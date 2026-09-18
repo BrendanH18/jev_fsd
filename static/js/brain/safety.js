@@ -35,7 +35,8 @@ export class DeadlockDetector {
       || (snap && snap.following && snap.following.gap_m < 8)
       || (snap && snap.nav && snap.nav.remaining_m < 10)
       || !world.route;
-    if (Math.abs(ego.v) < 0.3 && !legit) this.stoppedFor += dt;
+    const crawling = Math.abs(ego.v) < 1.0 && (!snap || !snap.target || snap.target.v > 2.0);
+    if (crawling && !legit) this.stoppedFor += dt;
     else this.stoppedFor = 0;
     world.stuckFor = this.stoppedFor;
     return this.stoppedFor;

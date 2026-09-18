@@ -1,7 +1,7 @@
 // A brain made of plain code. It proves the harness works without any model and is the fallback
 // when a model call fails or times out. Zero latency, zero cost.
 
-import { stopSpeedFor } from "../sim/controller.js";
+import { desiredSpeed } from "./sensors.js";
 
 export class RulesBrain {
   constructor() { this.name = "rules"; }
@@ -20,18 +20,8 @@ export class RulesBrain {
     if (snap.nav && snap.nav.arrived) stop = true;
     const motion = stop ? "stop" : "drive";
 
-    // desired speed: limit, curve, gap, and stop-line aware
-    let vDesired = snap.limit;
-    if (snap.route && snap.routeProj) vDesired = Math.min(vDesired, snap.route.curveSpeedAt(snap.routeProj.s));
-    if (snap.following) {
-      const gap = snap.following.gap_m;
-      const safe = Math.max(0, gap - 4);
-      vDesired = Math.min(vDesired, snap.following.speed + Math.min(2, safe / 3), stopSpeedFor(safe, 2.5));
-    }
-    if (i && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow")) || (i.control === "stop" && !i.stop_completed))) {
-      if (!i.entered) vDesired = Math.min(vDesired, stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), 2.5));
-    }
-    if (snap.nav) vDesired = Math.min(vDesired, stopSpeedFor(Math.max(0, snap.nav.remaining_m - 1), 2.0));
+    // desired speed: limit, curve, gap, stop-line and destination aware (shared with the state)
+    const vDesired = snap.target ? snap.target.v : desiredSpeed(snap).v;
 
     let best = null;
     for (const c of eligible) {

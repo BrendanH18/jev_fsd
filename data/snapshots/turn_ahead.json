@@ -1,0 +1,122 @@
+{
+  "name": "turn_ahead",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 8.3,
+      "limit": 8.3,
+      "speed_vs_limit": "at",
+      "target_speed": 8.3,
+      "target_reason": "speed limit",
+      "speed_vs_target": "at target"
+    },
+    "nav": {
+      "next_turn": "right",
+      "turn_in_m": 28.8,
+      "remaining_m": 697.7,
+      "destination": {
+        "right": 193.1,
+        "ahead": -424
+      },
+      "on_route": true,
+      "turn_street": "Balsam Street"
+    },
+    "road": {
+      "name": "West 8th Avenue",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0.2
+    },
+    "candidates": [
+      {
+        "id": "keep_lane_limit",
+        "steer": "hold lane",
+        "speed": "limit 9.3",
+        "end_speed": 9.3,
+        "vs_target": "above target",
+        "progress_m": 30,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "keep 8.3",
+        "end_speed": 8.3,
+        "vs_target": "at target",
+        "progress_m": 25,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_slow",
+        "steer": "hold lane",
+        "speed": "slow to 5.3",
+        "end_speed": 5.3,
+        "vs_target": "below target",
+        "progress_m": 18,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0.1,
+        "vs_target": "below target",
+        "progress_m": 6.7,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "keep 8.3",
+        "end_speed": 8.3,
+        "vs_target": "at target",
+        "progress_m": 25,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "keep 8.3",
+        "end_speed": 8.3,
+        "vs_target": "at target",
+        "progress_m": 25,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": -3,
+        "vs_target": "stopped",
+        "progress_m": 0.9,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ]
+  },
+  "questions": {
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A right turn is coming in 29 m; `car.target_speed` already accounts for it. Pick the maneuver to execute for the next second. Every listed candidate is predicted safe for 3 seconds. `car.target_speed` is the speed code computed from the limit, curves, the gap ahead, stop lines and the destination: normally pick the centered candidate whose end speed is at target. Deviate only for a reason in the situation: something blocking the path, a hazard, a stop that is required now, or the destination.",
+      "criteria": {
+        "keep_lane_limit": "hold lane, limit 9.3, +30 m, clear",
+        "keep_lane_target": "hold lane, keep 8.3, +25 m, clear",
+        "keep_lane_slow": "hold lane, slow to 5.3, +18 m, clear",
+        "keep_lane_stop": "hold lane, stop, +6.7 m, clear",
+        "left_0.5_target": "shift 0.5 m left, keep 8.3, +25 m, clear",
+        "right_0.5_target": "shift 0.5 m right, keep 8.3, +25 m, clear",
+        "hard_brake": "hold lane, brake hard, +0.9 m, clear"
+      }
+    }
+  },
+  "expect": {},
+  "saved_at": "2026-09-18T14:13:30"
+}

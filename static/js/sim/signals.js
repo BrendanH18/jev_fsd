@@ -1,4 +1,7 @@
 // Traffic-signal phases as a pure function of time, and per-vehicle stop-sign memory.
+
+// A full stop anywhere within this many meters before the line counts as stopping at the sign.
+export const STOP_ZONE_M = 6.0;
 // Cycle (48 s): A green 20, A yellow 3, all red 1, B green 20, B yellow 3, all red 1.
 
 export function phaseOf(intersection, t) {
@@ -32,7 +35,7 @@ export class StopMemory {
     if (!control || control.type !== "stop") { this.reset(); return this.state; }
     if (control.id !== this.controlId) { this.reset(); this.controlId = control.id; }
     if (this.state === "completed") return this.state;
-    if (Math.abs(v) < 0.2 && bumperToLine < 3.0 && bumperToLine > -6) {
+    if (Math.abs(v) < 0.2 && bumperToLine < STOP_ZONE_M && bumperToLine > -6) {
       this.stoppedFor += dt;
       if (this.state === "approaching") { this.state = "stopped"; this.stops++; }
       if (this.stoppedFor >= 0.7) this.state = "completed";

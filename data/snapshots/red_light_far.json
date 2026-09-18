@@ -1,0 +1,100 @@
+{
+  "name": "red_light_far",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 13.1,
+      "limit": 13.9,
+      "speed_vs_limit": "at",
+      "target_speed": 11.9,
+      "target_reason": "red light",
+      "speed_vs_target": "above target"
+    },
+    "nav": {
+      "next_turn": "left",
+      "turn_in_m": 336.6,
+      "remaining_m": 436.7,
+      "destination": {
+        "right": -100.5,
+        "ahead": 315.6
+      },
+      "on_route": true,
+      "turn_street": "Stephens Street"
+    },
+    "road": {
+      "name": "West Broadway",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0
+    },
+    "intersection": {
+      "control": "signal",
+      "signal": "red",
+      "bumper_to_line_m": 28.6,
+      "distance": "approaching",
+      "entered": false,
+      "cross_traffic_moving": false
+    },
+    "candidates": [
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0.2,
+        "vs_target": "below target",
+        "progress_m": 14.2,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "stop_at_line",
+        "steer": "hold lane",
+        "speed": "approach and stop at the line",
+        "end_speed": 4.2,
+        "vs_target": "below target",
+        "progress_m": 28,
+        "lane": "centered",
+        "outcome": "clear, stops 0.6 m before the line"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "progress_m": 13,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ],
+    "rejected": {
+      "runs_red": 8
+    }
+  },
+  "questions": {
+    "motion": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. The signal 29 m ahead is red: keep rolling toward the line and stop just before it. Decide whether the car should keep moving or hold still right now.",
+      "criteria": {
+        "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Correct whenever the line, obstacle, or destination is still ahead.",
+        "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red light or a stop not yet completed, when the path directly ahead is blocked, or when the car has reached the destination."
+      }
+    },
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. The signal 29 m ahead is red: keep rolling toward the line and stop just before it. Pick the maneuver to execute for the next second. Every listed candidate is predicted safe for 3 seconds. `car.target_speed` is the speed code computed from the limit, curves, the gap ahead, stop lines and the destination: normally pick the centered candidate whose end speed is at target. Deviate only for a reason in the situation: something blocking the path, a hazard, a stop that is required now, or the destination.",
+      "criteria": {
+        "keep_lane_stop": "hold lane, stop, +14.2 m, clear",
+        "stop_at_line": "hold lane, approach and stop at the line, +28 m, clear, stops 0.6 m before the line",
+        "hard_brake": "hold lane, brake hard, +13 m, clear"
+      }
+    }
+  },
+  "expect": {
+    "motion": "drive",
+    "motion_min_p": 0.5
+  },
+  "saved_at": "2026-09-18T14:19:16"
+}

@@ -81,8 +81,7 @@ export class World {
     if (input.left) steer = CAR.maxSteer;
     if (input.right) steer = -CAR.maxSteer;
     if (input.brake && this.ego.v <= 0.2 && !input.hardBrake) {
-      this.ego.step(dt, { steer, accel: 0 });
-      this.ego.v = Math.max(-CAR.maxReverse, this.ego.v - 1.5 * dt);
+      this.ego.step(dt, { steer, accel: -1.5, reverse: true });
       return;
     }
     this.ego.step(dt, { steer, accel });

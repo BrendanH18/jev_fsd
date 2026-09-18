@@ -27,7 +27,7 @@ export class Vehicle {
   }
 
   // steer: desired steering angle (rad); accel: m/s^2. Both are clamped to the car's limits.
-  step(dt, { steer = 0, accel = 0 } = {}) {
+  step(dt, { steer = 0, accel = 0, reverse = false } = {}) {
     const target = Math.max(-CAR.maxSteer, Math.min(CAR.maxSteer, steer));
     const maxDelta = CAR.steerRate * dt;
     this.delta += Math.max(-maxDelta, Math.min(maxDelta, target - this.delta));
@@ -40,8 +40,8 @@ export class Vehicle {
     if (this.psi <= -Math.PI) this.psi += 2 * Math.PI;
     const v0 = this.v;
     this.v += a * dt;
-    // braking never reverses the car on its own; reverse needs an explicit negative target speed
-    if (accel < 0 && v0 > 0 && this.v < 0) this.v = 0;
+    // braking never reverses the car on its own; reversing is an explicit choice
+    if (accel < 0 && v0 >= 0 && this.v < 0 && !reverse) this.v = 0;
     if (accel > 0 && v0 < 0 && this.v > 0) this.v = 0;
     this.v = Math.max(-CAR.maxReverse, Math.min(CAR.maxSpeed, this.v));
   }

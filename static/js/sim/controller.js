@@ -44,7 +44,7 @@ export function applyLaw(vehicle, law, route, s, dt) {
       return vehicle.step(dt, { steer: route ? purePursuit(vehicle, route, s, law.offset || 0) : vehicle.delta, accel: -7 });
     case "reverse": {
       const steer = law.target ? -steerToward(vehicle, law.target) : 0;
-      return vehicle.step(dt, { steer, accel: speedControl(vehicle.v, -2, { maxAccel: 2, maxBrake: 4 }) });
+      return vehicle.step(dt, { steer, accel: speedControl(vehicle.v, -2, { maxAccel: 2, maxBrake: 4 }), reverse: true });
     }
     case "steer":
       return vehicle.step(dt, { steer: law.steer, accel: speedControl(vehicle.v, law.vTarget) });

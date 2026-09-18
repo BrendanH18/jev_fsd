@@ -92,8 +92,40 @@ export function buildSnapshot(world, executing = null) {
   snap.traffic.sort((a, b) => a.dist - b.dist);
   snap.traffic = snap.traffic.slice(0, 8);
   if (executing && executing.hazard) snap.current_path_hazard = executing.hazard;
+  snap.target = desiredSpeed(snap);
   return snap;
 }
+
+// The speed code would like right now: limit, upcoming curvature, the gap ahead, a required stop
+// line, and the destination. Brains see it as `target_speed`; the rules brain drives to it.
+export function desiredSpeed(snap) {
+  let v = snap.limit;
+  const reasons = [];
+  if (snap.route && snap.routeProj) {
+    const curve = snap.route.curveSpeedAt(snap.routeProj.s, 18, 2.2);
+    if (curve < v) { v = curve; reasons.push("curve"); }
+    const curveFar = snap.route.curveSpeedAt(snap.routeProj.s, 35, 2.2);
+    if (curveFar < v && snap.ego.v > curveFar) { v = Math.max(curveFar, Math.sqrt(2 * 2.0 * 17) ); reasons.push("upcoming turn"); }
+  }
+  if (snap.following) {
+    const safe = Math.max(0, snap.following.gap_m - 4);
+    const vf = Math.min(snap.following.speed + Math.min(2, safe / 3), stopSpeedFor(safe, 2.5));
+    if (vf < v) { v = vf; reasons.push("car ahead"); }
+  }
+  const i = snap.intersection;
+  if (i && !i.entered && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow")) || (i.control === "stop" && !i.stop_completed))) {
+    const vs = stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), 2.5);
+    if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
+  }
+  if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) { v = 0; reasons.push("cross traffic"); }
+  if (snap.nav) {
+    const vd = stopSpeedFor(Math.max(0, snap.nav.remaining_m - 1), 2.0);
+    if (vd < v) { v = vd; reasons.push("destination"); }
+  }
+  return { v: Math.max(0, v), reasons };
+}
+
+function stopSpeedFor(distance, decel) { return distance <= 0 ? 0 : Math.sqrt(2 * decel * distance); }
 
 // Hazard flags decide the decision interval.
 export function hazardFlags(snap) {

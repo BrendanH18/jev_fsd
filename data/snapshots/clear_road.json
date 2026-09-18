@@ -1,0 +1,84 @@
+{
+  "name": "clear_road",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 0,
+      "limit": 8.3,
+      "speed_vs_limit": "under"
+    },
+    "nav": {
+      "next_turn": "right",
+      "turn_in_m": 86.1,
+      "remaining_m": 755,
+      "destination": {
+        "right": 196.5,
+        "ahead": -364.9
+      },
+      "on_route": true,
+      "turn_street": "Balsam Street"
+    },
+    "road": {
+      "name": "West 8th Avenue",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": -0.3
+    },
+    "candidates": [
+      {
+        "id": "keep_lane_limit",
+        "steer": "hold lane",
+        "speed": "limit 8.3",
+        "end_speed": 7.3,
+        "progress_m": 10.9,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_faster",
+        "steer": "hold lane",
+        "speed": "speed up to 2.0",
+        "end_speed": 2,
+        "progress_m": 4.6,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "progress_m": 0,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": -3,
+        "progress_m": 0,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ]
+  },
+  "questions": {
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Pick the maneuver to execute for the next second. Every listed candidate is predicted safe for 3 seconds. Prefer staying centered in the lane and making progress; slow down when following closely, approaching a turn, or approaching a stop line.",
+      "criteria": {
+        "keep_lane_limit": "hold lane, limit 8.3, +10.9 m, clear",
+        "keep_lane_faster": "hold lane, speed up to 2.0, +4.6 m, clear",
+        "keep_lane_stop": "hold lane, stop, +0 m, clear",
+        "hard_brake": "hold lane, brake hard, +0 m, clear"
+      }
+    }
+  },
+  "expect": {
+    "motion_absent": true
+  },
+  "saved_at": "2026-09-18T14:10:38"
+}
