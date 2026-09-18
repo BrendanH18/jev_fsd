@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jev FSD</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <div id="loading" class="overlay">
+    <div class="card">
+      <h1>Jev FSD</h1>
+      <p id="loading-text">Loading map…</p>
+    </div>
+  </div>
+
+  <div id="hud" class="hud" hidden>
+    <div class="hud-top-left panel">
+      <div class="speed"><span id="speed">0</span><small>km/h</small></div>
+      <div class="row"><span class="label">limit</span><span id="limit">–</span></div>
+      <div class="row"><span class="label">street</span><span id="street">–</span></div>
+      <div class="row nav"><span id="nav">click the minimap to set a destination</span></div>
+      <div class="row controls">
+        <label class="label">brain</label>
+        <select id="brain">
+          <option value="jev">Jev (TypeSafe)</option>
+          <option value="rules">Rules (code only)</option>
+        </select>
+        <button id="autopilot" class="toggle" title="J">autopilot: off</button>
+      </div>
+      <div class="row keys">W A S D drive · Space brake · J autopilot · C camera · R reset · P pause</div>
+    </div>
+
+    <div class="hud-top-right panel">
+      <canvas id="minimap" width="220" height="220"></canvas>
+      <div id="map-note" class="note"></div>
+    </div>
+
+    <div class="hud-bottom panel">
+      <div class="stat"><span class="label">decision</span><span id="latency">–</span></div>
+      <div class="stat"><span class="label">p50</span><span id="p50">–</span></div>
+      <div class="stat"><span class="label">tokens</span><span id="tokens">–</span></div>
+      <div class="stat"><span class="label">cost</span><span id="cost">$0</span></div>
+      <div class="stat"><span class="label">decisions/min</span><span id="rate">–</span></div>
+      <div class="stat"><span class="label">source</span><span id="source">–</span></div>
+      <div class="stat warn"><span class="label">collisions</span><span id="collisions">0</span></div>
+      <div class="stat warn"><span class="label">red lights</span><span id="reds">0</span></div>
+      <div class="stat warn"><span class="label">stop signs</span><span id="stops">0</span></div>
+      <div class="stat warn"><span class="label">off-road</span><span id="offroad">0 s</span></div>
+      <div class="stat"><span class="label">safety brakes</span><span id="safety">0</span></div>
+      <div class="stat"><span class="label">fallbacks</span><span id="fallbacks">0</span></div>
+      <button id="panel-toggle" class="toggle">JSON</button>
+    </div>
+
+    <div id="badge" class="badge" hidden></div>
+  </div>
+
+  <aside id="panel" class="panel drawer" hidden>
+    <header>
+      <strong>What Jev sees</strong>
+      <div class="tabs">
+        <button data-tab="state" class="active">State</button>
+        <button data-tab="questions">Questions</button>
+        <button data-tab="answers">Answers</button>
+        <button data-tab="meta">Meta</button>
+      </div>
+      <button id="panel-close" class="toggle">×</button>
+    </header>
+    <div class="actions">
+      <button id="copy-curl" class="toggle">Copy as curl</button>
+      <button id="save-snapshot" class="toggle">Save snapshot</button>
+      <button id="edit-style" class="toggle">Driving style</button>
+      <label class="check"><input type="checkbox" id="show-candidates" checked> candidates</label>
+    </div>
+    <div id="panel-body" class="body"><pre>No decision yet.</pre></div>
+  </aside>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
