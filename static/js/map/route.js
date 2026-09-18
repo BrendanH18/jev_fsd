@@ -2,6 +2,7 @@
 // with a hint so following the route is O(1) per tick, and offset points for lateral maneuvers.
 
 import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js";
+import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
 
 export class Route {
   constructor(data, map) {
@@ -23,6 +24,23 @@ export class Route {
     }
     this.edgeStarts.push(s);
     this.hint = 0;
+    // traffic controls along the route: stop-line position expressed as route arc length
+    this.controls = [];
+    for (let i = 0; i < this.edges.length; i++) {
+      const e = map.edges.get(this.edges[i]);
+      if (!e || !e.control) continue;
+      const lineOnEdge = pointAt(e.pts, e.cum, e.control.s_line);
+      const p = projectPoint(this.pts, this.cum, lineOnEdge);
+      if (!p || p.distance > 12) continue;
+      if (i === 0 && e.control.s_line < (data.start_s || 0) - 1) continue;  // already behind the start
+      const junctionNode = map.nodes.get(e.to);
+      const inter = e.control.type === "signal" ? map.intersections.get(e.control.id) : null;
+      this.controls.push({
+        edge: e.id, control: e.control, sRoute: p.s, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
+        secondsToGreen: inter ? (t) => secondsToGreenFor(inter, e.control.group, t) : null,
+      });
+    }
+    this.controls.sort((a, b) => a.sRoute - b.sRoute);
   }
 
   project(x, y, hint = null) {

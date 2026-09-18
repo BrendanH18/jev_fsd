@@ -263,6 +263,8 @@ class Router:
         length = cum[-1] if cum else 0.0
         return {
             "edges": list(path),
+            "start_s": g.r2(start_snap["s"]),
+            "goal_s": g.r2(goal_snap["s"]),
             "polyline": [(g.r2(x), g.r2(y)) for x, y in polyline],
             "length_m": g.r1(length),
             "turns": turns,
