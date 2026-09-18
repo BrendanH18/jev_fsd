@@ -1,0 +1,19 @@
+# Secrets: the app refuses to write .env unless this line is here.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Saved decision snapshots are local scratch; commit chosen ones on purpose with `git add -f`.
+data/snapshots/*.json
+
+# Local scratch
+.shots/
+.DS_Store
+
+# Claude Code local settings
+.claude/

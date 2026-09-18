@@ -1,0 +1,19 @@
+[project]
+name = "jev-fsd"
+version = "0.1.0"
+description = "A driving sim on real OpenStreetMap streets where TypeSafe's Jev (System One) model drives the car"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["typesafe", "jev", "system-one", "ai", "driving", "simulator", "openstreetmap", "three.js"]
+dependencies = [
+  "typesafe-sdk>=0.6.0",
+]
+
+[project.urls]
+Documentation = "https://docs.typesafe.ai"
+
+# Jev FSD is an application, not a library: `uv run server.py` installs the dependency into a
+# project venv and starts the server. No build backend is needed.
+[tool.uv]
+package = false
