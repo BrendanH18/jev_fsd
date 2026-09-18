@@ -95,7 +95,7 @@ export function situationClauses(snap) {
     if (label === "dangerous" || label === "short") out.push("The car ahead is close; keep a safe gap.");
   }
   if (snap.nav && snap.nav.next_turn !== "none" && snap.nav.turn_in_m < 40) out.push(`A ${snap.nav.next_turn === "uturn" ? "U-turn" : snap.nav.next_turn + " turn"} is coming in ${Math.round(snap.nav.turn_in_m)} m; \`car.target_speed\` already accounts for it.`);
-  if (snap.target && snap.ego.v < snap.target.v - 1 && !snap.stuck) out.push("The car is below its target speed with nothing requiring that; prefer the candidate that reaches the target.");
+  if (snap.target && snap.target.reasons.length === 0 && snap.ego.v < snap.target.v - 1 && !snap.stuck) out.push("The car is below its target speed with nothing requiring that; prefer the candidate that reaches the target.");
   if (!snap.road.on_road) out.push("The car is off the road; the candidates steer back toward the lane.");
   if (snap.stuck) out.push(`The car has been stopped with nothing blocking it for ${Math.round(snap.stuck.for_s)} s; if the way is clear, drive.`);
   if (snap.nav && snap.nav.remaining_m < 15) out.push("The destination is within reach; stop at it.");

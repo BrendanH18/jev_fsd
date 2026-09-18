@@ -4,20 +4,20 @@
     "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
     "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
     "car": {
-      "speed": 12.9,
+      "speed": 13.1,
       "limit": 13.9,
       "speed_vs_limit": "at",
-      "target_speed": 8.4,
-      "target_reason": "upcoming turn",
+      "target_speed": 11.9,
+      "target_reason": "stop sign",
       "speed_vs_target": "above target"
     },
     "nav": {
       "next_turn": "right",
-      "turn_in_m": 46.6,
-      "remaining_m": 615.6,
+      "turn_in_m": 47.7,
+      "remaining_m": 616.6,
       "destination": {
-        "right": 452.1,
-        "ahead": 136.6
+        "right": 452.3,
+        "ahead": 136.9
       },
       "on_route": true,
       "turn_street": "West Broadway"
@@ -25,13 +25,13 @@
     "road": {
       "name": "Balsam Street",
       "on_road": true,
-      "lane_offset_m": 0,
+      "lane_offset_m": 0.1,
       "lane_position": "centered",
       "heading_error_deg": 0.6
     },
     "intersection": {
       "control": "stop",
-      "bumper_to_line_m": 27.9,
+      "bumper_to_line_m": 28.9,
       "distance": "approaching",
       "entered": false,
       "stop_completed": false,
@@ -45,7 +45,7 @@
         "speed": "stop",
         "end_speed": 0.2,
         "vs_target": "below target",
-        "progress_m": 13.9,
+        "progress_m": 14.2,
         "lane": "centered",
         "outcome": "clear"
       },
@@ -53,11 +53,11 @@
         "id": "stop_at_line",
         "steer": "hold lane",
         "speed": "approach and stop at the line",
-        "end_speed": 3.9,
+        "end_speed": 4.3,
         "vs_target": "below target",
-        "progress_m": 27.5,
+        "progress_m": 28.2,
         "lane": "centered",
-        "outcome": "clear, stops 0.4 m before the line"
+        "outcome": "clear, stops 0.7 m before the line"
       },
       {
         "id": "hard_brake",
@@ -65,7 +65,7 @@
         "speed": "brake hard",
         "end_speed": 0,
         "vs_target": "stopped",
-        "progress_m": 12.8,
+        "progress_m": 13,
         "lane": "centered",
         "outcome": "clear"
       }
@@ -77,7 +77,7 @@
   "questions": {
     "motion": {
       "type": "choice",
-      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A stop sign is 28 m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear. Decide whether the car should keep moving or hold still right now.",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A stop sign is 29 m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear. Decide whether the car should keep moving or hold still right now.",
       "criteria": {
         "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Correct whenever the line, obstacle, or destination is still ahead.",
         "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red light or a stop not yet completed, when the path directly ahead is blocked, or when the car has reached the destination."
@@ -85,11 +85,11 @@
     },
     "vector": {
       "type": "choice",
-      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A stop sign is 28 m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear. Pick the maneuver to execute for the next second. Every listed candidate is predicted safe for 3 seconds. `car.target_speed` is the speed code computed from the limit, curves, the gap ahead, stop lines and the destination: normally pick the centered candidate whose end speed is at target. Deviate only for a reason in the situation: something blocking the path, a hazard, a stop that is required now, or the destination.",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A stop sign is 29 m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear. Pick the maneuver to execute for the next second. Every listed candidate is predicted safe for 3 seconds. `car.target_speed` is the speed code computed from the limit, curves, the gap ahead, stop lines and the destination: normally pick the centered candidate whose end speed is at target. Deviate only for a reason in the situation: something blocking the path, a hazard, a stop that is required now, or the destination.",
       "criteria": {
-        "keep_lane_stop": "hold lane, stop, +13.9 m, clear",
-        "stop_at_line": "hold lane, approach and stop at the line, +27.5 m, clear, stops 0.4 m before the line",
-        "hard_brake": "hold lane, brake hard, +12.8 m, clear"
+        "keep_lane_stop": "hold lane, stop, +14.2 m, clear",
+        "stop_at_line": "hold lane, approach and stop at the line, +28.2 m, clear, stops 0.7 m before the line",
+        "hard_brake": "hold lane, brake hard, +13 m, clear"
       }
     }
   },
@@ -97,5 +97,5 @@
     "motion": "drive",
     "motion_min_p": 0.5
   },
-  "saved_at": "2026-09-18T14:16:11"
+  "saved_at": "2026-09-18T14:31:43"
 }

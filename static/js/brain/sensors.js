@@ -3,7 +3,7 @@
 
 import { CAR } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
-import { signalFor } from "../sim/signals.js";
+import { signalFor, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -114,7 +114,8 @@ export function desiredSpeed(snap) {
   }
   const i = snap.intersection;
   if (i && !i.entered && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow")) || (i.control === "stop" && !i.stop_completed))) {
-    const vs = stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), 2.5);
+    // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line
+    const vs = i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), 2.5);
     if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
   }
   if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) { v = 0; reasons.push("cross traffic"); }

@@ -56,7 +56,7 @@ async function boot() {
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt));
   hud.setMapNote(status.map.synthetic
     ? `Synthetic grid (map fetch failed: ${status.map.error})`
-    : `OpenStreetMap · ${pack.edges.length} segments · ${pack.intersections.length} signals · ${pack.stops.length} stop signs${status.configured ? "" : " · no API key: Jev brain unavailable"}`);
+    : `Map data © OpenStreetMap contributors (ODbL) · ${pack.edges.length} segments · ${pack.intersections.length} signals · ${pack.stops.length} stop signs${status.configured ? "" : " · no API key: Jev brain unavailable"}`);
 
   function toggleAutopilot() {
     if (!autopilot.enabled && !world.route) { hud.badge("set a destination first (click the minimap)", "", 1500); return; }
