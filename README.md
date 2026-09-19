@@ -16,8 +16,8 @@ You need Python 3.9 or newer. That is all; the 3D scene loads Three.js from a CD
 no build step.
 
 ```sh
-git clone <this repo> jev_fsd && cd jev_fsd
-uv run server.py          # or: python3 server.py
+git clone https://github.com/BrendanH18/jev_fsd && cd jev_fsd
+uv run server.py
 ```
 
 Open http://127.0.0.1:8322 and click anywhere on the minimap.
