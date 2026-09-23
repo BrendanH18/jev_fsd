@@ -22,7 +22,9 @@ from .project import Projection
 
 SIGNAL_SNAP_M = 30.0
 CLUSTER_M = 25.0
-STOP_LINE_SETBACK_M = 4.0
+STOP_LINE_SETBACK_M = 4.0      # minimum; wider crossing roads push the line back further
+CURB_CLEARANCE_M = 1.2         # stop line to the crossing road's curb at a stop sign
+CROSSWALK_CLEARANCE_M = 4.0    # room for a painted crosswalk in front of a signal's stop line
 STOP_AHEAD_M = 30.0
 MIN_APPROACHES = 3
 CYCLE = {"green": 20.0, "yellow": 3.0, "all_red": 1.0}
@@ -38,8 +40,23 @@ def _nearest_vertex(graph: RoadGraph, x: float, y: float, max_m: float) -> Optio
     return best
 
 
-def _stop_line_s(edge: dict) -> float:
-    return max(1.0, edge["length"] - STOP_LINE_SETBACK_M)
+def _crossing_half_width(graph: RoadGraph, edge: dict) -> float:
+    """Half the asphalt width of the widest other road meeting this edge's end vertex."""
+    widest = 0.0
+    v = edge["to"]
+    for eid in graph.in_edges.get(v, []) + graph.out_edges.get(v, []):
+        other = graph.edges[eid]
+        if {other["from"], other["to"]} == {edge["from"], edge["to"]}:
+            continue  # this edge or its reverse twin
+        widest = max(widest, abs(other["asphalt"][0]), abs(other["asphalt"][1]))
+    return widest
+
+
+def _stop_line_s(graph: RoadGraph, edge: dict, clearance: float = CURB_CLEARANCE_M) -> float:
+    """Stop line just short of the crossing road's curb, so the line (and the car stopped at it)
+    never sits inside the other road's asphalt."""
+    setback = max(STOP_LINE_SETBACK_M, _crossing_half_width(graph, edge) + clearance)
+    return max(1.0, edge["length"] - setback)
 
 
 def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int = 11) -> dict:
@@ -91,7 +108,7 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
                 if e["from"] in member_set:
                     continue  # internal link of a dual carriageway
                 approaches.append({"edge": eid, "heading_deg": round(math.degrees(graph.edge_heading_in(eid)), 1),
-                                   "s_line": round(_stop_line_s(e), 2)})
+                                   "s_line": round(_stop_line_s(graph, e, CROSSWALK_CLEARANCE_M), 2)})
         if len(approaches) < 2:
             continue
         iid = "sig%d" % k
@@ -122,7 +139,7 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
                 e = graph.edges[eid]
                 if direction in ("forward", "backward") and e["forward"] != (direction == "forward"):
                     continue
-                targets.append((eid, _stop_line_s(e)))
+                targets.append((eid, _stop_line_s(graph, e)))
             if not direction and len(graph.in_edges.get(vid, [])) >= MIN_APPROACHES:
                 all_way = True
         else:

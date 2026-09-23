@@ -143,7 +143,7 @@ class PackTests(unittest.TestCase):
         pack = grid_pack()
         text = json.dumps(pack)
         self.assertLess(len(text), 1_000_000)
-        self.assertEqual(pack["pack_version"], "3")
+        self.assertEqual(pack["pack_version"], "4")
         self.assertTrue(pack["synthetic"])
         self.assertGreater(len(pack["buildings"]), 10)
         self.assertEqual(len(pack["lanes"]), sum(e["lanes"] for e in pack["edges"]))

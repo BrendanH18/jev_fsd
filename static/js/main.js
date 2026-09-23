@@ -7,6 +7,7 @@ import { World } from "./sim/world.js";
 import { SceneView } from "./render/scene.js";
 import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
+import { buildTrees } from "./render/trees.js";
 import { createCarMesh, syncCar } from "./render/cars.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
@@ -30,13 +31,15 @@ async function boot() {
   const view = new SceneView($("#view"), map.extent);
   const roads = buildRoads(map);
   view.scene.add(roads.group);
-  view.scene.add(buildBuildings(map));
-  const egoMesh = createCarMesh(0x2f7cff);
+  const buildings = buildBuildings(map);
+  view.scene.add(buildings);
+  view.scene.add(buildTrees(map, roads, buildings.userData.index));
+  const egoMesh = createCarMesh(0x1f5fd6, "ego");
   view.scene.add(egoMesh);
   const overlays = new Overlays(view.scene);
   const fleet = new NpcFleet(world, { count: status.npcs, seed: 7 });
   const npcMeshes = new Map();
-  for (const n of fleet.vehicles) { const m = createCarMesh(n.color); view.scene.add(m); npcMeshes.set(n.id, m); }
+  for (const n of fleet.vehicles) { const m = createCarMesh(n.color, n.id); view.scene.add(m); npcMeshes.set(n.id, m); }
 
   const autopilot = new Autopilot(world, {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
@@ -138,8 +141,16 @@ async function boot() {
     hud.update({ ego: world.ego, road: world._road, nav: snap ? snap.nav : null, violations: world.violations,
       decision: autopilot.lastDecision, totals: autopilot.totals, paused: world.paused });
     panel.render(now);
-    requestAnimationFrame(frame);
+    if (!manual) requestAnimationFrame(frame);
   }
+  // Headless screenshots run in a hidden page where requestAnimationFrame never fires; they advance
+  // frames by hand through window.__jev.advance(seconds).
+  let manual = false;
+  window.__jev.advance = (seconds, fps = 30) => {
+    manual = true;
+    for (let t = 0; t < seconds; t += 1 / fps) frame(last + 1000 / fps);
+    manual = false;
+  };
   requestAnimationFrame(frame);
 }
 

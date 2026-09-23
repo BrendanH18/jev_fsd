@@ -172,7 +172,7 @@ jev/osm/             fetch → parse → project → road graph → controls →
 jev/routing.py       edge-based A* with turn penalties, alternatives, rounded corners
 static/js/sim/       car model, controller, collisions, signals, traffic, world
 static/js/brain/     sensors, candidates, state + questions, scheduler, rules brain, jev brain, safety
-static/js/render/    scene, roads, buildings, cars, overlays, minimap
+static/js/render/    sky + sun + shadows, streets, buildings, trees, cars, overlays, minimap, procedural textures
 ```
 
 ## Credits

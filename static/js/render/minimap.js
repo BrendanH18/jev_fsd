@@ -29,6 +29,12 @@ export class Minimap {
     const c = this.roads.getContext("2d");
     c.fillStyle = "#11151c";
     c.fillRect(0, 0, this.roads.width, this.roads.height);
+    c.fillStyle = "#1c222c";
+    for (const b of this.map.pack.buildings) {
+      c.beginPath();
+      b.pts.forEach(([x, y], i) => { const [px, py] = this.toPx(x, y); i ? c.lineTo(px, py) : c.moveTo(px, py); });
+      c.fill();
+    }
     c.lineCap = "round";
     for (const e of this.map.edges.values()) {
       c.strokeStyle = e.cls === "residential" || e.cls === "living_street" ? "#3a4250" : "#586275";

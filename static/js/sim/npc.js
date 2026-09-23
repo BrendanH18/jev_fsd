@@ -9,7 +9,8 @@ import { rng } from "../common.js";
 import { wrap } from "./world.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
-const PALETTE = [0xd94f4f, 0xf2b84b, 0xe8e8e8, 0x8a8f99, 0x3fb783, 0xc57bd9, 0x2a2e35];
+// Real-world paint mix: mostly white, grey, silver, and black, some blue and red.
+const PALETTE = [0xeeeeea, 0x8d9299, 0x1a1c20, 0xc4c8cc, 0x2b3a55, 0x9b1e1e, 0xf2f2ee, 0x4a4f57, 0x0f1114, 0x6b7f5e, 0xb9b3a5];
 const LOOK_M = 60;
 const BOX_M = 9;
 
