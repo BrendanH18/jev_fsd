@@ -1,6 +1,6 @@
 // Offscreen screenshot of a URL with WKWebView (WebGL renders through Metal).
 //
-//   swift scripts/shot.swift URL OUT.png [wait_seconds] [post_js] [pre_js] [settle_seconds]
+//   swift scripts/shot.swift URL OUT.png [wait_seconds] [post_js] [pre_js] [settle_seconds] [timeout_seconds]
 //
 // Timeline: load -> settle (default 3 s) -> run pre_js -> wait -> run post_js -> snapshot.
 // Page errors, unhandled rejections, console.error and console.log are forwarded to stdout.
@@ -17,6 +17,7 @@ let wait = args.count > 3 ? Double(args[3]) ?? 4.0 : 4.0
 let postJS = args.count > 4 ? args[4] : ""
 let preJS = args.count > 5 ? args[5] : ""
 let settle = args.count > 6 ? Double(args[6]) ?? 3.0 : 3.0
+let timeout = args.count > 7 ? Double(args[7]) ?? 0 : 0
 
 class Handler: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     var onLoad: (() -> Void)?
@@ -86,5 +87,5 @@ handler.onLoad = {
     }
 }
 web.load(URLRequest(url: url))
-DispatchQueue.main.asyncAfter(deadline: .now() + settle + wait + 30) { print("timed out"); exit(1) }
+DispatchQueue.main.asyncAfter(deadline: .now() + max(timeout, settle + wait + 30)) { print("timed out"); exit(1) }
 app.run()

@@ -16,7 +16,7 @@ export class World {
     this.destination = null;
     this.paused = false;
     this.egoStop = new StopMemory();
-    this.violations = { collisions: 0, red_lights_run: 0, stop_signs_run: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
+    this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
     this.spawnEgo();
@@ -41,14 +41,14 @@ export class World {
 
   placeOnLane(lane, s) {
     const { pointAt, headingAt } = lanePoint(lane, s);
-    this.ego.x = pointAt[0]; this.ego.y = pointAt[1]; this.ego.psi = headingAt; this.ego.v = 0; this.ego.delta = 0;
+    this.ego.x = pointAt[0]; this.ego.y = pointAt[1]; this.ego.psi = headingAt; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
     this.egoStop.reset();
   }
 
   resetToLane() {
     const near = this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 80);
     if (near) {
-      this.ego.x = near.point[0]; this.ego.y = near.point[1]; this.ego.psi = near.heading; this.ego.v = 0; this.ego.delta = 0;
+      this.ego.x = near.point[0]; this.ego.y = near.point[1]; this.ego.psi = near.heading; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
     }
     this.events.push({ type: "reset" });
   }
@@ -88,17 +88,37 @@ export class World {
   }
 
   // Called every physics tick after the ego (and NPCs) moved. Collisions and violations.
+  // A collision counts once per contact: the pair must separate for a second before the next
+  // one counts. Fault: "ego" when the moving ego ran into a car ahead going its way or standing
+  // still; "other" when the ego was stopped or hit from behind; "shared" for crossing and oncoming
+  // contacts, where right of way decides and the sim does not judge it.
   audit(dt, road) {
     this.events.length = 0;
     const egoBox = this.ego.obb();
     for (const n of this.npcs) {
-      if (n.frozen > 0) continue;
-      if (obbOverlap(egoBox, n.obb())) {
+      const touching = obbOverlap(egoBox, n.obb());
+      if (touching && !n.contact) {
+        const [cx, cy] = n.center;
+        const rel = this.ego.toLocal(cx, cy);
+        const egoCenterAhead = rel.ahead - (CAR.length / 2 - CAR.rearOverhang);
+        const relHeading = Math.abs(wrap(n.psi - this.ego.psi));
+        const fault = this.ego.v < 0.5 || egoCenterAhead < -1 ? "other"
+          : egoCenterAhead > 0 && (relHeading < Math.PI / 4 || n.v < 0.5) ? "ego" : "shared";
+        const atFault = fault === "ego";
         this.violations.collisions++;
-        this.ego.v = 0;
+        if (atFault) this.violations.collisions_at_fault++;
+        this.events.push({
+          type: "collision", with: n.id, fault, at_fault: atFault, t: Math.round(this.t * 10) / 10,
+          ego_v: Math.round(this.ego.v * 10) / 10, other_v: Math.round(n.v * 10) / 10,
+          other_ahead: Math.round(egoCenterAhead * 10) / 10, other_right: Math.round(rel.right * 10) / 10,
+          relative_heading_deg: Math.round(wrap(n.psi - this.ego.psi) * 180 / Math.PI),
+        });
+        this.ego.v = 0; this.ego.a = 0;
+        n.v = 0; n.a = 0;
         n.frozen = 3;
-        this.events.push({ type: "collision", with: n.id });
       }
+      if (touching) { n.contact = true; n.clearFor = 0; }
+      else if (n.contact && (n.clearFor = (n.clearFor || 0) + dt) > 1) n.contact = false;
     }
     if (!road.on_road) this.violations.off_road_s += dt;
     // stop-line crossings on the edge the ego is on

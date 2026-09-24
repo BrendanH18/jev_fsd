@@ -23,6 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 MAPS_DIR = DATA_DIR / "maps"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
+RUNS_DIR = DATA_DIR / "runs"
 ENV_PATH = PROJECT_ROOT / ".env"
 
 KEY_ENV = "TYPESAFE_API_KEY"

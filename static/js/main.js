@@ -16,6 +16,8 @@ import { Input } from "./ui/input.js";
 import { Panel } from "./ui/panel.js";
 import { Autopilot } from "./brain/brain.js";
 import { NpcFleet } from "./sim/npc.js";
+import { stepWorld } from "./sim/step.js";
+import { setupScenario } from "./bench/runner.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -26,7 +28,7 @@ async function boot() {
   const pack = await api("/api/map");
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
   const map = new MapData(pack);
-  const world = new World(map, { seed: 1 });
+  const replay = readReplay();
   const hud = new Hud();
   const view = new SceneView($("#view"), map.extent);
   const roads = buildRoads(map);
@@ -37,11 +39,7 @@ async function boot() {
   const egoMesh = createCarMesh(0x1f5fd6, "ego");
   view.scene.add(egoMesh);
   const overlays = new Overlays(view.scene);
-  const fleet = new NpcFleet(world, { count: status.npcs, seed: 7 });
-  const npcMeshes = new Map();
-  for (const n of fleet.vehicles) { const m = createCarMesh(n.color, n.id); view.scene.add(m); npcMeshes.set(n.id, m); }
-
-  const autopilot = new Autopilot(world, {
+  const callbacks = {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
     onEvent: (ev) => {
       if (ev.type === "arrived") { hud.badge("ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
@@ -51,7 +49,18 @@ async function boot() {
       else if (ev.type === "deadlock") hud.badge("DEADLOCK: creeping", "safety", 1200);
       else if (ev.type === "error") hud.badge(ev.error, "", 1500);
     },
-  });
+  };
+  // A benchmark scenario opened with "watch" replays with the same start, route, and traffic seed.
+  let world, fleet, autopilot;
+  if (replay) {
+    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: status.configured ? replay.brain : "rules", npcs: replay.npcs, ...callbacks }));
+  } else {
+    world = new World(map, { seed: 1 });
+    fleet = new NpcFleet(world, { count: status.npcs, seed: 7 });
+    autopilot = new Autopilot(world, callbacks);
+  }
+  const npcMeshes = new Map();
+  for (const n of fleet.vehicles) { const m = createCarMesh(n.color, n.id); view.scene.add(m); npcMeshes.set(n.id, m); }
   if (!status.configured) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
@@ -101,6 +110,11 @@ async function boot() {
 
   $("#loading").hidden = true;
   hud.show();
+  if (replay) {
+    overlays.setRoute(world.route);
+    hud.setAutopilot(true);
+    hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
+  }
   window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays };
 
   let last = performance.now();
@@ -113,14 +127,7 @@ async function boot() {
       let steps = 0;
       while (acc >= FIXED_DT && steps < 5) {
         if (autopilot.enabled && input.anyDriving) { toggleAutopilot(); }
-        if (autopilot.enabled) autopilot.step(FIXED_DT, performance.now());
-        else world.stepManual(FIXED_DT, input);
-        fleet.step(FIXED_DT);
-        world.t += FIXED_DT;
-        world.tick++;
-        const road = world.roadInfo();
-        world.audit(FIXED_DT, road);
-        world._road = road;
+        stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
         for (const ev of world.events) {
           if (ev.type === "collision") { hud.flash(); hud.badge("COLLISION", "", 1200); }
           else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "", 1500);
@@ -131,8 +138,8 @@ async function boot() {
       }
     }
     for (const inter of map.intersections.values()) roads.signals.set(inter.id, world.phase(inter.id));
-    syncCar(egoMesh, world.ego, dt);
-    for (const n of fleet.vehicles) syncCar(npcMeshes.get(n.id), n, dt);
+    syncCar(egoMesh, world.ego, dt, world.t);
+    for (const n of fleet.vehicles) syncCar(npcMeshes.get(n.id), n, dt, world.t);
     overlays.tick(world.t);
     view.updateCamera(world.ego, dt);
     view.render();
@@ -152,6 +159,11 @@ async function boot() {
     manual = false;
   };
   requestAnimationFrame(frame);
+}
+
+function readReplay() {
+  if (!new URLSearchParams(location.search).has("replay")) return null;
+  try { return JSON.parse(localStorage.getItem("jev-fsd-replay")); } catch { return null; }
 }
 
 boot().catch((err) => {

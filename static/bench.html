@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jev FSD Benchmark</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/bench.css">
+</head>
+<body class="bench">
+  <header>
+    <h1>Benchmark</h1>
+    <span id="map-note" class="muted"></span>
+    <a href="/" class="toggle">back to the sim</a>
+  </header>
+
+  <section class="controls panel">
+    <label>brain
+      <select id="brain">
+        <option value="rules">Rules (code only)</option>
+        <option value="jev">Jev (TypeSafe)</option>
+      </select>
+    </label>
+    <label>scenarios <input id="count" type="number" min="1" max="60" value="12"></label>
+    <label>traffic <input id="npcs" type="number" min="0" max="120" value="40"></label>
+    <label>suite seed <input id="seed" type="number" min="1" value="1"></label>
+    <label>clock
+      <select id="mode">
+        <option value="lockstep">lockstep (waits for each decision)</option>
+        <option value="realtime">realtime (latency counts)</option>
+      </select>
+    </label>
+    <label>compare with <select id="compare"><option value="">none</option></select></label>
+    <button id="run" class="toggle on">Run</button>
+    <span id="status" class="muted"></span>
+  </section>
+
+  <section id="summary" class="cards"></section>
+  <section class="panel table-wrap">
+    <table id="results">
+      <thead></thead>
+      <tbody><tr><td class="muted">No run yet. Pick a brain and press Run.</td></tr></tbody>
+    </table>
+  </section>
+  <p class="muted foot">A drive passes when it arrives with no collision, red light, rolled stop sign, or a second or more off
+    the road. Comfort columns are reported, not graded. Lockstep with the Rules brain is fully reproducible: the same
+    suite seed gives the same numbers until the sim changes.</p>
+
+  <script type="module" src="/js/bench/main.js"></script>
+</body>
+</html>

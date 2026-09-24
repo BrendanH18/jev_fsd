@@ -5,6 +5,7 @@ import { CAR } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
 import { signalFor, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
+import { curveProfileSpeed } from "../sim/controller.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
@@ -102,10 +103,8 @@ export function desiredSpeed(snap) {
   let v = snap.limit;
   const reasons = [];
   if (snap.route && snap.routeProj) {
-    const curve = snap.route.curveSpeedAt(snap.routeProj.s, 18, 2.2);
-    if (curve < v) { v = curve; reasons.push("curve"); }
-    const curveFar = snap.route.curveSpeedAt(snap.routeProj.s, 35, 2.2);
-    if (curveFar < v && snap.ego.v > curveFar) { v = Math.max(curveFar, Math.sqrt(2 * 2.0 * 17) ); reasons.push("upcoming turn"); }
+    const curve = curveProfileSpeed(snap.route, snap.routeProj.s);
+    if (curve.v < v) { v = curve.v; reasons.push(curve.at < 4 ? "curve" : "upcoming turn"); }
   }
   if (snap.following) {
     const safe = Math.max(0, snap.following.gap_m - 4);
@@ -127,6 +126,7 @@ export function desiredSpeed(snap) {
 }
 
 function stopSpeedFor(distance, decel) { return distance <= 0 ? 0 : Math.sqrt(2 * decel * distance); }
+
 
 // Hazard flags decide the decision interval.
 export function hazardFlags(snap) {

@@ -36,7 +36,25 @@ export function stopSpeedFor(distance, decel = 2.5) {
   return Math.sqrt(2 * decel * distance);
 }
 
-// The "law" a candidate or the autopilot executes between decisions.
+export const CURVE_LAT_ACCEL = 2.2;   // m/s^2, comfortable cornering
+const CURVE_DECEL = 2.0;              // m/s^2, comfortable braking into a curve
+const CURVE_HORIZON_M = 60;
+
+// Fastest speed now from which the car can slow comfortably to every point's safe cornering speed
+// over the next 60 m, including the curve it is already in.
+export function curveProfileSpeed(route, s) {
+  let best = { v: Infinity, at: 0 };
+  for (let d = 0; d <= CURVE_HORIZON_M && s + d < route.length; d += 3) {
+    const vc = route.curveSpeedAt(s, d, CURVE_LAT_ACCEL);
+    if (!Number.isFinite(vc)) continue;
+    const v = Math.sqrt(vc * vc + 2 * CURVE_DECEL * d);
+    if (v < best.v) best = { v, at: d };
+  }
+  return best;
+}
+
+// The "law" a candidate or the autopilot executes between decisions. A lane law's vTarget is a
+// ceiling: the curve profile lowers it through turns, the way a real speed controller would.
 //   kind: "lane" (follow route with offset, target speed) | "hard_brake" | "reverse" | "steer" (fixed angle)
 export function applyLaw(vehicle, law, route, s, dt) {
   switch (law.kind) {
@@ -51,7 +69,7 @@ export function applyLaw(vehicle, law, route, s, dt) {
     case "lane":
     default: {
       const stopAt = law.stopAt;
-      let vTarget = law.vTarget;
+      let vTarget = Math.min(law.vTarget, curveProfileSpeed(route, s).v);
       if (stopAt !== undefined && stopAt !== null) vTarget = Math.min(vTarget, stopSpeedFor(stopAt - (s - (law.s0 ?? s))));
       return vehicle.step(dt, { steer: purePursuit(vehicle, route, s, law.offset || 0), accel: speedControl(vehicle.v, vTarget) });
     }

@@ -118,6 +118,32 @@ One 755 m drive in Kitsilano with 40 traffic cars, a stop sign, and three signal
 One run, one route. The point is the order of magnitude: hundreds of real model decisions per
 minute for a few cents.
 
+## Benchmark
+
+Open http://127.0.0.1:8322/bench to score a brain on a fixed suite of drives. The suite is built
+from a seed (same map + seed = same start points, destinations, and traffic), each drive runs
+headlessly through the same world, traffic, and step function as the app, and the page reports:
+
+- **Pass / fail**: a drive passes when it arrives with no collision, red light, rolled stop sign,
+  or a second or more off the road.
+- **Safety**: collisions (and whose fault: ego, other, or shared for crossing traffic), closest
+  gap, worst time to collision, safety-brake interventions, deadlock overrides.
+- **Comfort and lane keeping**: peak acceleration and braking, hard brakes, RMS jerk, peak lateral
+  acceleration, RMS distance from the lane center, seconds over 110% of the limit.
+- **Cost and latency** for model brains.
+
+Two clocks: *lockstep* pauses the sim for each decision (measures decision quality alone and is
+fully reproducible for the Rules brain), *realtime* lets the world move while a request is in
+flight (latency counts, as in the app). Runs save to `data/runs/` and any two can be compared;
+**watch** on a row replays that drive in the 3D sim.
+
+The car model has a brake/throttle lag with a jerk limit and a friction circle (mu 0.9, dry
+asphalt), so a turn taken too fast understeers off the road instead of being driven at any
+lateral acceleration.
+
+Rules brain, 12 drives, suite seed 1, 40 traffic cars: 92% pass (11/12), 9.8 km, 0 collisions,
+0 red lights, 0 rolled stops, 1.9 s off-road in one drive, RMS jerk 2.9 m/s^3, lane RMS 0.34 m.
+
 ## Your own neighbourhood
 
 ```sh
@@ -138,6 +164,8 @@ so the default runs offline. Two presets: `kitsilano`, `mount_pleasant`.
 - One-way streets, turn restrictions and lane counts come from OpenStreetMap tags and are only as
   good as the tags. Roundabouts and complex junctions are handled crudely.
 - The safety brake only covers collisions, on purpose, so the brain's mistakes are visible.
+- The car model is a kinematic bicycle with actuator lag and a grip limit, not a full tire model:
+  no weight transfer, no skids, no yaw dynamics. Road friction is one number (`ROAD.mu`).
 - Everything runs on `127.0.0.1`. This is a local demo, not a hosted service yet.
 
 ## Tests
@@ -145,6 +173,7 @@ so the default runs offline. Two presets: `kitsilano`, `mount_pleasant`.
 ```sh
 uv run python -m unittest discover tests    # offline: geometry, road graph, controls, routing, proxy
 open http://127.0.0.1:8322/tests            # browser: car model, controller, collisions, candidates, state
+open http://127.0.0.1:8322/bench            # closed-loop scenario suite with metrics (see Benchmark)
 uv run scripts/verify_jev.py                # live: saved decisions in data/snapshots/ against the real model
 ```
 
@@ -172,6 +201,7 @@ jev/osm/             fetch → parse → project → road graph → controls →
 jev/routing.py       edge-based A* with turn penalties, alternatives, rounded corners
 static/js/sim/       car model, controller, collisions, signals, traffic, world
 static/js/brain/     sensors, candidates, state + questions, scheduler, rules brain, jev brain, safety
+static/js/bench/     scenario suite, headless runner, metrics, benchmark page
 static/js/render/    sky + sun + shadows, streets, buildings, trees, cars, overlays, minimap, procedural textures
 ```
 

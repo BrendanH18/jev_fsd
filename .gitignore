@@ -11,6 +11,9 @@ __pycache__/
 # Saved decision snapshots are local scratch; commit chosen ones on purpose with `git add -f`.
 data/snapshots/*.json
 
+# Benchmark runs are local results; commit a baseline on purpose with `git add -f`.
+data/runs/
+
 # Local scratch
 .shots/
 .DS_Store

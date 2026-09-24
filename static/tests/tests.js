@@ -74,10 +74,10 @@ async function run() {
     check("sampler excludes reverse on the road", !cands.some((c) => c.id === "reverse"));
     let { eligible } = simulateAll(cands, snap, world);
     check("clear road: most candidates eligible", eligible.length >= cands.length - 2, `${eligible.length}/${cands.length}`);
-    // put a stationary NPC 10 m ahead
+    // put a stationary NPC ~9.5 m ahead: far enough that braking gently still works (the brakes lag)
     const blocker = new Vehicle(); blocker.id = "car_x";
     const f = world.ego.front;
-    blocker.x = world.ego.x + Math.cos(world.ego.psi) * 12; blocker.y = world.ego.y + Math.sin(world.ego.psi) * 12; blocker.psi = world.ego.psi; blocker.v = 0;
+    blocker.x = world.ego.x + Math.cos(world.ego.psi) * 14; blocker.y = world.ego.y + Math.sin(world.ego.psi) * 14; blocker.psi = world.ego.psi; blocker.v = 0;
     world.npcs = [blocker];
     snap = buildSnapshot(world);
     check("following detected", snap.following && snap.following.gap_m < 10, JSON.stringify(snap.following && { gap: snap.following.gap_m }));

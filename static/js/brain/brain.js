@@ -1,6 +1,8 @@
 // The autopilot: executes the current maneuver every physics tick, fires a decision on a
 // schedule, and applies the brain's answer. One request in flight at a time; stale answers
-// (older epoch) are discarded; timeouts fall back to the rules brain for that tick.
+// (older epoch) are discarded; timeouts fall back to the rules brain for that tick. `now` is the
+// simulation clock in ms, so decision cadence follows sim time (pausing stops decisions and a
+// benchmark replays the same schedule).
 
 import { applyLaw } from "../sim/controller.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
@@ -44,6 +46,7 @@ export class Autopilot {
 
   setEnabled(on) {
     this.enabled = on;
+    this.world.ego.signal = null;
     this.bumpEpoch();
     this.executing = null;
     this.lastStart = -Infinity;
@@ -56,6 +59,8 @@ export class Autopilot {
     if (!this.enabled || !world.route) return;
     const road = world._road = world.roadInfo();
     const snap = this.snap = buildSnapshot(world, this.executing);
+    const nav = snap.nav;
+    world.ego.signal = nav && nav.turn_in_m < 40 && (nav.next_turn === "left" || nav.next_turn === "right") ? nav.next_turn : null;
     this.deadlock.update(world, snap, dt);
     if (snap.nav && snap.nav.arrived && world.ego.v < 0.3) {
       this.setEnabled(false);
@@ -71,7 +76,10 @@ export class Autopilot {
     // execute the current law (or hold still)
     const s = snap.routeProj ? snap.routeProj.s : 0;
     const brake = safetyBrake(world, snap, this.executing);
-    if (brake) {
+    if (brake && brake.hold) {
+      world.ego.step(dt, { steer: world.ego.delta, accel: -3 });
+      this.safetyActive = false;
+    } else if (brake) {
       world.ego.step(dt, { steer: world.ego.delta, accel: -8 });
       if (!this.safetyActive) { world.violations.safety_brakes++; this.onEvent({ type: "safety", brake }); }
       this.safetyActive = true;
@@ -93,7 +101,7 @@ export class Autopilot {
     // schedule
     const flags = hazardFlags(snap);
     const interval = flags.length ? INTERVAL_HAZARD_MS : INTERVAL_CLEAR_MS;
-    if (!this.inFlight && now - this.lastStart >= interval) this.fire(snap, now, flags);
+    if (!this.inFlight && now - this.lastStart >= interval) this.firing = this.fire(snap, now, flags);
   }
 
   async fire(snap, now, flags) {

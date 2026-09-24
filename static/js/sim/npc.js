@@ -3,7 +3,7 @@
 
 import { Vehicle, CAR } from "./vehicle.js";
 import { purePursuit } from "./controller.js";
-import { cumulative, pointAt, headingAt, projectPoint, dist } from "../map/mapdata.js";
+import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { phaseOf, StopMemory } from "./signals.js";
 import { rng } from "../common.js";
 import { wrap } from "./world.js";
@@ -26,11 +26,7 @@ class NpcPath {
   }
   append(edgeId, laneIdx) {
     const lane = this.map.lane(edgeId, laneIdx) || this.map.lane(edgeId, 0);
-    const start = this.pts.length;
-    const pts = lane.pts;
-    if (this.pts.length && dist(this.pts[this.pts.length - 1], pts[0]) > 0.05) this.pts.push(pts[0]);
-    for (let i = this.pts.length ? 1 : 0; i < pts.length; i++) this.pts.push(pts[i]);
-    if (this.pts.length === pts.length && start === 0) { /* first lane */ }
+    this.pts = joinLanes(this.pts, lane.pts);
     this.cum = cumulative(this.pts);
     this.length = this.cum[this.cum.length - 1];
     const edge = this.map.edges.get(edgeId);
@@ -38,7 +34,8 @@ class NpcPath {
     this.edges.push({ id: edgeId, lane: laneIdx, sStart, sEnd: this.length, control: edge.control || null, to: edge.to, limit: edge.limit });
   }
   extend() {
-    while (this.length - this.s < LOOK_M * 2.5) {
+    // bounded: joining a very short lane after a rounded corner can add almost no length
+    for (let guard = 0; guard < 24 && this.length - this.s < LOOK_M * 2.5; guard++) {
       const last = this.edges[this.edges.length - 1];
       const succ = this.map.successors(last.id);
       if (!succ.length) return false;
@@ -152,6 +149,24 @@ export class NpcFleet {
         break;
       }
       if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
+      // the next junction: which way we turn there, and the indicator for it
+      const ji = path.edges.findIndex((e) => e.sEnd > front);
+      const cur = path.edges[ji], after = path.edges[ji + 1];
+      const toNode = cur ? cur.sEnd - front : Infinity;
+      const turn = after ? this.map.classifyTurn(this.map.turnAngle(cur.id, after.id)) : "straight";
+      n.signal = toNode < 35 && (turn === "left" || turn === "right") ? turn : null;
+      // turning left: yield to oncoming traffic before crossing its lane
+      if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
+        gap = Math.min(gap, Math.max(0.05, toNode - 5)); leadV = 0;
+      }
+      // junction with no sign or signal ahead: yield to anyone already crossing it
+      if (stopAt === null) {
+        const next = path.edges.find((e) => e.sEnd > front);
+        const toNode = next ? next.sEnd - front : Infinity;
+        if (next && !next.control && toNode > 5 && toNode < 25 && this.isJunction(next.to) && this.boxBusy(n, next)) {
+          gap = Math.min(gap, Math.max(0.05, toNode - 6)); leadV = 0;
+        }
+      }
       // intersection box rule for signals too: don't enter while a crossing car is inside
       if (stopAt === null && edge.control && edge.control.type === "signal") {
         const lineS = edge.sStart + (edge.control.s_line / Math.max(1, this.map.edges.get(edge.id).length)) * (edge.sEnd - edge.sStart);
@@ -182,6 +197,31 @@ export class NpcFleet {
     }
   }
 
+  // Someone coming the other way who will reach this node within 6 s (a slow left turn needs
+  // about that long to clear the oncoming lane).
+  oncoming(n, nodeId) {
+    const node = this.map.nodes.get(nodeId);
+    if (!node) return false;
+    for (const o of [this.world.ego, ...this.vehicles]) {
+      if (o === n || o.v < 1) continue;
+      if (Math.abs(wrap(o.psi - n.psi)) < Math.PI * 5 / 6) continue;
+      const dx = node.x - o.x, dy = node.y - o.y, d = Math.hypot(dx, dy);
+      if (d > 80 || dx * Math.cos(o.psi) + dy * Math.sin(o.psi) < 0) continue;
+      if (d / o.v < 6) return true;
+    }
+    return false;
+  }
+
+  isJunction(nodeId) {
+    if (!this.junctions) this.junctions = new Map();
+    if (!this.junctions.has(nodeId)) {
+      const ids = [...(this.map.inn.get(nodeId) || []), ...(this.map.out.get(nodeId) || [])];
+      const neighbors = new Set(ids.map((id) => { const e = this.map.edges.get(id); return e.from === nodeId ? e.to : e.from; }));
+      this.junctions.set(nodeId, neighbors.size >= 3);
+    }
+    return this.junctions.get(nodeId);
+  }
+
   boxBusy(n, e) {
     const node = this.map.nodes.get(e.to);
     if (!node) return false;
@@ -206,7 +246,7 @@ export class NpcFleet {
   respawn(n) {
     const near = this.map.nearestLane(n.x, n.y, n.psi, 40);
     if (!near) return;
-    n.x = near.point[0]; n.y = near.point[1]; n.psi = near.heading; n.v = 0; n.delta = 0;
+    n.x = near.point[0]; n.y = near.point[1]; n.psi = near.heading; n.v = 0; n.delta = 0; n.a = 0;
     n.path.start(near.lane.edge, near.lane.idx, near.s);
     n.stopMem.reset();
   }

@@ -6,7 +6,14 @@ import { CAR } from "../sim/vehicle.js";
 
 export function safetyBrake(world, snap, executing) {
   const ego = world.ego;
-  if (ego.v < 0.3) return null;
+  if (ego.v < 0.3) {
+    // standing still: never pull away into a car right in front (not counted as an intervention)
+    for (const n of world.npcs) {
+      const local = ego.toLocal(n.x, n.y);
+      if (Math.abs(local.right) < 1.6 && local.ahead > -1 && local.ahead - CAR.length < 2.0) return { reason: "blocked", hold: true };
+    }
+    return null;
+  }
   if (snap && snap.following) {
     const gap = snap.following.gap_m, closing = snap.following.closing_mps;
     const ttc = closing > 0.1 ? gap / closing : Infinity;

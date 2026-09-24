@@ -1,6 +1,13 @@
-// Kinematic bicycle model. State at the rear axle: x, y (m), psi (rad, CCW from +x), v (m/s),
-// delta (steering angle, rad). The same model runs the ego car, the NPCs, and the candidate
+// Kinematic bicycle model with a powertrain/brake actuator and tire grip. State at the rear axle:
+// x, y (m), psi (rad, CCW from +x), v (m/s), delta (steering angle, rad), a (actual longitudinal
+// acceleration, m/s^2). The same model runs the ego car, the NPCs, and the candidate
 // forward-simulations, so predictions match what actually happens.
+//
+// Actuator: the commanded acceleration is reached through a first-order lag and a jerk limit, so
+// a car cannot flip from full throttle to full braking in one tick.
+// Grip: braking and cornering share one friction circle of radius mu * g. Asked to turn tighter
+// than the tires allow, the car understeers (follows a wider arc), which is what makes a turn
+// taken too fast leave the road.
 
 export const CAR = {
   wheelbase: 2.7,
@@ -13,16 +20,24 @@ export const CAR = {
   maxBrake: 8.0,
   maxSpeed: 40.0,
   maxReverse: 3.0,
+  accelLag: 0.25,         // s, first-order actuator time constant
+  jerkMax: 15.0,          // m/s^3
 };
+
+// Road surface. mu ~0.9 dry asphalt, ~0.55 wet, ~0.2 snow.
+export const ROAD = { mu: 0.9 };
+const G = 9.81;
 
 export class Vehicle {
   constructor(x = 0, y = 0, psi = 0, v = 0) {
     this.x = x; this.y = y; this.psi = psi; this.v = v; this.delta = 0;
+    this.a = 0; this.latAccel = 0;
   }
 
   clone() {
     const c = new Vehicle(this.x, this.y, this.psi, this.v);
     c.delta = this.delta;
+    c.a = this.a;
     return c;
   }
 
@@ -31,18 +46,30 @@ export class Vehicle {
     const target = Math.max(-CAR.maxSteer, Math.min(CAR.maxSteer, steer));
     const maxDelta = CAR.steerRate * dt;
     this.delta += Math.max(-maxDelta, Math.min(maxDelta, target - this.delta));
-    let a = Math.max(-CAR.maxBrake, Math.min(CAR.maxAccel, accel));
-    if (a === 0) a = -0.02 * this.v;  // rolling drag
+    let cmd = Math.max(-CAR.maxBrake, Math.min(CAR.maxAccel, accel));
+    if (cmd === 0) cmd = -0.02 * this.v;  // rolling drag
+    const da = (cmd - this.a) * Math.min(1, dt / CAR.accelLag);
+    this.a += Math.max(-CAR.jerkMax * dt, Math.min(CAR.jerkMax * dt, da));
+    const grip = ROAD.mu * G;
+    const a = Math.max(-grip, Math.min(grip, this.a));
+    // curvature the tires can hold after the share of grip used for braking or accelerating
+    let curvature = Math.tan(this.delta) / CAR.wheelbase;
+    const latMax = Math.sqrt(Math.max(0, grip * grip - a * a));
+    const v2 = this.v * this.v;
+    if (v2 * Math.abs(curvature) > latMax) curvature = Math.sign(curvature) * latMax / v2;
+    this.latAccel = v2 * curvature;
     this.x += this.v * Math.cos(this.psi) * dt;
     this.y += this.v * Math.sin(this.psi) * dt;
-    this.psi += (this.v / CAR.wheelbase) * Math.tan(this.delta) * dt;
+    this.psi += this.v * curvature * dt;
     if (this.psi > Math.PI) this.psi -= 2 * Math.PI;
     if (this.psi <= -Math.PI) this.psi += 2 * Math.PI;
     const v0 = this.v;
     this.v += a * dt;
     // braking never reverses the car on its own; reversing is an explicit choice
-    if (accel < 0 && v0 >= 0 && this.v < 0 && !reverse) this.v = 0;
-    if (accel > 0 && v0 < 0 && this.v > 0) this.v = 0;
+    if (a < 0 && v0 >= 0 && this.v < 0 && !reverse) this.v = 0;
+    if (a > 0 && v0 < 0 && this.v > 0) this.v = 0;
+    // held on the brakes at a standstill the car does not accelerate backwards
+    if (this.v === 0 && this.a < 0 && !reverse) this.a = 0;
     this.v = Math.max(-CAR.maxReverse, Math.min(CAR.maxSpeed, this.v));
   }
 

@@ -17,6 +17,7 @@ TURN_PENALTY_S = {"straight": 0.0, "right": 2.0, "left": 4.0, "uturn": 20.0}
 MAX_LIMIT_MPS = 29.0
 FILLET_RADIUS_M = 6.0
 FILLET_MIN_DEG = 20.0
+BLEND_M = 4.0
 RESAMPLE_M = 1.0
 ALT_COST_FACTOR = 1.6
 ALT_MIN_DIFFERENT = 0.25
@@ -237,18 +238,15 @@ class Router:
                 polyline.extend(piece)
                 continue
             angle = g.turn_angle(self.heading_in(path[i - 1]), self.heading_out(path[i]))
-            corner = polyline[-1]
-            # join: the lane polylines of consecutive edges may be offset differently; bridge the gap
+            joined = None
             if abs(math.degrees(angle)) >= FILLET_MIN_DEG and len(polyline) >= 2 and len(piece) >= 2:
-                a = polyline[-2]
-                b = piece[1] if g.dist(piece[0], corner) < 0.5 else piece[0]
-                mid = ((corner[0] + piece[0][0]) / 2, (corner[1] + piece[0][1]) / 2)
-                curve = g.fillet(a, mid, b, FILLET_RADIUS_M)
-                polyline.pop()
-                polyline.extend(curve)
-                polyline.extend(piece[1:] if g.dist(piece[0], corner) < 0.5 else piece)
+                joined = _round_corner(polyline, piece, FILLET_RADIUS_M)
+            if not joined and g.dist(piece[0], polyline[-1]) > 0.05:
+                joined = _blend(polyline, piece, BLEND_M)
+            if joined:
+                polyline = joined
             else:
-                polyline.extend(piece if g.dist(piece[0], corner) > 0.05 else piece[1:])
+                polyline.extend(piece[1:])
         polyline = g.dedupe_consecutive(polyline, 0.05)
         polyline = g.resample(polyline, RESAMPLE_M) if len(polyline) >= 2 else polyline
         cum = g.cumulative_s(polyline)
@@ -270,6 +268,68 @@ class Router:
             "turns": turns,
             "summary": _summary(turns, length, self.edges[path[-1]]["name"]),
         }
+
+
+def _blend(before: List[Tuple[float, float]], after: List[Tuple[float, float]], blend: float):
+    """Near-straight join whose lane ends do not meet (lane widths or counts change): drop up to
+    `blend` meters on each side and connect, so the shift spreads over several meters instead of a
+    sideways step."""
+    cum_b, cum_a = g.cumulative_s(before), g.cumulative_s(after)
+    keep_b = max(0.0, cum_b[-1] - min(blend, cum_b[-1] / 2))
+    skip_a = min(blend, cum_a[-1] / 2)
+    head = [p for p, c in zip(before, cum_b) if c < keep_b - 0.05] + [g.point_at(before, keep_b, cum_b)]
+    tail = [g.point_at(after, skip_a, cum_a)] + [p for p, c in zip(after, cum_a) if c > skip_a + 0.05]
+    return head + tail
+
+
+def _unit(a, b):
+    d = g.dist(a, b)
+    return None if d < 1e-6 else ((b[0] - a[0]) / d, (b[1] - a[1]) / d)
+
+
+def _round_corner(before: List[Tuple[float, float]], after: List[Tuple[float, float]], radius: float):
+    """Join two lane polylines at a turn through the corner where their lines actually meet.
+
+    Lanes sit to the right of each street's centerline, so at a right turn the incoming lane runs
+    past the real corner and the outgoing one starts before it; joining end to start would make the
+    path back up. Instead: intersect the last incoming segment with the first outgoing one, trim both
+    to `radius` from that corner (less if a leg is short), and round it with a quadratic Bezier.
+    Returns the joined polyline, or None when the lines are near parallel or the corner is off."""
+    cum_b = g.cumulative_s(before)
+    cum_a = g.cumulative_s(after)
+    e, s0 = before[-1], after[0]
+    # directions over the last / first few meters: very short lane segments can point anywhere
+    din = _unit(g.point_at(before, max(0.0, cum_b[-1] - 3.0), cum_b), e)
+    dout = _unit(s0, g.point_at(after, min(cum_a[-1], 3.0), cum_a))
+    if din is None or dout is None:
+        return None
+    denom = din[0] * dout[1] - din[1] * dout[0]
+    if abs(denom) < 0.15:
+        return None
+    w = (s0[0] - e[0], s0[1] - e[1])
+    t = (w[0] * dout[1] - w[1] * dout[0]) / denom      # corner = e + t * din
+    u = (w[0] * din[1] - w[1] * din[0]) / denom        # corner = s0 + u * dout
+    if abs(t) > 15 or abs(u) > 15:
+        return None
+    corner = (e[0] + din[0] * t, e[1] + din[1] * t)
+    s_corner_b = cum_b[-1] + t          # corner position along `before`
+    s_corner_a = u                      # corner position along `after` (negative when before its start)
+    r = min(radius, max(0.5, s_corner_b / 2), max(0.5, (cum_a[-1] - s_corner_a) / 2))
+    keep_b = max(0.0, s_corner_b - r)
+    skip_a = max(0.0, s_corner_a + r)
+    head = [p for p, c in zip(before, cum_b) if c < keep_b - 0.05]
+    head.append(g.point_at(before, keep_b, cum_b) if keep_b <= cum_b[-1] else
+                (e[0] + din[0] * (keep_b - cum_b[-1]), e[1] + din[1] * (keep_b - cum_b[-1])))
+    p0 = head[-1]
+    p2 = g.point_at(after, skip_a, cum_a) if skip_a <= cum_a[-1] else (corner[0] + dout[0] * r, corner[1] + dout[1] * r)
+    curve = []
+    for k in range(1, 9):
+        tt = k / 8
+        uu = 1 - tt
+        curve.append((uu * uu * p0[0] + 2 * uu * tt * corner[0] + tt * tt * p2[0],
+                      uu * uu * p0[1] + 2 * uu * tt * corner[1] + tt * tt * p2[1]))
+    tail = [p for p, c in zip(after, cum_a) if c > skip_a + 0.05]
+    return head + curve + tail
 
 
 def _slice(pts: List[Tuple[float, float]], cum: List[float], s0: float, s1: float) -> List[Tuple[float, float]]:

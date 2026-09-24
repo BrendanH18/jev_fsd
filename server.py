@@ -24,14 +24,14 @@ from urllib.parse import parse_qs, urlparse
 
 from jev import decide, security
 from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
-from jev.config import MAPS_DIR, PROJECT_ROOT, SNAPSHOTS_DIR, Settings, parse_bbox
+from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.routing import Router
 
 VERSION = "0.1.0"
 STATIC = PROJECT_ROOT / "static"
-PAGES = {"/": "index.html", "/tests": "tests/run.html"}
+PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html"}
 MAX_BODY_BYTES = 1024 * 1024
 
 settings = Settings()
@@ -133,12 +133,57 @@ def api_snapshot_save(body, _query):
     return {"saved": str(path.relative_to(PROJECT_ROOT))}
 
 
+# --- benchmark runs --------------------------------------------------------------------------
+
+
+def api_bench_save(body, _query):
+    """Store a finished benchmark run (config, per-scenario results, summary) under data/runs/."""
+    for key in ("config", "summary", "results"):
+        if key not in body:
+            raise BadRequest("%s is required" % key)
+    if not isinstance(body["results"], list) or not isinstance(body["summary"], dict):
+        raise BadRequest("results must be a list and summary an object")
+    config = body["config"] if isinstance(body["config"], dict) else {}
+    brain = "".join(ch for ch in str(config.get("brain") or "run") if ch.isalnum())[:20] or "run"
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = RUNS_DIR / ("%s-%s.json" % (stamp, brain))
+    if path.exists():
+        path = RUNS_DIR / ("%s-%s-%s.json" % (stamp, brain, secrets.token_hex(2)))
+    payload = {"name": path.stem, "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "config": config,
+               "summary": body["summary"], "results": body["results"]}
+    path.write_text(json.dumps(payload, indent=1))
+    return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
+
+
+def api_bench_runs(_body, query):
+    """Recent runs, newest first: name, config, and summary (?name=<run> returns one in full)."""
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    name = (query.get("name") or [""])[0]
+    if name:
+        safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_")
+        path = RUNS_DIR / ("%s.json" % safe)
+        if not path.is_file():
+            raise BadRequest("No run named %s" % safe)
+        return json.loads(path.read_text())
+    runs = []
+    for path in sorted(RUNS_DIR.glob("*.json"), reverse=True)[:30]:
+        try:
+            data = json.loads(path.read_text())
+        except ValueError:
+            continue
+        runs.append({"name": path.stem, "saved_at": data.get("saved_at"), "config": data.get("config"), "summary": data.get("summary")})
+    return {"runs": runs}
+
+
 ROUTES = {
     ("GET", "/api/status"): api_status,
     ("GET", "/api/map"): api_map,
     ("POST", "/api/route"): api_route,
     ("POST", "/api/decide"): api_decide,
     ("POST", "/api/snapshot/save"): api_snapshot_save,
+    ("POST", "/api/bench/save"): api_bench_save,
+    ("GET", "/api/bench/runs"): api_bench_runs,
 }
 
 CSP = ("default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'nonce-%s'; "

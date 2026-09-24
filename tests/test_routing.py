@@ -32,6 +32,22 @@ class RouterTests(unittest.TestCase):
         e2 = self.router.edges[west["edge"]]
         self.assertLess(e2["pts"][-1][0], e2["pts"][0][0])
 
+    def test_route_never_backs_up_at_turns(self):
+        # Lanes sit right of each street's centerline, so a naive end-to-start join at a right turn
+        # makes the path step backwards. Every consecutive 1 m step must keep going forward.
+        worst = 0.0
+        for start, goal in [((-120.0, -180.0, 0.0), (60.0, 100.0)), ((-120.0, -180.0, 0.0), (-180.0, 100.0)),
+                            ((60.0, 150.0, -math.pi / 2), (-150.0, -60.0)), ((-60.0, 60.0, 0.0), (60.0, -150.0))]:
+            routes = self.router.routes({"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]})
+            self.assertTrue(routes)
+            pl = routes[0]["polyline"]
+            self.assertTrue(any(t["dir"] in ("left", "right") for t in routes[0]["turns"]))
+            for i in range(1, len(pl) - 1):
+                h1 = math.atan2(pl[i][1] - pl[i - 1][1], pl[i][0] - pl[i - 1][0])
+                h2 = math.atan2(pl[i + 1][1] - pl[i][1], pl[i + 1][0] - pl[i][0])
+                worst = max(worst, abs(g.wrap_angle(h2 - h1)))
+        self.assertLess(math.degrees(worst), 60)
+
     def test_route_reaches_goal_and_respects_oneway(self):
         # Oneway Ave runs north on the east column (x = 180). Start south-bound on the two-way column
         # next to it and ask for its south end: the only legal way in is from the south, heading north.

@@ -1,0 +1,28 @@
+body.bench { overflow: auto; padding: 18px 22px 40px; height: auto; min-height: 100%; }
+.bench header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+.bench header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.bench header a { margin-left: auto; text-decoration: none; }
+.bench .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; padding: 12px 14px; }
+.bench .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.bench input[type=number] { font: inherit; font-size: 13px; width: 90px; color: var(--text); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; text-transform: none; }
+.bench .controls select { text-transform: none; }
+.bench #run { font-size: 13px; padding: 7px 18px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.card .label { display: block; margin-bottom: 4px; }
+.card .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.card .delta { font-size: 12px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+.delta.better { color: var(--good); } .delta.worse { color: var(--bad); } .delta.same { color: var(--muted); }
+.table-wrap { overflow-x: auto; padding: 4px; }
+#results { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+#results th { text-align: right; font-weight: 500; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 8px; white-space: nowrap; position: sticky; top: 0; background: #11151c; }
+#results td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--border); white-space: nowrap; }
+#results th:first-child, #results td:first-child, #results td.left, #results th.left { text-align: left; }
+#results tr.fail td { background: rgba(255, 107, 107, 0.07); }
+#results td.pass { color: var(--good); font-weight: 600; }
+#results td.failed { color: var(--bad); font-weight: 600; }
+#results td.warn { color: var(--warn); }
+#results tr.running td { color: var(--accent); }
+#results tfoot td { font-weight: 600; border-top: 2px solid var(--border); }
+.bench .foot { font-size: 12px; max-width: 900px; line-height: 1.5; }
+.bench .watch { font-size: 11px; padding: 3px 8px; }

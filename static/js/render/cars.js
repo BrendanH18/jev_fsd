@@ -108,6 +108,9 @@ function styleGeometry(name) {
     plate: merge([box(0.03, 0.14, 0.5, XF + 0.1, st.sill + 0.12, 0), box(0.03, 0.14, 0.5, XR - 0.1, st.sill + 0.25, 0)]),
     head: merge(pair((z) => box(0.08, 0.13, 0.36, XF + 0.06, noseY, z))),
     tail: merge(pair((z) => box(0.08, 0.14, 0.4, XR - 0.06, tailY, z))),
+    // indicators: front and rear corner on each side (local +z is the right side)
+    blinkL: merge([box(0.07, 0.12, 0.22, XF + 0.05, noseY - 0.12, -(W / 2 - 0.1)), box(0.07, 0.12, 0.22, XR - 0.07, tailY - 0.12, -(W / 2 - 0.1))]),
+    blinkR: merge([box(0.07, 0.12, 0.22, XF + 0.05, noseY - 0.12, W / 2 - 0.1), box(0.07, 0.12, 0.22, XR - 0.07, tailY - 0.12, W / 2 - 0.1)]),
   };
   geoCache.set(name, g);
   return g;
@@ -120,6 +123,7 @@ const shared = {
   rim: new THREE.MeshStandardMaterial({ color: 0xb4b9c0, metalness: 1.0, roughness: 0.28 }),
   plate: new THREE.MeshStandardMaterial({ color: 0xe9ecef, roughness: 0.5 }),
   head: new THREE.MeshStandardMaterial({ color: 0xdfe6ee, emissive: 0xfff4e0, emissiveIntensity: 0.35, roughness: 0.1, metalness: 0.3 }),
+  blink: new THREE.MeshStandardMaterial({ color: 0xffa31a, emissive: 0xff8c00, emissiveIntensity: 3, roughness: 0.3 }),
   blob: new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, color: 0x000000, opacity: 0.65 }),
 };
 const paints = new Map();
@@ -180,6 +184,9 @@ export function createCarMesh(color = 0x2f7cff, id = "ego") {
   add(geo.plate, shared.plate, false);
   add(geo.head, shared.head, false);
   add(geo.tail, tail, false);
+  const blinkers = { left: new THREE.Mesh(geo.blinkL, shared.blink), right: new THREE.Mesh(geo.blinkR, shared.blink) };
+  blinkers.left.visible = blinkers.right.visible = false;
+  g.add(blinkers.left, blinkers.right);
 
   const brake = [];
   for (const z of [-(W / 2 - 0.26), W / 2 - 0.26]) {
@@ -206,11 +213,11 @@ export function createCarMesh(color = 0x2f7cff, id = "ego") {
     g.add(pivot);
     wheels.push({ pivot, wheel });
   }
-  g.userData = { wheels, spin: 0, tire: st.tire, tail, brake, prevV: 0, brakeLevel: 0 };
+  g.userData = { wheels, spin: 0, tire: st.tire, tail, brake, blinkers, prevV: 0, brakeLevel: 0 };
   return g;
 }
 
-export function syncCar(mesh, vehicle, dt = 0) {
+export function syncCar(mesh, vehicle, dt = 0, t = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
@@ -219,6 +226,10 @@ export function syncCar(mesh, vehicle, dt = 0) {
     u.wheels[i].wheel.rotation.z = -u.spin;
     u.wheels[i].pivot.rotation.y = i < 2 ? vehicle.delta : 0;
   }
+  // indicators blink at about 75 per minute
+  const on = (t % 0.8) < 0.45;
+  u.blinkers.left.visible = on && vehicle.signal === "left";
+  u.blinkers.right.visible = on && vehicle.signal === "right";
   // brake lights: on while decelerating or held stopped
   if (dt > 0) {
     const decel = (u.prevV - vehicle.v) / dt;

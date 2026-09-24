@@ -66,6 +66,45 @@ export function projectPoint(pts, cum, p, hint = null) {
   return best;
 }
 
+// Join two lane polylines where one street meets the next (mirrors jev/routing.py). Lanes sit
+// right of each street's centerline, so at a turn the incoming lane runs past the real corner and
+// the outgoing one starts before it; chaining them end to start makes a path that backs up or
+// swings across the road. Turns (>= 20 deg): round the corner where the two lane lines meet.
+// Near-straight joins whose ends do not meet: spread the shift over a few meters.
+export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
+  if (!before.length) return after.slice();
+  if (after.length < 2 || before.length < 2 || cumulative(after).at(-1) < 3) return before.concat(after.slice(dist(before[before.length - 1], after[0]) < 0.05 ? 1 : 0));
+  const cb = cumulative(before), ca = cumulative(after);
+  const Lb = cb[cb.length - 1], La = ca[ca.length - 1];
+  const e = before[before.length - 1], s0 = after[0];
+  const unit = (a, b) => { const d = dist(a, b); return d < 1e-6 ? null : [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; };
+  const din = unit(pointAt(before, cb, Math.max(0, Lb - 3)), e), dout = unit(s0, pointAt(after, ca, Math.min(La, 3)));
+  const angle = din && dout ? Math.abs(wrapAngle(Math.atan2(dout[1], dout[0]) - Math.atan2(din[1], din[0]))) : 0;
+  if (angle >= 20 * Math.PI / 180) {
+    const denom = din[0] * dout[1] - din[1] * dout[0];
+    const w = [s0[0] - e[0], s0[1] - e[1]];
+    const t = (w[0] * dout[1] - w[1] * dout[0]) / denom, u = (w[0] * din[1] - w[1] * din[0]) / denom;
+    if (Math.abs(denom) >= 0.15 && Math.abs(t) <= 15 && Math.abs(u) <= 15) {
+      const corner = [e[0] + din[0] * t, e[1] + din[1] * t];
+      const sb = Lb + t, sa = u;
+      const r = Math.min(radius, Math.max(0.5, sb / 2), Math.max(0.5, (La - sa) / 2));
+      const keep = Math.max(0, sb - r), skip = Math.max(0, sa + r);
+      const head = before.filter((_, i) => cb[i] < keep - 0.05);
+      head.push(keep <= Lb ? pointAt(before, cb, keep) : [e[0] + din[0] * (keep - Lb), e[1] + din[1] * (keep - Lb)]);
+      const p0 = head[head.length - 1];
+      const p2 = skip <= La ? pointAt(after, ca, skip) : [corner[0] + dout[0] * r, corner[1] + dout[1] * r];
+      for (let k = 1; k <= 8; k++) {
+        const q = k / 8, m = 1 - q;
+        head.push([m * m * p0[0] + 2 * m * q * corner[0] + q * q * p2[0], m * m * p0[1] + 2 * m * q * corner[1] + q * q * p2[1]]);
+      }
+      return head.concat(after.filter((_, i) => ca[i] > skip + 0.05));
+    }
+  }
+  if (dist(e, s0) <= 0.05) return before.concat(after.slice(1));
+  const keep = Math.max(0, Lb - Math.min(blend, Lb / 2)), skip = Math.min(blend, La / 2);
+  return before.filter((_, i) => cb[i] < keep - 0.05).concat([pointAt(before, cb, keep), pointAt(after, ca, skip)], after.filter((_, i) => ca[i] > skip + 0.05));
+}
+
 export class MapData {
   constructor(pack) {
     this.pack = pack;

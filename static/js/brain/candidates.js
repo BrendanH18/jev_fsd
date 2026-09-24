@@ -36,7 +36,7 @@ export function sampleCandidates(snap, world) {
     const lateral = snap.routeProj ? Math.abs(snap.routeProj.lateral) : 0;
     if (lateral > 0.5 || snap.following || snap.traffic.length) offsets.push(-1.0, 1.0);
     const target = snap.target ? snap.target.v : limit;
-    const speeds = new Set([0, Math.max(0, v - 3), v, Math.min(limit + 1, v + 2), limit, target].map((x) => Math.round(Math.max(0, Math.min(limit + 1, x)) * 10) / 10));
+    const speeds = new Set([0, Math.max(0, v - 3), v, Math.min(limit, v + 2), limit, target].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
     for (const d of offsets) {
       for (const vt of [...speeds].sort((a, b) => b - a)) {
         const name = Math.abs(vt - target) < 0.15 && vt > 0.05 ? "target" : vt <= 0.05 ? "stop" : Math.abs(vt - v) < 0.3 ? "hold" : vt >= limit - 0.05 ? "limit" : vt < v ? "slow" : "faster";
