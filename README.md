@@ -1,122 +1,136 @@
 # Jev FSD
 
-A driving simulator on real city streets where an AI model drives the car, and you can watch it
-think. The model is [Jev](https://typesafe.ai/) by TypeSafe AI, a "System One" model: it does not
-write text, it answers typed questions with probabilities in about a tenth of a second. Click a
-destination on the minimap and Jev drives there through traffic, stop signs, and lights, while a
-panel shows exactly what it was asked and how sure it was.
+**An AI model drives a car through a real city, and you can watch every decision it makes.**
 
-![Autopilot on Balsam Street in Kitsilano: the route in blue, candidate maneuvers in green, the chosen one in yellow](docs/drive.jpg)
+Jev FSD is a driving simulator built on real OpenStreetMap streets. Pick a destination and the car
+drives there through traffic, stop signs, and traffic lights. The driver is
+[Jev](https://typesafe.ai/), a "System One" model from TypeSafe AI: instead of writing text, it
+answers typed multiple-choice questions with probabilities, in about a tenth of a second. A panel
+shows exactly what the model was asked, what it answered, how sure it was, and what it cost.
 
-*The Rules brain driving in Kitsilano. Blue: the route. Green: the maneuvers that survived
-simulation. Yellow: the one chosen. Every building, street, lane, signal, and stop sign comes from
-OpenStreetMap.*
+![The autopilot on Balsam Street in Kitsilano, Vancouver: the route in blue, candidate maneuvers in green, the chosen one in yellow](docs/drive.jpg)
 
-Default map: Kitsilano, Vancouver. Any neighbourhood works.
+> **This is a research and demo project.** It is a simulation for exploring how a fast
+> classification model can make driving decisions. It is not a self-driving system and must never
+> be used to control a real vehicle. It is independent and not affiliated with TypeSafe AI.
 
-## Try it
+## Highlights
 
-You need [uv](https://docs.astral.sh/uv/) (it provides Python 3.10 or newer and the one
-dependency). The 3D scene loads Three.js from a CDN, so there is no Node and no build step.
+- **Real streets.** Kitsilano, Vancouver, by default: streets, lanes, speed limits, one-way streets,
+  traffic signals, stop signs, and buildings, straight from OpenStreetMap. Any neighbourhood works.
+- **Two drivers, one car.** Switch between the Jev model and a hand-written Rules driver. Both drive
+  the same car through the same pipeline, so you can compare them fairly.
+- **Nothing hidden.** Every decision can be inspected, copied as a `curl` command, or saved. Collisions,
+  red lights, rolled stop signs, and time off the road are counted on screen.
+- **A benchmark.** A reproducible suite of drives scores any driver on safety, comfort, lane keeping,
+  legality, and cost.
+- **No build step.** A small Python server and a browser. Three.js loads from a CDN; there is no
+  Node toolchain.
+
+## Quick start
+
+You need [uv](https://docs.astral.sh/uv/), which provides Python 3.10 or newer and the one
+dependency, and a desktop browser with WebGL.
 
 ```sh
 git clone https://github.com/BrendanH18/jev_fsd && cd jev_fsd
 uv run server.py
 ```
 
-Open http://127.0.0.1:8322 and click anywhere on the minimap.
+Open http://127.0.0.1:8322 and click anywhere on the minimap. The car plans a route and drives
+there.
 
-**To let Jev drive you need a TypeSafe API key.** Jev is in early access; request one at
-[console.typesafe.ai](https://console.typesafe.ai). Then:
+**Without an API key** the app runs with the Rules driver, which needs no account and costs
+nothing. **To let Jev drive**, request an API key at
+[console.typesafe.ai](https://console.typesafe.ai) (Jev is in early access), then:
 
 ```sh
-cp .env.example .env      # put TYPESAFE_API_KEY=... in it, restart the server
+cp .env.example .env      # set TYPESAFE_API_KEY=... and restart the server
 ```
 
-Without a key the app still runs with the **Rules** brain, plain code that drives the same car
-through the same harness. It is the fallback and the control group, not a fake Jev.
+### Controls
 
 | Key | Action |
 |---|---|
-| click the minimap | set a destination (autopilot starts) |
+| click the minimap | set a destination (the autopilot starts) |
 | `J` | autopilot on / off |
-| `W A S D` or arrows | drive yourself (takes over from the autopilot) |
+| `W A S D` or arrow keys | drive yourself (this takes over from the autopilot) |
 | `Space` | brake hard |
-| `C` | camera: chase, top-down, high chase |
-| `R` | reset the car onto the nearest lane |
+| `C` | switch camera: chase, top-down, high chase |
+| `R` | put the car back on the nearest lane |
 | `P` | pause |
-| `1` / `2` | Jev brain / Rules brain |
-| **JSON** | the panel: state, questions, answers, and timing for every decision |
+| `1` / `2` | Jev driver / Rules driver |
+| **JSON** button | open the decision panel |
 
-Three pages: `/` the sim, `/bench` the benchmark, `/tests` the browser test suite.
+The app has three pages: `/` (the simulator), `/bench` (the benchmark), and `/tests` (the
+browser test suite).
 
-Requirements: a desktop browser with WebGL. Phones are not supported yet.
+## Jev mode and Rules mode
 
-## What is simulated
+The two modes share almost everything. The same code senses the situation, proposes maneuvers,
+simulates each one three seconds ahead, and throws out anything that would crash, leave the road,
+run a red light, or roll a stop sign. Only then do the modes differ: they pick among the safe
+maneuvers that are left.
 
-**The map.** Streets, lanes, speed limits, one-way streets, traffic signals, stop signs, and
-building footprints come from OpenStreetMap and are built into a "map pack" on the server. Stop
-lines sit just short of the crossing street's curb (further back at signals, to leave room for a
-crosswalk), so a stopped car never waits inside the other road. Signal timing is invented (48 s
-cycles), because OpenStreetMap has none.
+| | Jev mode | Rules mode |
+|---|---|---|
+| Who chooses | the Jev model, via TypeSafe's API | about 40 lines of JavaScript (`static/js/brain/rules.js`) |
+| How it chooses | reads a description of the situation and answers two questions with probabilities | adds up a fixed score for each maneuver and takes the lowest |
+| Needs | an API key and a network connection | nothing |
+| Time per decision | about 130 ms (the car keeps executing its last choice meanwhile) | effectively zero |
+| Cost | about $0.00008 per decision, a few cents per drive | free |
+| Repeatable | no, answers can vary and network timing varies | yes, the same inputs always give the same choice |
+| Reads `driving_style` | yes, edit it in the panel and the driving changes | no |
+| When several routes exist | Jev picks one | takes the first |
 
-**The car.** A kinematic bicycle model with two things real cars have and toy models lack:
+**Rules mode** is plain code. It stops when the car is at a red or yellow light, at a stop sign it
+has not completed, when crossing traffic is moving after a stop, when a stopped car is less than
+3 m ahead, or at the destination. Otherwise it scores every safe maneuver: distance covered,
+distance from the lane center, heading error, and how far the final speed is from the target speed,
+with bonuses for stopping at a required stop line or at the destination and penalties for hard
+braking or getting close to other cars. It is the baseline Jev is compared against, and the
+fallback when Jev cannot answer. It is not a fake Jev and never pretends to be one.
 
-- *Actuator lag.* Throttle and brakes reach the commanded acceleration through a 0.25 s lag and a
-  15 m/s^3 jerk limit, so the car cannot flip from full throttle to full braking in one tick.
-- *Tire grip.* Braking and cornering share one friction circle (mu 0.9, dry asphalt). Asked to
-  turn tighter than the tires allow, the car understeers onto a wider arc; a turn taken too fast
-  leaves the road.
+**Jev mode** sends the situation (the car, the route, the road, the next intersection, the car
+ahead, nearby traffic, and the list of safe maneuvers with their predicted outcomes) to Jev as one
+request with up to two questions: `motion` (keep driving or hold still right now?) and `vector`
+(which maneuver for the next second?). Jev answers each with a probability for every option, and
+the car executes the most likely one.
 
-The same model drives the ego car, every traffic car, and every forward simulation the planner
-runs, so predictions match what actually happens.
+Two details keep Jev mode honest and cheap:
 
-**Traffic.** 40 cars follow lanes with the Intelligent Driver Model, pick turns at random, stop for
-red lights and stop signs, wait for crossing traffic, yield to oncoming cars when turning left and
-to crossing cars at junctions with no sign or signal, and signal their turns.
+- **Settled questions are never sent.** `motion` is only asked when stopping could be right: near
+  an intersection, close behind another car, with traffic just ahead, when the car is stuck, or near
+  the destination. `vector` is only asked when two or more maneuvers survived simulation. Otherwise
+  the answer is filled in locally at no cost.
+- **Failures fall back to Rules and are counted.** If Jev takes longer than 1.5 s, returns an
+  invalid choice, or the request fails, the Rules driver decides that one step, and the
+  **fallbacks** counter goes up.
 
-**The scene.** Everything is procedural, so there are no assets to download or license: a sky
-with a late-afternoon sun and shadows that follow the car, textured asphalt, curbs, grass
-boulevards and sidewalks, lane markings that stop at junctions, crosswalks at signals,
-Vancouver-style far-side mast-arm signals whose lamps glow, octagonal stop signs, street lights on
-arterials, thousands of street and yard trees, and houses with siding, windows, and gabled or
-hipped roofs. Cars have glass, lights, plates, rims, brake lights that come on as they slow, and
-indicators. A frame is roughly 600 draw calls and 460,000 triangles.
+In both modes a local safety brake steps in for imminent collisions only. It never intervenes for
+lights or signs, so a driver's mistakes stay visible.
 
-**Honest counters.** The HUD counts collisions, red lights run, stop signs rolled, time off the
-road, safety-brake interventions, and fallbacks. Nothing is hidden or reset.
+## How a decision is made
 
-## How it decides
+Code owns the math and the physics; the model owns the judgment. Every 250 ms of simulated time near
+anything interesting (an intersection, a car ahead, a turn), and every 650 ms on open road:
 
-Jev is text-only and, by TypeSafe's own account, not a calculator. So the split is strict:
-**code owns the math, Jev owns the judgment.**
-
-Every 250 ms of sim time near anything interesting (an intersection, a car ahead, a turn) and every
-650 ms on open road:
-
-1. **Sense.** Code projects the car onto the route and computes the situation: lane offset,
-   the next traffic control and its state, the car ahead and the gap, nearby traffic in the car's
-   frame, and a `target_speed`: the speed limit, lowered for the car ahead, a required stop, the
-   destination, and curves. The curve part is a speed profile over the next 60 m, the fastest
-   speed from which the car can still slow comfortably to every point's safe cornering speed.
-2. **Sample.** Code proposes up to 16 maneuvers: hold the lane at several speeds (never above the
-   limit), shift half a meter or a meter left or right, roll up to the stop line, stop at the
-   destination, brake hard. A maneuver's speed is a ceiling; through a turn the curve profile
-   lowers it, the way a real speed controller would.
-3. **Simulate.** Each maneuver runs 3 seconds forward with the real car model and controller
-   against predicted traffic. Anything that collides, leaves the road, or crosses a red or an
-   uncompleted stop line is rejected before Jev ever sees it.
-4. **Ask.** The survivors and the situation go to Jev as one request with two questions:
-   `motion` (drive or hold still, right now) and `vector` (which maneuver for the next second).
-   Questions with one legal answer are answered locally and cost nothing.
-5. **Execute.** The chosen maneuver keeps running until the next answer lands, so latency never
-   stalls the car. A local safety brake overrides for imminent collisions only, and a stopped car
-   will not pull into a car right in front of it. Neither ever intervenes for lights or signs;
-   those mistakes are counted on screen, not hidden.
+1. **Sense.** Project the car onto its route and compute the situation, including a
+   `target_speed`: the speed limit, lowered for the car ahead, a required stop, the destination,
+   and curves. The curve part looks 60 m ahead and picks the fastest speed from which the car can
+   still slow comfortably for every bend.
+2. **Propose.** Up to 16 maneuvers: stay in the lane at several speeds (never above the limit),
+   shift half a meter or a meter left or right, roll up to the stop line, stop at the destination,
+   or brake hard.
+3. **Simulate.** Run each maneuver three seconds forward with the real car model against predicted
+   traffic. Reject any that collide, leave the road, or cross a red light or an unfinished stop.
+4. **Choose.** Jev or Rules picks among the survivors (see above).
+5. **Execute.** The chosen maneuver keeps running until the next decision arrives, so the car never
+   waits for the network.
 
 ### What Jev actually sees
 
-A real decision, saved from a drive (`data/snapshots/red_light.json`), trimmed:
+A real decision saved from a drive (`data/snapshots/red_light.json`), shortened:
 
 ```json
 {
@@ -126,18 +140,17 @@ A real decision, saved from a drive (`data/snapshots/red_light.json`), trimmed:
   "road": {"name": "West Broadway", "on_road": true, "lane_position": "centered"},
   "intersection": {"control": "signal", "signal": "red", "bumper_to_line_m": 5.9, "distance": "at", "entered": false},
   "candidates": [
-    {"id": "keep_lane_hold", "steer": "hold lane",          "speed": "keep 0.7",   "vs_target": "above target", "progress_m": 2.1, "outcome": "clear"},
-    {"id": "keep_lane_stop", "steer": "hold lane",          "speed": "stop",       "vs_target": "at target",    "progress_m": 0.4, "outcome": "clear"},
-    {"id": "left_0.5_hold",  "steer": "shift 0.5 m left",   "speed": "keep 0.7",   "vs_target": "above target", "progress_m": 2.1, "outcome": "clear"},
-    {"id": "hard_brake",     "steer": "hold lane",          "speed": "brake hard", "vs_target": "at target",    "progress_m": 0.1, "outcome": "clear"}
+    {"id": "keep_lane_hold", "steer": "hold lane",        "speed": "keep 0.7",   "vs_target": "above target", "progress_m": 2.1, "outcome": "clear"},
+    {"id": "keep_lane_stop", "steer": "hold lane",        "speed": "stop",       "vs_target": "at target",    "progress_m": 0.4, "outcome": "clear"},
+    {"id": "left_0.5_hold",  "steer": "shift 0.5 m left", "speed": "keep 0.7",   "vs_target": "above target", "progress_m": 2.1, "outcome": "clear"},
+    {"id": "hard_brake",     "steer": "hold lane",        "speed": "brake hard", "vs_target": "at target",    "progress_m": 0.1, "outcome": "clear"}
   ],
   "rejected": {"runs_red": 3}
 }
 ```
 
-The three maneuvers that would have crossed the line never reached Jev; code rejected them.
-
-The `motion` question, with the situation clauses code chose to include:
+Three maneuvers that would have run the red light were removed by code before Jev saw anything.
+The `motion` question, including the situation-specific sentence the code added:
 
 > You are the driving policy of a car in city traffic. Obey traffic controls and drive as described
 > in `driving_style`. The car is at the line and the signal is red: hold still until it turns green.
@@ -149,194 +162,191 @@ The `motion` question, with the situation clauses code chose to include:
 > a red light or a stop not yet completed, when the path directly ahead is blocked, or when the car
 > has reached the destination.
 
-Jev's answer, live: `motion = stop` at 100%, `vector = keep_lane_stop` at 99%, in 100 ms, for
-$0.00006. Twenty meters earlier the same questions get `drive` at 100% and `stop_at_line` at 95%.
+Jev's live answer: `motion = stop` at 100% and `vector = keep_lane_stop` at 99%, in 100 ms, for
+$0.00006. Twenty meters earlier, the same questions got `drive` at 100% and `stop_at_line` at 95%.
 
-Wording is code. When the `stop` option was described as "a stop sign not yet completed", Jev
-halted 47 m before the sign and waited. Say *when* an option is correct, and it drives.
+**Wording matters.** When the `stop` option was described as "a stop sign not yet completed", Jev
+stopped 47 m before the sign and waited there. Describing *when* each option is correct fixed it.
+
+## The simulation
+
+- **The car.** A bicycle model with two properties real cars have: brakes and throttle respond with
+  a short lag and cannot change instantly, and the tires have limited grip shared between braking
+  and cornering (so a turn taken too fast drifts wide off the road). The same model drives every
+  car and every prediction, so predictions match what really happens.
+- **Traffic.** 40 cars follow their lanes, keep a safe gap, stop for red lights and stop signs,
+  yield to oncoming cars when turning left and to crossing cars at uncontrolled junctions, and use
+  their turn signals.
+- **The map.** Stop lines sit just short of the crossing street, a little further back at signals
+  to leave room for a crosswalk. Signal timing is invented (48-second cycles), because
+  OpenStreetMap does not record it.
+- **The scene.** Everything is generated in code, with no downloaded assets: sky and sun with
+  moving shadows, textured roads, curbs, boulevards and sidewalks, lane markings and crosswalks,
+  mast-arm traffic signals, stop signs, street lights, trees, and houses with windows and pitched
+  roofs.
 
 ## Benchmark
 
-![The benchmark page: 12 drives, pass rate, safety, comfort, and lane-keeping metrics](docs/bench.png)
+![The benchmark page: twelve drives with pass rate, safety, comfort, and lane-keeping metrics](docs/bench.png)
 
-http://127.0.0.1:8322/bench scores a brain on a fixed suite of drives, so any change to the car
-model, the traffic, the planner, or Jev's question wording can be measured instead of eyeballed.
+Open http://127.0.0.1:8322/bench to score a driver on a fixed suite of drives. Use it to compare
+Jev against Rules, or to check that a change made things better rather than just different.
 
-- **The suite** is built from a seed: start points, destinations routed by the server, and a
-  traffic seed per drive. The same map and seed always give the same suite.
-- **Each drive** runs headlessly through the same world, traffic, autopilot, and step function as
-  the app, until it arrives or runs out of time.
-- **Two clocks.** *Lockstep* pauses the sim while a decision is in flight: it measures decision
-  quality alone, and for the Rules brain the numbers are identical run after run. *Realtime* lets
-  the world keep moving while a request is out, as in the app, so model latency counts.
-- **Runs are saved** to `data/runs/` and any two can be compared side by side (the cards show the
-  change against the chosen run). **watch** on a row replays that exact drive in the 3D sim.
+- **Reproducible suite.** Start points, destinations, and traffic come from a seed. The same map and
+  seed always produce the same drives.
+- **Same code as the app.** Each drive runs without graphics but through the same world, traffic,
+  and autopilot you watch in the simulator.
+- **Two clocks.** *Lockstep* pauses the world while a decision is pending, which measures decision
+  quality alone; with Rules the results are identical on every run. *Realtime* keeps the world
+  moving during a request, as in the app, so model latency counts.
+- **Save, compare, replay.** Runs are saved to `data/runs/`, any two can be compared side by side,
+  and **watch** replays a drive in the 3D simulator.
 
-A drive **passes** when it arrives with no collision, no red light, no rolled stop sign, and less
-than a second off the road. Everything else is reported, not graded:
+A drive **passes** if it arrives with no collision, no red light run, no rolled stop sign, and less
+than one second off the road. The page also reports whose fault each collision was, the closest gap
+and shortest time to collision, safety-brake interventions, hard braking, jerk (how abruptly the
+car changes acceleration), cornering force, distance from the lane center, speeding, decisions,
+tokens, cost, and latency.
 
-| Group | Metrics |
-|---|---|
-| Safety | collisions and whose fault (ego: it ran into a car ahead or a stopped car; other: it was hit while stopped or from behind; shared: crossing or oncoming contact, where right of way decides), closest gap, worst time to collision, safety-brake interventions, deadlock overrides |
-| Comfort | peak acceleration and braking, hard brakes (below -3.5 m/s^2 for 0.2 s), RMS and peak jerk, peak lateral acceleration |
-| Lane keeping and legality | RMS and peak distance from the route, seconds above 110% of the limit, time stopped |
-| Cost | decisions, model calls, tokens, dollars, latency p50 / p95 |
+**Baseline (Rules, 12 drives, seed 1, 40 traffic cars):** 11 of 12 drives pass over 9.8 km, with
+no collisions, no red lights run, no rolled stop signs, 1.9 s off the road in one drive, and an
+average distance from the lane center of 0.34 m. The run is included as
+`data/runs/20260923-185357-rules.json`; choose it under **compare with**.
 
-### Baseline
-
-Rules brain, 12 drives, suite seed 1, 40 traffic cars, lockstep. The committed baseline is
-`data/runs/20260923-185357-rules.json`; select it under "compare with".
-
-| | |
-|---|---|
-| pass rate | 92% (11 of 12) |
-| distance | 9.8 km |
-| collisions / red lights / rolled stops | 0 / 0 / 0 |
-| off-road | 1.9 s, in one drive |
-| safety-brake interventions | 6 |
-| RMS jerk | 2.9 m/s^3 |
-| lane RMS | 0.34 m |
-| speeding | 1.3 s |
-
-### What it caught
-
-The first run of the benchmark passed 50% of drives, and every failure traced back to a real bug:
-
-- **Routes backed up at right turns.** Lanes sit right of each street's centerline, and the router
-  joined them end to start, so every right turn had a 1 to 2 m notch the car read as a hairpin.
-  Joins now round the corner where the two lane lines actually meet (278 of 300 random routes had
-  a sharp kink before; none backs up now, and a test guards it).
-- **Traffic cars had the same bug** and swung across the centerline on right turns, into oncoming
-  cars.
-- **The speed target ignored the turn the car was already in** and had a 30 km/h floor for upcoming
-  turns. With real tire grip, those turns ended off the road.
-- **Maneuvers offered speeds up to 1 m/s over the limit**, 115 s of speeding across the suite.
-- **One collision was counted 47 times** while the two cars stayed in contact.
+A Jev benchmark of the same suite is about 4,700 decisions, roughly $0.40.
 
 ## Measured with Jev
 
-One 755 m drive in Kitsilano with 40 traffic cars, a stop sign, and three signals, measured on
-2026-09-18, before the car model gained actuator lag and tire grip and before the route and
-traffic fixes above:
+One 755 m drive in Kitsilano with 40 traffic cars, one stop sign, and three traffic lights, recorded
+on 2026-09-18 with an earlier version of the car model:
 
-| | Jev brain |
+| | Jev |
 |---|---|
 | live decisions | 431 in 129 s |
 | latency, median / 90th percentile | 130 ms / 199 ms |
 | input tokens per decision | about 1,800 |
-| cost for the drive | $0.033 (input tokens only; Jev's output is free) |
+| cost of the drive | $0.033 (Jev charges for input tokens only) |
 | collisions / stop signs missed | 0 / 0 |
-| red lights | 1, entered as yellow turned red |
+| red lights | 1, entered as the light turned from yellow to red |
 
-One run, one route. The point is the order of magnitude: hundreds of real model decisions per
-minute for a few cents. The benchmark is the way to get comparable numbers for Jev against the
-Rules baseline; a 12-drive lockstep run is about 4,700 decisions, roughly $0.40 at this rate.
-
-![Jev at the destination, with the answers panel open (earlier build, before the graphics update)](docs/m3-jev-drive.png)
+This is one drive on one route; the benchmark is the way to get comparable numbers.
 
 ## Your own neighbourhood
 
+Set a bounding box (west, south, east, north, in degrees) and start the server:
+
 ```sh
-JEV_FSD_BBOX="-123.1120,49.2570,-123.0940,49.2680" uv run server.py   # W,S,E,N in degrees
-uv run scripts/fetch_map.py -123.1120,49.2570,-123.0940,49.2680     # or pre-build the map first
-uv run scripts/fetch_map.py mount_pleasant                          # presets: kitsilano, mount_pleasant
+JEV_FSD_BBOX="-123.1120,49.2570,-123.0940,49.2680" uv run server.py
+uv run scripts/fetch_map.py mount_pleasant      # or build a map ahead of time (presets: kitsilano, mount_pleasant)
 ```
 
-Keep it neighbourhood-sized: under 0.25 square degrees (the OpenStreetMap API limit), and
-roughly 1 to 2 km across for a smooth frame rate. The first build fetches from the OpenStreetMap
-API (Overpass mirrors as fallback) and caches both the raw data and the built pack under
-`data/maps/`. Packs are versioned (`*.v4.pack.json`); when the pipeline changes, the version goes
-up and packs rebuild from the cached raw data. The Kitsilano pack is committed, so the default runs
-offline.
+Keep it neighbourhood-sized: under 0.25 square degrees (the OpenStreetMap API limit) and roughly
+1 to 2 km across for a smooth frame rate. The first run downloads the map and caches it in
+`data/maps/`; the Kitsilano map is included, so the default works offline. If the download fails,
+the app uses a synthetic street grid and says so.
 
-Other settings, all optional, in `.env` or the environment (see `.env.example`):
-`JEV_FSD_BUDGET_USD` (spend guard per server run, default $1), `JEV_FSD_RPM` (live calls per
-minute, default 240), `JEV_FSD_NPCS` (traffic cars, default 40), `PORT` (default 8322),
-`TYPESAFE_DEFAULT_MODEL`, `TYPESAFE_BASE_URL`.
+### Configuration
 
-## Known limitations
+All settings are optional and go in `.env` or the environment (see `.env.example`).
 
-- Signal timing is invented in code (48 s cycles); OpenStreetMap has no timing data.
-- No pedestrians, no cyclists, no parked cars. Traffic cars never change lanes.
-- One-way streets, turn restrictions and lane counts come from OpenStreetMap tags and are only as
-  good as the tags. Roundabouts and complex junctions are handled crudely.
-- The car model is a kinematic bicycle with actuator lag and a grip limit, not a full tire model:
-  no weight transfer, no skids, no yaw dynamics. Road friction is one number (`ROAD.mu` in
-  `static/js/sim/vehicle.js`), and there is no weather yet.
-- The safety brake only covers collisions, on purpose, so the brain's mistakes are visible.
-- Everything runs on `127.0.0.1`. This is a local demo, not a hosted service yet.
+| Setting | Default | Meaning |
+|---|---|---|
+| `TYPESAFE_API_KEY` | none | enables Jev mode |
+| `JEV_FSD_BUDGET_USD` | `1.00` | stop live Jev calls after this much spend in one server run |
+| `JEV_FSD_RPM` | `240` | maximum live Jev calls per minute |
+| `JEV_FSD_NPCS` | `40` | number of traffic cars |
+| `JEV_FSD_BBOX` | Kitsilano | map area, as `W,S,E,N` or a preset name |
+| `PORT` | `8322` | server port |
+| `TYPESAFE_DEFAULT_MODEL`, `TYPESAFE_BASE_URL` | SDK defaults | model and API endpoint |
 
-Open issues the benchmark shows (Rules brain, suite seed 1):
+## Security and privacy
 
-- Drive 10 still leaves the road for about 2 s and needs 11 deadlock overrides. Not yet diagnosed.
-- Ride comfort: RMS jerk is about 2.9 m/s^3, where comfortable driving is under about 2. The
-  likely cause is the executed target speed switching between maneuvers every 250 ms.
-- Drive 2 needs 6 safety-brake interventions and records a time to collision near zero.
-- The Jev brain has not been benchmarked yet.
+- **Your API key stays on the server.** The browser never receives it; decisions go through the
+  local server, which forwards them to TypeSafe.
+- **The server only listens on `127.0.0.1`,** and refuses requests from other websites (host
+  allow-list, browser fetch metadata, origin checks, a per-session token, and JSON-only bodies), so
+  a page you visit cannot drive it or spend your credits.
+- **Spending is capped.** A per-run budget and a rate limit apply to live calls (see Configuration).
+- **What is sent to TypeSafe:** the decision state and questions shown in the panel. That is
+  distances, speeds, street names, and maneuver descriptions in the car's own frame, with no map
+  coordinates and nothing about you.
 
-## Tests
+## Limitations
+
+- No pedestrians, cyclists, or parked cars; traffic cars never change lanes.
+- One-way streets, turn restrictions, and lane counts are only as good as the OpenStreetMap tags.
+  Roundabouts and complex junctions are handled crudely.
+- The car model has no weight transfer, skidding, or yaw dynamics, and road grip is a single
+  number (there is no weather yet).
+- Known issues from the benchmark: one of the twelve baseline drives still leaves the road briefly;
+  the Rules driver's speed changes are more abrupt than comfortable driving; one drive needs several
+  safety-brake interventions.
+- It runs locally only. There is no hosted version.
+
+## Development
+
+### Tests
 
 ```sh
-uv run python -m unittest discover tests    # offline: geometry, road graph, controls, routing, proxy
-open http://127.0.0.1:8322/tests            # browser: car model, controller, collisions, candidates, state
-open http://127.0.0.1:8322/bench            # closed-loop scenario suite with metrics (see Benchmark)
+uv run python -m unittest discover tests    # offline: geometry, road graph, traffic controls, routing, API
+open http://127.0.0.1:8322/tests            # in the browser: car model, controller, collisions, candidates, state
+open http://127.0.0.1:8322/bench            # the benchmark suite
 uv run scripts/verify_jev.py                # live: saved decisions in data/snapshots/ against the real model
 ```
 
-The snapshots are real decisions saved from the panel's "Save snapshot" button, each with an
-expectation such as "at a red light, `motion = stop` with p > 0.5". Run them after touching any
-question wording; the offline tests cannot tell you whether Jev still understands you. Run the
-benchmark after touching the car model, the traffic, the planner, or the router.
+Snapshots are real decisions saved with the panel's **Save snapshot** button, each with an
+expectation such as "at a red light, `motion` is `stop` with probability above 0.5". Run them after
+changing any question wording, and run the benchmark after changing the car, traffic, planner, or
+router.
 
-**Headless (macOS).** `scripts/shot.swift` loads a page in an offscreen WebKit view, runs
-JavaScript, and saves a screenshot:
+### Headless runs (macOS)
+
+`scripts/shot.swift` opens a page in an offscreen browser view, runs JavaScript, and saves a
+screenshot. A page in a hidden window does not animate, so scripts advance the simulator with
+`window.__jev.advance(seconds)`. The benchmark can be run the same way:
 
 ```sh
-swift scripts/shot.swift URL OUT.png [wait_s] [post_js] [pre_js] [settle_s] [timeout_s]
 swift scripts/shot.swift http://127.0.0.1:8322/bench out.png 1 \
   "return JSON.stringify((await window.__bench.run({ brain: 'rules', count: 12, seed: 1 })).summary)" "" 4 900
 ```
 
-A page in a hidden window never fires `requestAnimationFrame`, so scripts step the sim themselves
-with `window.__jev.advance(seconds)` on `/`. The server must run where local ports are allowed.
+### Adding another driver
 
-## Troubleshooting
+Drivers live in `static/js/brain/`. A driver exposes
+`decide(snap, eligible, request, signal)` and resolves to `{ motion, candidateId, meta }`, where
+`motion` is `"drive"` or `"stop"`, `candidateId` is one of the eligible maneuvers, and `meta` holds
+timing and cost. Register it in the `Autopilot` constructor in `brain.js` and add it to the driver
+menus in `static/index.html` and `static/bench.html`. The benchmark will then score it like any
+other.
 
-- **"Could not listen on 127.0.0.1:8322"**: another server is running. `PORT=8400 uv run server.py`.
-- **Blank page or "Failed to start"**: the browser needs WebGL and access to cdn.jsdelivr.net for
-  Three.js. Check the browser console.
-- **Low frame rate**: the scene is about 600 draw calls with 4096-pixel shadows. Use a smaller map
-  box, or lower `SHADOW_MAP` in `static/js/render/scene.js`.
-- **"no API key: Jev brain unavailable"**: put `TYPESAFE_API_KEY` in `.env` and restart.
-- **"This server run has spent its $1.00 budget"**: the per-run spend guard. Restart with
-  `JEV_FSD_BUDGET_USD=5`.
-- **Map fetch fails**: the app falls back to a synthetic grid and says so in the minimap note.
-  Try `uv run scripts/fetch_map.py` again later, or a smaller box.
-- **The benchmark is slow**: a 12-drive Rules run simulates about 26 minutes of driving and takes
-  2 to 7 minutes depending on the machine. Keep the tab in the foreground; a Jev run is bounded by
-  network latency.
-- **"watch" opens the sim at the normal start**: it hands the scenario over through the browser's
-  local storage, which private windows may block.
-
-## Layout
+### Project layout
 
 ```
-server.py            pages / /bench /tests; API: status, map, route, decide, snapshot/save,
-                     bench/save, bench/runs
-jev/client.py        the only module that talks to TypeSafe (spend guard, latency, trace)
-jev/osm/             fetch → parse → project → road graph → controls → buildings → map pack
-jev/routing.py       edge-based A* with turn penalties, alternatives, corner-rounded lane joins
-static/js/sim/       car model, controller, collisions, signals, traffic, world, shared step
-static/js/brain/     sensors, candidates, state + questions, scheduler, rules brain, jev brain, safety
-static/js/bench/     scenario suite, headless runner, metrics, benchmark page
-static/js/render/    sky, sun and shadows, streets, buildings, trees, cars, overlays, minimap,
-                     procedural textures
-scripts/             fetch_map.py, verify_jev.py, shot.swift
-data/                maps/ (packs), snapshots/ (saved decisions), runs/ (benchmark results)
+server.py            local web server: pages, map, routing, the Jev proxy, benchmark storage
+jev/                 Python: TypeSafe client and spend guard, request checks, settings
+jev/osm/             OpenStreetMap download → road graph → traffic controls → buildings → map pack
+jev/routing.py       route planning with turn penalties and smooth lane-to-lane joins
+static/js/sim/       car model, controller, collisions, signals, traffic, world
+static/js/brain/     sensing, maneuvers, the questions for Jev, the Rules and Jev drivers, safety brake
+static/js/bench/     benchmark suite, headless runner, metrics
+static/js/render/    3D scene: sky, streets, buildings, trees, cars, overlays, minimap
+scripts/             map pre-builder, live snapshot checker, headless screenshots
+data/                maps, saved decisions, benchmark runs
 ```
 
-## Credits
+## Contributing
 
-Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL.
-Independent open-source demo, not affiliated with TypeSafe AI. Inspired by
-[JevPilot](https://github.com/standardagents/jevpilot). MIT license.
+Issues and pull requests are welcome. Before opening a pull request, run the offline tests, the
+browser tests, and a Rules benchmark (seed 1), and include the benchmark comparison against the
+committed baseline if your change affects driving.
+
+## Credits and license
+
+- Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, available under
+  the Open Database License (ODbL).
+- 3D rendering by [Three.js](https://threejs.org/) (MIT).
+- Jev and TypeSafe are products of TypeSafe AI. This project is independent and not affiliated with
+  or endorsed by TypeSafe AI.
+- Inspired by [JevPilot](https://github.com/standardagents/jevpilot).
+
+Released under the [MIT License](LICENSE).
