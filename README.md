@@ -168,6 +168,16 @@ so the default runs offline. Two presets: `kitsilano`, `mount_pleasant`.
   no weight transfer, no skids, no yaw dynamics. Road friction is one number (`ROAD.mu`).
 - Everything runs on `127.0.0.1`. This is a local demo, not a hosted service yet.
 
+Open issues found by the benchmark (Rules brain, suite seed 1, baseline in `data/runs/`):
+
+- Drive 10 of 12 still leaves the road for about 2 s and needs 11 deadlock overrides; not yet
+  diagnosed.
+- Ride comfort: RMS jerk is about 2.9 m/s^3 (comfortable driving is under about 2). The likely
+  cause is the executed target speed switching between candidates every 250 ms.
+- Drive 2 needs 6 safety-brake interventions and records a time to collision near zero.
+- The Jev brain has not been benchmarked yet (a 12-drive lockstep run is about 4,700 decisions,
+  roughly $0.40 at the measured rate; the server's spend guard still applies).
+
 ## Tests
 
 ```sh
@@ -176,6 +186,12 @@ open http://127.0.0.1:8322/tests            # browser: car model, controller, co
 open http://127.0.0.1:8322/bench            # closed-loop scenario suite with metrics (see Benchmark)
 uv run scripts/verify_jev.py                # live: saved decisions in data/snapshots/ against the real model
 ```
+
+Headless (macOS): `swift scripts/shot.swift URL OUT.png [wait] [post_js] [pre_js] [settle] [timeout]`
+loads a page in an offscreen WebKit view, runs JavaScript, and saves a screenshot. A hidden page
+never fires `requestAnimationFrame`, so scripts step the sim with `window.__jev.advance(seconds)`
+on `/`, and run the benchmark with `await window.__bench.run({ brain, count, seed })` on `/bench`.
+The server must run outside any sandbox that blocks local ports.
 
 The snapshots are real decisions saved from the panel's "Save snapshot" button, each with an
 expectation such as "at a red light, `motion = stop` with p > 0.5". Run them after touching any
