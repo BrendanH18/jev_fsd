@@ -20,3 +20,6 @@ data/runs/
 
 # Claude Code local settings
 .claude/
+
+# Claude Code project notes (local only)
+CLAUDE.md
