@@ -6,7 +6,7 @@ export class Hud {
   constructor() {
     this.el = {
       root: $("#hud"), speed: $("#speed"), limit: $("#limit"), street: $("#street"), nav: $("#nav"),
-      brain: $("#brain"), weather: $("#weather"), autopilot: $("#autopilot"), latency: $("#latency"), p50: $("#p50"), tokens: $("#tokens"),
+      brain: $("#brain"), weather: $("#weather"), time: $("#time"), quality: $("#quality"), autopilot: $("#autopilot"), latency: $("#latency"), p50: $("#p50"), tokens: $("#tokens"),
       cost: $("#cost"), rate: $("#rate"), source: $("#source"), collisions: $("#collisions"), reds: $("#reds"),
       stops: $("#stops"), yields: $("#yields"), offroad: $("#offroad"), safety: $("#safety"), fallbacks: $("#fallbacks"), badge: $("#badge"),
       mapNote: $("#map-note"),
@@ -21,6 +21,11 @@ export class Hud {
   onBrainChange(fn) { this.el.brain.addEventListener("change", () => fn(this.el.brain.value)); }
   onWeatherChange(fn) { this.el.weather.addEventListener("change", () => fn(this.el.weather.value)); }
   setWeather(name) { this.el.weather.value = name; }
+  onTimeChange(fn) { this.el.time.addEventListener("change", () => fn(this.el.time.value)); }
+  // a time that is not one of the presets shows as the nearest one
+  setTime(name) { this.el.time.value = name; }
+  onQualityChange(fn) { this.el.quality.addEventListener("change", () => fn(this.el.quality.value)); }
+  setQuality(name) { this.el.quality.value = name; }
   onAutopilotClick(fn) { this.el.autopilot.addEventListener("click", fn); }
   setBrain(name) { this.el.brain.value = name; }
   setAutopilot(on) {

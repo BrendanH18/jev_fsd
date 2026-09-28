@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { snowable } from "./weather.js";
 import { GeoBuilder, hash01 } from "./geo.js";
 import { facadeTextures, flatRoofTexture, shingleTexture } from "./textures.js";
+import { lighting } from "./atmosphere.js";
 
 const CHUNK = 180;
 const FACADE_TILE = 12;   // meters per facade texture tile
@@ -25,13 +26,28 @@ const color = (list, key, salt, jitter = 0.08) => {
   return c.multiplyScalar(1 - jitter + 2 * jitter * hash01(key, salt + 1));
 };
 
+// After dark about two windows in five are lit, mostly warm lamplight, now and then the cool flicker
+// of a screen; shop windows on the ground floor of apartment blocks stay lit.
 function wallMaterial(kind) {
   const { map, mask } = facadeTextures(kind);
   const mat = new THREE.MeshStandardMaterial({ map, vertexColors: true, roughness: 0.88, metalness: 0 });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.tintMask = { value: mask };
+    shader.uniforms.uNight = lighting.night;
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <map_pars_fragment>", "#include <map_pars_fragment>\nuniform sampler2D tintMask;")
+      .replace("#include <map_pars_fragment>", "#include <map_pars_fragment>\nuniform sampler2D tintMask;\nuniform float uNight;")
+      .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+        float glass = texture2D( tintMask, vMapUv ).g;
+        if ( glass > 0.5 && uNight > 0.0 ) {
+          vec2 cell = floor( vMapUv * 4.0 );
+          float rnd = fract( sin( dot( cell, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
+          float shop = ${kind === "block" ? "step( fract( vMapUv.y ), 0.25 )" : "0.0"};
+          float lit = max( step( 0.6, rnd ), shop );
+          vec3 tone = mix( vec3( 1.0, 0.68, 0.36 ), vec3( 0.62, 0.74, 1.0 ), step( 0.95, fract( rnd * 7.13 ) ) );
+          // brighter toward the top of the window, where the room's ceiling is lit
+          float fall = 0.55 + 0.45 * fract( vMapUv.y * 4.0 );
+          totalEmissiveRadiance += tone * lit * uNight * fall * 0.9;
+        }`)
       .replace("#include <color_fragment>", `
         float wallMask = texture2D( tintMask, vMapUv ).r;
         #if defined( USE_COLOR )
@@ -39,7 +55,7 @@ function wallMaterial(kind) {
         #endif`)
       .replace("#include <roughnessmap_fragment>", "float roughnessFactor = mix( 0.12, roughness, wallMask );");
   };
-  mat.customProgramCacheKey = () => "facade";
+  mat.customProgramCacheKey = () => "facade-" + kind;
   return mat;
 }
 
