@@ -10,15 +10,10 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { GeoBuilder } from "./geo.js";
 import { LAYER, groundLayer, toThree } from "./scene.js";
-import { asphaltTexture, concreteTexture, curbTexture, glowTexture, stopSignTexture, withMacroVariation } from "./textures.js";
+import { asphaltTexture, concreteTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation } from "./textures.js";
+import { snowable } from "./weather.js";
 
-const GUTTER = 0.3;         // painted asphalt beyond the outermost lane
-const CURB = 0.22;
-const STREET = {            // boulevard (grass between curb and sidewalk) and sidewalk widths, m
-  residential: [1.8, 1.5], living_street: [1.2, 1.5], tertiary: [1.2, 1.9], unclassified: [1.2, 1.6],
-  secondary: [0.0, 2.6], primary: [0.0, 3.2],
-};
-const streetOf = (e) => STREET[e.cls.replace("_link", "")] || [1.0, 1.8];
+import { GUTTER, CURB, streetOf } from "../map/streets.js";
 const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -114,10 +109,20 @@ export function buildRoads(map) {
     }
   }
 
+  // roundabouts: a disc of asphalt out to the ring's outer edge; the island is painted over it
+  const ringNodes = new Set();
+  const islandCurb = new GeoBuilder(), island = new GeoBuilder();
+  for (const rb of (map.roundabouts || new Map()).values()) {
+    for (const v of rb.vertices) ringNodes.add(v);
+    asphalt.polygon(circle(rb.x, rb.y, rb.outer_r + GUTTER, 40), 0, { scale: 7 });
+    islandCurb.polygon(circle(rb.x, rb.y, rb.island_r, 32), 0);
+    island.polygon(circle(rb.x, rb.y, rb.island_r - 0.3, 32), 0, { scale: 14 });
+  }
+
   // junction fills: hull of each leg's cross-section a little way out from the node
   for (const [id, list] of legs) {
     const node = map.nodes.get(id);
-    if (!node || list.length < 2) continue;
+    if (!node || list.length < 2 || ringNodes.has(id)) continue;
     if (list.length === 2) {
       const [a, b] = list.map((l) => legFrame(l.st.edge, l.out, 1).h);
       const bend = Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
@@ -140,19 +145,27 @@ export function buildRoads(map) {
     if (!c) continue;
     const L = e.cum[e.cum.length - 1];
     const left = e.oneway ? e.asphalt[0] + 0.15 : 0.12, right = e.asphalt[1] + GUTTER - 0.1;
+    if (c.type === "yield") { sharkTeeth(white, e, c.s_line, left, right - (e.parking ? e.parking[1] : 0)); continue; }
     stopBar(white, e, c.s_line, left, right, c.type === "signal" ? 0.6 : 0.5);
     if (c.type === "signal" && c.s_line + 4.2 < L) crosswalk(white, e, c.s_line + 1.0, c.s_line + 4.0);
   }
 
-  const asphaltMat = withMacroVariation(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92, metalness: 0 }), 0.05, 0.22);
+  const asphaltMat = snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92, metalness: 0 }), 0.05, 0.22), "asphalt");
   add(group, asphalt, asphaltMat, LAYER.asphalt);
-  add(group, curb, new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.85, color: 0xb4b4b0 }), LAYER.curb);
-  add(group, walk, withMacroVariation(new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.9 }), 0.07, 0.15), LAYER.sidewalk);
-  add(group, white, new THREE.MeshStandardMaterial({ color: 0xe6e6df, roughness: 0.6 }), LAYER.marking);
-  add(group, yellow, new THREE.MeshStandardMaterial({ color: 0xe0b52c, roughness: 0.6 }), LAYER.marking);
+  add(group, curb, snowable(new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.85, color: 0xb4b4b0 }), "curb"), LAYER.curb);
+  add(group, walk, snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.9 }), 0.07, 0.15), "concrete"), LAYER.sidewalk);
+  add(group, islandCurb, snowable(new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.85, color: 0xb4b4b0 }), "curb"), LAYER.islandCurb);
+  const grass = grassTexture().clone();   // the ground's copy is repeated across the whole map
+  grass.repeat.set(1, 1);
+  grass.needsUpdate = true;
+  const islandMat = snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: grass, roughness: 0.95 }), 0.06, 0.3), "grass");
+  add(group, island, islandMat, LAYER.island);
+  add(group, white, snowable(new THREE.MeshStandardMaterial({ color: 0xe6e6df, roughness: 0.6 }), "paint"), LAYER.marking);
+  add(group, yellow, snowable(new THREE.MeshStandardMaterial({ color: 0xe0b52c, roughness: 0.6 }), "paint"), LAYER.marking);
 
   const signals = buildSignals(map, group);
   buildStopSigns(map, group);
+  buildYieldSigns(map, group);
   buildStreetLights(map, group, streets, nodeR, legs);
   return { group, signals, streets, nodeR, legs };
 }
@@ -181,6 +194,25 @@ function stopBar(white, e, s, left, right, thickness) {
   const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
   const mid = (left + right) / 2;
   white.rect(p[0] + Math.sin(h) * mid, p[1] - Math.cos(h) * mid, h, thickness, right - left);
+}
+
+// A regular polygon approximating a circle, counter-clockwise.
+function circle(cx, cy, r, n) {
+  const pts = [];
+  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return pts;
+}
+
+// Yield line: a row of white triangles across the lane, each pointing at the approaching driver.
+function sharkTeeth(white, e, s, left, right) {
+  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const fx = Math.cos(h), fy = Math.sin(h), rx = Math.sin(h), ry = -Math.cos(h);
+  const base = 0.55, depth = 0.6;
+  for (let lat = left + 0.15; lat + base <= right; lat += base + 0.25) {
+    const a = [p[0] + rx * lat, p[1] + ry * lat], b = [p[0] + rx * (lat + base), p[1] + ry * (lat + base)];
+    const tip = [p[0] + rx * (lat + base / 2) - fx * depth, p[1] + ry * (lat + base / 2) - fy * depth];
+    white.polygon([a, tip, b], 0);
+  }
 }
 
 // Continental crosswalk: bars parallel to traffic across the whole roadway.
@@ -335,6 +367,37 @@ function buildStopSigns(map, group) {
   mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
   mk(faces, new THREE.MeshStandardMaterial({ map: stopSignTexture(), roughness: 0.45, emissive: 0x220000, emissiveIntensity: 0.3 }));
   mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
+}
+
+// Yield signs at roundabout entries: a white inverted triangle with a red border, on a post at the
+// right curb just before the yield line.
+function buildYieldSigns(map, group) {
+  const tri = (r, x) => {
+    // in the local YZ plane facing -x, point down
+    const g = new THREE.BufferGeometry();
+    const pts = [0, -r, 0, 0, r / 2, r * 0.866, 0, r / 2, -r * 0.866];
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    g.computeVertexNormals();
+    return g.translate(x, 2.2, 0);
+  };
+  const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.3, 8).translate(0, 1.15, 0);
+  const poles = [], reds = [], whites = [];
+  for (const e of map.edges.values()) {
+    const c = e.control;
+    if (!c || c.type !== "yield") continue;
+    const s = Math.max(0, c.s_line - 0.6);
+    const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+    const lat = e.asphalt[1] + GUTTER + CURB + 0.7;
+    const x = p[0] + Math.sin(h) * lat, y = p[1] - Math.cos(h) * lat;
+    poles.push(placed(pole, x, y, 0, h));
+    reds.push(placed(tri(0.45, -0.06), x, y, 0, h));
+    whites.push(placed(tri(0.3, -0.075), x, y, 0, h));
+  }
+  if (!poles.length) return;
+  const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
+  mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
+  mk(reds, new THREE.MeshStandardMaterial({ color: 0xc8102e, roughness: 0.45, side: THREE.DoubleSide, emissive: 0x220000, emissiveIntensity: 0.3 }));
+  mk(whites, new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.45, side: THREE.DoubleSide }));
 }
 
 // Cobra-head street lights along arterials, on the right of each direction every ~38 m.

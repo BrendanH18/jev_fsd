@@ -6,9 +6,9 @@ export class Hud {
   constructor() {
     this.el = {
       root: $("#hud"), speed: $("#speed"), limit: $("#limit"), street: $("#street"), nav: $("#nav"),
-      brain: $("#brain"), autopilot: $("#autopilot"), latency: $("#latency"), p50: $("#p50"), tokens: $("#tokens"),
+      brain: $("#brain"), weather: $("#weather"), autopilot: $("#autopilot"), latency: $("#latency"), p50: $("#p50"), tokens: $("#tokens"),
       cost: $("#cost"), rate: $("#rate"), source: $("#source"), collisions: $("#collisions"), reds: $("#reds"),
-      stops: $("#stops"), offroad: $("#offroad"), safety: $("#safety"), fallbacks: $("#fallbacks"), badge: $("#badge"),
+      stops: $("#stops"), yields: $("#yields"), offroad: $("#offroad"), safety: $("#safety"), fallbacks: $("#fallbacks"), badge: $("#badge"),
       mapNote: $("#map-note"),
     };
     this.latencies = [];
@@ -19,6 +19,8 @@ export class Hud {
   show() { this.el.root.hidden = false; }
 
   onBrainChange(fn) { this.el.brain.addEventListener("change", () => fn(this.el.brain.value)); }
+  onWeatherChange(fn) { this.el.weather.addEventListener("change", () => fn(this.el.weather.value)); }
+  setWeather(name) { this.el.weather.value = name; }
   onAutopilotClick(fn) { this.el.autopilot.addEventListener("click", fn); }
   setBrain(name) { this.el.brain.value = name; }
   setAutopilot(on) {
@@ -59,6 +61,7 @@ export class Hud {
     this.el.collisions.textContent = violations.collisions;
     this.el.reds.textContent = violations.red_lights_run;
     this.el.stops.textContent = violations.stop_signs_run;
+    this.el.yields.textContent = violations.failed_to_yield || 0;
     this.el.offroad.textContent = `${Math.round(violations.off_road_s)} s`;
     this.el.safety.textContent = violations.safety_brakes;
     this.el.fallbacks.textContent = violations.fallbacks;

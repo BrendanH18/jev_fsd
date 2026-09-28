@@ -22,8 +22,8 @@ export const yieldNow = () => new Promise((r) => { waiting.push(r); channel.port
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // A world set up for a scenario, ready to step. The app uses this to replay a scenario in 3D.
-export function setupScenario(map, sc, { brain = "rules", npcs = 40, style = null, onDecision = null, onEvent = null } = {}) {
-  const world = new World(map, { seed: sc.traffic_seed });
+export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "dry", style = null, onDecision = null, onEvent = null } = {}) {
+  const world = new World(map, { seed: sc.traffic_seed, weather });
   const lane = map.lane(sc.start.edge, sc.start.lane);
   world.placeOnLane(lane, sc.start.s);
   const fleet = new NpcFleet(world, { count: npcs, seed: sc.traffic_seed });
@@ -40,9 +40,9 @@ export function setupScenario(map, sc, { brain = "rules", npcs = 40, style = nul
   return { world, fleet, autopilot, events };
 }
 
-export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", style = null, shouldStop = () => false } = {}) {
+export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", style = null, shouldStop = () => false } = {}) {
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
-  const ctx = setupScenario(map, sc, { brain, npcs, style, onDecision: (d) => { if (d.meta && d.meta.source === "jev" && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
+  const ctx = setupScenario(map, sc, { brain, npcs, weather, style, onDecision: (d) => { if (d.meta && d.meta.source === "jev" && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
   const { world, autopilot, events } = ctx;
   const limit = Math.max(120, sc.tags.length_m / 2.5);
   const wallStart = performance.now();

@@ -76,6 +76,7 @@ export class DriveMetrics {
       at_fault: v.collisions_at_fault,
       red_lights: v.red_lights_run,
       stop_signs: v.stop_signs_run,
+      failed_to_yield: v.failed_to_yield || 0,
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -113,6 +114,7 @@ export function failures(m) {
   if (m.collisions) f.push("collision");
   if (m.red_lights) f.push("red light");
   if (m.stop_signs) f.push("stop sign");
+  if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
   return f;
 }
@@ -135,9 +137,10 @@ export function aggregate(results) {
     arrived_rate: Math.round((results.filter((r) => r.arrived).length / n) * 1000) / 1000,
     km: Math.round(km * 100) / 100,
     collisions: sum("collisions"), at_fault: sum("at_fault"), red_lights: sum("red_lights"), stop_signs: sum("stop_signs"),
+    failed_to_yield: sum("failed_to_yield"),
     off_road_s: Math.round(sum("off_road_s") * 10) / 10,
     safety_brakes: sum("safety_brakes"), deadlocks: sum("deadlocks"), fallbacks: sum("fallbacks"),
-    violations_per_km: km > 0 ? Math.round(((sum("collisions") + sum("red_lights") + sum("stop_signs")) / km) * 100) / 100 : null,
+    violations_per_km: km > 0 ? Math.round(((sum("collisions") + sum("red_lights") + sum("stop_signs") + sum("failed_to_yield")) / km) * 100) / 100 : null,
     avg_kmh: mean("avg_kmh"),
     min_gap_m: min("min_gap_m"), min_ttc_s: min("min_ttc_s"),
     hard_brakes: sum("hard_brakes"), rms_jerk: mean("rms_jerk"), max_lat_accel: mean("max_lat_accel"),

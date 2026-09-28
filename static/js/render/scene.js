@@ -8,10 +8,11 @@
 
 import * as THREE from "three";
 import { grassTexture, setMaxAnisotropy, withMacroVariation } from "./textures.js";
+import { snowable } from "./weather.js";
 
 export const toThree = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
-export const LAYER = { sky: -100, grass: -50, sidewalk: -40, curb: -38, asphalt: -30, patch: -28, marking: -20 };
+export const LAYER = { sky: -100, grass: -50, sidewalk: -40, curb: -38, asphalt: -30, patch: -28, islandCurb: -27, island: -26, marking: -20 };
 
 // A material for a ground layer: painted in renderOrder, no depth test or write.
 export function groundLayer(mesh, order) {
@@ -29,17 +30,18 @@ const SKY = { zenith: 0x3f79c4, horizon: 0xc9dbea, ground: 0x8d9a86, sun: 0xfff2
 const SHADOW_HALF = 70;          // meters of shadow coverage around the car
 const SHADOW_MAP = 4096;
 
-function skyMaterial() {
+function skyMaterial(colors = SKY) {
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     depthTest: false,
     fog: false,
     uniforms: {
-      zenith: { value: new THREE.Color(SKY.zenith) },
-      horizon: { value: new THREE.Color(SKY.horizon) },
-      groundColor: { value: new THREE.Color(SKY.ground) },
-      sunColor: { value: new THREE.Color(SKY.sun) },
+      zenith: { value: new THREE.Color(colors.zenith) },
+      horizon: { value: new THREE.Color(colors.horizon) },
+      groundColor: { value: new THREE.Color(colors.ground) },
+      sunColor: { value: new THREE.Color(colors.sun ?? SKY.sun) },
+      sunGlow: { value: colors.glow ?? 1 },
       sunDir: { value: SUN_DIR.clone() },
     },
     vertexShader: `
@@ -51,6 +53,7 @@ function skyMaterial() {
       }`,
     fragmentShader: `
       uniform vec3 zenith, horizon, groundColor, sunColor, sunDir;
+      uniform float sunGlow;
       varying vec3 vDir;
       void main() {
         vec3 d = normalize(vDir);
@@ -58,7 +61,7 @@ function skyMaterial() {
         vec3 col = mix(horizon, zenith, pow(clamp(h, 0.0, 1.0), 0.55));
         col = mix(col, groundColor, smoothstep(0.0, -0.08, h));
         float s = max(dot(d, sunDir), 0.0);
-        col += sunColor * (pow(s, 1200.0) * 30.0 + pow(s, 60.0) * 0.35 + pow(s, 6.0) * 0.12);
+        col += sunColor * sunGlow * (pow(s, 1200.0) * 30.0 + pow(s, 60.0) * 0.35 + pow(s, 6.0) * 0.12);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -95,7 +98,8 @@ export class SceneView {
     this.scene.environment = this.buildEnvironment();
     this.scene.environmentIntensity = 0.55;
 
-    this.scene.add(new THREE.HemisphereLight(0xcfe0f2, 0x6c7358, 0.55));
+    this.hemi = new THREE.HemisphereLight(0xcfe0f2, 0x6c7358, 0.55);
+    this.scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff0dc, 3.0);
     sun.castShadow = true;
     sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
@@ -109,7 +113,7 @@ export class SceneView {
 
     const [x0, y0, x1, y1] = extent;
     const size = Math.max(x1 - x0, y1 - y0) + 6000;
-    const grassMat = withMacroVariation(new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, metalness: 0 }), 0.06, 0.3);
+    const grassMat = snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, metalness: 0 }), 0.06, 0.3), "grass");
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), grassMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((x0 + x1) / 2, 0, -(y0 + y1) / 2);
@@ -122,9 +126,21 @@ export class SceneView {
     this.resize();
   }
 
-  buildEnvironment() {
+  // Repaint the sky (and the light it gives) for the weather: an overcast sky has no sun disc.
+  setSky({ zenith, horizon, ground }) {
+    const u = this.sky.material.uniforms;
+    u.zenith.value.setHex(zenith); u.horizon.value.setHex(horizon); u.groundColor.value.setHex(ground);
+    const clear = zenith === SKY.zenith;
+    u.sunGlow.value = clear ? 1 : 0.05;
+    this.scene.background.setHex(horizon);
+    this.scene.fog.color.setHex(horizon);
+    if (this.scene.environment) this.scene.environment.dispose();
+    this.scene.environment = this.buildEnvironment({ zenith, horizon, ground, glow: clear ? 1 : 0.05 });
+  }
+
+  buildEnvironment(colors = SKY) {
     const envScene = new THREE.Scene();
-    const mat = skyMaterial();
+    const mat = skyMaterial(colors);
     mat.depthTest = true;
     envScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), mat));
     const pmrem = new THREE.PMREMGenerator(this.renderer);

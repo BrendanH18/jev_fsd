@@ -2,15 +2,18 @@
 // model, scored by code, and filtered for safety by code. A brain only ever picks among the
 // survivors. Every prediction here is what the car will actually do if the candidate is chosen.
 
-import { CAR } from "../sim/vehicle.js";
+import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
+import { CROSSWALK_STOP_M } from "./sensors.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
 const FRONT = CAR.length - CAR.rearOverhang;
 const LANE_TOL = 1.2;
+const CYCLIST_CLEARANCE_M = 1.0;
+const QUEUE_GAP_M = 2.5;
 
 function speedLabel(v, ego, limit) {
   if (v <= 0.05) return "stop";
@@ -46,13 +49,22 @@ export function sampleCandidates(snap, world) {
           steer: d === 0 ? "hold lane" : `shift ${Math.abs(d)} m ${d < 0 ? "left" : "right"}`, speed: speedLabel(vt, v, limit) });
       }
     }
+    // Stopping maneuvers stop at their mark or queue 2.5 m behind whoever is in front of it.
+    const f = snap.following;
+    const queue = f ? f.s - (f.vehicle.spec || CAR).rearOverhang - FRONT - QUEUE_GAP_M : Infinity;
+    const stopAt = (mark) => Math.min(mark, queue);
     // approach and stop at the next stop line
     if (snap.intersection && snap.intersection.bumper_to_line_m > 0.3) {
-      out.push({ id: "stop_at_line", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: snap.intersection.s_line_route - FRONT - 0.5 },
+      out.push({ id: "stop_at_line", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) },
         steer: "hold lane", speed: "approach and stop at the line" });
     }
+    // stop short of a crosswalk someone is crossing
+    if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
+      out.push({ id: "stop_for_pedestrian", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) },
+        steer: "hold lane", speed: "stop before the crosswalk" });
+    }
     if (snap.nav && snap.nav.remaining_m < 40) {
-      out.push({ id: "stop_at_destination", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: snap.route.length - 1.0 },
+      out.push({ id: "stop_at_destination", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: stopAt(snap.route.length - 1.0) },
         steer: "hold lane", speed: "slow and stop at the destination" });
     }
   } else {
@@ -78,18 +90,20 @@ function dedupe(list) {
 // Forward-simulate every candidate. Mutates each candidate with `sim` (features) and `trace` (points).
 export function simulateAll(candidates, snap, world) {
   const { route, map } = world;
-  const npcs = world.npcs.map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
+  const npcs = world.obstaclesNear(world.ego.x, world.ego.y, 60).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   const mustStop = control && (
-    (control.control === "signal" && (control.signal === "red" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / 8 + 2))) ||
-    (control.control === "stop" && !control.stop_completed));
+    (control.control === "signal" && (control.signal === "red" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
+    (control.control === "stop" && !control.stop_completed) ||
+    (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;
+  const ped = snap.pedestrian;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
-    let collision = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let pedCross = false, closePass = false, collision = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     const law = { ...c.law, s0: startS };
     if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - startS;
@@ -101,16 +115,25 @@ export function simulateAll(candidates, snap, world) {
         hint = p.index; s = p.s; lateral = p.lateral; headingErr = wrap(car.psi - p.heading);
         if (Math.abs(lateral - (law.offset || 0)) > LANE_TOL && Math.abs(lateral) > LANE_TOL) staysInLane = false;
         if (mustStop && !crosses && s + FRONT > control.s_line_route + 0.2) crosses = true;
+        if (ped && !pedCross && s + FRONT > ped.s_route - 0.8) pedCross = true;
       }
       if (k % 3 === 0 || k === steps) {
         const rd = map.roadDistance(car.x, car.y);
         if (rd.distance > 0.8) { staysOnRoad = false; offSteps++; }
         const box = car.obb();
+        const c = Math.cos(car.psi), sn = Math.sin(car.psi);
         for (const o of npcs) {
           const ob = o.n.obb();
           ob.center = [o.x + o.vx * t + (ob.center[0] - o.n.x), o.y + o.vy * t + (ob.center[1] - o.n.y)];
-          const gap = Math.hypot(ob.center[0] - box.center[0], ob.center[1] - box.center[1]) - CAR.length;
-          if (gap < minGap) minGap = gap;
+          // gap to a vehicle in the car's path (one alongside, like a parked car, does not count)
+          const dx = ob.center[0] - box.center[0], dy = ob.center[1] - box.center[1];
+          const ahead = dx * c + dy * sn, side = Math.abs(dx * sn - dy * c);
+          if (ahead > 0 && side < box.halfWidth + ob.halfWidth + 0.3) {
+            const gap = ahead - box.halfLength - ob.halfLength;
+            if (gap < minGap) minGap = gap;
+          }
+          // passing a cyclist needs a metre of space (BC's minimum passing distance)
+          if (o.n.kind === "bike" && Math.abs(ahead) < box.halfLength + ob.halfLength && side - box.halfWidth - ob.halfWidth < CYCLIST_CLEARANCE_M) closePass = true;
           if (!collision && obbOverlap(box, ob, 0.3)) collision = { id: o.n.id, t: Math.round(t * 10) / 10, kind: Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4 ? "rear_end" : "crossing" };
         }
       }
@@ -130,8 +153,10 @@ export function simulateAll(candidates, snap, world) {
     // eligibility, decided by code
     let reject = null;
     if (collision) reject = "collision";
+    else if (closePass && c.law.kind !== "hard_brake") reject = "passes_cyclist_too_close";
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
-    else if (crosses) reject = control.control === "signal" ? "runs_red" : "runs_stop";
+    else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" ? "fails_to_yield" : "runs_stop";
+    else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
     c.reject = reject;
     c.eligible = !reject;
   }

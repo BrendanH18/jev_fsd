@@ -3,7 +3,10 @@
 import { api } from "../js/common.js";
 import { MapData } from "../js/map/mapdata.js";
 import { Route } from "../js/map/route.js";
-import { Vehicle, CAR } from "../js/sim/vehicle.js";
+import { Vehicle, CAR, ROAD, comfort } from "../js/sim/vehicle.js";
+import { ringBusy } from "../js/sim/roundabout.js";
+import { crosswalkConflict } from "../js/sim/pedestrians.js";
+import { setWeather } from "../js/sim/weather.js";
 import { purePursuit, speedControl } from "../js/sim/controller.js";
 import { obbOverlap } from "../js/sim/collision.js";
 import { World } from "../js/sim/world.js";
@@ -41,15 +44,42 @@ async function run() {
     }
     check("pure pursuit converges", Math.abs(car.y) < 0.2 && Math.abs(car.psi) < 0.05, `y=${car.y.toFixed(2)} psi=${car.psi.toFixed(3)}`);
   }
-  // full lock traces a circle of radius L / tan(delta_max)
+  // at walking pace, full lock traces a circle of radius L / tan(delta_max)
   {
-    const car = new Vehicle(0, 0, 0, 5);
+    const car = new Vehicle(0, 0, 0, 2);
     car.delta = CAR.maxSteer;
     const start = [car.x, car.y];
     let maxDist = 0;
-    for (let t = 0; t < 20; t += 0.01) { car.step(0.01, { steer: CAR.maxSteer, accel: speedControl(car.v, 5) }); maxDist = Math.max(maxDist, Math.hypot(car.x - start[0], car.y - start[1])); }
+    for (let t = 0; t < 30; t += 0.01) { car.step(0.01, { steer: CAR.maxSteer, accel: speedControl(car.v, 2) }); maxDist = Math.max(maxDist, Math.hypot(car.x - start[0], car.y - start[1])); }
     const r = CAR.wheelbase / Math.tan(CAR.maxSteer);
-    assertClose("full-lock circle diameter", maxDist, 2 * r, 0.3);
+    assertClose("full-lock circle diameter at 2 m/s", maxDist, 2 * r, 0.3);
+  }
+  // at speed the tires slip: a fixed steering angle traces a wider circle (mild understeer)
+  {
+    const steer = 3 * Math.PI / 180;
+    const car = new Vehicle(0, 0, 0, 15);
+    for (let t = 0; t < 8; t += 1 / 60) car.step(1 / 60, { steer, accel: speedControl(car.v, 15) });
+    const R = car.v / car.r, kin = CAR.wheelbase / Math.tan(steer);
+    check("understeer at 15 m/s", R > kin * 1.1 && R < kin * 2, `R=${R.toFixed(1)} kinematic=${kin.toFixed(1)}`);
+  }
+  // braking hard in a bend on a dry road stays stable (stability control keeps the rear in line)
+  {
+    const car = new Vehicle(0, 0, 0, 14);
+    const steer = 6 * Math.PI / 180;
+    for (let t = 0; t < 4; t += 1 / 60) car.step(1 / 60, { steer, accel: speedControl(car.v, 14) });
+    let maxBeta = 0;
+    for (let t = 0; t < 3; t += 1 / 60) { car.step(1 / 60, { steer, accel: -8 }); maxBeta = Math.max(maxBeta, Math.abs(car.beta)); }
+    check("brake in a bend: sideslip under 8 deg", maxBeta < 8 * Math.PI / 180, `${(maxBeta * 180 / Math.PI).toFixed(1)} deg`);
+  }
+  // on snow the same bend at 10 m/s saturates the tires and the car runs wide
+  {
+    const saved = ROAD.mu;
+    ROAD.mu = 0.2;
+    const steer = 6 * Math.PI / 180;
+    const car = new Vehicle(0, 0, 0, 10);
+    for (let t = 0; t < 6; t += 1 / 60) car.step(1 / 60, { steer, accel: speedControl(car.v, 10) });
+    ROAD.mu = saved;
+    check("snow: lateral grip capped near 0.2 g", Math.abs(car.latAccel) < 0.25 * 9.81 && car.slipping > 0, `ay=${car.latAccel.toFixed(2)} slipping=${car.slipping.toFixed(2)}`);
   }
   // OBB overlap
   {
@@ -90,7 +120,7 @@ async function run() {
     const state = toJevState(snap, cands, { rejected: sim.rejected });
     const text = JSON.stringify(state);
     check("state has no long decimals", !/\d\.\d{2,}/.test(text), text.match(/\d\.\d{2,}/)?.[0]);
-    const allowed = new Set(["driving_style", "units", "car", "nav", "road", "intersection", "following", "rear_follower", "traffic", "current_path_hazard", "stuck", "route_options", "candidates", "rejected"]);
+    const allowed = new Set(["driving_style", "units", "car", "nav", "road", "intersection", "following", "rear_follower", "traffic", "current_path_hazard", "stuck", "route_options", "candidates", "rejected", "pedestrian"]);
     check("state has only schema fields", Object.keys(state).every((k) => allowed.has(k)), Object.keys(state).join(","));
     const { questions, local } = buildQuestions(snap, sim.eligible);
     check("motion asked when following closely", !!questions.motion);
@@ -99,6 +129,48 @@ async function run() {
     check("rules brain picks an eligible candidate", sim.eligible.some((c) => c.id === r.candidateId), r.candidateId);
     check("rules brain slows behind a stopped car", r.candidateId !== "keep_lane_hold" && r.candidateId !== "keep_lane_limit", r.candidateId);
     void f;
+  }
+  // parked cars sit in the parking lane, clear of every travel lane
+  {
+    const world = new World(map, { seed: 3 });
+    const list = world.parked.list;
+    check("parked cars spawned", list.length > 500, `${list.length}`);
+    let worst = Infinity;
+    for (const car of list.slice(0, 400)) {
+      const [cx, cy] = car.center;
+      const near = map.nearestLane(cx, cy, car.psi, 15);
+      if (near) worst = Math.min(worst, Math.abs(near.lateral));
+    }
+    check("parked cars clear of the lanes", worst > 1.9, `closest lane center ${worst.toFixed(2)} m`);
+    check("parked cars found by obstaclesNear", world.obstaclesNear(list[0].center[0], list[0].center[1], 3).includes(list[0]));
+  }
+  // roundabout: a car circulating just upstream of an entry blocks it; one just past it does not
+  {
+    const rb = [...map.roundabouts.values()][0];
+    if (rb) {
+      const node = map.nodes.get(rb.vertices[0]);
+      const entry = Math.atan2(node.y - rb.y, node.x - rb.x);
+      const at = (a) => { const v = new Vehicle(rb.x + Math.cos(a) * rb.lane_r, rb.y + Math.sin(a) * rb.lane_r, a + Math.PI / 2, 4); return v; };
+      check("roundabout: circulating car upstream blocks the entry", ringBusy(rb, node, [at(entry - 1.2)]));
+      check("roundabout: car well past the entry does not", !ringBusy(rb, node, [at(entry + 1.5)]));
+    } else check("roundabout present on the map", false);
+  }
+  // crosswalks: a pedestrian starting across the path is a conflict; one on the far sidewalk is not
+  {
+    const pts = []; for (let x = 0; x <= 60; x += 1) pts.push([x, 0]);
+    const cum = pts.map((p) => p[0]);
+    const crowd = { list: [{ x: 30, y: 6, v: 1.3, crossing: { from: [30, 8], to: [30, -8] } }] };
+    const c = crosswalkConflict(pts, cum, 0, 50, crowd);
+    check("crosswalk conflict found ahead", c && Math.abs(c.s - 30) < 0.5, JSON.stringify(c && { s: c.s }));
+    crowd.list[0].y = -7.5;
+    check("pedestrian past the lane is no conflict", !crosswalkConflict(pts, cum, 0, 50, crowd));
+  }
+  // weather sets road grip and the comfort targets
+  {
+    setWeather("snow");
+    const snow = { mu: ROAD.mu, decel: comfort().decel };
+    setWeather("dry");
+    check("snow lowers grip and comfortable braking", snow.mu < 0.3 && snow.decel < 1.0 && ROAD.mu === 0.9, JSON.stringify(snow));
   }
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;

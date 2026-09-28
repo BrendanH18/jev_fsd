@@ -8,7 +8,7 @@ import { SceneView } from "./render/scene.js";
 import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
-import { createCarMesh, syncCar } from "./render/cars.js";
+import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, createPedMesh, syncPed } from "./render/cars.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
 import { Hud } from "./ui/hud.js";
@@ -18,6 +18,8 @@ import { Autopilot } from "./brain/brain.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
+import { WeatherView } from "./render/weather.js";
+import { setWeather } from "./sim/weather.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -53,18 +55,24 @@ async function boot() {
   // A benchmark scenario opened with "watch" replays with the same start, route, and traffic seed.
   let world, fleet, autopilot;
   if (replay) {
-    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: status.configured ? replay.brain : "rules", npcs: replay.npcs, ...callbacks }));
+    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: status.configured ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
   } else {
-    world = new World(map, { seed: 1 });
+    world = new World(map, { seed: 1, weather: new URLSearchParams(location.search).get("weather") || "dry" });
     fleet = new NpcFleet(world, { count: status.npcs, seed: 7 });
     autopilot = new Autopilot(world, callbacks);
   }
+  view.scene.add(buildParkedCars(world.parked.list));
+  const pedMeshes = world.crowd.list.map((p) => { const m = createPedMesh(p.look); view.scene.add(m); return m; });
   const npcMeshes = new Map();
-  for (const n of fleet.vehicles) { const m = createCarMesh(n.color, n.id); view.scene.add(m); npcMeshes.set(n.id, m); }
+  for (const n of fleet.vehicles) { const m = n.kind === "bike" ? createBikeMesh(n.color) : createCarMesh(n.color, n.id); view.scene.add(m); npcMeshes.set(n.id, m); }
   if (!status.configured) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
   panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };
+  const weatherView = new WeatherView(view);
+  weatherView.apply(world.weather);
+  hud.setWeather(world.weather);
+  hud.onWeatherChange((name) => { world.weather = setWeather(name).name; weatherView.apply(world.weather); hud.badge(`weather: ${name}`, "", 800); });
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt));
   hud.setMapNote(status.map.synthetic
     ? `Synthetic grid (map fetch failed: ${status.map.error})`
@@ -132,6 +140,7 @@ async function boot() {
           if (ev.type === "collision") { hud.flash(); hud.badge("COLLISION", "", 1200); }
           else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "", 1500);
           else if (ev.type === "stop_sign") hud.badge("RAN A STOP SIGN", "", 1500);
+          else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "", 1500);
         }
         acc -= FIXED_DT;
         steps++;
@@ -139,8 +148,10 @@ async function boot() {
     }
     for (const inter of map.intersections.values()) roads.signals.set(inter.id, world.phase(inter.id));
     syncCar(egoMesh, world.ego, dt, world.t);
-    for (const n of fleet.vehicles) syncCar(npcMeshes.get(n.id), n, dt, world.t);
+    for (const n of fleet.vehicles) (n.kind === "bike" ? syncBike : syncCar)(npcMeshes.get(n.id), n, dt, world.t);
+    world.crowd.list.forEach((p, i) => syncPed(pedMeshes[i], p));
     overlays.tick(world.t);
+    weatherView.update(dt);
     view.updateCamera(world.ego, dt);
     view.render();
     minimap.draw({ ego: world.ego, npcs: fleet.vehicles, route: world.route, destination: world.destination });

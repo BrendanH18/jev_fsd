@@ -3,6 +3,7 @@
 
 import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js";
 import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
+import { CAR } from "../sim/vehicle.js";
 
 export class Route {
   constructor(data, map) {
@@ -33,6 +34,8 @@ export class Route {
       const p = projectPoint(this.pts, this.cum, lineOnEdge);
       if (!p || p.distance > 12) continue;
       if (i === 0 && e.control.s_line < (data.start_s || 0) - 1) continue;  // already behind the start
+      // the route ends before it (and the car's nose, 3.6 m ahead of the point that arrives, too)
+      if (i === this.edges.length - 1 && data.goal_s !== undefined && e.control.s_line > data.goal_s + CAR.length - CAR.rearOverhang + 0.3) continue;
       const junctionNode = map.nodes.get(e.to);
       const inter = e.control.type === "signal" ? map.intersections.get(e.control.id) : null;
       this.controls.push({
@@ -43,9 +46,11 @@ export class Route {
     this.controls.sort((a, b) => a.sRoute - b.sRoute);
   }
 
+  // Without a hint this tracks the ego (and remembers where it is); with one it projects anything
+  // else (other vehicles, candidate forward-simulations) and leaves the ego's hint alone.
   project(x, y, hint = null) {
     const p = projectPoint(this.pts, this.cum, [x, y], hint === null ? this.hint : hint);
-    if (p) this.hint = p.index;
+    if (p && hint === null) this.hint = p.index;
     return p;
   }
   pointAt(s) { return pointAt(this.pts, this.cum, s); }

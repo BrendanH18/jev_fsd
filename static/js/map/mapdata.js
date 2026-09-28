@@ -61,7 +61,9 @@ export function projectPoint(pts, cum, p, hint = null) {
         best = { distance: d, s: cum[i] + t * segLen, lateral, index: i, point: [qx, qy], heading: Math.atan2(dy, dx) };
       }
     }
-    if (hint === null || (best && best.distance < 6)) break;
+    // a hit on the edge of the hinted window may just be the nearest point inside it: search it all
+    const atEdge = best && ((best.index === lo && lo > 0) || (best.index === hi - 1 && hi < pts.length - 1));
+    if (hint === null || (best && best.distance < 6 && !atEdge)) break;
   }
   return best;
 }
@@ -130,6 +132,8 @@ export class MapData {
     }
     this.intersections = new Map(pack.intersections.map((i) => [i.id, i]));
     this.stops = new Map(pack.stops.map((s) => [s.id, s]));
+    this.yields = new Map((pack.yields || []).map((y) => [y.id, y]));
+    this.roundabouts = new Map((pack.roundabouts || []).map((r) => [r.id, r]));
     this.grid = new Map();
     for (const lane of this.laneList) {
       for (const key of cellsOf(lane.pts)) {
