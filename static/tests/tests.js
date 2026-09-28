@@ -3,7 +3,7 @@
 import { api } from "../js/common.js";
 import { MapData } from "../js/map/mapdata.js";
 import { Route } from "../js/map/route.js";
-import { Vehicle, CAR } from "../js/sim/vehicle.js";
+import { Vehicle, CAR, ROAD } from "../js/sim/vehicle.js";
 import { purePursuit, speedControl } from "../js/sim/controller.js";
 import { obbOverlap } from "../js/sim/collision.js";
 import { World } from "../js/sim/world.js";
@@ -41,15 +41,42 @@ async function run() {
     }
     check("pure pursuit converges", Math.abs(car.y) < 0.2 && Math.abs(car.psi) < 0.05, `y=${car.y.toFixed(2)} psi=${car.psi.toFixed(3)}`);
   }
-  // full lock traces a circle of radius L / tan(delta_max)
+  // at walking pace, full lock traces a circle of radius L / tan(delta_max)
   {
-    const car = new Vehicle(0, 0, 0, 5);
+    const car = new Vehicle(0, 0, 0, 2);
     car.delta = CAR.maxSteer;
     const start = [car.x, car.y];
     let maxDist = 0;
-    for (let t = 0; t < 20; t += 0.01) { car.step(0.01, { steer: CAR.maxSteer, accel: speedControl(car.v, 5) }); maxDist = Math.max(maxDist, Math.hypot(car.x - start[0], car.y - start[1])); }
+    for (let t = 0; t < 30; t += 0.01) { car.step(0.01, { steer: CAR.maxSteer, accel: speedControl(car.v, 2) }); maxDist = Math.max(maxDist, Math.hypot(car.x - start[0], car.y - start[1])); }
     const r = CAR.wheelbase / Math.tan(CAR.maxSteer);
-    assertClose("full-lock circle diameter", maxDist, 2 * r, 0.3);
+    assertClose("full-lock circle diameter at 2 m/s", maxDist, 2 * r, 0.3);
+  }
+  // at speed the tires slip: a fixed steering angle traces a wider circle (mild understeer)
+  {
+    const steer = 3 * Math.PI / 180;
+    const car = new Vehicle(0, 0, 0, 15);
+    for (let t = 0; t < 8; t += 1 / 60) car.step(1 / 60, { steer, accel: speedControl(car.v, 15) });
+    const R = car.v / car.r, kin = CAR.wheelbase / Math.tan(steer);
+    check("understeer at 15 m/s", R > kin * 1.1 && R < kin * 2, `R=${R.toFixed(1)} kinematic=${kin.toFixed(1)}`);
+  }
+  // braking hard in a bend on a dry road stays stable (stability control keeps the rear in line)
+  {
+    const car = new Vehicle(0, 0, 0, 14);
+    const steer = 6 * Math.PI / 180;
+    for (let t = 0; t < 4; t += 1 / 60) car.step(1 / 60, { steer, accel: speedControl(car.v, 14) });
+    let maxBeta = 0;
+    for (let t = 0; t < 3; t += 1 / 60) { car.step(1 / 60, { steer, accel: -8 }); maxBeta = Math.max(maxBeta, Math.abs(car.beta)); }
+    check("brake in a bend: sideslip under 8 deg", maxBeta < 8 * Math.PI / 180, `${(maxBeta * 180 / Math.PI).toFixed(1)} deg`);
+  }
+  // on snow the same bend at 10 m/s saturates the tires and the car runs wide
+  {
+    const saved = ROAD.mu;
+    ROAD.mu = 0.2;
+    const steer = 6 * Math.PI / 180;
+    const car = new Vehicle(0, 0, 0, 10);
+    for (let t = 0; t < 6; t += 1 / 60) car.step(1 / 60, { steer, accel: speedControl(car.v, 10) });
+    ROAD.mu = saved;
+    check("snow: lateral grip capped near 0.2 g", Math.abs(car.latAccel) < 0.25 * 9.81 && car.slipping > 0, `ay=${car.latAccel.toFixed(2)} slipping=${car.slipping.toFixed(2)}`);
   }
   // OBB overlap
   {
@@ -90,7 +117,7 @@ async function run() {
     const state = toJevState(snap, cands, { rejected: sim.rejected });
     const text = JSON.stringify(state);
     check("state has no long decimals", !/\d\.\d{2,}/.test(text), text.match(/\d\.\d{2,}/)?.[0]);
-    const allowed = new Set(["driving_style", "units", "car", "nav", "road", "intersection", "following", "rear_follower", "traffic", "current_path_hazard", "stuck", "route_options", "candidates", "rejected"]);
+    const allowed = new Set(["driving_style", "units", "car", "nav", "road", "intersection", "following", "rear_follower", "traffic", "current_path_hazard", "stuck", "route_options", "candidates", "rejected", "pedestrian"]);
     check("state has only schema fields", Object.keys(state).every((k) => allowed.has(k)), Object.keys(state).join(","));
     const { questions, local } = buildQuestions(snap, sim.eligible);
     check("motion asked when following closely", !!questions.motion);

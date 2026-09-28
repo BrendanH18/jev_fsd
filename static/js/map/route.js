@@ -43,9 +43,11 @@ export class Route {
     this.controls.sort((a, b) => a.sRoute - b.sRoute);
   }
 
+  // Without a hint this tracks the ego (and remembers where it is); with one it projects anything
+  // else (other vehicles, candidate forward-simulations) and leaves the ego's hint alone.
   project(x, y, hint = null) {
     const p = projectPoint(this.pts, this.cum, [x, y], hint === null ? this.hint : hint);
-    if (p) this.hint = p.index;
+    if (p && hint === null) this.hint = p.index;
     return p;
   }
   pointAt(s) { return pointAt(this.pts, this.cum, s); }

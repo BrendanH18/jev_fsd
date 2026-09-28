@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from . import geometry as g
 
 TURN_PENALTY_S = {"straight": 0.0, "right": 2.0, "left": 4.0, "uturn": 20.0}
+SHARP_TURN_DEG = 130.0
 MAX_LIMIT_MPS = 29.0
 FILLET_RADIUS_M = 6.0
 FILLET_MIN_DEG = 20.0
@@ -61,9 +62,16 @@ class Router:
 
     def turn_penalty(self, edge_in: str, edge_out: str) -> float:
         kind = self.turn(edge_in, edge_out)
+        # A turn sharper than SHARP_TURN_DEG doubles back on itself (the tip of a traffic island
+        # where the two one-way halves of a street meet): no car makes it, so treat it as a U-turn.
+        if abs(math.degrees(self.turn_angle(edge_in, edge_out))) > SHARP_TURN_DEG:
+            kind = "uturn"
         if kind == "uturn" and len(self.successors(edge_in)) > 1:
             return 1e6  # only at dead ends
         return TURN_PENALTY_S[kind]
+
+    def turn_angle(self, edge_in: str, edge_out: str) -> float:
+        return g.turn_angle(self.heading_in(edge_in), self.heading_out(edge_out))
 
     # --- snapping -------------------------------------------------------------------------
 
@@ -205,6 +213,15 @@ class Router:
 
     # --- geometry ------------------------------------------------------------------------
 
+    def _roundabout_turn(self, path: Sequence[str], first: int, at: float) -> dict:
+        """One instruction for a pass through a roundabout: which exit, onto which street."""
+        last = first
+        while last + 1 < len(path) and self.edges[path[last + 1]].get("ring"):
+            last += 1
+        exit_edge = self.edges[path[last + 1]] if last + 1 < len(path) else None
+        return {"at_m": round(at, 1), "dir": "roundabout", "exit": _exits_between(self, path, first, last),
+                "street": exit_edge["name"] if exit_edge else ""}
+
     def _lane_index(self, path: Sequence[str], i: int) -> int:
         e = self.edges[path[i]]
         n = e["lanes"]
@@ -255,9 +272,14 @@ class Router:
         for i in range(len(path) - 1):
             e = self.edges[path[i]]
             at += (e["length"] - (start_snap["s"] if i == 0 else 0.0))
+            nxt = self.edges[path[i + 1]]
+            if e.get("ring") or nxt.get("ring"):
+                if nxt.get("ring") and not e.get("ring"):
+                    turns.append(self._roundabout_turn(path, i + 1, at))
+                continue  # moves inside a roundabout are part of its one instruction
             kind = self.turn(path[i], path[i + 1])
             if kind != "straight":
-                turns.append({"at_m": round(at, 1), "dir": kind, "street": self.edges[path[i + 1]]["name"]})
+                turns.append({"at_m": round(at, 1), "dir": kind, "street": nxt["name"]})
         length = cum[-1] if cum else 0.0
         return {
             "edges": list(path),
@@ -268,6 +290,16 @@ class Router:
             "turns": turns,
             "summary": _summary(turns, length, self.edges[path[-1]]["name"]),
         }
+
+
+def _exits_between(router: "Router", path: Sequence[str], first: int, last: int) -> int:
+    """Exits of the ring passed from path[first] up to and including the one taken after path[last]."""
+    count = 0
+    for j in range(first, last + 1):
+        e = router.edges[path[j]]
+        if any(not router.edges[o].get("ring") for o in router.successors(path[j])):
+            count += 1
+    return max(1, count)
 
 
 def _blend(before: List[Tuple[float, float]], after: List[Tuple[float, float]], blend: float):
@@ -353,7 +385,8 @@ def _summary(turns: List[dict], length: float, dest_street: str) -> str:
         head = "straight ahead"
     else:
         t = turns[0]
-        verb = "make a U-turn" if t["dir"] == "uturn" else "turn %s" % t["dir"]
+        verb = ("make a U-turn" if t["dir"] == "uturn" else
+                "take exit %d at the roundabout" % t["exit"] if t["dir"] == "roundabout" else "turn %s" % t["dir"])
         head = "%s%s in %d m" % (verb, (" onto " + t["street"]) if t["street"] else "", round(t["at_m"]))
         if len(turns) > 1:
             head += ", then %d more turn%s" % (len(turns) - 1, "" if len(turns) == 2 else "s")

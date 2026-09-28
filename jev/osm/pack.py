@@ -23,7 +23,7 @@ from .graph import RoadGraph, build_graph
 from .parse import OsmData, parse_xml
 from .project import Projection
 
-PACK_VERSION = "4"
+PACK_VERSION = "5"
 Bbox = Tuple[float, float, float, float]
 
 
@@ -70,7 +70,12 @@ def serialize(graph: RoadGraph, controls: dict, buildings: list, bbox: Bbox, pro
             "limit": g.r1(e["limit"]), "oneway": e["oneway"], "name": e["name"], "cls": e["cls"],
             "length": g.r2(e["length"]), "lane_offsets": [g.r2(d) for d in e["lane_offsets"]],
             "asphalt": [g.r2(e["asphalt"][0]), g.r2(e["asphalt"][1])],
+            "parking": [g.r2(e["parking"][0]), g.r2(e["parking"][1])],
         }
+        if e.get("bike"):
+            item["bike"] = True
+        if e.get("ring"):
+            item["ring"] = e["ring"]
         if e.get("control"):
             item["control"] = e["control"]
         edges.append(item)
@@ -86,6 +91,7 @@ def serialize(graph: RoadGraph, controls: dict, buildings: list, bbox: Bbox, pro
         "origin": proj.as_dict(), "stats": stats,
         "nodes": nodes, "edges": edges, "lanes": lanes,
         "intersections": controls["intersections"], "stops": controls["stops"],
+        "yields": controls.get("yields", []), "roundabouts": graph.roundabouts,
         "buildings": buildings,
     }
 

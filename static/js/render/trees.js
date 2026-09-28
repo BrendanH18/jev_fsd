@@ -6,6 +6,7 @@ import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { hash01 } from "./geo.js";
 import { toThree } from "./scene.js";
+import { snowable } from "./weather.js";
 
 const CHUNK = 180;
 const LEAF = [0x3f6b2a, 0x4b7a31, 0x58883a, 0x355d29, 0x62883a, 0x44722f, 0x4f6f2c];
@@ -52,6 +53,11 @@ export function buildTrees(map, roads, footprints) {
     }
   }
 
+  // one tree on each roundabout island, as on Vancouver's planted traffic circles
+  for (const rb of (map.roundabouts || new Map()).values()) {
+    spots.push({ x: rb.x, y: rb.y, key: rb.id, kind: "leaf", size: Math.min(0.85, 0.35 + rb.island_r * 0.12) });
+  }
+
   // yard trees, away from streets and houses
   const [x0, y0, x1, y1] = map.extent;
   for (let x = x0; x < x1; x += 13) for (let y = y0; y < y1; y += 13) {
@@ -65,7 +71,7 @@ export function buildTrees(map, roads, footprints) {
   const blobs = [blobGeometry(1), blobGeometry(2), blobGeometry(3)];
   const trunkGeo = new THREE.CylinderGeometry(0.1, 0.17, 1, 6).translate(0, 0.5, 0);
   const coneGeo = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true });
+  const leafMat = snowable(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true }), "leaf");
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a4636, roughness: 0.95 });
 
   const chunks = new Map();

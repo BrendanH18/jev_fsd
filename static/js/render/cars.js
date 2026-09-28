@@ -7,9 +7,13 @@ import { mergeGeometries, toCreasedNormals } from "three/addons/utils/BufferGeom
 import { CAR } from "../sim/vehicle.js";
 import { blobTexture, glowTexture } from "./textures.js";
 import { hash01 } from "./geo.js";
+import { snowable } from "./weather.js";
 
 const XR = -CAR.rearOverhang, XF = CAR.length - CAR.rearOverhang, W = CAR.width;
 const BEVEL = 0.09;
+const CG_X = CAR.wheelbase - CAR.cgToFront, CG_Y = 0.5;
+const PITCH_PER_MS2 = 0.0045;   // rad of nose dive per m/s^2 of braking (about 2 deg at 8 m/s^2)
+const ROLL_PER_MS2 = 0.007;     // rad of body roll per m/s^2 of cornering (about 3.5 deg at 0.9 g)
 
 // Profiles in (x forward, y up). `body` is the lower shell and `glass` the greenhouse; the painted
 // roof is the top of the greenhouse, clipped off and extruded a touch wider. Arches are cut around
@@ -172,10 +176,18 @@ export function createCarMesh(color = 0x2f7cff, id = "ego") {
   const st = STYLES[style];
   const geo = styleGeometry(style);
   const g = new THREE.Group();
+  // The body hangs from a pivot at the center of gravity, so it can pitch under braking and roll
+  // in bends while the wheels stay on the road.
+  const pivot = new THREE.Group();
+  pivot.position.set(CG_X, CG_Y, 0);
+  const body = new THREE.Group();
+  body.position.set(-CG_X, -CG_Y, 0);
+  pivot.add(body);
+  g.add(pivot);
   const add = (geometry, material, shadow) => {
     const m = new THREE.Mesh(geometry, material);
     m.castShadow = shadow; m.receiveShadow = true;
-    g.add(m);
+    body.add(m);
   };
   const tail = new THREE.MeshStandardMaterial({ color: 0x4a0606, emissive: 0xff0000, emissiveIntensity: 0.3, roughness: 0.2 });
   add(geo.paint, paint(color), true);
@@ -186,7 +198,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego") {
   add(geo.tail, tail, false);
   const blinkers = { left: new THREE.Mesh(geo.blinkL, shared.blink), right: new THREE.Mesh(geo.blinkR, shared.blink) };
   blinkers.left.visible = blinkers.right.visible = false;
-  g.add(blinkers.left, blinkers.right);
+  body.add(blinkers.left, blinkers.right);
 
   const brake = [];
   for (const z of [-(W / 2 - 0.26), W / 2 - 0.26]) {
@@ -194,7 +206,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego") {
     s.position.set(XR - 0.2, geo.tailY, z);
     s.scale.setScalar(0.7);
     s.visible = false;
-    g.add(s);
+    body.add(s);
     brake.push(s);
   }
 
@@ -213,7 +225,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego") {
     g.add(pivot);
     wheels.push({ pivot, wheel });
   }
-  g.userData = { wheels, spin: 0, tire: st.tire, tail, brake, blinkers, prevV: 0, brakeLevel: 0 };
+  g.userData = { wheels, spin: 0, tire: st.tire, tail, brake, blinkers, prevV: 0, brakeLevel: 0, pivot, pitch: 0, roll: 0 };
   return g;
 }
 
@@ -225,6 +237,13 @@ export function syncCar(mesh, vehicle, dt = 0, t = 0) {
   for (let i = 0; i < u.wheels.length; i++) {
     u.wheels[i].wheel.rotation.z = -u.spin;
     u.wheels[i].pivot.rotation.y = i < 2 ? vehicle.delta : 0;
+  }
+  // pitch and roll follow the car's accelerations through a soft suspension
+  if (dt > 0) {
+    const k = Math.min(1, dt * 8);
+    u.pitch += ((vehicle.ax || 0) * PITCH_PER_MS2 - u.pitch) * k;
+    u.roll += ((vehicle.latAccel || 0) * ROLL_PER_MS2 - u.roll) * k;
+    u.pivot.rotation.set(u.roll, 0, u.pitch);
   }
   // indicators blink at about 75 per minute
   const on = (t % 0.8) < 0.45;
@@ -239,4 +258,186 @@ export function syncCar(mesh, vehicle, dt = 0, t = 0) {
     u.tail.emissiveIntensity = 0.3 + u.brakeLevel * 1.2;
     for (const s of u.brake) { s.material.opacity = u.brakeLevel * 0.5; s.visible = u.brakeLevel > 0.02; }
   }
+}
+
+// Parked cars: thousands of them, so each body style's parts are instanced per map chunk (a few
+// dozen draw calls in all) and culled like the buildings. Lights are off; paint is per instance.
+const PARKED_CHUNK = 360;
+const STYLE_NAMES = ["sedan", "sedan", "hatch", "suv", "suv"];
+export function buildParkedCars(cars) {
+  const group = new THREE.Group();
+  const white = snowable(new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.45, roughness: 0.38, clearcoat: 1.0, clearcoatRoughness: 0.08 }), "car");
+  const tailOff = new THREE.MeshStandardMaterial({ color: 0x4a0606, roughness: 0.25 });
+  const headOff = new THREE.MeshStandardMaterial({ color: 0xc9d0d8, roughness: 0.15, metalness: 0.3 });
+  const chunks = new Map();
+  for (const car of cars) {
+    const key = `${Math.floor(car.x / PARKED_CHUNK)},${Math.floor(car.y / PARKED_CHUNK)}|${STYLE_NAMES[car.style || 0]}`;
+    if (!chunks.has(key)) chunks.set(key, []);
+    chunks.get(key).push(car);
+  }
+  const Y = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
+  for (const [key, list] of chunks) {
+    const style = key.split("|")[1];
+    const st = STYLES[style], geo = styleGeometry(style);
+    const mats = list.map((c) => new THREE.Matrix4().compose(new THREE.Vector3(c.x, 0, -c.y), new THREE.Quaternion().setFromAxisAngle(Y, c.psi), one));
+    const emit = (geometry, material, matrices, colors = null, shadow = false) => {
+      const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+      matrices.forEach((m, i) => { mesh.setMatrixAt(i, m); if (colors) mesh.setColorAt(i, colors[i]); });
+      mesh.castShadow = shadow;
+      mesh.receiveShadow = true;
+      mesh.computeBoundingSphere();
+      group.add(mesh);
+    };
+    emit(geo.paint, white, mats, list.map((c) => new THREE.Color(c.color)), true);
+    emit(geo.glass, shared.glass, mats, null, true);
+    emit(geo.trim, shared.trim, mats);
+    emit(geo.plate, shared.plate, mats);
+    emit(geo.head, headOff, mats);
+    emit(geo.tail, tailOff, mats);
+    const wheels = [];
+    for (const m of mats) {
+      for (const [lx, lz] of [[CAR.wheelbase, W / 2 - 0.17], [CAR.wheelbase, -W / 2 + 0.17], [0, W / 2 - 0.17], [0, -W / 2 + 0.17]]) {
+        wheels.push(m.clone().multiply(new THREE.Matrix4().makeTranslation(lx, st.tire, lz)));
+      }
+    }
+    emit(wheelGeometry(st.tire), [shared.tire, shared.rim], wheels);
+  }
+  group.userData.count = cars.length;
+  return group;
+}
+
+// A cyclist: a bicycle (two wheels, a diamond frame, bars, saddle) and a rider whose legs pedal
+// with the wheels. Local +X is forward from the rear axle, as for the cars.
+const bikeShared = {
+  tire: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
+  metal: new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.8, roughness: 0.35 }),
+  skin: new THREE.MeshStandardMaterial({ color: 0xd9a47e, roughness: 0.7 }),
+  pants: new THREE.MeshStandardMaterial({ color: 0x2d3748, roughness: 0.8 }),
+  helmet: new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4 }),
+};
+const rod = (x0, y0, x1, y1, r = 0.022) => {
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  const g = new THREE.CylinderGeometry(r, r, len, 6);
+  g.rotateZ(Math.atan2(y1 - y0, x1 - x0) - Math.PI / 2);
+  return g.translate((x0 + x1) / 2, (y0 + y1) / 2, 0);
+};
+export function createBikeMesh(color = 0x2b6cb0) {
+  const g = new THREE.Group();
+  const R = 0.34, wb = 1.05;
+  const frameMat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.35 });
+  const wheels = [];
+  for (const x of [0, wb]) {
+    const w = new THREE.Mesh(new THREE.TorusGeometry(R, 0.025, 6, 24), bikeShared.tire);
+    w.position.set(x, R, 0);
+    g.add(w);
+    wheels.push(w);
+  }
+  const crank = [0.45, 0.3], seat = [0.3, 0.85], head = [0.92, 0.82];
+  const frame = mergeGeometries([
+    rod(0, R, crank[0], crank[1]), rod(0, R, seat[0], seat[1]), rod(crank[0], crank[1], seat[0], seat[1]),
+    rod(crank[0], crank[1], head[0], head[1] - 0.08), rod(seat[0], seat[1] - 0.05, head[0], head[1]),
+    rod(head[0], head[1], wb, R), rod(head[0], head[1], head[0] - 0.05, head[1] + 0.18),
+  ], false);
+  g.add(new THREE.Mesh(frame, frameMat));
+  const bars = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 6).rotateX(Math.PI / 2).translate(head[0] - 0.05, head[1] + 0.18, 0), bikeShared.metal);
+  g.add(bars);
+  // rider
+  const shirt = new THREE.MeshStandardMaterial({ color: [0xc53030, 0x2f855a, 0xf6e05e, 0x3182ce, 0x1a202c][Math.floor(Math.random() * 5)], roughness: 0.8 });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.58, 0.34).translate(0, 0.29, 0), shirt);
+  torso.position.set(seat[0] + 0.02, seat[1] + 0.05, 0);
+  torso.rotation.z = -0.55;
+  g.add(torso);
+  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), bikeShared.skin);
+  headMesh.position.set(seat[0] + 0.35, seat[1] + 0.62, 0);
+  g.add(headMesh);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), bikeShared.helmet);
+  helmet.position.copy(headMesh.position).add(new THREE.Vector3(0, 0.02, 0));
+  g.add(helmet);
+  for (const z of [-0.12, 0.12]) {
+    const arm = new THREE.Mesh(rod(0, 0, head[0] - 0.05 - (seat[0] + 0.27), head[1] + 0.18 - (seat[1] + 0.45), 0.035), shirt);
+    arm.position.set(seat[0] + 0.27, seat[1] + 0.45, z * 1.6);
+    g.add(arm);
+  }
+  const legs = [];
+  for (const [z, phase] of [[-0.1, 0], [0.1, Math.PI]]) {
+    const leg = new THREE.Group();
+    leg.position.set(seat[0], seat[1], z);
+    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.45, 6).translate(0, -0.225, 0), bikeShared.pants);
+    leg.add(thigh);
+    g.add(leg);
+    legs.push({ leg, phase });
+  }
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.6).rotateX(-Math.PI / 2), shared.blob);
+  blob.position.set(wb / 2, 0.02, 0);
+  g.add(blob);
+  g.traverse((m) => { if (m.isMesh && m !== blob) { m.castShadow = true; m.receiveShadow = true; } });
+  g.userData = { bike: true, wheels, legs, spin: 0, crank: 0 };
+  return g;
+}
+
+export function syncBike(mesh, vehicle, dt = 0) {
+  mesh.position.set(vehicle.x, 0, -vehicle.y);
+  mesh.rotation.y = vehicle.psi;
+  // lean into turns: tan(lean) = v^2 * curvature / g
+  mesh.rotation.x = Math.atan((vehicle.latAccel || 0) / 9.81) * -0.9;
+  const u = mesh.userData;
+  u.spin += (vehicle.v * dt) / 0.34;
+  for (const w of u.wheels) w.rotation.z = -u.spin;
+  u.crank += (vehicle.v * dt) / 0.34 * 0.55;
+  for (const { leg, phase } of u.legs) leg.rotation.z = 0.35 + Math.sin(u.crank + phase) * 0.45;
+}
+
+// A pedestrian: legs and arms that swing with each step, a torso, a head. Clothes and skin vary.
+const SKIN = [0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0xffdbac, 0xd9a47e];
+const TOPS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xe2e8f0, 0x744210, 0x4a5568, 0xb83280];
+const BOTTOMS = [0x1a202c, 0x2d3748, 0x2c5282, 0x4a5568, 0x744210, 0x718096];
+const pedGeo = {
+  leg: new THREE.CylinderGeometry(0.07, 0.06, 0.82, 6).translate(0, -0.41, 0),
+  arm: new THREE.CylinderGeometry(0.05, 0.045, 0.62, 6).translate(0, -0.31, 0),
+  torso: new THREE.BoxGeometry(0.24, 0.62, 0.4).translate(0, 0.31, 0),
+  head: new THREE.SphereGeometry(0.11, 10, 8),
+  hair: new THREE.SphereGeometry(0.118, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+};
+const pedMats = new Map();
+const pedMat = (hex) => { if (!pedMats.has(hex)) pedMats.set(hex, new THREE.MeshStandardMaterial({ color: hex, roughness: 0.8 })); return pedMats.get(hex); };
+export function createPedMesh(look = 0) {
+  const pick = (list, k) => list[Math.floor(hash01(String(look), k) * list.length)];
+  const g = new THREE.Group();
+  const skin = pedMat(pick(SKIN, 1)), top = pedMat(pick(TOPS, 2)), bottom = pedMat(pick(BOTTOMS, 3));
+  const hair = pedMat(pick([0x1a1a1a, 0x3b2314, 0x6b4423, 0xa0522d, 0xd4b483, 0x9e9e9e], 4));
+  const scale = 0.92 + hash01(String(look), 5) * 0.16;
+  const limbs = [];
+  for (const z of [-0.1, 0.1]) {
+    const leg = new THREE.Mesh(pedGeo.leg, bottom);
+    leg.position.set(0, 0.86, z);
+    g.add(leg);
+    limbs.push({ m: leg, sign: z < 0 ? 1 : -1, amp: 0.45 });
+  }
+  const torso = new THREE.Mesh(pedGeo.torso, top);
+  torso.position.set(0, 0.86, 0);
+  g.add(torso);
+  for (const z of [-0.26, 0.26]) {
+    const arm = new THREE.Mesh(pedGeo.arm, top);
+    arm.position.set(0, 1.44, z);
+    g.add(arm);
+    limbs.push({ m: arm, sign: z < 0 ? -1 : 1, amp: 0.35 });
+  }
+  const head = new THREE.Mesh(pedGeo.head, skin);
+  head.position.set(0.02, 1.62, 0);
+  g.add(head);
+  const hairMesh = new THREE.Mesh(pedGeo.hair, hair);
+  hairMesh.position.set(0.0, 1.64, 0);
+  g.add(hairMesh);
+  g.scale.setScalar(scale);
+  g.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  g.userData = { limbs };
+  return g;
+}
+
+export function syncPed(mesh, ped) {
+  mesh.position.set(ped.x, 0, -ped.y);
+  mesh.rotation.y = ped.psi;
+  mesh.rotation.x = ped.frozen > 0 ? Math.PI / 2 : 0;   // knocked down
+  const swing = ped.v > 0.1 ? Math.sin(ped.phase * 4.2) : 0;
+  for (const l of mesh.userData.limbs) l.m.rotation.z = l.sign * l.amp * swing;
 }

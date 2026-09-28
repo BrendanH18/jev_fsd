@@ -10,7 +10,7 @@ import { aggregate } from "./metrics.js";
 // [key, header, format, better: "low" | "high" | null]
 const COLUMNS = [
   ["time_s", "time s", 1, "low"], ["avg_kmh", "km/h", 1, "high"],
-  ["collisions", "coll", 0, "low"], ["at_fault", "at fault", 0, "low"], ["red_lights", "red", 0, "low"], ["stop_signs", "stop", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
+  ["collisions", "coll", 0, "low"], ["at_fault", "at fault", 0, "low"], ["red_lights", "red", 0, "low"], ["stop_signs", "stop", 0, "low"], ["failed_to_yield", "yield", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
   ["min_gap_m", "min gap m", 1, "high"], ["min_ttc_s", "min TTC s", 1, "high"], ["max_decel", "max decel", 1, "high"],
   ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "rms jerk", 2, "low"], ["max_lat_accel", "max lat m/s²", 1, "low"],
   ["lane_rms_m", "lane rms m", 2, "low"], ["speeding_s", "speeding s", 1, "low"], ["safety_brakes", "safety", 0, "low"],
@@ -18,7 +18,7 @@ const COLUMNS = [
 ];
 const CARDS = [
   ["pass_rate", "pass rate", "pct", "high"], ["violations_per_km", "violations / km", 2, "low"], ["collisions", "collisions", 0, "low"], ["at_fault", "at-fault collisions", 0, "low"],
-  ["red_lights", "red lights run", 0, "low"], ["stop_signs", "stop signs rolled", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
+  ["red_lights", "red lights run", 0, "low"], ["stop_signs", "stop signs rolled", 0, "low"], ["failed_to_yield", "failures to yield", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
   ["min_ttc_s", "worst TTC s", 1, "high"], ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "mean rms jerk", 2, "low"],
   ["lane_rms_m", "mean lane rms m", 2, "low"], ["avg_kmh", "mean km/h", 1, "high"], ["km", "km driven", 2, null],
   ["safety_brakes", "safety brakes", 0, "low"], ["cost_usd", "cost", "usd", null],
@@ -49,7 +49,7 @@ async function loadRuns() {
   const sel = $("#compare");
   const keep = sel.value;
   sel.replaceChildren(h("option", { value: "" }, "none"), ...runs.map((r) => h("option", { value: r.name },
-    `${r.name} · ${r.config?.brain} · ${r.config?.count} × seed ${r.config?.seed} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`)));
+    `${r.name} · ${r.config?.brain} · ${r.config?.count} × seed ${r.config?.seed}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`)));
   if (keep) sel.value = keep;
   sel._runs = runs;
 }
@@ -57,14 +57,14 @@ async function loadRuns() {
 function runFromForm() {
   return run({
     brain: $("#brain").value, count: +$("#count").value, npcs: +$("#npcs").value,
-    seed: +$("#seed").value, mode: $("#mode").value,
+    seed: +$("#seed").value, mode: $("#mode").value, weather: $("#weather").value,
   });
 }
 
-export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", save = true } = {}) {
+export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", save = true } = {}) {
   running = true; stopRequested = false;
   $("#run").textContent = "Stop";
-  const config = { brain, count, npcs, seed, mode, map: status.map.name, pack: map.pack.pack_version, started_at: new Date().toISOString() };
+  const config = { brain, count, npcs, seed, mode, weather, map: status.map.name, pack: map.pack.pack_version, started_at: new Date().toISOString() };
   const setStatus = (t) => { $("#status").textContent = t; };
   setStatus("building the scenario suite…");
   const suite = await buildSuite(map, { count, seed });
@@ -76,7 +76,7 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
     setStatus(`running ${i + 1} / ${suite.length}: ${suite[i].tags.length_m} m, ${suite[i].tags.signals} signals, ${suite[i].tags.stops} stops`);
     render(state);
     await yieldNow();
-    const r = await runScenario(map, suite[i], { brain, npcs, mode, shouldStop: () => stopRequested });
+    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, shouldStop: () => stopRequested });
     state.results.push(r);
     state.summary = aggregate(state.results);
     render(state);
@@ -151,7 +151,7 @@ function render(state) {
 }
 
 function watch(sc, config) {
-  try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs })); } catch { /* storage off */ }
+  try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs, weather: config.weather })); } catch { /* storage off */ }
   window.open("/?replay=1", "_blank");
 }
 

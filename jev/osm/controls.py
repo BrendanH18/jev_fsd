@@ -6,7 +6,7 @@ so a dual carriageway becomes one intersection. Every incoming edge from outside
 approach with a stop line a few meters before the vertex. Phases are invented in code: OSM has no
 timing data. Stop signs (`highway=stop`) apply to the direction the node's `direction` tag says, to
 every incoming edge when the node is the junction itself, or otherwise to the direction whose
-junction lies ahead of the node.
+junction lies ahead of the node. Roundabout entries get a yield line.
 """
 
 from __future__ import annotations
@@ -23,9 +23,10 @@ from .project import Projection
 SIGNAL_SNAP_M = 30.0
 CLUSTER_M = 25.0
 STOP_LINE_SETBACK_M = 4.0      # minimum; wider crossing roads push the line back further
-CURB_CLEARANCE_M = 1.2         # stop line to the crossing road's curb at a stop sign
+CURB_CLEARANCE_M = 3.4         # stop line to the crossing road's curb at a stop sign: room for the crosswalk
 CROSSWALK_CLEARANCE_M = 4.0    # room for a painted crosswalk in front of a signal's stop line
 STOP_AHEAD_M = 30.0
+YIELD_CLEARANCE_M = 0.8        # yield line to the roundabout's outer edge
 MIN_APPROACHES = 3
 CYCLE = {"green": 20.0, "yellow": 3.0, "all_red": 1.0}
 CYCLE_S = 2 * (CYCLE["green"] + CYCLE["yellow"] + CYCLE["all_red"])
@@ -155,7 +156,7 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
                 targets.append((eid, max(1.0, min(s, e["length"] - 1.0))))
         for eid, s_line in targets:
             e = graph.edges[eid]
-            if e.get("control"):  # signals win; one control per edge
+            if e.get("control") or e.get("ring"):  # signals win; one control per edge; a ring never stops
                 continue
             sid = "stop%d" % stop_k
             stop_k += 1
@@ -163,6 +164,25 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
                           "x": g.r2(x), "y": g.r2(y), "junction": e["to"]})
             e["control"] = {"type": "stop", "id": sid, "s_line": round(s_line, 2), "all_way": all_way}
 
-    return {"intersections": intersections, "stops": stops,
+    # roundabout entries: yield to traffic already in the ring, at a line just outside its asphalt
+    yields = []
+    for rb in getattr(graph, "roundabouts", []):
+        ring_vertices = set(rb["vertices"])
+        for v in rb["vertices"]:
+            for eid in graph.in_edges.get(v, []):
+                e = graph.edges[eid]
+                if e.get("ring") or e.get("control") or e["from"] in ring_vertices:
+                    continue
+                vx, vy = graph.vertices[v]["x"], graph.vertices[v]["y"]
+                # the leg meets the ring at its vertex; the line sits YIELD_CLEARANCE_M outside the ring
+                to_center = math.hypot(vx - rb["x"], vy - rb["y"])
+                setback = max(1.0, rb["outer_r"] + YIELD_CLEARANCE_M - to_center)
+                s_line = max(1.0, e["length"] - setback)
+                yid = "yield%d" % len(yields)
+                yields.append({"id": yid, "edge": eid, "s_line": round(s_line, 2), "roundabout": rb["id"],
+                               "junction": v})
+                e["control"] = {"type": "yield", "id": yid, "s_line": round(s_line, 2), "roundabout": rb["id"]}
+
+    return {"intersections": intersections, "stops": stops, "yields": yields,
             "stats": {"signal_nodes_dropped": dropped_signals, "intersections": len(intersections),
-                      "stops": len(stops)}}
+                      "stops": len(stops), "yields": len(yields)}}

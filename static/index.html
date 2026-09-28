@@ -38,6 +38,15 @@
         </select>
         <button id="autopilot" class="toggle" title="J">autopilot: off</button>
       </div>
+      <div class="row controls">
+        <label class="label">weather</label>
+        <select id="weather">
+          <option value="dry">dry</option>
+          <option value="rain">rain</option>
+          <option value="fog">fog</option>
+          <option value="snow">snow</option>
+        </select>
+      </div>
       <div class="row keys">W A S D drive · Space brake · J autopilot · C camera · R reset · P pause</div>
     </div>
 
@@ -56,6 +65,7 @@
       <div class="stat warn"><span class="label">collisions</span><span id="collisions">0</span></div>
       <div class="stat warn"><span class="label">red lights</span><span id="reds">0</span></div>
       <div class="stat warn"><span class="label">stop signs</span><span id="stops">0</span></div>
+      <div class="stat warn"><span class="label">failed to yield</span><span id="yields">0</span></div>
       <div class="stat warn"><span class="label">off-road</span><span id="offroad">0 s</span></div>
       <div class="stat"><span class="label">safety brakes</span><span id="safety">0</span></div>
       <div class="stat"><span class="label">fallbacks</span><span id="fallbacks">0</span></div>

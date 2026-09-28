@@ -4,6 +4,7 @@
 // and the shadow pass can skip what they cannot see.
 
 import * as THREE from "three";
+import { snowable } from "./weather.js";
 import { GeoBuilder, hash01 } from "./geo.js";
 import { facadeTextures, flatRoofTexture, shingleTexture } from "./textures.js";
 
@@ -178,8 +179,8 @@ export function buildBuildings(map) {
   const mats = {
     house: wallMaterial("house"),
     block: wallMaterial("block"),
-    roof: new THREE.MeshStandardMaterial({ map: shingleTexture(), vertexColors: true, roughness: 0.92, side: THREE.DoubleSide }),
-    flat: new THREE.MeshStandardMaterial({ map: flatRoofTexture(), vertexColors: true, roughness: 0.95 }),
+    roof: snowable(new THREE.MeshStandardMaterial({ map: shingleTexture(), vertexColors: true, roughness: 0.92, side: THREE.DoubleSide }), "roof"),
+    flat: snowable(new THREE.MeshStandardMaterial({ map: flatRoofTexture(), vertexColors: true, roughness: 0.95 }), "roof"),
   };
   for (const chunk of chunks.values()) {
     for (const name of ["house", "block", "roof", "flat"]) {

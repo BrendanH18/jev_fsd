@@ -5,6 +5,7 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   if (autopilot.enabled) autopilot.step(dt, now);
   else if (input) world.stepManual(dt, input);
   fleet.step(dt);
+  world.crowd.step(dt);
   world.t += dt;
   world.tick++;
   const road = world.roadInfo();
