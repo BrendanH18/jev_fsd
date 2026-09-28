@@ -139,9 +139,14 @@ export class World {
     // stop-line crossings on the edge the ego is on
     const edge = road.edge;
     if (edge && edge.control && road.lane) {
-      const front = road.s + (CAR.length - CAR.rearOverhang);
+      // how far the front bumper is past the line: along the route when there is one, exactly as the
+      // sensors measure it (a lane polyline's length differs from the centerline's on a bend), else
+      // along the lane
+      const FRONT = CAR.length - CAR.rearOverhang;
+      const rc = this.route && this.route.controls.find((c) => c.edge === edge.id);
+      const past = rc ? this.route.project(this.ego.x, this.ego.y).s + FRONT - rc.sRoute : road.s + FRONT - edge.control.s_line;
       const key = `${edge.id}`;
-      const crossed = front >= edge.control.s_line;
+      const crossed = past >= 0;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
         if (edge.control.type === "signal") {
           const state = this.phase(edge.control.id)[edge.control.group];
@@ -155,7 +160,7 @@ export class World {
         }
       }
       this.lastRoad = { edgeId: key, crossed };
-      const bumperToLine = edge.control.s_line - front;
+      const bumperToLine = -past;
       this.egoStop.update(edge.control, bumperToLine, this.ego.v, dt);
     } else {
       this.lastRoad = edge ? { edgeId: edge.id, crossed: false } : null;

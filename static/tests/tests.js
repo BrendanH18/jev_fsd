@@ -3,7 +3,10 @@
 import { api } from "../js/common.js";
 import { MapData } from "../js/map/mapdata.js";
 import { Route } from "../js/map/route.js";
-import { Vehicle, CAR, ROAD } from "../js/sim/vehicle.js";
+import { Vehicle, CAR, ROAD, comfort } from "../js/sim/vehicle.js";
+import { ringBusy } from "../js/sim/roundabout.js";
+import { crosswalkConflict } from "../js/sim/pedestrians.js";
+import { setWeather } from "../js/sim/weather.js";
 import { purePursuit, speedControl } from "../js/sim/controller.js";
 import { obbOverlap } from "../js/sim/collision.js";
 import { World } from "../js/sim/world.js";
@@ -126,6 +129,48 @@ async function run() {
     check("rules brain picks an eligible candidate", sim.eligible.some((c) => c.id === r.candidateId), r.candidateId);
     check("rules brain slows behind a stopped car", r.candidateId !== "keep_lane_hold" && r.candidateId !== "keep_lane_limit", r.candidateId);
     void f;
+  }
+  // parked cars sit in the parking lane, clear of every travel lane
+  {
+    const world = new World(map, { seed: 3 });
+    const list = world.parked.list;
+    check("parked cars spawned", list.length > 500, `${list.length}`);
+    let worst = Infinity;
+    for (const car of list.slice(0, 400)) {
+      const [cx, cy] = car.center;
+      const near = map.nearestLane(cx, cy, car.psi, 15);
+      if (near) worst = Math.min(worst, Math.abs(near.lateral));
+    }
+    check("parked cars clear of the lanes", worst > 1.9, `closest lane center ${worst.toFixed(2)} m`);
+    check("parked cars found by obstaclesNear", world.obstaclesNear(list[0].center[0], list[0].center[1], 3).includes(list[0]));
+  }
+  // roundabout: a car circulating just upstream of an entry blocks it; one just past it does not
+  {
+    const rb = [...map.roundabouts.values()][0];
+    if (rb) {
+      const node = map.nodes.get(rb.vertices[0]);
+      const entry = Math.atan2(node.y - rb.y, node.x - rb.x);
+      const at = (a) => { const v = new Vehicle(rb.x + Math.cos(a) * rb.lane_r, rb.y + Math.sin(a) * rb.lane_r, a + Math.PI / 2, 4); return v; };
+      check("roundabout: circulating car upstream blocks the entry", ringBusy(rb, node, [at(entry - 1.2)]));
+      check("roundabout: car well past the entry does not", !ringBusy(rb, node, [at(entry + 1.5)]));
+    } else check("roundabout present on the map", false);
+  }
+  // crosswalks: a pedestrian starting across the path is a conflict; one on the far sidewalk is not
+  {
+    const pts = []; for (let x = 0; x <= 60; x += 1) pts.push([x, 0]);
+    const cum = pts.map((p) => p[0]);
+    const crowd = { list: [{ x: 30, y: 6, v: 1.3, crossing: { from: [30, 8], to: [30, -8] } }] };
+    const c = crosswalkConflict(pts, cum, 0, 50, crowd);
+    check("crosswalk conflict found ahead", c && Math.abs(c.s - 30) < 0.5, JSON.stringify(c && { s: c.s }));
+    crowd.list[0].y = -7.5;
+    check("pedestrian past the lane is no conflict", !crosswalkConflict(pts, cum, 0, 50, crowd));
+  }
+  // weather sets road grip and the comfort targets
+  {
+    setWeather("snow");
+    const snow = { mu: ROAD.mu, decel: comfort().decel };
+    setWeather("dry");
+    check("snow lowers grip and comfortable braking", snow.mu < 0.3 && snow.decel < 1.0 && ROAD.mu === 0.9, JSON.stringify(snow));
   }
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;

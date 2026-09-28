@@ -17,11 +17,15 @@ shows exactly what the model was asked, what it answered, how sure it was, and w
 ## Highlights
 
 - **Real streets.** Kitsilano, Vancouver, by default: streets, lanes, speed limits, one-way streets,
-  traffic signals, stop signs, and buildings, straight from OpenStreetMap. Any neighbourhood works.
+  traffic signals, stop signs, traffic circles, parking lanes, bike routes, and buildings, straight
+  from OpenStreetMap. Any neighbourhood works.
+- **A living street.** Traffic that changes lanes, thousands of parked cars, cyclists on the bike
+  routes, and pedestrians who cross at the corners, all of whom the car has to share the road with.
+  Rain, fog, and snow change the grip under the tires and how carefully everyone drives.
 - **Two drivers, one car.** Switch between the Jev model and a hand-written Rules driver. Both drive
   the same car through the same pipeline, so you can compare them fairly.
 - **Nothing hidden.** Every decision can be inspected, copied as a `curl` command, or saved. Collisions,
-  red lights, rolled stop signs, and time off the road are counted on screen.
+  red lights, rolled stop signs, failures to yield, and time off the road are counted on screen.
 - **A benchmark.** A reproducible suite of drives scores any driver on safety, comfort, lane keeping,
   legality, and cost.
 - **No build step.** A small Python server and a browser. Three.js loads from a CDN; there is no
@@ -58,6 +62,7 @@ cp .env.example .env      # set TYPESAFE_API_KEY=... and restart the server
 | `Space` | brake hard |
 | `C` | switch camera: chase, top-down, high chase |
 | `R` | put the car back on the nearest lane |
+| weather menu (or `?weather=rain` in the URL) | dry, rain, fog, or snow |
 | `P` | pause |
 | `1` / `2` | Jev driver / Rules driver |
 | **JSON** button | open the decision panel |
@@ -116,14 +121,17 @@ Code owns the math and the physics; the model owns the judgment. Every 250 ms of
 anything interesting (an intersection, a car ahead, a turn), and every 650 ms on open road:
 
 1. **Sense.** Project the car onto its route and compute the situation, including a
-   `target_speed`: the speed limit, lowered for the car ahead, a required stop, the destination,
-   and curves. The curve part looks 60 m ahead and picks the fastest speed from which the car can
-   still slow comfortably for every bend.
+   `target_speed`: the speed limit, lowered for the weather, the vehicle ahead, a required stop, a
+   roundabout, a pedestrian in a crosswalk, the destination, and curves. The curve part looks 60 m
+   ahead and picks the fastest speed from which the car can still slow comfortably for every bend;
+   "comfortably" shrinks with the grip the road has.
 2. **Propose.** Up to 16 maneuvers: stay in the lane at several speeds (never above the limit),
-   shift half a meter or a meter left or right, roll up to the stop line, stop at the destination,
-   or brake hard.
+   shift half a meter or a meter left or right, roll up to the stop line, stop before a crosswalk,
+   stop at the destination, or brake hard. Stopping maneuvers queue behind whoever is in front.
 3. **Simulate.** Run each maneuver three seconds forward with the real car model against predicted
-   traffic. Reject any that collide, leave the road, or cross a red light or an unfinished stop.
+   traffic, parked cars, cyclists, and pedestrians. Reject any that collide, leave the road, cross
+   a red light or an unfinished stop, enter a roundabout or a crosswalk without yielding, or pass a
+   cyclist with less than a meter to spare.
 4. **Choose.** Jev or Rules picks among the survivors (see above).
 5. **Execute.** The chosen maneuver keeps running until the next decision arrives, so the car never
    waits for the network.
@@ -170,20 +178,42 @@ stopped 47 m before the sign and waited there. Describing *when* each option is 
 
 ## The simulation
 
-- **The car.** A bicycle model with two properties real cars have: brakes and throttle respond with
-  a short lag and cannot change instantly, and the tires have limited grip shared between braking
-  and cornering (so a turn taken too fast drifts wide off the road). The same model drives every
-  car and every prediction, so predictions match what really happens.
+![Snow on West 8th Avenue: the autopilot follows a cyclist between parked cars](docs/snow.jpg)
+
+- **The car.** A dynamic bicycle model: tires that grip in proportion to how much they slip and
+  then saturate, grip shared between braking and cornering, weight that shifts forward under
+  braking and outward in a bend (costing the loaded tires some grip), and yaw inertia. Brakes and
+  throttle respond with a short lag. Anti-lock brakes and stability control keep hard braking in a
+  bend stable on a dry road; on a wet or snowy road, a bend taken too fast still slides. At walking
+  pace it becomes a simple kinematic model. The same model drives every car, cyclist, and
+  prediction, so predictions match what really happens. Bodies pitch under braking and roll in
+  bends.
 - **Traffic.** 40 cars follow their lanes, keep a safe gap, stop for red lights and stop signs,
-  yield to oncoming cars when turning left and to crossing cars at uncontrolled junctions, and use
-  their turn signals.
-- **The map.** Stop lines sit just short of the crossing street, a little further back at signals
-  to leave room for a crosswalk. Signal timing is invented (48-second cycles), because
-  OpenStreetMap does not record it.
+  yield to oncoming cars when turning left, to crossing cars at uncontrolled junctions, to traffic
+  already in a roundabout, and to pedestrians in crosswalks, and use their turn signals. On
+  multi-lane streets they move into the lane their next turn needs, or around a slow car, when
+  the next lane has a safe gap.
+- **Parked cars.** Both curbs of residential streets have parking lanes (OpenStreetMap parking tags
+  win where they exist), about half full: some 3,200 cars on the Kitsilano map, kept clear of
+  corners and stop lines. They are obstacles like any other car.
+- **Cyclists.** Twelve riders stay on the bike routes where they can, ride the right-hand side of
+  the lane at 15 to 23 km/h, and obey signs and signals. Passing one requires a meter of space.
+- **Pedestrians.** Sixty people walk the sidewalks, turn corners, and cross streets at junctions:
+  at signals during the walk phase, elsewhere when no car would reach the crosswalk within five
+  seconds. Drivers must let anyone in a crosswalk they are about to cross get past their lane.
+- **Roundabouts.** Kitsilano's traffic circles are tagged in OpenStreetMap tighter than a car can
+  turn, so the circulating lane is moved out to at least 5 m from the center around a planted
+  island. Every entry has a yield line; the route gives one instruction ("take exit 2").
+- **Weather.** Dry (grip 0.9), rain (0.55), fog (0.8), or snow (0.25). Grip feeds the tire model and
+  the comfortable cornering and braking targets, and every driver slows below the limit in bad
+  weather. The scene follows: an overcast sky, wet reflective roads, fog, falling rain or snow, and
+  snow settling on roofs, lawns, roads, and the tops of trees and parked cars.
+- **The map.** Stop lines sit behind the crosswalk, just short of the crossing street. Signal timing
+  is invented (48-second cycles), because OpenStreetMap does not record it.
 - **The scene.** Everything is generated in code, with no downloaded assets: sky and sun with
-  moving shadows, textured roads, curbs, boulevards and sidewalks, lane markings and crosswalks,
-  mast-arm traffic signals, stop signs, street lights, trees, and houses with windows and pitched
-  roofs.
+  moving shadows, textured roads, curbs, boulevards and sidewalks, lane markings, crosswalks and
+  yield lines, mast-arm traffic signals, stop and yield signs, street lights, trees, and houses with
+  windows and pitched roofs.
 
 ## Benchmark
 
@@ -202,18 +232,21 @@ Jev against Rules, or to check that a change made things better rather than just
 - **Save, compare, replay.** Runs are saved to `data/runs/`, any two can be compared side by side,
   and **watch** replays a drive in the 3D simulator.
 
-A drive **passes** if it arrives with no collision, no red light run, no rolled stop sign, and less
-than one second off the road. The page also reports whose fault each collision was, the closest gap
+A drive **passes** if it arrives with no collision, no red light run, no rolled stop sign, no
+failure to yield (to traffic in a roundabout or a pedestrian in a crosswalk), and less than one
+second off the road. Drives can run in any weather. The page also reports whose fault each collision was, the closest gap
 and shortest time to collision, safety-brake interventions, hard braking, jerk (how abruptly the
 car changes acceleration), cornering force, distance from the lane center, speeding, decisions,
 tokens, cost, and latency.
 
-**Baseline (Rules, 12 drives, seed 1, 40 traffic cars):** 11 of 12 drives pass over 9.8 km, with
-no collisions, no red lights run, no rolled stop signs, 1.9 s off the road in one drive, and an
-average distance from the lane center of 0.34 m. The run is included as
-`data/runs/20260923-185357-rules.json`; choose it under **compare with**.
+**Baseline (Rules, 12 drives, seed 1, 40 traffic cars, 12 cyclists, 60 pedestrians, parked cars):**
+all 12 drives pass over 10.6 km, with no collisions, no red lights run, no rolled stop signs, no
+failures to yield, 8 safety-brake interventions, and an average distance from the lane center of
+0.15 m. The same suite also passes 12 of 12 in rain, fog, and snow (average speed drops from 25 to
+19 km/h in snow). The run is included as `data/runs/20260928-140541-rules.json`; choose it under
+**compare with**.
 
-A Jev benchmark of the same suite is about 4,700 decisions, roughly $0.40.
+A Jev benchmark of the same suite is about 4,800 decisions, roughly $0.40 at earlier token counts.
 
 ## Measured with Jev
 
@@ -273,14 +306,16 @@ All settings are optional and go in `.env` or the environment (see `.env.example
 
 ## Limitations
 
-- No pedestrians, cyclists, or parked cars; traffic cars never change lanes.
+- Traffic cars never overtake cyclists (they follow them), and the driven car never changes lanes
+  or passes one; it has half- and one-meter shifts within its lane only.
+- Pedestrians only cross at junctions (never mid-block, never against the signal) and never react
+  to a car that fails to yield. Nobody parks or pulls out: parked cars stay put all drive.
 - One-way streets, turn restrictions, and lane counts are only as good as the OpenStreetMap tags.
-  Roundabouts and complex junctions are handled crudely.
-- The car model has no weight transfer, skidding, or yaw dynamics, and road grip is a single
-  number (there is no weather yet).
-- Known issues from the benchmark: one of the twelve baseline drives still leaves the road briefly;
-  the Rules driver's speed changes are more abrupt than comfortable driving; one drive needs several
-  safety-brake interventions.
+  Complex junctions are handled simply, and traffic circles are widened to be drivable.
+- The car model has no suspension, tire temperature, or road camber, and sensing is perfect: fog
+  changes what you see, not what the car knows.
+- The Jev question wording for roundabouts, cyclists, pedestrians, and weather has not yet been
+  checked against the live model (`scripts/verify_jev.py` covers the older situations).
 - It runs locally only. There is no hosted version.
 
 ## Development

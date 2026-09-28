@@ -14,6 +14,7 @@ export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
 const YIELD_ENTRY_MPS = 4.0;
 const PED_LOOK_M = 45;
+const CROSS_ETA_S = 4.5;
 export const CROSSWALK_STOP_M = 2.0;   // stop this far short of a crosswalk centerline
 const FRONT = CAR.length - CAR.rearOverhang;
 
@@ -56,12 +57,18 @@ export function buildSnapshot(world, executing = null) {
       const junction = inter ? [inter.x, inter.y] : c.junction;
       let crossTraffic = false;
       const rb = control.type === "yield" ? map.roundabouts.get(control.roundabout) : null;
-      if (rb) crossTraffic = ringBusy(rb, map.nodes.get(map.edges.get(c.edge).to), world.npcs);
+      // yielding at a roundabout: look further round the ring the longer the car needs to reach the line
+      if (rb) crossTraffic = ringBusy(rb, map.nodes.get(map.edges.get(c.edge).to), world.npcs, null, Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v)));
       else if (junction) {
+        // crossing traffic in the junction, or heading for it and due within a few seconds (at a
+        // two-way stop the through road does not stop, so its traffic must be waited for)
         for (const n of world.npcs) {
-          if (Math.hypot(n.x - junction[0], n.y - junction[1]) > 20 || Math.abs(n.v) < 0.5) continue;
+          if (Math.abs(n.v) < 0.5) continue;
           const diff = Math.abs(wrap(n.psi - ego.psi));
-          if (diff > Math.PI / 6 && diff < Math.PI * 5 / 6) { crossTraffic = true; break; }
+          if (diff <= Math.PI / 6 || diff >= Math.PI * 5 / 6) continue;
+          const dx = junction[0] - n.x, dy = junction[1] - n.y, d = Math.hypot(dx, dy);
+          const closing = (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6);
+          if (d < 20 || (closing > 0.7 && d < 60 && d / n.v < CROSS_ETA_S)) { crossTraffic = true; break; }
         }
       }
       const stopMem = world.egoStop;
@@ -142,9 +149,10 @@ export function desiredSpeed(snap) {
   }
   if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) { v = 0; reasons.push("cross traffic"); }
   if (i && i.control === "yield" && !i.entered) {
+    const entry = YIELD_ENTRY_MPS * Math.sqrt(decel / 2.5);
     // roundabout: stop at the line for traffic in the ring, otherwise enter at a walking-plus pace
     const vy = i.cross_traffic_moving ? (i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel))
-      : Math.sqrt(YIELD_ENTRY_MPS * YIELD_ENTRY_MPS + 2 * decel * Math.max(0, i.bumper_to_line_m));
+      : Math.sqrt(entry * entry + 2 * decel * Math.max(0, i.bumper_to_line_m));
     if (vy < v) { v = vy; reasons.push(i.cross_traffic_moving ? "yield to roundabout traffic" : "roundabout"); }
   }
   if (snap.pedestrian) {

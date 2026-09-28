@@ -2,7 +2,7 @@
 // model, scored by code, and filtered for safety by code. A brain only ever picks among the
 // survivors. Every prediction here is what the car will actually do if the candidate is chosen.
 
-import { CAR } from "../sim/vehicle.js";
+import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
@@ -94,7 +94,7 @@ export function simulateAll(candidates, snap, world) {
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   const mustStop = control && (
-    (control.control === "signal" && (control.signal === "red" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / 8 + 2))) ||
+    (control.control === "signal" && (control.signal === "red" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
     (control.control === "stop" && !control.stop_completed) ||
     (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;

@@ -6,7 +6,9 @@ const YIELD_HORIZON_S = 3.5;   // a gap shorter than this is not taken
 const PASSING_M = 3.5;         // a vehicle this close to the entry along the ring blocks it
 
 // True when a vehicle circulating in roundabout `rb` blocks entering at the ring vertex `node`.
-export function ringBusy(rb, node, vehicles, self = null) {
+// `extra` seconds widen the window for a driver still approaching the line, who will get there
+// later and must know now whether to slow down.
+export function ringBusy(rb, node, vehicles, self = null, extra = 0) {
   if (!rb || !node) return false;
   const dir = rb.ccw === false ? -1 : 1;
   const entry = Math.atan2(node.y - rb.y, node.x - rb.x);
@@ -21,7 +23,7 @@ export function ringBusy(rb, node, vehicles, self = null) {
     const arc = ahead * rb.lane_r;
     const behind = (2 * Math.PI - ahead) * rb.lane_r;
     if (arc < PASSING_M || behind < PASSING_M) return true;
-    if (arc / Math.max(1, Math.abs(o.v)) < YIELD_HORIZON_S) return true;
+    if (arc / Math.max(1, Math.abs(o.v)) < YIELD_HORIZON_S + extra) return true;
   }
   return false;
 }

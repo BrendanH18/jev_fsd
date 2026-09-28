@@ -238,7 +238,7 @@ export class NpcFleet {
         if (bumperToLine > 70) break;
         if (e.control.type === "signal") {
           const st = phaseOf(this.map.intersections.get(e.control.id), world.t)[e.control.group];
-          const canStop = bumperToLine > n.v * n.v / (2 * 4) + 1;
+          const canStop = bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
           if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
         } else if (e.control.type === "yield") {
           // roundabout entry: wait at the line while someone in the ring would arrive first
@@ -289,10 +289,13 @@ export class NpcFleet {
       if (gap === Infinity) a = IDM.aMax * (1 - Math.pow(n.v / v0, 4));
       else {
         const dv = n.v - leadV;
-        const sStar = IDM.s0 + Math.max(0, n.v * IDM.T + n.v * dv / (2 * Math.sqrt(IDM.aMax * IDM.b)));
+        // on a slippery road drivers leave more room and brake more gently
+        const grip = Math.min(1, comfort().decel / 2.5);
+        const b = IDM.b * grip, T = IDM.T / Math.max(0.5, grip);
+        const sStar = IDM.s0 + Math.max(0, n.v * T + n.v * dv / (2 * Math.sqrt(IDM.aMax * b)));
         a = IDM.aMax * (1 - Math.pow(n.v / v0, 4) - Math.pow(sStar / Math.max(gap, 0.1), 2));
       }
-      a = Math.max(-6, Math.min(IDM.aMax, a));
+      a = Math.max(-Math.min(6, comfort().hardDecel * 1.1), Math.min(IDM.aMax, a));
       if (n.v < 0.05 && a < 0) a = -1;   // stopped: hold the brakes rather than creep
       // wedged at an angle to its lane (a turn taken wide, then blocked): put it back on the lane
       if (n.waiting > 10 && Math.abs(wrap(n.psi - path.headingAt(path.s))) > 0.35) { this.respawn(n); continue; }

@@ -2,6 +2,7 @@
 // when a model call fails or times out. Zero latency, zero cost.
 
 import { desiredSpeed } from "./sensors.js";
+import { comfort } from "../sim/vehicle.js";
 
 export class RulesBrain {
   constructor() { this.name = "rules"; }
@@ -11,7 +12,7 @@ export class RulesBrain {
     const v = snap.ego.v;
     let stop = false;
     if (i) {
-      const brakeDist = v * v / (2 * 3) + 1.0;
+      const brakeDist = v * v / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
       if (i.control === "signal" && (i.signal === "red" || i.signal === "yellow") && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
       if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) stop = true;
       if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) stop = true;
