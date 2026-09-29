@@ -45,7 +45,7 @@ async function boot() {
   view.scene.add(roads.group);
   const buildings = buildBuildings(map);
   view.scene.add(buildings);
-  view.scene.add(buildTrees(map, roads, buildings.userData.index));
+  view.addScenery(buildTrees(map, roads, buildings.userData.index));
   view.scene.add(buildSurroundings(map));
   view.backdrop.visible = inVancouver(pack.origin);   // the North Shore mountains
   const egoMesh = createCarMesh(0x1f5fd6, "ego");
@@ -74,7 +74,7 @@ async function boot() {
     fleet = new NpcFleet(world, { count: status.npcs, seed: 7 });
     autopilot = new Autopilot(world, callbacks);
   }
-  view.scene.add(buildParkedCars(world.parked.list));
+  view.addScenery(buildParkedCars(world.parked.list));
   const pedMeshes = world.crowd.list.map((p) => { const m = createPersonMesh(p.look); view.scene.add(m); return m; });
   const npcMeshes = new Map();
   const parkedMeshes = new Map();

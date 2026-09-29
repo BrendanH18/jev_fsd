@@ -16,6 +16,7 @@ import { toThree } from "./scene.js";
 import { snowable } from "./weather.js";
 import { lighting } from "./atmosphere.js";
 import { leafTexture, needleTexture, barkTexture } from "./textures.js";
+import { chunkLOD } from "./lod.js";
 
 const CHUNK = 180;
 const LEAF = [0x4d7a2e, 0x5a8a34, 0x668f3a, 0x42692c, 0x6f9440, 0x547f31, 0x5b7a2f];
@@ -25,10 +26,9 @@ const BOULEVARD = { residential: 1.8, living_street: 1.2, tertiary: 1.2, unclass
 const VARIANTS = 3;
 
 // A unit crown (radius ~1, centered on the origin) of leaf cards around a core.
-function crownGeometry(seed) {
+function crownGeometry(seed, count = 150) {
   const rnd = mulberry(seed * 7919 + 13);
   const cards = [];
-  const count = 150;
   for (let i = 0; i < count; i++) {
     // points biased toward the surface of a slightly flattened, lumpy ellipsoid
     const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2;
@@ -53,8 +53,8 @@ function crownGeometry(seed) {
 }
 
 // The crown's dark interior, so gaps between cards read as shade rather than sky.
-function coreGeometry(seed) {
-  let g = new THREE.IcosahedronGeometry(1, 2);
+function coreGeometry(seed, detail = 2) {
+  let g = new THREE.IcosahedronGeometry(1, detail);
   g.deleteAttribute("normal"); g.deleteAttribute("uv");
   g = mergeVertices(g);
   const p = g.attributes.position;
@@ -84,14 +84,14 @@ function trunkGeometry(seed) {
 }
 
 // Conifer: tiers of ragged, drooping cones, each a little narrower than the one below.
-function coniferGeometry(seed) {
+function coniferGeometry(seed, detailed = true) {
   const rnd = mulberry(seed * 3571 + 5);
   const tiers = [];
   const n = 5;
   for (let t = 0; t < n; t++) {
     const f = t / n;
     const r = 1 - f * 0.78, h = 0.34;
-    const g = new THREE.ConeGeometry(r, h, 14, 2, true);
+    const g = new THREE.ConeGeometry(r, h, detailed ? 14 : 7, detailed ? 2 : 1, true);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       if (p.getY(i) < -h / 2 + 1e-3) {
@@ -187,6 +187,9 @@ export function buildTrees(map, roads, footprints) {
   for (let v = 0; v < VARIANTS; v++) {
     crowns.push(crownGeometry(v + 1)); cores.push(coreGeometry(v + 1)); trunks.push(trunkGeometry(v + 1)); conifers.push(coniferGeometry(v + 1));
   }
+  const distantCrown = crownGeometry(1, 40), distantCore = coreGeometry(1, 0);
+  const distantTrunk = new THREE.CylinderGeometry(0.1, 0.17, 1, 5).translate(0, 0.5, 0);
+  const distantConifer = coniferGeometry(1, false);
   const leafMap = leafTexture();
   const leafMat = withWind(snowable(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), "leaf"), 0.05);
   const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: 0.45, side: THREE.DoubleSide });
@@ -224,7 +227,7 @@ export function buildTrees(map, roads, footprints) {
   }
 
   const group = new THREE.Group();
-  const emit = (geo, mat, list, depthMat = null) => {
+  const emit = (level, geo, mat, list, depthMat = null) => {
     if (!list.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, list.length);
     list.forEach((it, i) => { mesh.setMatrixAt(i, it.m); if (it.col) mesh.setColorAt(i, it.col); });
@@ -232,15 +235,22 @@ export function buildTrees(map, roads, footprints) {
     mesh.receiveShadow = true;
     if (depthMat) mesh.customDepthMaterial = depthMat;
     mesh.computeBoundingSphere();
-    group.add(mesh);
+    level.add(mesh);
   };
   for (const c of chunks.values()) {
+    const near = new THREE.Group(), far = new THREE.Group();
     for (let v = 0; v < VARIANTS; v++) {
-      emit(trunks[v], barkMat, c.trunk[v]);
-      emit(cores[v], coreMat, c.core[v]);
-      emit(crowns[v], leafMat, c.crown[v], leafDepth);
-      emit(conifers[v], needleMat, c.conifer[v]);
+      emit(near, trunks[v], barkMat, c.trunk[v]);
+      emit(near, cores[v], coreMat, c.core[v]);
+      emit(near, crowns[v], leafMat, c.crown[v], leafDepth);
+      emit(near, conifers[v], needleMat, c.conifer[v]);
     }
+    // Merge distant variants into one batch per part; per-instance color and scale preserve variety.
+    emit(far, distantTrunk, barkMat, c.trunk.flat());
+    emit(far, distantCore, coreMat, c.core.flat());
+    emit(far, distantCrown, leafMat, c.crown.flat(), leafDepth);
+    emit(far, distantConifer, needleMat, c.conifer.flat());
+    group.add(chunkLOD(near, far));
   }
   group.userData.count = spots.length;
   return group;

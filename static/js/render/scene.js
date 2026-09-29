@@ -3,8 +3,8 @@
 //
 // Ground-level layers (grass, sidewalks, asphalt, markings) are coplanar, so instead of lifting
 // them apart by millimeters (which z-fights at a distance) they are drawn first, in a fixed
-// order, with a depth test that always passes. They still write depth (all at the same height), so
-// everything drawn afterwards is depth-tested against the ground and ambient occlusion can see it.
+// order over a single depth-writing ground plane. Surface color layers do not rewrite depth, so
+// coplanar triangle interpolation cannot make the AO's reconstructed ground normals shimmer.
 
 import * as THREE from "three";
 import { grassTexture, setMaxAnisotropy, withMacroVariation } from "./textures.js";
@@ -18,10 +18,18 @@ export const toThree = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
 export const LAYER = { sky: -100, grass: -50, water: -46, sidewalk: -40, curb: -38, asphalt: -30, patch: -28, islandCurb: -27, island: -26, marking: -20, pool: -10 };
 
-// A material for a ground layer: painted in renderOrder over whatever is there, writing depth.
+// Only the base plane writes depth. Color layers use a small raster depth bias to pass the test
+// against that plane, retaining depth tests against other geometry without stacking depth errors.
 export function groundLayer(mesh, order) {
   const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  for (const m of mats) { m.depthTest = true; m.depthFunc = THREE.AlwaysDepth; m.depthWrite = true; }
+  for (const m of mats) {
+    m.depthTest = true;
+    m.depthFunc = THREE.LessEqualDepth;
+    m.depthWrite = order === LAYER.grass;
+    m.polygonOffset = order !== LAYER.grass;
+    m.polygonOffsetFactor = -1;
+    m.polygonOffsetUnits = -1;
+  }
   mesh.renderOrder = order;
   mesh.receiveShadow = true;
   mesh.castShadow = false;
@@ -98,6 +106,7 @@ export class SceneView {
     setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
 
     this.scene = new THREE.Scene();
+    this.sceneryLODs = [];
     this.scene.background = new THREE.Color();
     this.scene.fog = new THREE.FogExp2(0xffffff, 0.0016);
     this.camera = new THREE.PerspectiveCamera(58, 1, 0.3, 6000);
@@ -150,9 +159,11 @@ export class SceneView {
       this.sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
       if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
     }
-    if (q.post && !this.post) this.post = new PostFX(this.renderer, this.scene, this.camera);
+    if (q.post && !this.post) this.post = new PostFX(this.renderer, this.scene, this.camera, { ao: q.ao });
+    if (q.post && this.post) this.post.setAO(q.ao);
     if (!q.post && this.post) { this.post.dispose(); this.post = null; }
     this.reflection.enabled = q.post;
+    this.reflection.resolutionScale = q.reflectionScale;
     this.resize();
     if (this.atmosphere) this.setAtmosphere(this.atmosphere);
     return this.quality;
@@ -277,11 +288,29 @@ export class SceneView {
 
   render(dt = 0) {
     lighting.time.value += dt;
-    this.reflection.render();
-    if (this.post) this.post.render();
-    else {
-      this.renderer.setRenderTarget(null);
-      this.renderer.render(this.scene, this.camera);
+    this.camera.updateMatrixWorld();
+    // Select detail once from the viewing camera. A mirrored camera must not change the meshes
+    // between the reflection, shadow and main passes within the same frame.
+    for (const lod of this.sceneryLODs) lod.update(this.camera);
+    const shadows = this.renderer.shadowMap.autoUpdate;
+    try {
+      // Wet frames update shadows in the first scene pass (the reflection), then reuse those same
+      // fresh maps in the main pass. Dry frames update them in the main pass as usual.
+      if (this.reflection.render()) this.renderer.shadowMap.autoUpdate = false;
+      if (this.post) this.post.render();
+      else {
+        this.renderer.setRenderTarget(null);
+        this.renderer.render(this.scene, this.camera);
+      }
+    } finally {
+      this.renderer.shadowMap.autoUpdate = shadows;
     }
+  }
+
+  addScenery(object) {
+    object.traverse(child => {
+      if (child.isLOD) { child.autoUpdate = false; this.sceneryLODs.push(child); }
+    });
+    this.scene.add(object);
   }
 }

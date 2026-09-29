@@ -10,6 +10,7 @@ import { blobTexture, glowTexture, poolTexture } from "./textures.js";
 import { hash01 } from "./geo.js";
 import { snowable } from "./weather.js";
 import { createPersonMesh, poseRider } from "./people.js";
+import { chunkLOD } from "./lod.js";
 
 const XR = -CAR.rearOverhang, XF = CAR.length - CAR.rearOverhang, W = CAR.width;
 const BEVEL = 0.09;
@@ -357,8 +358,32 @@ export function syncCar(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   }
 }
 
-// Parked cars: thousands of them, so each body style's parts are instanced per map chunk (a few
-// dozen draw calls in all) and culled like the buildings. Lights are off; paint is per instance.
+// Distant parked cars keep their body silhouette, glass and wheel colors, without tiny trim,
+// beveled panels or individual spokes. The driven car and moving traffic always use full detail.
+function distantCarGeometry(style) {
+  const key = `distant-${style}`;
+  if (geoCache.has(key)) return geoCache.get(key);
+  const st = STYLES[style], roof = roofLine(st);
+  const shape = { tumble: 0.06, tuck: 0.1, top: roof };
+  const geo = {
+    paint: merge([
+      extrude(bodyOutline(st), W, 0, shape),
+      extrude(clipAbove(st.glass, roof), W * 0.86 + 0.02, 0, { tumble: 0.16, top: roof + 0.05 }),
+      box(0.12, roof - st.belt + 0.02, W * 0.8, st.pillar, (st.belt + roof) / 2, 0),
+    ]),
+    glass: extrude(st.glass, W * 0.86, 0, { tumble: 0.16, top: roof + 0.05 }),
+    trim: box(CAR.length - 0.5, 0.12, W - 0.1, (XR + XF) / 2, st.sill - 0.02, 0),
+    wheels: mergeGeometries([
+      new THREE.CylinderGeometry(st.tire, st.tire, 0.24, 10).rotateX(Math.PI / 2).toNonIndexed(),
+      new THREE.CylinderGeometry(st.tire * 0.66, st.tire * 0.66, 0.25, 10).rotateX(Math.PI / 2).toNonIndexed(),
+    ], true),
+  };
+  geoCache.set(key, geo);
+  return geo;
+}
+
+// Parked parts are instanced per chunk to keep draw calls low as the camera crosses the city.
+// Both detail levels retain instance references, so a pull-out removes the car at any distance.
 const PARKED_CHUNK = 360;
 const STYLE_NAMES = ["sedan", "sedan", "hatch", "suv", "suv"];
 export function buildParkedCars(cars) {
@@ -375,32 +400,39 @@ export function buildParkedCars(cars) {
   const Y = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
   for (const [key, list] of chunks) {
     const style = key.split("|")[1];
-    const st = STYLES[style], geo = styleGeometry(style);
+    const st = STYLES[style], geo = styleGeometry(style), distant = distantCarGeometry(style);
+    const near = new THREE.Group(), far = new THREE.Group();
     const mats = list.map((c) => new THREE.Matrix4().compose(new THREE.Vector3(c.x, 0, -c.y), new THREE.Quaternion().setFromAxisAngle(Y, c.psi), one));
     for (const c of list) c.instances = [];
-    const emit = (geometry, material, matrices, colors = null, shadow = false) => {
+    const emit = (level, geometry, material, matrices, colors = null, shadow = false) => {
       const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
       const per = matrices.length / list.length;   // 1, or 4 for the wheels
       matrices.forEach((m, i) => { mesh.setMatrixAt(i, m); if (colors) mesh.setColorAt(i, colors[i]); list[Math.floor(i / per)].instances.push({ mesh, i }); });
       mesh.castShadow = shadow;
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
-      group.add(mesh);
+      level.add(mesh);
     };
-    emit(geo.paint, white, mats, list.map((c) => new THREE.Color(c.color)), true);
-    emit(geo.glass, shared.glass, mats, null, true);
-    emit(geo.trim, shared.trim, mats);
-    emit(geo.chrome, shared.chrome, mats);
-    emit(geo.plate, shared.plate, mats);
-    emit(geo.head, headOff, mats);
-    emit(geo.tail, tailOff, mats);
+    const colors = list.map((c) => new THREE.Color(c.color));
+    emit(near, geo.paint, white, mats, colors, true);
+    emit(near, geo.glass, shared.glass, mats, null, true);
+    emit(near, geo.trim, shared.trim, mats);
+    emit(near, geo.chrome, shared.chrome, mats);
+    emit(near, geo.plate, shared.plate, mats);
+    emit(near, geo.head, headOff, mats);
+    emit(near, geo.tail, tailOff, mats);
     const wheels = [];
     for (const m of mats) {
       for (const [lx, lz] of [[CAR.wheelbase, W / 2 - 0.17], [CAR.wheelbase, -W / 2 + 0.17], [0, W / 2 - 0.17], [0, -W / 2 + 0.17]]) {
         wheels.push(m.clone().multiply(new THREE.Matrix4().makeTranslation(lx, st.tire, lz)));
       }
     }
-    emit(wheelGeometry(st.tire), [shared.tire, shared.rim], wheels);
+    emit(near, wheelGeometry(st.tire), [shared.tire, shared.rim], wheels);
+    emit(far, distant.paint, white, mats, colors, true);
+    emit(far, distant.glass, shared.glass, mats, null, true);
+    emit(far, distant.trim, shared.trim, mats);
+    emit(far, distant.wheels, [shared.tire, shared.rim], wheels);
+    group.add(chunkLOD(near, far));
   }
   group.userData.count = cars.length;
   return group;

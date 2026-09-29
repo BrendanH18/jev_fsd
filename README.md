@@ -322,6 +322,8 @@ uv run scripts/verify_jev.py                # live: committed cases + data/snaps
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check # fixture drift
 ```
 
+For renderer profiling and distance-detail tests, see [Rendering performance](docs/render-performance.md).
+
 Run the benchmark after changing the car, traffic, planner, or router, and the snapshot check after
 changing any question wording. The committed Jev cases in `static/tests/fixtures/jev/` are built by
 running the real sensing and question pipeline; rebuild them with

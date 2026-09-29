@@ -1,0 +1,171 @@
+{
+  "date": "2026-09-29",
+  "baseline_commit": "96bbd34",
+  "scene": {
+    "map": "Kitsilano",
+    "seed": 1,
+    "npc_seed": 7,
+    "traffic_cars": 40,
+    "pedestrians": 60,
+    "simulation_time": 0,
+    "css_viewport": [
+      1280,
+      800
+    ]
+  },
+  "method": "Frozen spawn poses; chase camera settled; 12 warm-up renders followed by 60 timed renders. CPU measures synchronous render submission, not GPU time or delivered FPS.",
+  "baseline": {
+    "rows": [
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 5.236666666716337,
+          "p50": 3.300000000745058,
+          "p95": 14.399999998509884
+        },
+        "draw_calls": 1953,
+        "frames": 60,
+        "hour": 15.5,
+        "quality": "high",
+        "triangles": 10994280,
+        "viewport": [
+          1920,
+          1200
+        ],
+        "weather": "dry"
+      },
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 3.128333333320916,
+          "p50": 3,
+          "p95": 4
+        },
+        "draw_calls": 1932,
+        "frames": 60,
+        "hour": 15.5,
+        "quality": "low",
+        "triangles": 10994259,
+        "viewport": [
+          1280,
+          800
+        ],
+        "weather": "dry"
+      },
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 10.851666666691502,
+          "p50": 7,
+          "p95": 24.799999997019768
+        },
+        "draw_calls": 3610,
+        "frames": 60,
+        "hour": 15.5,
+        "quality": "high",
+        "triangles": 19563147,
+        "viewport": [
+          1920,
+          1200
+        ],
+        "weather": "rain"
+      },
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 15.894999999987583,
+          "p50": 15,
+          "p95": 32.20000000298023
+        },
+        "draw_calls": 1923,
+        "frames": 60,
+        "hour": 23,
+        "quality": "high",
+        "triangles": 10620606,
+        "viewport": [
+          1920,
+          1200
+        ],
+        "weather": "dry"
+      }
+    ],
+    "t": 0
+  },
+  "optimized": {
+    "rows": [
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 3.813333333345751,
+          "p50": 3.199999999254942,
+          "p95": 10.199999999254942
+        },
+        "draw_calls": 1524,
+        "frames": 60,
+        "hour": 15.5,
+        "quality": "high",
+        "triangles": 5415513,
+        "viewport": [
+          1920,
+          1200
+        ],
+        "weather": "dry"
+      },
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 3.6,
+          "p50": 3.600000001490116,
+          "p95": 4.199999999254942
+        },
+        "draw_calls": 1503,
+        "frames": 60,
+        "hour": 15.5,
+        "quality": "low",
+        "triangles": 5415492,
+        "viewport": [
+          1280,
+          800
+        ],
+        "weather": "dry"
+      },
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 7.316666666666666,
+          "p50": 7.199999999254942,
+          "p95": 9.300000000745058
+        },
+        "draw_calls": 2836,
+        "frames": 60,
+        "hour": 15.5,
+        "quality": "high",
+        "triangles": 9335965,
+        "viewport": [
+          1920,
+          1200
+        ],
+        "weather": "rain"
+      },
+      {
+        "camera": "chase",
+        "cpu_ms": {
+          "mean": 11.511666666654248,
+          "p50": 3.899999998509884,
+          "p95": 22
+        },
+        "draw_calls": 1535,
+        "frames": 60,
+        "hour": 23,
+        "quality": "high",
+        "triangles": 5442087,
+        "viewport": [
+          1920,
+          1200
+        ],
+        "weather": "dry"
+      }
+    ],
+    "t": 0
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "date": "2026-09-29",
+  "baseline": "First distance-detail implementation, before stability fixes",
+  "method": "EXT_disjoint_timer_query_webgl2; frozen spawn poses at simulation time 0; world seed 1, NPC seed 7; 1280x800 CSS viewport; high preset; 12 warm-up renders and 12 GPU samples; no disjoint clock flag. High now uses a 1x render buffer, 2048 shadows and quarter-size reflections; baseline high used 1.5x, 4096 shadows and half-size reflections. This measures GPU rendering work, not delivered FPS or simulation costs.",
+  "before": [
+    {
+      "weather": "dry",
+      "hour": 15.5,
+      "available": true,
+      "frames": 12,
+      "gpu_ms": {
+        "mean": 14.846454416666669,
+        "p50": 15.65425,
+        "p95": 16.463125
+      },
+      "quality": "high",
+      "viewport": [
+        1920,
+        1200
+      ]
+    },
+    {
+      "weather": "rain",
+      "hour": 15.5,
+      "available": true,
+      "frames": 12,
+      "gpu_ms": {
+        "mean": 21.283152416666663,
+        "p50": 21.780624,
+        "p95": 24.9155
+      },
+      "quality": "high",
+      "viewport": [
+        1920,
+        1200
+      ]
+    },
+    {
+      "weather": "rain",
+      "hour": 23,
+      "available": true,
+      "frames": 12,
+      "gpu_ms": {
+        "mean": 21.50782925,
+        "p50": 21.678999,
+        "p95": 24.53475
+      },
+      "quality": "high",
+      "viewport": [
+        1920,
+        1200
+      ]
+    }
+  ],
+  "after": [
+    {
+      "weather": "dry",
+      "hour": 15.5,
+      "available": true,
+      "quality": "high",
+      "frames": 12,
+      "viewport": [
+        1280,
+        800
+      ],
+      "gpu_ms": {
+        "mean": 6.967075749999999,
+        "p50": 7.189291,
+        "p95": 8.096374
+      }
+    },
+    {
+      "weather": "rain",
+      "hour": 15.5,
+      "available": true,
+      "quality": "high",
+      "frames": 12,
+      "viewport": [
+        1280,
+        800
+      ],
+      "gpu_ms": {
+        "mean": 11.825878000000001,
+        "p50": 11.102999,
+        "p95": 21.254458
+      }
+    },
+    {
+      "weather": "rain",
+      "hour": 23,
+      "available": true,
+      "quality": "high",
+      "frames": 12,
+      "viewport": [
+        1280,
+        800
+      ],
+      "gpu_ms": {
+        "mean": 11.970978666666667,
+        "p50": 11.325875,
+        "p95": 21.368083
+      }
+    }
+  ]
+}
