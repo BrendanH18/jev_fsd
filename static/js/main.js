@@ -24,6 +24,8 @@ import { setWeather } from "./sim/weather.js";
 import { pedPhase } from "./sim/signals.js";
 import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
 import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
+import { DriveScore, saveDrive } from "./sim/drive-score.js";
+import { DriveReport } from "./ui/drive-report.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -52,10 +54,11 @@ async function boot() {
   addHeadlights(egoMesh);
   view.scene.add(egoMesh);
   const overlays = new Overlays(view.scene);
+  let drive = null, arrivalPending = false, driveReport;
   const callbacks = {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
     onEvent: (ev) => {
-      if (ev.type === "arrived") { hud.badge("ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
+      if (ev.type === "arrived") { arrivalPending = true; hud.badge("ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
       else if (ev.type === "safety") hud.badge("SAFETY BRAKE", "safety", 700);
       else if (ev.type === "fallback") hud.badge(`fallback: ${ev.error}`, "safety", 1800);
       else if (ev.type === "reroute") { hud.badge(`re-routed (${ev.count} options)`, "", 1000); overlays.setRoute(world.route); }
@@ -143,11 +146,34 @@ async function boot() {
   const input = new Input({
     autopilot: toggleAutopilot,
     camera: () => hud.badge(`camera: ${view.toggleCamera()}`, "", 700),
-    reset: () => { world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
+    reset: () => { drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
     pause: () => { world.paused = !world.paused; hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700); },
     brain1: () => { hud.setBrain("jev"); hud.el.brain.dispatchEvent(new Event("change")); },
     brain2: () => { hud.setBrain("rules"); hud.el.brain.dispatchEvent(new Event("change")); },
   });
+
+  let pausedBeforeReport = false;
+  driveReport = new DriveReport({
+    onFinish: () => finishDrive("finished"),
+    onNewDrive: () => hud.badge("Choose your next destination on the minimap", "stop", 2000),
+    onOpen: () => { pausedBeforeReport = world.paused; world.paused = true; },
+    onClose: () => { world.paused = pausedBeforeReport; },
+  });
+  function startDrive(title, route = null) {
+    if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("replaced"));
+    drive = new DriveScore(world, { title, route, map: pack.synthetic ? "Practice grid" : "Kitsilano, Vancouver", driver: autopilot.enabled ? autopilot.brainName : "manual" });
+    arrivalPending = false;
+    driveReport.lastUpdate = -Infinity;
+    driveReport.update(drive);
+  }
+  function finishDrive(reason) {
+    if (!drive || drive.finished) return;
+    if (autopilot.enabled) { autopilot.setEnabled(false); hud.setAutopilot(false); overlays.setCandidates(null); }
+    const report = drive.finish(reason);
+    const saved = saveDrive(report);
+    driveReport.lastUpdate = -Infinity; driveReport.update(drive);
+    driveReport.show(report, saved);
+  }
 
   async function setDestination(pt) {
     try {
@@ -160,6 +186,7 @@ async function boot() {
       autopilot.executing = null;
       hud.badge(`route: ${world.route.summary}`, "", 2200);
       if (!autopilot.enabled) toggleAutopilot();
+      startDrive(world.route.summary || "City drive", world.route);
     } catch (err) {
       hud.badge(`routing failed: ${err.message}`, "safety", 2000);
     }
@@ -171,8 +198,9 @@ async function boot() {
     overlays.setRoute(world.route);
     hud.setAutopilot(true);
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
+    startDrive(`Replay ${replay.scenario.id}`, world.route);
   }
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, setTime: (h) => { hour = parseHour(h); applySky(); } };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, driveReport, get drive() { return drive; }, finishDrive, setTime: (h) => { hour = parseHour(h); applySky(); } };
 
   let last = performance.now();
   let acc = 0;
@@ -184,8 +212,15 @@ async function boot() {
       acc += dt;
       let steps = 0;
       while (acc >= FIXED_DT && steps < 5) {
+        if (input.anyDriving && (!drive || drive.finished)) startDrive("Free drive");
         if (autopilot.enabled && input.anyDriving) { toggleAutopilot(); }
+        if (drive && !drive.finished) {
+          const driver = autopilot.enabled ? autopilot.brainName : "manual";
+          if (driver !== drive.driver) drive.driver = "mixed";
+        }
         stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
+        drive?.record(world, world._road, FIXED_DT);
+        if (arrivalPending) { arrivalPending = false; finishDrive("arrived"); }
         for (const ev of world.events) {
           if (ev.type === "collision") { hud.flash(); hud.badge("COLLISION", "", 1200); }
           else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "", 1500);
@@ -194,6 +229,7 @@ async function boot() {
         }
         acc -= FIXED_DT;
         steps++;
+        if (world.paused) { acc = 0; break; }
       }
     }
     for (const inter of map.intersections.values()) {
@@ -215,6 +251,7 @@ async function boot() {
     hud.update({ ego: world.ego, road: world._road, nav: snap ? snap.nav : null, violations: world.violations,
       decision: autopilot.lastDecision, totals: autopilot.totals, paused: world.paused });
     panel.render(now);
+    driveReport.update(drive, now);
     if (!manual) requestAnimationFrame(frame);
   }
   // Headless screenshots run in a hidden page where requestAnimationFrame never fires; they advance

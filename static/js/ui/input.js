@@ -6,6 +6,7 @@ export class Input {
     this.actions = actions;
     this.manualActive = false;
     window.addEventListener("keydown", (ev) => {
+      if (document.querySelector("dialog[open]")) return;
       if (ev.target && ["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName)) return;
       const k = ev.key.toLowerCase();
       if (["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {

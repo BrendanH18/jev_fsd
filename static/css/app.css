@@ -67,3 +67,45 @@ select, .toggle { font: inherit; font-size: 12px; color: var(--text); background
 .muted { color: var(--muted); }
 .flash { position: fixed; inset: 0; background: rgba(255, 60, 60, 0.35); pointer-events: none; z-index: 15; animation: fade 0.6s forwards; }
 @keyframes fade { to { opacity: 0; } }
+
+.drive-card { position: absolute; left: 14px; bottom: 132px; width: 310px; padding: 16px; }
+.drive-heading, .drive-score-row, .drive-actions, .dialog-header, .dialog-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.text-button { font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px; }
+.drive-score-row { justify-content: flex-start; margin: 12px 0; }
+.drive-number { font-size: 44px; line-height: 1; color: var(--good); font-variant-numeric: tabular-nums; }
+.drive-number[data-grade="E"], .drive-number[data-grade="D"] { color: var(--warn); }
+.drive-title { font-size: 13px; font-weight: 600; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drive-score-row .muted { font-size: 11px; margin-top: 5px; }
+.score-category { display: grid; grid-template-columns: 78px 1fr 26px; gap: 10px; align-items: center; font-size: 11px; margin: 7px 0; }
+.score-category > span { color: var(--muted); }
+.score-category b { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+.score-track { height: 4px; border-radius: 4px; overflow: hidden; background: rgba(255,255,255,0.08); }
+.score-track i { display: block; height: 100%; transition: width 0.3s; }
+.drive-coach { color: var(--muted); font-size: 12px; line-height: 1.5; min-height: 36px; }
+.drive-actions .toggle { font-size: 11px; }
+button:disabled { opacity: 0.4; cursor: default; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.drive-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; padding: 26px; background: #111923; color: var(--text); border: 1px solid rgba(255,255,255,.16); border-radius: 20px; box-shadow: 0 30px 120px #0009; }
+.drive-dialog::backdrop { background: #050c14b3; backdrop-filter: blur(5px); }
+.drive-dialog h2 { font-size: 25px; margin: 22px 0 8px; letter-spacing: -0.03em; }
+.drive-dialog h3 { margin-top: 22px; font-size: 14px; }
+.drive-dialog p { font-size: 13px; line-height: 1.6; }
+.report-score { display: flex; gap: 16px; align-items: center; margin: 20px 0; }
+.report-score strong { font-size: 72px; color: var(--good); line-height: 1; letter-spacing: -0.06em; }
+.report-score span { color: var(--muted); font-size: 13px; }
+.report-metrics { display: flex; justify-content: space-between; padding: 14px 0; font-size: 13px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.report-categories { margin-top: 20px; }
+.report-categories .score-category { font-size: 13px; grid-template-columns: 90px 1fr 30px; margin: 12px 0; }
+.report-tips, .report-events { padding-left: 20px; color: #b7c7d9; font-size: 13px; line-height: 1.7; }
+.report-tips li { margin: 8px 0; }
+.drive-dialog summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.drive-dialog .score-explanation { font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 16px; }
+.dialog-footer { font-size: 11px; margin-top: 18px; }
+.history-list { display: grid; gap: 8px; margin-top: 24px; }
+.history-entry { display: flex; align-items: center; gap: 18px; padding: 16px; text-align: left; color: var(--text); background: #ffffff05; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.history-entry strong { min-width: 70px; color: var(--good); }
+.history-entry span { font-size: 13px; }
+.history-entry small { display: block; font-size: 11px; color: var(--muted); margin-top: 5px; }
+.empty-state { padding: 30px 0; }
+@media (max-height: 750px) { .drive-card { bottom: 102px; } .drive-bars { display: none; } }
+@media (max-width: 700px) { .drive-card { width: 255px; bottom: 130px; padding: 12px; } .drive-bars { display: none; } .hud-top-left { min-width: 255px; max-width: calc(100vw - 28px); } .hud-top-right { top: auto; bottom: 140px; } #minimap { width: 150px; height: 150px; } .note { max-width: 150px; } }
