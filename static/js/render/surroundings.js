@@ -5,8 +5,10 @@
 // simulation; it is scenery, cheap to draw (instanced, chunked), and faded by a haze of its own so
 // it can be seen further than the scene's fog allows.
 //
-// The geography is simplified from the real thing, in the map's frame (x east, y north, meters
-// from the map center at 49.265 N, 123.160 W).
+// The geography is simplified from the real thing and laid out in meters around a fixed point in
+// Kitsilano (49.265 N, 123.160 W); any map of Vancouver is placed against it by its own origin, so
+// the water and downtown are where they should be from Mount Pleasant too. A map elsewhere gets the
+// continuation of the city but none of Vancouver's landmarks.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -21,6 +23,26 @@ const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a
 
 // Distance haze shared by everything out here: color follows the fog, strength the weather.
 export const haze = { color: { value: new THREE.Color(0xc9dbea) }, k: { value: 0.00022 } };
+
+const KITS = { lat: 49.265, lon: -123.16 };
+const M_PER_DEG_LAT = 110574, M_PER_DEG_LON = 111320;
+
+// A frame converter from a map's own coordinates to the Kitsilano frame and back.
+function frames(origin) {
+  const o = origin || KITS;
+  const kxMap = M_PER_DEG_LON * Math.cos(o.lat * Math.PI / 180), kxK = M_PER_DEG_LON * Math.cos(KITS.lat * Math.PI / 180);
+  return {
+    toK: (x, y) => [((o.lon + x / kxMap) - KITS.lon) * kxK, ((o.lat + y / M_PER_DEG_LAT) - KITS.lat) * M_PER_DEG_LAT],
+    fromK: (x, y) => [((KITS.lon + x / kxK) - o.lon) * kxMap, ((KITS.lat + y / M_PER_DEG_LAT) - o.lat) * M_PER_DEG_LAT],
+  };
+}
+
+// Is the map in Vancouver (within 12 km of Kitsilano)?
+export function inVancouver(origin) {
+  if (!origin) return false;
+  const [x, y] = frames(origin).fromK(0, 0);
+  return Math.hypot(x, y) < 12000;
+}
 
 // Land or water? The south shore of English Bay runs along Kitsilano out to Kits Point, False
 // Creek cuts east from there, downtown sits between it and Burrard Inlet, Stanley Park caps the
@@ -114,12 +136,18 @@ export function buildSurroundings(map) {
   const group = new THREE.Group();
   const [ex0, ey0, ex1, ey1] = map.extent;
   const insideMap = (x, y, margin = 12) => x > ex0 - margin && x < ex1 + margin && y > ey0 - margin && y < ey1 + margin;
+  // geography queries in the Kitsilano frame; outside Vancouver there is only land
+  const vancouver = inVancouver(map.pack.origin);
+  const { toK, fromK } = frames(map.pack.origin);
+  const water = (x, y) => vancouver && isWater(...toK(x, y));
+  const downtown = (x, y) => vancouver && isDowntown(...toK(x, y));
+  const park = (x, y) => vancouver && isPark(...toK(x, y));
 
   // --- water: a grid of cells, merged where they are wet ---
   const cell = 50, R = 6000;
   const wpos = [];
   for (let x = -R; x < R; x += cell) for (let y = -2000; y < R; y += cell) {
-    if (!isWater(x + cell / 2, y + cell / 2)) continue;
+    if (!water(x + cell / 2, y + cell / 2)) continue;
     const a = toThree(x, y), b = toThree(x + cell, y), c = toThree(x + cell, y + cell), d = toThree(x, y + cell);
     wpos.push(a.x, 0, a.z, b.x, 0, b.z, c.x, 0, c.z, a.x, 0, a.z, c.x, 0, c.z, d.x, 0, d.z);
   }
@@ -133,16 +161,18 @@ export function buildSurroundings(map) {
   wgeo.setAttribute("uv", new THREE.BufferAttribute(wuv, 2));
   const waves = macroTexture().clone();
   waves.needsUpdate = true;
-  const water = new THREE.Mesh(wgeo, new THREE.MeshStandardMaterial({ color: 0x1b3440, roughness: 0.12, metalness: 0.1, envMapIntensity: 1.4, bumpMap: waves, bumpScale: 0.6 }));
-  groundLayer(water, LAYER.water);
-  group.add(water);
+  if (wpos.length) {
+    const sea = new THREE.Mesh(wgeo, new THREE.MeshStandardMaterial({ color: 0x1b3440, roughness: 0.12, metalness: 0.1, envMapIntensity: 1.4, bumpMap: waves, bumpScale: 0.6 }));
+    groundLayer(sea, LAYER.water);
+    group.add(sea);
+  }
 
   // --- filler street grid and houses on the land around the map ---
   const houses = [], roofs = [], trees = [], blocks = [], streets = [];
   const AVE = 100, ST = 92;   // avenues run east-west every ~100 m, streets north-south every ~92 m
   for (let bx = -CITY_RADIUS; bx < CITY_RADIUS; bx += ST) for (let by = -CITY_RADIUS; by < CITY_RADIUS; by += AVE) {
     const cx = bx + ST / 2, cy = by + AVE / 2;
-    if (Math.hypot(cx, cy) > CITY_RADIUS || insideMap(cx, cy, 60) || isWater(cx, cy) || isDowntown(cx, cy) || isPark(cx, cy)) continue;
+    if (Math.hypot(cx, cy) > CITY_RADIUS || insideMap(cx, cy, 60) || water(cx, cy) || downtown(cx, cy) || park(cx, cy)) continue;
     streets.push([bx, by]);
     const key = `${bx},${by}`;
     const arterial = Math.abs(by % (AVE * 4)) < 1;   // every fourth avenue is a busy street with apartments
@@ -150,7 +180,7 @@ export function buildSurroundings(map) {
       const yRow = cy + row * 24;
       for (let lx = bx + 12; lx < bx + ST - 12; lx += 11) {
         const k = `${key}:${row}:${lx}`;
-        if (insideMap(lx, yRow, 8) || isWater(lx, yRow)) continue;
+        if (insideMap(lx, yRow, 8) || water(lx, yRow)) continue;
         if (arterial && row < 0 && hash01(k, 1) < 0.8) {
           blocks.push({ x: lx + 5, y: yRow - 4, sx: 22, sy: 10 + hash01(k, 2) * 6, sz: 18, color: [0xd6cfc2, 0xb9a88f, 0x9b6a55, 0xcfc7ba, 0x8d9094][Math.floor(hash01(k, 3) * 5)] });
           lx += 11;
@@ -168,11 +198,12 @@ export function buildSurroundings(map) {
 
   // --- downtown and the West End: towers, taller toward the middle ---
   const towers = [];
-  for (let x = 1620; x < 4150; x += 58) for (let y = 1350; y < 2700; y += 58) {
+  for (let x = 1620; vancouver && x < 4150; x += 58) for (let y = 1350; y < 2700; y += 58) {
     const k = `t${x},${y}`;
-    const px = x + (hash01(k, 1) - 0.5) * 20, py = y + (hash01(k, 2) - 0.5) * 20;
-    if (!isDowntown(px, py) || hash01(k, 3) < 0.25) continue;
-    const core = Math.exp(-(((px - 2800) / 900) ** 2 + ((py - 2150) / 550) ** 2));
+    const kx = x + (hash01(k, 1) - 0.5) * 20, ky = y + (hash01(k, 2) - 0.5) * 20;
+    if (!isDowntown(kx, ky) || hash01(k, 3) < 0.25) continue;
+    const [px, py] = fromK(kx, ky);
+    const core = Math.exp(-(((kx - 2800) / 900) ** 2 + ((ky - 2150) / 550) ** 2));
     const h = 25 + (40 + 150 * core) * (0.4 + hash01(k, 4) * 0.8);
     const glassy = hash01(k, 5) < 0.55;
     towers.push({ x: px, y: py, sx: 22 + hash01(k, 6) * 16, sy: h, sz: 22 + hash01(k, 7) * 16, rot: 0,
@@ -181,10 +212,11 @@ export function buildSurroundings(map) {
 
   // --- Stanley Park: old-growth forest ---
   const forest = [];
-  for (let x = 0; x < 2900; x += 32) for (let y = 3100; y < 5000; y += 32) {
+  for (let x = 0; vancouver && x < 2900; x += 32) for (let y = 3100; y < 5000; y += 32) {
     const k = `p${x},${y}`;
-    const px = x + hash01(k, 1) * 32, py = y + hash01(k, 2) * 32;
-    if (!isPark(px, py)) continue;
+    const kx = x + hash01(k, 1) * 32, ky = y + hash01(k, 2) * 32;
+    if (!isPark(kx, ky)) continue;
+    const [px, py] = fromK(kx, ky);
     const s = 9 + hash01(k, 3) * 7;
     forest.push({ x: px, y: py, z: s * 1.2, sx: s, sy: s * 1.9, sz: s, color: [0x1f3a2a, 0x27432f, 0x2c4a2c][Math.floor(hash01(k, 4) * 3)] });
   }

@@ -23,7 +23,7 @@ import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
 import { pedPhase } from "./sim/signals.js";
 import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
-import { buildSurroundings, tintSurroundings } from "./render/surroundings.js";
+import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -47,6 +47,7 @@ async function boot() {
   view.scene.add(buildings);
   view.scene.add(buildTrees(map, roads, buildings.userData.index));
   view.scene.add(buildSurroundings(map));
+  view.backdrop.visible = inVancouver(pack.origin);   // the North Shore mountains
   const egoMesh = createCarMesh(0x1f5fd6, "ego");
   addHeadlights(egoMesh);
   view.scene.add(egoMesh);
