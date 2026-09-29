@@ -9,6 +9,9 @@
 //
 // Actuator: the commanded acceleration is reached through a first-order lag and a jerk limit, so a
 // car cannot flip from full throttle to full braking in one tick.
+// Powertrain: the engine's power caps the acceleration it can give at speed (P / (m v)), less what
+// rolling resistance and aerodynamic drag take, so a car pulls hard from a standstill and ever
+// less eagerly as it gathers speed.
 // Tires: each axle's lateral force follows a Fiala brush model: linear in slip angle at first, then
 // saturating at the grip left over after braking or driving on that axle (a friction circle per
 // axle). Cornering stiffness scales with the load on the axle.
@@ -41,7 +44,11 @@ export const CAR = {
   brakeFront: 0.65,       // share of braking force on the front axle
   driveFront: 1.0,        // front-wheel drive
   rollFront: 0.55,        // share of lateral load transfer taken by the front axle
+  power: 80000,           // W usable at the wheels, a typical compact sedan
+  cdA: 0.68,              // m^2, drag coefficient times frontal area
+  crr: 0.012,             // rolling resistance coefficient
 };
+const AIR = 1.2;          // kg/m^3
 
 // A bicycle with its rider. No mass is given, so it always runs the kinematic model: a bicycle
 // leans rather than slides, and nothing in this sim pushes one to its tire limits.
@@ -91,6 +98,10 @@ export class Vehicle {
     this.delta += Math.max(-maxDelta, Math.min(maxDelta, target - this.delta));
     let cmd = Math.max(-P.maxBrake, Math.min(P.maxAccel, accel));
     if (cmd === 0) cmd = -0.02 * this.v;  // rolling drag
+    if (P.power && this.v > 0 && cmd > 0) {
+      const resist = P.crr * G + 0.5 * AIR * P.cdA * this.v * this.v / P.mass;
+      cmd = Math.min(cmd, P.power / (P.mass * Math.max(this.v, 2)) - resist);
+    }
     const da = (cmd - this.a) * Math.min(1, dt / P.accelLag);
     this.a += Math.max(-P.jerkMax * dt, Math.min(P.jerkMax * dt, da));
 

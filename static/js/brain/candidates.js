@@ -49,22 +49,24 @@ export function sampleCandidates(snap, world) {
           steer: d === 0 ? "hold lane" : `shift ${Math.abs(d)} m ${d < 0 ? "left" : "right"}`, speed: speedLabel(vt, v, limit) });
       }
     }
-    // Stopping maneuvers stop at their mark or queue 2.5 m behind whoever is in front of it.
+    // Stopping maneuvers stop at their mark or queue 2.5 m behind whoever is in front of it, and
+    // approach no faster than the target speed (which already allows for a slowing car ahead).
+    const approach = Math.min(limit, Math.max(target, 3));
     const f = snap.following;
     const queue = f ? f.s - (f.vehicle.spec || CAR).rearOverhang - FRONT - QUEUE_GAP_M : Infinity;
     const stopAt = (mark) => Math.min(mark, queue);
     // approach and stop at the next stop line
     if (snap.intersection && snap.intersection.bumper_to_line_m > 0.3) {
-      out.push({ id: "stop_at_line", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) },
+      out.push({ id: "stop_at_line", law: { kind: "lane", offset: 0, vTarget: approach, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) },
         steer: "hold lane", speed: "approach and stop at the line" });
     }
     // stop short of a crosswalk someone is crossing
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
-      out.push({ id: "stop_for_pedestrian", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) },
+      out.push({ id: "stop_for_pedestrian", law: { kind: "lane", offset: 0, vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) },
         steer: "hold lane", speed: "stop before the crosswalk" });
     }
     if (snap.nav && snap.nav.remaining_m < 40) {
-      out.push({ id: "stop_at_destination", law: { kind: "lane", offset: 0, vTarget: Math.min(limit, Math.max(v, 3)), stopAtRoute: stopAt(snap.route.length - 1.0) },
+      out.push({ id: "stop_at_destination", law: { kind: "lane", offset: 0, vTarget: approach, stopAtRoute: stopAt(snap.route.length - 1.0) },
         steer: "hold lane", speed: "slow and stop at the destination" });
     }
   } else {

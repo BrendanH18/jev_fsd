@@ -1,14 +1,86 @@
 // Traffic-signal phases as a pure function of time, and per-vehicle stop-sign memory.
+//
+// Each intersection gets a two-phase timing plan worked out the way a traffic engineer would:
+//   yellow     1 s of perception-reaction plus the time to stop at 3.05 m/s^2 from the approach
+//              speed (the ITE formula), 3 to 5 s
+//   all-red    the time to clear the junction at the approach speed
+//   cycle      60 s where an arterial crosses, 50 s otherwise
+//   greens     what is left, split by each direction's share of the traffic (lanes times speed),
+//              but never shorter than the walk plus the time to finish crossing at 1.2 m/s
+// Pedestrians walking alongside a green get a 7 s walk signal, then a flashing don't-walk that
+// runs out just as the parallel traffic's yellow begins.
 
 // A full stop anywhere within this many meters before the line counts as stopping at the sign.
 export const STOP_ZONE_M = 6.0;
-// Cycle (48 s): A green 20, A yellow 3, all red 1, B green 20, B yellow 3, all red 1.
+export const WALK_S = 7;
+const PED_SPEED = 1.2;
+const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
+
+// Build the plan from the approaches' streets. `map` is the MapData (edges with limits and widths).
+export function timingPlan(inter, map) {
+  const groups = { A: { speed: 0, weight: 0, width: 0, arterial: false }, B: { speed: 0, weight: 0, width: 0, arterial: false } };
+  for (const a of inter.approaches) {
+    const e = map.edges.get(a.edge);
+    const g = groups[a.group];
+    if (!e || !g) continue;
+    g.speed = Math.max(g.speed, e.limit || 13.9);
+    g.weight += (e.lanes || 1) * (e.limit || 13.9);
+    g.width = Math.max(g.width, (e.asphalt ? e.asphalt[1] - e.asphalt[0] : 7));
+    g.arterial = g.arterial || ARTERIAL.has(e.cls);
+  }
+  for (const g of Object.values(groups)) { if (!g.speed) g.speed = 13.9; if (!g.weight) g.weight = 13.9; if (!g.width) g.width = 8; }
+  const round = (x) => Math.round(x * 10) / 10;
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const phase = (me, other) => ({
+    yellow: round(clamp(1 + me.speed / (2 * 3.05), 3, 5)),
+    allRed: round(clamp((other.width + 5.5) / me.speed, 1, 3)),
+    // traffic on this phase runs alongside the pedestrians who cross the other group's street
+    minGreen: WALK_S + other.width / PED_SPEED,
+  });
+  const pA = phase(groups.A, groups.B), pB = phase(groups.B, groups.A);
+  const cycle = groups.A.arterial || groups.B.arterial ? 60 : 50;
+  const green = cycle - pA.yellow - pA.allRed - pB.yellow - pB.allRed;
+  let gA = round(green * groups.A.weight / (groups.A.weight + groups.B.weight));
+  gA = round(clamp(gA, pA.minGreen, green - pB.minGreen));
+  const gB = round(green - gA);
+  const A = { start: 0, green: gA, yellow: pA.yellow, allRed: pA.allRed };
+  const B = { start: round(gA + pA.yellow + pA.allRed), green: gB, yellow: pB.yellow, allRed: pB.allRed };
+  return { cycle, A, B };
+}
+
+function planOf(intersection) {
+  // maps loaded without a plan fall back to the old fixed 48 s cycle
+  return intersection.plan || {
+    cycle: intersection.cycle_s || 48,
+    A: { start: 0, green: 20, yellow: 3, allRed: 1 },
+    B: { start: 24, green: 20, yellow: 3, allRed: 1 },
+  };
+}
+
+function stateIn(p, u) {
+  const d = u - p.start;
+  return d >= 0 && d < p.green ? "green" : d >= p.green && d < p.green + p.yellow ? "yellow" : "red";
+}
 
 export function phaseOf(intersection, t) {
-  const u = ((t + intersection.offset_s) % intersection.cycle_s + intersection.cycle_s) % intersection.cycle_s;
-  const A = u < 20 ? "green" : u < 23 ? "yellow" : "red";
-  const B = u >= 24 && u < 44 ? "green" : u >= 44 && u < 47 ? "yellow" : "red";
-  return { A, B, u };
+  const plan = planOf(intersection);
+  const c = plan.cycle;
+  const u = ((t + (intersection.offset_s || 0)) % c + c) % c;
+  return { A: stateIn(plan.A, u), B: stateIn(plan.B, u), u };
+}
+
+// The pedestrian signal for people walking alongside `group`'s traffic: "walk", "flash" (the
+// flashing hand: finish crossing, do not start), or "dont".
+export function pedPhase(intersection, group, t) {
+  const plan = planOf(intersection);
+  const p = plan[group];
+  if (!p) return "dont";
+  const c = plan.cycle;
+  const u = ((t + (intersection.offset_s || 0)) % c + c) % c;
+  const d = ((u - p.start) % c + c) % c;
+  if (d < Math.min(WALK_S, p.green)) return "walk";
+  if (d < p.green) return "flash";
+  return "dont";
 }
 
 export function signalFor(map, control, t) {
@@ -20,11 +92,12 @@ export function signalFor(map, control, t) {
 
 // Seconds until the given group next turns green (0 when green now).
 export function secondsToGreen(intersection, group, t) {
-  const { u } = phaseOf(intersection, t);
-  const start = group === "A" ? 0 : 24;
-  const end = group === "A" ? 20 : 44;
-  if (u >= start && u < end) return 0;
-  return ((start - u) + intersection.cycle_s) % intersection.cycle_s;
+  const plan = planOf(intersection);
+  const p = plan[group];
+  const c = plan.cycle;
+  const u = ((t + (intersection.offset_s || 0)) % c + c) % c;
+  if (stateIn(p, u) === "green") return 0;
+  return ((p.start - u) % c + c) % c;
 }
 
 // Stop-sign progress for one vehicle: approaching -> stopped -> completed. Reset when the vehicle

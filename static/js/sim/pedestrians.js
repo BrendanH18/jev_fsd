@@ -4,12 +4,17 @@
 // Where they may cross: at the corners of junctions, along the line of the cross street's sidewalk
 // (a marked crosswalk at signals, an unmarked one elsewhere, as BC law has it). When: at a signal,
 // only in the walk phase, which runs with the parallel traffic's green; elsewhere, when no
-// approaching vehicle would reach the crosswalk within a few seconds. Once on the road they keep
-// going. Nobody jaywalks, and nobody crosses at a roundabout.
+// approaching vehicle would reach the crosswalk within a few seconds. Nobody crosses at a
+// roundabout.
+//
+// On quiet residential blocks some people cut straight across mid-block instead, once they have
+// looked both ways and nothing is coming for a good while. Legally they must yield to traffic
+// there, but drivers still have to avoid them. And someone on the road who sees a car coming that
+// is not stopping for them reacts: in its path, they hurry out of it; beside it, they wait.
 
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
-import { phaseOf } from "./signals.js";
+import { pedPhase } from "./signals.js";
 import { rng } from "../common.js";
 
 export const PEDESTRIANS = 60;
@@ -25,8 +30,10 @@ class Pedestrian {
   }
 }
 const CROSS_BEYOND_CURB_M = 1.6;   // crosswalk center past the cross street's asphalt edge
-const WALK_S = 12;                 // walk phase at a signal: the first seconds of the parallel green
 const GAP_S = 5;                   // an approaching vehicle closer than this in time blocks a crossing
+const JAYWALK_GAP_S = 8;           // a mid-block crossing waits for a longer gap
+const JAYWALK_P = 0.14;            // chance a walk along a quiet block ends up crossing mid-block
+const QUIET = new Set(["residential", "unclassified", "living_street"]);
 const YIELD_AHEAD_M = 3.0;         // a pedestrian still this far short of the car's path counts
 
 export class Crowd {
@@ -34,6 +41,7 @@ export class Crowd {
     this.world = world;
     this.map = world.map;
     this.random = rng(seed * 31337 + 11);
+    this.habits = rng(seed * 4099 + 29);   // walking speeds and jaywalking, apart from the routes
     this.list = [];
     this.build();
     if (this.legsAt.size) this.spawn(count);
@@ -96,6 +104,7 @@ export class Crowd {
         speed: 1.1 + this.random() * 0.5, path: [], crossing: null, waiting: 0, phase: this.random() * 6,
         look: Math.floor(this.random() * 1e6),
       });
+      if (this.habits() < 0.12) ped.speed = 0.75 + this.habits() * 0.25;   // older or unhurried
       this.walkAlong(ped, st, side, s, dir);
       this.list.push(ped);
     }
@@ -112,11 +121,27 @@ export class Crowd {
     const known = this.legsAt.has(node);
     const end = known ? this.leg(node, st).s : dir > 0 ? Math.max(s, L - 12) : Math.min(s, 12);
     const lat = sidewalkOffset(e, side);
-    const pts = [];
+    // now and then, on a quiet block, cut across to the other sidewalk partway along
+    let cross = null;
+    if (QUIET.has(e.cls) && !e.ring && Math.abs(end - s) > 35 && this.habits() < JAYWALK_P) {
+      cross = s + dir * (10 + this.habits() * (Math.abs(end - s) - 25));
+    }
+    const path = [];
     const step = 5;
-    for (let u = s; dir > 0 ? u < end : u > end; u += dir * step) pts.push(offsetPoint(e, u, lat));
-    pts.push(offsetPoint(e, end, lat));
-    ped.path = pts.map((p) => ({ p }));
+    const walk = (from, to, sideLat) => {
+      for (let u = from; dir > 0 ? u < to : u > to; u += dir * step) path.push({ p: offsetPoint(e, u, sideLat) });
+      path.push({ p: offsetPoint(e, to, sideLat) });
+    };
+    if (cross === null) walk(s, end, lat);
+    else {
+      walk(s, cross, lat);
+      const other = sidewalkOffset(e, -side);
+      const from = offsetPoint(e, cross, lat), to = offsetPoint(e, cross + dir * 2.5, other);
+      path.push({ p: to, cross: { node: null, from, to, jaywalk: true } });
+      walk(cross + dir * 2.5, end, other);
+      side = -side;
+    }
+    ped.path = path;
     ped.at = { node, st, side, s: end, dir, turnBack: !known };
   }
 
@@ -174,7 +199,12 @@ export class Crowd {
         ped.waiting = 0;
       }
       const dx = wp.p[0] - ped.x, dy = wp.p[1] - ped.y, d = Math.hypot(dx, dy);
-      const v = ped.crossing ? ped.speed * 1.15 : ped.speed;   // people hurry across
+      let v = ped.crossing ? ped.speed * 1.15 : ped.speed;   // people hurry across
+      if (ped.crossing) {
+        const react = this.threat(ped, dx / (d || 1), dy / (d || 1));
+        if (react === "wait") { ped.v = 0; continue; }
+        if (react === "hurry") v = Math.max(v, 2.4);
+      }
       if (d <= v * dt) {
         ped.x = wp.p[0]; ped.y = wp.p[1];
         ped.path.shift();
@@ -189,27 +219,50 @@ export class Crowd {
     }
   }
 
+  // A car bearing down that will not stop in time: "hurry" out of its path if already in it, "wait"
+  // if about to step into it, else null.
+  threat(ped, ux, uy) {
+    for (const o of [this.world.ego, ...this.world.npcs]) {
+      if (o.v < 2 || Math.abs(o.x - ped.x) > 40 || Math.abs(o.y - ped.y) > 40) continue;
+      const local = o.toLocal(ped.x, ped.y);
+      const front = (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6);
+      const ahead = local.ahead - front;
+      if (ahead < -0.5 || ahead > 30) continue;
+      const stopDist = o.v * o.v / (2 * 4) + o.v * 0.5;   // what a driver braking now would need
+      if (ahead > stopDist + 2 && (o.a || 0) < -1) continue;   // it is braking in time
+      if (ahead / o.v > 3) continue;
+      const half = (o.spec ? o.spec.width : 1.9) / 2 + 0.6;
+      if (Math.abs(local.right) < half) return "hurry";
+      // beside its path: step in only if walking away from it
+      const c = Math.cos(o.psi), s = Math.sin(o.psi);
+      const towardRight = ux * s - uy * c;   // + means walking to the car's right
+      if (Math.abs(local.right) < half + 2.5 && Math.sign(towardRight) === -Math.sign(local.right)) return "wait";
+    }
+    return null;
+  }
+
   mayCross(cross, t) {
+    if (cross.jaywalk) return this.clearFor(cross, JAYWALK_GAP_S, 70);
     const info = this.legsAt.get(cross.node);
     if (info.inter && cross.leg.group) {
-      const { A, B, u } = phaseOf(info.inter, t);
-      // walk with the parallel traffic: the crossed leg's own traffic is held at red
-      const other = cross.leg.group === "A" ? "B" : "A";
-      const start = other === "A" ? 0 : 24;
-      const since = ((u - start) % info.inter.cycle_s + info.inter.cycle_s) % info.inter.cycle_s;
-      return (cross.leg.group === "A" ? A : B) === "red" && since < WALK_S;
+      // walk with the parallel traffic, and only step off on the walk signal
+      return pedPhase(info.inter, cross.leg.group === "A" ? "B" : "A", t) === "walk";
     }
-    // no signal: wait until nothing moving would reach the crosswalk within GAP_S
+    return this.clearFor(cross, GAP_S, 45);
+  }
+
+  // Nothing moving would reach the crossing within `gap` seconds (looking out to `range` meters).
+  clearFor(cross, gap, range) {
     const mid = [(cross.from[0] + cross.to[0]) / 2, (cross.from[1] + cross.to[1]) / 2];
     const half = dist(cross.from, cross.to) / 2 + 2;
     for (const o of [this.world.ego, ...this.world.npcs]) {
       if (Math.abs(o.v) < 0.5) continue;
       const dx = mid[0] - o.x, dy = mid[1] - o.y;
       const ahead = dx * Math.cos(o.psi) + dy * Math.sin(o.psi);
-      if (ahead < -2 || Math.hypot(dx, dy) > 45) continue;
+      if (ahead < -2 || Math.hypot(dx, dy) > range) continue;
       const side = Math.abs(dx * Math.sin(o.psi) - dy * Math.cos(o.psi));
       if (side > half + 6) continue;
-      if (Math.max(0, ahead - 4) / o.v < GAP_S) return false;
+      if (Math.max(0, ahead - 4) / o.v < gap) return false;
     }
     return true;
   }

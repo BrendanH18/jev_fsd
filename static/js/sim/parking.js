@@ -1,6 +1,7 @@
-// Parked cars along the curbs of streets with parking lanes. They never move, but they are real
-// obstacles: the ego, the traffic, and every candidate forward-simulation can hit them. Placement is
-// seeded, so a scenario always has the same cars in the same spots.
+// Parked cars along the curbs of streets with parking lanes. They are real obstacles: the ego, the
+// traffic, and every candidate forward-simulation can hit them. Now and then one pulls out into
+// traffic (see NpcFleet.maybePullOut), leaving the parking lane for good. Placement is seeded, so a
+// scenario always has the same cars in the same spots.
 
 import { Vehicle, CAR } from "./vehicle.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
@@ -20,6 +21,7 @@ export class ParkedCars {
     this.map = map;
     this.list = [];
     this.grid = new Map();
+    this.removed = [];   // pulled out since the renderer last looked
     if (density > 0) this.spawn(seed, density);
   }
 
@@ -68,6 +70,8 @@ export class ParkedCars {
           car.parked = true;
           car.color = PALETTE[Math.floor(random() * PALETTE.length)];
           car.style = Math.floor(random() * 5);
+          car.edge = e.id;
+          car.curb = lat > 0 ? "right" : "left";
           this.add(car);
         }
       }
@@ -80,6 +84,18 @@ export class ParkedCars {
     const key = `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`;
     if (!this.grid.has(key)) this.grid.set(key, []);
     this.grid.get(key).push(car);
+  }
+
+  // Take a car out of the parking lane (it is pulling out). `removed` tells the renderer.
+  remove(car) {
+    const i = this.list.indexOf(car);
+    if (i < 0) return false;
+    this.list.splice(i, 1);
+    const [cx, cy] = car.center;
+    const cell = this.grid.get(`${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`);
+    if (cell) cell.splice(cell.indexOf(car), 1);
+    this.removed.push(car);
+    return true;
   }
 
   // Parked cars whose center lies within `r` meters of (x, y).

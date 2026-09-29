@@ -8,7 +8,8 @@ import { SceneView } from "./render/scene.js";
 import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
-import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, createPedMesh, syncPed, addHeadlights, syncCarLights } from "./render/cars.js";
+import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar } from "./render/cars.js";
+import { createPersonMesh, syncPerson } from "./render/people.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
 import { Hud } from "./ui/hud.js";
@@ -63,14 +64,29 @@ async function boot() {
   if (replay) {
     ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: status.configured ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
   } else {
-    world = new World(map, { seed: 1, weather: params.get("weather") || "dry" });
+    // fewer people out on foot late in the evening and at night
+    const pedestrians = hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined;
+    world = new World(map, { seed: 1, weather: params.get("weather") || "dry", pedestrians });
     fleet = new NpcFleet(world, { count: status.npcs, seed: 7 });
     autopilot = new Autopilot(world, callbacks);
   }
   view.scene.add(buildParkedCars(world.parked.list));
-  const pedMeshes = world.crowd.list.map((p) => { const m = createPedMesh(p.look); view.scene.add(m); return m; });
+  const pedMeshes = world.crowd.list.map((p) => { const m = createPersonMesh(p.look); view.scene.add(m); return m; });
   const npcMeshes = new Map();
-  for (const n of fleet.vehicles) { const m = n.kind === "bike" ? createBikeMesh(n.color) : createCarMesh(n.color, n.id); view.scene.add(m); npcMeshes.set(n.id, m); }
+  // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
+  const syncFleetMeshes = () => {
+    const ids = new Set();
+    for (const n of fleet.vehicles) {
+      ids.add(n.id);
+      if (npcMeshes.has(n.id)) continue;
+      const m = n.kind === "bike" ? createBikeMesh(n.color) : createCarMesh(n.color, n.id, n.style ?? null);
+      view.scene.add(m);
+      npcMeshes.set(n.id, m);
+    }
+    for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); }
+    for (const car of world.parked.removed.splice(0)) hideParkedCar(car);
+  };
+  syncFleetMeshes();
   if (!status.configured) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
@@ -159,10 +175,11 @@ async function boot() {
       }
     }
     for (const inter of map.intersections.values()) roads.signals.set(inter.id, world.phase(inter.id));
+    syncFleetMeshes();
     const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
     syncCar(egoMesh, world.ego, dt, world.t, lightsOn);
     for (const n of fleet.vehicles) (n.kind === "bike" ? syncBike : syncCar)(npcMeshes.get(n.id), n, dt, world.t, lightsOn);
-    world.crowd.list.forEach((p, i) => syncPed(pedMeshes[i], p));
+    world.crowd.list.forEach((p, i) => syncPerson(pedMeshes[i], p, view.camera, world.weather === "rain"));
     overlays.tick(world.t);
     weatherView.update(dt);
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
