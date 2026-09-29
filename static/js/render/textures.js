@@ -136,15 +136,16 @@ export const flatRoofTexture = () => once("flatroof", () => toTexture(paint(256,
   return [clamp255(v), clamp255(v), clamp255(v + 2)];
 })));
 
-// Facades: one tile is 12 m x 12 m (4 bays x 4 floors of 3 m). Returns { map, mask } where mask is
-// white where the building's tint applies (wall) and black on glass and trim.
+// Facades: one tile is 12 m x 12 m (4 bays x 4 floors of 3 m). Returns { map, mask } where the
+// mask's red channel is 1 where the building's tint applies (wall) and its green channel is 1 on
+// window glass (which can light up at night).
 export function facadeTextures(kind) {
   return once("facade:" + kind, () => {
     const size = 512, m = size / 12;           // pixels per meter
     const map = canvas(size), mask = canvas(size);
     const c = map.getContext("2d"), k = mask.getContext("2d");
     const Y = (h) => size - h * m;             // canvas y of a height (v = 0 is the ground)
-    k.fillStyle = "#fff"; k.fillRect(0, 0, size, size);
+    k.fillStyle = "#f00"; k.fillRect(0, 0, size, size);
     if (kind === "house") {
       c.fillStyle = "#f4f2ee"; c.fillRect(0, 0, size, size);
       // lap siding: a shadow line every 0.2 m
@@ -192,6 +193,8 @@ export function facadeTextures(kind) {
         if (!store) c.fillRect(x0, y0 + ph * 0.42, pw, 3);
         k.fillStyle = "#000";
         k.fillRect(x0 - trim * 1.6, y0 - trim, pw + trim * 3.2, ph + trim * 2.4);
+        k.fillStyle = "#0f0";
+        k.fillRect(x0 + 2, y0 + 2, pw - 4, ph - 4);
       }
     }
     // a darker foundation band at the bottom of each tile
@@ -200,6 +203,79 @@ export function facadeTextures(kind) {
     return { map: toTexture(map), mask: toTexture(mask, { srgb: false }) };
   });
 }
+
+// A cluster of leaves on a transparent card: pale, so the per-tree tint sets the hue, with lighter
+// tops, darker undersides, and a midrib on each leaf.
+export const leafTexture = () => once("leaf", () => {
+  const size = 256, c = canvas(size), ctx = c.getContext("2d");
+  let seed = 11;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 70; i++) {
+    const a = rnd() * Math.PI * 2, d = Math.pow(rnd(), 0.6) * size * 0.4;
+    const x = size / 2 + Math.cos(a) * d, y = size / 2 + Math.sin(a) * d;
+    const len = size * (0.07 + rnd() * 0.05), w = len * (0.42 + rnd() * 0.15);
+    const rot = rnd() * Math.PI * 2;
+    const shade = 150 + rnd() * 105;
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(rot);
+    ctx.beginPath();
+    ctx.moveTo(-len, 0);
+    ctx.quadraticCurveTo(0, -w * 1.2, len, 0);
+    ctx.quadraticCurveTo(0, w * 1.2, -len, 0);
+    ctx.fillStyle = `rgb(${shade * 0.86 | 0},${shade | 0},${shade * 0.72 | 0})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(40,50,30,${0.25 + rnd() * 0.2})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-len * 0.9, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
+    ctx.restore();
+  }
+  // a few twigs holding the cluster together
+  ctx.strokeStyle = "rgba(70,55,40,0.9)"; ctx.lineWidth = 2.5;
+  for (let i = 0; i < 4; i++) {
+    const a = rnd() * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(size / 2, size / 2); ctx.lineTo(size / 2 + Math.cos(a) * size * 0.3, size / 2 + Math.sin(a) * size * 0.3); ctx.stroke();
+  }
+  return toTexture(c, { repeat: false });
+});
+
+// Needles: fine streaks of light and dark along the cone's slope.
+export const needleTexture = () => once("needle", () => toTexture(paint(256, (x, y) => {
+  const streak = fbm(x * 4, y * 0.35, 256, 8, 3, 61);
+  const grain = hash(x, y, 62);
+  const v = 150 + (streak - 0.5) * 120 + (grain - 0.5) * 50;
+  return [clamp255(v * 0.9), clamp255(v), clamp255(v * 0.85)];
+})));
+
+// Bark: furrows running up the trunk.
+export const barkTexture = () => once("bark", () => toTexture(paint(256, (x, y) => {
+  const furrow = fbm(x * 3, y * 0.4, 256, 6, 4, 71);
+  const v = 110 + (furrow - 0.5) * 140 + (hash(x, y, 72) - 0.5) * 25;
+  return [clamp255(v), clamp255(v * 0.92), clamp255(v * 0.84)];
+})));
+
+// Pedestrian signal faces: a walking figure and a raised hand, lit on black.
+export const walkSignalTexture = () => once("walksig", () => {
+  const size = 64, c = canvas(size), ctx = c.getContext("2d");
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = ctx.fillStyle = "#fff"; ctx.lineWidth = 5; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(34, 12, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(32, 20); ctx.lineTo(29, 38); ctx.lineTo(38, 54);     // body and front leg
+  ctx.moveTo(29, 38); ctx.lineTo(22, 54);                          // back leg
+  ctx.moveTo(31, 24); ctx.lineTo(40, 34); ctx.moveTo(31, 24); ctx.lineTo(23, 32);   // arms
+  ctx.stroke();
+  return toTexture(c, { repeat: false });
+});
+
+export const handSignalTexture = () => once("handsig", () => {
+  const size = 64, c = canvas(size), ctx = c.getContext("2d");
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.roundRect(20, 28, 26, 26, 6); ctx.fill();         // palm
+  for (const [x, h] of [[21, 20], [28, 24], [35, 23], [42, 18]]) { ctx.beginPath(); ctx.roundRect(x - 3, 30 - h, 6, h + 4, 3); ctx.fill(); }
+  ctx.beginPath(); ctx.roundRect(12, 36, 12, 6, 3); ctx.fill();           // thumb
+  return toTexture(c, { repeat: false });
+});
 
 export const stopSignTexture = () => once("stop", () => {
   const size = 256, c = canvas(size), ctx = c.getContext("2d");
@@ -240,6 +316,30 @@ export const blobTexture = () => once("blob", () => {
   g.addColorStop(0.55, "rgba(0,0,0,0.45)");
   g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+  return toTexture(c, { repeat: false, srgb: false });
+});
+
+// Headlight throw on the road, seen from above: u runs away from the car, v across it. Brightest a
+// few meters ahead, widening and fading with distance.
+export const poolTexture = () => once("pool", () => {
+  const c = paint(128, (x, y) => {
+    const u = x / 127, v = y / 127;
+    const spread = 0.1 + 0.28 * u;
+    const across = Math.exp(-((v - 0.5) ** 2) / (2 * spread * spread));
+    const along = Math.min(1, u / 0.08) * Math.pow(1 - u, 1.6);
+    const k = across * along * 255;
+    return [k, k, k];
+  });
+  return toTexture(c, { repeat: false, srgb: false });
+});
+
+// A soft round pool of light for a street lamp.
+export const lampPoolTexture = () => once("lamppool", () => {
+  const c = paint(128, (x, y) => {
+    const d = Math.hypot(x - 63.5, y - 63.5) / 63.5;
+    const k = Math.max(0, 1 - d) ** 2.2 * 255;
+    return [k, k, k];
+  });
   return toTexture(c, { repeat: false, srgb: false });
 });
 

@@ -8,7 +8,8 @@ import { SceneView } from "./render/scene.js";
 import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
-import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, createPedMesh, syncPed } from "./render/cars.js";
+import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar } from "./render/cars.js";
+import { createPersonMesh, syncPerson } from "./render/people.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
 import { Hud } from "./ui/hud.js";
@@ -20,6 +21,9 @@ import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
+import { pedPhase } from "./sim/signals.js";
+import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
+import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -32,13 +36,20 @@ async function boot() {
   const map = new MapData(pack);
   const replay = readReplay();
   const hud = new Hud();
-  const view = new SceneView($("#view"), map.extent);
+  const params = new URLSearchParams(location.search);
+  const quality = params.get("quality") || localStorage.getItem("jev-fsd-quality") || "high";
+  let hour = parseHour(params.get("time"));
+  const view = new SceneView($("#view"), map.extent, { quality });
+  hud.setQuality(view.quality);
   const roads = buildRoads(map);
   view.scene.add(roads.group);
   const buildings = buildBuildings(map);
   view.scene.add(buildings);
   view.scene.add(buildTrees(map, roads, buildings.userData.index));
+  view.scene.add(buildSurroundings(map));
+  view.backdrop.visible = inVancouver(pack.origin);   // the North Shore mountains
   const egoMesh = createCarMesh(0x1f5fd6, "ego");
+  addHeadlights(egoMesh);
   view.scene.add(egoMesh);
   const overlays = new Overlays(view.scene);
   const callbacks = {
@@ -57,22 +68,42 @@ async function boot() {
   if (replay) {
     ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: status.configured ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
   } else {
-    world = new World(map, { seed: 1, weather: new URLSearchParams(location.search).get("weather") || "dry" });
+    // fewer people out on foot late in the evening and at night
+    const pedestrians = hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined;
+    world = new World(map, { seed: 1, weather: params.get("weather") || "dry", pedestrians });
     fleet = new NpcFleet(world, { count: status.npcs, seed: 7 });
     autopilot = new Autopilot(world, callbacks);
   }
   view.scene.add(buildParkedCars(world.parked.list));
-  const pedMeshes = world.crowd.list.map((p) => { const m = createPedMesh(p.look); view.scene.add(m); return m; });
+  const pedMeshes = world.crowd.list.map((p) => { const m = createPersonMesh(p.look); view.scene.add(m); return m; });
   const npcMeshes = new Map();
-  for (const n of fleet.vehicles) { const m = n.kind === "bike" ? createBikeMesh(n.color) : createCarMesh(n.color, n.id); view.scene.add(m); npcMeshes.set(n.id, m); }
+  // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
+  const syncFleetMeshes = () => {
+    const ids = new Set();
+    for (const n of fleet.vehicles) {
+      ids.add(n.id);
+      if (npcMeshes.has(n.id)) continue;
+      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : createCarMesh(n.color, n.id, n.style ?? null);
+      view.scene.add(m);
+      npcMeshes.set(n.id, m);
+    }
+    for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); }
+    for (const car of world.parked.removed.splice(0)) hideParkedCar(car);
+  };
+  syncFleetMeshes();
   if (!status.configured) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
   panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };
   const weatherView = new WeatherView(view);
+  const applySky = () => { const a = atmosphereFor(hour, world.weather); view.setAtmosphere(a); tintSurroundings(a); };
   weatherView.apply(world.weather);
+  applySky();
   hud.setWeather(world.weather);
-  hud.onWeatherChange((name) => { world.weather = setWeather(name).name; weatherView.apply(world.weather); hud.badge(`weather: ${name}`, "", 800); });
+  hud.setTime(nearestPreset(hour));
+  hud.onWeatherChange((name) => { world.weather = setWeather(name).name; weatherView.apply(world.weather); applySky(); hud.badge(`weather: ${name}`, "", 800); });
+  hud.onTimeChange((name) => { hour = parseHour(name); applySky(); hud.badge(`time: ${formatHour(hour)}`, "", 800); });
+  hud.onQualityChange((name) => { localStorage.setItem("jev-fsd-quality", view.setQuality(name)); hud.badge(`graphics: ${view.quality}`, "", 800); });
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt));
   hud.setMapNote(status.map.synthetic
     ? `Synthetic grid (map fetch failed: ${status.map.error})`
@@ -123,12 +154,13 @@ async function boot() {
     hud.setAutopilot(true);
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
   }
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, setTime: (h) => { hour = parseHour(h); applySky(); } };
 
   let last = performance.now();
   let acc = 0;
   function frame(now) {
-    const dt = Math.min(0.25, (now - last) / 1000);
+    // never negative: headless runs advance the clock by hand, ahead of requestAnimationFrame
+    const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
     last = now;
     if (!world.paused) {
       acc += dt;
@@ -146,14 +178,20 @@ async function boot() {
         steps++;
       }
     }
-    for (const inter of map.intersections.values()) roads.signals.set(inter.id, world.phase(inter.id));
-    syncCar(egoMesh, world.ego, dt, world.t);
-    for (const n of fleet.vehicles) (n.kind === "bike" ? syncBike : syncCar)(npcMeshes.get(n.id), n, dt, world.t);
-    world.crowd.list.forEach((p, i) => syncPed(pedMeshes[i], p));
+    for (const inter of map.intersections.values()) {
+      roads.signals.set(inter.id, world.phase(inter.id));
+      roads.signals.setPed(inter.id, { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) }, world.t);
+    }
+    syncFleetMeshes();
+    const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
+    syncCar(egoMesh, world.ego, dt, world.t, lightsOn);
+    for (const n of fleet.vehicles) (n.kind === "bike" ? syncBike : syncCar)(npcMeshes.get(n.id), n, dt, world.t, lightsOn);
+    world.crowd.list.forEach((p, i) => syncPerson(pedMeshes[i], p, view.camera, world.weather === "rain"));
     overlays.tick(world.t);
     weatherView.update(dt);
+    if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(world.ego, dt);
-    view.render();
+    view.render(dt);
     minimap.draw({ ego: world.ego, npcs: fleet.vehicles, route: world.route, destination: world.destination });
     const snap = autopilot.enabled ? autopilot.snap : null;
     hud.update({ ego: world.ego, road: world._road, nav: snap ? snap.nav : null, violations: world.violations,
@@ -171,6 +209,17 @@ async function boot() {
   };
   requestAnimationFrame(frame);
 }
+
+function nearestPreset(hour) {
+  let best = "afternoon", d = Infinity;
+  for (const [name, h] of Object.entries(TIME_PRESETS)) {
+    const x = Math.abs(h - hour);
+    if (x < d) { d = x; best = name; }
+  }
+  return best;
+}
+
+const formatHour = (h) => `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
 
 function readReplay() {
   if (!new URLSearchParams(location.search).has("replay")) return null;

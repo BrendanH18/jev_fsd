@@ -44,6 +44,14 @@ export class Route {
       });
     }
     this.controls.sort((a, b) => a.sRoute - b.sRoute);
+    // where each street's speed limit starts, located on the polyline like the controls
+    this.limitMarks = [];
+    for (let i = 1; i < this.edges.length; i++) {
+      const e = map.edges.get(this.edges[i]);
+      if (!e || !e.limit) continue;
+      const p = projectPoint(this.pts, this.cum, e.pts[0]);
+      if (p && p.distance < 12) this.limitMarks.push({ at: p.s, limit: e.limit });
+    }
   }
 
   // Without a hint this tracks the ego (and remembers where it is); with one it projects anything
@@ -61,6 +69,9 @@ export class Route {
     return [p[0] + Math.sin(h) * d, p[1] - Math.cos(h) * d];  // right of travel is (sin h, -cos h)
   }
   turnsAfter(s) { return this.turns.filter((t) => t.at_m > s - 3); }
+
+  // Speed limits that start within `horizon` meters ahead of s: [{ at, limit }] in route arc length.
+  limitsAhead(s, horizon = 80) { return this.limitMarks.filter((m) => m.at > s && m.at <= s + horizon); }
   edgeIndexAt(s) {
     let i = 0;
     while (i + 1 < this.edgeStarts.length - 1 && this.edgeStarts[i + 1] <= s) i++;

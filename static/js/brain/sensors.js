@@ -86,11 +86,14 @@ export function buildSnapshot(world, executing = null) {
     }
     // a pedestrian on a crosswalk the route crosses, whom the car must let across
     const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, world.crowd);
-    if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v };
+    if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
     // vehicles in the route corridor
     const vehicles = world.obstaclesNear(ego.x, ego.y, TRAFFIC_RADIUS_M).filter((o) => o.kind !== "pedestrian");
     // ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed
-    const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 1.7, vehicles, p.index);
+    // a car coming the other way and passing is traffic, not a car to follow (one stopped in the
+    // lane, facing us, is still in the way)
+    const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 1.7, vehicles, p.index)
+      .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6));
     if (ahead.length) {
       const lead = ahead[0];
       const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
@@ -131,6 +134,12 @@ export function desiredSpeed(snap) {
   if (snap.route && snap.routeProj) {
     const curve = curveProfileSpeed(snap.route, snap.routeProj.s);
     if (curve.v < v) { v = curve.v; reasons.push(curve.at < 4 ? "curve" : "upcoming turn"); }
+    // a lower limit on the next street: be down to it, gently, a little before the car gets there
+    for (const { at, limit } of snap.route.limitsAhead ? snap.route.limitsAhead(snap.routeProj.s) : []) {
+      const lim = limit * (weather.speed < 1 ? weather.speed : 1);
+      const vl = Math.sqrt(lim * lim + 2 * decel * 0.6 * Math.max(0, at - snap.routeProj.s - FRONT - 15));
+      if (vl < v) { v = vl; reasons.push("lower limit ahead"); }
+    }
   }
   if (snap.following) {
     // close in on the leader gently, and never faster than lets the car stop comfortably behind it

@@ -57,7 +57,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   }
   if (snap.pedestrian) {
     const p = snap.pedestrian;
-    state.pedestrian = { crosswalk_m: r1(Math.max(0, p.bumper_to_crosswalk_m)), distance: distLabel(p.bumper_to_crosswalk_m - 2), in_path: p.to_path_m < 1.8, yield: true };
+    state.pedestrian = { crosswalk_m: r1(Math.max(0, p.bumper_to_crosswalk_m)), distance: distLabel(p.bumper_to_crosswalk_m - 2), in_path: p.to_path_m < 1.8, yield: true, ...(p.mid_block ? { mid_block: true } : {}) };
   }
   if (snap.rear_follower && snap.rear_follower.gap_m < 12) state.rear_follower = { id: snap.rear_follower.id, gap_m: r1(snap.rear_follower.gap_m) };
   if (snap.traffic.length) {
@@ -105,7 +105,8 @@ export function situationClauses(snap) {
   }
   if (snap.pedestrian) {
     const p = snap.pedestrian, m = Math.max(0, Math.round(p.bumper_to_crosswalk_m));
-    out.push(p.bumper_to_crosswalk_m < STOP_ZONE_M ? "A pedestrian is crossing in the crosswalk right in front of the car: hold still until they have crossed." : `A pedestrian is crossing in a crosswalk ${m} m ahead: slow down and stop before the crosswalk until they have crossed.`);
+    const where = p.mid_block ? "mid-block, outside a crosswalk" : "in the crosswalk";
+    out.push(p.bumper_to_crosswalk_m < STOP_ZONE_M ? `A pedestrian is crossing ${where} right in front of the car: hold still until they have crossed.` : `A pedestrian is crossing ${where} ${m} m ahead: slow down and stop short of them until they have crossed.`);
   }
   if (snap.following) {
     const label = gapLabel(snap.following.gap_m, snap.following.closing_mps);

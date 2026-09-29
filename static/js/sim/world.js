@@ -178,7 +178,8 @@ World.prototype.auditCrosswalks = function () {
   if (!prev || this.ego.v < 0.3) return;
   for (const ped of this.crowd.list) {
     const c = ped.crossing;
-    if (!c || ped.yieldCounted === c) continue;
+    // someone crossing mid-block must yield to traffic: hitting them is a collision, not this
+    if (!c || c.jaywalk || ped.yieldCounted === c) continue;
     const hit = segIntersect(prev, f, c.from, c.to);
     if (!hit) continue;
     const len = Math.hypot(c.to[0] - c.from[0], c.to[1] - c.from[1]);

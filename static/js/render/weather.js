@@ -1,15 +1,17 @@
-// How the weather looks: sky and fog, the sun's strength, wet or snow-covered surfaces, and rain or
-// snow falling around the camera. Surfaces opt in by tagging their material with
+// How the weather looks on the ground: wet or snow-covered surfaces, and rain or snow falling
+// around the camera. Surfaces opt in by tagging their material with
 // `userData.surface`; snow settles on whatever faces up (a shader tweak), so roofs, lawns, and the
 // tops of trees and parked cars turn white while walls stay as they are.
 
 import * as THREE from "three";
 
+// what each weather does to surfaces and the air around the camera (the sky and light are in
+// atmosphere.js)
 const PRESETS = {
-  dry: { zenith: 0x3f79c4, horizon: 0xc9dbea, ground: 0x8d9a86, sun: 3.0, hemi: 0.55, fog: 0.0016, env: 0.55, exposure: 1.0 },
-  rain: { zenith: 0x5f6a76, horizon: 0x98a2ab, ground: 0x5d655c, sun: 0.55, hemi: 1.0, fog: 0.0065, env: 0.8, exposure: 0.95, wet: 1 },
-  fog: { zenith: 0xaab2b9, horizon: 0xc4c9cd, ground: 0x9aa09a, sun: 0.45, hemi: 1.1, fog: 0.022, env: 0.7, exposure: 1.0, wet: 0.4 },
-  snow: { zenith: 0x8f9cab, horizon: 0xd3dae1, ground: 0xc9cfd6, sun: 0.9, hemi: 1.05, fog: 0.007, env: 0.75, exposure: 1.0, snow: 1 },
+  dry: {},
+  rain: { wet: 1, particles: "rain" },
+  fog: { wet: 0.4 },
+  snow: { snow: 1, particles: "snow" },
 };
 // how much snow each kind of surface keeps (plowed and driven roads keep the least)
 const SNOW_COVER = { grass: 0.95, roof: 0.92, concrete: 0.8, curb: 0.7, leaf: 0.55, asphalt: 0.42, paint: 0.35, car: 0.8 };
@@ -55,12 +57,6 @@ export class WeatherView {
     const P = PRESETS[name] || PRESETS.dry;
     this.name = PRESETS[name] ? name : "dry";
     const v = this.view;
-    v.setSky({ zenith: P.zenith, horizon: P.horizon, ground: P.ground });
-    v.scene.fog.density = P.fog;
-    v.sun.intensity = P.sun;
-    v.hemi.intensity = P.hemi;
-    v.scene.environmentIntensity = P.env;
-    v.renderer.toneMappingExposure = P.exposure;
     v.scene.traverse((o) => {
       const mats = !o.material ? [] : Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
@@ -74,7 +70,7 @@ export class WeatherView {
         if (m.userData.snow) m.userData.snow.value = (P.snow || 0) * (SNOW_COVER[surface] || 0);
       }
     });
-    this.setParticles(P.wet === 1 ? "rain" : P.snow ? "snow" : null);
+    this.setParticles(P.particles || null);
   }
 
   setParticles(kind) {

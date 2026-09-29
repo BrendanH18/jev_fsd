@@ -29,7 +29,7 @@ from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.routing import Router
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 STATIC = PROJECT_ROOT / "static"
 PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html"}
 MAX_BODY_BYTES = 1024 * 1024

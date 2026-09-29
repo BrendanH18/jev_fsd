@@ -2,6 +2,8 @@
 // adjacency, and traffic-control lookups. Coordinates: x east, y north, meters. Headings are
 // radians counter-clockwise from +x.
 
+import { timingPlan } from "../sim/signals.js";
+
 const CELL = 50;
 
 export function dist(a, b) { return Math.hypot(b[0] - a[0], b[1] - a[1]); }
@@ -130,7 +132,9 @@ export class MapData {
       this.lanes.set(`${l.edge}:${l.idx}`, lane);
       this.laneList.push(lane);
     }
-    this.intersections = new Map(pack.intersections.map((i) => [i.id, i]));
+    // signal timing is worked out here from the streets meeting at each junction (see signals.js)
+    this.intersections = new Map(pack.intersections.map((i) => [i.id, { ...i }]));
+    for (const inter of this.intersections.values()) inter.plan = timingPlan(inter, this);
     this.stops = new Map(pack.stops.map((s) => [s.id, s]));
     this.yields = new Map((pack.yields || []).map((y) => [y.id, y]));
     this.roundabouts = new Map((pack.roundabouts || []).map((r) => [r.id, r]));

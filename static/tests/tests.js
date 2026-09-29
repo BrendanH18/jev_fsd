@@ -10,6 +10,8 @@ import { setWeather } from "../js/sim/weather.js";
 import { purePursuit, speedControl } from "../js/sim/controller.js";
 import { obbOverlap } from "../js/sim/collision.js";
 import { World } from "../js/sim/world.js";
+import { NpcFleet } from "../js/sim/npc.js";
+import { phaseOf, pedPhase } from "../js/sim/signals.js";
 import { buildSnapshot } from "../js/brain/sensors.js";
 import { sampleCandidates, simulateAll } from "../js/brain/candidates.js";
 import { toJevState, buildQuestions } from "../js/brain/state.js";
@@ -164,6 +166,48 @@ async function run() {
     check("crosswalk conflict found ahead", c && Math.abs(c.s - 30) < 0.5, JSON.stringify(c && { s: c.s }));
     crowd.list[0].y = -7.5;
     check("pedestrian past the lane is no conflict", !crosswalkConflict(pts, cum, 0, 50, crowd));
+  }
+  // signal timing: yellow from the approach speed (ITE), all-red to clear the junction, a walk
+  // signal that starts with the parallel green and runs out before its yellow
+  {
+    const inter = [...map.intersections.values()][0];
+    const plan = inter.plan;
+    check("signal plan: cycle adds up", Math.abs(plan.A.green + plan.A.yellow + plan.A.allRed + plan.B.green + plan.B.yellow + plan.B.allRed - plan.cycle) < 0.05, JSON.stringify(plan));
+    check("signal plan: yellow 3 to 5 s", [plan.A, plan.B].every((p) => p.yellow >= 3 && p.yellow <= 5));
+    check("signal plan: all-red 1 to 3 s", [plan.A, plan.B].every((p) => p.allRed >= 1 && p.allRed <= 3));
+    const t0 = -inter.offset_s;   // u = 0: A turns green
+    check("A green at the start of the cycle, B red", phaseOf(inter, t0 + 0.5).A === "green" && phaseOf(inter, t0 + 0.5).B === "red");
+    check("A yellow after its green", phaseOf(inter, t0 + plan.A.green + 0.2).A === "yellow");
+    check("all red between the phases", (() => { const p = phaseOf(inter, t0 + plan.A.green + plan.A.yellow + 0.1); return p.A === "red" && p.B === "red"; })());
+    check("walk alongside A's green, then the flashing hand", pedPhase(inter, "A", t0 + 1) === "walk" && pedPhase(inter, "A", t0 + plan.A.green - 0.5) === "flash" && pedPhase(inter, "A", t0 + plan.A.green + 1) === "dont");
+  }
+  // powertrain: full throttle at highway speed gives far less than the car manages from rest
+  {
+    const slow = new Vehicle(0, 0, 0, 1), fast = new Vehicle(0, 0, 0, 30);
+    for (let t = 0; t < 1; t += 1 / 60) { slow.step(1 / 60, { accel: 3 }); fast.step(1 / 60, { accel: 3 }); }
+    const gainSlow = slow.v - 1, gainFast = fast.v - 30;
+    check("power limits acceleration at speed", gainFast < gainSlow * 0.8 && gainFast > 0.5, `from rest +${gainSlow.toFixed(2)}, at 30 m/s +${gainFast.toFixed(2)}`);
+  }
+  // traffic at a two-way stop waits for a car coming on the through road
+  {
+    const world = new World(map, { seed: 5, parked: 0, pedestrians: 0 });
+    const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 });
+    const node = [...map.nodes.values()][0];
+    const n = new Vehicle(node.x - 15, node.y, 0, 0); n.driver = { T: 1.2 };
+    const through = new Vehicle(node.x, node.y - 40, Math.PI / 2, 12);
+    world.ego = through;
+    check("stop-sign gap: a car 3.3 s out blocks the crossing", fleet.crossComing(n, node.id));
+    through.y = node.y - 90;
+    check("stop-sign gap: one 7.5 s out does not", !fleet.crossComing(n, node.id));
+  }
+  // a parked car ahead of the ego can pull out: it leaves the parking lane and joins traffic
+  {
+    const world = new World(map, { seed: 2, pedestrians: 0 });
+    const fleet = new NpcFleet(world, { count: 5, bikes: 0, seed: 2 });
+    const before = world.parked.list.length;
+    let car = null;
+    for (let k = 0; k < 20 && !car; k++) car = fleet.maybePullOut();
+    check("a parked car pulled out", car && car.pull && world.parked.list.length === before - 1 && fleet.vehicles.includes(car), car ? car.id : "none nearby");
   }
   // weather sets road grip and the comfort targets
   {
