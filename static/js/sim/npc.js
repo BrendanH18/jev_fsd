@@ -3,11 +3,12 @@
 // parked up ahead of the ego signals, waits for a gap, and pulls out into the lane.
 
 import { Vehicle, CAR, BIKE, comfort } from "./vehicle.js";
-import { purePursuit } from "./controller.js";
+import { purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { phaseOf, StopMemory } from "./signals.js";
 import { rng } from "../common.js";
 import { wrap } from "./world.js";
+import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { crosswalkConflict } from "./pedestrians.js";
 import { current as weather } from "./weather.js";
@@ -139,6 +140,8 @@ export class NpcFleet {
     this.events = rng(seed * 104729 + 17);
     this.nextPull = 10 + this.events() * 12;
     this.pulled = 0;
+    this.parkingEvents = rng(seed * 65537 + 31);
+    this.nextPark = 12 + this.parkingEvents() * 15;
     this.target = count;
     this.vehicles = [];
     this.spawn(count);
@@ -205,8 +208,10 @@ export class NpcFleet {
     const world = this.world;
     this.nextPull -= dt;
     if (this.nextPull <= 0) { this.nextPull = 14 + this.events() * 18; this.maybePullOut(); }
+    this.nextPark -= dt;
+    if (this.nextPark <= 0) { this.nextPark = 15 + this.parkingEvents() * 20; this.maybePark(); }
     const all = [world.ego, ...this.vehicles];
-    for (const n of this.vehicles) {
+    for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
       if (n.pull && n.pull.wait > 0) {
         // still parked: indicator on, waiting for a gap in the lane
@@ -215,6 +220,7 @@ export class NpcFleet {
         n.v = 0;
         continue;
       }
+      if (n.parking) { this.parkStep(n, dt); continue; }
       if (n.backoff) { this.backOff(n, dt); continue; }
       if (n.holdFor > 0) { n.holdFor -= dt; n.step(dt, { steer: n.delta, accel: -3 }); if (n.v < 0) n.v = 0; continue; }
       const path = n.path;
@@ -225,9 +231,9 @@ export class NpcFleet {
         n.lc = null;
         n.lcCooldown = 6;
       }
-      const proj = projectPoint(path.pts, path.cum, [n.x, n.y], null);
+      let proj = projectPoint(path.pts, path.cum, [n.x, n.y], null);
       path.s = proj.s;
-      if (proj.distance > 6) { this.respawn(n); continue; }
+      if (proj.distance > 6) { this.recoverPath(n); proj = projectPoint(path.pts, path.cum, [n.x, n.y], null); path.s = proj.s; }
       path.extend();
       path.trim();
       const edge = path.currentEdge();
@@ -255,7 +261,7 @@ export class NpcFleet {
       // leader: nearest vehicle ahead on our path within LOOK_M (a parked car only when it sticks
       // out into the lane)
       let gap = Infinity, leadV = n.v0, leader = null;
-      for (const o of all.concat(world.parked.near(n.x, n.y, LOOK_M))) {
+      for (const o of all.concat(world.parked.near(n.x, n.y, LOOK_M), world.parked.doorsNear(n.x, n.y, LOOK_M))) {
         if (o === n) continue;
         if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
         const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
@@ -352,8 +358,8 @@ export class NpcFleet {
       if (n.v < 0.3 && a > 0.2) { n.ready = (n.ready || 0) + dt; if (n.ready < (D.react || 0)) a = -1; }
       else if (n.v > 1) n.ready = 0;
       if (n.v < 0.05 && a < 0) a = -1;   // stopped: hold the brakes rather than creep
-      // wedged at an angle to its lane (a turn taken wide, then blocked): put it back on the lane
-      if (n.waiting > 10 && Math.abs(wrap(n.psi - path.headingAt(path.s))) > 0.35) { this.respawn(n); continue; }
+      // wedged at an angle to its lane (a turn taken wide, then blocked): rebase its path
+      if (n.waiting > 10 && Math.abs(wrap(n.psi - path.headingAt(path.s))) > 0.35) { this.recoverPath(n); continue; }
       const steer = purePursuit(n, path, path.s, offset);
       n.step(dt, { steer, accel: a });
       if (n.v < 0) n.v = 0;
@@ -378,12 +384,69 @@ export class NpcFleet {
     if (done && n.v > -0.05) { n.v = 0; n.backoff = null; n.holdFor = 5; }
   }
 
+  // Reserve a vacant curb slot on a driver's current lane. The car indicates, slows, moves
+  // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
+  maybePark() {
+    for (const n of this.vehicles) {
+      if (n.kind === "bike" || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
+      const e = this.map.edges.get(edge.id);
+      const choices = this.world.parked.slots.filter((slot) => {
+        if (slot.edge !== edge.id || slot.occupant || slot.reserved) return false;
+        if (edge.lane !== (slot.curb === "right" ? e.lanes - 1 : 0)) return false;
+        const p = projectPoint(n.path.pts, n.path.cum, [slot.x, slot.y]);
+        const ahead = p.s - n.path.s;
+        return ahead > Math.max(18, n.v * n.v / (2 * comfort().decel) + 8) && ahead < 60
+          && Math.abs(p.lateral) < 4.5 && this.world.obstaclesNear(slot.x, slot.y, 14).every((o) => o === n || Math.hypot(o.x - slot.x, o.y - slot.y) > 13);
+      });
+      if (!lane || !choices.length) continue;
+      const slot = choices[Math.floor(this.parkingEvents() * choices.length)];
+      const p = projectPoint(n.path.pts, n.path.cum, [slot.x, slot.y]);
+      slot.reserved = n;
+      n.parking = { slot, start: n.path.s, end: p.s, lat: p.lateral, t: 0 };
+      n.signal = slot.curb;
+      return n;
+    }
+    return null;
+  }
+
+  parkStep(n, dt) {
+    const park = n.parking;
+    park.t += dt;
+    const p = projectPoint(n.path.pts, n.path.cum, [n.x, n.y]);
+    n.path.s = p.s;
+    const room = park.end - p.s;
+    const offset = park.lat * smooth((14 - room) / 9);
+    const target = Math.min(3, Math.sqrt(2 * comfort().decel * Math.max(0, room - 0.2)));
+    // Check a short swept envelope, including pedestrians, before moving into the bay.
+    const box = n.obb();
+    const reach = Math.max(0.5, n.v * 0.8);
+    box.center = [box.center[0] + Math.cos(n.psi) * reach / 2, box.center[1] + Math.sin(n.psi) * reach / 2];
+    box.halfLength += reach / 2;
+    box.halfWidth += 0.15;
+    const blocked = this.world.obstaclesNear(n.x, n.y, 12).concat(this.world.ego).some((o) => o !== n && obbOverlap(box, o.obb(), 0.2));
+    n.step(dt, { steer: purePursuit(n, n.path, p.s, offset), accel: blocked ? -comfort().hardDecel : speedControl(n.v, target) });
+    if (n.v < 0) n.v = 0;
+    if (room < 0.6 && n.v < 0.2 && Math.abs(p.lateral - park.lat) < 0.45) {
+      n.v = n.a = n.vy = n.r = 0;
+      n.signal = null;
+      n.edge = park.slot.edge; n.curb = park.slot.curb; n.slot = park.slot;
+      n.parking = null;
+      this.vehicles.splice(this.vehicles.indexOf(n), 1);
+      this.world.parked.add(n);
+    } else if (park.t > 35 || room < -2) {
+      park.slot.reserved = null;
+      n.parking = null;
+      n.signal = null;
+    }
+  }
+
   // A car parked 20 to 90 m ahead of the ego gets ready to pull out. It becomes traffic; to keep the
   // count steady, the traffic car farthest from the ego (well out of sight) leaves.
   maybePullOut() {
     const world = this.world, ego = world.ego, map = this.map;
     const cx = ego.x + Math.cos(ego.psi) * 55, cy = ego.y + Math.sin(ego.psi) * 55;
-    const near = world.parked.near(cx, cy, 45).filter((c) => { const l = ego.toLocal(c.x, c.y); return l.ahead > 20 && l.ahead < 90 && c.edge; });
+    const near = world.parked.near(cx, cy, 45).filter((c) => { const l = ego.toLocal(c.x, c.y); return l.ahead > 20 && l.ahead < 90 && c.edge && !c.door; });
     if (!near.length) return null;
     const car = near[Math.floor(this.events() * near.length)];
     const e = map.edges.get(car.edge);
@@ -404,13 +467,14 @@ export class NpcFleet {
     v.stopMem = new StopMemory();
     v.frozen = 0;
     v.waiting = 0;
+    v.parked = false;
     v.pull = { lat: proj.lateral, t: 0, T: 3.5, wait: 1.5 + this.events() * 2.5 };
     this.vehicles.push(v);
     const cars = this.vehicles.filter((k) => k.kind !== "bike");
     if (cars.length > this.target) {
       let far = null;
       for (const k of cars) {
-        if (k.pull) continue;
+        if (k.pull || k.parking) continue;
         const d = Math.hypot(k.x - ego.x, k.y - ego.y);
         if (d > 150 && (!far || d > far.d)) far = { k, d };
       }
@@ -423,13 +487,17 @@ export class NpcFleet {
   // nothing stopped right in front.
   pullClear(n) {
     const path = n.path;
-    const gap = n.driver && n.driver.T < 1.05 ? 3.5 : 5;
+    const gap = Math.max(n.pull?.T || 3.5, n.driver && n.driver.T < 1.05 ? 3.5 : 5) + 1.5;
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n || Math.abs(o.x - n.x) > 70 || Math.abs(o.y - n.y) > 70) continue;
+      const dx = n.x - o.x, dy = n.y - o.y, distance = Math.hypot(dx, dy);
+      const closing = dx * Math.cos(o.psi) + dy * Math.sin(o.psi);
+      const side = Math.abs(dx * Math.sin(o.psi) - dy * Math.cos(o.psi));
+      if (distance < 12 || (closing > 0 && side < 5.5 && distance < o.v * gap + 8)) return false;
       const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
-      if (!p || Math.abs(p.lateral) > 2.6) continue;
+      if (!p || Math.abs(p.lateral) > 3.5) continue;
       const ds = p.s - path.s;
-      if (ds > -1 && ds < 8) return false;
+      if (Math.abs(ds) < 9) return false;
       if (ds <= -1 && ds > -60 && o.v > 0.5 && (-ds - 5) / o.v < gap) return false;
     }
     return true;
@@ -535,10 +603,10 @@ export class NpcFleet {
     return false;
   }
 
-  respawn(n) {
+  recoverPath(n) {
     const near = this.map.nearestLane(n.x, n.y, n.psi, 40);
     if (!near) return;
-    n.x = near.point[0]; n.y = near.point[1]; n.psi = near.heading; n.v = 0; n.delta = 0; n.a = 0;
+    // Rebase the plan without teleporting the body or instantaneously stopping a moving car.
     n.path.start(near.lane.edge, near.lane.idx, near.s);
     n.stopMem.reset();
     n.lc = null;

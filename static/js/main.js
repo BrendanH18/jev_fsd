@@ -8,7 +8,7 @@ import { SceneView } from "./render/scene.js";
 import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
-import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar } from "./render/cars.js";
+import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar, createDoorMesh, syncDoor } from "./render/cars.js";
 import { createPersonMesh, syncPerson } from "./render/people.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
@@ -77,6 +77,8 @@ async function boot() {
   view.scene.add(buildParkedCars(world.parked.list));
   const pedMeshes = world.crowd.list.map((p) => { const m = createPersonMesh(p.look); view.scene.add(m); return m; });
   const npcMeshes = new Map();
+  const parkedMeshes = new Map();
+  const doorMeshes = new Map();
   // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
   const syncFleetMeshes = () => {
     const ids = new Set();
@@ -88,7 +90,23 @@ async function boot() {
       npcMeshes.set(n.id, m);
     }
     for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); }
-    for (const car of world.parked.removed.splice(0)) hideParkedCar(car);
+    for (const car of world.parked.added.splice(0)) {
+      const m = createCarMesh(car.color, car.id, car.style ?? null);
+      syncCar(m, car);
+      view.scene.add(m);
+      parkedMeshes.set(car.id, m);
+    }
+    for (const car of world.parked.removed.splice(0)) {
+      hideParkedCar(car);
+      if (parkedMeshes.has(car.id)) { view.scene.remove(parkedMeshes.get(car.id)); parkedMeshes.delete(car.id); }
+    }
+    const doors = new Set();
+    for (const door of world.parked.activeDoors) {
+      doors.add(door.id);
+      if (!doorMeshes.has(door.id)) { const m = createDoorMesh(door.owner); view.scene.add(m); doorMeshes.set(door.id, m); }
+      syncDoor(doorMeshes.get(door.id), door);
+    }
+    for (const [id, m] of doorMeshes) if (!doors.has(id)) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); doorMeshes.delete(id); }
   };
   syncFleetMeshes();
   if (!status.configured) autopilot.setBrain("rules");

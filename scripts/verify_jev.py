@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Send saved decision snapshots to the live model and check expectations.
 
-    uv run scripts/verify_jev.py                      # every data/snapshots/*.json
+    uv run scripts/verify_jev.py                      # committed realism cases + saved snapshots
+    uv run scripts/verify_jev.py --offline             # request/expectation validation, no model calls
     uv run scripts/verify_jev.py data/snapshots/red_light.json
 
 Each snapshot is {name, state, questions, expect?}. `expect` may contain:
@@ -19,6 +20,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jev.client import JevClient, JevError, ranked  # noqa: E402
 from jev.config import SNAPSHOTS_DIR  # noqa: E402
+from jev.decide import validate_request, InvalidRequest  # noqa: E402
+
+FIXTURES_DIR = Path(__file__).resolve().parent.parent / "static/tests/fixtures/jev"
 
 
 def check(expect: dict, answers: dict) -> list:
@@ -44,16 +48,38 @@ def check(expect: dict, answers: dict) -> list:
 
 
 def main(argv: list) -> int:
-    paths = [Path(p) for p in argv[1:]] or sorted(SNAPSHOTS_DIR.glob("*.json"))
+    offline = "--offline" in argv[1:]
+    paths = [Path(p) for p in argv[1:] if p != "--offline"] or sorted(FIXTURES_DIR.glob("*.json")) + sorted(SNAPSHOTS_DIR.glob("*.json"))
     if not paths:
         print("No snapshots. Save some from the app's JSON panel first.")
         return 1
+    if offline:
+        failures = 0
+        for path in paths:
+            try:
+                snap = json.loads(path.read_text())
+                validate_request(snap)
+                expect, questions = snap.get("expect") or {}, snap["questions"]
+                if "motion" in expect and expect["motion"] not in questions.get("motion", {}).get("criteria", {}):
+                    raise ValueError("expected motion is not an asked option")
+                if expect.get("motion_absent") and "motion" in questions:
+                    raise ValueError("motion should have been resolved locally")
+                options = questions.get("vector", {}).get("criteria", {})
+                if "vector_in" in expect and not set(expect["vector_in"]) & set(options):
+                    raise ValueError("no expected vector is an asked option")
+                print("%-28s VALID (offline)" % path.name)
+            except (InvalidRequest, ValueError, OSError) as err:
+                print("%-28s INVALID %s" % (path.name, err))
+                failures += 1
+        print("\n%d snapshot(s), %d invalid; live model behavior was not tested." % (len(paths), failures))
+        return 1 if failures else 0
     client = JevClient()
     if not client.configured:
         print("No TYPESAFE_API_KEY configured.")
         return 1
     failures = 0
     total_cost = 0.0
+    model = "unknown"
     for path in paths:
         snap = json.loads(path.read_text())
         try:
@@ -63,6 +89,7 @@ def main(argv: list) -> int:
             failures += 1
             continue
         meta = result.meta()
+        model = result.model
         total_cost += meta["cost_usd"]
         parts = []
         for qid, a in result.answers.items():
@@ -77,7 +104,7 @@ def main(argv: list) -> int:
             print("    " + p)
         for p in problems:
             print("    ! " + p)
-    print("\n%d snapshot(s), %d failure(s), total cost $%.5f, model %s" % (len(paths), failures, total_cost, result.model if paths else "?"))
+    print("\n%d snapshot(s), %d failure(s), total cost $%.5f, model %s" % (len(paths), failures, total_cost, model))
     return 1 if failures else 0
 
 

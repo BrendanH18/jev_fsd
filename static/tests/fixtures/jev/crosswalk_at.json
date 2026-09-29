@@ -1,0 +1,99 @@
+{
+  "name": "crosswalk_at",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 0,
+      "limit": 13.9,
+      "speed_vs_limit": "under",
+      "target_speed": 0,
+      "target_reason": "pedestrian crossing",
+      "speed_vs_target": "at target"
+    },
+    "visibility": {
+      "range_m": 80,
+      "clear_path_m": 80,
+      "safe_speed_mps": 16.6,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 180,
+      "remaining_m": 180,
+      "destination": {
+        "right": 0,
+        "ahead": 180
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "Test Street",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0
+    },
+    "pedestrian": {
+      "crossing_m": 1.4,
+      "distance": "at",
+      "in_path": true,
+      "yield": true
+    },
+    "candidates": [
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0,
+        "max_lateral_accel": 0,
+        "progress_m": 0,
+        "lane": "centered",
+        "outcome": "clear, but closes to 1.1 m of a car"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 1.5,
+        "max_lateral_accel": 0,
+        "progress_m": 0,
+        "lane": "centered",
+        "outcome": "clear, but closes to 1.1 m of a car"
+      }
+    ],
+    "rejected": {
+      "fails_to_yield_to_pedestrian": 2
+    }
+  },
+  "questions": {
+    "motion": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A pedestrian is crossing in the crosswalk right in front of the car: hold still until they have cleared the car's path. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Decide whether the car should keep moving or hold still right now.",
+      "criteria": {
+        "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
+        "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when the path directly ahead is blocked, or when the car has reached the destination."
+      }
+    },
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A pedestrian is crossing in the crosswalk right in front of the car: hold still until they have cleared the car's path. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "keep_lane_stop": "hold lane, stop, +0 m, clear, but closes to 1.1 m of a car",
+        "hard_brake": "hold lane, brake hard, +0 m, clear, but closes to 1.1 m of a car"
+      }
+    }
+  },
+  "local": {},
+  "expect": {
+    "motion": "stop",
+    "motion_min_p": 0.7
+  }
+}

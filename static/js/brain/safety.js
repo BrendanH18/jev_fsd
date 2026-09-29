@@ -2,6 +2,7 @@
 // imminent collisions only. It never intervenes for lights or signs: those are the brain's job,
 // and mistakes there are counted as violations.
 
+import { obbOverlap } from "../sim/collision.js";
 import { CAR } from "../sim/vehicle.js";
 
 const FRONT = CAR.length - CAR.rearOverhang;
@@ -10,7 +11,7 @@ export function safetyBrake(world, snap, executing) {
   const ego = world.ego;
   if (ego.v < 0.3) {
     // standing still: never pull away into a car right in front (not counted as an intervention)
-    for (const n of world.obstaclesNear(ego.x, ego.y, 12)) {
+    for (const n of world.visibleObstaclesNear(ego.x, ego.y, 12)) {
       const local = ego.toLocal(n.x, n.y);
       if (Math.abs(local.right) < 1.6 && local.ahead > -1 && local.ahead - FRONT - (n.spec || CAR).rearOverhang < 2.0) return { reason: "blocked", hold: true };
     }
@@ -23,7 +24,14 @@ export function safetyBrake(world, snap, executing) {
     if ((gap < 2.0 && closing > -0.3) || ttc < 1.2) return { reason: "following", ttc, gap };
   }
   // anything directly ahead in the ego frame, regardless of route
-  for (const n of world.obstaclesNear(ego.x, ego.y, 26)) {
+  for (const n of world.visibleObstaclesNear(ego.x, ego.y, 26)) {
+    if (n.kind === "door") {
+      const box = ego.obb();
+      const reach = Math.max(2, ego.v * 1.2);
+      box.center = [box.center[0] + Math.cos(ego.psi) * reach / 2, box.center[1] + Math.sin(ego.psi) * reach / 2];
+      box.halfLength += reach / 2;
+      if (obbOverlap(box, n.obb(), 0.3)) return { reason: "open door" };
+    }
     const local = ego.toLocal(n.x, n.y);
     if (local.ahead < 0 || local.ahead > 20 || Math.abs(local.right) > 1.4) continue;
     const gap = local.ahead - FRONT - (n.spec || CAR).rearOverhang;

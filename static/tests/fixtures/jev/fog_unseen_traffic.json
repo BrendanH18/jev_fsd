@@ -1,0 +1,224 @@
+{
+  "name": "fog_unseen_traffic",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 5,
+      "limit": 13.9,
+      "speed_vs_limit": "under",
+      "target_speed": 7.3,
+      "target_reason": "fog, limited visibility",
+      "speed_vs_target": "below target"
+    },
+    "visibility": {
+      "range_m": 28,
+      "clear_path_m": 28,
+      "safe_speed_mps": 7.3,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 180,
+      "remaining_m": 180,
+      "destination": {
+        "right": 0,
+        "ahead": 180
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "Test Street",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0,
+      "conditions": "fog, damp road, poor visibility"
+    },
+    "candidates": [
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "speed up to 7.3",
+        "end_speed": 7.3,
+        "vs_target": "at target",
+        "max_accel": 2.3,
+        "max_decel": 0,
+        "max_lateral_accel": 0,
+        "progress_m": 20.3,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_faster",
+        "steer": "hold lane",
+        "speed": "speed up to 7.0",
+        "end_speed": 7,
+        "vs_target": "at target",
+        "max_accel": 2.1,
+        "max_decel": 0,
+        "max_lateral_accel": 0,
+        "progress_m": 19.7,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_cautious",
+        "steer": "hold lane",
+        "speed": "speed up to 5.5",
+        "end_speed": 5.5,
+        "vs_target": "below target",
+        "max_accel": 0.5,
+        "max_decel": 0,
+        "max_lateral_accel": 0,
+        "progress_m": 16.2,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_hold",
+        "steer": "hold lane",
+        "speed": "keep 5.0",
+        "end_speed": 5,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 0,
+        "max_lateral_accel": 0,
+        "progress_m": 15,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_slow",
+        "steer": "hold lane",
+        "speed": "slow to 2.0",
+        "end_speed": 2,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 3.2,
+        "max_lateral_accel": 0,
+        "progress_m": 8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 5.2,
+        "max_lateral_accel": 0,
+        "progress_m": 3.6,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "speed up to 7.3",
+        "end_speed": 7.3,
+        "vs_target": "at target",
+        "max_accel": 2.3,
+        "max_decel": 0,
+        "max_lateral_accel": 2.8,
+        "progress_m": 20.2,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_hold",
+        "steer": "shift 0.5 m left",
+        "speed": "keep 5.0",
+        "end_speed": 5,
+        "vs_target": "below target",
+        "max_accel": 0.1,
+        "max_decel": 0.4,
+        "max_lateral_accel": 2.6,
+        "progress_m": 14.9,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "speed up to 7.3",
+        "end_speed": 7.3,
+        "vs_target": "at target",
+        "max_accel": 2.3,
+        "max_decel": 0,
+        "max_lateral_accel": 2.8,
+        "progress_m": 20.2,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_hold",
+        "steer": "shift 0.5 m right",
+        "speed": "keep 5.0",
+        "end_speed": 5,
+        "vs_target": "below target",
+        "max_accel": 0.1,
+        "max_decel": 0.4,
+        "max_lateral_accel": 2.6,
+        "progress_m": 14.9,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 6.2,
+        "max_lateral_accel": 0,
+        "progress_m": 3,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ],
+    "rejected": {
+      "visibility_stopping_distance": 1
+    }
+  },
+  "questions": {
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Conditions: fog, damp road, poor visibility. Grip is reduced, so `car.target_speed` sits below the limit and braking needs more room. Objects beyond 28 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "keep_lane_target": "hold lane, speed up to 7.3, +20.3 m, clear",
+        "keep_lane_faster": "hold lane, speed up to 7.0, +19.7 m, clear",
+        "keep_lane_cautious": "hold lane, speed up to 5.5, +16.2 m, clear",
+        "keep_lane_hold": "hold lane, keep 5.0, +15 m, clear",
+        "keep_lane_slow": "hold lane, slow to 2.0, +8 m, clear",
+        "keep_lane_stop": "hold lane, stop, +3.6 m, clear",
+        "left_0.5_target": "shift 0.5 m left, speed up to 7.3, +20.2 m, clear",
+        "left_0.5_hold": "shift 0.5 m left, keep 5.0, +14.9 m, clear",
+        "right_0.5_target": "shift 0.5 m right, speed up to 7.3, +20.2 m, clear",
+        "right_0.5_hold": "shift 0.5 m right, keep 5.0, +14.9 m, clear",
+        "hard_brake": "hold lane, brake hard, +3 m, clear"
+      }
+    }
+  },
+  "local": {
+    "motion": {
+      "type": "choice",
+      "choice": "drive",
+      "probabilities": {
+        "drive": 1
+      },
+      "confidence": 1,
+      "local": true
+    }
+  },
+  "expect": {
+    "motion_absent": true,
+    "vector_not_in": [
+      "keep_lane_limit"
+    ]
+  }
+}

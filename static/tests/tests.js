@@ -16,6 +16,9 @@ import { buildSnapshot } from "../js/brain/sensors.js";
 import { sampleCandidates, simulateAll } from "../js/brain/candidates.js";
 import { toJevState, buildQuestions } from "../js/brain/state.js";
 import { RulesBrain } from "../js/brain/rules.js";
+import { safetyBrake } from "../js/brain/safety.js";
+import { Visibility } from "../js/sim/visibility.js";
+import { fixtureWorld, crossingPedestrian, buildRealismCases } from "./jev-fixtures.js";
 
 const out = document.getElementById("out");
 const results = [];
@@ -93,7 +96,7 @@ async function run() {
   }
   // candidates on the real map: sampler always includes hard_brake; a stationary car ahead is rejected
   {
-    const world = new World(map);
+    const world = new World(map, { parked: 0, pedestrians: 0 });
     const near = map.nearestLane(world.ego.x, world.ego.y, world.ego.psi, 40);
     const res = await api("/api/route", { from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: (() => { const p = near.lane.pts[near.lane.pts.length - 1]; return { x: p[0], y: p[1] }; })(), k: 1 });
     check("route to the end of the current lane", res.routes.length > 0);
@@ -122,7 +125,7 @@ async function run() {
     const state = toJevState(snap, cands, { rejected: sim.rejected });
     const text = JSON.stringify(state);
     check("state has no long decimals", !/\d\.\d{2,}/.test(text), text.match(/\d\.\d{2,}/)?.[0]);
-    const allowed = new Set(["driving_style", "units", "car", "nav", "road", "intersection", "following", "rear_follower", "traffic", "current_path_hazard", "stuck", "route_options", "candidates", "rejected", "pedestrian"]);
+    const allowed = new Set(["driving_style", "units", "car", "nav", "road", "intersection", "following", "rear_follower", "traffic", "current_path_hazard", "stuck", "route_options", "candidates", "rejected", "pedestrian", "visibility", "roadside"]);
     check("state has only schema fields", Object.keys(state).every((k) => allowed.has(k)), Object.keys(state).join(","));
     const { questions, local } = buildQuestions(snap, sim.eligible);
     check("motion asked when following closely", !!questions.motion);
@@ -216,6 +219,114 @@ async function run() {
     setWeather("dry");
     check("snow lowers grip and comfortable braking", snow.mu < 0.3 && snow.decel < 1.0 && ROAD.mu === 0.9, JSON.stringify(snow));
   }
+  // Occluded objects must not leak through the planner or emergency brake. Collision auditing
+  // still uses the full world, so losing sight of something does not remove its physical body.
+  {
+    const world = fixtureWorld({ buildings: [{ pts: [[28, -5], [32, -5], [32, 5], [28, 5]], h: 8 }] });
+    const hidden = new Vehicle(36, 0, 0, 0); hidden.id = "hidden";
+    world.npcs = [hidden];
+    world.crowd.list = [crossingPedestrian(38)];
+    const snap = buildSnapshot(world);
+    check("building hides traffic and crossing pedestrians", !snap.following && !snap.traffic.length && !snap.pedestrian && !snap.observed.includes(hidden));
+    const candidates = sampleCandidates(snap, world); simulateAll(candidates, snap, world);
+    check("prediction cannot see a hidden vehicle", !candidates.find((c) => c.id === "keep_lane_hold").sim.collision);
+    check("emergency brake cannot see a hidden vehicle", safetyBrake(world, snap, null) === null);
+    world.ego.x = 32.5;
+    check("hazard appears after clearing the corner", buildSnapshot(world).following?.id === "hidden");
+    world.ego.x = hidden.x;
+    world.audit(1 / 60, world.roadInfo());
+    check("collision audit keeps unseen physical obstacles", world.violations.collisions > 0);
+    const sight = new Visibility({ pack: { buildings: [{ pts: [[24.9, 0.1], [25.1, 0.1], [25.1, 0.3], [24.9, 0.3]], h: 3 }] } });
+    check("sight ray catches a narrow footprint across cell boundaries", !sight.canSee({ x: 20, y: 0 }, 30, 0.4));
+    check("clear sight beside a footprint", sight.canSee({ x: 20, y: 1 }, 30, 1));
+  }
+  {
+    const world = fixtureWorld({ weather: "fog" });
+    const far = new Vehicle(65, 0, 0, 0); far.id = "fog_hidden"; world.npcs = [far];
+    const snap = buildSnapshot(world), candidates = sampleCandidates(snap, world);
+    const sim = simulateAll(candidates, snap, world);
+    check("fog limits sensed traffic to 28 m", snap.visibility.range_m === 28 && !snap.following && !snap.traffic.length);
+    check("speed permits stopping within fog range", snap.target.reasons.includes("limited visibility") && snap.target.v < 8);
+    check("planner rejects acceleration beyond visible stopping room", sim.rejected.visibility_stopping_distance > 0);
+    setWeather("dry");
+    check("clearing fog reveals the same car", buildSnapshot(world).following?.id === far.id);
+  }
+  {
+    const world = fixtureWorld({ weather: "fog" });
+    const inter = { ...[...map.intersections.values()][0], x: 80, y: 0 };
+    world.map.intersections.set(inter.id, inter);
+    world.route.controls.push({ edge: "street", sRoute: 74, control: { id: inter.id, type: "signal", group: "A" } });
+    const snap = buildSnapshot(world);
+    const candidates = sampleCandidates(snap, world), sim = simulateAll(candidates, snap, world);
+    check("unseen signal phase is unknown", snap.intersection.signal === "unknown");
+    check("unknown signal requires a stopping approach", sim.mustStop);
+    world.ego.x = 60;
+    check("signal phase appears inside visibility range", buildSnapshot(world).intersection.signal !== "unknown");
+    setWeather("dry");
+  }
+  {
+    const world = fixtureWorld();
+    const car = new Vehicle(38, -2.6, 0, 0); car.id = "door_car"; car.curb = "right";
+    world.parked.add(car);
+    const door = world.parked.openDoor(car);
+    world.parked.step(1, world);
+    check("street-side door swings into the lane", door.angle > 1 && door.y > car.y + 1.3);
+    check("open door is a separate sensed obstacle", buildSnapshot(world).roadside.some((o) => o.kind === "open door") && world.obstaclesNear(door.x, door.y, 2).includes(door));
+    const snap = buildSnapshot(world), candidates = sampleCandidates(snap, world); simulateAll(candidates, snap, world);
+    check("door blocks a predicted centered maneuver", candidates.some((c) => c.sim.collision?.id === door.id));
+    check("car cannot pull out with its door open", !world.parked.remove(car));
+    world.ego.x = door.x - 2; world.ego.v = 4;
+    check("safety brake detects the door panel", safetyBrake(world, buildSnapshot(world), null) !== null);
+    world.ego.x = door.x; world.ego.y = door.y;
+    world.audit(1 / 60, world.roadInfo());
+    check("door contact is counted as a collision", world.events.some((e) => e.type === "collision" && e.kind === "door"));
+    world.parked.step(6, world);
+    check("door closes and leaves the obstacle list", !car.door && !world.parked.doorsNear(door.x, door.y, 20).length);
+  }
+  {
+    const world = new World(map, { seed: 2, pedestrians: 0 });
+    const fleet = new NpcFleet(world, { count: 40, bikes: 0, seed: 2 });
+    const n = fleet.maybePark(), slot = n?.parking.slot;
+    check("traffic reserves a vacant curb bay", n && slot.reserved === n && !slot.occupant);
+    if (n) {
+      world.npcs = fleet.vehicles = [n]; world.ego.x = -1e5;
+      let clear = true, maxSpeed = 0;
+      for (let k = 0; k < 2105 && n.parking; k++) {
+        fleet.parkStep(n, 1 / 60); maxSpeed = Math.max(maxSpeed, n.v);
+        clear &&= world.parked.near(n.x, n.y, 8).every((o) => o === n || !obbOverlap(n.obb(), o.obb()));
+      }
+      check("traffic parks at low speed without hitting neighbors", clear && maxSpeed < 3.6 && n.parked);
+      check("parking transfers the same body to the curb grid", !fleet.vehicles.includes(n) && slot.occupant === n && !slot.reserved && world.parked.near(n.x, n.y, 5).includes(n));
+      check("parking releases its bay when removed", world.parked.remove(n) && !slot.occupant);
+    }
+  }
+  {
+    const world = fixtureWorld();
+    const car = new Vehicle(42, -2.6, 0, 0); car.id = "curb_signal"; car.pull = { wait: 2 };
+    world.npcs = [car];
+    check("waiting pull-out does not stop the through lane", !buildSnapshot(world).following);
+    car.pull.wait = 0; car.v = 1;
+    check("moving pull-out is followed before it reaches lane center", buildSnapshot(world).following?.id === car.id);
+    // A production path from a real fleet is rebased without changing the physical body.
+    const real = new World(map, { parked: 0, pedestrians: 0 });
+    const realFleet = new NpcFleet(real, { count: 1, bikes: 0 });
+    const driver = realFleet.vehicles[0];
+    driver.v = 7;
+    const pose = [driver.x, driver.y, driver.psi, driver.v];
+    realFleet.recoverPath(driver);
+    check("NPC path recovery preserves pose and velocity", JSON.stringify(pose) === JSON.stringify([driver.x, driver.y, driver.psi, driver.v]));
+  }
+  // Fixture drift is an error: live validation must exercise the same wording as the app.
+  const fixtures = buildRealismCases();
+  window.__jevFixtures = fixtures;
+  for (const fixture of fixtures) {
+    const saved = await (await fetch(`/tests/fixtures/jev/${fixture.name}.json`)).json();
+    check(`Jev fixture matches current pipeline: ${fixture.name}`, JSON.stringify(saved) === JSON.stringify(fixture));
+    check(`Jev question fits API limits: ${fixture.name}`, Object.values(fixture.questions).every((q) => q.instructions.length <= 2000));
+  }
+  const approach = fixtures.find((f) => f.name === "mid_block_approach"), at = fixtures.find((f) => f.name === "mid_block_at");
+  check("mid-block wording distinguishes approaching and holding", approach.questions.motion.instructions.includes("22 m ahead") && at.questions.motion.instructions.includes("right in front") && approach.state.pedestrian.mid_block && at.state.pedestrian.distance === "at");
+  check("Jev receives clearance and comfort tradeoffs", approach.state.candidates.some((c) => "max_decel" in c) && !approach.questions.vector.instructions.includes("normally pick the centered candidate"));
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;
   window.__results = results;

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Building footprints occlude the ego's observations, predictions, and emergency brake. Fog,
+  rain, and snow shorten sensing range; signal phases outside sight are unknown. Speed planning
+  and candidate filtering use visible stopping room, including blind bends.
+- Traffic can reserve a vacant curb bay and park at low speed. Parked cars open animated
+  street-side doors with matching collision shapes; traffic reacts to the panels.
+- Pull-outs leave more room for approaching traffic. NPC path recovery preserves the moving
+  body's position and velocity.
+- Jev weighs progress, clearance, comfort, roadside activity, and driving style instead of being
+  directed to copy the Rules target-speed preference. Mid-block crossings distinguish approach,
+  hold, and clearing the car's path. Candidates report comfort and clearance estimates.
+- Eleven committed decision cases are generated through the actual driver pipeline. The snapshot
+  checker validates requests offline and checks model expectations when a key is available.
+- Live Jev behavior remains unverified; historical benchmark numbers describe the earlier world.
+
 ## 0.2.0
 
 A large realism and graphics update. The Rules benchmark (seed 1) still passes 12 of 12 drives in
