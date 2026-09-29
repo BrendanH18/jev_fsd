@@ -1,6 +1,7 @@
 // Candidate maneuvers: sampled by code, forward-simulated 3 s with the real controller and car
 // model, scored by code, and filtered for safety by code. A brain only ever picks among the
-// survivors. Every prediction here is what the car will actually do if the candidate is chosen.
+// survivors. The car model matches execution; other objects use constant-velocity predictions
+// from visible observations and can change behavior after a choice.
 
 import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw } from "../sim/controller.js";
@@ -37,12 +38,12 @@ export function sampleCandidates(snap, world) {
   if (!lost && !offRoad) {
     const offsets = [0, -0.5, 0.5];
     const lateral = snap.routeProj ? Math.abs(snap.routeProj.lateral) : 0;
-    if (lateral > 0.5 || snap.following || snap.traffic.length) offsets.push(-1.0, 1.0);
+    if (lateral > 0.5 || snap.following || (snap.traffic.length || snap.roadside?.length)) offsets.push(-1.0, 1.0);
     const target = snap.target ? snap.target.v : limit;
-    const speeds = new Set([0, Math.max(0, v - 3), v, Math.min(limit, v + 2), limit, target].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
+    const speeds = new Set([0, Math.max(0, v - 3), v, Math.min(limit, v + 2), limit, target, target * 0.75].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
     for (const d of offsets) {
       for (const vt of [...speeds].sort((a, b) => b - a)) {
-        const name = Math.abs(vt - target) < 0.15 && vt > 0.05 ? "target" : vt <= 0.05 ? "stop" : Math.abs(vt - v) < 0.3 ? "hold" : vt >= limit - 0.05 ? "limit" : vt < v ? "slow" : "faster";
+        const name = Math.abs(vt - target) < 0.15 && vt > 0.05 ? "target" : vt <= 0.05 ? "stop" : Math.abs(vt - target * 0.75) < 0.06 ? "cautious" : Math.abs(vt - v) < 0.3 ? "hold" : vt >= limit - 0.05 ? "limit" : vt < v ? "slow" : "faster";
         const prefix = d === 0 ? "keep_lane" : `${d < 0 ? "left" : "right"}_${Math.abs(d)}`;
         if (d !== 0 && name !== "hold" && name !== "target") continue;  // lateral shifts only at hold/target speeds
         out.push({ id: `${prefix}_${name}`, law: { kind: "lane", offset: d, vTarget: vt },
@@ -63,7 +64,7 @@ export function sampleCandidates(snap, world) {
     // stop short of a crosswalk someone is crossing
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", law: { kind: "lane", offset: 0, vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) },
-        steer: "hold lane", speed: "stop before the crosswalk" });
+        steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
     }
     if (snap.nav && snap.nav.remaining_m < 40) {
       out.push({ id: "stop_at_destination", law: { kind: "lane", offset: 0, vTarget: approach, stopAtRoute: stopAt(snap.route.length - 1.0) },
@@ -79,7 +80,9 @@ export function sampleCandidates(snap, world) {
     }
     out.push({ id: "reverse", law: { kind: "reverse", target }, steer: "reverse toward the road", speed: "reverse 2.0" });
   }
-  const list = dedupe(out).slice(0, 15);
+  // Keep required stopping options when a busy street supplies many lateral alternatives.
+  const priority = (c) => c.law.stopAtRoute !== undefined ? 0 : c.law.offset === 0 ? 1 : 2;
+  const list = dedupe(out).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
   list.push({ id: "hard_brake", law: { kind: "hard_brake", offset: 0 }, steer: "hold lane", speed: "brake hard" });
   return list;
 }
@@ -92,11 +95,11 @@ function dedupe(list) {
 // Forward-simulate every candidate. Mutates each candidate with `sim` (features) and `trace` (points).
 export function simulateAll(candidates, snap, world) {
   const { route, map } = world;
-  const npcs = world.obstaclesNear(world.ego.x, world.ego.y, 60).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
+  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   const mustStop = control && (
-    (control.control === "signal" && (control.signal === "red" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
+    (control.control === "signal" && (control.signal === "red" || control.signal === "unknown" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
     (control.control === "stop" && !control.stop_completed) ||
     (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;
@@ -105,6 +108,7 @@ export function simulateAll(candidates, snap, world) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
+    let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
     let pedCross = false, closePass = false, collision = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     const law = { ...c.law, s0: startS };
@@ -112,6 +116,9 @@ export function simulateAll(candidates, snap, world) {
     for (let k = 1; k <= steps; k++) {
       const t = k * SIM_DT;
       applyLaw(car, law, route, s, SIM_DT);
+      maxAccel = Math.max(maxAccel, car.ax || 0);
+      maxDecel = Math.max(maxDecel, -(car.ax || 0));
+      maxLat = Math.max(maxLat, Math.abs(car.latAccel || 0));
       if (route && snap.onRoute) {
         const p = route.project(car.x, car.y, hint);
         hint = p.index; s = p.s; lateral = p.lateral; headingErr = wrap(car.psi - p.heading);
@@ -134,6 +141,7 @@ export function simulateAll(candidates, snap, world) {
             const gap = ahead - box.halfLength - ob.halfLength;
             if (gap < minGap) minGap = gap;
           }
+          if (Math.abs(ahead) < box.halfLength + ob.halfLength + 1) minClearance = Math.min(minClearance, Math.max(0, side - box.halfWidth - ob.halfWidth));
           // passing a cyclist needs a metre of space (BC's minimum passing distance)
           if (o.n.kind === "bike" && Math.abs(ahead) < box.halfLength + ob.halfLength && side - box.halfWidth - ob.halfWidth < CYCLIST_CLEARANCE_M) closePass = true;
           if (!collision && obbOverlap(box, ob, 0.3)) collision = { id: o.n.id, t: Math.round(t * 10) / 10, kind: Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4 ? "rear_end" : "crossing" };
@@ -143,6 +151,7 @@ export function simulateAll(candidates, snap, world) {
     }
     c.trace = trace;
     c.sim = {
+      max_accel: maxAccel, max_decel: maxDecel, max_lateral_accel: maxLat, min_clearance_m: minClearance,
       end_speed: car.v, progress_m: (route && snap.onRoute) ? s - startS : Math.hypot(car.x - snap.ego.x, car.y - snap.ego.y) * (car.v >= 0 ? 1 : -1),
       lane_err_end: lateral, heading_err_deg: headingErr * 180 / Math.PI, stays_on_road: staysOnRoad, stays_in_lane: staysInLane,
       crosses_stop_line: crosses, collision, min_gap_m: minGap, off_road_fraction: offSteps / Math.ceil(steps / 3),
@@ -155,6 +164,7 @@ export function simulateAll(candidates, snap, world) {
     // eligibility, decided by code
     let reject = null;
     if (collision) reject = "collision";
+    else if (snap.visibility && car.v > snap.visibility.safe_speed_mps + 0.5 && car.v >= snap.ego.v - 0.5 && c.law.kind !== "hard_brake") reject = "visibility_stopping_distance";
     else if (closePass && c.law.kind !== "hard_brake") reject = "passes_cyclist_too_close";
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
     else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" ? "fails_to_yield" : "runs_stop";

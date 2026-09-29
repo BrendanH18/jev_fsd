@@ -6,12 +6,14 @@ import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
 import { Crowd, PEDESTRIANS } from "./pedestrians.js";
+import { Visibility } from "./visibility.js";
 import { setWeather } from "./weather.js";
 
 export class World {
   constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry" } = {}) {
     this.map = map;
     this.seed = seed;
+    this.visibility = new Visibility(map);
     this.weather = setWeather(weather).name;
     this.parked = new ParkedCars(map, { seed, density: parked });
     this.t = 0;
@@ -32,7 +34,11 @@ export class World {
   // Everything that can be hit near (x, y): the traffic within `r`, the parked cars, and the people.
   obstaclesNear(x, y, r) {
     const out = this.npcs.filter((n) => Math.abs(n.x - x) < r + 5 && Math.abs(n.y - y) < r + 5);
-    return out.concat(this.parked.near(x, y, r), this.crowd.near(x, y, r));
+    return out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
+  }
+
+  visibleObstaclesNear(x, y, r, observer = this.ego) {
+    return this.obstaclesNear(x, y, r).filter((o) => this.visibility.sees(observer, o));
   }
 
   // Middle of a long residential edge near the map center, facing along it.

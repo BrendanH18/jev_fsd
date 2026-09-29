@@ -412,6 +412,34 @@ export function hideParkedCar(car) {
   for (const { mesh, i } of car.instances || []) { mesh.setMatrixAt(i, HIDDEN); mesh.instanceMatrix.needsUpdate = true; }
 }
 
+// Street-side door panel: match the simulation hinge, angle, length and thickness exactly.
+export function createDoorMesh(car) {
+  const group = new THREE.Group();
+  const swing = new THREE.Group();
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.65, 0.12), paint(car.color));
+  panel.position.y = 0.72;
+  const window = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.38, 0.07), shared.glass);
+  window.position.y = 1.2;
+  swing.add(panel, window);
+  // Parked bodies are batched geometry. Cover the closed panel with a recessed dark cabin
+  // opening while its separate door swings, without rebuilding thousands of instances.
+  const opening = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.85, 0.025), shared.trim);
+  opening.position.set(1.55, 0.84, (car.curb === "right" ? -1 : 1) * (W / 2 + 0.015));
+  group.add(opening, swing);
+  group.userData.swing = swing;
+  panel.castShadow = window.castShadow = true;
+  return group;
+}
+
+export function syncDoor(mesh, door) {
+  const car = door.owner, dx = door.x - car.x, dy = door.y - car.y;
+  mesh.position.set(car.x, 0, -car.y);
+  mesh.rotation.y = car.psi;
+  const swing = mesh.userData.swing;
+  swing.position.set(dx * Math.cos(car.psi) + dy * Math.sin(car.psi), 0, dx * Math.sin(car.psi) - dy * Math.cos(car.psi));
+  swing.rotation.y = door.psi - car.psi;
+}
+
 // A cyclist: a bicycle (two wheels, a diamond frame, bars, saddle) and a rider whose legs pedal
 // with the wheels. Local +X is forward from the rear axle, as for the cars.
 const bikeShared = {

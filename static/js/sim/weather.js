@@ -8,10 +8,10 @@
 import { ROAD } from "./vehicle.js";
 
 export const WEATHER = {
-  dry: { label: "dry", mu: 0.9, speed: 1.0, description: "dry road" },
-  rain: { label: "rain", mu: 0.55, speed: 0.88, description: "rain, wet road" },
-  fog: { label: "fog", mu: 0.8, speed: 0.8, description: "fog, damp road, poor visibility" },
-  snow: { label: "snow", mu: 0.25, speed: 0.62, description: "snow, packed snow on the road" },
+  dry: { label: "dry", mu: 0.9, speed: 1.0, visibility: 80, description: "dry road" },
+  rain: { label: "rain", mu: 0.55, speed: 0.88, visibility: 55, description: "rain, wet road" },
+  fog: { label: "fog", mu: 0.8, speed: 0.8, visibility: 28, description: "fog, damp road, poor visibility" },
+  snow: { label: "snow", mu: 0.25, speed: 0.62, visibility: 40, description: "snow, packed snow on the road" },
 };
 
 export const current = { name: "dry", ...WEATHER.dry };

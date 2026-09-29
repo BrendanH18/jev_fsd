@@ -26,6 +26,8 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.car.target_reason = snap.target.reasons.length ? snap.target.reasons.join(", ") : "speed limit";
     state.car.speed_vs_target = speedVsTarget(ego.v, snap.target.v);
   }
+  if (snap.visibility) state.visibility = { range_m: snap.visibility.range_m, ...(snap.visibility.clear_path_m !== undefined ? { clear_path_m: r1(snap.visibility.clear_path_m) } : {}), safe_speed_mps: r1(snap.visibility.safe_speed_mps), building_occlusion: true, note: "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist." };
+  if (snap.roadside?.length) state.roadside = snap.roadside.map((o) => ({ ...o, right: r1(o.right), ahead: r1(o.ahead) }));
   if (snap.nav) {
     state.nav = {
       next_turn: snap.nav.next_turn, turn_in_m: r1(snap.nav.turn_in_m), remaining_m: r1(snap.nav.remaining_m),
@@ -57,7 +59,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   }
   if (snap.pedestrian) {
     const p = snap.pedestrian;
-    state.pedestrian = { crosswalk_m: r1(Math.max(0, p.bumper_to_crosswalk_m)), distance: distLabel(p.bumper_to_crosswalk_m - 2), in_path: p.to_path_m < 1.8, yield: true, ...(p.mid_block ? { mid_block: true } : {}) };
+    state.pedestrian = { crossing_m: r1(Math.max(0, p.bumper_to_crosswalk_m)), distance: distLabel(p.bumper_to_crosswalk_m - 2), in_path: p.to_path_m < 1.8, yield: true, ...(p.mid_block ? { mid_block: true } : {}) };
   }
   if (snap.rear_follower && snap.rear_follower.gap_m < 12) state.rear_follower = { id: snap.rear_follower.id, gap_m: r1(snap.rear_follower.gap_m) };
   if (snap.traffic.length) {
@@ -69,6 +71,8 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   const target = snap.target ? snap.target.v : limit;
   state.candidates = candidates.filter((c) => c.eligible).map((c) => ({
     id: c.id, steer: c.steer, speed: c.speed, end_speed: r1(c.sim.end_speed), vs_target: speedVsTarget(c.sim.end_speed, target),
+    max_accel: r1(c.sim.max_accel || 0), max_decel: r1(c.sim.max_decel || 0), max_lateral_accel: r1(c.sim.max_lateral_accel || 0),
+    ...(Number.isFinite(c.sim.min_clearance_m) ? { min_clearance_m: r1(c.sim.min_clearance_m) } : {}),
     progress_m: r1(c.sim.progress_m), lane: laneLabel(c.sim.lane_err_end), outcome: outcomeLabel(c, snap),
   }));
   if (meta.rejected && Object.keys(meta.rejected).length) state.rejected = meta.rejected;
@@ -78,7 +82,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
 function outcomeLabel(c, snap) {
   if (c.id === "stop_at_line" && snap.intersection) return `clear, stops ${Math.max(0, r1(snap.intersection.bumper_to_line_m - c.sim.progress_m))} m before the line`;
   if (c.id === "stop_at_destination") return "clear, reaches the destination";
-  if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the crosswalk`;
+  if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
   if (!c.sim.stays_on_road) return c.sim.off_road_fraction > 0.5 ? "leaves the road" : "touches the road edge";
   if (!c.sim.stays_in_lane) return "clear, drifts out of lane";
   if (c.sim.min_gap_m < 4) return `clear, but closes to ${r1(c.sim.min_gap_m)} m of a car`;
@@ -91,22 +95,23 @@ export function situationClauses(snap) {
   const m = i ? Math.max(0, Math.round(i.bumper_to_line_m)) : 0;
   const atLine = i && i.bumper_to_line_m < STOP_ZONE_M;
   if (i && i.control === "signal") {
-    if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
+    if (i.signal === "unknown") out.push(`The signal phase ${m} m ahead is not visible: approach cautiously and stop at the line unless a permitted phase becomes visible.`);
+    else if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
   } else if (i && i.control === "stop") {
     if (!i.stop_completed) out.push(atLine ? "The car is at the stop line and the stop is not completed yet: hold still until it is." : `A stop sign is ${m} m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear.`);
-    else out.push(i.cross_traffic_moving ? "The stop is completed but cross traffic is moving through the junction: hold until it is clear." : "The stop is completed and cross traffic is clear: go.");
+    else out.push(i.cross_traffic_moving ? "The stop is completed but cross traffic is moving through the junction: hold until it is clear." : "The stop is completed and no crossing traffic is visible: check sight lines before proceeding.");
   } else if (i && i.control === "yield") {
     const exit = snap.nav && snap.nav.exit ? ` and take exit ${snap.nav.exit}` : "";
     if (i.entered) out.push(`The car is in a roundabout: keep circulating counter-clockwise${exit}.`);
     else if (i.cross_traffic_moving) out.push(atLine ? "The car is at a roundabout's yield line and a car in the roundabout has the right of way: hold still until it has passed." : `A roundabout is ${m} m ahead and a car in it has the right of way: slow down and stop at the yield line if it has not passed.`);
-    else out.push(`A roundabout is ${m} m ahead and nobody in it is coming: enter without stopping, go counter-clockwise${exit}.`);
+    else out.push(`A roundabout is ${m} m ahead and no approaching ring traffic is visible: check sight lines and enter cautiously, go counter-clockwise${exit}.`);
   }
   if (snap.pedestrian) {
     const p = snap.pedestrian, m = Math.max(0, Math.round(p.bumper_to_crosswalk_m));
     const where = p.mid_block ? "mid-block, outside a crosswalk" : "in the crosswalk";
-    out.push(p.bumper_to_crosswalk_m < STOP_ZONE_M ? `A pedestrian is crossing ${where} right in front of the car: hold still until they have crossed.` : `A pedestrian is crossing ${where} ${m} m ahead: slow down and stop short of them until they have crossed.`);
+    out.push(p.bumper_to_crosswalk_m < STOP_ZONE_M ? `A pedestrian is crossing ${where} right in front of the car: hold still until they have cleared the car's path.` : `A pedestrian is crossing ${where} ${m} m ahead: slow down and stop short of them until they have cleared the car's path.`);
   }
   if (snap.following) {
     const label = gapLabel(snap.following.gap_m, snap.following.closing_mps);
@@ -115,7 +120,8 @@ export function situationClauses(snap) {
   }
   if (snap.nav && snap.nav.next_turn !== "none" && snap.nav.next_turn !== "roundabout" && snap.nav.turn_in_m < 40) out.push(`A ${snap.nav.next_turn === "uturn" ? "U-turn" : snap.nav.next_turn + " turn"} is coming in ${Math.round(snap.nav.turn_in_m)} m; \`car.target_speed\` already accounts for it.`);
   if (weather.name !== "dry") out.push(`Conditions: ${weather.description}. Grip is reduced, so \`car.target_speed\` sits below the limit and braking needs more room.`);
-  if (snap.target && snap.target.reasons.filter((r) => r !== weather.label).length === 0 && snap.ego.v < snap.target.v - 1 && !snap.stuck) out.push("The car is below its target speed with nothing requiring that; prefer the candidate that reaches the target.");
+  if (snap.visibility) out.push(`Objects beyond ${snap.visibility.range_m} m or behind buildings are unseen; an empty traffic list does not prove the road is clear.`);
+  if (snap.roadside?.length) out.push("Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes.");
   if (!snap.road.on_road) out.push("The car is off the road; the candidates steer back toward the lane.");
   if (snap.stuck) out.push(`The car has been stopped with nothing blocking it for ${Math.round(snap.stuck.for_s)} s; if the way is clear, drive.`);
   if (snap.nav && snap.nav.remaining_m < 15) out.push("The destination is within reach; stop at it.");
@@ -124,7 +130,7 @@ export function situationClauses(snap) {
 
 export function needsMotionQuestion(snap) {
   return !!((snap.intersection && snap.intersection.bumper_to_line_m < 30) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30)
-    || snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) || snap.stuck || (snap.nav && snap.nav.remaining_m < 30));
+    || snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) || snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) || snap.stuck || (snap.nav && snap.nav.remaining_m < 30));
 }
 
 // Returns { questions, local } where `local` holds answers resolved without the model.
@@ -138,8 +144,8 @@ export function buildQuestions(snap, eligible, meta = {}) {
       type: "choice",
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
-        drive: "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Correct whenever the line, obstacle, or destination is still ahead.",
-        stop: "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red light, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when the path directly ahead is blocked, or when the car has reached the destination.",
+        drive: "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
+        stop: "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when the path directly ahead is blocked, or when the car has reached the destination.",
       },
     };
   } else {
@@ -150,7 +156,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
     for (const c of eligible) criteria[c.id] = `${c.steer}, ${c.speed}, +${r1(c.sim.progress_m)} m, ${outcomeLabel(c, snap)}`;
     questions.vector = {
       type: "choice",
-      instructions: `${pre} Pick the maneuver to execute for the next second. Every listed candidate is predicted safe for 3 seconds. \`car.target_speed\` is the speed code computed from the limit, curves, the gap ahead, stop lines, crosswalks and the destination: normally pick the centered candidate whose end speed is at target. Deviate only for a reason in the situation: something blocking the path, a hazard, a stop that is required now, or the destination.`,
+      instructions: `${pre} Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.`,
       criteria,
     };
   } else if (eligible.length === 1) {

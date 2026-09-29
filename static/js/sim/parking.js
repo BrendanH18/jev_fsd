@@ -1,6 +1,6 @@
 // Parked cars along the curbs of streets with parking lanes. They are real obstacles: the ego, the
-// traffic, and every candidate forward-simulation can hit them. Now and then one pulls out into
-// traffic (see NpcFleet.maybePullOut), leaving the parking lane for good. Placement is seeded, so a
+// traffic, and every candidate forward-simulation can hit them. Cars open street-side doors,
+// pull out into traffic, and park in vacant bays (see NpcFleet). Placement is seeded, so a
 // scenario always has the same cars in the same spots.
 
 import { Vehicle, CAR } from "./vehicle.js";
@@ -22,7 +22,13 @@ export class ParkedCars {
     this.list = [];
     this.grid = new Map();
     this.removed = [];   // pulled out since the renderer last looked
+    this.added = [];
+    this.slots = [];
+    this.activeDoors = [];
+    this.random = rng(seed * 65537 + 23);
+    this.nextDoor = 8 + this.random() * 10;
     if (density > 0) this.spawn(seed, density);
+    this.added.length = 0;
   }
 
   spawn(seed, density) {
@@ -56,6 +62,12 @@ export class ParkedCars {
       if (e.oneway && e.parking[0] > 0) sides.push(e.asphalt[0] + e.parking[0] / 2 + 0.05);
       for (const lat of sides) {
         for (let s = from + SLOT_M / 2; s + SLOT_M / 2 <= to; s += SLOT_M) {
+          const pSlot = pointAt(e.pts, e.cum, s), hSlot = headingAt(e.pts, e.cum, s);
+          const backSlot = CAR.length / 2 - CAR.rearOverhang;
+          const slot = { edge: e.id, curb: lat > 0 ? "right" : "left", occupant: null, reserved: null,
+            x: pSlot[0] + Math.sin(hSlot) * lat - Math.cos(hSlot) * backSlot,
+            y: pSlot[1] - Math.cos(hSlot) * lat - Math.sin(hSlot) * backSlot, psi: hSlot };
+          this.slots.push(slot);
           if (random() > density) continue;
           const jitter = (random() - 0.5) * 1.2;
           const sc = s + jitter;   // car center along the edge
@@ -72,6 +84,7 @@ export class ParkedCars {
           car.style = Math.floor(random() * 5);
           car.edge = e.id;
           car.curb = lat > 0 ? "right" : "left";
+          car.slot = slot;
           this.add(car);
         }
       }
@@ -79,7 +92,10 @@ export class ParkedCars {
   }
 
   add(car) {
+    car.parked = true;
+    if (car.slot) { car.slot.occupant = car; car.slot.reserved = null; }
     this.list.push(car);
+    this.added.push(car);
     const [cx, cy] = car.center;
     const key = `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`;
     if (!this.grid.has(key)) this.grid.set(key, []);
@@ -88,6 +104,7 @@ export class ParkedCars {
 
   // Take a car out of the parking lane (it is pulling out). `removed` tells the renderer.
   remove(car) {
+    if (car.door) return false;
     const i = this.list.indexOf(car);
     if (i < 0) return false;
     this.list.splice(i, 1);
@@ -95,7 +112,53 @@ export class ParkedCars {
     const cell = this.grid.get(`${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`);
     if (cell) cell.splice(cell.indexOf(car), 1);
     this.removed.push(car);
+    if (car.slot) car.slot.occupant = null;
     return true;
+  }
+
+  // The street-side front door swings backward from its hinge. Its OBB is the same panel drawn
+  // by the renderer, rather than an inflated whole-car box.
+  openDoor(car) {
+    if (!car.parked || car.door || !this.list.includes(car)) return null;
+    const door = { id: `${car.id}_door`, kind: "door", owner: car, t: 0, angle: 0, v: 0,
+      spec: { length: 1.1, width: 0.12, rearOverhang: 0.55 },
+      get center() { return [this.x, this.y]; },
+      obb() { return { center: [this.x, this.y], heading: this.psi, halfLength: 0.55, halfWidth: 0.06 }; } };
+    car.door = door;
+    this.activeDoors.push(door);
+    this.poseDoor(door);
+    return door;
+  }
+
+  poseDoor(door) {
+    const car = door.owner, side = car.curb === "right" ? -1 : 1;
+    door.angle = Math.PI / 3 * Math.min(1, door.t / 0.8, Math.max(0, (6 - door.t) / 0.8));
+    const hx = car.x + Math.cos(car.psi) * 2.1 + Math.sin(car.psi) * CAR.width / 2 * side;
+    const hy = car.y + Math.sin(car.psi) * 2.1 - Math.cos(car.psi) * CAR.width / 2 * side;
+    door.psi = car.psi + side * door.angle;
+    door.x = hx - Math.cos(door.psi) * 0.55;
+    door.y = hy - Math.sin(door.psi) * 0.55;
+  }
+
+  step(dt, world) {
+    for (const door of [...this.activeDoors]) {
+      door.t += dt;
+      this.poseDoor(door);
+      if (door.t >= 6) { door.owner.door = null; this.activeDoors.splice(this.activeDoors.indexOf(door), 1); }
+    }
+    this.nextDoor -= dt;
+    if (this.nextDoor > 0) return;
+    this.nextDoor = 12 + this.random() * 16;
+    const nearby = this.near(world.ego.x, world.ego.y, 45).filter((c) => {
+      const l = world.ego.toLocal(c.x, c.y);
+      const stoppingRoom = world.ego.v * world.ego.v / (2 * 4) + world.ego.v * 1.5 + 5;
+      return !c.door && l.ahead > Math.max(15, stoppingRoom) && l.ahead < 40 && Math.abs(l.right) < 7;
+    });
+    if (nearby.length) this.openDoor(nearby[Math.floor(this.random() * nearby.length)]);
+  }
+
+  doorsNear(x, y, r) {
+    return this.activeDoors.filter((d) => d.angle > 0.02 && Math.hypot(d.x - x, d.y - y) < r);
   }
 
   // Parked cars whose center lies within `r` meters of (x, y).
