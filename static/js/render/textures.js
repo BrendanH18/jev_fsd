@@ -253,6 +253,30 @@ export const barkTexture = () => once("bark", () => toTexture(paint(256, (x, y) 
   return [clamp255(v), clamp255(v * 0.92), clamp255(v * 0.84)];
 })));
 
+// Pedestrian signal faces: a walking figure and a raised hand, lit on black.
+export const walkSignalTexture = () => once("walksig", () => {
+  const size = 64, c = canvas(size), ctx = c.getContext("2d");
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = ctx.fillStyle = "#fff"; ctx.lineWidth = 5; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(34, 12, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(32, 20); ctx.lineTo(29, 38); ctx.lineTo(38, 54);     // body and front leg
+  ctx.moveTo(29, 38); ctx.lineTo(22, 54);                          // back leg
+  ctx.moveTo(31, 24); ctx.lineTo(40, 34); ctx.moveTo(31, 24); ctx.lineTo(23, 32);   // arms
+  ctx.stroke();
+  return toTexture(c, { repeat: false });
+});
+
+export const handSignalTexture = () => once("handsig", () => {
+  const size = 64, c = canvas(size), ctx = c.getContext("2d");
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.roundRect(20, 28, 26, 26, 6); ctx.fill();         // palm
+  for (const [x, h] of [[21, 20], [28, 24], [35, 23], [42, 18]]) { ctx.beginPath(); ctx.roundRect(x - 3, 30 - h, 6, h + 4, 3); ctx.fill(); }
+  ctx.beginPath(); ctx.roundRect(12, 36, 12, 6, 3); ctx.fill();           // thumb
+  return toTexture(c, { repeat: false });
+});
+
 export const stopSignTexture = () => once("stop", () => {
   const size = 256, c = canvas(size), ctx = c.getContext("2d");
   const oct = (r) => {

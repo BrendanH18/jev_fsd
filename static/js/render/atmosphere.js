@@ -61,7 +61,7 @@ const KEYS = [
 
 // How the weather changes the sky: cloud cover hides the sun and greys the sky; fog closes in.
 const WEATHER = {
-  dry: { cloud: 0, fog: 0.0016, overcast: null, wet: 0 },
+  dry: { cloud: 0, fog: 0.0009, overcast: null, wet: 0 },
   rain: { cloud: 1, fog: 0.0065, overcast: { zenith: 0x5f6a76, horizon: 0x98a2ab, ground: 0x5d655c }, wet: 1 },
   fog: { cloud: 1, fog: 0.022, overcast: { zenith: 0xaab2b9, horizon: 0xc4c9cd, ground: 0x9aa09a }, wet: 0.4 },
   snow: { cloud: 0.9, fog: 0.007, overcast: { zenith: 0x8f9cab, horizon: 0xd3dae1, ground: 0xc9cfd6 }, wet: 0 },

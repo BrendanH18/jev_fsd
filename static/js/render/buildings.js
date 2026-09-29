@@ -1,12 +1,15 @@
 // Buildings from OSM footprints. Houses (most of Kitsilano) get sided walls with windows and a
 // gabled or hipped roof when the footprint is roughly rectangular; larger or taller buildings get
-// flat roofs and an apartment/storefront facade. Geometry is merged per ~180 m chunk so the camera
-// and the shadow pass can skip what they cannot see.
+// flat roofs and an apartment/storefront facade. Houses facing a street get the details that make
+// a Kitsilano block: a front porch with steps and posts, a brick chimney, a clipped hedge along the
+// front yard. Geometry is merged per ~180 m chunk so the camera and the shadow pass can skip what
+// they cannot see.
 
 import * as THREE from "three";
 import { snowable } from "./weather.js";
 import { GeoBuilder, hash01 } from "./geo.js";
-import { facadeTextures, flatRoofTexture, shingleTexture } from "./textures.js";
+import { facadeTextures, flatRoofTexture, shingleTexture, grassTexture } from "./textures.js";
+import { sidewalkOffset, streetOf } from "../map/streets.js";
 import { lighting } from "./atmosphere.js";
 
 const CHUNK = 180;
@@ -112,6 +115,77 @@ class Chunk {
     this.block = new GeoBuilder({ colors: true }); this.block.uvScale = 1 / FACADE_TILE;
     this.roof = new GeoBuilder({ colors: true }); this.roof.uvScale = 1 / SHINGLE_TILE;
     this.flat = new GeoBuilder({ colors: true });
+    this.detail = new GeoBuilder({ colors: true });
+    this.hedge = new GeoBuilder({ colors: true }); this.hedge.uvScale = 1 / 3;
+  }
+}
+
+// A box on the ground plan: centered at (cx, cy), long axis (ux, uy), half extents hl x hw, from
+// height z0 to z1, sides facing out.
+function orientedBox(b, cx, cy, ux, uy, hl, hw, z0, z1, color, top = true) {
+  const vx = -uy, vy = ux;
+  const P = (a, c, z) => [cx + ux * a + vx * c, cy + uy * a + vy * c, z];
+  const corners = [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]];
+  for (let i = 0; i < 4; i++) {
+    const [a0, c0] = corners[i], [a1, c1] = corners[(i + 1) % 4];
+    const out = [((a0 + a1) / 2) * ux + ((c0 + c1) / 2) * vx, ((a0 + a1) / 2) * uy + ((c0 + c1) / 2) * vy, 0];
+    b.quad(P(a0, c0, z0), P(a1, c1, z0), P(a1, c1, z1), P(a0, c0, z1), null, color, out);
+  }
+  if (top) b.quad(P(-hl, -hw, z1), P(hl, -hw, z1), P(hl, hw, z1), P(-hl, hw, z1), null, color, [0, 0, 1]);
+}
+
+const WHITE = new THREE.Color(0xf4f2ec), DECK = new THREE.Color(0x7d746a), BRICK = new THREE.Color(0x8a4c3c), STEP = new THREE.Color(0xa9a59c);
+const HEDGE = [0x6f9a50, 0x7fa85a, 0x648c48];
+
+// The details of a house with a street in front: porch, chimney, hedge.
+function houseDetails(chunk, map, r, wallH, roofTop, key, roofCol) {
+  const near = map.nearestLane(r.cx, r.cy, null, 45);
+  if (chunk && hash01(key, 41) < 0.45) {
+    // a chimney up through the roof near one gable end
+    const end = hash01(key, 42) < 0.5 ? -1 : 1;
+    const a = end * Math.max(0, r.hl - 0.9), c = r.hw * 0.35 * (hash01(key, 43) < 0.5 ? -1 : 1);
+    orientedBox(chunk.detail, r.cx + r.ux * a - r.uy * c, r.cy + r.uy * a + r.ux * c, r.ux, r.uy, 0.35, 0.3, wallH - 0.5, roofTop + 0.7, BRICK);
+  }
+  if (!near) return;
+  const e = near.lane.edgeRef;
+  const side = near.lateral > 0 ? 1 : -1;
+  // how far from the lane center the sidewalk's back edge is: nothing built in front of that
+  const walkBack = Math.abs(sidewalkOffset(e, side) - near.lane.offset) + streetOf(e)[1] / 2;
+  const dx = near.point[0] - r.cx, dy = near.point[1] - r.cy, d = Math.hypot(dx, dy) || 1;
+  const fx = dx / d, fy = dy / d;
+  // the side of the house that faces the street
+  const alongU = fx * r.ux + fy * r.uy, alongV = fx * -r.uy + fy * r.ux;
+  const useU = Math.abs(alongU) > Math.abs(alongV);
+  const sgn = Math.sign(useU ? alongU : alongV) || 1;
+  const nx = useU ? r.ux * sgn : -r.uy * sgn, ny = useU ? r.uy * sgn : r.ux * sgn;   // outward normal of the front wall
+  const half = useU ? r.hl : r.hw, across = useU ? r.hw : r.hl;
+  const yard = d - half - walkBack;   // front wall to the back of the sidewalk
+  if (yard < 3) return;
+  const wx = r.cx + nx * half, wy = r.cy + ny * half;   // middle of the front wall
+  const tx = -ny, ty = nx;                                // along the front wall
+  if (hash01(key, 44) < 0.75) {
+    // front porch: a raised deck, steps down to the yard, two posts, a shallow roof
+    const depth = Math.min(2.2, yard - 1.2), width = Math.min(4.6, across * 1.2);
+    const shift = (hash01(key, 45) - 0.5) * Math.max(0, across * 2 - width) * 0.6;
+    const px = wx + nx * depth / 2 + tx * shift, py = wy + ny * depth / 2 + ty * shift;
+    orientedBox(chunk.detail, px, py, nx, ny, depth / 2, width / 2, 0, 0.62, DECK);
+    for (let k = 0; k < 3; k++) {
+      const sd = depth / 2 + 0.16 + k * 0.3;
+      orientedBox(chunk.detail, px + nx * sd, py + ny * sd, nx, ny, 0.16, 0.7, 0, 0.62 - (k + 1) * 0.18, STEP);
+    }
+    for (const s of [-1, 1]) {
+      const cx = px + nx * (depth / 2 - 0.12) + tx * s * (width / 2 - 0.12), cy = py + ny * (depth / 2 - 0.12) + ty * s * (width / 2 - 0.12);
+      orientedBox(chunk.detail, cx, cy, nx, ny, 0.08, 0.08, 0.62, 2.85, WHITE);
+    }
+    orientedBox(chunk.detail, px + nx * 0.15, py + ny * 0.15, nx, ny, depth / 2 + 0.3, width / 2 + 0.25, 2.85, 3.0, roofCol);
+    // a front door behind the porch
+    orientedBox(chunk.detail, wx + nx * 0.03 + tx * shift, wy + ny * 0.03 + ty * shift, nx, ny, 0.03, 0.5, 0.62, 2.7, new THREE.Color([0x5a2e22, 0x2b3a4a, 0x1f1f1f, 0x7a1f1f, 0x2f4a3a][Math.floor(hash01(key, 46) * 5)]));
+  }
+  if (hash01(key, 47) < 0.35 && yard > 4) {
+    // a clipped hedge along the front of the yard, a little back from the sidewalk
+    const hx = r.cx + nx * (d - walkBack - 0.9), hy = r.cy + ny * (d - walkBack - 0.9);
+    const col = new THREE.Color(HEDGE[Math.floor(hash01(key, 48) * HEDGE.length)]);
+    orientedBox(chunk.hedge, hx, hy, tx, ty, across + 1.2, 0.45, 0, 1.0 + hash01(key, 49) * 0.5, col);
   }
 }
 
@@ -148,6 +222,7 @@ function pitchedRoof(chunk, wallsB, r, wallH, key, wallCol, roofCol) {
       wallsB.tri(P(s * hl, -hw, wallH), P(s * hl, hw, wallH), P(s * hl, 0, top), null, wallCol, out);
     }
   }
+  return top;
 }
 
 export function buildBuildings(map) {
@@ -178,7 +253,9 @@ export function buildBuildings(map) {
     if (pitched) {
       const wallH = Math.max(2.8, h - Math.min(4.2, r.hw * 0.7));
       walls(builder, pts, wallH, wallCol);
-      pitchedRoof(chunk, builder, r, wallH, i, wallCol, color(ROOF_COLORS, i, 21, 0.12));
+      const roofCol = color(ROOF_COLORS, i, 21, 0.12);
+      const top = pitchedRoof(chunk, builder, r, wallH, i, wallCol, roofCol);
+      if (kind === "house") houseDetails(chunk, map, r, wallH, top, i, roofCol);
     } else {
       walls(builder, pts, h, wallCol);
       chunk.flat.polygon(pts, h, { scale: FLAT_TILE, color: color(FLAT_COLORS, i, 31) });
@@ -197,9 +274,13 @@ export function buildBuildings(map) {
     block: wallMaterial("block"),
     roof: snowable(new THREE.MeshStandardMaterial({ map: shingleTexture(), vertexColors: true, roughness: 0.92, side: THREE.DoubleSide }), "roof"),
     flat: snowable(new THREE.MeshStandardMaterial({ map: flatRoofTexture(), vertexColors: true, roughness: 0.95 }), "roof"),
+    detail: snowable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), "roof"),
+    hedge: snowable(new THREE.MeshStandardMaterial({ map: grassTexture().clone(), vertexColors: true, roughness: 0.95 }), "leaf"),
   };
+  mats.hedge.map.repeat.set(1, 1);
+  mats.hedge.map.needsUpdate = true;
   for (const chunk of chunks.values()) {
-    for (const name of ["house", "block", "roof", "flat"]) {
+    for (const name of ["house", "block", "roof", "flat", "detail", "hedge"]) {
       const b = chunk[name];
       if (b.empty) continue;
       const mesh = new THREE.Mesh(b.toGeometry(), mats[name]);

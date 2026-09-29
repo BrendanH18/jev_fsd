@@ -12,10 +12,11 @@ import { snowable } from "./weather.js";
 import { PostFX, QUALITY } from "./post.js";
 import { atmosphereFor, lighting, updateNightMaterials } from "./atmosphere.js";
 import { GroundReflection } from "./reflection.js";
+import { buildBackdrop, tintBackdrop } from "./backdrop.js";
 
 export const toThree = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
-export const LAYER = { sky: -100, grass: -50, sidewalk: -40, curb: -38, asphalt: -30, patch: -28, islandCurb: -27, island: -26, marking: -20, pool: -10 };
+export const LAYER = { sky: -100, grass: -50, water: -46, sidewalk: -40, curb: -38, asphalt: -30, patch: -28, islandCurb: -27, island: -26, marking: -20, pool: -10 };
 
 // A material for a ground layer: painted in renderOrder over whatever is there, writing depth.
 export function groundLayer(mesh, order) {
@@ -131,6 +132,8 @@ export class SceneView {
     grassMat.map.repeat.set(size / 14, size / 14);
     groundLayer(ground, LAYER.grass);
     this.scene.add(ground);
+    this.backdrop = buildBackdrop(new THREE.Vector3((x0 + x1) / 2, 0, -(y0 + y1) / 2));
+    this.scene.add(this.backdrop);
 
     this.post = null;
     this.reflection = new GroundReflection(renderer, this.scene, this.camera);
@@ -176,6 +179,7 @@ export class SceneView {
     this.scene.environmentIntensity = a.env;
     this.renderer.toneMappingExposure = a.exposure;
     if (this.post) this.post.setBloom(a.bloom.strength, a.bloom.threshold);
+    tintBackdrop(this.backdrop, a);
     lighting.night.value = a.night;
     lighting.wet.value = a.wet;
     lighting.sunDir.value.copy(a.sun.dir);

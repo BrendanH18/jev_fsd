@@ -14,6 +14,7 @@ const HAIR = [0x1a1a1a, 0x3b2314, 0x6b4423, 0xa0522d, 0xd4b483, 0x9e9e9e, 0x2a1a
 const SHOES = [0x111111, 0x3a2a1a, 0xe8e8e8, 0x2a2f38];
 const UMBRELLAS = [0x111111, 0x1f3a64, 0x8a1c1c, 0x2d5a3d, 0x5a3d7a, 0xd8b030];
 const DRAW_WITHIN_M = 130;
+const HIP = 0.92;
 
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0 });
 
@@ -41,7 +42,8 @@ export function createPersonMesh(look = 0) {
   const longHair = k(8) < 0.35, backpack = k(9) < 0.25, coat = k(10) < 0.4;
 
   const g = new THREE.Group();
-  const body = new THREE.Group();   // bobs with each step
+  const body = new THREE.Group();   // origin at the hips: bobs with each step, leans on a bike
+  body.position.y = HIP;
   g.add(body);
   // the rigid body: pelvis, torso, neck, head, hair, backpack (local +x is forward)
   const parts = [
@@ -54,7 +56,8 @@ export function createPersonMesh(look = 0) {
   ];
   if (longHair) parts.push(tint(new THREE.CylinderGeometry(0.1, 0.085, 0.24, 10, 1, true, Math.PI * 0.5, Math.PI).translate(-0.02, 1.64, 0), hair));
   if (backpack) parts.push(tint(new THREE.BoxGeometry(0.14, 0.36, 0.28).translate(-0.19, 1.3, 0), pick([0x1a1a1a, 0x7a2a2a, 0x2a4a7a, 0x3a5a3a], 11)));
-  body.add(new THREE.Mesh(mergeGeometries(parts, false), material));
+  const torso = mergeGeometries(parts, false).translate(0, -HIP, 0);
+  body.add(new THREE.Mesh(torso, material));
 
   const limb = (parent, x, y, z, geo) => {
     const pivot = new THREE.Group();
@@ -65,13 +68,13 @@ export function createPersonMesh(look = 0) {
   };
   const legs = [], arms = [];
   for (const side of [-1, 1]) {
-    const hip = limb(body, 0, 0.92, side * 0.085, tint(segment(0.075 * build, 0.058, 0.43), bottom));
+    const hip = limb(body, 0, 0, side * 0.085, tint(segment(0.075 * build, 0.058, 0.43), bottom));
     const knee = limb(hip, 0, -0.43, 0, mergeGeometries([
       tint(segment(0.056, 0.042, 0.43), bottom),
       tint(new THREE.BoxGeometry(0.24, 0.07, 0.095).translate(0.05, -0.46, 0), shoes),
     ], false));
     legs.push({ hip, knee, side });
-    const shoulder = limb(body, 0, 1.48, side * 0.2 * build, tint(segment(0.047, 0.04, 0.29), coat ? top : pick([top, skin], 12)));
+    const shoulder = limb(body, 0, 1.48 - HIP, side * 0.2 * build, tint(segment(0.047, 0.04, 0.29), coat ? top : pick([top, skin], 12)));
     const elbow = limb(shoulder, 0, -0.29, 0, mergeGeometries([
       tint(segment(0.04, 0.033, 0.25), coat ? top : skin),
       tint(ball(0.042).translate(0, -0.28, 0), skin),
@@ -85,7 +88,7 @@ export function createPersonMesh(look = 0) {
     tint(canopy, pick(UMBRELLAS, 13)),
     tint(new THREE.CylinderGeometry(0.01, 0.01, 0.8, 5).translate(0, -0.3, 0), 0x333333),
   ], false), material));
-  umbrella.position.set(0.12, 1.98, 0.16);
+  umbrella.position.set(0.12, 1.98 - HIP, 0.16);
   umbrella.visible = false;
   body.add(umbrella);
   for (const m of [...body.children]) m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -122,5 +125,23 @@ export function syncPerson(mesh, ped, camera, rain = false) {
     shoulder.rotation.z = 0.32 * stride * Math.sin(p);
     elbow.rotation.z = 0.25 + 0.25 * stride * Math.max(0, Math.sin(p));
   }
-  u.body.position.y = moving ? 0.025 * Math.abs(Math.cos(phi)) * stride : 0;
+  u.body.position.y = HIP + (moving ? 0.025 * Math.abs(Math.cos(phi)) * stride : 0);
+}
+
+// A person seated on a bicycle: leaning over the bars, hands on the grips, feet on the pedals.
+// `crank` is the crank angle (rad).
+export function poseRider(mesh, crank) {
+  const u = mesh.userData;
+  u.body.rotation.z = -0.55;
+  for (const { hip, knee, side } of u.legs) {
+    const c = crank + (side > 0 ? Math.PI : 0);
+    hip.rotation.z = 1.05 + 0.4 * Math.sin(c);
+    knee.rotation.z = -1.25 - 0.45 * Math.cos(c);
+  }
+  for (const { shoulder, elbow, side } of u.arms) {
+    shoulder.rotation.z = 1.25;
+    shoulder.rotation.x = side * 0.1;
+    elbow.rotation.z = 0.35;
+  }
+  u.umbrella.visible = false;
 }

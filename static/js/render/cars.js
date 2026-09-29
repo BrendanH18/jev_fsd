@@ -9,6 +9,7 @@ import { CAR } from "../sim/vehicle.js";
 import { blobTexture, glowTexture, poolTexture } from "./textures.js";
 import { hash01 } from "./geo.js";
 import { snowable } from "./weather.js";
+import { createPersonMesh, poseRider } from "./people.js";
 
 const XR = -CAR.rearOverhang, XF = CAR.length - CAR.rearOverhang, W = CAR.width;
 const BEVEL = 0.09;
@@ -416,8 +417,6 @@ export function hideParkedCar(car) {
 const bikeShared = {
   tire: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
   metal: new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.8, roughness: 0.35 }),
-  skin: new THREE.MeshStandardMaterial({ color: 0xd9a47e, roughness: 0.7 }),
-  pants: new THREE.MeshStandardMaterial({ color: 0x2d3748, roughness: 0.8 }),
   helmet: new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4 }),
 };
 const rod = (x0, y0, x1, y1, r = 0.022) => {
@@ -426,7 +425,7 @@ const rod = (x0, y0, x1, y1, r = 0.022) => {
   g.rotateZ(Math.atan2(y1 - y0, x1 - x0) - Math.PI / 2);
   return g.translate((x0 + x1) / 2, (y0 + y1) / 2, 0);
 };
-export function createBikeMesh(color = 0x2b6cb0) {
+export function createBikeMesh(color = 0x2b6cb0, look = 0) {
   const g = new THREE.Group();
   const R = 0.34, wb = 1.05;
   const frameMat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.35 });
@@ -446,37 +445,19 @@ export function createBikeMesh(color = 0x2b6cb0) {
   g.add(new THREE.Mesh(frame, frameMat));
   const bars = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 6).rotateX(Math.PI / 2).translate(head[0] - 0.05, head[1] + 0.18, 0), bikeShared.metal);
   g.add(bars);
-  // rider
-  const shirt = new THREE.MeshStandardMaterial({ color: [0xc53030, 0x2f855a, 0xf6e05e, 0x3182ce, 0x1a202c][Math.floor(Math.random() * 5)], roughness: 0.8 });
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.58, 0.34).translate(0, 0.29, 0), shirt);
-  torso.position.set(seat[0] + 0.02, seat[1] + 0.05, 0);
-  torso.rotation.z = -0.55;
-  g.add(torso);
-  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), bikeShared.skin);
-  headMesh.position.set(seat[0] + 0.35, seat[1] + 0.62, 0);
-  g.add(headMesh);
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), bikeShared.helmet);
-  helmet.position.copy(headMesh.position).add(new THREE.Vector3(0, 0.02, 0));
-  g.add(helmet);
-  for (const z of [-0.12, 0.12]) {
-    const arm = new THREE.Mesh(rod(0, 0, head[0] - 0.05 - (seat[0] + 0.27), head[1] + 0.18 - (seat[1] + 0.45), 0.035), shirt);
-    arm.position.set(seat[0] + 0.27, seat[1] + 0.45, z * 1.6);
-    g.add(arm);
-  }
-  const legs = [];
-  for (const [z, phase] of [[-0.1, 0], [0.1, Math.PI]]) {
-    const leg = new THREE.Group();
-    leg.position.set(seat[0], seat[1], z);
-    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.45, 6).translate(0, -0.225, 0), bikeShared.pants);
-    leg.add(thigh);
-    g.add(leg);
-    legs.push({ leg, phase });
-  }
+  // rider: a person in the saddle, leaning over the bars, pedaling
+  const rider = createPersonMesh(look);
+  rider.position.set(seat[0] - 0.05, seat[1] + 0.02 - 0.92 * rider.scale.y, 0);
+  poseRider(rider, 0);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.15, 0.9, 1), bikeShared.helmet);
+  helmet.position.set(0, 1.77 - 0.92, 0);   // on the head, in the rider's hip frame
+  rider.userData.body.add(helmet);
+  g.add(rider);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(wb / 2, 0.02, 0);
   g.add(blob);
   g.traverse((m) => { if (m.isMesh && m !== blob) { m.castShadow = true; m.receiveShadow = true; } });
-  g.userData = { bike: true, wheels, legs, spin: 0, crank: 0 };
+  g.userData = { bike: true, wheels, rider, spin: 0, crank: 0 };
   return g;
 }
 
@@ -489,5 +470,5 @@ export function syncBike(mesh, vehicle, dt = 0) {
   u.spin += (vehicle.v * dt) / 0.34;
   for (const w of u.wheels) w.rotation.z = -u.spin;
   u.crank += (vehicle.v * dt) / 0.34 * 0.55;
-  for (const { leg, phase } of u.legs) leg.rotation.z = 0.35 + Math.sin(u.crank + phase) * 0.45;
+  poseRider(u.rider, u.crank);
 }

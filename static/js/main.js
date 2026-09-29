@@ -21,7 +21,9 @@ import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
+import { pedPhase } from "./sim/signals.js";
 import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
+import { buildSurroundings, tintSurroundings } from "./render/surroundings.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -44,6 +46,7 @@ async function boot() {
   const buildings = buildBuildings(map);
   view.scene.add(buildings);
   view.scene.add(buildTrees(map, roads, buildings.userData.index));
+  view.scene.add(buildSurroundings(map));
   const egoMesh = createCarMesh(0x1f5fd6, "ego");
   addHeadlights(egoMesh);
   view.scene.add(egoMesh);
@@ -79,7 +82,7 @@ async function boot() {
     for (const n of fleet.vehicles) {
       ids.add(n.id);
       if (npcMeshes.has(n.id)) continue;
-      const m = n.kind === "bike" ? createBikeMesh(n.color) : createCarMesh(n.color, n.id, n.style ?? null);
+      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : createCarMesh(n.color, n.id, n.style ?? null);
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
@@ -92,7 +95,7 @@ async function boot() {
   const panel = new Panel(autopilot, hud);
   panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };
   const weatherView = new WeatherView(view);
-  const applySky = () => view.setAtmosphere(atmosphereFor(hour, world.weather));
+  const applySky = () => { const a = atmosphereFor(hour, world.weather); view.setAtmosphere(a); tintSurroundings(a); };
   weatherView.apply(world.weather);
   applySky();
   hud.setWeather(world.weather);
@@ -174,7 +177,10 @@ async function boot() {
         steps++;
       }
     }
-    for (const inter of map.intersections.values()) roads.signals.set(inter.id, world.phase(inter.id));
+    for (const inter of map.intersections.values()) {
+      roads.signals.set(inter.id, world.phase(inter.id));
+      roads.signals.setPed(inter.id, { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) }, world.t);
+    }
     syncFleetMeshes();
     const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
     syncCar(egoMesh, world.ego, dt, world.t, lightsOn);

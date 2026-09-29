@@ -41,6 +41,11 @@ export class PostFX {
     this.ao.updateGtaoMaterial({ radius: 1.5, distanceExponent: 1.5, thickness: 1.8, scale: 1.6, samples: 12, distanceFallOff: 1.0 });
     this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
     this.ao.blendIntensity = 1.0;
+    // depth-reconstructed normals are noise a few hundred meters out (depth precision runs out),
+    // and occlusion there is invisible anyway: fade it away with distance
+    const m = this.ao.gtaoMaterial;
+    m.fragmentShader = m.fragmentShader.replace("ao = pow(ao, scale);", "ao = pow(ao, scale);\n\t\t\tao = mix(ao, 1.0, smoothstep(120.0, 320.0, -viewPos.z));");
+    m.needsUpdate = true;
 
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.45, 1.0);
     this.output = new OutputPass();
