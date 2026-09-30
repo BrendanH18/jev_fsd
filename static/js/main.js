@@ -26,19 +26,23 @@ import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmos
 import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
 import { DriveScore, saveDrive } from "./sim/drive-score.js";
 import { DriveReport } from "./ui/drive-report.js";
+import { Explorer } from "./ui/explorer.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
 
 async function boot() {
   loadingText.textContent = "Loading map…";
-  const status = await api("/api/status");
-  const pack = await api("/api/map");
+  const params = new URLSearchParams(location.search);
+  const mapQuery = params.get("bbox") || params.get("map") || "";
+  const query = mapQuery ? `?bbox=${encodeURIComponent(mapQuery)}` : "";
+  const status = await api(`/api/status${query}`);
+  const pack = await api(`/api/map${query}`);
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
   const map = new MapData(pack);
   const replay = readReplay();
   const hud = new Hud();
-  const params = new URLSearchParams(location.search);
+  $("#current-city").textContent = status.map.synthetic ? "Practice grid" : status.map.label;
   const quality = params.get("quality") || localStorage.getItem("jev-fsd-quality") || "high";
   let hour = parseHour(params.get("time"));
   const view = new SceneView($("#view"), map.extent, { quality });
@@ -155,13 +159,13 @@ async function boot() {
   let pausedBeforeReport = false;
   driveReport = new DriveReport({
     onFinish: () => finishDrive("finished"),
-    onNewDrive: () => hud.badge("Choose your next destination on the minimap", "stop", 2000),
+    onNewDrive: () => explorer.open(),
     onOpen: () => { pausedBeforeReport = world.paused; world.paused = true; },
     onClose: () => { world.paused = pausedBeforeReport; },
   });
   function startDrive(title, route = null) {
     if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("replaced"));
-    drive = new DriveScore(world, { title, route, map: pack.synthetic ? "Practice grid" : "Kitsilano, Vancouver", driver: autopilot.enabled ? autopilot.brainName : "manual" });
+    drive = new DriveScore(world, { title, route, map: pack.synthetic ? "Practice grid" : status.map.label, driver: autopilot.enabled ? autopilot.brainName : "manual" });
     arrivalPending = false;
     driveReport.lastUpdate = -Infinity;
     driveReport.update(drive);
@@ -175,18 +179,40 @@ async function boot() {
     driveReport.show(report, saved);
   }
 
+  let pausedBeforeExplorer = false;
+  const explorer = new Explorer({
+    map: status.map,
+    getStart: () => ({ x: world.ego.x, y: world.ego.y, heading: world.ego.psi }),
+    onOpen: () => { pausedBeforeExplorer = world.paused; world.paused = true; },
+    onClose: () => { world.paused = pausedBeforeExplorer; },
+    onDrive: (d) => applyRoute(d.route, d.destination, d.title),
+    onMap: (id) => {
+      if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("map changed"));
+      autopilot.setEnabled(false);
+      const next = new URL(location.href);
+      next.searchParams.delete("bbox"); next.searchParams.delete("replay");
+      next.searchParams.set("map", id); next.searchParams.set("explore", "1");
+      next.searchParams.set("weather", world.weather); next.searchParams.set("time", formatHour(hour));
+      next.searchParams.set("quality", view.quality);
+      location.assign(next);
+    },
+  });
+
+  function applyRoute(data, pt, title) {
+    world.destination = pt;
+    world.route = new Route(data, map);
+    overlays.setRoute(world.route);
+    autopilot.bumpEpoch(); autopilot.executing = null;
+    hud.badge(`route: ${world.route.summary}`, "", 2200);
+    if (!autopilot.enabled) toggleAutopilot();
+    startDrive(title || `Drive to ${map.nearestLane(...pt)?.lane.edgeRef.name || "your destination"}`, world.route);
+  }
+
   async function setDestination(pt) {
     try {
-      const res = await api("/api/route", { from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1 });
+      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1 });
       if (!res.routes.length) { hud.badge("no route to that point", "safety", 1500); return; }
-      world.destination = pt;
-      world.route = new Route(res.routes[0], map);
-      overlays.setRoute(world.route);
-      autopilot.bumpEpoch();
-      autopilot.executing = null;
-      hud.badge(`route: ${world.route.summary}`, "", 2200);
-      if (!autopilot.enabled) toggleAutopilot();
-      startDrive(world.route.summary || "City drive", world.route);
+      applyRoute(res.routes[0], res.routes[0].polyline.at(-1));
     } catch (err) {
       hud.badge(`routing failed: ${err.message}`, "safety", 2000);
     }
@@ -200,7 +226,8 @@ async function boot() {
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
     startDrive(`Replay ${replay.scenario.id}`, world.route);
   }
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, driveReport, get drive() { return drive; }, finishDrive, setTime: (h) => { hour = parseHour(h); applySky(); } };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, driveReport, explorer, get drive() { return drive; }, finishDrive, setTime: (h) => { hour = parseHour(h); applySky(); } };
+  if (params.has("explore")) explorer.open();
 
   let last = performance.now();
   let acc = 0;

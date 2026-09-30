@@ -22,7 +22,7 @@ export async function buildSuite(map, { count = 12, seed = 1 } = {}) {
     const goal = [p[0] + Math.cos(angle) * reach, p[1] + Math.sin(angle) * reach];
     if (!inset(p[0], p[1]) || !inset(goal[0], goal[1])) continue;
     let res;
-    try { res = await api("/api/route", { from: { x: p[0], y: p[1], heading: psi }, to: { x: goal[0], y: goal[1] }, k: 1 }); } catch { continue; }
+    try { res = await api("/api/route", { bbox: map.routingBbox.join(","), from: { x: p[0], y: p[1], heading: psi }, to: { x: goal[0], y: goal[1] }, k: 1 }); } catch { continue; }
     const data = res.routes && res.routes[0];
     if (!data) continue;
     const route = new Route(data, map);

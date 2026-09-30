@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import math
 import os
 import secrets
 import sys
@@ -28,6 +29,8 @@ from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.routing import Router
+from jev.maps import catalog, map_identity
+from jev.drives import suggested_drives
 
 VERSION = "0.2.0"
 STATIC = PROJECT_ROOT / "static"
@@ -69,8 +72,8 @@ def load_map(bbox_text: str = "") -> dict:
     return entry
 
 
-def api_status(_body, _query):
-    entry = load_map()
+def api_status(_body, query):
+    entry = load_map((query.get("bbox") or query.get("map") or [""])[0])
     pack = entry["pack"]
     return {
         "version": VERSION,
@@ -81,14 +84,30 @@ def api_status(_body, _query):
         "price_per_mtok_input": PRICE_PER_INPUT_TOKEN_USD * 1_000_000,
         "spend": client.guard.snapshot(),
         "npcs": settings.npcs,
-        "map": {"bbox": list(entry["bbox"]), "name": pack.get("name"), "synthetic": bool(pack.get("synthetic")),
+        "map": {**map_identity(entry["bbox"]), "bbox": list(entry["bbox"]), "name": pack.get("name"), "synthetic": bool(pack.get("synthetic")),
                 "error": entry["error"], "stats": pack.get("stats", {})},
     }
 
 
 def api_map(_body, query):
-    entry = load_map((query.get("bbox") or [""])[0])
-    return entry["pack"]
+    entry = load_map((query.get("bbox") or query.get("map") or [""])[0])
+    return {**entry["pack"], "routing_bbox": list(entry["bbox"])}
+
+
+def api_maps(_body, _query):
+    return {"maps": catalog(MAPS_DIR)}
+
+
+def api_drives(body, _query):
+    entry = load_map(str(body.get("bbox") or ""))
+    start = body.get("from") or {}
+    try:
+        start = {"x": float(start["x"]), "y": float(start["y"]), "heading": float(start["heading"])}
+        if not all(math.isfinite(v) for v in start.values()):
+            raise ValueError()
+    except (KeyError, TypeError, ValueError):
+        raise BadRequest("from {x, y, heading} with finite coordinates is required")
+    return {"drives": suggested_drives(entry["router"], start)}
 
 
 def api_route(body, _query):
@@ -179,6 +198,8 @@ def api_bench_runs(_body, query):
 ROUTES = {
     ("GET", "/api/status"): api_status,
     ("GET", "/api/map"): api_map,
+    ("GET", "/api/maps"): api_maps,
+    ("POST", "/api/drives"): api_drives,
     ("POST", "/api/route"): api_route,
     ("POST", "/api/decide"): api_decide,
     ("POST", "/api/snapshot/save"): api_snapshot_save,
