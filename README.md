@@ -12,7 +12,7 @@ smoothness and control. Traffic parks and pulls out, car doors open, pedestrians
 weather changes both visibility and grip. The driving HUD keeps turn guidance, speed, live
 coaching and the pilot's latest decision visible while you drive.
 
-![Driving in Kitsilano: the route in blue, candidate manoeuvres in green, and the chosen one in yellow](docs/drive.jpg)
+![Rules driving in Kitsilano with the redesigned trip card, live drive coach, pilot decision card and speed instruments](docs/drive-hud.jpg)
 
 > This is a research and demo simulator, not a system for controlling a real vehicle. The project
 > is independent and is not affiliated with or endorsed by TypeSafe AI.
@@ -162,7 +162,7 @@ speeding.
 
 ## Graphics and recent rendering fixes
 
-![A rainy night in Kitsilano, with lights reflected in the wet road](docs/night.jpg)
+![A rainy-night Rules drive in Kitsilano with the current HUD and lights reflected in the wet road](docs/night-hud.jpg)
 
 Parked cars and trees use distance-based detail to reduce distant geometry. Nearby scenery
 retains detailed meshes and shadows, while hysteresis prevents repeated detail switches around
