@@ -9,9 +9,10 @@ situation, available manoeuvres, model probabilities, latency and API cost.
 
 Choose a suggested route, take the wheel, and review your drive for safety, road rules,
 smoothness and control. Traffic parks and pulls out, car doors open, pedestrians cross, and
-weather changes both visibility and grip.
+weather changes both visibility and grip. The driving HUD keeps turn guidance, speed, live
+coaching and the pilot's latest decision visible while you drive.
 
-![Driving in Kitsilano: the route in blue, candidate manoeuvres in green, and the chosen one in yellow](docs/drive.jpg)
+![Rules driving in Kitsilano with the redesigned trip card, live drive coach, pilot decision card and speed instruments](docs/drive-hud.jpg)
 
 > This is a research and demo simulator, not a system for controlling a real vehicle. The project
 > is independent and is not affiliated with or endorsed by TypeSafe AI.
@@ -35,7 +36,7 @@ first page load fully offline.
 Try **Explore cities → Victoria → Neighbourhood cruise**. A suggested drive starts the selected
 autopilot; `W A S D` takes over manually. You can also click a destination on the minimap or
 start a free drive with the keyboard. Press `C` for hood view and enable **Sound** for driving
-ambience.
+ambience. Open **Settings** to change weather, time and graphics, or press `?` for keyboard help.
 
 To enable Jev, obtain a key from the [TypeSafe console](https://console.typesafe.ai) and create
 a local environment file:
@@ -95,6 +96,33 @@ could not see; use the seeded benchmark for controlled driver comparisons.
 
 See [the scoring formula, thresholds and report behaviour](docs/drive-experience.md).
 
+## Driving HUD
+
+The redesigned HUD groups route guidance, driving instruments and pilot feedback:
+
+| Area | What it shows |
+|---|---|
+| Left column | City and current street, next turn and distance, Rules/Jev buttons, autopilot switch, Settings and live drive coach |
+| Instrument cluster | Speed in km/h, mapped speed limit, indicators and manual, pilot or paused mode |
+| Right column | Minimap, latest pilot decision, candidate probabilities, latency, tokens, cost, fallbacks and incident counts |
+
+The trip card gives turn-by-turn guidance during both manual and autopilot driving. Speed and
+limit highlights use the same 5 km/h speeding grace as the drive coach.
+
+The **Pilot decision** card displays candidate speeds in km/h and up to five probability rows,
+keeping the executed candidate visible when it has a probability. Rules probabilities describe
+a deterministic choice, not model confidence. Jev responses have a green label; Rules fallbacks
+have an amber label and no model probabilities. Locally resolved choices may also have no
+probabilities. Turning autopilot off clears the latest latency and token fields; cost and p50
+remain session statistics.
+
+At widths of 900 px or less, the decision and incident cards are hidden and **Inspect JSON**
+is available under **Settings**. Short screens hide category bars and secondary telemetry;
+the HUD columns scroll to keep settings and drive actions reachable. At very narrow widths,
+the minimap and compact instruments sit below the left column. Driving still requires a
+keyboard; there are no touch driving controls. HUD animations and transitions respect the
+system's reduced-motion preference.
+
 ## Controls and driving feel
 
 | Key or control | Action |
@@ -116,11 +144,11 @@ See [the scoring formula, thresholds and report behaviour](docs/drive-experience
 | **Settings** | Weather, time, graphics quality, wipers and camera motion |
 | **Sound** | Toggle driving audio |
 
-The trip card gives turn-by-turn guidance during both manual and autopilot driving. The
-**Pilot decision** card shows the latest choice, speeds in km/h and candidate probabilities.
-Rules fallbacks have an amber label; locally resolved choices may have no probabilities.
-Space and arrow keys operate focused buttons; click the road view to use them for driving.
-Modified browser shortcuts keep their normal behaviour.
+Use `Tab` to reach controls. The Rules/Jev group has one tab stop; arrow keys, `Home` and `End`
+select a driver. Jev remains visible when no API key is configured, and selecting it explains
+how to enable it. Space and arrow keys operate focused buttons; click the road view to use
+them for driving. Driving shortcuts are ignored in form fields and open dialogs, and shortcuts
+with Ctrl, Cmd or Alt keep their normal browser behaviour.
 
 Keyboard steering ramps gently and limits cornering demand at speed while retaining full lock
 for low-speed manoeuvres. Vehicles, cyclists, pedestrians and the camera interpolate between
@@ -134,7 +162,7 @@ speeding.
 
 ## Graphics and recent rendering fixes
 
-![A rainy night in Kitsilano, with lights reflected in the wet road](docs/night.jpg)
+![A rainy-night Rules drive in Kitsilano with the current HUD and lights reflected in the wet road](docs/night-hud.jpg)
 
 Parked cars and trees use distance-based detail to reduce distant geometry. Nearby scenery
 retains detailed meshes and shadows, while hysteresis prevents repeated detail switches around
@@ -146,9 +174,13 @@ each frame. These changes address road flicker, inconsistent shadows and wet-ren
 
 Street-name and speed-limit signs use correctly proportioned printed rectangles, bolder street
 lettering, padded atlas cells and up to 8× anisotropic filtering. Text reads correctly from
-both sides. The signs keep their shared 2048² atlas and batched meshes. The bottom statistics
-panel has a solid background with backdrop blur removed, and windshield trim is opaque, so
-green scenery cannot bleed through those surfaces.
+both sides. The signs keep their shared 2048² atlas and batched meshes. Driving instruments,
+the drive coach, incident panel and windshield trim are opaque, and persistent HUD panels
+avoid backdrop blur, so green scenery cannot bleed through the opaque surfaces.
+
+HUD text and statistics refresh at most 10 times per second and skip unchanged DOM writes.
+The decision card rebuilds only when a decision or autopilot state changes. These changes
+reduce DOM work while physics and pilot decisions keep their existing cadence.
 
 | Preset | Rendering |
 |---|---|
@@ -286,7 +318,10 @@ runRenderTests(); // Every result should have ok: true.
 The documented validation covers 50 Python tests, 117 browser assertions (99 simulation and 18 HUD),
 43 renderer assertions, 18 scoring tests, interpolation checks and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality
-transitions. For GPU profiling, see [rendering performance](docs/render-performance.md).
+transitions. HUD checks cover fallback and stop labels, unavailable Jev, keyboard driver
+selection, probability rows, telemetry reset and the 10 Hz update bound. See
+[HUD validation and viewport-review limits](docs/drive-experience.md#validation) and
+[rendering performance](docs/render-performance.md) for DOM measurements and GPU profiling.
 
 Run a seeded Rules benchmark after changing physics, traffic, planning or routing. Rebuild
 committed Jev cases with `scripts/build_jev_fixtures.mjs` after changing sensing or question
