@@ -270,6 +270,13 @@ export class SceneView {
       // at the base of the windshield, looking down the road over the hood
       target = toThree(ego.x + fx * 2.05, ego.y + fy * 2.05, 1.32);
       look = toThree(ego.x + fx * 30, ego.y + fy * 30, 0.9);
+      if (this.cameraMotion !== false) {
+        const smooth = 1 - Math.exp(-8 * dt);
+        this.cameraPitch = (this.cameraPitch || 0) + (THREE.MathUtils.clamp((ego.ax || 0) * 0.006, -0.035, 0.025) - (this.cameraPitch || 0)) * smooth;
+        this.cameraRoll = (this.cameraRoll || 0) + (THREE.MathUtils.clamp((ego.latAccel || 0) * 0.005, -0.03, 0.03) - (this.cameraRoll || 0)) * smooth;
+        look.y += this.cameraPitch * 30;
+        up.set(Math.sin(ego.psi) * this.cameraRoll, 1, Math.cos(ego.psi) * this.cameraRoll).normalize();
+      }
       lerp = 1;
     } else {
       target = toThree(ego.x - fx * 8, ego.y - fy * 8, 3.1);

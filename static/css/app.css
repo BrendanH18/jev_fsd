@@ -137,6 +137,16 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
 .mission-meta { color: var(--muted); font-size: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
 .mission-start { display: block; margin-top: 14px; color: var(--accent); font-size: 12px; }
 .error-note { color: var(--warn); }
+.cockpit { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+.drive-instruments { position: absolute; bottom: 138px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; border-radius: 999px; padding: 9px 18px; background: #08131bc7; font-size: 10px; letter-spacing: .1em; }
+.indicator { color: #43584e; font-size: 16px; }
+.indicator.active { color: #71e69e; text-shadow: 0 0 12px #71e69e88; }
+#speed-warning { color: var(--warn); }
+#drive-mode { color: #c5d6e6; }
+.speed.speeding { color: var(--warn); }
+.immersion-controls { margin-top: 9px; }
+.immersion-controls .check { font-size: 10px; gap: 3px; }
+.immersion-controls input { accent-color: var(--accent); }
 @media (max-width: 850px) { .city-grid { grid-template-columns: repeat(2, 1fr); } .city-card p { min-height: 0; } .mission-grid { grid-template-columns: 1fr; } .explorer-section { display: block; } .explorer-section > span { display: block; margin-top: 8px; } }
 @media (max-height: 750px) { .drive-card { bottom: 102px; } .drive-bars { display: none; } }
 @media (max-width: 700px) { .drive-card { width: 255px; bottom: 130px; padding: 12px; } .drive-bars { display: none; } .hud-top-left { min-width: 255px; max-width: calc(100vw - 28px); } .hud-top-right { top: auto; bottom: 140px; } #minimap { width: 150px; height: 150px; } .note { max-width: 150px; } }

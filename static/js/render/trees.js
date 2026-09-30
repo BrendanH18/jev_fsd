@@ -80,7 +80,7 @@ function trunkGeometry(seed) {
     g.translate(0, 0.92, 0);
     parts.push(g);
   }
-  return mergeGeometries(parts.map((p) => p.toNonIndexed()), false);
+  return mergeGeometries(parts.map((p) => p.index ? p.toNonIndexed() : p), false);
 }
 
 // Conifer: tiers of ragged, drooping cones, each a little narrower than the one below.

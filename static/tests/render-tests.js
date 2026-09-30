@@ -6,7 +6,7 @@ import { buildParkedCars, hideParkedCar } from "../js/render/cars.js";
 import { buildTrees } from "../js/render/trees.js";
 import { SceneView, groundLayer, LAYER } from "../js/render/scene.js";
 import { GroundReflection, reflection } from "../js/render/reflection.js";
-import { lighting } from "../js/render/atmosphere.js";
+import { lighting, sunPosition } from "../js/render/atmosphere.js";
 import { PostFX } from "../js/render/post.js";
 
 export function runRenderTests() {
@@ -14,6 +14,10 @@ export function runRenderTests() {
   const check = (name, ok) => results.push({ name, ok: !!ok });
   const camera = new THREE.PerspectiveCamera();
   const at = (x, y, z) => { camera.position.set(x, y, z); camera.updateMatrixWorld(); };
+  const victoriaSun = sunPosition(13, { latitude: 48.4255, longitude: -123.3655, utcOffset: -7 });
+  const torontoSun = sunPosition(13, { latitude: 43.6655, longitude: -79.403, utcOffset: -4 });
+  check("Canadian cities use their own latitude for the sun", torontoSun.elevation > victoriaSun.elevation && Math.abs(torontoSun.dir.length() - 1) < 1e-8);
+  check("local morning and evening put the sun on opposite sides", sunPosition(9, { latitude: 48.4255, longitude: -123.3655, utcOffset: -7 }).dir.x > 0 && sunPosition(17, { latitude: 48.4255, longitude: -123.3655, utcOffset: -7 }).dir.x < 0);
 
   const car = { x: 1020, y: -540, psi: 0.7, color: 0x3377aa, style: 0 };
   const neighbor = { ...car, x: 1030, style: 1 };
@@ -135,6 +139,11 @@ export function runRenderTests() {
   // attached texture/sampler feedback loop, which mocks cannot detect.
   const live = window.__jev?.view;
   if (live) {
+    const signs = window.__jev.signs;
+    if (signs) {
+      check("street signs are batched instances with a shared atlas", signs.userData.signCount > 0 && signs.children.every(o => o.isInstancedMesh) && new Set(signs.children.filter(o => o.geometry.attributes.signUv).map(o => o.material.map)).size === 1);
+      check("street signs add no shadow-map casters", signs.children.every(o => !o.castShadow));
+    }
     const quality = live.quality, wet = lighting.wet.value, gl = live.renderer.getContext();
     for (let i = 0; i < 10 && gl.getError() !== gl.NO_ERROR; i++) { /* drain earlier errors */ }
     try {

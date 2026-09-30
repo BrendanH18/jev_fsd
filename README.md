@@ -3,7 +3,8 @@
 **Watch an AI model drive through a real city, and see every decision it makes.**
 
 Jev FSD is a driving simulator on real [OpenStreetMap](https://www.openstreetmap.org/) streets,
-Kitsilano in Vancouver by default. Click a destination on the minimap and the car drives there
+Kitsilano in Vancouver by default, with bundled neighbourhoods in **Victoria, Toronto and Montréal**.
+Choose **Explore cities** for a suggested drive, or click a destination on the minimap and the car drives there
 through traffic, stop signs, traffic lights, cyclists, pedestrians, parking cars, and opening
 doors, in any weather and at any time of day. The driver is [Jev](https://typesafe.ai/), a
 "System One" model from TypeSafe AI: instead of writing text, it answers typed multiple-choice
@@ -16,7 +17,26 @@ asked, what it answered, how sure it was, and what that cost.
 > decisions in a simulation. It is not a self-driving system and must never be used to control a
 > real vehicle. It is independent and not affiliated with TypeSafe AI.
 
-## What's new: a car that can't see everything
+## New: a drive worth improving
+
+- **Four Canadian cities.** Switch between Vancouver's Kitsilano, Victoria's Old Town, Toronto's
+  Annex and Montréal's Plateau. All four map packs are included and work without downloading a map.
+- **Three drives from wherever you are.** A neighbourhood cruise, a junction-focused route and a
+  longer tour, all routed through the selected city's actual street graph.
+- **A live drive coach.** Safety, road rules, smoothness and control contribute to a score out of
+  100. Complete a route or choose **Finish & review** for a grade, deductions and coaching tips.
+  Your last 20 drives stay on this device; reports export as JSON. Manual and autopilot drives
+  use the same measurements. Pauses and waiting at lights carry no penalty.
+- **More of the driving feel.** Readable street names and speed-limit signs, gentler keyboard
+  steering, interpolated vehicle motion, manual indicators and a speed warning. Hood view adds
+  rain beads, sweeping wipers and optional camera motion; optional sound adds motor, road, rain,
+  indicator clicks and a horn.
+
+Start with **Explore cities → Victoria → Neighbourhood cruise**, or press `W` to drive yourself.
+Use **View** or `C` for the hood camera and **Sound off** to enable audio.
+See [drive scoring and controls](docs/drive-experience.md) and [map data](docs/maps.md).
+
+## Driving realism: a car that can't see everything
 
 Until now the car knew the whole world: every car behind every house, every signal phase a block
 away, every pedestrian in thick fog. This release takes that away and makes the street busier.
@@ -94,11 +114,15 @@ cp .env.example .env      # set TYPESAFE_API_KEY=... and restart the server
 | `J` | autopilot on / off |
 | `W A S D` or arrows | drive yourself (takes over from the autopilot) |
 | `Space` | brake hard |
+| `Q` / `E` / `H` | left indicator / right indicator / horn (enable sound first) |
 | `C` | camera: chase, hood, top-down, high chase |
 | `R` / `P` | put the car back on the lane / pause |
 | `1` / `2` | Jev driver / Rules driver |
 | weather, time, graphics menus | or `?weather=rain`, `?time=night` (also `?time=17:45`), `?quality=low` in the URL |
 | **JSON** button | open the decision panel |
+| **Explore cities** / **Explore drives** | choose a Canadian city or a suggested route |
+| **Finish & review** / **History** | grade the current drive / see saved reports |
+| **Sound**, **wipers**, **motion** | optional audio and hood-view effects |
 
 Three pages: `/` (the simulator), `/bench` (the benchmark), `/tests` (the browser tests).
 
@@ -268,7 +292,9 @@ JEV_FSD_BBOX="-123.1120,49.2570,-123.0940,49.2680" uv run server.py    # west, s
 uv run scripts/fetch_map.py mount_pleasant                               # or build one ahead of time
 ```
 
-Keep it neighbourhood-sized: under 0.25 square degrees and roughly 1 to 2 km across. The first run
+The bundled city picker needs no configuration; `?map=victoria`, `?map=toronto` and
+`?map=montreal` also select a city directly. Keep custom areas neighbourhood-sized: under
+0.25 square degrees and roughly 1 to 2 km across. The first run
 downloads and caches the map in `data/maps/`; Kitsilano is included, so the default works offline.
 If a download fails the app uses a synthetic grid and says so. Vancouver's water, downtown, and
 mountains appear on any map of Vancouver; elsewhere you get the surrounding city but no landmarks.

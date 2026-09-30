@@ -132,7 +132,12 @@ export class DriveScore {
 
 export const HISTORY_KEY = "jev-fsd-drives-v1";
 export function readHistory(storage = globalThis.localStorage) {
-  try { const data = JSON.parse(storage.getItem(HISTORY_KEY)); return Array.isArray(data) ? data.filter(d => d?.model_version === SCORE_VERSION && typeof d.score === "number").slice(0, 20) : []; }
+  try {
+    const data = JSON.parse(storage.getItem(HISTORY_KEY));
+    return Array.isArray(data) ? data.filter(d => d?.model_version === SCORE_VERSION && Number.isFinite(d.score)
+      && typeof d.title === "string" && typeof d.map === "string" && Array.isArray(d.tips) && Array.isArray(d.incidents)
+      && Object.keys(SCORE_WEIGHTS).every(key => Number.isFinite(d.categories?.[key]))).slice(0, 20) : [];
+  }
   catch { return []; }
 }
 export function saveDrive(report, storage = globalThis.localStorage) {

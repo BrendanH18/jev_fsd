@@ -27,6 +27,10 @@ import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surro
 import { DriveScore, saveDrive } from "./sim/drive-score.js";
 import { DriveReport } from "./ui/drive-report.js";
 import { Explorer } from "./ui/explorer.js";
+import { buildStreetSigns } from "./render/signs.js";
+import { DriveAudio } from "./ui/drive-audio.js";
+import { Cockpit } from "./ui/cockpit.js";
+import { capturePose, interpolatePose } from "./sim/interpolate.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -49,6 +53,8 @@ async function boot() {
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
   view.scene.add(roads.group);
+  const signs = buildStreetSigns(map);
+  view.addScenery(signs);
   const buildings = buildBuildings(map);
   view.scene.add(buildings);
   view.addScenery(buildTrees(map, roads, buildings.userData.index));
@@ -86,6 +92,7 @@ async function boot() {
   const npcMeshes = new Map();
   const parkedMeshes = new Map();
   const doorMeshes = new Map();
+  const previousCars = new Map(), previousPeople = [], previousEgo = {};
   // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
   const syncFleetMeshes = () => {
     const ids = new Set();
@@ -96,7 +103,7 @@ async function boot() {
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
-    for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); }
+    for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); previousCars.delete(id); }
     for (const car of world.parked.added.splice(0)) {
       const m = createCarMesh(car.color, car.id, car.style ?? null);
       syncCar(m, car);
@@ -121,7 +128,7 @@ async function boot() {
   const panel = new Panel(autopilot, hud);
   panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };
   const weatherView = new WeatherView(view);
-  const applySky = () => { const a = atmosphereFor(hour, world.weather); view.setAtmosphere(a); tintSurroundings(a); };
+  const applySky = () => { const a = atmosphereFor(hour, world.weather, { latitude: pack.origin.lat, longitude: pack.origin.lon, utcOffset: status.map.utc_offset ?? -7 }); view.setAtmosphere(a); tintSurroundings(a); };
   weatherView.apply(world.weather);
   applySky();
   hud.setWeather(world.weather);
@@ -147,9 +154,21 @@ async function boot() {
     autopilot.setBrain(name);
     hud.badge(`brain: ${name}`, "", 800);
   });
+  const audio = new DriveAudio($("#drive-sound"));
+  const cockpit = new Cockpit();
+  const switchCamera = () => { const mode = view.toggleCamera(); $("#camera-view").textContent = `View: ${mode}`; hud.badge(`camera: ${mode}`, "", 700); };
+  $("#camera-view").addEventListener("click", switchCamera);
+  $("#camera-motion").addEventListener("change", ev => { view.cameraMotion = ev.target.checked; });
+  let manualSignal = null;
+  function signal(side) {
+    if (autopilot.enabled) return;
+    world.ego.signal = world.ego.signal === side ? null : side;
+    manualSignal = world.ego.signal ? { t: world.t, heading: world.ego.psi } : null;
+  }
   const input = new Input({
     autopilot: toggleAutopilot,
-    camera: () => hud.badge(`camera: ${view.toggleCamera()}`, "", 700),
+    camera: switchCamera,
+    signalLeft: () => signal("left"), signalRight: () => signal("right"), horn: () => audio.horn(),
     reset: () => { drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
     pause: () => { world.paused = !world.paused; hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700); },
     brain1: () => { hud.setBrain("jev"); hud.el.brain.dispatchEvent(new Event("change")); },
@@ -226,25 +245,29 @@ async function boot() {
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
     startDrive(`Replay ${replay.scenario.id}`, world.route);
   }
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, driveReport, explorer, get drive() { return drive; }, finishDrive, setTime: (h) => { hour = parseHour(h); applySky(); } };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, driveReport, explorer, get drive() { return drive; }, finishDrive, setTime: (h) => { hour = parseHour(h); applySky(); } };
   if (params.has("explore")) explorer.open();
 
   let last = performance.now();
   let acc = 0;
+  let indicatorLit = false;
   function frame(now) {
     // never negative: headless runs advance the clock by hand, ahead of requestAnimationFrame
     const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
     last = now;
     if (!world.paused) {
-      acc += dt;
+      acc = Math.min(acc + dt, FIXED_DT * 5);
       let steps = 0;
       while (acc >= FIXED_DT && steps < 5) {
         if (input.anyDriving && (!drive || drive.finished)) startDrive("Free drive");
         if (autopilot.enabled && input.anyDriving) { toggleAutopilot(); }
-        if (drive && !drive.finished) {
+        if (drive && !drive.finished && !arrivalPending) {
           const driver = autopilot.enabled ? autopilot.brainName : "manual";
           if (driver !== drive.driver) drive.driver = "mixed";
         }
+        capturePose(world.ego, previousEgo);
+        for (const car of fleet.vehicles) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
+        world.crowd.list.forEach((p, i) => { previousPeople[i] = capturePose(p, previousPeople[i]); });
         stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
         drive?.record(world, world._road, FIXED_DT);
         if (arrivalPending) { arrivalPending = false; finishDrive("arrived"); }
@@ -259,20 +282,37 @@ async function boot() {
         if (world.paused) { acc = 0; break; }
       }
     }
+    const alpha = world.paused ? 1 : acc / FIXED_DT;
+    const renderEgo = Number.isFinite(previousEgo.x) ? interpolatePose(world.ego, previousEgo, alpha) : world.ego;
     for (const inter of map.intersections.values()) {
       roads.signals.set(inter.id, world.phase(inter.id));
       roads.signals.setPed(inter.id, { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) }, world.t);
     }
     syncFleetMeshes();
+    if (manualSignal && !autopilot.enabled) {
+      const turned = Math.abs(Math.atan2(Math.sin(world.ego.psi - manualSignal.heading), Math.cos(world.ego.psi - manualSignal.heading))) > 0.5;
+      if (world.t - manualSignal.t > 12 || (turned && Math.abs(world.ego.delta) < 0.08)) { world.ego.signal = null; manualSignal = null; }
+    }
     const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
-    syncCar(egoMesh, world.ego, dt, world.t, lightsOn);
-    for (const n of fleet.vehicles) (n.kind === "bike" ? syncBike : syncCar)(npcMeshes.get(n.id), n, dt, world.t, lightsOn);
-    world.crowd.list.forEach((p, i) => syncPerson(pedMeshes[i], p, view.camera, world.weather === "rain"));
+    syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
+    for (const n of fleet.vehicles) (n.kind === "bike" ? syncBike : syncCar)(npcMeshes.get(n.id), interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
+    world.crowd.list.forEach((p, i) => syncPerson(pedMeshes[i], interpolatePose(p, previousPeople[i], alpha), view.camera, world.weather === "rain"));
     overlays.tick(world.t);
     weatherView.update(dt);
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
-    view.updateCamera(world.ego, dt);
+    view.updateCamera(renderEgo, dt);
     view.render(dt);
+    cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
+    audio.update(world.ego, world.weather, world.paused || document.hidden, view.mode === "hood");
+    const blink = world.ego.signal && world.t % 0.8 < 0.45;
+    if (blink && !indicatorLit && !world.paused) audio.tick();
+    indicatorLit = blink;
+    $("#left-indicator").classList.toggle("active", !!blink && world.ego.signal === "left");
+    $("#right-indicator").classList.toggle("active", !!blink && world.ego.signal === "right");
+    const speeding = Math.abs(world.ego.v) > (world._road?.limit || 13.9) + 1.4;
+    $("#speed-warning").hidden = !speeding;
+    $(".speed").classList.toggle("speeding", speeding);
+    $("#drive-mode").textContent = world.paused ? "PAUSED" : autopilot.enabled ? `${autopilot.brainName.toUpperCase()} PILOT` : "MANUAL";
     minimap.draw({ ego: world.ego, npcs: fleet.vehicles, route: world.route, destination: world.destination });
     const snap = autopilot.enabled ? autopilot.snap : null;
     hud.update({ ego: world.ego, road: world._road, nav: snap ? snap.nav : null, violations: world.violations,

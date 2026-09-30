@@ -81,6 +81,7 @@ test('history survives reload, stays bounded, handles corruption and blocked sto
   for (let i = 0; i < 25; i++) saveDrive({ ...r, title: `Drive ${i}` }, storage);
   assert.equal(readHistory(storage).length, 20); assert.equal(readHistory(storage)[0].title, 'Drive 24');
   assert.deepEqual(readHistory({ getItem() { return '{'; } }), []);
+  assert.deepEqual(readHistory({ getItem() { return '[{"model_version":1,"score":100}]'; } }), []);
   assert.equal(saveDrive(r, { getItem() { throw Error(); }, setItem() { throw Error(); } }), false);
 });
 test('invalid step times cannot corrupt a score', () => {

@@ -317,6 +317,16 @@ async function run() {
     check("NPC path recovery preserves pose and velocity", JSON.stringify(pose) === JSON.stringify([driver.x, driver.y, driver.psi, driver.v]));
   }
   // Fixture drift is an error: live validation must exercise the same wording as the app.
+  {
+    const world = new World(map, { parked: 0, pedestrians: 0 });
+    world.ego.v = 14;
+    world.stepManual(1 / 60, { left: true });
+    check("manual steering ramps rather than snapping to full lock", world.ego.delta > 0 && world.ego.delta <= 0.8 / 60 + 1e-9);
+    for (let i = 0; i < 60; i++) world.stepManual(1 / 60, { left: true, throttle: true });
+    check("manual steering limits cornering demand at city speed", Math.abs(world.ego.delta) < 0.06 && Math.abs(world.ego.latAccel) < 5);
+    for (let i = 0; i < 60; i++) world.stepManual(1 / 60, {});
+    check("manual steering recentres after the key is released", Math.abs(world.ego.delta) < 1e-6);
+  }
   const fixtures = buildRealismCases();
   window.__jevFixtures = fixtures;
   for (const fixture of fixtures) {

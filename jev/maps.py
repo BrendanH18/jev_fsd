@@ -9,20 +9,20 @@ from .osm.pack import pack_path
 
 MAP_CATALOG = (
     {"id": "kitsilano", "name": "Kitsilano", "city": "Vancouver", "province": "British Columbia",
-     "description": "Leafy residential blocks, bike routes and busy avenues.", "character": "Residential", "accent": "#6ec7a1"},
+     "description": "Leafy residential blocks, bike routes and busy avenues.", "character": "Residential", "accent": "#6ec7a1", "utc_offset": -7},
     {"id": "victoria", "name": "Old Town", "city": "Victoria", "province": "British Columbia",
-     "description": "Compact downtown streets, frequent signals and one-way turns.", "character": "City centre", "accent": "#deb988"},
+     "description": "Compact downtown streets, frequent signals and one-way turns.", "character": "City centre", "accent": "#deb988", "utc_offset": -7},
     {"id": "toronto", "name": "The Annex", "city": "Toronto", "province": "Ontario",
-     "description": "A dense street grid with stop-controlled blocks and larger avenues.", "character": "Urban grid", "accent": "#8cadde"},
+     "description": "A dense street grid with stop-controlled blocks and larger avenues.", "character": "Urban grid", "accent": "#8cadde", "utc_offset": -4},
     {"id": "montreal", "name": "Le Plateau", "city": "Montréal", "province": "Québec",
-     "description": "Angled streets, one-way connections and a mix of junctions.", "character": "One-way streets", "accent": "#c29be2"},
+     "description": "Angled streets, one-way connections and a mix of junctions.", "character": "One-way streets", "accent": "#c29be2", "utc_offset": -4},
 )
 
 
 def map_identity(bbox: tuple) -> dict:
     for item in MAP_CATALOG:
         if tuple(bbox) == PRESET_BBOXES[item["id"]]:
-            return {"id": item["id"], "label": "%s, %s" % (item["name"], item["city"])}
+            return {"id": item["id"], "label": "%s, %s" % (item["name"], item["city"]), "utc_offset": item["utc_offset"]}
     return {"id": "custom", "label": "Custom neighbourhood"}
 
 

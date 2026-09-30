@@ -66,8 +66,14 @@
           <option value="high">high</option>
           <option value="ultra">ultra</option>
         </select>
+        <button id="camera-view" class="toggle" title="C">View: chase</button>
       </div>
-      <div class="row keys">W A S D drive · Space brake · J autopilot · C camera · R reset · P pause</div>
+      <div class="row controls immersion-controls">
+        <button id="drive-sound" class="toggle" aria-pressed="false">Sound off</button>
+        <label class="check"><input id="wipers" type="checkbox" checked> wipers</label>
+        <label class="check"><input id="camera-motion" type="checkbox" checked> motion</label>
+      </div>
+      <div class="row keys">W A S D drive · Space brake · Q E indicators · H horn<br>J autopilot · C camera · R reset · P pause</div>
     </div>
 
     <div class="hud-top-right panel">
@@ -93,6 +99,12 @@
     </div>
 
     <div id="badge" class="badge" hidden></div>
+    <div class="drive-instruments" aria-label="Driving instruments">
+      <span id="left-indicator" class="indicator">◀</span>
+      <span id="speed-warning" hidden>CHECK SPEED</span>
+      <span id="drive-mode">MANUAL</span>
+      <span id="right-indicator" class="indicator">▶</span>
+    </div>
   </div>
 
   <aside id="panel" class="panel drawer" hidden>
