@@ -224,8 +224,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _send(self, status, payload, content_type="application/json", nonce=""):
         data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+        # Header values must stay on one line, including types from the MIME registry.
+        safe_content_type = content_type.replace("\r", "").replace("\n", "")
+        if safe_content_type != content_type:
+            safe_content_type = "application/octet-stream"
         self.send_response(status)
-        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Type", safe_content_type)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -271,13 +275,15 @@ class Handler(BaseHTTPRequestHandler):
             html = html.replace("</head>", '<meta name="jev-csrf" content="%s">\n</head>' % SESSION_TOKEN, 1)
             html = html.replace('<script type="importmap">', '<script type="importmap" nonce="%s">' % nonce)
             return self._send(200, html.encode(), "text/html; charset=utf-8", nonce=nonce)
-        file = (STATIC / path.lstrip("/")).resolve()
-        if not str(file).startswith(str(STATIC)) or not file.is_file():
+        root = os.path.realpath(STATIC)
+        file = os.path.realpath(os.path.join(root, path.lstrip("/")))
+        # Include the separator so sibling directories such as static-private cannot pass.
+        if not file.startswith(root + os.sep) or not os.path.isfile(file):
             return self._send(404, {"error": "Not found"})
-        ctype = mimetypes.guess_type(str(file))[0] or "application/octet-stream"
+        ctype = mimetypes.guess_type(file)[0] or "application/octet-stream"
         if ctype.startswith("text/") or ctype.endswith("javascript"):
             ctype += "; charset=utf-8"
-        self._send(200, file.read_bytes(), ctype)
+        self._send(200, Path(file).read_bytes(), ctype)
 
     def do_GET(self):
         self._handle("GET")

@@ -1,5 +1,6 @@
 import json
 import unittest
+from urllib.parse import urlparse
 
 from helpers import grid_pack, synthetic_osm
 
@@ -158,7 +159,7 @@ class PackTests(unittest.TestCase):
 
         def http(url, data, timeout):
             calls.append(url)
-            if "openstreetmap.org" in url:
+            if urlparse(url).hostname == "api.openstreetmap.org":
                 raise OSError("down")
             return b'<?xml version="1.0"?><osm></osm>'
 
@@ -166,8 +167,8 @@ class PackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = fetch.fetch_osm_xml(small, Path(tmp), http=http, sleep=lambda s: None)
             self.assertTrue(path.exists())
-            self.assertEqual(sum("openstreetmap.org" in u for u in calls), 3)
-            self.assertTrue(any("overpass" in u for u in calls))
+            self.assertEqual(sum(urlparse(u).hostname == "api.openstreetmap.org" for u in calls), 3)
+            self.assertEqual(calls[-1], fetch.OVERPASS_URLS[0])
             n = len(calls)
             fetch.fetch_osm_xml(small, Path(tmp), http=http, sleep=lambda s: None)
             self.assertEqual(len(calls), n)  # cached
