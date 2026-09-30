@@ -17,7 +17,7 @@ export class DriveReport {
       this.coach = h("p", { class: "drive-coach" }, "A score for safety, road rules, smoothness and control."),
       h("div", { class: "drive-actions" }, h("button", { id: "new-drive", class: "toggle", onclick: onNewDrive }, "Explore drives"),
         this.finishButton = h("button", { id: "finish-drive", class: "toggle", disabled: true, onclick: onFinish }, "Finish & review")));
-    $("#hud").append(this.card);
+    ($("#hud-left") || $("#hud")).append(this.card);
     this.dialog = h("dialog", { class: "drive-dialog", "aria-label": "Drive report" });
     this.dialog.addEventListener("click", ev => { if (ev.target === this.dialog) this.dialog.close(); });
     this.dialog.addEventListener("close", onClose);
@@ -31,6 +31,7 @@ export class DriveReport {
     const r = this.current = session.snapshot();
     this.number.textContent = r.qualified ? r.score : "—";
     this.number.dataset.grade = r.grade;
+    this.number.dataset.qualified = String(r.qualified);
     this.title.textContent = r.title;
     this.stats.textContent = `${(r.distance_m / 1000).toFixed(2)} km · ${time(r.elapsed_s)} · ${r.qualified ? `Grade ${r.grade}` : "100 m to qualify"}`;
     this.coach.textContent = r.status === "active" ? r.coach : `${r.status === "arrived" ? "Destination reached" : "Drive finished"} · ${r.tips[0]}`;
