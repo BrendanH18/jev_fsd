@@ -192,7 +192,7 @@ export class Autopilot {
     if (!world.destination) return;
     this.rerouting = true;
     try {
-      const res = await api("/api/route", { from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3 });
+      const res = await api("/api/route", { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3 });
       if (res.routes.length) {
         if (res.routes.length === 1 || this.brainName === "rules") {
           world.route = new Route(res.routes[0], world.map);

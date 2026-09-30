@@ -34,9 +34,11 @@ const fmt = (v, f) => {
 let map = null, status = null, stopRequested = false, running = false, lastRun = null;
 
 async function boot() {
-  status = await api("/api/status");
-  map = new MapData(await api("/api/map"));
-  $("#map-note").textContent = `${status.map.synthetic ? "synthetic grid" : "Kitsilano, OpenStreetMap"} · ${map.edges.size} segments · ${status.configured ? "Jev available" : "no API key: Rules only"}`;
+  const params = new URLSearchParams(location.search), selection = params.get("bbox") || params.get("map");
+  const query = selection ? `?bbox=${encodeURIComponent(selection)}` : "";
+  status = await api(`/api/status${query}`);
+  map = new MapData(await api(`/api/map${query}`));
+  $("#map-note").textContent = `${status.map.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${status.configured ? "Jev available" : "no API key: Rules only"}`;
   $("#npcs").value = status.npcs;
   if (!status.configured) $("#brain").querySelector('option[value="jev"]').disabled = true;
   $("#run").addEventListener("click", () => (running ? (stopRequested = true) : runFromForm()));
@@ -64,7 +66,7 @@ function runFromForm() {
 export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", save = true } = {}) {
   running = true; stopRequested = false;
   $("#run").textContent = "Stop";
-  const config = { brain, count, npcs, seed, mode, weather, map: status.map.name, pack: map.pack.pack_version, started_at: new Date().toISOString() };
+  const config = { brain, count, npcs, seed, mode, weather, map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
   const setStatus = (t) => { $("#status").textContent = t; };
   setStatus("building the scenario suite…");
   const suite = await buildSuite(map, { count, seed });
@@ -151,8 +153,8 @@ function render(state) {
 }
 
 function watch(sc, config) {
-  try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs, weather: config.weather })); } catch { /* storage off */ }
-  window.open("/?replay=1", "_blank");
+  try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs, weather: config.weather, bbox: config.bbox || map.routingBbox })); } catch { /* storage off */ }
+  window.open(`/?replay=1&bbox=${encodeURIComponent((config.bbox || map.routingBbox).join(","))}`, "_blank");
 }
 
 window.__bench = { run, get last() { return lastRun; } };

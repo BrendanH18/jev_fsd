@@ -113,6 +113,7 @@ export class MapData {
   constructor(pack) {
     this.pack = pack;
     this.bbox = pack.bbox;
+    this.routingBbox = pack.routing_bbox || pack.bbox;
     this.extent = pack.extent;
     this.edges = new Map(pack.edges.map((e) => [e.id, { ...e, cum: cumulative(e.pts) }]));
     this.lanes = new Map();

@@ -96,9 +96,11 @@ export class World {
     if (input.throttle) accel = 2.5;
     if (input.brake) accel = this.ego.v > 0.2 ? -6 : -1.5;  // brake, then gently reverse
     if (input.hardBrake) accel = -8;
-    let steer = 0;
-    if (input.left) steer = CAR.maxSteer;
-    if (input.right) steer = -CAR.maxSteer;
+    // Keys are binary, unlike a steering wheel. Limit their angle at speed to a comfortable
+    // cornering demand, then ramp it so a tap does not ask for full lock in a fast bend.
+    const maxAngle = Math.min(CAR.maxSteer, Math.atan(3.2 * CAR.wheelbase / Math.max(1, this.ego.v ** 2)));
+    const desired = (Number(!!input.left) - Number(!!input.right)) * maxAngle;
+    const steer = this.ego.delta + Math.max(-0.8 * dt, Math.min(0.8 * dt, desired - this.ego.delta));
     if (input.brake && this.ego.v <= 0.2 && !input.hardBrake) {
       this.ego.step(dt, { steer, accel: -1.5, reverse: true });
       return;

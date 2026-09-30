@@ -40,6 +40,9 @@ DEFAULT_BBOX: Tuple[float, float, float, float] = (-123.1700, 49.2600, -123.1500
 PRESET_BBOXES = {
     "kitsilano": DEFAULT_BBOX,
     "mount_pleasant": (-123.1120, 49.2570, -123.0940, 49.2680),
+    "victoria": (-123.3740, 48.4190, -123.3570, 48.4320),
+    "toronto": (-79.4120, 43.6600, -79.3940, 43.6710),
+    "montreal": (-73.5900, 45.5160, -73.5740, 45.5280),
 }
 
 

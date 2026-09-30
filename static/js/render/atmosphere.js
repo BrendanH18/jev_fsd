@@ -36,12 +36,14 @@ export function updateNightMaterials() {
 }
 
 // Sun direction in Three.js coordinates (x east, y up, z south) and its elevation (rad).
-export function sunPosition(hour) {
-  const H = (hour - SOLAR_NOON_H) * 15 * Math.PI / 180;   // hour angle, + in the afternoon
-  const sinEl = Math.sin(LAT) * Math.sin(DECLINATION) + Math.cos(LAT) * Math.cos(DECLINATION) * Math.cos(H);
+export function sunPosition(hour, location = null) {
+  const latitude = location ? location.latitude * Math.PI / 180 : LAT;
+  const solarNoon = location ? 12 + location.utcOffset - location.longitude / 15 : SOLAR_NOON_H;
+  const H = (hour - solarNoon) * 15 * Math.PI / 180;   // hour angle, + in the afternoon
+  const sinEl = Math.sin(latitude) * Math.sin(DECLINATION) + Math.cos(latitude) * Math.cos(DECLINATION) * Math.cos(H);
   const el = Math.asin(sinEl);
   // azimuth from north, clockwise
-  const cosAz = (Math.sin(DECLINATION) - Math.sin(el) * Math.sin(LAT)) / (Math.cos(el) * Math.cos(LAT));
+  const cosAz = (Math.sin(DECLINATION) - Math.sin(el) * Math.sin(latitude)) / (Math.cos(el) * Math.cos(latitude));
   let az = Math.acos(Math.max(-1, Math.min(1, cosAz)));
   if (H > 0) az = 2 * Math.PI - az;
   const east = Math.sin(az) * Math.cos(el), north = Math.cos(az) * Math.cos(el);
@@ -81,9 +83,9 @@ function keyed(elDeg) {
 }
 
 // Everything the renderer needs for one time of day and weather.
-export function atmosphereFor(hour, weather = "dry") {
+export function atmosphereFor(hour, weather = "dry", location = null) {
   const W = WEATHER[weather] || WEATHER.dry;
-  const sun = sunPosition(hour);
+  const sun = sunPosition(hour, location);
   const elDeg = sun.elevation * 180 / Math.PI;
   const sky = keyed(elDeg);
   const day = smooth(-6, 12, elDeg);                // 0 at night, 1 in full daylight

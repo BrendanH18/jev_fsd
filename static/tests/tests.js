@@ -19,6 +19,7 @@ import { RulesBrain } from "../js/brain/rules.js";
 import { safetyBrake } from "../js/brain/safety.js";
 import { Visibility } from "../js/sim/visibility.js";
 import { fixtureWorld, crossingPedestrian, buildRealismCases } from "./jev-fixtures.js";
+import { buildSuite } from "../js/bench/scenarios.js";
 
 const out = document.getElementById("out");
 const results = [];
@@ -317,6 +318,16 @@ async function run() {
     check("NPC path recovery preserves pose and velocity", JSON.stringify(pose) === JSON.stringify([driver.x, driver.y, driver.psi, driver.v]));
   }
   // Fixture drift is an error: live validation must exercise the same wording as the app.
+  {
+    const world = new World(map, { parked: 0, pedestrians: 0 });
+    world.ego.v = 14;
+    world.stepManual(1 / 60, { left: true });
+    check("manual steering ramps rather than snapping to full lock", world.ego.delta > 0 && world.ego.delta <= 0.8 / 60 + 1e-9);
+    for (let i = 0; i < 60; i++) world.stepManual(1 / 60, { left: true, throttle: true });
+    check("manual steering limits cornering demand at city speed", Math.abs(world.ego.delta) < 0.06 && Math.abs(world.ego.latAccel) < 5);
+    for (let i = 0; i < 60; i++) world.stepManual(1 / 60, {});
+    check("manual steering recentres after the key is released", Math.abs(world.ego.delta) < 1e-6);
+  }
   const fixtures = buildRealismCases();
   window.__jevFixtures = fixtures;
   for (const fixture of fixtures) {
@@ -327,6 +338,10 @@ async function run() {
   const approach = fixtures.find((f) => f.name === "mid_block_approach"), at = fixtures.find((f) => f.name === "mid_block_at");
   check("mid-block wording distinguishes approaching and holding", approach.questions.motion.instructions.includes("22 m ahead") && at.questions.motion.instructions.includes("right in front") && approach.state.pedestrian.mid_block && at.state.pedestrian.distance === "at");
   check("Jev receives clearance and comfort tradeoffs", approach.state.candidates.some((c) => "max_decel" in c) && !approach.questions.vector.instructions.includes("normally pick the centered candidate"));
+  const victoria = new MapData(await api("/api/map?map=victoria"));
+  const citySuite = await buildSuite(victoria, { count: 1, seed: 1 });
+  check("signal-heavy Victoria can build a one-drive benchmark", citySuite.length === 1);
+  check("city benchmark routes and start use the selected map", citySuite.length === 1 && !!victoria.lane(citySuite[0].start.edge, citySuite[0].start.lane) && citySuite[0].route.edges.every(e => victoria.edges.has(e)));
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;
   window.__results = results;

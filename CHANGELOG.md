@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Bundled city selection for Vancouver, Victoria, Toronto and Montréal, with reachable suggested
+  drives from the current pose and selected-city routing, benchmarks and replay.
+- Live drive scoring for manual and autopilot drives, with category breakdowns, grades, coaching,
+  event timelines, JSON export and local history. Waiting and pauses carry no penalty.
+- Instanced street-name and speed-limit signs, optional procedural driving audio, indicators,
+  a horn, speed warnings, hood-view rain/wipers and optional camera motion.
+- Visual interpolation and speed-sensitive keyboard steering. Distance-based scenery detail and
+  lighter high-quality GPU budgets; stable ground depth, synchronized shadows and a fix for wet
+  reflection texture feedback loops. Measured rendering comparisons are documented separately.
+
 - Building footprints occlude the ego's observations, predictions, and emergency brake. Fog,
   rain, and snow shorten sensing range; signal phases outside sight are unknown. Speed planning
   and candidate filtering use visible stopping room, including blind bends.

@@ -6,6 +6,7 @@ export class Input {
     this.actions = actions;
     this.manualActive = false;
     window.addEventListener("keydown", (ev) => {
+      if (document.querySelector("dialog[open]")) return;
       if (ev.target && ["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName)) return;
       const k = ev.key.toLowerCase();
       if (["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
@@ -13,7 +14,8 @@ export class Input {
         this.keys.add(k);
         return;
       }
-      const map = { j: "autopilot", c: "camera", r: "reset", p: "pause", "1": "brain1", "2": "brain2", escape: "escape" };
+      const map = { j: "autopilot", c: "camera", r: "reset", p: "pause", q: "signalLeft", e: "signalRight", h: "horn", "1": "brain1", "2": "brain2", escape: "escape" };
+      if (ev.repeat && map[k]) return;
       if (map[k] && this.actions[map[k]]) { ev.preventDefault(); this.actions[map[k]](); }
     });
     window.addEventListener("keyup", (ev) => this.keys.delete(ev.key.toLowerCase()));
