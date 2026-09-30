@@ -9,12 +9,14 @@ export class Input {
       if (document.querySelector("dialog[open]")) return;
       if (ev.target && ["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName)) return;
       const k = ev.key.toLowerCase();
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (ev.target?.closest?.("button") && [" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
       if (["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
         ev.preventDefault();
         this.keys.add(k);
         return;
       }
-      const map = { j: "autopilot", c: "camera", r: "reset", p: "pause", q: "signalLeft", e: "signalRight", h: "horn", "1": "brain1", "2": "brain2", escape: "escape" };
+      const map = { j: "autopilot", c: "camera", r: "reset", p: "pause", q: "signalLeft", e: "signalRight", h: "horn", "1": "brain1", "2": "brain2", "?": "help", "/": "help", escape: "escape" };
       if (ev.repeat && map[k]) return;
       if (map[k] && this.actions[map[k]]) { ev.preventDefault(); this.actions[map[k]](); }
     });

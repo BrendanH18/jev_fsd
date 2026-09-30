@@ -24,7 +24,7 @@ import { setWeather } from "./sim/weather.js";
 import { pedPhase } from "./sim/signals.js";
 import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
 import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
-import { DriveScore, saveDrive, SPEED_GRACE_MPS } from "./sim/drive-score.js";
+import { DriveScore, saveDrive } from "./sim/drive-score.js";
 import { DriveReport } from "./ui/drive-report.js";
 import { Explorer } from "./ui/explorer.js";
 import { buildStreetSigns } from "./render/signs.js";
@@ -75,7 +75,7 @@ async function boot() {
       else if (ev.type === "fallback") hud.badge(`fallback: ${ev.error}`, "safety", 1800);
       else if (ev.type === "reroute") { hud.badge(`re-routed (${ev.count} options)`, "", 1000); overlays.setRoute(world.route); }
       else if (ev.type === "deadlock") hud.badge("DEADLOCK: creeping", "safety", 1200);
-      else if (ev.type === "error") hud.badge(ev.error, "", 1500);
+      else if (ev.type === "error") hud.badge(ev.error, "safety", 1500);
     },
   };
   // A benchmark scenario opened with "watch" replays with the same start, route, and traffic seed.
@@ -139,13 +139,16 @@ async function boot() {
   hud.onTimeChange((name) => { hour = parseHour(name); applySky(); hud.badge(`time: ${formatHour(hour)}`, "", 800); });
   hud.onQualityChange((name) => {
     view.setQuality(name);
+    hud.setQuality(view.quality);
     try { localStorage.setItem("jev-fsd-quality", view.quality); } catch { /* preferences are optional */ }
     hud.badge(`graphics: ${view.quality}`, "", 800);
   });
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt));
+  hud.setJevAvailable(status.configured);
   hud.setMapNote(status.map.synthetic
     ? `Synthetic grid (map fetch failed: ${status.map.error})`
-    : `Map data © OpenStreetMap contributors (ODbL) · ${pack.edges.length} segments · ${pack.intersections.length} signals · ${pack.stops.length} stop signs${status.configured ? "" : " · no API key: Jev brain unavailable"}`);
+    : `© OpenStreetMap contributors (ODbL) · ${pack.edges.length} roads · ${pack.intersections.length} signals · ${pack.stops.length} stops`,
+  status.configured ? "" : "no API key, Jev unavailable");
 
   function toggleAutopilot() {
     if (!autopilot.enabled && !world.route) { hud.badge("set a destination first (click the minimap)", "", 1500); return; }
@@ -155,11 +158,14 @@ async function boot() {
     if (!autopilot.enabled) overlays.setCandidates(null);
   }
   hud.onAutopilotClick(toggleAutopilot);
-  hud.onBrainChange((name) => {
-    if (name === "jev" && !status.configured) { hud.badge("no TYPESAFE_API_KEY on the server", "safety", 1800); hud.setBrain("rules"); return; }
+  function selectBrain(name) {
+    if (name === "jev" && !status.configured) { hud.badge("Jev needs TYPESAFE_API_KEY in .env on the server", "safety", 2200); hud.setBrain(autopilot.brainName); return; }
+    if (name === autopilot.brainName) return;
     autopilot.setBrain(name);
-    hud.badge(`brain: ${name}`, "", 800);
-  });
+    hud.setBrain(name);
+    hud.badge(`brain: ${name === "jev" ? "Jev" : "Rules"}`, "", 800);
+  }
+  hud.onBrainChange(selectBrain);
   const audio = new DriveAudio($("#drive-sound"));
   const cockpit = new Cockpit();
   const switchCamera = () => { const mode = view.toggleCamera(); $("#camera-view").textContent = `View: ${mode}`; hud.badge(`camera: ${mode}`, "", 700); };
@@ -177,8 +183,10 @@ async function boot() {
     signalLeft: () => signal("left"), signalRight: () => signal("right"), horn: () => audio.horn(),
     reset: () => { drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
     pause: () => { world.paused = !world.paused; hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700); },
-    brain1: () => { hud.setBrain("jev"); hud.el.brain.dispatchEvent(new Event("change")); },
-    brain2: () => { hud.setBrain("rules"); hud.el.brain.dispatchEvent(new Event("change")); },
+    brain1: () => selectBrain("jev"),
+    brain2: () => selectBrain("rules"),
+    help: () => hud.toggleKeys(),
+    escape: () => { hud.toggleKeys(false); panel.toggle(false); },
   });
 
   let pausedBeforeReport = false;
@@ -243,6 +251,20 @@ async function boot() {
     }
   }
 
+  // Turn-by-turn guidance for manual drivers; the autopilot's own snapshot is used when it drives.
+  let cachedNav = null, navRoute = null, navAt = -Infinity;
+  function routeNav(now) {
+    const route = world.route;
+    if (!route) { navRoute = null; cachedNav = null; return null; }
+    if (route === navRoute && now - navAt < 100) return cachedNav;
+    navRoute = route; navAt = now;
+    const p = route.project(world.ego.x, world.ego.y);
+    if (p.distance > 25) return cachedNav = null;
+    const remaining = route.remaining(p.s), next = route.turnsAfter(p.s)[0];
+    return cachedNav = { next_turn: next ? next.dir : "none", exit: next?.exit ?? null, turn_in_m: next ? next.at_m - p.s : remaining,
+      turn_street: next?.street || "", remaining_m: remaining, arrived: remaining < 3.5 };
+  }
+
   $("#loading").hidden = true;
   hud.show();
   if (replay) {
@@ -278,10 +300,10 @@ async function boot() {
         drive?.record(world, world._road, FIXED_DT);
         if (arrivalPending) { arrivalPending = false; finishDrive("arrived"); }
         for (const ev of world.events) {
-          if (ev.type === "collision") { hud.flash(); hud.badge("COLLISION", "", 1200); }
-          else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "", 1500);
-          else if (ev.type === "stop_sign") hud.badge("RAN A STOP SIGN", "", 1500);
-          else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "", 1500);
+          if (ev.type === "collision") { hud.flash(); hud.badge("COLLISION", "alert", 1200); }
+          else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "alert", 1500);
+          else if (ev.type === "stop_sign") hud.badge("RAN A STOP SIGN", "alert", 1500);
+          else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
         }
         acc -= FIXED_DT;
         steps++;
@@ -315,14 +337,10 @@ async function boot() {
     indicatorLit = blink;
     $("#left-indicator").classList.toggle("active", !!blink && world.ego.signal === "left");
     $("#right-indicator").classList.toggle("active", !!blink && world.ego.signal === "right");
-    const speeding = Math.abs(world.ego.v) > (world._road?.limit || 13.9) + SPEED_GRACE_MPS;
-    $("#speed-warning").hidden = !speeding;
-    $(".speed").classList.toggle("speeding", speeding);
-    $("#drive-mode").textContent = world.paused ? "PAUSED" : autopilot.enabled ? `${autopilot.brainName.toUpperCase()} PILOT` : "MANUAL";
     minimap.draw({ ego: world.ego, npcs: fleet.vehicles, route: world.route, destination: world.destination });
     const snap = autopilot.enabled ? autopilot.snap : null;
-    hud.update({ ego: world.ego, road: world._road, nav: snap ? snap.nav : null, violations: world.violations,
-      decision: autopilot.lastDecision, totals: autopilot.totals, paused: world.paused });
+    hud.update({ ego: world.ego, road: world._road, nav: snap?.nav || routeNav(now), violations: world.violations,
+      decision: autopilot.lastDecision, totals: autopilot.totals, paused: world.paused, autopilot: autopilot.enabled, hasRoute: !!world.route }, now);
     panel.render(now);
     driveReport.update(drive, now);
     if (!manual) requestAnimationFrame(frame);

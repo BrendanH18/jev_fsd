@@ -15,95 +15,129 @@
   </script>
 </head>
 <body>
-  <canvas id="view"></canvas>
+  <canvas id="view" tabindex="0" aria-label="Driving view"></canvas>
 
   <div id="loading" class="overlay">
     <div class="card">
-      <h1>Jev FSD</h1>
+      <div class="loading-mark" aria-hidden="true"></div>
+      <h1>JEV <small>DRIVE LAB</small></h1>
       <p id="loading-text">Loading map…</p>
     </div>
   </div>
 
   <div id="hud" class="hud" hidden>
-    <div class="hud-top-left panel">
-      <div class="world-heading"><span class="brand">JEV <small>DRIVE LAB</small></span><button id="explore-world" class="text-button">Explore cities ↗</button></div>
-      <div id="current-city" class="current-city">Vancouver · Kitsilano</div>
+    <div id="hud-left" class="hud-column hud-left">
+      <section class="hud-top-left panel" aria-label="Trip">
+        <div class="world-heading"><span class="brand">JEV <small>DRIVE LAB</small></span><button id="explore-world" class="chip-button">Explore cities ↗</button></div>
+        <div id="current-city" class="current-city">Vancouver · Kitsilano</div>
+        <div id="nav-card" class="nav-card idle">
+          <span id="nav-arrow" class="nav-arrow" aria-hidden="true">◎</span>
+          <div class="nav-text">
+            <strong><span id="nav-distance">No destination</span><small id="nav-remaining"></small></strong>
+            <span id="nav">Click the minimap or explore drives</span>
+          </div>
+        </div>
+        <div class="street-line"><span class="label">on</span><span id="street">–</span></div>
+        <div class="pilot-row">
+          <div class="segmented" role="radiogroup" aria-label="Autopilot brain">
+            <button id="brain-rules" role="radio" data-brain="rules" title="2 · deterministic code, free">Rules</button>
+            <button id="brain-jev" role="radio" data-brain="jev" title="1 · TypeSafe Jev model">Jev</button>
+          </div>
+          <button id="autopilot" class="switch" role="switch" aria-checked="false" title="J"><i aria-hidden="true"></i><span>Autopilot</span></button>
+        </div>
+        <div class="toolbar">
+          <button id="settings-toggle" class="tool" aria-expanded="false" aria-controls="settings">Settings</button>
+          <button id="camera-view" class="tool" title="C">View: chase</button>
+          <button id="drive-sound" class="tool" aria-pressed="false">Sound off</button>
+          <button id="keys-toggle" class="tool" title="?" aria-pressed="false" aria-controls="keys-help" aria-label="Keyboard shortcuts">?</button>
+        </div>
+        <div id="settings" class="settings" hidden>
+          <label><span class="label">weather</span>
+            <select id="weather">
+              <option value="dry">Dry</option>
+              <option value="rain">Rain</option>
+              <option value="fog">Fog</option>
+              <option value="snow">Snow</option>
+            </select></label>
+          <label><span class="label">time</span>
+            <select id="time">
+              <option value="dawn">Dawn</option>
+              <option value="morning">Morning</option>
+              <option value="noon">Noon</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="golden">Golden hour</option>
+              <option value="dusk">Dusk</option>
+              <option value="night">Night</option>
+            </select></label>
+          <label><span class="label">graphics</span>
+            <select id="quality">
+              <option value="low">Low</option>
+              <option value="high">High</option>
+              <option value="ultra">Ultra</option>
+            </select></label>
+          <div class="settings-checks">
+            <label class="check"><input id="wipers" type="checkbox" checked> Wipers</label>
+            <label class="check"><input id="camera-motion" type="checkbox" checked> Camera motion</label>
+            <button id="settings-inspect" class="chip-button settings-inspect" data-inspect aria-controls="panel" aria-expanded="false">Inspect JSON</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="hud-column hud-right">
+      <section class="hud-top-right panel" aria-label="Map">
+        <canvas id="minimap" width="220" height="220" title="Click to set a destination"></canvas>
+        <div id="map-note" class="note"></div>
+      </section>
+
+      <section id="decision-card" class="decision-card panel" aria-label="Autopilot decision">
+        <div class="card-heading"><span class="label">Pilot decision</span><span id="source" class="source-tag">–</span></div>
+        <div id="decision-motion" class="decision-motion">Autopilot off</div>
+        <div id="decision-options" class="decision-options"><p class="muted">Choose a drive and the pilot's options appear here.</p></div>
+        <div class="telemetry">
+          <div class="stat"><span class="label">latency</span><span id="latency">–</span></div>
+          <div class="stat"><span class="label">p50</span><span id="p50">–</span></div>
+          <div class="stat"><span class="label">per min</span><span id="rate">–</span></div>
+          <div class="stat"><span class="label">tokens</span><span id="tokens">–</span></div>
+          <div class="stat"><span class="label">cost</span><span id="cost">$0</span></div>
+          <div class="stat"><span class="label">fallbacks</span><span id="fallbacks">0</span></div>
+        </div>
+        <button id="panel-toggle" class="chip-button inspect" data-inspect aria-controls="panel" aria-expanded="false">Inspect JSON</button>
+      </section>
+
+      <section class="incidents panel" aria-label="Incidents">
+        <div class="incident" title="Collisions"><span id="collisions">0</span><small>collisions</small></div>
+        <div class="incident" title="Red lights run"><span id="reds">0</span><small>red lights</small></div>
+        <div class="incident" title="Stop signs run"><span id="stops">0</span><small>stop signs</small></div>
+        <div class="incident" title="Failures to yield"><span id="yields">0</span><small>yields</small></div>
+        <div class="incident" title="Time off the road"><span id="offroad">0 s</span><small>off-road</small></div>
+        <div class="incident" title="Safety-layer emergency brakes"><span id="safety">0</span><small>safety brakes</small></div>
+      </section>
+    </div>
+
+    <div id="badge" class="badge" role="status" hidden></div>
+    <div class="cluster panel" aria-label="Driving instruments">
+      <span id="left-indicator" class="indicator" aria-hidden="true">◀</span>
+      <div id="limit-sign" class="limit-sign" title="Speed limit"><small>MAXIMUM</small><b id="limit">–</b></div>
       <div class="speed"><span id="speed">0</span><small>km/h</small></div>
-      <div class="row"><span class="label">limit</span><span id="limit">–</span></div>
-      <div class="row"><span class="label">street</span><span id="street">–</span></div>
-      <div class="row nav"><span id="nav">click the minimap to set a destination</span></div>
-      <div class="row controls">
-        <label class="label">brain</label>
-        <select id="brain">
-          <option value="jev">Jev (TypeSafe)</option>
-          <option value="rules">Rules (code only)</option>
-        </select>
-        <button id="autopilot" class="toggle" title="J">autopilot: off</button>
-      </div>
-      <div class="row controls">
-        <label class="label">weather</label>
-        <select id="weather">
-          <option value="dry">dry</option>
-          <option value="rain">rain</option>
-          <option value="fog">fog</option>
-          <option value="snow">snow</option>
-        </select>
-        <label class="label">time</label>
-        <select id="time">
-          <option value="dawn">dawn</option>
-          <option value="morning">morning</option>
-          <option value="noon">noon</option>
-          <option value="afternoon">afternoon</option>
-          <option value="golden">golden hour</option>
-          <option value="dusk">dusk</option>
-          <option value="night">night</option>
-        </select>
-      </div>
-      <div class="row controls">
-        <label class="label">graphics</label>
-        <select id="quality">
-          <option value="low">low</option>
-          <option value="high">high</option>
-          <option value="ultra">ultra</option>
-        </select>
-        <button id="camera-view" class="toggle" title="C">View: chase</button>
-      </div>
-      <div class="row controls immersion-controls">
-        <button id="drive-sound" class="toggle" aria-pressed="false">Sound off</button>
-        <label class="check"><input id="wipers" type="checkbox" checked> wipers</label>
-        <label class="check"><input id="camera-motion" type="checkbox" checked> motion</label>
-      </div>
-      <div class="row keys">W A S D drive · Space brake · Q E indicators · H horn<br>J autopilot · C camera · R reset · P pause</div>
+      <div class="cluster-mode"><span id="drive-mode">MANUAL</span><span id="speed-warning" hidden>Slow down</span></div>
+      <span id="right-indicator" class="indicator" aria-hidden="true">▶</span>
     </div>
 
-    <div class="hud-top-right panel">
-      <canvas id="minimap" width="220" height="220"></canvas>
-      <div id="map-note" class="note"></div>
-    </div>
-
-    <div class="hud-bottom panel">
-      <div class="stat"><span class="label">decision</span><span id="latency">–</span></div>
-      <div class="stat"><span class="label">p50</span><span id="p50">–</span></div>
-      <div class="stat"><span class="label">tokens</span><span id="tokens">–</span></div>
-      <div class="stat"><span class="label">cost</span><span id="cost">$0</span></div>
-      <div class="stat"><span class="label">decisions/min</span><span id="rate">–</span></div>
-      <div class="stat"><span class="label">source</span><span id="source">–</span></div>
-      <div class="stat warn"><span class="label">collisions</span><span id="collisions">0</span></div>
-      <div class="stat warn"><span class="label">red lights</span><span id="reds">0</span></div>
-      <div class="stat warn"><span class="label">stop signs</span><span id="stops">0</span></div>
-      <div class="stat warn"><span class="label">failed to yield</span><span id="yields">0</span></div>
-      <div class="stat warn"><span class="label">off-road</span><span id="offroad">0 s</span></div>
-      <div class="stat"><span class="label">safety brakes</span><span id="safety">0</span></div>
-      <div class="stat"><span class="label">fallbacks</span><span id="fallbacks">0</span></div>
-      <button id="panel-toggle" class="toggle">JSON</button>
-    </div>
-
-    <div id="badge" class="badge" hidden></div>
-    <div class="drive-instruments" aria-label="Driving instruments">
-      <span id="left-indicator" class="indicator">◀</span>
-      <span id="speed-warning" hidden>CHECK SPEED</span>
-      <span id="drive-mode">MANUAL</span>
-      <span id="right-indicator" class="indicator">▶</span>
+    <div id="keys-help" class="keys-help panel" hidden>
+      <div class="card-heading"><span class="label">Keyboard</span><button id="keys-close" class="chip-button" aria-label="Close shortcuts">×</button></div>
+      <dl>
+        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Drive (takes over from autopilot)</dd>
+        <dt><kbd>Space</kbd></dt><dd>Brake hard</dd>
+        <dt><kbd>J</kbd></dt><dd>Toggle autopilot</dd>
+        <dt><kbd>1</kbd><kbd>2</kbd></dt><dd>Jev / Rules brain</dd>
+        <dt><kbd>Q</kbd><kbd>E</kbd></dt><dd>Left / right indicator</dd>
+        <dt><kbd>H</kbd></dt><dd>Horn (with sound on)</dd>
+        <dt><kbd>C</kbd></dt><dd>Cycle camera</dd>
+        <dt><kbd>R</kbd></dt><dd>Reset to lane</dd>
+        <dt><kbd>P</kbd></dt><dd>Pause</dd>
+        <dt><kbd>?</kbd></dt><dd>Show or hide this list</dd>
+      </dl>
     </div>
   </div>
 
@@ -116,7 +150,7 @@
         <button data-tab="answers">Answers</button>
         <button data-tab="meta">Meta</button>
       </div>
-      <button id="panel-close" class="toggle">×</button>
+      <button id="panel-close" class="toggle" aria-label="Close inspector">×</button>
     </header>
     <div class="actions">
       <button id="copy-curl" class="toggle">Copy as curl</button>

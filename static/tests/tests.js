@@ -1,6 +1,7 @@
 // Browser-run assertions for the simulation and brain modules. Open /tests in the app server.
 
 import { api } from "../js/common.js";
+import { runUiTests } from "./ui-tests.js";
 import { MapData } from "../js/map/mapdata.js";
 import { Route } from "../js/map/route.js";
 import { Vehicle, CAR, ROAD, comfort } from "../js/sim/vehicle.js";
@@ -342,6 +343,7 @@ async function run() {
   const citySuite = await buildSuite(victoria, { count: 1, seed: 1 });
   check("signal-heavy Victoria can build a one-drive benchmark", citySuite.length === 1);
   check("city benchmark routes and start use the selected map", citySuite.length === 1 && !!victoria.lane(citySuite[0].start.edge, citySuite[0].start.lane) && citySuite[0].route.edges.every(e => victoria.edges.has(e)));
+  results.push(...await runUiTests());
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;
   window.__results = results;

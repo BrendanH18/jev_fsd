@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Redesigned trip and drive-coach cards, central driving instruments, a live decision summary,
+  Settings and keyboard help. Manual drivers now receive turn-by-turn route guidance.
+- Scrollable HUD columns and a narrow-screen inspector entry point; keyboard-accessible brain
+  buttons, accurate fallback/stop labels, reduced-motion support and opaque instruments.
+  HUD text refreshes at most 10 times per second and skips unchanged DOM writes.
+
 - Bundled city selection for Vancouver, Victoria, Toronto and Montréal, with reachable suggested
   drives from the current pose and selected-city routing, benchmarks and replay.
 - Live drive scoring for manual and autopilot drives, with category breakdowns, grades, coaching,

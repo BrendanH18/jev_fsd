@@ -23,11 +23,11 @@ detail is chosen once from the main camera before both passes, so the mirrored c
 switch geometry independently. The reflection clips geometry below the road and fades at texture
 borders, and blur dithering follows road coordinates rather than screen pixels.
 
-Windshield trim and the bottom statistics panel are now opaque. The bottom panel also avoids a
-backdrop blur over the moving WebGL canvas; grass and reflected greenery cannot show through
-these surfaces. Street signs retain the same 2048² atlas and instance batches, with proportionate
-printed rectangles, bold lettering, same-colour gutters, half-texel UV insets and GPU-capped 8×
-anisotropy. Both sides show readable text without adding meshes or increasing render resolution.
+Windshield trim, the driving instruments, drive coach and incident panel are opaque. Persistent
+HUD panels avoid backdrop blur over the moving WebGL canvas; grass and reflected greenery
+cannot show through the opaque surfaces. Street signs retain the same 2048² atlas and instance
+batches, with proportionate printed rectangles, bold lettering, same-colour gutters, half-texel
+UV insets and GPU-capped 8× anisotropy. Both sides show readable text without adding meshes or increasing render resolution.
 
 The base ground plane now writes depth once. Road paint and surface color layers use depth
 testing and a small raster bias without rewriting coplanar depth. This keeps the ground depth
@@ -53,6 +53,27 @@ The old wet pipeline also rejected draws due to its feedback loop. Raw GPU measu
 does not include CPU simulation or establish delivered FPS on another machine. Wet frames have
 also been checked for zero GL errors across high/ultra/high/low transitions and during an
 eight-second Rules drive that moved 50 m.
+
+## HUD design review (2026-09-30)
+
+The redesigned HUD refreshes text and statistics at most once every 100 ms. Unchanged text and
+mode classes retain their DOM nodes. The decision card rebuilds only when the decision object
+or autopilot state changes. Manual navigation caches route projection and turn lookup for
+100 ms and invalidates the cache when the route changes. Indicator blinking still follows the
+render loop; physics and decisions keep their existing cadence.
+
+In a paused Kitsilano scene in the T3 Chromium preview, 120 repeated calls with unchanged HUD
+state produced 2,040 DOM mutations before the review fixes and zero after warm-up with the
+fixes. `MutationObserver` counted child, text and attribute changes across the HUD subtree.
+The new HUD regression suite checks zero mutations for an unchanged update and verifies that
+speed changes wait for the next 100 ms refresh. This measures avoided DOM work, not GPU time,
+compositing cost or delivered FPS; the older GPU measurements above do not include this review.
+
+Persistent panels use a dark background without backdrop filtering; instruments, drive coach
+and incidents use a solid background. The low preset also removes HUD panel shadows. Speeding
+uses a static highlight instead of an infinite glow animation. Reduced-motion preferences
+disable CSS transitions and animations. The temporary toast retains its blur, and modal-dialog
+backdrops may blur while the simulation is paused.
 
 ## First-pass geometry comparison
 
@@ -104,7 +125,7 @@ nearby shadows, removal of a parked car from both detail levels without removing
 reflection clipping, sampler/state restoration, quality changes and actual wet WebGL draws
 (43 assertions when run from the simulator, including city lighting, sign proportions and
 front/rear WebGL lettering).
-The existing `/tests` suite remains independent of Three.js and also passes (99 assertions), as
-do the 50 Python tests and offline fixture checks. The subsequent drive-experience changes add
+The `/tests` suite remains independent of Three.js and also passes (117 assertions: 99 simulation
+and 18 HUD), as do the 50 Python tests and offline fixture checks. The subsequent drive-experience changes add
 visual interpolation and gentler manual steering; the Rules/Jev controller and decision pipeline
 remain shared with the benchmark.

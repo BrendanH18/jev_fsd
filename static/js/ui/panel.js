@@ -11,7 +11,8 @@ export class Panel {
     this.tab = "state";
     this.last = null;
     this.dirty = true;
-    $("#panel-toggle").addEventListener("click", () => this.toggle());
+    this.toggles = [...document.querySelectorAll("[data-inspect]")];
+    for (const button of this.toggles) button.addEventListener("click", () => this.toggle());
     $("#panel-close").addEventListener("click", () => this.toggle(false));
     for (const b of this.el.querySelectorAll(".tabs button")) {
       b.addEventListener("click", () => {
@@ -34,7 +35,10 @@ export class Panel {
   toggle(force) {
     const open = force === undefined ? this.el.hidden : force;
     this.el.hidden = !open;
-    $("#panel-toggle").classList.toggle("on", open);
+    for (const button of this.toggles) {
+      button.classList.toggle("on", open);
+      button.setAttribute("aria-expanded", String(open));
+    }
     if (open) { this.dirty = true; this.render(); }
   }
 

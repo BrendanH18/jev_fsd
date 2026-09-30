@@ -103,16 +103,24 @@ See [the scoring formula, thresholds and report behaviour](docs/drive-experience
 | `W A S D` or arrows | Drive manually and take over from autopilot |
 | `Space` | Brake hard |
 | `J` | Toggle autopilot |
-| `1` / `2` | Select Jev / Rules |
+| `1` / `2` | Select Jev / Rules (also available as buttons) |
 | `Q` / `E` | Toggle left / right indicators |
 | `H` | Horn when sound is enabled |
 | `C` or **View** | Cycle chase, hood, overhead and high chase cameras |
 | `R` / `P` | Reset to the lane / pause |
+| `?` or `/` | Toggle keyboard shortcuts |
+| `Escape` | Close keyboard shortcuts or the decision inspector |
 | **Explore cities** / **Explore drives** | Pick a city or suggested route |
 | **Finish & review** / **History** | Review the current drive / saved drives |
-| **JSON** | Open the decision inspector |
-| Weather / time / graphics menus | Change conditions and rendering quality |
-| **Sound**, **wipers**, **motion** | Toggle audio, rain sweeps and hood-camera motion |
+| **Inspect JSON** | Open the decision inspector; on narrow screens, find it under **Settings** |
+| **Settings** | Weather, time, graphics quality, wipers and camera motion |
+| **Sound** | Toggle driving audio |
+
+The trip card gives turn-by-turn guidance during both manual and autopilot driving. The
+**Pilot decision** card shows the latest choice, speeds in km/h and candidate probabilities.
+Rules fallbacks have an amber label; locally resolved choices may have no probabilities.
+Space and arrow keys operate focused buttons; click the road view to use them for driving.
+Modified browser shortcuts keep their normal behaviour.
 
 Keyboard steering ramps gently and limits cornering demand at speed while retaining full lock
 for low-speed manoeuvres. Vehicles, cyclists, pedestrians and the camera interpolate between
@@ -267,7 +275,7 @@ node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```
 
-Open [/tests](http://127.0.0.1:8322/tests) for simulation checks. From the simulator's browser
+Open [/tests](http://127.0.0.1:8322/tests) for simulation and HUD checks. From the simulator's browser
 console, run the WebGL renderer checks:
 
 ```js
@@ -275,7 +283,7 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 50 Python tests, 99 browser simulation assertions,
+The documented validation covers 50 Python tests, 117 browser assertions (99 simulation and 18 HUD),
 43 renderer assertions, 18 scoring tests, interpolation checks and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality
 transitions. For GPU profiling, see [rendering performance](docs/render-performance.md).
