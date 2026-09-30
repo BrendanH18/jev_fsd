@@ -55,7 +55,7 @@ async function boot() {
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
   view.scene.add(roads.group);
-  const signs = buildStreetSigns(map);
+  const signs = buildStreetSigns(map, { anisotropy: view.renderer.capabilities.getMaxAnisotropy() });
   view.addScenery(signs);
   const buildings = buildBuildings(map);
   view.scene.add(buildings);

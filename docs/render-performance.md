@@ -23,6 +23,12 @@ detail is chosen once from the main camera before both passes, so the mirrored c
 switch geometry independently. The reflection clips geometry below the road and fades at texture
 borders, and blur dithering follows road coordinates rather than screen pixels.
 
+Windshield trim and the bottom statistics panel are now opaque. The bottom panel also avoids a
+backdrop blur over the moving WebGL canvas; grass and reflected greenery cannot show through
+these surfaces. Street signs retain the same 2048² atlas and instance batches, with proportionate
+printed rectangles, bold lettering, same-colour gutters, half-texel UV insets and GPU-capped 8×
+anisotropy. Both sides show readable text without adding meshes or increasing render resolution.
+
 The base ground plane now writes depth once. Road paint and surface color layers use depth
 testing and a small raster bias without rewriting coplanar depth. This keeps the ground depth
 stable for occlusion and avoids interpolated depth seams between overlapping triangles.
@@ -96,7 +102,8 @@ The profiler restores the pause state and renderer statistics configuration afte
 Renderer tests cover world transforms, paint, detail selection, hysteresis, geometry reduction,
 nearby shadows, removal of a parked car from both detail levels without removing its neighbor,
 reflection clipping, sampler/state restoration, quality changes and actual wet WebGL draws
-(34 assertions when run from the simulator, including city lighting and street signs).
+(43 assertions when run from the simulator, including city lighting, sign proportions and
+front/rear WebGL lettering).
 The existing `/tests` suite remains independent of Three.js and also passes (99 assertions), as
 do the 50 Python tests and offline fixture checks. The subsequent drive-experience changes add
 visual interpolation and gentler manual steering; the Rules/Jev controller and decision pipeline

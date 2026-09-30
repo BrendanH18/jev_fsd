@@ -9,7 +9,9 @@ export class Cockpit {
   constructor() {
     this.root = svgNode("svg", { class: "cockpit", viewBox: "0 0 1600 1000", preserveAspectRatio: "none", "aria-hidden": "true" });
     this.root.style.display = "none";
-    const frame = svgNode("path", { d: "M0 0 L75 0 L185 900 Q800 835 1415 900 L1525 0 L1600 0 L1600 1000 L0 1000 Z", fill: "#081017", opacity: ".62" });
+    // Pillars and dashboard are solid trim. Translucency here let roadside grass and wet
+    // reflections show through as moving green patches around the lower windshield.
+    const frame = svgNode("path", { d: "M0 0 L75 0 L185 900 Q800 835 1415 900 L1525 0 L1600 0 L1600 1000 L0 1000 Z", fill: "#081017" });
     this.drops = svgNode("g", { class: "windshield-drops", opacity: ".28" });
     // The swept centre stays clear; beads accumulate around the unswept glass edges.
     for (let i = 0; i < 80; i++) {

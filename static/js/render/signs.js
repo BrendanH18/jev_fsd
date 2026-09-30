@@ -5,7 +5,7 @@ import { pointAt, headingAt } from "../map/mapdata.js";
 
 const TILE_W = 256, TILE_H = 128, COLS = 8, ROWS = 16, CHUNK = 250;
 
-export function buildStreetSigns(map) {
+export function buildStreetSigns(map, { anisotropy = 8 } = {}) {
   const root = new THREE.Group(), labels = new Map(), items = [], seen = new Set();
   const canvas = document.createElement("canvas"); canvas.width = TILE_W * COLS; canvas.height = TILE_H * ROWS;
   const ctx = canvas.getContext("2d");
@@ -15,17 +15,24 @@ export function buildStreetSigns(map) {
     if (labels.size >= COLS * ROWS) return null;
     const index = labels.size, x = index % COLS * TILE_W, y = Math.floor(index / COLS) * TILE_H;
     ctx.fillStyle = speed ? "#eeeae0" : "#244f46"; ctx.fillRect(x, y, TILE_W, TILE_H);
-    ctx.strokeStyle = speed ? "#202c30" : "#d2e5dd"; ctx.lineWidth = 3; ctx.strokeRect(x + 6, y + 6, TILE_W - 12, TILE_H - 12);
+    // Draw into a rectangle with the board's actual proportions. The rest of the cell is a
+    // same-colour gutter, so filtering cannot immediately pick up a neighbouring sign.
+    const w = speed ? 86 : 240, h = speed ? 112 : 46;
+    const left = x + (TILE_W - w) / 2, top = y + (TILE_H - h) / 2;
+    ctx.strokeStyle = speed ? "#202c30" : "#d2e5dd"; ctx.lineWidth = 2;
+    ctx.strokeRect(left + 3, top + 3, w - 6, h - 6);
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = speed ? "#172128" : "#eff6f0";
     if (speed) {
-      ctx.font = "bold 22px sans-serif"; ctx.fillText("MAXIMUM", x + TILE_W / 2, y + 28);
-      ctx.font = "bold 65px sans-serif"; ctx.fillText(text, x + TILE_W / 2, y + 81);
+      ctx.font = "bold 11px sans-serif"; ctx.fillText("MAXIMUM", left + w / 2, top + 21);
+      ctx.font = "bold 60px sans-serif"; ctx.fillText(text, left + w / 2, top + 70, w - 14);
     } else {
-      let size = 30; ctx.font = `600 ${size}px sans-serif`;
-      while (ctx.measureText(text).width > TILE_W - 24 && size > 14) { size--; ctx.font = `600 ${size}px sans-serif`; }
-      ctx.fillText(text, x + TILE_W / 2, y + TILE_H / 2, TILE_W - 20);
+      let size = 32; ctx.font = `bold ${size}px sans-serif`;
+      while (ctx.measureText(text).width > w - 18 && size > 16) { size--; ctx.font = `bold ${size}px sans-serif`; }
+      ctx.fillText(text, left + w / 2, top + h / 2, w - 18);
     }
-    const rect = [x / canvas.width, 1 - (y + TILE_H) / canvas.height, 1 / COLS, 1 / ROWS];
+    // Half-texel insets keep linear sampling within the printed board.
+    const rect = [(left + 0.5) / canvas.width, 1 - (top + h - 0.5) / canvas.height,
+      (w - 1) / canvas.width, (h - 1) / canvas.height];
     labels.set(key, rect); return rect;
   }
   for (const edge of map.edges.values()) {
@@ -47,12 +54,16 @@ export function buildStreetSigns(map) {
     }
   }
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.max(1, Math.min(8, anisotropy));
   const plateMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65, metalness: 0.1, side: THREE.DoubleSide });
   plateMaterial.onBeforeCompile = shader => {
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute vec4 signUv;")
-      .replace("#include <uv_vertex>", "#include <uv_vertex>\nvMapUv = vMapUv * signUv.zw + signUv.xy;");
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute vec4 signUv;\nvarying vec4 vSignUv;")
+      .replace("#include <uv_vertex>", "#include <uv_vertex>\nvSignUv = signUv;\nvMapUv = vMapUv * signUv.zw + signUv.xy;");
+    // Street plates are printed on both sides; the rear must not mirror the lettering.
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec4 vSignUv;")
+      .replace("#include <map_fragment>", THREE.ShaderChunk.map_fragment.replace("vMapUv", "vec2(gl_FrontFacing ? vMapUv.x : 2.0 * vSignUv.x + vSignUv.z - vMapUv.x, vMapUv.y)"));
   };
-  plateMaterial.customProgramCacheKey = () => "street-sign-atlas-v1";
+  plateMaterial.customProgramCacheKey = () => "street-sign-atlas-v2";
   const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x7b8585, roughness: 0.6, metalness: 0.65 });
   const chunks = new Map();
   for (const item of items) {

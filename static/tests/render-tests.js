@@ -8,6 +8,7 @@ import { SceneView, groundLayer, LAYER } from "../js/render/scene.js";
 import { GroundReflection, reflection } from "../js/render/reflection.js";
 import { lighting, sunPosition } from "../js/render/atmosphere.js";
 import { PostFX } from "../js/render/post.js";
+import { buildStreetSigns } from "../js/render/signs.js";
 
 export function runRenderTests() {
   const results = [];
@@ -87,6 +88,39 @@ export function runRenderTests() {
   groundLayer(ground, LAYER.grass); groundLayer(paint, LAYER.marking);
   check("road paint keeps a single stable ground depth", ground.material.depthWrite && !paint.material.depthWrite && paint.material.polygonOffset && paint.material.depthFunc === THREE.LessEqualDepth);
 
+  const signFixture = buildStreetSigns({ edges: new Map([["street", {
+    from: "a", to: "b", length: 120, name: "Government Street", limit: 50 / 3.6,
+    pts: [[0, 0], [120, 0]], cum: [0, 120], asphalt: [-3.5, 3.5],
+  }]]) }, { anisotropy: 4 });
+  const board = signFixture.children.find(o => o.geometry.attributes.signUv);
+  const atlas = signFixture.userData.atlas, canvas = atlas.image;
+  const pixels = canvas.getContext("2d");
+  const signUVs = board.geometry.attributes.signUv;
+  for (let i = 0; i < board.count; i++) {
+    board.getMatrixAt(i, matrix);
+    const scale = new THREE.Vector3().setFromMatrixScale(matrix);
+    const u = signUVs.getX(i), v = signUVs.getY(i), w = signUVs.getZ(i), h = signUVs.getW(i);
+    const aspect = w * canvas.width / (h * canvas.height);
+    check(`sign ${i} lettering preserves the board proportions`, Math.abs(aspect / (scale.x / scale.y) - 1) < 0.03);
+    check(`sign ${i} UVs stay inside their atlas cell`, u > 0 && v > 0 && u + w < 1 && v + h < 1);
+    if (i === 1) {
+      // Count white letter rows inside the border: lettering must occupy useful board height,
+      // rather than being compressed into the old tile's large empty vertical margins.
+      const left = Math.round(u * canvas.width), top = Math.round((1 - v - h) * canvas.height);
+      const width = Math.floor(w * canvas.width), height = Math.floor(h * canvas.height);
+      let rows = 0;
+      for (let y = 7; y < height - 7; y++) {
+        const data = pixels.getImageData(left + 7, top + y, width - 14, 1).data;
+        let white = 0;
+        for (let x = 0; x < data.length; x += 4) if (data[x] > 200 && data[x + 1] > 200 && data[x + 2] > 200) white++;
+        if (white >= 3) rows++;
+      }
+      check("street lettering uses at least a third of the board height", rows >= height / 3);
+    }
+  }
+  check("sign filtering respects the supplied GPU anisotropy limit", atlas.anisotropy === 4);
+  check("atlas gutters are opaque around both sign shapes", pixels.getImageData(0, 0, 1, 1).data[3] === 255 && pixels.getImageData(256, 0, 1, 1).data[3] === 255);
+
   const calls = [], renderer = { shadowMap: { autoUpdate: true } };
   const view = { renderer, camera, sceneryLODs: [lod],
     reflection: { render: () => { calls.push(renderer.shadowMap.autoUpdate); return true; } },
@@ -139,6 +173,36 @@ export function runRenderTests() {
   // attached texture/sampler feedback loop, which mocks cannot detect.
   const live = window.__jev?.view;
   if (live) {
+    // Rasterize the same labelled board from opposite sides. This catches mirrored rear text
+    // and shader/atlas errors that texture configuration assertions cannot detect.
+    const fixtureScene = new THREE.Scene();
+    fixtureScene.background = new THREE.Color(0x101010);
+    fixtureScene.add(board, new THREE.AmbientLight(0xffffff, 2));
+    board.getMatrixAt(1, matrix);
+    const center = new THREE.Vector3().setFromMatrixPosition(matrix);
+    const normal = new THREE.Vector3(0, 0, 1).transformDirection(matrix);
+    const signCamera = new THREE.OrthographicCamera(-1.3, 1.3, 0.325, -0.325, 0.1, 30);
+    const signTarget = new THREE.WebGLRenderTarget(512, 128);
+    const previousTarget = live.renderer.getRenderTarget();
+    const front = new Uint8Array(512 * 128 * 4), rear = new Uint8Array(front.length);
+    try {
+      for (const [direction, pixels] of [[1, front], [-1, rear]]) {
+        signCamera.position.copy(center).addScaledVector(normal, direction * 12);
+        signCamera.lookAt(center);
+        live.renderer.setRenderTarget(signTarget);
+        live.renderer.render(fixtureScene, signCamera);
+        live.renderer.readRenderTargetPixels(signTarget, 0, 0, 512, 128, pixels);
+      }
+      let difference = 0, textPixels = 0;
+      for (let i = 0; i < front.length; i += 4) {
+        difference += Math.abs(front[i] - rear[i]) + Math.abs(front[i + 1] - rear[i + 1]) + Math.abs(front[i + 2] - rear[i + 2]);
+        const x = (i / 4) % 512, y = Math.floor(i / 4 / 512);
+        // Target pixels are linear, lit values; exclude the white border from the letter count.
+        if (x > 60 && x < 452 && y > 35 && y < 93 && front[i] > 80 && front[i + 1] > 80 && front[i + 2] > 80) textPixels++;
+      }
+      check("street sign lettering actually renders in WebGL", textPixels > 1000);
+      check("rear street sign text reads in the same direction as the front", difference / (512 * 128 * 3) < 1);
+    } finally { live.renderer.setRenderTarget(previousTarget); signTarget.dispose(); signFixture.add(board); }
     const signs = window.__jev.signs;
     if (signs) {
       check("street signs are batched instances with a shared atlas", signs.userData.signCount > 0 && signs.children.every(o => o.isInstancedMesh) && new Set(signs.children.filter(o => o.geometry.attributes.signUv).map(o => o.material.map)).size === 1);
@@ -160,11 +224,13 @@ export function runRenderTests() {
 
   // Dispose fixture buffers; materials/geometries shared with the live scene stay cached.
   const buffers = new Set();
-  for (const root of [parked, trees, chunk]) root.traverse(o => {
+  for (const root of [parked, trees, chunk, signFixture]) root.traverse(o => {
     if (o.isInstancedMesh) o.dispose();
     if (root !== parked && o.geometry) buffers.add(o.geometry);
   });
   for (const geometry of buffers) geometry.dispose();
+  atlas.dispose();
+  for (const material of new Set(signFixture.children.map(o => o.material))) material.dispose();
   ground.geometry.dispose(); ground.material.dispose(); paint.material.dispose();
   return results;
 }

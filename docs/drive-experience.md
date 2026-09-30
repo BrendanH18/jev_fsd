@@ -56,7 +56,11 @@ create different demands, so use the seeded benchmark for controlled driver comp
   and stalled rendering cannot accumulate an unbounded backlog of physics updates.
 - Street names and mapped speed limits share a 2048² atlas and instanced boards/posts in 250 m
   chunks. The signs add no shadow casters. They are decorative; collision and sensing geometry
-  continue to come from the simulation. Sun positioning uses each bundled city's latitude,
+  continue to come from the simulation. Printed rectangles match each board's proportions,
+  with larger bold street lettering, padded atlas cells and up to 8× anisotropic filtering.
+  Lettering reads correctly from both sides. Windshield trim and the bottom statistics panel
+  are opaque so moving scenery cannot bleed through as green patches.
+  Sun positioning uses each bundled city's latitude,
   longitude and September daylight-time offset; the season remains late September.
 
 ## Validation
@@ -66,8 +70,9 @@ tests, including violation caps, fresh-session baselines, pauses, duration, hard
 gaps, history corruption and blocked storage. `scripts/test_interpolate.mjs` checks interpolation
 without changing simulation state, wrapped headings and teleport handling.
 
-The browser simulation suite passes 99 assertions and the renderer suite 34, including new
-manual-steering, city-sun and instanced-sign checks. The 50 Python tests include bundled-map,
+The browser simulation suite passes 99 assertions and the renderer suite 43, including
+manual-steering, city-sun, sign proportions, atlas padding and actual front/rear sign rasterization.
+The 50 Python tests include bundled-map,
 selected-city routing, distinct reachable suggestions and fallback checks. Fixture checks remain
 clean with 20 valid offline Jev requests.
 
