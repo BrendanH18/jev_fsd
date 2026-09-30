@@ -2,6 +2,7 @@
 // time, so pauses, frame rate and the decision API cannot change the score.
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
+export const SPEED_GRACE_MPS = 5 / 3.6;
 const clamp = (n, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
 const round = (n, digits = 1) => Math.round(n * 10 ** digits) / 10 ** digits;
 const COUNTERS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield" };
@@ -15,6 +16,7 @@ export class DriveScore {
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
     this.brakingCounted = false; this.lastGap = Infinity; this.lastTtc = Infinity;
+    this.laneHeading = null;
     this.hardBrakes = 0; this.minGap = Infinity; this.maxSpeed = 0; this.progress = 0;
     this.incidents = []; this.coach = "Settle in. Look ahead and leave room.";
     this.finished = null; this.startedAt = new Date().toISOString();
@@ -31,9 +33,10 @@ export class DriveScore {
     const ego = world.ego, speed = Math.abs(ego.v);
     this.elapsed += dt; this.distance += speed * dt; this.maxSpeed = Math.max(this.maxSpeed, speed);
     if (speed > 0.5) this.moving += dt;
-    const speeding = !!road && speed > road.limit + 1.4; // 5 km/h grace, not a higher speed target
+    const speeding = !!road && speed > road.limit + SPEED_GRACE_MPS;
     const offRoad = road?.on_road === false;
-    const wrongWay = !!road?.on_road && speed > 2 && Math.abs(road.heading_error || 0) > Math.PI / 2;
+    const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
+    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0;
     if (speeding) this.speeding += dt;
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
@@ -58,6 +61,12 @@ export class DriveScore {
     this.sample += dt;
     if (this.sample + 1e-9 < 0.1) return;
     const h = this.sample; this.sample = 0;
+    // Navigation favours lanes aligned with the car. Evaluate direction from the physically
+    // closest lane instead, without penalising ambiguous junction mouths.
+    if (world.map?.nearestLane) {
+      const nearest = world.map.nearestLane(ego.x, ego.y, null, 12);
+      this.laneHeading = nearest && nearest.distance < 2.3 && nearest.s > 6 && nearest.s < nearest.lane.length - 6 ? nearest.heading : null;
+    }
     if (this.lastV !== null) {
       const a = (ego.v - this.lastV) / h;
       if (a < -3.5) {

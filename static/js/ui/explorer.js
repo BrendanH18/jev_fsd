@@ -42,7 +42,9 @@ export class Explorer {
       this.loading ? h("p", { class: "empty-state" }, "Finding a few good drives…") : this.driveError ? h("p", { class: "error-note" }, `Could not find drives: ${this.driveError}`)
         : this.drives.length ? h("div", { class: "mission-grid" }, this.drives.map(d => this.driveCard(d)))
         : h("p", { class: "empty-state" }, "No suggested routes here. Return to a lane or choose a destination on the minimap."),
-      h("div", { class: "dialog-footer" }, h("span", { class: "muted" }, "Map data © OpenStreetMap contributors · ODbL"), h("button", { class: "toggle", onclick: () => this.dialog.close() }, "Just drive")));
+      h("div", { class: "dialog-footer" }, h("span", { class: "muted" }, "Map data © OpenStreetMap contributors · ODbL"),
+        h("a", { class: "text-button", href: `/bench?bbox=${encodeURIComponent(this.map.bbox.join(","))}`, target: "_blank", rel: "noopener" }, "Benchmark this city ↗"),
+        h("button", { class: "toggle", onclick: () => this.dialog.close() }, "Just drive")));
   }
 
   cityCard(m) {

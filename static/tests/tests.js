@@ -19,6 +19,7 @@ import { RulesBrain } from "../js/brain/rules.js";
 import { safetyBrake } from "../js/brain/safety.js";
 import { Visibility } from "../js/sim/visibility.js";
 import { fixtureWorld, crossingPedestrian, buildRealismCases } from "./jev-fixtures.js";
+import { buildSuite } from "../js/bench/scenarios.js";
 
 const out = document.getElementById("out");
 const results = [];
@@ -337,6 +338,10 @@ async function run() {
   const approach = fixtures.find((f) => f.name === "mid_block_approach"), at = fixtures.find((f) => f.name === "mid_block_at");
   check("mid-block wording distinguishes approaching and holding", approach.questions.motion.instructions.includes("22 m ahead") && at.questions.motion.instructions.includes("right in front") && approach.state.pedestrian.mid_block && at.state.pedestrian.distance === "at");
   check("Jev receives clearance and comfort tradeoffs", approach.state.candidates.some((c) => "max_decel" in c) && !approach.questions.vector.instructions.includes("normally pick the centered candidate"));
+  const victoria = new MapData(await api("/api/map?map=victoria"));
+  const citySuite = await buildSuite(victoria, { count: 1, seed: 1 });
+  check("signal-heavy Victoria can build a one-drive benchmark", citySuite.length === 1);
+  check("city benchmark routes and start use the selected map", citySuite.length === 1 && !!victoria.lane(citySuite[0].start.edge, citySuite[0].start.lane) && citySuite[0].route.edges.every(e => victoria.edges.has(e)));
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;
   window.__results = results;

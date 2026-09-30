@@ -97,7 +97,7 @@ Renderer tests cover world transforms, paint, detail selection, hysteresis, geom
 nearby shadows, removal of a parked car from both detail levels without removing its neighbor,
 reflection clipping, sampler/state restoration, quality changes and actual wet WebGL draws
 (34 assertions when run from the simulator, including city lighting and street signs).
-The existing `/tests` suite remains independent of Three.js and also passes (97 assertions), as
+The existing `/tests` suite remains independent of Three.js and also passes (99 assertions), as
 do the 50 Python tests and offline fixture checks. The subsequent drive-experience changes add
 visual interpolation and gentler manual steering; the Rules/Jev controller and decision pipeline
 remain shared with the benchmark.

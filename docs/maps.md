@@ -15,6 +15,9 @@ routed from the car's current position when the explorer opens; the world pauses
 Changing city starts a new world and keeps the selected weather, time and graphics setting.
 An active drive with distance recorded is saved as **map changed**, without an arrival claim.
 Routing, rerouting, status and map attribution use the selected city's bounding box.
+**Benchmark this city** in the explorer opens the benchmark on that same map; saved runs and
+3D replays preserve the bounding box. Signal-heavy downtowns can start scenarios on controlled
+streets when the original uncontrolled-street sampling cannot fill a suite.
 The map geometry has no elevation data; buildings use tagged heights or procedural estimates.
 Vancouver's specific mountain backdrop and landmarks are shown only in Vancouver.
 

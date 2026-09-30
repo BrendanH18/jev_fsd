@@ -24,7 +24,7 @@ import { setWeather } from "./sim/weather.js";
 import { pedPhase } from "./sim/signals.js";
 import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
 import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
-import { DriveScore, saveDrive } from "./sim/drive-score.js";
+import { DriveScore, saveDrive, SPEED_GRACE_MPS } from "./sim/drive-score.js";
 import { DriveReport } from "./ui/drive-report.js";
 import { Explorer } from "./ui/explorer.js";
 import { buildStreetSigns } from "./render/signs.js";
@@ -38,16 +38,18 @@ const loadingText = $("#loading-text");
 async function boot() {
   loadingText.textContent = "Loading map…";
   const params = new URLSearchParams(location.search);
-  const mapQuery = params.get("bbox") || params.get("map") || "";
+  const replay = readReplay();
+  const mapQuery = params.get("bbox") || params.get("map") || replay?.bbox?.join(",") || "";
   const query = mapQuery ? `?bbox=${encodeURIComponent(mapQuery)}` : "";
   const status = await api(`/api/status${query}`);
   const pack = await api(`/api/map${query}`);
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
   const map = new MapData(pack);
-  const replay = readReplay();
   const hud = new Hud();
   $("#current-city").textContent = status.map.synthetic ? "Practice grid" : status.map.label;
-  const quality = params.get("quality") || localStorage.getItem("jev-fsd-quality") || "high";
+  let savedQuality;
+  try { savedQuality = localStorage.getItem("jev-fsd-quality"); } catch { /* preferences are optional */ }
+  const quality = params.get("quality") || savedQuality || "high";
   let hour = parseHour(params.get("time"));
   const view = new SceneView($("#view"), map.extent, { quality });
   hud.setQuality(view.quality);
@@ -135,7 +137,11 @@ async function boot() {
   hud.setTime(nearestPreset(hour));
   hud.onWeatherChange((name) => { world.weather = setWeather(name).name; weatherView.apply(world.weather); applySky(); hud.badge(`weather: ${name}`, "", 800); });
   hud.onTimeChange((name) => { hour = parseHour(name); applySky(); hud.badge(`time: ${formatHour(hour)}`, "", 800); });
-  hud.onQualityChange((name) => { localStorage.setItem("jev-fsd-quality", view.setQuality(name)); hud.badge(`graphics: ${view.quality}`, "", 800); });
+  hud.onQualityChange((name) => {
+    view.setQuality(name);
+    try { localStorage.setItem("jev-fsd-quality", view.quality); } catch { /* preferences are optional */ }
+    hud.badge(`graphics: ${view.quality}`, "", 800);
+  });
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt));
   hud.setMapNote(status.map.synthetic
     ? `Synthetic grid (map fetch failed: ${status.map.error})`
@@ -309,7 +315,7 @@ async function boot() {
     indicatorLit = blink;
     $("#left-indicator").classList.toggle("active", !!blink && world.ego.signal === "left");
     $("#right-indicator").classList.toggle("active", !!blink && world.ego.signal === "right");
-    const speeding = Math.abs(world.ego.v) > (world._road?.limit || 13.9) + 1.4;
+    const speeding = Math.abs(world.ego.v) > (world._road?.limit || 13.9) + SPEED_GRACE_MPS;
     $("#speed-warning").hidden = !speeding;
     $(".speed").classList.toggle("speeding", speeding);
     $("#drive-mode").textContent = world.paused ? "PAUSED" : autopilot.enabled ? `${autopilot.brainName.toUpperCase()} PILOT` : "MANUAL";

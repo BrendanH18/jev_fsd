@@ -11,11 +11,16 @@ const MIN_ROUTE_M = 350, MAX_ROUTE_M = 1400;
 export async function buildSuite(map, { count = 12, seed = 1 } = {}) {
   const random = rng(seed * 7919 + 17);
   const lanes = map.laneList.filter((l) => l.length > 40 && !l.edgeRef.control);
+  const allLanes = map.laneList.filter((l) => l.length > 40);
   const [x0, y0, x1, y1] = map.extent;
   const inset = (x, y) => x > x0 + 60 && x < x1 - 60 && y > y0 + 60 && y < y1 - 60;
   const suite = [];
-  for (let attempt = 0; suite.length < count && attempt < count * 12; attempt++) {
-    const lane = lanes[Math.floor(random() * lanes.length)];
+  for (let attempt = 0; suite.length < count && attempt < Math.max(120, count * 60); attempt++) {
+    // Keep the original seeded attempts first. Signal-heavy city centres may have almost no
+    // uncontrolled interior streets, so use all drivable lanes when those attempts fall short.
+    const pool = attempt < count * 12 && lanes.length ? lanes : allLanes;
+    if (!pool.length) break;
+    const lane = pool[Math.floor(random() * pool.length)];
     const s = lane.length * (0.3 + random() * 0.4);
     const p = pointAt(lane.pts, lane.cum, s), psi = headingAt(lane.pts, lane.cum, s);
     const angle = random() * Math.PI * 2, reach = 350 + random() * 450;

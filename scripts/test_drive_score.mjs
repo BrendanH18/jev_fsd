@@ -71,6 +71,12 @@ test('finished reports are immutable and finish is idempotent', () => {
   const w = world(), s = new DriveScore(w); drive(w, s); const r = s.finish('arrived');
   drive(w, s); assert.deepEqual(s.finish('finished'), r); r.incidents.push({}); assert.equal(s.snapshot().incidents.length, 0);
 });
+test('wrong-way scoring uses the physical lane rather than a heading-biased navigation lane', () => {
+  const w = world(), s = new DriveScore(w); w.ego.psi = Math.PI;
+  w.map = { nearestLane: () => ({ distance: 0.1, s: 40, heading: 0, lane: { length: 100 } }) };
+  const r = drive(w, s, 5, 1 / 60, { ...road, heading_error: 0 });
+  assert(r.wrong_way_s > 4.8); assert(r.categories.control < 87);
+});
 test('route progress is bounded and stored independently of world route removal', () => {
   const w = world(), route = { length: 100, project(x) { return { s: x, distance: 0 }; } }, s = new DriveScore(w, { route });
   assert.equal(drive(w, s).progress, 1); assert.equal(s.finish('arrived').status, 'arrived');
