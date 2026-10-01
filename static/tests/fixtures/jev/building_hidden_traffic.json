@@ -37,45 +37,6 @@
     },
     "candidates": [
       {
-        "id": "keep_lane_target",
-        "steer": "hold lane",
-        "speed": "slow to 2.3",
-        "end_speed": 2.3,
-        "vs_target": "at target",
-        "max_accel": 0,
-        "max_decel": 2.9,
-        "max_lateral_accel": 0,
-        "progress_m": 8.6,
-        "lane": "centered",
-        "outcome": "clear"
-      },
-      {
-        "id": "keep_lane_slow",
-        "steer": "hold lane",
-        "speed": "slow to 2.0",
-        "end_speed": 2,
-        "vs_target": "at target",
-        "max_accel": 0,
-        "max_decel": 3.2,
-        "max_lateral_accel": 0,
-        "progress_m": 8,
-        "lane": "centered",
-        "outcome": "clear"
-      },
-      {
-        "id": "keep_lane_cautious",
-        "steer": "hold lane",
-        "speed": "slow to 1.7",
-        "end_speed": 1.7,
-        "vs_target": "below target",
-        "max_accel": 0,
-        "max_decel": 3.6,
-        "max_lateral_accel": 0,
-        "progress_m": 7.3,
-        "lane": "centered",
-        "outcome": "clear"
-      },
-      {
         "id": "keep_lane_stop",
         "steer": "hold lane",
         "speed": "stop",
@@ -86,32 +47,6 @@
         "max_lateral_accel": 0,
         "progress_m": 3.6,
         "lane": "centered",
-        "outcome": "clear"
-      },
-      {
-        "id": "left_0.5_target",
-        "steer": "shift 0.5 m left",
-        "speed": "slow to 2.3",
-        "end_speed": 2.3,
-        "vs_target": "at target",
-        "max_accel": 0,
-        "max_decel": 2.9,
-        "max_lateral_accel": 2.5,
-        "progress_m": 8.6,
-        "lane": "slightly left",
-        "outcome": "clear"
-      },
-      {
-        "id": "right_0.5_target",
-        "steer": "shift 0.5 m right",
-        "speed": "slow to 2.3",
-        "end_speed": 2.3,
-        "vs_target": "at target",
-        "max_accel": 0,
-        "max_decel": 2.9,
-        "max_lateral_accel": 2.5,
-        "progress_m": 8.6,
-        "lane": "slightly right",
         "outcome": "clear"
       },
       {
@@ -129,7 +64,7 @@
       }
     ],
     "rejected": {
-      "visibility_stopping_distance": 5
+      "collision": 10
     }
   },
   "questions": {
@@ -137,12 +72,7 @@
       "type": "choice",
       "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
       "criteria": {
-        "keep_lane_target": "hold lane, slow to 2.3, +8.6 m, clear",
-        "keep_lane_slow": "hold lane, slow to 2.0, +8 m, clear",
-        "keep_lane_cautious": "hold lane, slow to 1.7, +7.3 m, clear",
         "keep_lane_stop": "hold lane, stop, +3.6 m, clear",
-        "left_0.5_target": "shift 0.5 m left, slow to 2.3, +8.6 m, clear",
-        "right_0.5_target": "shift 0.5 m right, slow to 2.3, +8.6 m, clear",
         "hard_brake": "hold lane, brake hard, +2.9 m, clear"
       }
     }

@@ -1,8 +1,8 @@
 import http.client
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 import threading
 import unittest
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
@@ -34,7 +34,7 @@ class StaticServerTests(unittest.TestCase):
             def log_message(self, _fmt, *_args):
                 pass
 
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        self.httpd = server.LocalServer(("127.0.0.1", 0), QuietHandler)
         self.addCleanup(self.httpd.server_close)
         QuietHandler.port = self.httpd.server_port
         thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.01})
@@ -60,6 +60,14 @@ class StaticServerTests(unittest.TestCase):
                 self.assertIn("javascript", headers["Content-Type"])
                 self.assertTrue(headers["Content-Type"].endswith("; charset=utf-8"))
                 self.assertEqual(int(headers["Content-Length"]), len(body))
+
+    def test_cold_module_download_burst_serves_every_asset(self):
+        with ThreadPoolExecutor(max_workers=32) as pool:
+            responses = list(pool.map(self.get, ["/nested/app.js"] * 64))
+        for status, headers, body in responses:
+            self.assertEqual(status, 200)
+            self.assertEqual(body, b"export const ready = true;")
+            self.assertEqual(int(headers["Content-Length"]), len(body))
 
     def test_traversal_and_external_symlinks_are_not_served(self):
         for path in (

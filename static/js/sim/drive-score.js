@@ -83,8 +83,9 @@ export class DriveScore {
     if (speed > 2) for (const other of world.obstaclesNear(ego.x, ego.y, 35)) {
       const [x, y] = other.center || [other.x, other.y];
       const rel = ego.toLocal(x, y);
-      if (rel.ahead <= 0 || Math.abs(rel.right) > 1.4 + (other.width || 1.8) / 2) continue;
-      const g = rel.ahead - 3.6 - (other.length || 0.6) / 2;
+      if (rel.ahead <= 0 || Math.abs(rel.right) > (ego.spec?.width || 1.9) / 2 + 0.45 + (other.spec?.width || other.width || 1.8) / 2) continue;
+      const front = ego.spec ? ego.spec.length - ego.spec.rearOverhang : 3.6;
+      const g = rel.ahead - front - (other.spec?.length || other.length || 0.6) / 2;
       if (g <= 0) continue; // physical overlaps belong to collision auditing
       gap = Math.min(gap, g);
       const forwardSpeed = (other.v || 0) * Math.cos((other.psi || 0) - ego.psi);

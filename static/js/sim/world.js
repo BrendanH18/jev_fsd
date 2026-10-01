@@ -8,17 +8,23 @@ import { ParkedCars, PARKED_DENSITY } from "./parking.js";
 import { Crowd, PEDESTRIANS } from "./pedestrians.js";
 import { Visibility } from "./visibility.js";
 import { setWeather } from "./weather.js";
+import { StaticObstacles, poseOf } from "./static-obstacles.js";
+
+const AUDIT_ROUTE_CORRIDOR_M = 4;
+const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
 
 export class World {
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry" } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
+    this.staticObstacles = new StaticObstacles(map);
+    this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
     this.parked = new ParkedCars(map, { seed, density: parked });
     this.t = 0;
     this.tick = 0;
-    this.ego = new Vehicle();
+    this.ego = new Vehicle(0, 0, 0, 0, vehicleSpec);
     this.npcs = [];
     this.route = null;
     this.destination = null;
@@ -31,7 +37,8 @@ export class World {
     this.crowd = new Crowd(this, { seed, count: pedestrians });
   }
 
-  // Everything that can be hit near (x, y): the traffic within `r`, the parked cars, and the people.
+  // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
+  // controllers do not mistake a large building's center for a vehicle in their lane.
   obstaclesNear(x, y, r) {
     const out = this.npcs.filter((n) => Math.abs(n.x - x) < r + 5 && Math.abs(n.y - y) < r + 5);
     return out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
@@ -62,17 +69,52 @@ export class World {
     const { pointAt, headingAt } = lanePoint(lane, s);
     this.ego.x = pointAt[0]; this.ego.y = pointAt[1]; this.ego.psi = headingAt; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
     this.egoStop.reset();
+    this.resetContactHistory();
   }
 
   resetToLane() {
     const near = this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 80);
     if (near) {
       this.ego.x = near.point[0]; this.ego.y = near.point[1]; this.ego.psi = near.heading; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
+      this.resetContactHistory();
     }
     this.events.push({ type: "reset" });
   }
 
   phase(intersectionId) { return phaseOf(this.map.intersections.get(intersectionId), this.t); }
+
+  resetContactHistory() {
+    this.ego.vy = 0; this.ego.r = 0; this.ego.ax = 0; this.ego.latAccel = 0;
+    this._previousStaticPose = poseOf(this.ego);
+    this.staticContacts.clear();
+    this._lastFront = null;
+    this.lastRoad = null;
+  }
+
+  auditStatic(dt) {
+    const hit = this.staticObstacles.sweep(this._previousStaticPose || poseOf(this.ego), poseOf(this.ego), this.ego.spec);
+    if (hit) {
+      const { obstacle, safePose } = hit;
+      if (!this.staticContacts.has(obstacle.id)) {
+        this.violations.collisions++;
+        this.violations.collisions_at_fault++;
+        this.events.push({ type: "collision", with: obstacle.id, kind: obstacle.kind, fault: "ego", at_fault: true,
+          t: Math.round(this.t * 10) / 10, ego_v: Math.round(this.ego.v * 10) / 10, other_v: 0 });
+      }
+      this.staticContacts.set(obstacle.id, 0);
+      Object.assign(this.ego, safePose, { v: 0, a: 0, vy: 0, r: 0, ax: 0, latAccel: 0 });
+    }
+    // Keep a small contact skin after resolving the wall; throttle against it remains one
+    // incident. A full second physically clear of that footprint permits another incident.
+    const near = new Set(this.staticContacts.size ? this.staticObstacles.overlaps(this.ego.obb(), 0.1).map((o) => o.id) : []);
+    for (const [id, clearFor] of this.staticContacts) {
+      if (near.has(id) || hit?.obstacle.id === id) this.staticContacts.set(id, 0);
+      else if (clearFor + dt > 1) this.staticContacts.delete(id);
+      else this.staticContacts.set(id, clearFor + dt);
+    }
+    this._previousStaticPose = poseOf(this.ego);
+    return !!hit;
+  }
 
   // Where the ego is relative to the road network (cached per tick).
   roadInfo() {
@@ -93,12 +135,12 @@ export class World {
 
   stepManual(dt, input) {
     let accel = 0;
-    if (input.throttle) accel = 2.5;
+    if (input.throttle) accel = this.ego.spec.maxAccel;
     if (input.brake) accel = this.ego.v > 0.2 ? -6 : -1.5;  // brake, then gently reverse
-    if (input.hardBrake) accel = -8;
+    if (input.hardBrake) accel = -this.ego.spec.maxBrake;
     // Keys are binary, unlike a steering wheel. Limit their angle at speed to a comfortable
     // cornering demand, then ramp it so a tap does not ask for full lock in a fast bend.
-    const maxAngle = Math.min(CAR.maxSteer, Math.atan(3.2 * CAR.wheelbase / Math.max(1, this.ego.v ** 2)));
+    const maxAngle = Math.min(this.ego.spec.maxSteer, Math.atan(3.2 * this.ego.spec.wheelbase / Math.max(1, this.ego.v ** 2)));
     const desired = (Number(!!input.left) - Number(!!input.right)) * maxAngle;
     const steer = this.ego.delta + Math.max(-0.8 * dt, Math.min(0.8 * dt, desired - this.ego.delta));
     if (input.brake && this.ego.v <= 0.2 && !input.hardBrake) {
@@ -115,13 +157,14 @@ export class World {
   // contacts, where right of way decides and the sim does not judge it.
   audit(dt, road) {
     this.events.length = 0;
+    if (this.auditStatic(dt)) Object.assign(road, this.roadInfo());
     const egoBox = this.ego.obb();
     for (const n of this.obstaclesNear(this.ego.x, this.ego.y, 12)) {
       const touching = obbOverlap(egoBox, n.obb());
       if (touching && !n.contact) {
         const [cx, cy] = n.center;
         const rel = this.ego.toLocal(cx, cy);
-        const egoCenterAhead = rel.ahead - (CAR.length / 2 - CAR.rearOverhang);
+        const egoCenterAhead = rel.ahead - (this.ego.spec.length / 2 - this.ego.spec.rearOverhang);
         const relHeading = Math.abs(wrap(n.psi - this.ego.psi));
         const fault = n.kind === "pedestrian" ? (this.ego.v < 0.5 ? "other" : "ego")
           : this.ego.v < 0.5 || egoCenterAhead < -1 ? "other"
@@ -144,32 +187,39 @@ export class World {
     }
     this.auditCrosswalks();
     if (!road.on_road) this.violations.off_road_s += dt;
-    // stop-line crossings on the edge the ego is on
-    const edge = road.edge;
-    if (edge && edge.control && road.lane) {
+    // The front bumper can reach a route's stop line while the rear axle is still on an
+    // adjacent segment. Use the same upcoming route control as sensing instead of losing
+    // stop memory when the closest physical lane belongs to that adjacent edge.
+    const FRONT = this.ego.spec.length - this.ego.spec.rearOverhang;
+    const routeProjection = this.route ? this.route.project(this.ego.x, this.ego.y) : null;
+    const followsRoute = routeProjection && routeProjection.distance < AUDIT_ROUTE_CORRIDOR_M
+      && Math.abs(wrap(this.ego.psi - routeProjection.heading)) < AUDIT_ROUTE_HEADING_RAD;
+    const frontS = routeProjection ? routeProjection.s + FRONT : null;
+    const rc = followsRoute ? this.route.controls.find((c) => c.sRoute + 12 >= frontS && c.sRoute - frontS <= 80) : null;
+    const edge = rc ? this.map.edges.get(rc.edge) : road.edge;
+    const control = rc ? rc.control : edge?.control;
+    if (control && (rc || road.lane)) {
       // how far the front bumper is past the line: along the route when there is one, exactly as the
       // sensors measure it (a lane polyline's length differs from the centerline's on a bend), else
       // along the lane
-      const FRONT = CAR.length - CAR.rearOverhang;
-      const rc = this.route && this.route.controls.find((c) => c.edge === edge.id);
-      const past = rc ? this.route.project(this.ego.x, this.ego.y).s + FRONT - rc.sRoute : road.s + FRONT - edge.control.s_line;
-      const key = `${edge.id}`;
+      const past = rc ? frontS - rc.sRoute : road.s + FRONT - control.s_line;
+      const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
-        if (edge.control.type === "signal") {
-          const state = this.phase(edge.control.id)[edge.control.group];
+        if (control.type === "signal") {
+          const state = this.phase(control.id)[control.group];
           if (state === "red") { this.violations.red_lights_run++; this.events.push({ type: "red_light" }); }
-        } else if (edge.control.type === "stop" && !this.egoStop.completed) {
+        } else if (control.type === "stop" && !this.egoStop.completed) {
           this.violations.stop_signs_run++;
           this.events.push({ type: "stop_sign" });
-        } else if (edge.control.type === "yield" && ringBusy(this.map.roundabouts.get(edge.control.roundabout), this.map.nodes.get(edge.to), this.npcs)) {
+        } else if (control.type === "yield" && ringBusy(this.map.roundabouts.get(control.roundabout), this.map.nodes.get(edge.to), this.npcs)) {
           this.violations.failed_to_yield++;
           this.events.push({ type: "failed_to_yield", to: "roundabout traffic" });
         }
       }
       this.lastRoad = { edgeId: key, crossed };
       const bumperToLine = -past;
-      this.egoStop.update(edge.control, bumperToLine, this.ego.v, dt);
+      this.egoStop.update(control, bumperToLine, this.ego.v, dt);
     } else {
       this.lastRoad = edge ? { edgeId: edge.id, crossed: false } : null;
       this.egoStop.update(null, 0, 0, dt);

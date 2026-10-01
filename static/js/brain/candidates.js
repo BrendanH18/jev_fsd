@@ -8,10 +8,10 @@ import { applyLaw } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
 import { CROSSWALK_STOP_M } from "./sensors.js";
+import { poseOf } from "../sim/static-obstacles.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
-const FRONT = CAR.length - CAR.rearOverhang;
 const LANE_TOL = 1.2;
 const CYCLIST_CLEARANCE_M = 1.0;
 const QUEUE_GAP_M = 2.5;
@@ -30,6 +30,7 @@ export function speedVsTarget(v, target) {
 
 export function sampleCandidates(snap, world) {
   const { ego, limit } = snap;
+  const FRONT = world.ego.spec.length - world.ego.spec.rearOverhang;
   const v = Math.max(0, ego.v);
   const out = [];
   const offRoad = !snap.road.on_road;
@@ -95,6 +96,7 @@ function dedupe(list) {
 // Forward-simulate every candidate. Mutates each candidate with `sim` (features) and `trace` (points).
 export function simulateAll(candidates, snap, world) {
   const { route, map } = world;
+  const FRONT = world.ego.spec.length - world.ego.spec.rearOverhang;
   const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
@@ -115,7 +117,14 @@ export function simulateAll(candidates, snap, world) {
     if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - startS;
     for (let k = 1; k <= steps; k++) {
       const t = k * SIM_DT;
+      const previousPose = poseOf(car);
       applyLaw(car, law, route, s, SIM_DT);
+      // Static map geometry is known even when fog or a corner hides moving traffic. Use the
+      // same footprint sweep as execution, including reverse and sideways body motion.
+      if (!collision && world.staticObstacles) {
+        const hit = world.staticObstacles.sweep(previousPose, poseOf(car), car.spec);
+        if (hit) collision = { id: hit.obstacle.id, t: Math.round((t - SIM_DT + hit.fraction * SIM_DT) * 10) / 10, kind: hit.obstacle.kind };
+      }
       maxAccel = Math.max(maxAccel, car.ax || 0);
       maxDecel = Math.max(maxDecel, -(car.ax || 0));
       maxLat = Math.max(maxLat, Math.abs(car.latAccel || 0));

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Movable 360° camera follows the selected vehicle with mouse/touch orbit, wheel/pinch zoom,
+  camera buttons, keyboard rotation and recentering. Existing fixed camera views remain available.
+
+- Six selectable vehicle models and paint colours, with distinct proportions, detailed wheels,
+  glazing, mirrors, lighting and trim. Driven vehicle dimensions and handling feed physics,
+  stopping distances, traffic gaps, collision checks and cameras.
+- Tree trunks, signposts, signal poles, lamps, porches and hedges share scenery placement with
+  collision geometry; collision feedback identifies the struck object.
+
+- Eight bundled neighbourhoods across seven Canadian cities, including Mount Pleasant, Calgary
+  Beltline, Ottawa Centretown and Québec City Saint-Roch. Searchable, filterable world explorer
+  with loading states, retries and preserved keyboard focus.
+- Mapped buildings block the driven car and candidate predictions with swept footprint checks.
+  Route-aware stop memory fixes indefinite waits when the front bumper reaches a stop line
+  before the rear axle reaches the controlled segment; off-route driving retains lane auditing.
+- Darkness limits forward and peripheral sensing and feeds speed planning. Fixed, real-time
+  and accelerated daylight clocks; traffic density, repeatable world seeds and visible pause.
+- Bundled Three.js runtime removes CDN startup dependency. A larger local-server request queue
+  handles cold asset bursts, and startup failures show an actionable retry instead of an endless spinner.
+
 - Redesigned trip and drive-coach cards, central driving instruments, a live decision summary,
   Settings and keyboard help. Manual drivers now receive turn-by-turn route guidance.
 - Scrollable HUD columns and a narrow-screen inspector entry point; keyboard-accessible brain

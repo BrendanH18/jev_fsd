@@ -2,7 +2,9 @@
 // await import('/tests/render-tests.js').then(m => m.runRenderTests())
 import * as THREE from "three";
 import { chunkLOD } from "../js/render/lod.js";
-import { buildParkedCars, hideParkedCar } from "../js/render/cars.js";
+import { createCarMesh, addHeadlights, buildParkedCars, hideParkedCar } from "../js/render/cars.js";
+import { CAR } from "../js/sim/vehicle.js";
+import { VEHICLE_MODELS } from "../js/sim/vehicle-models.js";
 import { buildTrees } from "../js/render/trees.js";
 import { SceneView, groundLayer, LAYER } from "../js/render/scene.js";
 import { GroundReflection, reflection } from "../js/render/reflection.js";
@@ -19,6 +21,38 @@ export function runRenderTests() {
   const torontoSun = sunPosition(13, { latitude: 43.6655, longitude: -79.403, utcOffset: -4 });
   check("Canadian cities use their own latitude for the sun", torontoSun.elevation > victoriaSun.elevation && Math.abs(torontoSun.dir.length() - 1) < 1e-8);
   check("local morning and evening put the sun on opposite sides", sunPosition(9, { latitude: 48.4255, longitude: -123.3655, utcOffset: -7 }).dir.x > 0 && sunPosition(17, { latitude: 48.4255, longitude: -123.3655, utcOffset: -7 }).dir.x < 0);
+
+  const carFixtures = [], silhouettes = new Set();
+  for (const model of VEHICLE_MODELS) {
+    const mesh = createCarMesh(0x3377aa, "ego", model.id), u = mesh.userData;
+    carFixtures.push(mesh);
+    silhouettes.add(mesh.getObjectByName("bodywork").geometry);
+    const expectedWheels = [[model.spec.wheelbase, model.spec.track / 2], [model.spec.wheelbase, -model.spec.track / 2], [0, model.spec.track / 2], [0, -model.spec.track / 2]];
+    check(`${model.id} wheel centres match its physical axles and track`, u.wheels.every(({ pivot }, i) =>
+      Math.abs(pivot.position.x - expectedWheels[i][0]) < 1e-8 && Math.abs(pivot.position.z - expectedWheels[i][1]) < 1e-8));
+    const geometry = mesh.getObjectByName("bodywork").geometry;
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox;
+    check(`${model.id} painted shell matches its physical length and height`,
+      Math.abs(bounds.min.x + model.spec.rearOverhang) < 0.09 &&
+      Math.abs(bounds.max.x - (model.spec.length - model.spec.rearOverhang)) < 0.09 &&
+      Math.abs(bounds.max.y - model.height) < 0.07);
+    // Collision width is the body width; exterior mirrors add at most 13 cm on either side.
+    check(`${model.id} body width stays within its mirrors`, bounds.max.z * 2 >= model.spec.width && bounds.max.z * 2 < model.spec.width + 0.27);
+    check(`${model.id} geometry has finite positions`, u.body.children.filter(o => o.isMesh).every(o => o.geometry.attributes.position.array.every(Number.isFinite)));
+    addHeadlights(mesh);
+    const lens = mesh.getObjectByName("headlamp-lenses").geometry;
+    lens.computeBoundingBox();
+    const lampX = (lens.boundingBox.min.x + lens.boundingBox.max.x) / 2;
+    check(`${model.id} headlight beams originate at its lenses`, u.headlights.every(light => Math.abs(light.position.x - lampX) < 0.04 && Math.abs(light.position.x - (model.spec.length - model.spec.rearOverhang)) < 0.08));
+    const blob = mesh.children.find(o => o.isMesh && o.geometry.type === "PlaneGeometry");
+    check(`${model.id} contact shadow follows its footprint`, blob.geometry.parameters.width === model.spec.length + 0.5 && blob.geometry.parameters.height === model.spec.width + 0.5);
+    check(`${model.id} hood camera stays forward of its windscreen`, u.hoodCamera.x > 0.7 * model.spec.wheelbase && u.hoodCamera.x < model.spec.length - model.spec.rearOverhang && u.hoodCamera.y > u.headlampPosition.y);
+  }
+  check("six vehicle choices use six distinct body silhouettes", silhouettes.size === 6);
+  const trafficStyles = Array.from({ length: 8 }, (_, index) => createCarMesh(0x3377aa, `traffic-fixture-${index}`, index));
+  carFixtures.push(...trafficStyles);
+  check("all numeric traffic styles retain the common collision footprint", trafficStyles.every(mesh => mesh.userData.spec === CAR && mesh.userData.wheels[0].pivot.position.x === CAR.wheelbase));
 
   const car = { x: 1020, y: -540, psi: 0.7, color: 0x3377aa, style: 0 };
   const neighbor = { ...car, x: 1030, style: 1 };
@@ -48,6 +82,10 @@ export function runRenderTests() {
     return total;
   };
   check("distant parked geometry removes at least half the triangles", triangles(lod.levels[1].object) < triangles(lod.levels[0].object) / 2);
+  const parkedVariants = buildParkedCars(Array.from({ length: 8 }, (_, style) => ({ x: style * 5, y: 0, psi: 0, color: 0x3377aa, style })));
+  check("all six parked silhouettes retain instancing and cheaper distant detail", parkedVariants.children.length === 6 && parkedVariants.children.every(chunk =>
+    chunk.levels.every(level => level.object.children.every(o => o.isInstancedMesh)) &&
+    triangles(chunk.levels[1].object) < triangles(chunk.levels[0].object) / 2));
   hideParkedCar(car);
   check("pull-out removes every near and far instance", car.instances.every(({ mesh, i }) => {
     mesh.getMatrixAt(i, matrix);
@@ -224,10 +262,16 @@ export function runRenderTests() {
 
   // Dispose fixture buffers; materials/geometries shared with the live scene stay cached.
   const buffers = new Set();
-  for (const root of [parked, trees, chunk, signFixture]) root.traverse(o => {
+  for (const root of [parked, parkedVariants, trees, chunk, signFixture]) root.traverse(o => {
     if (o.isInstancedMesh) o.dispose();
-    if (root !== parked && o.geometry) buffers.add(o.geometry);
+    if (root !== parked && root !== parkedVariants && o.geometry) buffers.add(o.geometry);
   });
+  for (const mesh of carFixtures) {
+    mesh.userData.tail.dispose();
+    for (const brake of mesh.userData.brake) brake.material.dispose();
+    for (const child of mesh.children) if (child.isMesh) child.geometry.dispose();
+    for (const light of mesh.userData.headlights || []) light.shadow.dispose();
+  }
   for (const geometry of buffers) geometry.dispose();
   atlas.dispose();
   for (const material of new Set(signFixture.children.map(o => o.material))) material.dispose();

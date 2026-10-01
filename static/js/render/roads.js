@@ -16,6 +16,7 @@ import { buildStreetLights } from "./citylights.js";
 import { wetReflective } from "./reflection.js";
 
 import { GUTTER, CURB, streetOf } from "../map/streets.js";
+import { sceneryFor, analyzeStreets, trimAt } from "../map/scenery.js";
 const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -23,40 +24,6 @@ const surfaceHalf = (e) => Math.max(Math.abs(e.asphalt[0]), Math.abs(e.asphalt[1
 
 // Groups the directed edges into drawn streets (a two-way street is two edges) and computes, per
 // node, the widest street meeting there.
-function analyze(map) {
-  const streets = [];
-  const seen = new Map();
-  for (const e of map.edges.values()) {
-    const key = [e.from, e.to].sort().join("|") + "|" + Math.round(e.length);
-    if (seen.has(key)) { seen.get(key).twin = e; continue; }
-    const st = { edge: e, twin: null };
-    seen.set(key, st);
-    streets.push(st);
-  }
-  const legs = new Map();  // node id -> [{street, dir: +1 leaving from pts[0] | -1 arriving at pts[n-1]}]
-  for (const st of streets) {
-    const e = st.edge;
-    if (!legs.has(e.from)) legs.set(e.from, []);
-    if (!legs.has(e.to)) legs.set(e.to, []);
-    legs.get(e.from).push({ st, out: true });
-    legs.get(e.to).push({ st, out: false });
-  }
-  const nodeR = new Map();
-  for (const [id, list] of legs) nodeR.set(id, Math.max(...list.map((l) => surfaceHalf(l.st.edge))));
-  return { streets, legs, nodeR };
-}
-
-// Half the surface width of the widest other street at an edge's end node.
-function crossingHalf(map, e) {
-  let w = 0;
-  for (const id of [...(map.inn.get(e.to) || []), ...(map.out.get(e.to) || [])]) {
-    const o = map.edges.get(id);
-    if ((o.from === e.from && o.to === e.to) || (o.from === e.to && o.to === e.from)) continue;
-    w = Math.max(w, surfaceHalf(o));
-  }
-  return w;
-}
-
 // Leg of a street leaving a node: a point `d` meters out and the heading away from the node.
 function legFrame(e, out, d) {
   const L = e.cum[e.cum.length - 1];
@@ -80,7 +47,7 @@ function hull(points) {
 
 export function buildRoads(map) {
   const group = new THREE.Group();
-  const { streets, legs, nodeR } = analyze(map);
+  const { streets, legs, nodeR } = analyzeStreets(map);
   const asphalt = new GeoBuilder(), curb = new GeoBuilder(), walk = new GeoBuilder();
   const white = new GeoBuilder(), yellow = new GeoBuilder();
 
@@ -203,10 +170,7 @@ export function buildRoads(map) {
   return { group, signals, streets, nodeR, legs, streetLights };
 }
 
-function trimAt(nodeR, legs, id) {
-  const list = legs.get(id) || [];
-  return list.length >= 3 ? nodeR.get(id) + 1.0 : list.length === 2 ? 0.5 : 0;
-}
+
 
 function add(group, builder, material, order) {
   if (builder.empty) return;
@@ -290,17 +254,7 @@ function buildSignals(map, group) {
   const glowMats = Object.fromEntries(Object.entries(colors).map(([k, c]) => [k, new THREE.SpriteMaterial({
     map: glowTexture(), color: c, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
   })]));
-  for (const inter of map.intersections.values()) {
-    for (const a of inter.approaches) {
-      const e = map.edges.get(a.edge);
-      if (!e) continue;
-      const L = e.cum[e.cum.length - 1];
-      const end = e.pts[e.pts.length - 1];
-      const h = headingAt(e.pts, e.cum, L - 0.5);
-      const ahead = crossingHalf(map, e) + 2.2;
-      const poleLat = e.asphalt[1] + GUTTER + CURB + 1.0;
-      const px = end[0] + Math.cos(h) * ahead + Math.sin(h) * poleLat;
-      const py = end[1] + Math.sin(h) * ahead - Math.cos(h) * poleLat;
+  for (const { inter, a, e, heading: h, poleLat, x: px, y: py } of sceneryFor(map).signals) {
       for (const kind of ["walk", "hand"]) {
         const k = `${inter.id}|${a.group}|${kind}`;
         if (!pedGeos.has(k)) pedGeos.set(k, []);
@@ -334,7 +288,6 @@ function buildSignals(map, group) {
           sprites.get(key).push(sp);
         });
       });
-    }
   }
   const addMerged = (geos, mat, shadow = true) => {
     if (!geos.length) return;
@@ -413,13 +366,7 @@ function buildStopSigns(map, group) {
   const face = octagon(0.38, -1).translate(-0.07, 2.25, 0);
   const back = octagon(0.38, 1).translate(-0.06, 2.25, 0);
   const poles = [], faces = [], backs = [];
-  for (const stop of map.stops.values()) {
-    const e = map.edges.get(stop.edge);
-    if (!e) continue;
-    const s = Math.min(stop.s_line + 0.4, e.cum[e.cum.length - 1]);
-    const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-    const lat = e.asphalt[1] + GUTTER + CURB + 0.7;
-    const x = p[0] + Math.sin(h) * lat, y = p[1] - Math.cos(h) * lat;
+  for (const { x, y, heading: h } of sceneryFor(map).stopSigns) {
     poles.push(placed(pole, x, y, 0, h));
     faces.push(placed(face, x, y, 0, h));
     backs.push(placed(back, x, y, 0, h));
@@ -444,13 +391,7 @@ function buildYieldSigns(map, group) {
   };
   const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.3, 8).translate(0, 1.15, 0);
   const poles = [], reds = [], whites = [];
-  for (const e of map.edges.values()) {
-    const c = e.control;
-    if (!c || c.type !== "yield") continue;
-    const s = Math.max(0, c.s_line - 0.6);
-    const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-    const lat = e.asphalt[1] + GUTTER + CURB + 0.7;
-    const x = p[0] + Math.sin(h) * lat, y = p[1] - Math.cos(h) * lat;
+  for (const { x, y, heading: h } of sceneryFor(map).yieldSigns) {
     poles.push(placed(pole, x, y, 0, h));
     reds.push(placed(tri(0.45, -0.06), x, y, 0, h));
     whites.push(placed(tri(0.3, -0.075), x, y, 0, h));

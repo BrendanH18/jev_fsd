@@ -8,20 +8,21 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+      "three": "/vendor/three/build/three.module.js",
+      "three/addons/": "/vendor/three/examples/jsm/"
     }
   }
   </script>
 </head>
 <body>
-  <canvas id="view" tabindex="0" aria-label="Driving view"></canvas>
+  <canvas id="view" tabindex="0" aria-label="Driving view" aria-describedby="camera-help"></canvas>
 
   <div id="loading" class="overlay">
     <div class="card">
       <div class="loading-mark" aria-hidden="true"></div>
       <h1>JEV <small>DRIVE LAB</small></h1>
       <p id="loading-text">Loading map…</p>
+      <button id="retry-start" class="toggle" hidden>Retry loading</button>
     </div>
   </div>
 
@@ -51,7 +52,21 @@
           <button id="drive-sound" class="tool" aria-pressed="false">Sound off</button>
           <button id="keys-toggle" class="tool" title="?" aria-pressed="false" aria-controls="keys-help" aria-label="Keyboard shortcuts">?</button>
         </div>
+        <div class="orbit-toolbar" role="group" aria-label="360 camera controls">
+          <button id="camera-orbit" class="chip-button" aria-pressed="false" title="Rotate freely around the car">360° view</button>
+          <div id="orbit-actions" class="orbit-actions" hidden>
+            <button id="camera-zoom-out" class="chip-button" aria-label="Zoom camera out">−</button>
+            <button id="camera-zoom-in" class="chip-button" aria-label="Zoom camera in">+</button>
+            <button id="camera-recenter" class="chip-button">Recenter</button>
+          </div>
+        </div>
+        <p id="camera-help" class="camera-help" hidden>Drag to orbit · Scroll or pinch to zoom<br>Shift + arrows to rotate the focused view</p>
+        <div class="world-conditions" aria-label="World conditions">
+          <span id="world-conditions">15:30 · Dry · 80 m sight</span>
+          <button id="pause-world" class="chip-button" aria-pressed="false" title="P">Pause</button>
+        </div>
         <div id="settings" class="settings" hidden>
+          <h3 class="settings-section-heading">Environment</h3>
           <label><span class="label">weather</span>
             <select id="weather">
               <option value="dry">Dry</option>
@@ -75,10 +90,112 @@
               <option value="high">High</option>
               <option value="ultra">Ultra</option>
             </select></label>
+          <label><span class="label">daylight clock</span>
+            <select id="clock-rate">
+              <option value="0">Fixed time</option>
+              <option value="1">Real time</option>
+              <option value="60">1 min / second</option>
+            </select></label>
+          <label><span class="label">traffic cars</span>
+            <select id="traffic-density">
+              <option value="0">Quiet · 0</option>
+              <option value="16">Light · 16</option>
+              <option value="40">Typical · 40</option>
+              <option value="80">Busy · 80</option>
+            </select></label>
+          <label><span class="label">world seed</span>
+            <input id="world-seed" type="number" min="1" max="2147483647" step="1" value="1" required></label>
+          <section class="vehicle-garage" aria-labelledby="garage-heading">
+            <div class="garage-heading"><h3 id="garage-heading">Your garage</h3><span>Six ways to drive</span></div>
+            <div id="vehicle-options" class="vehicle-options" role="group" aria-label="Vehicle">
+              <button type="button" class="vehicle-option" data-vehicle="compact" aria-pressed="false">
+                <svg class="vehicle-silhouette" viewBox="0 0 128 52" aria-hidden="true" focusable="false">
+                  <ellipse class="vehicle-shadow" cx="65" cy="45" rx="57" ry="3"/>
+                  <polygon class="vehicle-body" points="10,36 22,29 34,15 76,15 95,28 114,31 119,40 10,40"/>
+                  <polygon class="vehicle-glass" points="37,18 73,18 85,27 31,27"/>
+                  <path class="vehicle-trim" d="M58 18v11M12 35h7M111 34h7"/>
+                  <circle class="vehicle-tire" cx="29" cy="40" r="8"/><circle class="vehicle-tire" cx="101" cy="40" r="8"/>
+                  <circle class="vehicle-rim" cx="29" cy="40" r="4"/><circle class="vehicle-rim" cx="101" cy="40" r="4"/>
+                </svg>
+                <strong>City hatch</strong><span>Easy to place. Made for city blocks.</span>
+              </button>
+              <button type="button" class="vehicle-option" data-vehicle="sedan" aria-pressed="true">
+                <svg class="vehicle-silhouette" viewBox="0 0 128 52" aria-hidden="true" focusable="false">
+                  <ellipse class="vehicle-shadow" cx="65" cy="45" rx="57" ry="3"/>
+                  <polygon class="vehicle-body" points="8,36 27,29 40,16 77,16 96,29 117,32 122,41 8,41"/>
+                  <polygon class="vehicle-glass" points="43,19 74,19 86,28 33,28"/>
+                  <path class="vehicle-trim" d="M58 18v11M12 35h7M111 34h7"/>
+                  <circle class="vehicle-tire" cx="29" cy="40" r="8"/><circle class="vehicle-tire" cx="101" cy="40" r="8"/>
+                  <circle class="vehicle-rim" cx="29" cy="40" r="4"/><circle class="vehicle-rim" cx="101" cy="40" r="4"/>
+                </svg>
+                <strong>Touring sedan</strong><span>Balanced comfort and control.</span>
+              </button>
+              <button type="button" class="vehicle-option" data-vehicle="sport" aria-pressed="false">
+                <svg class="vehicle-silhouette" viewBox="0 0 128 52" aria-hidden="true" focusable="false">
+                  <ellipse class="vehicle-shadow" cx="65" cy="45" rx="57" ry="3"/>
+                  <polygon class="vehicle-body" points="8,37 28,31 43,21 73,18 96,31 119,34 124,41 8,41"/>
+                  <polygon class="vehicle-glass" points="45,23 73,21 86,30 34,30"/>
+                  <path class="vehicle-trim" d="M58 18v11M12 35h7M111 34h7"/>
+                  <circle class="vehicle-tire" cx="29" cy="40" r="8"/><circle class="vehicle-tire" cx="101" cy="40" r="8"/>
+                  <circle class="vehicle-rim" cx="29" cy="40" r="4"/><circle class="vehicle-rim" cx="101" cy="40" r="4"/>
+                </svg>
+                <strong>Sport coupe</strong><span>Lower stance. Sharper response.</span>
+              </button>
+              <button type="button" class="vehicle-option" data-vehicle="wagon" aria-pressed="false">
+                <svg class="vehicle-silhouette" viewBox="0 0 128 52" aria-hidden="true" focusable="false">
+                  <ellipse class="vehicle-shadow" cx="65" cy="45" rx="57" ry="3"/>
+                  <polygon class="vehicle-body" points="9,36 14,17 27,14 78,14 96,28 117,31 122,41 9,41"/>
+                  <polygon class="vehicle-glass" points="22,17 75,17 85,27 18,27"/>
+                  <path class="vehicle-trim" d="M58 18v11M12 35h7M111 34h7"/>
+                  <circle class="vehicle-tire" cx="29" cy="40" r="8"/><circle class="vehicle-tire" cx="101" cy="40" r="8"/>
+                  <circle class="vehicle-rim" cx="29" cy="40" r="4"/><circle class="vehicle-rim" cx="101" cy="40" r="4"/>
+                </svg>
+                <strong>Estate wagon</strong><span>Longer wheelbase. Everyday utility.</span>
+              </button>
+              <button type="button" class="vehicle-option" data-vehicle="suv" aria-pressed="false">
+                <svg class="vehicle-silhouette" viewBox="0 0 128 52" aria-hidden="true" focusable="false">
+                  <ellipse class="vehicle-shadow" cx="65" cy="45" rx="57" ry="3"/>
+                  <polygon class="vehicle-body" points="9,36 14,14 27,11 77,11 96,26 116,29 121,41 9,41"/>
+                  <polygon class="vehicle-glass" points="22,14 74,14 84,25 18,25"/>
+                  <path class="vehicle-trim" d="M58 18v11M12 35h7M111 34h7"/>
+                  <circle class="vehicle-tire" cx="29" cy="40" r="8"/><circle class="vehicle-tire" cx="101" cy="40" r="8"/>
+                  <circle class="vehicle-rim" cx="29" cy="40" r="4"/><circle class="vehicle-rim" cx="101" cy="40" r="4"/>
+                </svg>
+                <strong>Trail SUV</strong><span>Higher ride. Room to explore.</span>
+              </button>
+              <button type="button" class="vehicle-option" data-vehicle="pickup" aria-pressed="false">
+                <svg class="vehicle-silhouette" viewBox="0 0 128 52" aria-hidden="true" focusable="false">
+                  <ellipse class="vehicle-shadow" cx="65" cy="45" rx="57" ry="3"/>
+                  <polygon class="vehicle-body" points="8,24 38,24 40,12 74,12 93,27 117,29 122,42 8,42"/>
+                  <polygon class="vehicle-glass" points="44,15 71,15 82,25 43,25"/>
+                  <path class="vehicle-trim" d="M58 18v11M12 35h7M111 34h7"/>
+                  <circle class="vehicle-tire" cx="29" cy="40" r="8"/><circle class="vehicle-tire" cx="101" cy="40" r="8"/>
+                  <circle class="vehicle-rim" cx="29" cy="40" r="4"/><circle class="vehicle-rim" cx="101" cy="40" r="4"/>
+                </svg>
+                <strong>Utility pickup</strong><span>Long body. Deliberate handling.</span>
+              </button>
+            </div>
+            <div class="garage-paint">
+              <span class="label" id="paint-label">Paint</span>
+              <div id="paint-options" class="paint-options" role="group" aria-labelledby="paint-label">
+                <button type="button" class="paint-option" data-paint="1f5fd6" style="--paint: #1f5fd6" aria-label="Ocean blue paint" title="Ocean blue" aria-pressed="true"></button>
+                <button type="button" class="paint-option" data-paint="f2f4f5" style="--paint: #f2f4f5" aria-label="Pearl white paint" title="Pearl white" aria-pressed="false"></button>
+                <button type="button" class="paint-option" data-paint="292d34" style="--paint: #292d34" aria-label="Graphite paint" title="Graphite" aria-pressed="false"></button>
+                <button type="button" class="paint-option" data-paint="a32932" style="--paint: #a32932" aria-label="Canyon red paint" title="Canyon red" aria-pressed="false"></button>
+                <button type="button" class="paint-option" data-paint="315b4d" style="--paint: #315b4d" aria-label="Forest green paint" title="Forest green" aria-pressed="false"></button>
+                <button type="button" class="paint-option" data-paint="c4c8ce" style="--paint: #c4c8ce" aria-label="Silver paint" title="Silver" aria-pressed="false"></button>
+              </div>
+            </div>
+            <p id="vehicle-spec" class="vehicle-spec" role="status" aria-live="polite" aria-atomic="true">Touring sedan · Balanced comfort and control</p>
+          </section>
           <div class="settings-checks">
             <label class="check"><input id="wipers" type="checkbox" checked> Wipers</label>
             <label class="check"><input id="camera-motion" type="checkbox" checked> Camera motion</label>
             <button id="settings-inspect" class="chip-button settings-inspect" data-inspect aria-controls="panel" aria-expanded="false">Inspect JSON</button>
+          </div>
+          <div class="world-settings-footer">
+            <span>Vehicle, paint, traffic and seed apply when you start a new world. Cyclists and pedestrians remain active.</span>
+            <button id="restart-world" class="toggle">Start new world</button>
           </div>
         </div>
       </section>
@@ -134,6 +251,8 @@
         <dt><kbd>Q</kbd><kbd>E</kbd></dt><dd>Left / right indicator</dd>
         <dt><kbd>H</kbd></dt><dd>Horn (with sound on)</dd>
         <dt><kbd>C</kbd></dt><dd>Cycle camera</dd>
+        <dt>Drag / pinch</dt><dd>Orbit around the car / zoom</dd>
+        <dt>Shift + arrows</dt><dd>Rotate the focused driving view</dd>
         <dt><kbd>R</kbd></dt><dd>Reset to lane</dd>
         <dt><kbd>P</kbd></dt><dd>Pause</dd>
         <dt><kbd>?</kbd></dt><dd>Show or hide this list</dd>
@@ -161,6 +280,6 @@
     <div id="panel-body" class="body"><pre>No decision yet.</pre></div>
   </aside>
 
-  <script type="module" src="/js/main.js"></script>
+  <script type="module" src="/js/start.js"></script>
 </body>
 </html>

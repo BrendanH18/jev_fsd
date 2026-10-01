@@ -30,6 +30,7 @@ function blocks(from, to, pts) {
 
 export class Visibility {
   constructor(map) {
+    this.night = 0;
     this.grid = new Map();
     for (const { pts, h } of map.pack.buildings || []) {
       if (pts.length < 3 || h < 1.5) continue;
@@ -44,11 +45,22 @@ export class Visibility {
     }
   }
 
-  get range() { return weather.visibility; }
+  // Low beams preserve a forward sight line after dark, while unlit peripheral
+  // hazards are visible over a shorter distance. Weather remains the upper bound.
+  setNight(value) { this.night = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0; }
+  get range() { return Math.min(weather.visibility, 80 - 35 * this.night); }
+
+  rangeAt(observer, x, y) {
+    if (!this.night || !Number.isFinite(observer.psi)) return this.range;
+    const bearing = Math.atan2(y - observer.y, x - observer.x) - observer.psi;
+    const angle = Math.abs(Math.atan2(Math.sin(bearing), Math.cos(bearing)));
+    const beam = Math.max(0, Math.min(1, (Math.PI / 3 - angle) / (Math.PI / 6)));
+    return Math.min(weather.visibility, 80 - this.night * (58 - 23 * beam));
+  }
 
   canSee(observer, x, y) {
     const d = Math.hypot(x - observer.x, y - observer.y);
-    if (d > this.range) return false;
+    if (d > this.rangeAt(observer, x, y)) return false;
     const seen = new Set(), from = [observer.x, observer.y], to = [x, y];
     // Visit the ray's bounded rectangle, including cells the ray only clips at a corner.
     for (let cx = Math.floor(Math.min(observer.x, x) / CELL); cx <= Math.floor(Math.max(observer.x, x) / CELL); cx++) {

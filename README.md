@@ -3,7 +3,7 @@
 **Drive real Canadian streets, watch an AI choose its next move, and improve your driving score.**
 
 Jev FSD is a local driving simulator built from [OpenStreetMap](https://www.openstreetmap.org/)
-roads and buildings. Explore Vancouver, Victoria, Toronto and Montréal by hand, with the free
+roads and buildings. Explore eight neighbourhoods across seven Canadian cities by hand, with the free
 Rules driver, or with [TypeSafe AI's Jev](https://typesafe.ai/). The decision panel shows the
 situation, available manoeuvres, model probabilities, latency and API cost.
 
@@ -30,12 +30,12 @@ uv run server.py
 
 Open [127.0.0.1:8322](http://127.0.0.1:8322). Without an API key, the app selects the free Rules
 driver. There is no frontend build step; the simulation and renderer use JavaScript and Three.js,
-and the local server uses Python. Three.js loads from a CDN, so bundled maps do not make the
-first page load fully offline.
+and the local server uses Python. The pinned Three.js runtime and all eight map packs are bundled,
+so driving with Rules needs no external network after installing the Python dependencies.
 
 Try **Explore cities → Victoria → Neighbourhood cruise**. A suggested drive starts the selected
 autopilot; `W A S D` takes over manually. You can also click a destination on the minimap or
-start a free drive with the keyboard. Press `C` for hood view and enable **Sound** for driving
+start a free drive with the keyboard. Cycle **View** to hood view and enable **Sound** for driving
 ambience. Open **Settings** to change weather, time and graphics, or press `?` for keyboard help.
 
 To enable Jev, obtain a key from the [TypeSafe console](https://console.typesafe.ai) and create
@@ -49,17 +49,23 @@ cp .env.example .env
 The key stays on the server. Jev sends decision requests to TypeSafe; Rules driving, drive
 scoring and the bundled maps need no API key.
 
-## Explore four Canadian cities
+## Explore eight Canadian neighbourhoods
 
 The city picker includes neighbourhood-sized extracts of real roads, one-way streets, lane
-and speed-limit tags, traffic controls and buildings. All four processed map packs are bundled.
+and speed-limit tags, traffic controls and buildings. All eight processed map packs are bundled.
+Search by city or neighbourhood, and filter by region and road character. The explorer keeps
+your search and keyboard focus while loading maps or finding routes, and offers retries on errors.
 
 | City | Neighbourhood | Direct simulator URL |
 |---|---|---|
 | Vancouver | Kitsilano | [/?map=kitsilano](http://127.0.0.1:8322/?map=kitsilano) |
+| Vancouver | Mount Pleasant | [/?map=mount_pleasant](http://127.0.0.1:8322/?map=mount_pleasant) |
 | Victoria | Old Town | [/?map=victoria](http://127.0.0.1:8322/?map=victoria) |
 | Toronto | The Annex | [/?map=toronto](http://127.0.0.1:8322/?map=toronto) |
 | Montréal | Le Plateau | [/?map=montreal](http://127.0.0.1:8322/?map=montreal) |
+| Calgary | Beltline | [/?map=calgary](http://127.0.0.1:8322/?map=calgary) |
+| Ottawa | Centretown | [/?map=ottawa](http://127.0.0.1:8322/?map=ottawa) |
+| Québec City | Saint-Roch | [/?map=quebec_city](http://127.0.0.1:8322/?map=quebec_city) |
 
 **Explore cities** offers three reachable drives from your current position: **Neighbourhood
 cruise**, **City precision** and **The long way home**. The world pauses while choosing a route
@@ -70,6 +76,18 @@ The sun uses each city's latitude, longitude and late-September daylight-time of
 Vancouver's mountains, water and landmark backdrop appear only on Vancouver maps. These packs
 have no elevation data; building heights come from tags or procedural estimates.
 See [map coverage, attribution and refresh instructions](docs/maps.md).
+
+**Settings** includes a six-car garage, six paint colours, traffic-car density, a repeatable world
+seed and **Start new world**. Choose a city hatch, touring sedan, sport coupe, estate wagon,
+trail SUV or utility pickup; start a new world to apply your selection. Each driven model has
+its own dimensions, mass, wheel power, drive layout and centre of gravity. Collision checks,
+stopping distances, candidate predictions and cameras use the selected vehicle. Vehicle names
+and specifications describe generic simulated cars.
+Changing density or seed restarts the world and saves a non-empty active drive. A quiet world
+still has cyclists, pedestrians and curb activity. URL options include `?traffic=16&seed=42`.
+The daylight clock can remain fixed, run in real time or advance one minute per simulated second
+(`?clock=0`, `1` or `60`). Pausing also pauses daylight. The conditions strip shows local time,
+weather and forward sight range, with a visible Pause/Resume button.
 
 ## Drive coach and reports
 
@@ -134,7 +152,11 @@ system's reduced-motion preference.
 | `1` / `2` | Select Jev / Rules (also available as buttons) |
 | `Q` / `E` | Toggle left / right indicators |
 | `H` | Horn when sound is enabled |
-| `C` or **View** | Cycle chase, hood, overhead and high chase cameras |
+| `C` or **View** | Cycle chase, 360°, hood, overhead and high chase cameras |
+| **360° view** or drag the driving view | Orbit freely around the car; follows it as you drive |
+| Wheel / pinch / camera + − | Zoom the 360° view |
+| Shift + arrow keys (view focused) | Rotate the 360° view without steering |
+| **Recenter** | Return the 360° camera behind the car |
 | `R` / `P` | Reset to the lane / pause |
 | `?` or `/` | Toggle keyboard shortcuts |
 | `Escape` | Close keyboard shortcuts or the decision inspector |
@@ -209,8 +231,17 @@ door for six seconds; the animated door has matching sensing, prediction and col
 Cyclists ride bike routes, and pedestrians cross at signals or sometimes mid-block and carry
 umbrellas in rain.
 
-Buildings block the driver's view of traffic, pedestrians and signals. Detection range is
-**80 m dry, 55 m rain, 40 m snow and 28 m fog**. Unseen signal phases are treated as unknown,
+Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
+the driven car and candidate predictions. Rendering and collisions share deterministic scenery
+placements. Swept checks stop the car before penetration and count contact once until it separates;
+collision scoring applies. Trunk radii follow the model, while overhead crowns remain passable.
+Stop-line auditing and the planner share route controls while the car follows its route, so a
+completed stop is remembered even when the rear axle remains on an adjacent road segment.
+
+Buildings block the driver's view of traffic, pedestrians and signals. Daylight detection range is
+**80 m dry, 55 m rain, 40 m snow and 28 m fog**. Darkness reduces forward low-beam sight to
+45 m and unlit peripheral sight to 22 m, with a smooth twilight transition; weather caps both.
+These sight limits feed actual sensing and speed planning. Unseen signal phases are treated as unknown,
 and planning limits speed to stopping within visible road. Predictions and the emergency brake
 use observed hazards; collisions and violations are audited against the full world.
 
@@ -255,6 +286,8 @@ not been validated; offline fixtures establish request consistency, not model ju
 
 Detailed results: [drive experience](docs/drive-experience.md), [realism validation](docs/realism-validation.md)
 and [rendering validation](docs/render-performance.md). Release history is in [CHANGELOG.md](CHANGELOG.md).
+The [world expansion validation](docs/world-validation.md) records the new maps, physical building
+collisions, darkness, startup reliability and final seeded comparisons.
 
 ## Custom maps and configuration
 
@@ -290,12 +323,12 @@ street names and manoeuvre descriptions, without map coordinates. Drive reports 
 browser's local storage unless you export them.
 
 Map tags and procedural geometry limit realism. There is no road elevation or camber, and
-visual body pitch and roll do not add a physical suspension model. Building footprints and
-weather ranges determine sensing; trees, vehicles and darkness do not add occlusion or reduced
-night detection. The driven car makes small lateral shifts rather than full lane changes;
+visual body pitch and roll do not add a physical suspension model. Buildings, weather and darkness
+determine sensing; trees and vehicles do not occlude it, and individual street lamps do not extend
+detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car makes small lateral shifts rather than full lane changes;
 traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
-against signals. Street-name and speed-limit plates are decorative, not additional collision
-or sensing objects. Scenery beyond the map has simplified geography.
+against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information.
+Low curbs remain traversable, and scenery beyond the playable map is decorative with simplified geography.
 
 ## Development
 
@@ -303,6 +336,12 @@ or sensing objects. Scenery beyond the map has simplified geography.
 uv run python -m unittest discover tests
 node --experimental-default-type=module scripts/test_drive_score.mjs
 node --experimental-default-type=module scripts/test_interpolate.mjs
+node --experimental-default-type=module scripts/test_orbit_camera.mjs
+node --experimental-default-type=module scripts/test_static_collision.mjs
+node --experimental-default-type=module scripts/test_scenery_collision.mjs
+node --experimental-default-type=module scripts/test_route_controls.mjs
+node --experimental-default-type=module scripts/test_world_conditions.mjs
+node --experimental-default-type=module scripts/test_vehicle_models.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```
@@ -315,8 +354,10 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 50 Python tests, 117 browser assertions (99 simulation and 18 HUD),
-43 renderer assertions, 18 scoring tests, interpolation checks and 20 offline Jev requests.
+The documented validation covers 58 Python tests, 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
+88 renderer assertions, 18 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
+22 vehicle model regressions, six route-control regressions,
+world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality
 transitions. HUD checks cover fallback and stop labels, unavailable Jev, keyboard driver
 selection, probability rows, telemetry reset and the 10 Hz update bound. See

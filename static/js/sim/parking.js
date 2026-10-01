@@ -81,7 +81,7 @@ export class ParkedCars {
           car.id = `parked_${this.list.length + 1}`;
           car.parked = true;
           car.color = PALETTE[Math.floor(random() * PALETTE.length)];
-          car.style = Math.floor(random() * 5);
+          car.style = Math.floor(random() * 8);
           car.edge = e.id;
           car.curb = lat > 0 ? "right" : "left";
           car.slot = slot;

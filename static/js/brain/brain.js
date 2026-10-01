@@ -173,7 +173,7 @@ export class Autopilot {
     }
     if (result.routeId && this.pendingRoutes) {
       const pick = this.pendingRoutes.find((r) => r.id === result.routeId) || this.pendingRoutes[0];
-      world.route = new Route(pick, world.map);
+      world.route = new Route(pick, world.map, world.ego.spec);
       this.pendingRoutes = null;
       this.bumpEpoch();
     }
@@ -195,11 +195,11 @@ export class Autopilot {
       const res = await api("/api/route", { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3 });
       if (res.routes.length) {
         if (res.routes.length === 1 || this.brainName === "rules") {
-          world.route = new Route(res.routes[0], world.map);
+          world.route = new Route(res.routes[0], world.map, world.ego.spec);
           this.bumpEpoch();
         } else {
           this.pendingRoutes = res.routes;         // the next decision asks Jev which one
-          world.route = new Route(res.routes[0], world.map);
+          world.route = new Route(res.routes[0], world.map, world.ego.spec);
         }
         this.offRouteFor = 0;
         this.onEvent({ type: "reroute", count: res.routes.length });

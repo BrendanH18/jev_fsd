@@ -6,15 +6,11 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { pointAt, headingAt } from "../map/mapdata.js";
+import { sceneryFor } from "../map/scenery.js";
 import { toThree, LAYER } from "./scene.js";
 import { lampPoolTexture } from "./textures.js";
 import { glowsAtNight, lighting } from "./atmosphere.js";
-import { hash01 } from "./geo.js";
-import { GUTTER, CURB } from "../map/streets.js";
 
-const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
-const LIT = new Set([...ARTERIAL, "residential", "unclassified", "living_street"]);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const LAMP_COLOR = 0xffe4bf;       // 4000 K LED, a touch warm
 const REAL_LIGHTS = 6;
@@ -35,27 +31,7 @@ function design(tall) {
 }
 
 export function buildStreetLights(map, group, streets, trimAt) {
-  const lamps = [];   // { x, y, h, heading, tall, lx, ly } (lx, ly: the point under the head)
-  for (const st of streets) {
-    for (const e of [st.edge, st.twin]) {
-      if (!e || !LIT.has(e.cls)) continue;
-      const tall = ARTERIAL.has(e.cls);
-      // a two-way residential street gets lights on alternating sides: each direction lights one
-      // half; a one-way street lights both
-      const L = e.cum[e.cum.length - 1];
-      const from = trimAt(e.from) + 4, to = L - trimAt(e.to) - 6;
-      const spacing = tall ? 38 : 45;
-      const lat = e.asphalt[1] + GUTTER + CURB + 0.45;
-      const phase = tall ? 0 : (st.twin && e === st.twin ? spacing / 2 : 0);
-      for (let s = from + 6 + phase + hash01(e.id, 3) * 4; s < to; s += spacing) {
-        const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-        const nx = Math.sin(h), ny = -Math.cos(h);   // right of travel
-        const x = p[0] + nx * lat, y = p[1] + ny * lat;
-        const d = design(tall);
-        lamps.push({ x, y, h: d.h, heading: h, tall, lx: x - nx * (d.reach + 0.1), ly: y - ny * (d.reach + 0.1) });
-      }
-    }
-  }
+  const lamps = sceneryFor(map).lamps;
   if (!lamps.length) return { lamps, lights: null };
 
   const designs = { true: design(true), false: design(false) };
