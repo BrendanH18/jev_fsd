@@ -6,7 +6,7 @@ import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
 import { CAR } from "../sim/vehicle.js";
 
 export class Route {
-  constructor(data, map) {
+  constructor(data, map, vehicleSpec = CAR) {
     this.id = data.id;
     this.pts = data.polyline;
     this.cum = cumulative(this.pts);
@@ -34,12 +34,20 @@ export class Route {
       const p = projectPoint(this.pts, this.cum, lineOnEdge);
       if (!p || p.distance > 12) continue;
       if (i === 0 && e.control.s_line < (data.start_s || 0) - 1) continue;  // already behind the start
-      // the route ends before it (and the car's nose, 3.6 m ahead of the point that arrives, too)
-      if (i === this.edges.length - 1 && data.goal_s !== undefined && e.control.s_line > data.goal_s + CAR.length - CAR.rearOverhang + 0.3) continue;
+      // Include controls the selected car's front bumper reaches beyond its destination.
+      if (i === this.edges.length - 1 && data.goal_s !== undefined && e.control.s_line > data.goal_s + vehicleSpec.length - vehicleSpec.rearOverhang + 0.3) continue;
+      // A longer car can reach a line beyond the truncated route. Projection clamps to the
+      // endpoint, so retain its forward distance rather than moving the line to the destination.
+      let sRoute = p.s;
+      if (i === this.edges.length - 1 && p.s >= this.length - 1e-6) {
+        const end = this.endPoint(), h = this.headingAt(this.length);
+        const beyond = (lineOnEdge[0] - end[0]) * Math.cos(h) + (lineOnEdge[1] - end[1]) * Math.sin(h);
+        if (beyond > 0) sRoute += beyond;
+      }
       const junctionNode = map.nodes.get(e.to);
       const inter = e.control.type === "signal" ? map.intersections.get(e.control.id) : null;
       this.controls.push({
-        edge: e.id, control: e.control, sRoute: p.s, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
+        edge: e.id, control: e.control, sRoute, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
         secondsToGreen: inter ? (t) => secondsToGreenFor(inter, e.control.group, t) : null,
       });
     }

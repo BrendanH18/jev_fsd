@@ -213,6 +213,12 @@ CSP = ("default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'nonce-%s
        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
 
+class LocalServer(ThreadingHTTPServer):
+    # Module graphs and map previews arrive in bursts. The default five-connection
+    # backlog can reset parallel asset downloads on a cold browser load.
+    request_queue_size = 128
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "JevFSD/" + VERSION
     port = 8322
@@ -296,7 +302,7 @@ def main():
     port = settings.port
     Handler.port = port
     try:
-        httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        httpd = LocalServer(("127.0.0.1", port), Handler)
     except OSError as err:
         print("Could not listen on 127.0.0.1:%d (%s). Set PORT=<other port> and try again." % (port, err))
         return 1

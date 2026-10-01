@@ -16,20 +16,20 @@ const YIELD_ENTRY_MPS = 4.0;
 const PED_LOOK_M = 45;
 const CROSS_ETA_S = 4.5;
 export const CROSSWALK_STOP_M = 2.0;   // stop this far short of a crosswalk centerline
-const FRONT = CAR.length - CAR.rearOverhang;
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
+  const FRONT = ego.spec.length - ego.spec.rearOverhang;
   const visible = world.visibleObstaclesNear(ego.x, ego.y, TRAFFIC_RADIUS_M);
   const visibleNpcs = world.npcs.filter((n) => visible.includes(n));
   const road = world._road || world.roadInfo();
   const snap = {
     t: world.t, tick: world.tick,
-    ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v },
+    ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
     road, route, routeProj: null, onRoute: false, nav: null, intersection: null, following: null, pedestrian: null,
     rear_follower: null, traffic: [], current_path_hazard: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
-    observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range), building_occlusion: true },
+    observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
     roadside: [],
   };
   if (route) {
@@ -42,7 +42,7 @@ export function buildSnapshot(world, executing = null) {
     }
     snap.visibility.clear_path_m = clearPath;
     // At a blind corner retain a walking pace so the car can expose the sight line gradually.
-    snap.visibility.safe_speed_mps = visibilitySpeed(Math.max(12, clearPath));
+    snap.visibility.safe_speed_mps = visibilitySpeed(Math.max(12, clearPath), FRONT);
     snap.onRoute = p.distance < 25 && Math.abs(headingErr) < Math.PI * 100 / 180;
     const remaining = route.remaining(p.s);
     const turns = route.turnsAfter(p.s);
@@ -116,7 +116,7 @@ export function buildSnapshot(world, executing = null) {
     if (behind.length) {
       const b = behind[behind.length - 1];
       const bs = b.vehicle.spec || CAR;
-      snap.rear_follower = { id: b.vehicle.id, gap_m: p.s - b.s - (bs.length - bs.rearOverhang) - CAR.rearOverhang, closing_mps: b.vehicle.v - ego.v };
+      snap.rear_follower = { id: b.vehicle.id, gap_m: p.s - b.s - (bs.length - bs.rearOverhang) - ego.spec.rearOverhang, closing_mps: b.vehicle.v - ego.v };
     }
   }
   // nearby traffic in the ego frame
@@ -147,12 +147,13 @@ export function buildSnapshot(world, executing = null) {
 // The speed code would like right now: limit, upcoming curvature, the gap ahead, a required stop
 // line, and the destination. Brains see it as `target_speed`; the rules brain drives to it.
 export function desiredSpeed(snap) {
+  const FRONT = snap.ego?.front_m ?? CAR.length - CAR.rearOverhang;
   const decel = comfort().decel;
   let v = snap.limit;
   const reasons = [];
   if (weather.speed < 1) { v = snap.limit * weather.speed; reasons.push(weather.label); }
   if (snap.visibility) {
-    const visibleSpeed = snap.visibility.safe_speed_mps ?? visibilitySpeed(snap.visibility.range_m);
+    const visibleSpeed = snap.visibility.safe_speed_mps ?? visibilitySpeed(snap.visibility.range_m, FRONT);
     if (visibleSpeed < v) { v = visibleSpeed; reasons.push("limited visibility"); }
   }
   if (snap.route && snap.routeProj) {
@@ -201,7 +202,7 @@ export function desiredSpeed(snap) {
 }
 
 // Include one second of sensing, decision and actuator delay in the stopping envelope.
-function visibilitySpeed(range) {
+function visibilitySpeed(range, FRONT = CAR.length - CAR.rearOverhang) {
   const decel = comfort().decel, room = Math.max(0, range - FRONT - 5);
   return Math.sqrt(decel * decel + 2 * decel * room) - decel;
 }

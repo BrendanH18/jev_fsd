@@ -13,6 +13,7 @@ import { PostFX, QUALITY } from "./post.js";
 import { atmosphereFor, lighting, updateNightMaterials } from "./atmosphere.js";
 import { GroundReflection } from "./reflection.js";
 import { buildBackdrop, tintBackdrop } from "./backdrop.js";
+import { OrbitCamera } from "./orbit-camera.js";
 
 export const toThree = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
@@ -111,6 +112,7 @@ export class SceneView {
     this.scene.fog = new THREE.FogExp2(0xffffff, 0.0016);
     this.camera = new THREE.PerspectiveCamera(58, 1, 0.3, 6000);
     this.mode = "chase";
+    this.orbit = new OrbitCamera();
     this.camPos = new THREE.Vector3();
     this.camLook = new THREE.Vector3();
 
@@ -248,8 +250,12 @@ export class SceneView {
   }
 
   toggleCamera() {
-    const modes = ["chase", "hood", "top", "far"];
-    this.mode = modes[(modes.indexOf(this.mode) + 1) % modes.length];
+    const modes = ["chase", "orbit", "hood", "top", "far"];
+    return this.setCamera(modes[(modes.indexOf(this.mode) + 1) % modes.length]);
+  }
+
+  setCamera(mode) {
+    this.mode = mode;
     this.camPos.set(0, 0, 0);   // snap rather than swoop between very different views
     return this.mode;
   }
@@ -258,7 +264,12 @@ export class SceneView {
     const fx = Math.cos(ego.psi), fy = Math.sin(ego.psi);
     let target, look, up = new THREE.Vector3(0, 1, 0), lerp = 1 - Math.pow(0.002, dt);
     this.camera.fov = this.mode === "hood" ? 64 : 58;
-    if (this.mode === "top") {
+    if (this.mode === "orbit") {
+      const pose = this.orbit.pose(ego, this.vehicleHeight);
+      target = toThree(pose.x, pose.y, pose.z);
+      look = toThree(...pose.look);
+      lerp = 1; // Direct manipulation: no spring lag while dragging, still follows the car.
+    } else if (this.mode === "top") {
       target = toThree(ego.x, ego.y, 130);
       look = toThree(ego.x, ego.y, 0);
       up = new THREE.Vector3(0, 0, -1);
@@ -268,8 +279,9 @@ export class SceneView {
       look = toThree(ego.x + fx * 12, ego.y + fy * 12, 0.5);
     } else if (this.mode === "hood") {
       // at the base of the windshield, looking down the road over the hood
-      target = toThree(ego.x + fx * 2.05, ego.y + fy * 2.05, 1.32);
-      look = toThree(ego.x + fx * 30, ego.y + fy * 30, 0.9);
+      const hood = this.vehicleCamera || { x: 2.05, y: 1.32 };
+      target = toThree(ego.x + fx * hood.x, ego.y + fy * hood.x, hood.y);
+      look = toThree(ego.x + fx * 30, ego.y + fy * 30, hood.y - 0.42);
       if (this.cameraMotion !== false) {
         const smooth = 1 - Math.exp(-8 * dt);
         this.cameraPitch = (this.cameraPitch || 0) + (THREE.MathUtils.clamp((ego.ax || 0) * 0.006, -0.035, 0.025) - (this.cameraPitch || 0)) * smooth;
@@ -279,7 +291,8 @@ export class SceneView {
       }
       lerp = 1;
     } else {
-      target = toThree(ego.x - fx * 8, ego.y - fy * 8, 3.1);
+      const extra = Math.max(0, (ego.spec?.length || 4.5) - 4.5);
+      target = toThree(ego.x - fx * (8 + extra), ego.y - fy * (8 + extra), 3.1 + Math.max(0, (this.vehicleHeight || 1.45) - 1.45));
       look = toThree(ego.x + fx * 8, ego.y + fy * 8, 1.1);
     }
     if (this.camPos.lengthSq() === 0) { this.camPos.copy(target); this.camLook.copy(look); }

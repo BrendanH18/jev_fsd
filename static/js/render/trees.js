@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
-import { pointAt, headingAt } from "../map/mapdata.js";
+import { sceneryFor } from "../map/scenery.js";
 import { hash01 } from "./geo.js";
 import { toThree } from "./scene.js";
 import { snowable } from "./weather.js";
@@ -22,7 +22,6 @@ const CHUNK = 180;
 const LEAF = [0x4d7a2e, 0x5a8a34, 0x668f3a, 0x42692c, 0x6f9440, 0x547f31, 0x5b7a2f];
 const PLUM = 0x7a3c4c;      // purple-leaf plums line many Vancouver side streets
 const NEEDLE = [0x33502f, 0x2d4a36, 0x3b5a3c];
-const BOULEVARD = { residential: 1.8, living_street: 1.2, tertiary: 1.2, unclassified: 1.2 };
 const VARIANTS = 3;
 
 // A unit crown (radius ~1, centered on the origin) of leaf cards around a core.
@@ -144,44 +143,7 @@ function withWind(material, amount) {
 }
 
 export function buildTrees(map, roads, footprints) {
-  const spots = [];   // {x, y, kind, size, key}
-  const clear = (x, y, margin) => !footprints.near(x, y, margin) && map.roadDistance(x, y).distance > 1.0;
-
-  // street trees on the boulevard, both sides
-  for (const st of roads.streets) {
-    const e = st.edge;
-    const blvd = BOULEVARD[e.cls];
-    if (!blvd) continue;
-    const L = e.cum[e.cum.length - 1];
-    const trim = (id) => ((roads.legs.get(id) || []).length >= 3 ? roads.nodeR.get(id) + 7 : 2);
-    const from = trim(e.from), to = L - trim(e.to);
-    for (const sign of [1, -1]) {
-      const lat = sign > 0 ? e.asphalt[1] + 0.3 + 0.22 + blvd / 2 : e.asphalt[0] - 0.3 - 0.22 - blvd / 2;
-      for (let s = from + 3 + hash01(e.id, sign) * 6; s < to; s += 10 + hash01(e.id + s, 7) * 5) {
-        const key = `${e.id}:${sign}:${Math.round(s)}`;
-        if (hash01(key, 1) < 0.14) continue;   // gaps for driveways
-        const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-        const x = p[0] + Math.sin(h) * lat, y = p[1] - Math.cos(h) * lat;
-        if (!clear(x, y, 2.0)) continue;
-        spots.push({ x, y, key, kind: hash01(key, 2) < 0.12 ? "plum" : "leaf", size: 0.8 + hash01(key, 3) * 0.35 });
-      }
-    }
-  }
-
-  // one tree on each roundabout island, as on Vancouver's planted traffic circles
-  for (const rb of (map.roundabouts || new Map()).values()) {
-    spots.push({ x: rb.x, y: rb.y, key: rb.id, kind: "leaf", size: Math.min(0.85, 0.35 + rb.island_r * 0.12) });
-  }
-
-  // yard trees, away from streets and houses
-  const [x0, y0, x1, y1] = map.extent;
-  for (let x = x0; x < x1; x += 13) for (let y = y0; y < y1; y += 13) {
-    const key = `${x},${y}`;
-    if (hash01(key, 9) > 0.4) continue;
-    const px = x + hash01(key, 10) * 13, py = y + hash01(key, 11) * 13;
-    if (footprints.near(px, py, 2.5) || map.roadDistance(px, py).distance < 7) continue;
-    spots.push({ x: px, y: py, key, kind: hash01(key, 12) < 0.3 ? "conifer" : "leaf", size: 0.8 + hash01(key, 13) * 0.6 });
-  }
+  const spots = sceneryFor(map).trees;
 
   const crowns = [], cores = [], trunks = [], conifers = [];
   for (let v = 0; v < VARIANTS; v++) {

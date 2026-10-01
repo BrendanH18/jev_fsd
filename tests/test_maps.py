@@ -14,14 +14,20 @@ from jev.routing import Router
 class CanadianMapsTests(unittest.TestCase):
     def test_all_catalog_maps_are_bundled_and_identifiable(self):
         entries = catalog(MAPS_DIR)
-        self.assertEqual(len(entries), 4)
-        self.assertEqual({m['city'] for m in entries}, {'Vancouver', 'Victoria', 'Toronto', 'Montréal'})
+        self.assertEqual(len(entries), len(MAP_CATALOG))
+        self.assertEqual({m['id'] for m in entries}, set(PRESET_BBOXES))
+        self.assertGreaterEqual(len({m['province'] for m in entries}), 4)
         for item in entries:
             with self.subTest(map=item['id']):
                 self.assertTrue(item['cached'])
                 self.assertGreater(item['stats']['roads'], 100)
+                self.assertGreater(item['stats']['signals'], 0)
+                self.assertGreater(item['stats']['buildings'], 100)
                 self.assertTrue(item['preview'])
                 self.assertEqual(map_identity(tuple(item['bbox']))['id'], item['id'])
+                pack = build_pack(tuple(item['bbox']), MAPS_DIR)
+                self.assertFalse(pack.get('synthetic', False))
+                self.assertEqual(pack['bbox'], item['bbox'])
 
     def test_each_city_offers_three_distinct_drivable_routes(self):
         for item in MAP_CATALOG:
@@ -43,8 +49,35 @@ class CanadianMapsTests(unittest.TestCase):
                     for a, b in zip(d['route']['edges'], d['route']['edges'][1:]):
                         self.assertEqual(router.edges[a]['to'], router.edges[b]['from'])
 
+    def test_suggested_routes_are_reachable_across_each_neighbourhood(self):
+        for item in MAP_CATALOG:
+            pack = build_pack(PRESET_BBOXES[item['id']], MAPS_DIR)
+            router = Router(pack)
+            x0, y0, x1, y1 = pack['extent']
+            lanes = []
+            for lane in router.lanes.values():
+                if lane['length'] < 70:
+                    continue
+                x, y = g.point_at(lane['pts'], lane['length'] / 2, lane['cum'])
+                if x0 + 100 < x < x1 - 100 and y0 + 100 < y < y1 - 100:
+                    lanes.append(lane)
+            self.assertGreater(len(lanes), 10, item['id'])
+            for index in (0, len(lanes) // 2, len(lanes) - 1):
+                with self.subTest(map=item['id'], start=index):
+                    lane = lanes[index]
+                    point = g.point_at(lane['pts'], lane['length'] / 2, lane['cum'])
+                    start = dict(x=point[0], y=point[1], heading=g.heading_of(lane['pts'][0], lane['pts'][1]))
+                    drives = suggested_drives(router, start)
+                    self.assertEqual(len(drives), 3)
+                    for drive in drives:
+                        self.assertLess(g.dist(point, drive['route']['polyline'][0]), 10)
+                        self.assertGreater(drive['length_m'], 250)
+                        self.assertLess(drive['length_m'], 1900)
+                        for a, b in zip(drive['route']['edges'], drive['route']['edges'][1:]):
+                            self.assertEqual(router.edges[a]['to'], router.edges[b]['from'])
+
     def test_selected_city_status_and_map_use_the_same_bbox(self):
-        for name in ('victoria', 'toronto', 'montreal'):
+        for name in (item['id'] for item in MAP_CATALOG):
             with self.subTest(map=name):
                 status = server.api_status(None, {'map': [name]})
                 pack = server.api_map(None, {'map': [name]})

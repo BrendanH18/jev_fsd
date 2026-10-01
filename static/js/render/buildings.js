@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { snowable } from "./weather.js";
 import { GeoBuilder, hash01 } from "./geo.js";
 import { facadeTextures, flatRoofTexture, shingleTexture, grassTexture } from "./textures.js";
-import { sidewalkOffset, streetOf } from "../map/streets.js";
+import { buildingShapes } from "../map/building-scenery.js";
 import { lighting } from "./atmosphere.js";
 
 const CHUNK = 180;
@@ -17,7 +17,6 @@ const FACADE_TILE = 12;   // meters per facade texture tile
 const SHINGLE_TILE = 4;
 const FLAT_TILE = 9;
 const EAVE = 0.4;
-const INSET = 0.06;       // shrink footprints so buildings sharing a wall do not z-fight
 
 const HOUSE_COLORS = [0xf2eee6, 0xe9dfc8, 0xd8d3c6, 0xb6c3ae, 0x9fb1c2, 0x707d88, 0x414c58, 0xc9b99c, 0xeadba4, 0x8f604b, 0xf5f3ec, 0x5f705d, 0xc6cfd4, 0xa77b5c];
 const BLOCK_COLORS = [0xdad2c4, 0xc9b9a0, 0xaba59c, 0x9d6c56, 0xe4dfd5, 0x8f9296, 0xb98b6b, 0xcfc8bb];
@@ -62,53 +61,6 @@ function wallMaterial(kind) {
   return mat;
 }
 
-function centroid(pts) {
-  let x = 0, y = 0;
-  for (const p of pts) { x += p[0]; y += p[1]; }
-  return [x / pts.length, y / pts.length];
-}
-
-function area(pts) {
-  let a = 0;
-  for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p[0] * q[1] - q[0] * p[1]; }
-  return a / 2;
-}
-
-function convexHull(points) {
-  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lo = [], up = [];
-  for (const p of pts) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
-  for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
-  up.pop(); lo.pop();
-  return lo.concat(up);
-}
-
-// Minimum-area bounding rectangle: center, long axis (ux, uy), half length hl >= half width hw.
-function minRect(pts) {
-  const hull = convexHull(pts);
-  let best = null;
-  for (let i = 0; i < hull.length; i++) {
-    const p = hull[i], q = hull[(i + 1) % hull.length];
-    const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
-    if (l < 1e-6) continue;
-    const ux = (q[0] - p[0]) / l, uy = (q[1] - p[1]) / l;
-    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
-    for (const [x, y] of hull) {
-      const u = x * ux + y * uy, v = -x * uy + y * ux;
-      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
-    }
-    const a = (u1 - u0) * (v1 - v0);
-    if (!best || a < best.area) best = { area: a, ux, uy, u0, u1, v0, v1 };
-  }
-  if (!best) return null;
-  const { ux, uy, u0, u1, v0, v1 } = best;
-  const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2;
-  let r = { cx: cu * ux - cv * uy, cy: cu * uy + cv * ux, ux, uy, hl: (u1 - u0) / 2, hw: (v1 - v0) / 2, area: best.area };
-  if (r.hw > r.hl) r = { ...r, ux: -uy, uy: ux, hl: r.hw, hw: r.hl };
-  return r;
-}
-
 class Chunk {
   constructor() {
     this.house = new GeoBuilder({ colors: true }); this.house.uvScale = 1 / FACADE_TILE;
@@ -138,54 +90,19 @@ const WHITE = new THREE.Color(0xf4f2ec), DECK = new THREE.Color(0x7d746a), BRICK
 const HEDGE = [0x6f9a50, 0x7fa85a, 0x648c48];
 
 // The details of a house with a street in front: porch, chimney, hedge.
-function houseDetails(chunk, map, r, wallH, roofTop, key, roofCol) {
-  const near = map.nearestLane(r.cx, r.cy, null, 45);
+function houseDetails(chunk, r, wallH, roofTop, key, roofCol, boxes) {
   if (chunk && hash01(key, 41) < 0.45) {
     // a chimney up through the roof near one gable end
     const end = hash01(key, 42) < 0.5 ? -1 : 1;
     const a = end * Math.max(0, r.hl - 0.9), c = r.hw * 0.35 * (hash01(key, 43) < 0.5 ? -1 : 1);
     orientedBox(chunk.detail, r.cx + r.ux * a - r.uy * c, r.cy + r.uy * a + r.ux * c, r.ux, r.uy, 0.35, 0.3, wallH - 0.5, roofTop + 0.7, BRICK);
   }
-  if (!near) return;
-  const e = near.lane.edgeRef;
-  const side = near.lateral > 0 ? 1 : -1;
-  // how far from the lane center the sidewalk's back edge is: nothing built in front of that
-  const walkBack = Math.abs(sidewalkOffset(e, side) - near.lane.offset) + streetOf(e)[1] / 2;
-  const dx = near.point[0] - r.cx, dy = near.point[1] - r.cy, d = Math.hypot(dx, dy) || 1;
-  const fx = dx / d, fy = dy / d;
-  // the side of the house that faces the street
-  const alongU = fx * r.ux + fy * r.uy, alongV = fx * -r.uy + fy * r.ux;
-  const useU = Math.abs(alongU) > Math.abs(alongV);
-  const sgn = Math.sign(useU ? alongU : alongV) || 1;
-  const nx = useU ? r.ux * sgn : -r.uy * sgn, ny = useU ? r.uy * sgn : r.ux * sgn;   // outward normal of the front wall
-  const half = useU ? r.hl : r.hw, across = useU ? r.hw : r.hl;
-  const yard = d - half - walkBack;   // front wall to the back of the sidewalk
-  if (yard < 3) return;
-  const wx = r.cx + nx * half, wy = r.cy + ny * half;   // middle of the front wall
-  const tx = -ny, ty = nx;                                // along the front wall
-  if (hash01(key, 44) < 0.75) {
-    // front porch: a raised deck, steps down to the yard, two posts, a shallow roof
-    const depth = Math.min(2.2, yard - 1.2), width = Math.min(4.6, across * 1.2);
-    const shift = (hash01(key, 45) - 0.5) * Math.max(0, across * 2 - width) * 0.6;
-    const px = wx + nx * depth / 2 + tx * shift, py = wy + ny * depth / 2 + ty * shift;
-    orientedBox(chunk.detail, px, py, nx, ny, depth / 2, width / 2, 0, 0.62, DECK);
-    for (let k = 0; k < 3; k++) {
-      const sd = depth / 2 + 0.16 + k * 0.3;
-      orientedBox(chunk.detail, px + nx * sd, py + ny * sd, nx, ny, 0.16, 0.7, 0, 0.62 - (k + 1) * 0.18, STEP);
-    }
-    for (const s of [-1, 1]) {
-      const cx = px + nx * (depth / 2 - 0.12) + tx * s * (width / 2 - 0.12), cy = py + ny * (depth / 2 - 0.12) + ty * s * (width / 2 - 0.12);
-      orientedBox(chunk.detail, cx, cy, nx, ny, 0.08, 0.08, 0.62, 2.85, WHITE);
-    }
-    orientedBox(chunk.detail, px + nx * 0.15, py + ny * 0.15, nx, ny, depth / 2 + 0.3, width / 2 + 0.25, 2.85, 3.0, roofCol);
-    // a front door behind the porch
-    orientedBox(chunk.detail, wx + nx * 0.03 + tx * shift, wy + ny * 0.03 + ty * shift, nx, ny, 0.03, 0.5, 0.62, 2.7, new THREE.Color([0x5a2e22, 0x2b3a4a, 0x1f1f1f, 0x7a1f1f, 0x2f4a3a][Math.floor(hash01(key, 46) * 5)]));
-  }
-  if (hash01(key, 47) < 0.35 && yard > 4) {
-    // a clipped hedge along the front of the yard, a little back from the sidewalk
-    const hx = r.cx + nx * (d - walkBack - 0.9), hy = r.cy + ny * (d - walkBack - 0.9);
-    const col = new THREE.Color(HEDGE[Math.floor(hash01(key, 48) * HEDGE.length)]);
-    orientedBox(chunk.hedge, hx, hy, tx, ty, across + 1.2, 0.45, 0, 1.0 + hash01(key, 49) * 0.5, col);
+  for (const box of boxes) {
+    const { part, cx, cy, ux, uy, hl, hw, z0, z1 } = box;
+    const materialColor = part === "porch" ? DECK : part === "porch_step" ? STEP
+      : part === "porch_roof" ? roofCol : part === "door" ? new THREE.Color([0x5a2e22, 0x2b3a4a, 0x1f1f1f, 0x7a1f1f, 0x2f4a3a][Math.floor(hash01(key, 46) * 5)])
+      : part === "hedge" ? new THREE.Color(HEDGE[Math.floor(hash01(key, 48) * HEDGE.length)]) : WHITE;
+    orientedBox(part === "hedge" ? chunk.hedge : chunk.detail, cx, cy, ux, uy, hl, hw, z0, z1, materialColor);
   }
 }
 
@@ -229,33 +146,19 @@ export function buildBuildings(map) {
   const group = new THREE.Group();
   const chunks = new Map();
   const footprints = [];
-  map.pack.buildings.forEach((bld, i) => {
-    let pts = bld.pts;
-    if (Math.abs(area(pts)) < 1) return;
-    if (area(pts) < 0) pts = [...pts].reverse();
-    const c = centroid(pts);
-    pts = pts.map(([x, y]) => {
-      const dx = x - c[0], dy = y - c[1], d = Math.hypot(dx, dy) || 1;
-      const k = Math.max(0.5, 1 - INSET / d);
-      return [c[0] + dx * k, c[1] + dy * k];
-    });
+  buildingShapes(map).forEach(({ pts, i, h, kind, r, pitched, cx, cy, boxes }) => {
     footprints.push(pts);
-    const key = `${Math.floor(c[0] / CHUNK)},${Math.floor(c[1] / CHUNK)}`;
+    const key = `${Math.floor(cx / CHUNK)},${Math.floor(cy / CHUNK)}`;
     if (!chunks.has(key)) chunks.set(key, new Chunk());
     const chunk = chunks.get(key);
-    const h = bld.h + (i % 7) * 0.04;
-    const a = Math.abs(area(pts));
-    const kind = h > 13 || a > 450 ? "block" : "house";
     const wallCol = color(kind === "house" ? HOUSE_COLORS : BLOCK_COLORS, i, 11);
-    const r = kind === "house" ? minRect(pts) : null;
-    const pitched = r && a / r.area > 0.7 && r.hw <= 8.5 && r.hw >= 1.5 && hash01(i, 3) < 0.92;
     const builder = kind === "house" ? chunk.house : chunk.block;
     if (pitched) {
       const wallH = Math.max(2.8, h - Math.min(4.2, r.hw * 0.7));
       walls(builder, pts, wallH, wallCol);
       const roofCol = color(ROOF_COLORS, i, 21, 0.12);
       const top = pitchedRoof(chunk, builder, r, wallH, i, wallCol, roofCol);
-      if (kind === "house") houseDetails(chunk, map, r, wallH, top, i, roofCol);
+      if (kind === "house") houseDetails(chunk, r, wallH, top, i, roofCol, boxes);
     } else {
       walls(builder, pts, h, wallCol);
       chunk.flat.polygon(pts, h, { scale: FLAT_TILE, color: color(FLAT_COLORS, i, 31) });

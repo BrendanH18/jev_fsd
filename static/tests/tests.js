@@ -2,6 +2,7 @@
 
 import { api } from "../js/common.js";
 import { runUiTests } from "./ui-tests.js";
+import { runExplorerTests } from "./explorer-tests.js";
 import { MapData } from "../js/map/mapdata.js";
 import { Route } from "../js/map/route.js";
 import { Vehicle, CAR, ROAD, comfort } from "../js/sim/vehicle.js";
@@ -231,13 +232,15 @@ async function run() {
     const snap = buildSnapshot(world);
     check("building hides traffic and crossing pedestrians", !snap.following && !snap.traffic.length && !snap.pedestrian && !snap.observed.includes(hidden));
     const candidates = sampleCandidates(snap, world); simulateAll(candidates, snap, world);
-    check("prediction cannot see a hidden vehicle", !candidates.find((c) => c.id === "keep_lane_hold").sim.collision);
+    const predicted = candidates.find((c) => c.id === "keep_lane_hold").sim.collision;
+    check("prediction sees the mapped wall but cannot see a hidden vehicle", predicted?.kind === "building" && predicted.id !== hidden.id);
     check("emergency brake cannot see a hidden vehicle", safetyBrake(world, snap, null) === null);
     world.ego.x = 32.5;
     check("hazard appears after clearing the corner", buildSnapshot(world).following?.id === "hidden");
     world.ego.x = hidden.x;
+    world.resetContactHistory(); // Explicit test placement, rather than driving through the wall.
     world.audit(1 / 60, world.roadInfo());
-    check("collision audit keeps unseen physical obstacles", world.violations.collisions > 0);
+    check("collision audit keeps unseen physical obstacles", world.events.some((e) => e.type === "collision" && e.with === hidden.id));
     const sight = new Visibility({ pack: { buildings: [{ pts: [[24.9, 0.1], [25.1, 0.1], [25.1, 0.3], [24.9, 0.3]], h: 3 }] } });
     check("sight ray catches a narrow footprint across cell boundaries", !sight.canSee({ x: 20, y: 0 }, 30, 0.4));
     check("clear sight beside a footprint", sight.canSee({ x: 20, y: 1 }, 30, 1));
@@ -344,6 +347,7 @@ async function run() {
   check("signal-heavy Victoria can build a one-drive benchmark", citySuite.length === 1);
   check("city benchmark routes and start use the selected map", citySuite.length === 1 && !!victoria.lane(citySuite[0].start.edge, citySuite[0].start.lane) && citySuite[0].route.edges.every(e => victoria.edges.has(e)));
   results.push(...await runUiTests());
+  results.push(...await runExplorerTests());
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;
   window.__results = results;

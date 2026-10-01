@@ -535,7 +535,9 @@ export class NpcFleet {
       if (!p || Math.abs(p.lateral) > 2.2) continue;
       const ds = p.s - me.s;
       const need = ds >= 0 ? 8 + Math.max(0, n.v - o.v) * 2 : 8 + Math.max(0, o.v - n.v) * 2.5;
-      if (Math.abs(ds) < need + CAR.length) return;
+      const ns = n.spec || CAR, os = o.spec || CAR;
+      const bodyGap = ds >= 0 ? ns.length - ns.rearOverhang + os.rearOverhang : os.length - os.rearOverhang + ns.rearOverhang;
+      if (Math.abs(ds) < need + bodyGap) return;
     }
     n.lc = { dir, to, edge: edge.id, width: Math.abs(e.lane_offsets[to] - e.lane_offsets[edge.lane]), t: 0, T: 3.5 };
   }

@@ -5,15 +5,15 @@
 import { obbOverlap } from "../sim/collision.js";
 import { CAR } from "../sim/vehicle.js";
 
-const FRONT = CAR.length - CAR.rearOverhang;
 
 export function safetyBrake(world, snap, executing) {
   const ego = world.ego;
+  const FRONT = ego.spec.length - ego.spec.rearOverhang;
   if (ego.v < 0.3) {
     // standing still: never pull away into a car right in front (not counted as an intervention)
     for (const n of world.visibleObstaclesNear(ego.x, ego.y, 12)) {
       const local = ego.toLocal(n.x, n.y);
-      if (Math.abs(local.right) < 1.6 && local.ahead > -1 && local.ahead - FRONT - (n.spec || CAR).rearOverhang < 2.0) return { reason: "blocked", hold: true };
+      if (Math.abs(local.right) < ego.spec.width / 2 + 0.65 && local.ahead > -1 && local.ahead - FRONT - (n.spec || CAR).rearOverhang < 2.0) return { reason: "blocked", hold: true };
     }
     return null;
   }
@@ -33,7 +33,7 @@ export function safetyBrake(world, snap, executing) {
       if (obbOverlap(box, n.obb(), 0.3)) return { reason: "open door" };
     }
     const local = ego.toLocal(n.x, n.y);
-    if (local.ahead < 0 || local.ahead > 20 || Math.abs(local.right) > 1.4) continue;
+    if (local.ahead < 0 || local.ahead > 20 || Math.abs(local.right) > ego.spec.width / 2 + 0.45) continue;
     const gap = local.ahead - FRONT - (n.spec || CAR).rearOverhang;
     const closing = ego.v - n.v * Math.cos(n.psi - ego.psi);
     if (gap < 1.5 || (closing > 0.1 && gap / closing < 1.0)) return { reason: "ahead", gap, closing };
