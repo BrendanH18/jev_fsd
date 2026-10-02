@@ -34,7 +34,7 @@ from jev.drives import suggested_drives
 
 VERSION = "0.2.0"
 STATIC = PROJECT_ROOT / "static"
-PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html"}
+PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html", "/arena": "arena.html"}
 MAX_BODY_BYTES = 1024 * 1024
 
 settings = Settings()

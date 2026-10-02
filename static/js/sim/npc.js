@@ -41,7 +41,7 @@ const SHARP_TURN = 130 * Math.PI / 180;   // mirrors SHARP_TURN_DEG in jev/routi
 const BOX_M = 9;
 const LEADER_MARGIN_M = 0.3;    // beyond two half-widths: anything closer to the path is in the way
 
-class NpcPath {
+export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
   constructor(map, random, { bike = false } = {}) { this.map = map; this.random = random; this.bike = bike; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
   start(edgeId, laneIdx, s, planned = []) {

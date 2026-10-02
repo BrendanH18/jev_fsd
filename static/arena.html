@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent arena · Jev Drive Lab</title>
+  <link rel="stylesheet" href="/css/app.css"><link rel="stylesheet" href="/css/arena.css">
+</head>
+<body class="arena">
+  <main>
+    <header><a class="brand" href="/">JEV / DRIVE LAB</a><a href="https://github.com/BrendanH18/jev_fsd" target="_blank" rel="noopener">GitHub ↗</a></header>
+    <p class="eyebrow">REPEATABLE STREETS / MEASURABLE DECISIONS</p>
+    <h1>Bring your own driver.</h1>
+    <p class="intro">Four fixed challenges. Shared physics, sensing and safety checks. Compare driving outcomes, comfort, latency and cost.</p>
+    <section class="arena-controls panel" aria-label="Evaluation controls">
+      <fieldset><legend>Agents to compare</legend><div id="agents"></div></fieldset>
+      <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
+      <button id="arena-run" class="toggle on">Run evaluation</button><button id="arena-export" class="toggle" disabled>Export results</button>
+      <p id="arena-status" role="status">Loading the arena…</p>
+      <details><summary>Add a trusted local agent</summary><label>Module path <input id="agent-module" placeholder="./js/agents/my-agent.js"></label><button id="arena-load" class="toggle">Load agent</button><p>Export a default definition with id, label and create(). JavaScript runs in this browser. See <a href="https://github.com/BrendanH18/jev_fsd/blob/main/docs/agents.md">the adapter guide</a>.</p></details>
+    </section>
+    <section aria-label="Evaluation results"><div class="table-wrap panel"><table><thead><tr><th>Agent / challenge</th><th>Outcome</th><th>Score</th><th>Time</th><th>Incidents</th><th>Hard brakes</th><th>p50</th><th>Cost</th></tr></thead><tbody id="arena-results"><tr><td colspan="8">Run an evaluation to see measured results.</td></tr></tbody></table></div></section>
+    <p class="arena-note">These are local simulator results, not a verified public leaderboard. A pass requires arrival with no collision, red light, missed stop or failed yield, and less than one second off-road. The coaching score is a separate measure. Exported runs include challenge, map-pack and clock versions.</p>
+    <section class="panel manual-attempts"><h2>Your challenge drives</h2><div id="manual-attempts"></div><p>Saved on this browser. Manual attempts use realtime driving; compare them with realtime agent evaluations. Replay branches are labelled.</p></section>
+  </main>
+  <script type="module" src="/js/lab/arena.js"></script>
+</body></html>

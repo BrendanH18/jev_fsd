@@ -3,6 +3,10 @@
 const TOKEN = document.querySelector('meta[name="jev-csrf"]')?.content || "";
 
 export async function api(path, body, { signal } = {}) {
+  if (document.querySelector('meta[name="jev-demo"]')) {
+    const { demoApi } = await import("./demo/api.js");
+    return demoApi(path, body, { signal });
+  }
   const opts = body === undefined
     ? { headers: { "X-Jev-Token": TOKEN }, signal }
     : { method: "POST", headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN }, body: JSON.stringify(body), signal };
@@ -64,11 +68,22 @@ export async function copyText(text) {
 // Seeded RNG (mulberry32) so traffic is reproducible.
 export function rng(seed) {
   let a = seed >>> 0;
-  return () => {
+  const random = () => {
     a = (a + 0x6D2B79F5) >>> 0;
     let t = a;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  random.getState = () => a >>> 0;
+  random.setState = value => { a = value >>> 0; };
+  random.clone = () => { const next = rng(0); next.setState(a); return next; };
+  return random;
+}
+
+export function appUrl(path = "", params = null) {
+  const base = new URL("../../", import.meta.url);
+  const url = new URL(path.replace(/^\//, ""), base);
+  if (params) url.search = new URLSearchParams(params).toString();
+  return url.href;
 }

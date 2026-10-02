@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Drive Lab welcome screen with scenic drives, AI demonstrations and four fixed driving challenges.
+- Geometric perception overlay with visibility, hidden-object inspection and candidate rejection reasons.
+- Recorded drive checkpoints with interpolated playback, incident seeking, manual takeovers,
+  driver changes and revalidated alternate manoeuvres. Replay branches and modified challenges are labelled.
+- Shareable PNG score cards, reproducible challenge links and manual-arrival reports.
+- Extensible agent registry, cautious starter agent, safety-checked adapter loading and a local
+  evaluation arena with versioned JSON exports.
+- Static GitHub Pages demo with all eight bundled maps and browser-side routing; no server or key required.
+- Quieter default telemetry, distinct city facade palettes and decorative city silhouettes.
+- Shorter README, new demo media and guides for replay, adapters and Pages deployment.
+
 - Movable 360° camera follows the selected vehicle with mouse/touch orbit, wheel/pinch zoom,
   camera buttons, keyboard rotation and recentering. Existing fixed camera views remain available.
 

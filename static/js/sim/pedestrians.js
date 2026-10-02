@@ -20,7 +20,7 @@ import { rng } from "../common.js";
 export const PEDESTRIANS = 60;
 export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 };   // footprint for collisions
 
-class Pedestrian {
+export class Pedestrian {
   constructor(props) { Object.assign(this, props); this.spec = PED; this.kind = "pedestrian"; this.a = 0; this.frozen = 0; }
   get center() { return [this.x, this.y]; }
   obb() { return { center: [this.x, this.y], heading: this.psi, halfLength: PED.length / 2, halfWidth: PED.width / 2 }; }
@@ -330,4 +330,3 @@ function groupOf(inter, h) {
   }
   return best ? best.group : null;
 }
-

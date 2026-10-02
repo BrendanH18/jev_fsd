@@ -20,6 +20,7 @@ data/maps/*.osm.xml
 # Local scratch
 .shots/
 .DS_Store
+.demo-site/
 
 # Claude Code local settings
 .claude/

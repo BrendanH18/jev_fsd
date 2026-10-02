@@ -8,11 +8,10 @@ import { applyLaw } from "../sim/controller.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
-import { RulesBrain } from "./rules.js";
-import { JevBrain } from "./jev.js";
 import { safetyBrake, DeadlockDetector } from "./safety.js";
 import { api } from "../common.js";
 import { Route } from "../map/route.js";
+import { createAgents, validAgentChoice } from "./registry.js";
 
 const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
@@ -21,7 +20,7 @@ const TIMEOUT_MS = 1500;
 export class Autopilot {
   constructor(world, { onDecision = () => {}, onEvent = () => {} } = {}) {
     this.world = world;
-    this.brains = { rules: new RulesBrain(), jev: new JevBrain() };
+    this.brains = createAgents();
     this.brainName = "jev";
     this.enabled = false;
     this.epoch = 0;
@@ -42,7 +41,12 @@ export class Autopilot {
 
   get brain() { return this.brains[this.brainName]; }
   setBrain(name) { if (this.brains[name]) { this.brainName = name; this.bumpEpoch(); } }
-  bumpEpoch() { this.epoch++; if (this.inFlight) { this.inFlight.abort(); this.inFlight = null; } }
+  bumpEpoch() {
+    this.epoch++;
+    if (this.inFlight) { this.inFlight.abort(); this.inFlight = null; }
+    // A stale route response cannot finish the new epoch's rerouting lifecycle.
+    this.rerouting = false;
+  }
 
   setEnabled(on) {
     this.enabled = on;
@@ -122,7 +126,7 @@ export class Autopilot {
       this.apply({ motion: "stop", candidateId: "hard_brake", meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" }, answers: { ...local } }, snap, candidates, request);
       return;
     }
-    if (!Object.keys(questions).length || this.brainName === "rules") {
+    if ((!Object.keys(questions).length && this.brainName === "jev") || this.brainName === "rules") {
       const r = this.brains.rules.decideSync(snap, eligible);
       if (this.brainName !== "rules") { r.meta.source = "local"; r.answers = { ...local }; } else r.answers = { ...local, motion: { type: "choice", choice: r.motion, probabilities: { [r.motion]: 1 }, confidence: 1 }, vector: { type: "choice", choice: r.candidateId, probabilities: { [r.candidateId]: 1 }, confidence: 1 } };
       this.apply(r, snap, candidates, request);
@@ -132,16 +136,23 @@ export class Autopilot {
     this.inFlight = controller;
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const result = await this.brain.decide(snap, eligible, request, controller.signal);
+      const result = await Promise.race([
+        this.brain.decide(snap, eligible, request, controller.signal),
+        new Promise((_, reject) => controller.signal.addEventListener("abort", () => reject(new DOMException("Decision timed out", "AbortError")), { once: true })),
+      ]);
       clearTimeout(timer);
       if (epoch !== this.epoch) return;
+      if (this.brainName !== "jev" && !validAgentChoice(result, eligible)) throw new Error("Agent returned a manoeuvre outside the eligible candidate set");
+      result.meta ||= {};
+      result.meta.source ||= this.brainName;
+      for (const key of ["latency_ms", "input_tokens", "cost_usd"]) if (!Number.isFinite(result.meta[key]) || result.meta[key] < 0) result.meta[key] = 0;
       if (result.candidateId === null && eligible.length) {
         const r = this.brains.rules.decideSync(snap, eligible);
         result.candidateId = r.candidateId;
         result.meta.fallback = "invalid vector";
         this.world.violations.fallbacks++;
       }
-      this.totals.calls++;
+      if (this.brainName === "jev" || result.meta.live_call) this.totals.calls++;
       this.apply(result, snap, candidates, request);
     } catch (err) {
       clearTimeout(timer);
@@ -190,12 +201,15 @@ export class Autopilot {
   async reroute() {
     const world = this.world;
     if (!world.destination) return;
+    const epoch = this.epoch;
     this.rerouting = true;
     try {
       const res = await api("/api/route", { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3 });
+      if (epoch !== this.epoch) return;
       if (res.routes.length) {
         if (res.routes.length === 1 || this.brainName === "rules") {
           world.route = new Route(res.routes[0], world.map, world.ego.spec);
+          this.rerouting = false;
           this.bumpEpoch();
         } else {
           this.pendingRoutes = res.routes;         // the next decision asks Jev which one
@@ -205,9 +219,9 @@ export class Autopilot {
         this.onEvent({ type: "reroute", count: res.routes.length });
       }
     } catch (err) {
-      this.onEvent({ type: "error", error: err.message });
+      if (epoch === this.epoch) this.onEvent({ type: "error", error: err.message });
     } finally {
-      this.rerouting = false;
+      if (epoch === this.epoch) this.rerouting = false;
     }
   }
 }
