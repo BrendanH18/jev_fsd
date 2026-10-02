@@ -82,5 +82,19 @@ registerAgent({ id: "invalid-test", label: "Invalid fixture", create: () => ({ a
 const invalid = setupChallenge(map, CHALLENGES[0], { brain: "invalid-test" });
 invalid.autopilot.step(1 / 60, 0); await invalid.autopilot.firing;
 test("invalid custom-agent output falls back to Rules without executing it", () => { assert.equal(invalid.world.violations.fallbacks, 1); assert.equal(invalid.autopilot.lastDecision.meta.source, "rules_fallback"); assert.notEqual(invalid.autopilot.lastDecision.chosenId, "teleport"); });
+
+const routing = setupChallenge(map, CHALLENGES[0]), originalFetch = globalThis.fetch, pendingRoutes = [];
+globalThis.fetch = () => new Promise(resolve => pendingRoutes.push(resolve));
+try {
+  const initialRoute = routing.world.route, stale = routing.autopilot.reroute();
+  routing.autopilot.setBrain("cautious");
+  test("switching drivers releases a pending reroute", () => { assert.equal(routing.autopilot.rerouting, false); });
+  const current = routing.autopilot.reroute();
+  const respond = (index, id) => pendingRoutes[index]({ ok: true, json: async () => ({ routes: [{ ...routing.scenario.route, id }] }) });
+  respond(0, "stale-route"); await stale;
+  test("stale reroutes cannot replace the route or release a newer request", () => { assert.equal(routing.world.route, initialRoute); assert.equal(routing.autopilot.rerouting, true); });
+  respond(1, "current-route"); await current;
+  test("the current reroute applies and releases its request", () => { assert.equal(routing.world.route.id, "current-route"); assert.equal(routing.autopilot.rerouting, false); });
+} finally { globalThis.fetch = originalFetch; }
 console.log(`${assertions} drive lab checks passed`);
 process.exit(0);

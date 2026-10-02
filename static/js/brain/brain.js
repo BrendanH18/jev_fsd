@@ -41,7 +41,12 @@ export class Autopilot {
 
   get brain() { return this.brains[this.brainName]; }
   setBrain(name) { if (this.brains[name]) { this.brainName = name; this.bumpEpoch(); } }
-  bumpEpoch() { this.epoch++; if (this.inFlight) { this.inFlight.abort(); this.inFlight = null; } }
+  bumpEpoch() {
+    this.epoch++;
+    if (this.inFlight) { this.inFlight.abort(); this.inFlight = null; }
+    // A stale route response cannot finish the new epoch's rerouting lifecycle.
+    this.rerouting = false;
+  }
 
   setEnabled(on) {
     this.enabled = on;
