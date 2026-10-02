@@ -1,0 +1,29 @@
+html:has(body.arena), body.arena { overflow: auto; height: auto; min-height: 100%; }
+body.arena { background: radial-gradient(ellipse at 80% 0, #193a34, #0b131d 50%); }
+.arena main { max-width: 1150px; padding: 30px; margin: auto; }
+.arena header { display: flex; justify-content: space-between; margin-bottom: 65px; }
+.arena a { color: #83d9c4; text-decoration: none; }
+.arena .eyebrow { color: #83d9c4; font: 11px var(--mono); letter-spacing: .12em; }
+.arena h1 { font-size: clamp(36px, 6vw, 64px); letter-spacing: -.05em; margin: 18px 0; }
+.arena .intro { color: #afc0cc; line-height: 1.7; max-width: 600px; margin-bottom: 35px; }
+.arena-controls { padding: 22px; margin-bottom: 25px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.arena fieldset { padding: 0; border: 0; margin: 0; }
+.arena legend { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+#agents { display: flex; gap: 18px; flex-wrap: wrap; }
+.arena label { font-size: 12px; display: flex; gap: 8px; align-items: center; }
+.arena input[type="checkbox"] { accent-color: #83d9c4; }
+#arena-status, .arena details { flex-basis: 100%; color: #afc0cc; font-size: 12px; line-height: 1.7; }
+.arena details input { min-width: 240px; }
+.arena details label { margin: 14px 0; }
+.arena table { border-collapse: collapse; width: 100%; text-align: left; font-size: 12px; }
+.arena th { color: #91a8b6; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.arena th, .arena td { padding: 15px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.arena td:first-child { white-space: normal; min-width: 170px; }
+.arena td small { display: block; color: #91a8b6; margin-top: 5px; }
+.arena .table-wrap { overflow-x: auto; }
+.arena .pass { color: #83d9c4; } .arena .fail { color: #ff999c; }
+.arena-note, .manual-attempts p { color: #91a8b6; font-size: 12px; line-height: 1.8; }
+.manual-attempts { padding: 22px; margin-top: 30px; }
+.manual-attempts h2 { font-size: 20px; margin-top: 0; }
+#manual-attempts > p { padding: 8px 0; border-bottom: 1px solid var(--border); }
+@media(max-width:600px) { .arena main { padding: 20px; } .arena header { margin-bottom: 40px; } }

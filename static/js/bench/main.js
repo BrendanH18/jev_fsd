@@ -1,7 +1,7 @@
 // Benchmark page: build the suite, run every scenario headlessly, show and save the results, and
 // compare with an earlier run. window.__bench.run(opts) does the same from a script.
 
-import { api, $, h, usd } from "../common.js";
+import { api, $, h, usd, appUrl } from "../common.js";
 import { MapData } from "../map/mapdata.js";
 import { buildSuite } from "./scenarios.js";
 import { runScenario, yieldNow } from "./runner.js";
@@ -154,7 +154,7 @@ function render(state) {
 
 function watch(sc, config) {
   try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs, weather: config.weather, bbox: config.bbox || map.routingBbox })); } catch { /* storage off */ }
-  window.open(`/?replay=1&bbox=${encodeURIComponent((config.bbox || map.routingBbox).join(","))}`, "_blank");
+  window.open(appUrl("", { replay: 1, bbox: (config.bbox || map.routingBbox).join(",") }), "_blank", "noopener");
 }
 
 window.__bench = { run, get last() { return lastRun; } };

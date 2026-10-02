@@ -142,7 +142,7 @@ function pitchedRoof(chunk, wallsB, r, wallH, key, wallCol, roofCol) {
   return top;
 }
 
-export function buildBuildings(map) {
+export function buildBuildings(map, { houseColors = HOUSE_COLORS, blockColors = BLOCK_COLORS } = {}) {
   const group = new THREE.Group();
   const chunks = new Map();
   const footprints = [];
@@ -151,7 +151,7 @@ export function buildBuildings(map) {
     const key = `${Math.floor(cx / CHUNK)},${Math.floor(cy / CHUNK)}`;
     if (!chunks.has(key)) chunks.set(key, new Chunk());
     const chunk = chunks.get(key);
-    const wallCol = color(kind === "house" ? HOUSE_COLORS : BLOCK_COLORS, i, 11);
+    const wallCol = color(kind === "house" ? houseColors : blockColors, i, 11);
     const builder = kind === "house" ? chunk.house : chunk.block;
     if (pitched) {
       const wallH = Math.max(2.8, h - Math.min(4.2, r.hw * 0.7));

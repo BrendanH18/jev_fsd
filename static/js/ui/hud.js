@@ -65,7 +65,7 @@ export class Hud {
     for (const b of this.el.brainButtons) {
       const selected = b.dataset.brain === name;
       b.setAttribute("aria-checked", String(selected));
-      b.tabIndex = selected ? 0 : -1;
+      b.tabIndex = selected || (!this.el.brainButtons.some(button => button.dataset.brain === name) && b.dataset.brain === "rules") ? 0 : -1;
     }
   }
   // Jev needs a server-side key; keep the option visible so people know it exists.

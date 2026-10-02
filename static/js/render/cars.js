@@ -501,7 +501,7 @@ export function buildParkedCars(cars) {
     const emit = (level, geometry, material, matrices, colors = null, shadow = false) => {
       const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
       const per = matrices.length / list.length;   // 1, or 4 for the wheels
-      matrices.forEach((m, i) => { mesh.setMatrixAt(i, m); if (colors) mesh.setColorAt(i, colors[i]); list[Math.floor(i / per)].instances.push({ mesh, i }); });
+      matrices.forEach((m, i) => { mesh.setMatrixAt(i, m); if (colors) mesh.setColorAt(i, colors[i]); list[Math.floor(i / per)].instances.push({ mesh, i, matrix: m.clone() }); });
       mesh.castShadow = shadow;
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
@@ -536,6 +536,10 @@ export function buildParkedCars(cars) {
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 export function hideParkedCar(car) {
   for (const { mesh, i } of car.instances || []) { mesh.setMatrixAt(i, HIDDEN); mesh.instanceMatrix.needsUpdate = true; }
+}
+
+export function restoreParkedCar(car) {
+  for (const { mesh, i, matrix } of car.instances || []) { mesh.setMatrixAt(i, matrix); mesh.instanceMatrix.needsUpdate = true; }
 }
 
 // Street-side door panel: match the simulation hinge, angle, length and thickness exactly.

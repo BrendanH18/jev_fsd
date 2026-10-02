@@ -1,4 +1,4 @@
-import { $, api, h } from "../common.js";
+import { $, api, h, appUrl } from "../common.js";
 
 const searchText = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -46,7 +46,7 @@ export class Explorer {
         h("span", { class: "explorer-paused" }, "Simulation paused while you explore")),
       this.driveStatus, this.drivesView,
       h("div", { class: "dialog-footer" }, h("span", { class: "muted" }, "Map data © ", h("a", { href: "https://www.openstreetmap.org/copyright", target: "_blank", rel: "noopener" }, "OpenStreetMap contributors"), " · ODbL"),
-        h("a", { class: "text-button", href: `/bench?bbox=${encodeURIComponent(this.map.bbox.join(","))}`, target: "_blank", rel: "noopener" }, "Benchmark this map ↗"),
+        h("a", { class: "text-button", href: appUrl(document.querySelector('meta[name="jev-demo"]') ? "bench.html" : "bench", { bbox: this.map.bbox.join(",") }), target: "_blank", rel: "noopener" }, "Benchmark this map ↗"),
         h("button", { class: "toggle", onclick: () => this.close() }, "Just drive")));
     this.updateFilters();
   }

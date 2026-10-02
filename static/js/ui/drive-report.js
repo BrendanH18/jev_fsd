@@ -1,11 +1,13 @@
 import { $, h } from "../common.js";
 import { readHistory } from "../sim/drive-score.js";
+import { exportDriveCard, copyDriveLink, driveLink } from "../lab/share.js";
 
 const time = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
 
 export class DriveReport {
-  constructor({ onFinish, onNewDrive, onOpen = () => {}, onClose = () => {} }) {
+  constructor({ onFinish, onNewDrive, onReplay, onOpen = () => {}, onClose = () => {} }) {
+    this.onReplay = onReplay;
     this.current = null; this.lastUpdate = -Infinity;
     this.onOpen = onOpen;
     this.card = h("section", { class: "drive-card panel", "aria-label": "Drive score" },
@@ -47,16 +49,21 @@ export class DriveReport {
   show(report, saved = true) {
     this.dialog.replaceChildren(
       h("div", { class: "dialog-header" }, h("span", { class: "label" }, "DRIVE REPORT"), h("button", { class: "toggle", "aria-label": "Close report", onclick: () => this.dialog.close() }, "×")),
-      h("h2", {}, report.title), h("p", { class: "muted" }, `${report.map} · ${report.driver} · ${report.status}`),
+      h("h2", {}, report.title), h("p", { class: "muted" }, `${report.map} · ${report.driver} · ${report.status}${report.modified ? " · modified challenge" : ""}`),
       h("div", { class: "report-score" }, h("strong", {}, report.qualified ? report.score : "—"), h("span", {}, report.qualified ? `Grade ${report.grade} / 100` : "Practice drive · not yet graded")),
       h("div", { class: "report-metrics" }, h("span", {}, `${(report.distance_m / 1000).toFixed(2)} km`), h("span", {}, time(report.elapsed_s)), h("span", {}, `${report.max_kmh} km/h peak`)),
       h("div", { class: "report-categories" }, this.categoryBars(report)),
       h("h3", {}, "For your next drive"), h("ul", { class: "report-tips" }, report.tips.map(t => h("li", {}, t))),
       h("details", {}, h("summary", {}, `${report.incidents.length} recorded events`),
         h("ol", { class: "report-events" }, report.incidents.map(i => h("li", {}, `${time(i.at_s)} · ${i.at_m} m · ${i.message}`)))),
-      h("p", { class: "score-explanation" }, "Score = 40% safety + 30% road rules + 20% smoothness + 10% control. Collisions cap the score at 59; red lights and failures to yield at 69. Waiting at lights carries no penalty. Simulation coaching model v1."),
+      h("p", { class: "score-explanation" }, `Score = 40% safety + 30% road rules + 20% smoothness + 10% control. Collisions cap the score at 59; red lights and failures to yield at 69. Waiting at lights carries no penalty. Simulation coaching model v1.${report.branched ? " This drive includes a replay takeover." : ""}`),
+      this.shareStatus = h("p", { class: "report-share-status", role: "status" }),
       h("div", { class: "dialog-footer" }, h("span", { class: "muted" }, saved ? "Saved on this device" : "Storage unavailable · export to keep this drive"),
-        h("button", { id: "export-drive", class: "toggle", onclick: () => this.export(report) }, "Export JSON")));
+        h("button", { id: "export-drive", class: "toggle", onclick: () => this.export(report) }, "Export JSON"),
+        h("button", { class: "toggle", onclick: () => this.share(() => exportDriveCard(report, report.config), "Image saved. Share it with your challenge link.") }, "Save score card"),
+        report.config ? h("button", { class: "toggle", onclick: () => this.share(() => copyDriveLink(report.config), "Link copied. It recreates the setup, not the recorded drive.") }, report.config.challenge ? "Copy challenge link" : "Copy setup link") : null,
+        report.config?.challenge ? h("a", { class: "toggle", href: driveLink({ ...report.config, drive: "rules" }) }, "Try with Rules") : null,
+        this.onReplay && report.started_at === this.current?.started_at ? h("button", { class: "toggle", onclick: () => { this.dialog.close(); this.onReplay(); } }, "Review replay") : null));
     this.open();
   }
 
@@ -76,5 +83,9 @@ export class DriveReport {
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
     const a = h("a", { href: url, download: "jev-drive-report.json" }); a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async share(action, success) {
+    try { await action(); this.shareStatus.textContent = success; }
+    catch (error) { this.shareStatus.replaceChildren(error.message, error.link ? h("input", { value: error.link, readonly: true, "aria-label": "Challenge link", style: { width: "100%", marginTop: "8px" }, onfocus: ev => ev.target.select() }) : null); }
   }
 }
