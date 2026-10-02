@@ -110,5 +110,33 @@ try {
     assert.equal(catalogCalls, 2); assert.deepEqual(catalogs, [{ maps: [{ id: "kitsilano" }] }, { maps: [{ id: "kitsilano" }] }]);
   });
 } finally { globalThis.fetch = originalFetch; }
+
+const { demoApi: cancellationApi } = await import("../static/js/demo/api.js?cancellation-regression");
+const sharedRequests = [], catalogItem = { id: "kitsilano", bbox: map.bbox };
+globalThis.fetch = (url, { signal } = {}) => new Promise((resolve, reject) => {
+  sharedRequests.push({ url: String(url), resolve });
+  signal?.addEventListener("abort", () => reject(new DOMException("Fetch aborted", "AbortError")), { once: true });
+});
+try {
+  const firstCaller = new AbortController();
+  const cancelled = assert.rejects(cancellationApi("/api/maps", undefined, { signal: firstCaller.signal }), { name: "AbortError" });
+  firstCaller.abort();
+  const replacement = cancellationApi("/api/maps");
+  sharedRequests[0].resolve({ ok: true, json: async () => [catalogItem] });
+  await cancelled;
+  const result = await replacement;
+  test("aborting one catalog caller leaves a concurrent replacement alive", () => { assert.deepEqual(result.maps, [catalogItem]); assert.equal(sharedRequests.length, 1); });
+
+  const mapCaller = new AbortController();
+  const cancelledMap = assert.rejects(cancellationApi("/api/map?map=kitsilano", undefined, { signal: mapCaller.signal }), { name: "AbortError" });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  mapCaller.abort();
+  const replacementMap = cancellationApi("/api/map?map=kitsilano");
+  await new Promise(resolve => setTimeout(resolve, 0));
+  sharedRequests[1].resolve({ ok: true, json: async () => map.pack });
+  await cancelledMap;
+  const pack = await replacementMap;
+  test("aborting one map caller leaves the shared map fetch reusable", () => { assert.equal(pack, map.pack); assert.equal(sharedRequests.length, 2); });
+} finally { globalThis.fetch = originalFetch; }
 console.log(`${assertions} drive lab checks passed`);
 process.exit(0);
