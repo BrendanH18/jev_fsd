@@ -16,6 +16,7 @@ import { Hud } from "./ui/hud.js";
 import { Input } from "./ui/input.js";
 import { Panel } from "./ui/panel.js";
 import { Autopilot } from "./brain/brain.js";
+import { agentDefinitions } from "./brain/registry.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
@@ -258,7 +259,8 @@ export async function boot() {
     autopilot.setBrain(name);
     hud.setBrain(name);
     lab?.setAgent(name);
-    hud.badge(`brain: ${name === "jev" ? "Jev" : "Rules"}`, "", 800);
+    const label = agentDefinitions().find(agent => agent.id === name)?.label || name;
+    hud.badge(`brain: ${label}`, "", 800);
   }
   hud.onBrainChange(selectBrain);
   const audio = new DriveAudio($("#drive-sound"));

@@ -96,5 +96,19 @@ try {
   respond(1, "current-route"); await current;
   test("the current reroute applies and releases its request", () => { assert.equal(routing.world.route.id, "current-route"); assert.equal(routing.autopilot.rerouting, false); });
 } finally { globalThis.fetch = originalFetch; }
+
+const { demoApi } = await import("../static/js/demo/api.js");
+let catalogCalls = 0;
+globalThis.fetch = async () => {
+  if (++catalogCalls === 1) throw new Error("Transient catalog network failure");
+  return { ok: true, json: async () => [{ id: "kitsilano" }] };
+};
+try {
+  await assert.rejects(demoApi("/api/maps"), /Transient catalog network failure/);
+  const catalogs = await Promise.all([demoApi("/api/maps"), demoApi("/api/maps")]);
+  test("a failed demo catalog request can retry and share its successful result", () => {
+    assert.equal(catalogCalls, 2); assert.deepEqual(catalogs, [{ maps: [{ id: "kitsilano" }] }, { maps: [{ id: "kitsilano" }] }]);
+  });
+} finally { globalThis.fetch = originalFetch; }
 console.log(`${assertions} drive lab checks passed`);
 process.exit(0);

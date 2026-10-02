@@ -3,13 +3,14 @@ import { browserRoute, browserDrives } from "./routing.js";
 
 const root = new URL("../../demo-data/", import.meta.url), cache = new Map();
 let catalogPromise;
+const loadCatalog = signal => (catalogPromise ||= json("catalog.json", signal).catch(err => { catalogPromise = null; throw err; }));
 async function json(name, signal) {
   const response = await fetch(new URL(name, root), { signal });
   if (!response.ok) throw new Error(`Could not load bundled demo data (${response.status}).`);
   return response.json();
 }
 async function selection(query, body, signal) {
-  const maps = await (catalogPromise ||= json("catalog.json"));
+  const maps = await loadCatalog(signal);
   const key = query.get("map") || query.get("bbox") || body?.bbox || "kitsilano";
   const item = maps.find(m => m.id === key || m.bbox.join(",") === String(key));
   if (!item) throw new Error("The public demo supports the eight bundled neighbourhoods. Use the local app for custom maps.");
@@ -19,7 +20,7 @@ async function selection(query, body, signal) {
 export async function demoApi(path, body, { signal } = {}) {
   if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
   const url = new URL(path, "https://demo.local");
-  if (url.pathname === "/api/maps") return { maps: await (catalogPromise ||= json("catalog.json")) };
+  if (url.pathname === "/api/maps") return { maps: await loadCatalog(signal) };
   if (url.pathname === "/api/bench/runs") {
     try { return { runs: JSON.parse(localStorage.getItem("jev-demo-runs") || "[]") }; } catch { return { runs: [] }; }
   }

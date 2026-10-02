@@ -17,7 +17,8 @@ from jev.osm.pack import pack_path
 
 def build(output: Path) -> None:
     output = output.resolve()
-    if output == ROOT or output == ROOT / "static" or ROOT.is_relative_to(output):
+    static = ROOT / "static"
+    if output == ROOT or output == static or output.is_relative_to(static) or ROOT.is_relative_to(output):
         raise ValueError("Choose a separate generated output directory.")
     output.mkdir(parents=True, exist_ok=True)
     for directory in ("js", "css", "vendor"):
