@@ -449,7 +449,14 @@ export class NpcFleet {
     const near = world.parked.near(cx, cy, 45).filter((c) => { const l = ego.toLocal(c.x, c.y); return l.ahead > 20 && l.ahead < 90 && c.edge && !c.door; });
     if (!near.length) return null;
     const car = near[Math.floor(this.events() * near.length)];
+    return this.startPullOut(car);
+  }
+
+  // Authored challenges use the same transition, gap acceptance and merge physics as background traffic.
+  startPullOut(car) {
+    const world = this.world, ego = world.ego, map = this.map;
     const e = map.edges.get(car.edge);
+    if (!e) return null;
     const laneIdx = car.curb === "right" ? e.lanes - 1 : 0;
     const lane = map.lane(e.id, laneIdx);
     if (!lane) return null;

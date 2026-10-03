@@ -26,7 +26,7 @@ def build(output: Path) -> None:
     for page in ("index.html", "bench.html", "arena.html"):
         text = (ROOT / "static" / page).read_text()
         text = text.replace("<head>", '<head>\n  <meta name="jev-demo" content="rules-only">\n  <meta name="description" content="Drive real Canadian streets, challenge an AI driver, and inspect every decision. Free open-source browser simulator.">')
-        text = text.replace("</head>", '<meta property="og:title" content="Jev Drive Lab — Can you beat the AI?">\n<meta property="og:description" content="Real Canadian streets. Four driving challenges. Inspect every decision.">\n<meta property="og:image" content="https://brendanh18.github.io/jev_fsd/assets/drive-lab.png">\n<meta name="twitter:card" content="summary_large_image">\n</head>')
+        text = text.replace("</head>", '<meta property="og:title" content="Jev Drive Lab — Can you beat the AI?">\n<meta property="og:description" content="Real Canadian streets. Six driving challenges. Inspect every decision.">\n<meta property="og:image" content="https://brendanh18.github.io/jev_fsd/assets/drive-lab.png">\n<meta name="twitter:card" content="summary_large_image">\n</head>')
         text = re.sub(r'(["\'])/(css|js|vendor)/', r'\1./\2/', text)
         text = text.replace('href="/"', 'href="./"')
         text = text.replace('href="/favicon.svg"', 'href="./favicon.svg"')

@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Four authored challenges
+## Six authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -13,8 +13,13 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Into the unknown | Victoria, Old Town | A signal-controlled junction with 28 m fog visibility |
 | Rain check | Montréal, Le Plateau | A scripted crossing on a wet street after dark |
 | Winter composure | Toronto, The Annex | A stop-controlled block with reduced snow grip |
+| Joining the flow | Vancouver, Kitsilano | A parked car indicates, accepts a gap and merges using the normal NPC controller |
+| Around the corner | Vancouver, Kitsilano | A scripted pedestrian crossing with a sight line obstructed by a mapped building |
 
-Challenge version 1 fixes map, seed, weather, time, vehicle, background traffic and route.
+Suite version 2 adds the merge and obstructed crossing. Each challenge separately versions
+its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
+and snow challenges remain version 1; the rainy crossing is version 2 because its person
+now correctly waits for the approach trigger rather than starting during setup.
 The main simulator and agent arena use `setupChallenge` and the same step function. Authored
 actors trigger from the approaching car's position; the crossing is scripted rather than
 chosen by the normal crowd's gap acceptance. This isolates a repeatable hazard while allowing

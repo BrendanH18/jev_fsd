@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-- Drive Lab welcome screen with scenic drives, AI demonstrations and four fixed driving challenges.
+- Saved agent evaluations with browser history, v1/v2 JSON import, selectable baseline drivers
+  and deltas restricted to matching experiment conditions. Stopped and ambiguous attempts are excluded.
+- Arena incident timelines with the most recent recorded decision, observed state, selected
+  manoeuvre, candidate rejection reasons, emergency brakes, fallbacks and termination events.
+- Two new deterministic challenges: a car merging from parking and a person emerging from
+  behind a mapped building. Suite version 2; Rain check version 2 fixes its initial pedestrian hold.
+
+- Drive Lab welcome screen with scenic drives, AI demonstrations and six fixed driving challenges.
 - Geometric perception overlay with visibility, hidden-object inspection and candidate rejection reasons.
 - Recorded drive checkpoints with interpolated playback, incident seeking, manual takeovers,
   driver changes and revalidated alternate manoeuvres. Replay branches and modified challenges are labelled.
