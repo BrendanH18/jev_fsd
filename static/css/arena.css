@@ -26,4 +26,26 @@ body.arena { background: radial-gradient(ellipse at 80% 0, #193a34, #0b131d 50%)
 .manual-attempts { padding: 22px; margin-top: 30px; }
 .manual-attempts h2 { font-size: 20px; margin-top: 0; }
 #manual-attempts > p { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.arena-history, .run-details { padding: 22px; margin-bottom: 25px; }
+.arena h2 { font-size: 20px; margin-top: 0; }
+.history-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.arena select { max-width: 100%; }
+.history-controls select { max-width: 330px; }
+.arena #history-status, .arena #comparison-status, .run-details p { color: #afc0cc; font-size: 12px; line-height: 1.7; }
+.import-button { position: relative; cursor: pointer; }
+.import-button input { position: absolute; opacity: 0; inset: 0; width: 100%; cursor: pointer; }
+.import-button:focus-within { outline: 2px solid #83d9c4; outline-offset: 3px; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.agent-summary { padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
+.agent-summary h3 { font-size: 14px; margin: 0 0 12px; }
+.agent-summary p { color: #afc0cc; line-height: 1.8; font-size: 12px; margin: 4px 0; }
+.arena .delta { display: block; color: #b7c8d3; font-size: 10px; margin-top: 5px; }
+.arena .comparison-note { max-width: 260px; white-space: normal; }
+.result-button { border: 0; padding: 0; background: transparent; color: #83d9c4; text-align: left; cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.timeline { padding-left: 22px; }
+.timeline > li { padding: 10px 0; color: #afc0cc; font-size: 12px; line-height: 1.7; }
+.run-details details { margin-top: 6px; }
+.run-details pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: #0b131d; color: #afc0cc; border-radius: 6px; font-size: 11px; }
+.run-details .candidate-list { padding-left: 20px; }
+.arena [hidden] { display: none !important; }
 @media(max-width:600px) { .arena main { padding: 20px; } .arena header { margin-bottom: 40px; } }

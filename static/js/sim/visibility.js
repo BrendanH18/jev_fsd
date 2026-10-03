@@ -61,19 +61,25 @@ export class Visibility {
   canSee(observer, x, y) {
     const d = Math.hypot(x - observer.x, y - observer.y);
     if (d > this.rangeAt(observer, x, y)) return false;
-    const seen = new Set(), from = [observer.x, observer.y], to = [x, y];
+    return !this.occluded([observer.x, observer.y], [x, y]);
+  }
+
+  // Geometry-only query for authoring repeatable blind-corner challenges, independent of weather.
+  occluded(from, to) {
+    const [x, y] = to;
+    const seen = new Set();
     // Visit the ray's bounded rectangle, including cells the ray only clips at a corner.
-    for (let cx = Math.floor(Math.min(observer.x, x) / CELL); cx <= Math.floor(Math.max(observer.x, x) / CELL); cx++) {
-      for (let cy = Math.floor(Math.min(observer.y, y) / CELL); cy <= Math.floor(Math.max(observer.y, y) / CELL); cy++) {
+    for (let cx = Math.floor(Math.min(from[0], x) / CELL); cx <= Math.floor(Math.max(from[0], x) / CELL); cx++) {
+      for (let cy = Math.floor(Math.min(from[1], y) / CELL); cy <= Math.floor(Math.max(from[1], y) / CELL); cy++) {
         const key = `${cx},${cy}`;
         for (const pts of this.grid.get(key) || []) {
           if (seen.has(pts)) continue;
           seen.add(pts);
-          if (blocks(from, to, pts)) return false;
+          if (blocks(from, to, pts)) return true;
         }
       }
     }
-    return true;
+    return false;
   }
 
   sees(observer, object) {

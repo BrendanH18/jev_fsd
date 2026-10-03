@@ -63,7 +63,7 @@ export class DriveLab {
       h("p", { class: "lab-hero-copy" }, "Take the wheel, challenge an AI, or look inside its next decision. Every drive has something to teach you."),
       h("div", { class: "welcome-options" },
         this.welcomeCard("01", "Take a scenic drive", "Real neighbourhoods. Golden light. Find your rhythm.", "Start cruising →", () => this.scenic("manual")),
-        this.welcomeCard("02", "Can you beat the AI?", "Four authored challenges. The same conditions for every driver.", "Pick a challenge →", () => this.challenges()),
+        this.welcomeCard("02", "Can you beat the AI?", "Six authored challenges. The same conditions for every driver.", "Pick a challenge →", () => this.challenges()),
         this.welcomeCard("03", "Watch the AI drive", "Follow its choices, then rewind and try your own.", "Watch Rules →", () => this.scenic("rules"))),
       h("div", { class: "lab-footer" }, h("span", {}, "8 neighbourhoods · 7 Canadian cities · No key needed for Rules"),
         h("a", { href: "https://github.com/BrendanH18/jev_fsd", target: "_blank", rel: "noopener" }, "Star on GitHub ↗")),

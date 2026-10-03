@@ -13,6 +13,7 @@ const { DriveScore } = await import("../static/js/sim/drive-score.js");
 const { rng } = await import("../static/js/common.js");
 const { validAgentChoice, registerAgent } = await import("../static/js/brain/registry.js");
 const { driveLink } = await import("../static/js/lab/share.js");
+const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
 const names = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2" };
 const load = id => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v5.pack.json`, import.meta.url))));
 let assertions = 0;
@@ -49,8 +50,50 @@ for (const challenge of CHALLENGES) {
   for (const brain of ["rules", "cautious"]) {
     const result = await evaluateChallenge(map, challenge, { brain });
     test(`${challenge.id}: ${brain} completes a clean authored drive`, () => { assert.ok(result.pass, JSON.stringify(result.failures)); assert.ok(result.report.qualified); assert.equal(result.cost_usd, 0); });
+    test(`${challenge.id}: ${brain} exports inspectable decision and event context`, () => {
+      assert.ok(result.decisions_trace.length); assert.ok(result.events.some(e => e.type === "arrived"));
+      assert.ok(result.events.some(e => e.type === "hazard"));
+      assert.equal(result.hard_brakes, result.events.filter(e => e.type === "hard_brake").length);
+      validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] })));
+    });
   }
 }
+
+for (const challenge of CHALLENGES.filter(c => ["pedestrian", "occluded-pedestrian", "pull"].includes(c.hazard))) {
+  const ctx = setupChallenge(load(challenge.map), challenge), { world, fleet } = ctx;
+  const ped = world.crowd.list[0];
+  if (ped) {
+    const initial = [ped.x, ped.y];
+    ctx.autopilot.setEnabled(false);
+    for (let i = 0; i < 60; i++) stepWorld(ctx, 1 / 60, i * 1000 / 60);
+    test(`${challenge.id}: person waits for the authored approach trigger`, () => { assert.deepEqual([ped.x, ped.y], initial); assert.equal(world.challenge.triggered, false); });
+    if (challenge.hazard === "occluded-pedestrian") {
+      const lane = world.map.lane(ctx.scenario.start.edge, ctx.scenario.start.lane);
+      world.placeOnLane(lane, ctx.scenario.crossing.hazardS - 43);
+      test("blind crossing: the building hides the entire person and the walking path is clear", () => {
+        assert.equal(world.visibility.sees(world.ego, ped), false);
+        assert.equal(world.visibility.occluded(ctx.scenario.crossing.from, ctx.scenario.crossing.to), false);
+      });
+      world.placeOnLane(lane, ctx.scenario.crossing.hazardS - 20);
+      test("blind crossing: the approaching driver's sight line opens", () => assert.equal(world.visibility.sees(world.ego, ped), true));
+    }
+  } else {
+    for (let i = 0; i < 900; i++) { stepWorld(ctx, 1 / 60, world.t * 1000); if (ctx.autopilot.firing) await ctx.autopilot.firing; }
+    test("curb merge: a parked car actually transitions to traffic and moves", () => {
+      assert.equal(world.challenge.triggered, true); assert.ok(world.challenge.mergingId);
+      const car = fleet.vehicles.find(c => c.id === world.challenge.mergingId);
+      assert.ok(car); assert.equal(world.parked.list.length, 0); assert.ok(car.path.s > 86); assert.equal(car.door, undefined);
+    });
+  }
+}
+
+const timedOut = await evaluateChallenge(load("kitsilano"), CHALLENGES[0], { limit: 0.5 });
+test("failed arrivals retain a timeout and the preceding decision", () => {
+  assert.equal(timedOut.pass, false); assert.equal(timedOut.report.status, "timeout");
+  const event = timedOut.events.at(-1); assert.equal(event.type, "timeout"); assert.ok(event.decision_id);
+});
+const stopped = await evaluateChallenge(load("kitsilano"), CHALLENGES[0], { shouldStop: () => true });
+test("stopped runs cannot pass or claim arrival", () => { assert.equal(stopped.pass, false); assert.equal(stopped.stopped, true); assert.equal(stopped.report.status, "stopped"); assert.equal(stopped.events.at(-1).type, "stopped"); });
 
 const map = load("kitsilano"), ctx = setupChallenge(map, CHALLENGES[0]);
 const clock = new WorldClock(15.5), recorder = new DriveRecorder({ seconds: 3 }), drive = new DriveScore(ctx.world, { route: ctx.world.route });
@@ -82,6 +125,11 @@ registerAgent({ id: "invalid-test", label: "Invalid fixture", create: () => ({ a
 const invalid = setupChallenge(map, CHALLENGES[0], { brain: "invalid-test" });
 invalid.autopilot.step(1 / 60, 0); await invalid.autopilot.firing;
 test("invalid custom-agent output falls back to Rules without executing it", () => { assert.equal(invalid.world.violations.fallbacks, 1); assert.equal(invalid.autopilot.lastDecision.meta.source, "rules_fallback"); assert.notEqual(invalid.autopilot.lastDecision.chosenId, "teleport"); });
+const fallbackRun = await evaluateChallenge(map, CHALLENGES[0], { brain: "invalid-test", limit: 1 });
+test("fallback timeline context shows the replacement Rules decision", () => {
+  const event = fallbackRun.events.find(e => e.type === "fallback"); assert.ok(event);
+  assert.equal(fallbackRun.decisions_trace.find(d => d.id === event.decision_id).source, "rules_fallback");
+});
 
 const routing = setupChallenge(map, CHALLENGES[0]), originalFetch = globalThis.fetch, pendingRoutes = [];
 globalThis.fetch = () => new Promise(resolve => pendingRoutes.push(resolve));

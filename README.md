@@ -16,8 +16,9 @@ seven Canadian cities, right in your browser.
 
 ## Pick your drive
 
-- **Can you beat the AI?** Four fixed challenges: an opening car door beside a cyclist,
-  a foggy junction, a rainy-night crossing, and a full stop in snow. Drive manually or compare
+- **Can you beat the AI?** Six fixed challenges: an opening car door beside a cyclist,
+  a foggy junction, a rainy-night crossing, a full stop in snow, a car merging from parking,
+  and a person emerging from behind a building. Drive manually or compare
   Rules, Jev and your own agent under the same conditions.
 - **See through the AI's eyes.** Inspect visible hazards, building occlusion, sight limits,
   predicted trajectories and candidate rejection reasons.
@@ -25,7 +26,8 @@ seven Canadian cities, right in your browser.
   switch drivers or try another eligible manoeuvre. Playback interpolates recorded checkpoints.
 - **Share the result.** Export a score card and copy a link that recreates the challenge setup.
 - **Bring your own driver.** Load a JavaScript agent, run the fixed evaluation suite and compare
-  safety outcomes, comfort, latency and cost. Export versioned results.
+  safety outcomes, comfort, latency and cost. Save evaluations, import a previous baseline,
+  and inspect incident timelines with recorded decisions. Export versioned results.
 - **Just cruise.** Choose a neighbourhood, a car and a camera. Turn on sound, watch the daylight
   change, or take a scenic drive in golden light.
 
@@ -63,16 +65,17 @@ Coaching scores measure safety, road rules, smoothness and control. Evaluation p
 arrival with no audited collision, red light, missed stop or failed yield, and less than one
 second off-road. A high coaching score alone is not an evaluation pass.
 
-Open [/arena](http://127.0.0.1:8322/arena) for the four authored challenges or
+Open [/arena](http://127.0.0.1:8322/arena) for the six authored challenges or
 [/bench](http://127.0.0.1:8322/bench) for seeded city routes. Rules and the cautious starter
-passed all four authored challenges in the recorded local checks. These individual runs do
+passed all six authored challenges in the recorded local checks. These individual runs do
 not guarantee performance across every map, seed or live model response.
 
 ## Build, contribute and explore
 
 ```sh
 uv run python -m unittest discover tests
-node --experimental-default-type=module scripts/test_drive_lab.mjs
+node scripts/test_drive_lab.mjs
+node scripts/test_arena_history.mjs
 python3 scripts/build_demo.py
 ```
 

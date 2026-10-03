@@ -51,7 +51,7 @@ export async function boot() {
   loadingText.textContent = "Loading map…";
   const params = new URLSearchParams(location.search);
   const challenge = challengeById(params.get("challenge"));
-  if (params.has("challenge") && !challenge) throw new Error("Unknown challenge. Open the drive lab to choose one of the four available challenges.");
+  if (params.has("challenge") && !challenge) throw new Error("Unknown challenge. Open the drive lab to choose an available challenge.");
   if (challenge) for (const [key, value] of Object.entries(challengeConfig(challenge))) params.set(key, String(value));
   const replay = readReplay();
   const garage = vehicleOptions(replay ? new URLSearchParams() : params);

@@ -10,7 +10,7 @@
     <header><a class="brand" href="/">JEV / DRIVE LAB</a><a href="https://github.com/BrendanH18/jev_fsd" target="_blank" rel="noopener">GitHub ↗</a></header>
     <p class="eyebrow">REPEATABLE STREETS / MEASURABLE DECISIONS</p>
     <h1>Bring your own driver.</h1>
-    <p class="intro">Four fixed challenges. Shared physics, sensing and safety checks. Compare driving outcomes, comfort, latency and cost.</p>
+    <p class="intro">Six fixed challenges. Shared physics, sensing and safety checks. Save a run, compare drivers and inspect the decisions around each incident.</p>
     <section class="arena-controls panel" aria-label="Evaluation controls">
       <fieldset><legend>Agents to compare</legend><div id="agents"></div></fieldset>
       <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
@@ -18,8 +18,26 @@
       <p id="arena-status" role="status">Loading the arena…</p>
       <details><summary>Add a trusted local agent</summary><label>Module path <input id="agent-module" placeholder="./js/agents/my-agent.js"></label><button id="arena-load" class="toggle">Load agent</button><p>Export a default definition with id, label and create(). JavaScript runs in this browser. See <a href="https://github.com/BrendanH18/jev_fsd/blob/main/docs/agents.md">the adapter guide</a>.</p></details>
     </section>
+    <section class="panel arena-history" aria-labelledby="history-heading">
+      <h2 id="history-heading">Saved evaluations</h2>
+      <div class="history-controls">
+        <label>View <select id="arena-history"><option value="current">Current evaluation</option></select></label>
+        <label class="import-button toggle">Import JSON<input id="arena-import" type="file" accept=".json,application/json"></label>
+        <button id="arena-delete" class="toggle" disabled>Delete saved run</button>
+      </div>
+      <p id="history-status" role="status">The latest evaluations are saved on this browser. Export a run to keep a permanent copy.</p>
+      <div class="history-controls">
+        <label>Compare against <select id="arena-baseline"><option value="">No baseline</option></select></label>
+        <label>Baseline driver <select id="arena-baseline-agent" disabled></select></label>
+      </div>
+      <p id="comparison-status" role="status">Choose a saved baseline to compare matching challenge conditions.</p>
+      <div id="arena-summary" class="summary-grid"></div>
+    </section>
     <section aria-label="Evaluation results"><div class="table-wrap panel"><table><thead><tr><th>Agent / challenge</th><th>Outcome</th><th>Score</th><th>Time</th><th>Incidents</th><th>Hard brakes</th><th>p50</th><th>Cost</th></tr></thead><tbody id="arena-results"><tr><td colspan="8">Run an evaluation to see measured results.</td></tr></tbody></table></div></section>
     <p class="arena-note">These are local simulator results, not a verified public leaderboard. A pass requires arrival with no collision, red light, missed stop or failed yield, and less than one second off-road. The coaching score is a separate measure. Exported runs include challenge, map-pack and clock versions.</p>
+    <section id="arena-details" class="panel run-details" aria-labelledby="details-heading" hidden>
+      <h2 id="details-heading" tabindex="-1">Run details</h2><div id="details-content"></div>
+    </section>
     <section class="panel manual-attempts"><h2>Your challenge drives</h2><div id="manual-attempts"></div><p>Saved on this browser. Manual attempts use realtime driving; compare them with realtime agent evaluations. Replay branches are labelled.</p></section>
   </main>
   <script type="module" src="/js/lab/arena.js"></script>

@@ -14,7 +14,8 @@ Python application. Custom map downloads are also local-app features.
 
 The build copies only frontend assets, curated map data, the license and attribution. It never
 copies `.env`, provider credentials, saved runs or local reports. Reports and demo benchmark
-runs use this browser's local storage. Relative URLs and `appUrl` support a project subpath
+runs use this browser's local storage. Arena history, baseline comparisons, JSON import/export
+and incident decision logs also work entirely in the browser. Relative URLs and `appUrl` support a project subpath
 such as `/jev_fsd/`; the simulator, benchmark replay, arena and share links all retain that root.
 
 `.github/workflows/demo.yml` builds and checks pull requests, then deploys from `main`. Set
