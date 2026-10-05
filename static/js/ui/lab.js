@@ -2,6 +2,7 @@ import { $, h, appUrl } from "../common.js";
 import { CHALLENGES, challengeConfig } from "../lab/challenges.js";
 import { driveLink } from "../lab/share.js";
 import { agentDefinitions, registerAgent } from "../brain/registry.js";
+import { replayPosition } from "../lab/playback.js";
 
 export class DriveLab {
   constructor({ city, demo, configured, onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception }) {
@@ -35,7 +36,7 @@ export class DriveLab {
       this.controls = h("div", { class: "replay-controls", hidden: true },
         this.slider = h("input", { type: "range", min: 0, max: 0, step: 1, value: 0, "aria-label": "Replay time", oninput: () => this.seek(Number(this.slider.value)) }),
         h("div", { class: "replay-buttons" },
-          this.play = h("button", { class: "chip-button", onclick: () => { this.playing = !this.playing; this.lastTick = performance.now(); this.play.textContent = this.playing ? "Pause replay" : "Play replay"; } }, "Play replay"),
+          this.play = h("button", { class: "chip-button", onclick: () => this.togglePlayback() }, "Play replay"),
           h("button", { class: "chip-button", onclick: () => this.previousIncident() }, "Before incident"),
           h("button", { class: "chip-button", onclick: () => this.branch("manual") }, "Take over here"),
           this.branchAgent = h("select", { "aria-label": "Branch driver" }, ...agentDefinitions().filter(a => a.id !== "jev" || configured).map(a => h("option", { value: a.id }, a.label))),
@@ -50,6 +51,7 @@ export class DriveLab {
       h("label", { class: "wide" }, h("span", { class: "label" }, "Local agent module"), this.module = h("input", { type: "text", placeholder: "/js/agents/my-agent.js", "aria-label": "Local agent module" })),
       h("button", { class: "toggle wide", onclick: () => this.loadAgent() }, "Load agent"), this.agentStatus = h("p", { class: "muted wide", role: "status" }, "Trusted JavaScript modules run in this browser."));
     this.lastTick = -Infinity; this.playing = false; this.reviewing = false;
+    this.replayElapsed = 0; this.replayAlpha = 0;
   }
   open(content) {
     this.dialog.replaceChildren(h("div", { class: "lab-dialog-top" }, h("span", { class: "brand" }, "JEV / DRIVE LAB"),
@@ -106,12 +108,20 @@ export class DriveLab {
   }
   update(recorder, now) {
     this.recorder = recorder; this.replay.hidden = recorder.frames.length < 2;
-    if (this.reviewing && this.playing && now - this.lastTick >= 500) {
-      const next = Math.min(recorder.frames.length - 1, Number(this.slider.value) + 1);
-      this.seek(next); if (next === recorder.frames.length - 1) { this.playing = false; this.play.textContent = "Play replay"; }
+    if (this.reviewing && this.playing) {
+      const position = replayPosition(recorder.frames, Number(this.slider.value), this.replayElapsed + Math.max(0, now - this.lastTick) / 1000);
+      if (position.index !== Number(this.slider.value)) this.seek(position.index);
+      this.replayElapsed = position.elapsed; this.replayAlpha = position.alpha;
+      if (position.ended) { this.playing = false; this.play.textContent = "Play replay"; }
       this.lastTick = now;
     }
     if (!this.reviewing) { this.slider.max = Math.max(0, recorder.frames.length - 1); this.slider.value = this.slider.max; }
+  }
+  togglePlayback() {
+    if (!this.reviewing || !this.recorder?.frames.length) return;
+    if (!this.playing && Number(this.slider.value) === this.recorder.frames.length - 1) this.seek(0);
+    this.playing = !this.playing; this.lastTick = performance.now();
+    this.play.textContent = this.playing ? "Pause replay" : "Play replay";
   }
   openReplay() {
     if (!this.recorder?.frames.length || this.reviewing) return;
@@ -119,6 +129,7 @@ export class DriveLab {
     this.slider.max = this.recorder.frames.length - 1; this.seek(Math.max(0, this.recorder.frames.length - 11));
   }
   seek(index) {
+    this.replayElapsed = 0; this.replayAlpha = 0; this.lastTick = performance.now();
     this.slider.value = index; this.onSeek(index);
     const frame = this.recorder.frames[index];
     this.branchCandidate.replaceChildren(...(frame?.state.pilot.lastDecision?.candidates || []).filter(c => c.eligible).map(c => h("option", { value: c.id },
@@ -133,5 +144,5 @@ export class DriveLab {
   }
   branch(driver) { if (this.onBranch(Number(this.slider.value), driver) !== false) this.endReview(); }
   live() { this.onLive(); this.endReview(); }
-  endReview() { this.reviewing = false; this.playing = false; this.controls.hidden = true; this.play.textContent = "Play replay"; this.replayStatus.textContent = "Recording · last 120 seconds"; }
+  endReview() { this.reviewing = false; this.playing = false; this.replayElapsed = 0; this.replayAlpha = 0; this.controls.hidden = true; this.play.textContent = "Play replay"; this.replayStatus.textContent = "Recording · last 120 seconds"; }
 }

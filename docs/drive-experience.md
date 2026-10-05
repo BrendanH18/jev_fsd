@@ -104,7 +104,7 @@ and to the bottom below 760 px; this last breakpoint adjustment could not be vis
 after the shared preview disconnected. These are desktop Chromium viewport checks, not
 physical-device tests.
 
-`node --experimental-default-type=module scripts/test_drive_score.mjs` runs 18 focused scoring
+`node --experimental-default-type=module scripts/test_drive_score.mjs` runs 19 focused scoring
 tests, including violation caps, fresh-session baselines, pauses, duration, hard braking, manual
 gaps, history corruption and blocked storage. `scripts/test_interpolate.mjs` checks interpolation
 without changing simulation state, wrapped headings and teleport handling.

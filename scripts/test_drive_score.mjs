@@ -94,4 +94,17 @@ test('invalid step times cannot corrupt a score', () => {
   const w = world(), s = new DriveScore(w); for (const dt of [0, -1, NaN, Infinity]) s.record(w, road, dt);
   assert.equal(s.snapshot().elapsed_s, 0); assert.equal(s.snapshot().score, 100);
 });
+test('blocked access to localStorage still allows reports and exports', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('Storage blocked'); } });
+  try {
+    assert.deepEqual(readHistory(), []);
+    const w = world(), report = new DriveScore(w).finish();
+    assert.equal(saveDrive(report), false);
+    assert.equal(JSON.parse(JSON.stringify(report)).status, 'finished');
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else delete globalThis.localStorage;
+  }
+});
 console.log(`${passed} drive scoring tests passed`);

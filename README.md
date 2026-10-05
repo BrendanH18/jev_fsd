@@ -23,8 +23,10 @@ seven Canadian cities, right in your browser.
 - **See through the AI's eyes.** Inspect visible hazards, building occlusion, sight limits,
   predicted trajectories and candidate rejection reasons.
 - **Rewind your drive.** Review the last two minutes, jump back before an incident, take over,
-  switch drivers or try another eligible manoeuvre. Playback interpolates recorded checkpoints.
+  switch drivers or try another eligible manoeuvre. Playback follows recorded timestamps,
+  holds its position when paused, and starts again from the oldest checkpoint when you play at the end.
 - **Share the result.** Export a score card and copy a link that recreates the challenge setup.
+  Reports and exports stay available when browser storage is blocked; export to keep those drives.
 - **Bring your own driver.** Load a JavaScript agent, run the fixed evaluation suite and compare
   safety outcomes, comfort, latency and cost. Save evaluations, import a previous baseline,
   and inspect incident timelines with recorded decisions. Export versioned results.
@@ -50,6 +52,9 @@ let Rules driving run without external network access after Python dependencies 
 
 **WASD / arrows** drive and take over · **J** toggles autopilot · **P** pauses · **C** changes
 camera · **?** opens keyboard help. Use a desktop browser with WebGL and a keyboard.
+Held driving keys clear when focus enters a form or dialog, or the tab becomes hidden.
+Typing in editable fields and operating focused controls keeps their normal keyboard behaviour.
+Click the road view to use driving keys after interacting with controls.
 
 To enable Jev, copy `.env.example` to `.env`, set `TYPESAFE_API_KEY` from the
 [TypeSafe console](https://console.typesafe.ai), and restart. The key stays on the local server;
@@ -75,8 +80,10 @@ not guarantee performance across every map, seed or live model response.
 ```sh
 uv run python -m unittest discover tests
 node scripts/test_drive_lab.mjs
-node scripts/test_arena_history.mjs
+node scripts/test_drive_controls.mjs
+node scripts/test_replay.mjs
 node scripts/test_drive_score.mjs
+node scripts/test_arena_history.mjs
 node scripts/test_vehicle_models.mjs
 python3 scripts/build_demo.py
 ```

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replay playback follows recorded timestamps, preserves its position when paused,
+  catches up after slow frames and restarts from the beginning after reaching the end.
+- Held driving keys clear when focus enters forms or dialogs, or the tab becomes hidden;
+  editable fields and focused controls retain their keyboard behaviour.
+- Drive reports and history remain usable when the browser blocks access to local storage.
+
 - Comment cleanup across simulation, brain and render modules: shorter headers, removed
   redundant labels, fixed a stale snow grip note, dropped a dead candidate stub and unused
   NPC stop-line local. Normalized Python section banners and aligned the stdlib User-Agent

@@ -168,9 +168,9 @@ system's reduced-motion preference.
 
 Use `Tab` to reach controls. The Rules/Jev group has one tab stop; arrow keys, `Home` and `End`
 select a driver. Jev remains visible when no API key is configured, and selecting it explains
-how to enable it. Space and arrow keys operate focused buttons; click the road view to use
-them for driving. Driving shortcuts are ignored in form fields and open dialogs, and shortcuts
-with Ctrl, Cmd or Alt keep their normal browser behaviour.
+how to enable it. Focused controls retain their normal keyboard behaviour; click the road view
+to use WASD, Space or arrows for driving. Driving shortcuts are ignored in form fields and
+open dialogs, and shortcuts with Ctrl, Cmd or Alt keep their normal browser behaviour.
 
 Keyboard steering ramps gently and limits cornering demand at speed while retaining full lock
 for low-speed manoeuvres. Vehicles, cyclists, pedestrians and the camera interpolate between
@@ -335,6 +335,8 @@ Low curbs remain traversable, and scenery beyond the playable map is decorative 
 ```sh
 uv run python -m unittest discover tests
 node --experimental-default-type=module scripts/test_drive_score.mjs
+node --experimental-default-type=module scripts/test_drive_controls.mjs
+node --experimental-default-type=module scripts/test_replay.mjs
 node --experimental-default-type=module scripts/test_interpolate.mjs
 node --experimental-default-type=module scripts/test_orbit_camera.mjs
 node --experimental-default-type=module scripts/test_static_collision.mjs
@@ -355,7 +357,7 @@ runRenderTests(); // Every result should have ok: true.
 ```
 
 The documented validation covers 60 Python tests, 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
-88 renderer assertions, 18 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
+88 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
 22 vehicle model regressions, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality

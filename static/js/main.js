@@ -534,8 +534,8 @@ export async function boot() {
       pauseButton.setAttribute("aria-pressed", String(world.paused)); pauseButton.textContent = world.paused ? "Resume" : "Pause";
     }
     const alpha = world.paused ? 1 : acc / FIXED_DT;
-    const replayNext = lab.reviewing && lab.playing ? recorder.frames[Number(lab.slider.value) + 1]?.state : null;
-    const replayAlpha = Math.min(1, Math.max(0, (now - lab.lastTick) / 500));
+    const replayNext = lab.reviewing ? recorder.frames[Number(lab.slider.value) + 1]?.state : null;
+    const replayAlpha = lab.replayAlpha;
     const renderEgo = replayNext ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
       : Number.isFinite(previousEgo.x) ? interpolatePose(world.ego, previousEgo, alpha) : world.ego;
     for (const inter of map.intersections.values()) {

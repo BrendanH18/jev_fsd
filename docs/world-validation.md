@@ -37,7 +37,7 @@ pauses with the world; fixed, 1× and 60× rates are available.
   candidate rejection and agreement between prediction and execution.
 - World-condition checks cover midnight wrap, pause/rate changes, bounded URL settings,
   rotating headlight sight, fog limits, building occlusion and the production speed target.
-- 18 scoring tests, interpolation checks and 20 offline Jev requests pass. Generated
+- 19 scoring tests, interpolation checks and 20 offline Jev requests pass. Generated
   realism fixtures match the pipeline. Live Jev was not exercised and no API spend was made.
 
 The native preview was exercised in Calgary, Ottawa and Québec City. Search, city switching,
