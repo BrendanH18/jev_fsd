@@ -168,9 +168,9 @@ system's reduced-motion preference.
 
 Use `Tab` to reach controls. The Rules/Jev group has one tab stop; arrow keys, `Home` and `End`
 select a driver. Jev remains visible when no API key is configured, and selecting it explains
-how to enable it. Space and arrow keys operate focused buttons; click the road view to use
-them for driving. Driving shortcuts are ignored in form fields and open dialogs, and shortcuts
-with Ctrl, Cmd or Alt keep their normal browser behaviour.
+how to enable it. Focused controls retain their normal keyboard behaviour; click the road view
+to use WASD, Space or arrows for driving. Driving shortcuts are ignored in form fields and
+open dialogs, and shortcuts with Ctrl, Cmd or Alt keep their normal browser behaviour.
 
 Keyboard steering ramps gently and limits cornering demand at speed while retaining full lock
 for low-speed manoeuvres. Vehicles, cyclists, pedestrians and the camera interpolate between

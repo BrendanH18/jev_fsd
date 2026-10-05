@@ -54,6 +54,7 @@ let Rules driving run without external network access after Python dependencies 
 camera · **?** opens keyboard help. Use a desktop browser with WebGL and a keyboard.
 Held driving keys clear when focus enters a form or dialog, or the tab becomes hidden.
 Typing in editable fields and operating focused controls keeps their normal keyboard behaviour.
+Click the road view to use driving keys after interacting with controls.
 
 To enable Jev, copy `.env.example` to `.env`, set `TYPESAFE_API_KEY` from the
 [TypeSafe console](https://console.typesafe.ai), and restart. The key stays on the local server;

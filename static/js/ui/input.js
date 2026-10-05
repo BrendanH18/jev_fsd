@@ -12,7 +12,7 @@ export class Input {
       if (document.querySelector("dialog[open]") || editing(ev.target)) { this.keys.clear(); return; }
       const k = ev.key.toLowerCase();
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-      if (control(ev.target) && [" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
+      if (control(ev.target) && ["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
       if (["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
         ev.preventDefault();
         this.keys.add(k);

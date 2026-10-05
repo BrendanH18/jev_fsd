@@ -26,9 +26,11 @@ for (const kind of ["input", "textarea", "select", "editable", "[role='textbox']
   assert(!press("w", target(kind)).defaultPrevented); assert(!input.anyDriving);
   press("p", target(kind)); assert.equal(pauses, 0);
 }
-for (const kind of ["button", "a", "[role='radio']"]) {
-  assert(!press(" ", target(kind)).defaultPrevented); assert(!input.hardBrake);
-  assert(!press("ArrowLeft", target(kind)).defaultPrevented); assert(!input.left);
+for (const kind of ["button", "a", "[role='button']", "[role='radio']", "[role='switch']"]) {
+  for (const key of ["w", "a", "s", "d", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+    assert(!press(key, target(kind)).defaultPrevented, `${kind} retains normal ${key} behaviour`);
+    assert(!input.anyDriving, `${key} cannot drive while ${kind} is focused`);
+  }
 }
 press("w"); document.hidden = true; emit(document, "visibilitychange"); assert(!input.anyDriving);
 document.hidden = false; emit(document, "visibilitychange"); assert(!input.anyDriving);
