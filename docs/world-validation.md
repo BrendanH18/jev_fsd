@@ -25,12 +25,12 @@ pauses with the world; fixed, 1× and 60× rates are available.
 
 ## Checks
 
-- 58 Python tests pass, including real map identity, three distinct reachable drives from
+- 60 Python tests pass, including real map identity, three distinct reachable drives from
   three positions on every map, routing, server security and parallel asset downloads.
-- 137 browser assertions pass: 99 simulation, 18 HUD and 20 explorer checks. Explorer tests
+- 119 browser assertions pass: 81 simulation, 18 HUD and 20 explorer checks. Explorer tests
   cover accented search, focus preservation, current-map accessibility, loading errors,
   retries, request cancellation and queued close/reopen events.
-- 43 WebGL renderer assertions pass using the locally bundled Three.js runtime, including
+- 46 WebGL renderer assertions pass using the locally bundled Three.js runtime, including
   wet rendering and quality transitions.
 - 13 static collision and six route-control regressions pass. Static checks cover enclosing
   and concave polygons, reverse/rotation sweeps, sustained contact, resets, score caps,

@@ -76,10 +76,13 @@ not guarantee performance across every map, seed or live model response.
 uv run python -m unittest discover tests
 node scripts/test_drive_lab.mjs
 node scripts/test_arena_history.mjs
+node scripts/test_drive_score.mjs
+node scripts/test_vehicle_models.mjs
 python3 scripts/build_demo.py
 ```
 
-The [agent guide](docs/agents.md) includes a starter adapter and the evaluation contract.
+CI on pull requests runs the Drive Lab and arena history checks, then builds the GitHub Pages
+demo. The [agent guide](docs/agents.md) includes a starter adapter and the evaluation contract.
 The [full reference](docs/project-reference.md#development) lists the simulation, rendering
 and scoring checks. Run seeded comparisons after changes to physics, sensing or planning.
 Contributions to agents, scenarios, accessibility and neighbourhood details are welcome.

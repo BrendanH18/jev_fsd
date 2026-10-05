@@ -44,7 +44,7 @@ class Router:
             for cell in _cells_of_polyline(lane["pts"]):
                 self._grid.setdefault(cell, []).append(key)
 
-    # --- edge helpers ---------------------------------------------------------------------
+    # Edge helpers
 
     def successors(self, edge_id: str) -> List[str]:
         return self.out_edges.get(self.edges[edge_id]["to"], [])
@@ -73,7 +73,7 @@ class Router:
     def turn_angle(self, edge_in: str, edge_out: str) -> float:
         return g.turn_angle(self.heading_in(edge_in), self.heading_out(edge_out))
 
-    # --- snapping -------------------------------------------------------------------------
+    # Snapping
 
     def snap(self, x: float, y: float, heading: Optional[float] = None, max_m: float = 60.0,
              heading_tolerance: float = math.radians(60)) -> Optional[dict]:
@@ -125,7 +125,7 @@ class Router:
             return []
         return [p for p in ordered if p["distance"] <= ordered[0]["distance"] + slack_m]
 
-    # --- search ---------------------------------------------------------------------------
+    # Search
 
     def astar(self, start_edge: str, start_s: float, goal_edge: str, goal_s: float,
               extra_cost: Optional[Dict[str, float]] = None) -> Optional[Tuple[List[str], float]]:
@@ -211,7 +211,7 @@ class Router:
             out.append(route)
         return out
 
-    # --- geometry ------------------------------------------------------------------------
+    # Geometry
 
     def _roundabout_turn(self, path: Sequence[str], first: int, at: float) -> dict:
         """One instruction for a pass through a roundabout: which exit, onto which street."""

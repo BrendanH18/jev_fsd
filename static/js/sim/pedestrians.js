@@ -1,16 +1,6 @@
-// Pedestrians: they walk the sidewalks, turn corners, and cross streets at intersections, and every
-// driver (the ego and the traffic) must yield to one in a crosswalk it is about to drive through.
-//
-// Where they may cross: at the corners of junctions, along the line of the cross street's sidewalk
-// (a marked crosswalk at signals, an unmarked one elsewhere, as BC law has it). When: at a signal,
-// only in the walk phase, which runs with the parallel traffic's green; elsewhere, when no
-// approaching vehicle would reach the crosswalk within a few seconds. Nobody crosses at a
-// roundabout.
-//
-// On quiet residential blocks some people cut straight across mid-block instead, once they have
-// looked both ways and nothing is coming for a good while. Legally they must yield to traffic
-// there, but drivers still have to avoid them. And someone on the road who sees a car coming that
-// is not stopping for them reacts: in its path, they hurry out of it; beside it, they wait.
+// Pedestrians walk sidewalks and cross at junctions; drivers must yield in the ego's crosswalk.
+// Signal crossings only during walk; unmarked corners when no vehicle arrives within a few seconds.
+// Quiet residential blocks may jaywalk after looking both ways (they yield; drivers still avoid them).
 
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";

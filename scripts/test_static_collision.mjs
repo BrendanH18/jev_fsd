@@ -1,12 +1,14 @@
 // node --experimental-default-type=module scripts/test_static_collision.mjs
 import assert from 'node:assert/strict';
-import { obbPolygonOverlap } from '../static/js/sim/collision.js';
-import { StaticObstacles, poseOf } from '../static/js/sim/static-obstacles.js';
-import { Vehicle, CAR } from '../static/js/sim/vehicle.js';
-import { DriveScore } from '../static/js/sim/drive-score.js';
-import { stepWorld } from '../static/js/sim/step.js';
 
+// Stub document before modules that transitively import static/js/common.js.
 globalThis.document = { querySelector: () => null };
+
+const { obbPolygonOverlap } = await import('../static/js/sim/collision.js');
+const { StaticObstacles, poseOf } = await import('../static/js/sim/static-obstacles.js');
+const { Vehicle, CAR } = await import('../static/js/sim/vehicle.js');
+const { DriveScore } = await import('../static/js/sim/drive-score.js');
+const { stepWorld } = await import('../static/js/sim/step.js');
 const { World } = await import('../static/js/sim/world.js');
 const { MapData } = await import('../static/js/map/mapdata.js');
 const { simulateAll, pathHazard } = await import('../static/js/brain/candidates.js');

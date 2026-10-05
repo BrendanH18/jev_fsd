@@ -19,8 +19,8 @@ a post has a dedicated regression.
 
 Validation completed:
 
-- 58 Python tests and 137 browser simulation/HUD/explorer assertions.
-- 88 renderer assertions, including six vehicle silhouettes, actual axle/track/body dimensions,
+- 60 Python tests and 119 browser simulation/HUD/explorer assertions.
+- 46 renderer assertions, including six vehicle silhouettes, actual axle/track/body dimensions,
   finite geometry, lights, shadows and cameras, instanced parked LOD, real sign rasterization
   and wet WebGL frames across graphics settings.
 - 22 vehicle regressions covering dimensions, clone state, powertrain differences, dry/wet

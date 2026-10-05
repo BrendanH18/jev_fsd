@@ -1,12 +1,6 @@
-// Street trees on the grass boulevards and a scatter of yard trees, the way Kitsilano looks from the
-// road. Instanced per chunk: one draw call per part per chunk, culled like the buildings.
-//
-// A broadleaf crown is a few hundred leaf-cluster cards scattered through an ellipsoid around a
-// darker core, with normals that point out from the crown's center, so light wraps round the whole
-// crown the way it does on a real tree rather than catching individual cards. The cards are
-// alpha-tested (they cast dappled shadows too) and sway in the wind in the vertex shader. Trunks
-// fork into a few limbs that reach up into the crown. Conifers are stacked tiers of drooping,
-// ragged needle cones.
+// Street and yard trees, instanced per chunk. Broadleaf crowns use outward normals from the crown
+// center so light wraps the volume; alpha-tested cards cast dappled shadows and sway in the vertex
+// shader. Conifers are stacked drooping needle tiers.
 
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";

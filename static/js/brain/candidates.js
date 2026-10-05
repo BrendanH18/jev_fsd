@@ -1,7 +1,6 @@
-// Candidate maneuvers: sampled by code, forward-simulated 3 s with the real controller and car
-// model, scored by code, and filtered for safety by code. A brain only ever picks among the
-// survivors. The car model matches execution; other objects use constant-velocity predictions
-// from visible observations and can change behavior after a choice.
+// Sample maneuvers, forward-sim 3 s with the real controller and car model, then reject unsafe
+// ones. Brains only pick among survivors. Other agents use constant-velocity predictions from
+// visible observations and can change behavior after a choice.
 
 import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw } from "../sim/controller.js";
@@ -57,12 +56,10 @@ export function sampleCandidates(snap, world) {
     const f = snap.following;
     const queue = f ? f.s - (f.vehicle.spec || CAR).rearOverhang - FRONT - QUEUE_GAP_M : Infinity;
     const stopAt = (mark) => Math.min(mark, queue);
-    // approach and stop at the next stop line
     if (snap.intersection && snap.intersection.bumper_to_line_m > 0.3) {
       out.push({ id: "stop_at_line", law: { kind: "lane", offset: 0, vTarget: approach, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) },
         steer: "hold lane", speed: "approach and stop at the line" });
     }
-    // stop short of a crosswalk someone is crossing
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", law: { kind: "lane", offset: 0, vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) },
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -166,11 +163,6 @@ export function simulateAll(candidates, snap, world) {
       crosses_stop_line: crosses, collision, min_gap_m: minGap, off_road_fraction: offSteps / Math.ceil(steps / 3),
       end: [car.x, car.y],
     };
-    if (route && snap.onRoute) {
-      const p = route.project(snap.route ? car.x : 0, car.y, hint);
-      c.sim.end_ahead = null;
-    }
-    // eligibility, decided by code
     let reject = null;
     if (collision) reject = "collision";
     else if (snap.visibility && car.v > snap.visibility.safe_speed_mps + 0.5 && car.v >= snap.ego.v - 0.5 && c.law.kind !== "hard_brake") reject = "visibility_stopping_distance";

@@ -96,7 +96,7 @@ def serialize(graph: RoadGraph, controls: dict, buildings: list, bbox: Bbox, pro
     }
 
 
-# --- procedural fallback ----------------------------------------------------------------------
+# Procedural fallback
 
 
 def synthetic_osm(cols: int = 4, rows: int = 4, spacing: float = 120.0, seed: int = 3) -> Tuple[OsmData, Bbox]:

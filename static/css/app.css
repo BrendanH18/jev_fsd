@@ -146,7 +146,6 @@ select option { background: var(--panel-solid); color: var(--text); }
 .check { font-size: 11.5px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
 .check input { accent-color: var(--accent); margin: 0; }
 
-/* Right column */
 #minimap { display: block; width: 220px; height: 220px; border-radius: 9px; background: #11151c; cursor: crosshair; }
 .note { color: var(--faint); font-size: 10px; line-height: 1.45; margin: 6px 2px 0; }
 .note .warn-text { color: var(--warn); }

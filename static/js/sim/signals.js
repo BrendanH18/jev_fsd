@@ -1,14 +1,7 @@
-// Traffic-signal phases as a pure function of time, and per-vehicle stop-sign memory.
-//
-// Each intersection gets a two-phase timing plan worked out the way a traffic engineer would:
-//   yellow     1 s of perception-reaction plus the time to stop at 3.05 m/s^2 from the approach
-//              speed (the ITE formula), 3 to 5 s
-//   all-red    the time to clear the junction at the approach speed
-//   cycle      60 s where an arterial crosses, 50 s otherwise
-//   greens     what is left, split by each direction's share of the traffic (lanes times speed),
-//              but never shorter than the walk plus the time to finish crossing at 1.2 m/s
-// Pedestrians walking alongside a green get a 7 s walk signal, then a flashing don't-walk that
-// runs out just as the parallel traffic's yellow begins.
+// Signal phases as f(t), plus per-vehicle stop-sign memory.
+// Timing: yellow = 1 s PRT + ITE stop distance at 3.05 m/s² (3–5 s); all-red clears the box;
+// cycle 60 s arterial / 50 s else; green split by lane×speed with walk + 1.2 m/s crossing floor.
+// Parallel pedestrians get a 7 s walk, then flashing don't-walk ending as yellow begins.
 
 // A full stop anywhere within this many meters before the line counts as stopping at the sign.
 export const STOP_ZONE_M = 6.0;
