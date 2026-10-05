@@ -1,5 +1,5 @@
-// Sun/moon lighting and sky colors for the renderer. Ephemeris is Vancouver (~49.27 N) in late
-// September local daylight time; weather overlays cloud/fog. `lighting` is shared shader uniforms.
+// Sun/moon lighting and sky colors for the selected city in late September local time, defaulting
+// to Vancouver (~49.27 N). Weather overlays cloud/fog; `lighting` holds shared shader uniforms.
 
 import * as THREE from "three";
 

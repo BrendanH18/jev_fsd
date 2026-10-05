@@ -1,5 +1,5 @@
 // Signal phases as f(t), plus per-vehicle stop-sign memory.
-// Timing: yellow = 1 s PRT + ITE stop distance at 3.05 m/s² (3–5 s); all-red clears the box;
+// Timing: yellow = 1 s reaction time + speed / (2 × 3.05 m/s²), clamped to 3–5 s; all-red clears the box;
 // cycle 60 s arterial / 50 s else; green split by lane×speed with walk + 1.2 m/s crossing floor.
 // Parallel pedestrians get a 7 s walk, then flashing don't-walk ending as yellow begins.
 

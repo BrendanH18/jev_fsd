@@ -1,4 +1,4 @@
-// Pedestrians walk sidewalks and cross at junctions; drivers must yield in the ego's crosswalk.
+// Pedestrians walk sidewalks and cross at junctions; drivers yield to crossings in their path.
 // Signal crossings only during walk; unmarked corners when no vehicle arrives within a few seconds.
 // Quiet residential blocks may jaywalk after looking both ways (they yield; drivers still avoid them).
 

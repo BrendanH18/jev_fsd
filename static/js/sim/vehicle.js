@@ -1,6 +1,7 @@
 // Dynamic bicycle (Fiala tires, load transfer, yaw inertia), blended to kinematic below walking
 // speed. Same model for ego, NPCs, bikes, and candidate forward-sims so predictions match execution.
-// State: rear-axle x,y; psi; body speed v; CG sideslip rate vy; yaw rate r; steer delta; accel cmd a.
+// State: rear-axle x,y (m); heading psi (rad); forward speed v and CG lateral speed vy (m/s);
+// yaw rate r (rad/s); steer delta (rad); actuator acceleration command a (m/s²).
 // Actuator lag + jerk limit; powertrain power/drag cap; per-axle friction circle after long force.
 // Weight transfer: hard braking in a bend unloads the rear (oversteer); turn-in washout is understeer.
 
