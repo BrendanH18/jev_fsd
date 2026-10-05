@@ -25,19 +25,19 @@ pauses with the world; fixed, 1× and 60× rates are available.
 
 ## Checks
 
-- 58 Python tests pass, including real map identity, three distinct reachable drives from
+- 60 Python tests pass, including real map identity, three distinct reachable drives from
   three positions on every map, routing, server security and parallel asset downloads.
 - 137 browser assertions pass: 99 simulation, 18 HUD and 20 explorer checks. Explorer tests
   cover accented search, focus preservation, current-map accessibility, loading errors,
   retries, request cancellation and queued close/reopen events.
-- 43 WebGL renderer assertions pass using the locally bundled Three.js runtime, including
+- 88 WebGL renderer assertions pass using the locally bundled Three.js runtime, including
   wet rendering and quality transitions.
 - 13 static collision and six route-control regressions pass. Static checks cover enclosing
   and concave polygons, reverse/rotation sweeps, sustained contact, resets, score caps,
   candidate rejection and agreement between prediction and execution.
 - World-condition checks cover midnight wrap, pause/rate changes, bounded URL settings,
   rotating headlight sight, fog limits, building occlusion and the production speed target.
-- 18 scoring tests, interpolation checks and 20 offline Jev requests pass. Generated
+- 19 scoring tests, interpolation checks and 20 offline Jev requests pass. Generated
   realism fixtures match the pipeline. Live Jev was not exercised and no API spend was made.
 
 The native preview was exercised in Calgary, Ottawa and Québec City. Search, city switching,

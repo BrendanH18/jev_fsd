@@ -1,14 +1,7 @@
-// Everything beyond the edge of the map, so the neighbourhood does not end in an empty plain:
-// English Bay and False Creek to the north, a low-detail continuation of the city's houses and
-// street grid on the land around the map, the West End and downtown towers across False Creek to
-// the north-east, and the dark forest of Stanley Park beyond them. None of it takes part in the
-// simulation; it is scenery, cheap to draw (instanced, chunked), and faded by a haze of its own so
-// it can be seen further than the scene's fog allows.
-//
-// The geography is simplified from the real thing and laid out in meters around a fixed point in
-// Kitsilano (49.265 N, 123.160 W); any map of Vancouver is placed against it by its own origin, so
-// the water and downtown are where they should be from Mount Pleasant too. A map elsewhere gets the
-// continuation of the city but none of Vancouver's landmarks.
+// Beyond-map scenery so neighbourhoods do not end in empty plains: water, filler street grid,
+// Vancouver landmarks (English Bay, downtown, Stanley Park) when the extract is local.
+// Laid out in meters around Kitsilano (49.265 N, 123.160 W); other Vancouver maps align by origin.
+// Scenery only — instanced/chunked, not simulated.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -143,7 +136,7 @@ export function buildSurroundings(map) {
   const downtown = (x, y) => vancouver && isDowntown(...toK(x, y));
   const park = (x, y) => vancouver && isPark(...toK(x, y));
 
-  // --- water: a grid of cells, merged where they are wet ---
+  // Water grid, merged where wet.
   const cell = 50, R = 6000;
   const wpos = [];
   for (let x = -R; x < R; x += cell) for (let y = -2000; y < R; y += cell) {
@@ -167,7 +160,7 @@ export function buildSurroundings(map) {
     group.add(sea);
   }
 
-  // --- filler street grid and houses on the land around the map ---
+  // Filler street grid and houses on the land around the map.
   const houses = [], roofs = [], trees = [], blocks = [], streets = [];
   const AVE = 100, ST = 92;   // avenues run east-west every ~100 m, streets north-south every ~92 m
   for (let bx = -CITY_RADIUS; bx < CITY_RADIUS; bx += ST) for (let by = -CITY_RADIUS; by < CITY_RADIUS; by += AVE) {
@@ -196,7 +189,7 @@ export function buildSurroundings(map) {
     }
   }
 
-  // --- downtown and the West End: towers, taller toward the middle ---
+  // Downtown and West End towers, taller toward the middle.
   const towers = [];
   for (let x = 1620; vancouver && x < 4150; x += 58) for (let y = 1350; y < 2700; y += 58) {
     const k = `t${x},${y}`;
@@ -210,7 +203,7 @@ export function buildSurroundings(map) {
       color: glassy ? [0x5d7a86, 0x6f8793, 0x4d6470, 0x7d949c][Math.floor(hash01(k, 8) * 4)] : [0xd8d4cc, 0xb8b2a6, 0x9aa0a6, 0xc9bfae][Math.floor(hash01(k, 9) * 4)] });
   }
 
-  // --- Stanley Park: old-growth forest ---
+  // Stanley Park old-growth forest.
   const forest = [];
   for (let x = 0; vancouver && x < 2900; x += 32) for (let y = 3100; y < 5000; y += 32) {
     const k = `p${x},${y}`;

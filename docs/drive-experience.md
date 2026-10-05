@@ -104,14 +104,14 @@ and to the bottom below 760 px; this last breakpoint adjustment could not be vis
 after the shared preview disconnected. These are desktop Chromium viewport checks, not
 physical-device tests.
 
-`node --experimental-default-type=module scripts/test_drive_score.mjs` runs 18 focused scoring
+`node --experimental-default-type=module scripts/test_drive_score.mjs` runs 19 focused scoring
 tests, including violation caps, fresh-session baselines, pauses, duration, hard braking, manual
 gaps, history corruption and blocked storage. `scripts/test_interpolate.mjs` checks interpolation
 without changing simulation state, wrapped headings and teleport handling.
 
-The browser suite passes 117 assertions (99 simulation and 18 HUD) and the renderer suite 43, including
+The browser suite passes 137 assertions (99 simulation, 18 HUD and 20 explorer) and the renderer suite 88, including
 manual-steering, city-sun, sign proportions, atlas padding and actual front/rear sign rasterization.
-The 50 Python tests include bundled-map,
+The 60 Python tests include bundled-map,
 selected-city routing, distinct reachable suggestions and fallback checks. Fixture checks remain
 clean with 20 valid offline Jev requests.
 

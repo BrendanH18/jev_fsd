@@ -77,7 +77,6 @@ export class Autopilot {
     if (!snap.onRoute) this.offRouteFor += dt; else this.offRouteFor = 0;
     if (this.offRouteFor > 3 && !this.rerouting) this.reroute();
 
-    // execute the current law (or hold still)
     const s = snap.routeProj ? snap.routeProj.s : 0;
     const brake = safetyBrake(world, snap, this.executing);
     if (brake && brake.hold) {
@@ -102,7 +101,6 @@ export class Autopilot {
       world.violations.deadlock_overrides++;
       this.onEvent({ type: "deadlock" });
     }
-    // schedule
     const flags = hazardFlags(snap);
     const interval = flags.length ? INTERVAL_HAZARD_MS : INTERVAL_CLEAR_MS;
     if (!this.inFlight && now - this.lastStart >= interval) this.firing = this.fire(snap, now, flags);

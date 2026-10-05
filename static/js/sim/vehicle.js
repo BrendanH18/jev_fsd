@@ -1,24 +1,9 @@
-// Vehicle model: a dynamic bicycle model with tire slip, weight transfer, and yaw inertia, blended
-// into a kinematic bicycle model at walking speeds (where slip angles are ill-defined). The same
-// model runs the ego car, the NPCs, the cyclists, and the candidate forward-simulations, so
-// predictions match what actually happens.
-//
-// State: x, y at the rear axle (m); psi (rad, CCW from +x); v, the forward speed of the body (m/s);
-// vy, the sideways speed of the center of gravity (m/s, + to the left); r, the yaw rate (rad/s);
-// delta, the steering angle (rad); a, the actuator's longitudinal acceleration command (m/s^2).
-//
-// Actuator: the commanded acceleration is reached through a first-order lag and a jerk limit, so a
-// car cannot flip from full throttle to full braking in one tick.
-// Powertrain: the engine's power caps the acceleration it can give at speed (P / (m v)), less what
-// rolling resistance and aerodynamic drag take, so a car pulls hard from a standstill and ever
-// less eagerly as it gathers speed.
-// Tires: each axle's lateral force follows a Fiala brush model: linear in slip angle at first, then
-// saturating at the grip left over after braking or driving on that axle (a friction circle per
-// axle). Cornering stiffness scales with the load on the axle.
-// Weight transfer: braking moves load onto the front axle, accelerating onto the rear; cornering
-// moves load to the outside tires, which costs the axle some grip because a tire's friction
-// coefficient falls as its load grows. Brake hard in a fast bend and the unloaded rear lets go
-// (oversteer); turn in too fast and the front washes out (understeer).
+// Dynamic bicycle (Fiala tires, load transfer, yaw inertia), blended to kinematic below walking
+// speed. Same model for ego, NPCs, bikes, and candidate forward-sims so predictions match execution.
+// State: rear-axle x,y (m); heading psi (rad); forward speed v and CG lateral speed vy (m/s);
+// yaw rate r (rad/s); steer delta (rad); actuator acceleration command a (m/s²).
+// Actuator lag + jerk limit; powertrain power/drag cap; per-axle friction circle after long force.
+// Weight transfer: hard braking in a bend unloads the rear (oversteer); turn-in washout is understeer.
 
 export const CAR = {
   kind: "car",
@@ -68,7 +53,7 @@ export const BIKE = {
   jerkMax: 8.0,
 };
 
-// Road surface, set by the weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.2 packed snow.
+// Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
 export const ROAD = { mu: 0.9 };
 export const G = 9.81;
 const LOAD_SENSITIVITY = 0.12;   // a tire at twice its static load grips 12% less per newton
@@ -164,7 +149,6 @@ export class Vehicle {
     else { Fxf = Fx * P.brakeFront; Fxr = Fx * (1 - P.brakeFront); }
     Fxf = clampAbs(Fxf, longCap(muF * Fzf, P.frontStiffness * Fzf * Math.abs(Math.tan(alphaF))));
     Fxr = clampAbs(Fxr, longCap(muR * Fzr, P.rearStiffness * Fzr * Math.abs(Math.tan(alphaR))));
-    // lateral forces from slip angles
     const FyMaxF = Math.sqrt(Math.max(0, (muF * Fzf) ** 2 - Fxf * Fxf));
     const FyMaxR = Math.sqrt(Math.max(0, (muR * Fzr) ** 2 - Fxr * Fxr));
     const Fyf = fiala(alphaF, P.frontStiffness * Fzf, FyMaxF);
@@ -173,7 +157,6 @@ export class Vehicle {
     const fx = Fxf * cd - Fyf * sd + Fxr;
     const fy = Fxf * sd + Fyf * cd + Fyr;
     const ax = fx / m, ay = fy / m;
-    // equations of motion in the body frame
     const dvx = ax + vy * r;
     const dvy = ay - vx * r;
     const dr = (lf * (Fxf * sd + Fyf * cd) - lr * Fyr) / P.yawInertia;

@@ -18,9 +18,12 @@ class StaticServerTests(unittest.TestCase):
         (self.static / "nested").mkdir()
         (self.static / "nested" / "app.js").write_text("export const ready = true;")
         (self.static / "asset.unknown-type").write_bytes(b"asset")
-        (self.static / "index.html").write_text(
-            '<html><head><script type="importmap">{}</script></head><body>Home</body></html>'
-        )
+        for page in server.PAGES.values():
+            file = self.static / page
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text(
+                '<html><head><script type="importmap">{}</script></head><body>Home</body></html>'
+            )
         private = self.root / "static-private"
         private.mkdir()
         (private / "secret.txt").write_text("private fixture")
@@ -94,12 +97,17 @@ class StaticServerTests(unittest.TestCase):
             self.assertEqual(self.get("/../static-private/secret.txt")[0], 404)
 
     def test_page_keeps_session_token_and_csp_nonce(self):
-        status, headers, body = self.get("/")
-        self.assertEqual(status, 200)
-        self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
-        self.assertIn(('content="%s"' % server.SESSION_TOKEN).encode(), body)
-        nonce = headers["Content-Security-Policy"].split("'nonce-", 1)[1].split("'", 1)[0]
-        self.assertIn(('nonce="%s"' % nonce).encode(), body)
+        for path in server.PAGES:
+            with self.subTest(path=path):
+                status, headers, body = self.get(path)
+                self.assertEqual(status, 200)
+                self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
+                self.assertIn(('content="%s"' % server.SESSION_TOKEN).encode(), body)
+                csp = headers["Content-Security-Policy"]
+                nonce = csp.split("'nonce-", 1)[1].split("'", 1)[0]
+                script_src = csp.split("script-src ", 1)[1].split(";", 1)[0]
+                self.assertEqual(script_src.split(), ["'self'", "'nonce-%s'" % nonce])
+                self.assertIn(('nonce="%s"' % nonce).encode(), body)
 
     def test_unknown_mime_type_uses_binary_fallback(self):
         status, headers, body = self.get("/asset.unknown-type")

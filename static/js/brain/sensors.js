@@ -56,7 +56,6 @@ export function buildSnapshot(world, executing = null) {
       destination: { right: dest.right, ahead: dest.ahead },
       arrived: remaining < 3.5,
     };
-    // next traffic control along the route within LOOK_AHEAD_CONTROL_M of the front bumper
     const frontS = p.s + FRONT;
     for (const c of route.controls) {
       if (c.sRoute + 12 < frontS) continue;          // already through this one
@@ -95,14 +94,11 @@ export function buildSnapshot(world, executing = null) {
       };
       break;
     }
-    // a pedestrian on a crosswalk the route crosses, whom the car must let across
     const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, { list: world.crowd.list.filter((p) => visible.includes(p)) });
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
-    // vehicles in the route corridor
     const vehicles = visible.filter((o) => o.kind !== "pedestrian");
-    // ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed
-    // a car coming the other way and passing is traffic, not a car to follow (one stopped in the
-    // lane, facing us, is still in the way)
+    // Ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed.
+    // Oncoming traffic that is passing is not a follow target; a stopped car facing us still is.
     const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2, vehicles, p.index)
       .filter((a) => Math.abs(a.lateral) <= 1.7 || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking)
       .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6));
@@ -119,7 +115,6 @@ export function buildSnapshot(world, executing = null) {
       snap.rear_follower = { id: b.vehicle.id, gap_m: p.s - b.s - (bs.length - bs.rearOverhang) - ego.spec.rearOverhang, closing_mps: b.vehicle.v - ego.v };
     }
   }
-  // nearby traffic in the ego frame
   for (const n of visibleNpcs) {
     const d = Math.hypot(n.x - ego.x, n.y - ego.y);
     if (d > TRAFFIC_RADIUS_M) continue;

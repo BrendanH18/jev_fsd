@@ -1,13 +1,5 @@
-// Time of day and weather, as the renderer sees them: where the sun is, what color the sky and fog
-// are, how strong the sun, sky, and moon light are, and how much the city's own lights matter.
-//
-// The sun follows its real path over Vancouver (49.27 N, 123.1 W) in late September, on local
-// daylight time, so 07:00 is just before sunrise, 13:10 is solar noon at about 40 degrees, and the
-// sun sets a little after 19:00. The sky's colors are keyed on the sun's elevation; weather lays an
-// overcast over them.
-//
-// `lighting` holds uniforms shared by every material that reacts to the dark or the wet (windows
-// that light up, lamp heads, light pools, headlights), so one assignment updates them all.
+// Sun/moon lighting and sky colors for the selected city in late September local time, defaulting
+// to Vancouver (~49.27 N). Weather overlays cloud/fog; `lighting` holds shared shader uniforms.
 
 import * as THREE from "three";
 

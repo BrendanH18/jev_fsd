@@ -19,13 +19,13 @@ a post has a dedicated regression.
 
 Validation completed:
 
-- 58 Python tests and 137 browser simulation/HUD/explorer assertions.
+- 60 Python tests and 137 browser simulation/HUD/explorer assertions.
 - 88 renderer assertions, including six vehicle silhouettes, actual axle/track/body dimensions,
   finite geometry, lights, shadows and cameras, instanced parked LOD, real sign rasterization
   and wet WebGL frames across graphics settings.
 - 22 vehicle regressions covering dimensions, clone state, powertrain differences, dry/wet
   stability, stopping/queue/pedestrian clearances, safety braking and route-end control positions.
-- 13 building and 11 scenery collision regressions, six route-control regressions, 18 scoring
+- 13 building and 11 scenery collision regressions, six route-control regressions, 19 scoring
   tests, interpolation and world-condition checks, and 20 valid offline model requests.
 - 24 real Kitsilano Rules drives: six vehicles, two seeded routes, dry/rain, 16 traffic cars.
   All arrived with no collisions, traffic violations or off-road time. Safety braking intervened

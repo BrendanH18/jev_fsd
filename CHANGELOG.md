@@ -8,6 +8,13 @@
   editable fields and focused controls retain their keyboard behaviour.
 - Drive reports and history remain usable when the browser blocks access to local storage.
 
+- Comment cleanup across simulation, brain and render modules: shorter headers, removed
+  redundant labels, fixed a stale snow grip note, dropped a dead candidate stub and unused
+  NPC stop-line local. Normalized Python section banners and aligned the stdlib User-Agent
+  with 0.2.0. Tightened CSP after vendoring Three.js; fixed Node static-collision imports so
+  the document stub runs before `common.js`. README and docs test counts match the current suite;
+  `pyproject.toml` points at this project's docs and demo.
+
 - Saved agent evaluations with browser history, v1/v2 JSON import, selectable baseline drivers
   and deltas restricted to matching experiment conditions. Stopped and ambiguous attempts are excluded.
 - Arena incident timelines with the most recent recorded decision, observed state, selected
