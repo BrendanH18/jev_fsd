@@ -123,9 +123,9 @@ The profiler restores the pause state and renderer statistics configuration afte
 Renderer tests cover world transforms, paint, detail selection, hysteresis, geometry reduction,
 nearby shadows, removal of a parked car from both detail levels without removing its neighbor,
 reflection clipping, sampler/state restoration, quality changes and actual wet WebGL draws
-(43 assertions when run from the simulator, including city lighting, sign proportions and
+(88 assertions when run from the simulator, including city lighting, sign proportions and
 front/rear WebGL lettering).
-The `/tests` suite remains independent of Three.js and also passes (117 assertions: 99 simulation
-and 18 HUD), as do the 50 Python tests and offline fixture checks. The subsequent drive-experience changes add
+The `/tests` suite remains independent of Three.js and also passes (137 assertions: 99 simulation,
+18 HUD and 20 explorer), as do the 60 Python tests and offline fixture checks. The subsequent drive-experience changes add
 visual interpolation and gentler manual steering; the Rules/Jev controller and decision pipeline
 remain shared with the benchmark.

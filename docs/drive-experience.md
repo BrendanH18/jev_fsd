@@ -109,9 +109,9 @@ tests, including violation caps, fresh-session baselines, pauses, duration, hard
 gaps, history corruption and blocked storage. `scripts/test_interpolate.mjs` checks interpolation
 without changing simulation state, wrapped headings and teleport handling.
 
-The browser suite passes 117 assertions (99 simulation and 18 HUD) and the renderer suite 43, including
+The browser suite passes 137 assertions (99 simulation, 18 HUD and 20 explorer) and the renderer suite 88, including
 manual-steering, city-sun, sign proportions, atlas padding and actual front/rear sign rasterization.
-The 50 Python tests include bundled-map,
+The 60 Python tests include bundled-map,
 selected-city routing, distinct reachable suggestions and fallback checks. Fixture checks remain
 clean with 20 valid offline Jev requests.
 

@@ -15,10 +15,7 @@ import { current as weather } from "./weather.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
 
-// Every driver is a little different: how hard they accelerate and brake, how much gap they keep,
-// how long they take to get going when the car ahead moves off or the light changes, and how
-// keen they are to change lanes. Drawn from their own seeded stream, so adding them does not move
-// anyone's spawn point.
+// Seeded per-driver IDM and lane-change temperament so adding NPCs does not shift spawn points.
 function driverProfile(random, bike = false) {
   const r = random();
   const assertive = r < 0.2, timid = r > 0.85;
@@ -214,7 +211,6 @@ export class NpcFleet {
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
       if (n.pull && n.pull.wait > 0) {
-        // still parked: indicator on, waiting for a gap in the lane
         n.signal = n.pull.lat > 0 ? "left" : "right";
         if (this.pullClear(n)) n.pull.wait -= dt;
         n.v = 0;
@@ -225,7 +221,6 @@ export class NpcFleet {
       if (n.holdFor > 0) { n.holdFor -= dt; n.step(dt, { steer: n.delta, accel: -3 }); if (n.v < 0) n.v = 0; continue; }
       const path = n.path;
       if (n.lc && n.lc.t >= n.lc.T) {
-        // the lane change is done: follow the new lane from here
         const lane = this.map.lane(n.lc.edge, n.lc.to);
         if (lane && path.currentEdge().id === n.lc.edge) path.switchLane(n.lc.to, projectPoint(lane.pts, lane.cum, [n.x, n.y], null).s);
         n.lc = null;
@@ -252,14 +247,13 @@ export class NpcFleet {
       const keepRight = n.kind === "bike" ? Math.max(0, this.map.edges.get(edge.id).lane_width / 2 - 0.75) : 0;
       let offset = keepRight + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0);
       if (n.pull) {
-        // easing out of the parking lane onto the lane's line
         n.pull.t += dt;
         offset += n.pull.lat * (1 - smooth(n.pull.t / n.pull.T));
         if (n.pull.t >= n.pull.T) n.pull = null;
       }
 
-      // leader: nearest vehicle ahead on our path within LOOK_M (a parked car only when it sticks
-      // out into the lane)
+      // Leader: nearest vehicle ahead on our path within LOOK_M (parked cars only when they
+      // stick into the lane).
       let gap = Infinity, leadV = n.v0, leader = null;
       for (const o of all.concat(world.parked.near(n.x, n.y, LOOK_M), world.parked.doorsNear(n.x, n.y, LOOK_M))) {
         if (o === n) continue;
@@ -276,11 +270,9 @@ export class NpcFleet {
         if (g < gap) { gap = g; leadV = o.v; leader = o; }
       }
       n.lead = gap < Infinity ? { gap, v: leadV } : null;
-      // virtual leaders: stop lines
       let stopAt = null;
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
-        const sLine = e.sStart + e.control.s_line - (e === path.edges[0] ? 0 : 0);
         const lineS = e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
         const bumperToLine = lineS - front;
         if (bumperToLine < -1) continue;
@@ -301,11 +293,9 @@ export class NpcFleet {
         }
         break;
       }
-      // a pedestrian crossing ahead on the path: stop short of the crosswalk
       const cw = crosswalkConflict(path.pts, path.cum, front - 2, front + 35, world.crowd, spec.width / 2 + 0.9);
       if (cw) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
       if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
-      // the next junction: which way we turn there, and the indicator for it
       const ji = path.edges.findIndex((e) => e.sEnd > front);
       const cur = path.edges[ji], after = path.edges[ji + 1];
       const toNode = cur ? cur.sEnd - front : Infinity;
@@ -335,7 +325,7 @@ export class NpcFleet {
         n.standoff = (n.standoff || 0) + dt;
         if (n.standoff > 3) { n.standoff = 0; n.backoff = { left: 6, t: 0 }; }
       } else n.standoff = 0;
-      // deadlock release
+      // After ~15 s stopped at a clear control with no vehicle blocking, abandon the virtual leader.
       if (n.v < 0.2 && gap < 3) n.waiting += dt; else n.waiting = 0;
       if (n.waiting > 15 && stopAt !== null && stopAt < 1 && leadV === 0 && !this.blockedByVehicle(n) && !(cur && this.crossComing(n, cur.to))) { gap = Infinity; leadV = n.v0; n.waiting = 0; }
 

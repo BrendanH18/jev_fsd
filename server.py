@@ -51,7 +51,7 @@ def log(msg: str) -> None:
     sys.stderr.write("  %s  %s\n" % (time.strftime("%H:%M:%S"), msg))
 
 
-# --- maps ------------------------------------------------------------------------------------
+# Maps
 
 
 def load_map(bbox_text: str = "") -> dict:
@@ -125,7 +125,7 @@ def api_route(body, _query):
     return {"routes": routes, "compute_ms": round((time.perf_counter() - started) * 1000, 1)}
 
 
-# --- decisions -------------------------------------------------------------------------------
+# Decisions
 
 
 def api_decide(body, _query):
@@ -152,7 +152,7 @@ def api_snapshot_save(body, _query):
     return {"saved": str(path.relative_to(PROJECT_ROOT))}
 
 
-# --- benchmark runs --------------------------------------------------------------------------
+# Benchmark runs
 
 
 def api_bench_save(body, _query):
@@ -207,7 +207,7 @@ ROUTES = {
     ("GET", "/api/bench/runs"): api_bench_runs,
 }
 
-CSP = ("default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'nonce-%s'; "
+CSP = ("default-src 'self'; script-src 'self' 'nonce-%s'; "
        "connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; "
        "style-src 'self' 'unsafe-inline'; font-src 'self'; "
        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")

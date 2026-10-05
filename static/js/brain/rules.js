@@ -23,7 +23,6 @@ export class RulesBrain {
     if (snap.nav && snap.nav.arrived) stop = true;
     const motion = stop ? "stop" : "drive";
 
-    // desired speed: limit, curve, gap, stop-line and destination aware (shared with the state)
     const vDesired = snap.target ? snap.target.v : desiredSpeed(snap).v;
 
     let best = null;

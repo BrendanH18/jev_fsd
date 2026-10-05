@@ -134,7 +134,7 @@ class JevClient:
         self._sdk_key: Optional[str] = None
         self._lock = threading.Lock()
 
-    # --- key management ---------------------------------------------------------------------
+    # Key management
 
     @property
     def model(self) -> str:
@@ -168,7 +168,7 @@ class JevClient:
     def reload_settings(self) -> None:
         self.settings.reload_file()
 
-    # --- calls ------------------------------------------------------------------------------
+    # Calls
 
     def system_one(self, state: Any, questions: Dict[str, dict]) -> JevResult:
         payload = {"state": state, "model": self.model, "questions": questions}
@@ -198,7 +198,7 @@ class JevClient:
         response, _ = self._stdlib_request("GET", "/v1/models", None, max_attempts=2)
         return response
 
-    # --- transports -------------------------------------------------------------------------
+    # Transports
 
     def _sdk_client(self):
         with self._lock:
@@ -232,7 +232,7 @@ class JevClient:
             req = urllib.request.Request(
                 self.base_url + path, data=data, method=method,
                 headers={"Authorization": "Bearer " + (self.api_key or ""), "Content-Type": "application/json",
-                         "User-Agent": "jev-fsd/0.1 (stdlib)"})
+                         "User-Agent": "jev-fsd/0.2.0 (stdlib)"})
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     return json.loads(resp.read().decode()), attempt
@@ -272,7 +272,7 @@ def _error_message(status: int, body: Any) -> str:
     return "TypeSafe error %s: %s" % (status, text)
 
 
-# --- small helpers for building questions ----------------------------------------------
+# Helpers for building questions
 
 
 def noul(instructions: Any, yes: Any = None, no: Any = None) -> dict:
