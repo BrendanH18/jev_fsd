@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replay playback follows recorded timestamps, preserves its position when paused,
+  catches up after slow frames and restarts from the beginning after reaching the end.
+- Held driving keys clear when focus enters forms or dialogs, or the tab becomes hidden;
+  editable fields and focused controls retain their keyboard behaviour.
+- Drive reports and history remain usable when the browser blocks access to local storage.
+
 - Saved agent evaluations with browser history, v1/v2 JSON import, selectable baseline drivers
   and deltas restricted to matching experiment conditions. Stopped and ambiguous attempts are excluded.
 - Arena incident timelines with the most recent recorded decision, observed state, selected

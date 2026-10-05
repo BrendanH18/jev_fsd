@@ -141,8 +141,9 @@ export class DriveScore {
 }
 
 export const HISTORY_KEY = "jev-fsd-drives-v1";
-export function readHistory(storage = globalThis.localStorage) {
+export function readHistory(storage) {
   try {
+    storage ||= globalThis.localStorage;
     const data = JSON.parse(storage.getItem(HISTORY_KEY));
     return Array.isArray(data) ? data.filter(d => d?.model_version === SCORE_VERSION && Number.isFinite(d.score)
       && typeof d.title === "string" && typeof d.map === "string" && Array.isArray(d.tips) && Array.isArray(d.incidents)
@@ -150,7 +151,10 @@ export function readHistory(storage = globalThis.localStorage) {
   }
   catch { return []; }
 }
-export function saveDrive(report, storage = globalThis.localStorage) {
-  const history = [report, ...readHistory(storage)].slice(0, 20);
-  try { storage.setItem(HISTORY_KEY, JSON.stringify(history)); return true; } catch { return false; }
+export function saveDrive(report, storage) {
+  try {
+    storage ||= globalThis.localStorage;
+    const history = [report, ...readHistory(storage)].slice(0, 20);
+    storage.setItem(HISTORY_KEY, JSON.stringify(history)); return true;
+  } catch { return false; }
 }

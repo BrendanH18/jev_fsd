@@ -335,6 +335,8 @@ Low curbs remain traversable, and scenery beyond the playable map is decorative 
 ```sh
 uv run python -m unittest discover tests
 node --experimental-default-type=module scripts/test_drive_score.mjs
+node --experimental-default-type=module scripts/test_drive_controls.mjs
+node --experimental-default-type=module scripts/test_replay.mjs
 node --experimental-default-type=module scripts/test_interpolate.mjs
 node --experimental-default-type=module scripts/test_orbit_camera.mjs
 node --experimental-default-type=module scripts/test_static_collision.mjs

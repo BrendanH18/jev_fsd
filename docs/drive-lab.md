@@ -47,6 +47,9 @@ A rolling recorder retains the last 120 seconds of the active drive at 0.5-secon
 It copies car physics, traffic paths, pedestrians, doors, random streams, control memory,
 scoring and daylight. Replay playback interpolates actor poses between checkpoints. Seeking
 does not step physics, run decisions or alter the recorded scores.
+Playback follows each checkpoint's recorded timestamp, including the final partial interval.
+Pausing holds the displayed position; pressing **Play replay** at the end starts again from
+the oldest retained checkpoint.
 
 **Rewind** opens the timeline. **Before incident** seeks three seconds before the preceding
 retained incident. **Take over here** starts manual control from the selected state; **Try this
