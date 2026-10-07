@@ -73,7 +73,8 @@ create different demands, so use the seeded benchmark for controlled driver comp
 
 - `Q` / `E` toggle manual left/right indicators; they cancel after a completed turn or 12 s.
   Autopilot continues to indicate from its navigation plan. `H` plays a short horn when sound is on.
-- **View** / `C` switches chase, hood, overhead and high chase cameras. Hood view displays the
+- **View** / `C` switches chase, 360°, hood, overhead, high chase and cinematic cameras. The cinematic
+  camera cuts between roadside, bumper, aerial, lead and side-profile shots. `O` opens photo mode. Hood view displays the
   windshield frame, rain beads and wipers. **Settings → Wipers** disables the blades' automatic
   sweep in rain; **Camera motion** disables the subtle acceleration and cornering response of the hood camera.
 - **Sound off/on** enables procedural motor, tire, road and rain sounds. Audio starts only after

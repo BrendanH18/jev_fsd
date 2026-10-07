@@ -54,11 +54,12 @@ const KEYS = [
 ];
 
 // How the weather changes the sky: cloud cover hides the sun and greys the sky; fog closes in.
+// `deck` is how much of the visible sky the drawn cloud layer covers (fog hides it entirely).
 const WEATHER = {
-  dry: { cloud: 0, fog: 0.0009, overcast: null, wet: 0 },
-  rain: { cloud: 1, fog: 0.0065, overcast: { zenith: 0x5f6a76, horizon: 0x98a2ab, ground: 0x5d655c }, wet: 1 },
-  fog: { cloud: 1, fog: 0.022, overcast: { zenith: 0xaab2b9, horizon: 0xc4c9cd, ground: 0x9aa09a }, wet: 0.4 },
-  snow: { cloud: 0.9, fog: 0.007, overcast: { zenith: 0x8f9cab, horizon: 0xd3dae1, ground: 0xc9cfd6 }, wet: 0 },
+  dry: { cloud: 0, deck: 0.38, fog: 0.0009, overcast: null, wet: 0 },
+  rain: { cloud: 1, deck: 0.96, fog: 0.0065, overcast: { zenith: 0x5f6a76, horizon: 0x98a2ab, ground: 0x5d655c }, wet: 1 },
+  fog: { cloud: 1, deck: 0, fog: 0.022, overcast: { zenith: 0xaab2b9, horizon: 0xc4c9cd, ground: 0x9aa09a }, wet: 0.4 },
+  snow: { cloud: 0.9, deck: 0.9, fog: 0.007, overcast: { zenith: 0x8f9cab, horizon: 0xd3dae1, ground: 0xc9cfd6 }, wet: 0 },
 };
 
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -103,8 +104,27 @@ export function atmosphereFor(hour, weather = "dry", location = null) {
   const moonDir = new THREE.Vector3(0.35, 0.72, 0.6).normalize();
   const key = sunUp > 0.02 ? { dir: sun.dir, color: sky.sun.clone(), intensity: sunIntensity }
     : { dir: moonDir, color: col(0x9db4ff), intensity: 0.35 * moonUp * (1 - 0.85 * cloud) };
+  // Fair-weather clouds are bright on top and blue-grey underneath; storm decks are a darker grey.
+  // At dusk the lit side takes the sun's colour, and at night the deck reflects the city's glow.
+  const cloudLum = 0.05 + 0.95 * day;
+  const clouds = {
+    cover: W.deck,
+    lit: col(0xffffff).lerp(sky.sun, 0.55 * (1 - smooth(4, 22, elDeg)) * sunUp).multiplyScalar(cloudLum * (1 - 0.35 * cloud))
+      .add(col(0x3a2a22).multiplyScalar(night * 0.6)),
+    shade: sky.zenith.clone().lerp(col(0x9aa3ad), 0.55).multiplyScalar(cloudLum * (0.82 - 0.25 * cloud))
+      .add(col(0x22191a).multiplyScalar(night * 0.6)),
+  };
+  // A gentle cinematic grade per light: warmer and richer at the ends of the day, cooler and a
+  // little flatter at night, muted under cloud. Applied after tone mapping (see post.js).
+  const golden = sunUp * (1 - smooth(6, 20, elDeg)) * (1 - cloud);
+  const grade = {
+    contrast: 1.06 + 0.04 * golden - 0.04 * cloud * day,
+    saturation: 1.08 + 0.08 * golden - 0.12 * cloud - 0.1 * night,
+    tint: col(0xffffff).lerp(col(0xffe2c4), 0.45 * golden).lerp(col(0xd8e4ff), 0.35 * night),
+    vignette: 0.22 + 0.08 * night,
+  };
   return {
-    hour, weather, sun, elevationDeg: elDeg, day, night, cloud,
+    hour, weather, sun, elevationDeg: elDeg, day, night, cloud, clouds, grade,
     sky, fogDensity: W.fog * (weather === "dry" ? 1 + night * 0.4 : 1), fogColor: sky.horizon.clone(),
     key,
     sunGlow: sunUp * (1 - cloud),

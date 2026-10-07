@@ -1,45 +1,103 @@
-# Jev FSD · Drive Lab
+# Jev Drive Lab
 
-**Can you drive Canadian streets better than an AI? Try the same challenge—and inspect every decision.**
+**A driving simulator on real Canadian streets. Take on the same challenge as an AI driver, then
+rewind and see why it made every choice.**
 
-An open-source driving simulator on real OpenStreetMap streets. Take the wheel, watch an AI
-choose its next move, then rewind and try a different decision. Eight neighbourhoods across
-seven Canadian cities, right in your browser.
+[**▶ Play it in your browser**](https://brendanh18.github.io/jev_fsd/) — no install, no account, no API key.
 
-[**Try the browser demo →**](https://brendanh18.github.io/jev_fsd/) ·
-[Agent adapters](docs/agents.md) · [Drive lab guide](docs/drive-lab.md) ·
-[Full project reference](docs/project-reference.md)
+![Jev Drive Lab on a tree-lined street in Kitsilano, Vancouver](docs/drive-lab.png)
 
-![Jev Drive Lab](docs/drive-lab.png)
+---
 
-![A recorded Rules drive with the geometric perception overlay](docs/drive-demo.gif)
+## Why this exists
 
-## Pick your drive
+Most self-driving demos ask you to trust a video. This one hands you the wheel.
 
-- **Can you beat the AI?** Six fixed challenges: an opening car door beside a cyclist,
-  a foggy junction, a rainy-night crossing, a full stop in snow, a car merging from parking,
-  and a person emerging from behind a building. Drive manually or compare
-  Rules, Jev and your own agent under the same conditions.
-- **See through the AI's eyes.** Inspect visible hazards, building occlusion, sight limits,
-  predicted trajectories and candidate rejection reasons.
-- **Rewind your drive.** Review the last two minutes, jump back before an incident, take over,
-  switch drivers or try another eligible manoeuvre. Playback follows recorded timestamps,
-  holds its position when paused, and starts again from the oldest checkpoint when you play at the end.
-- **Share the result.** Export a score card and copy a link that recreates the challenge setup.
-  Reports and exports stay available when browser storage is blocked; export to keep those drives.
-- **Bring your own driver.** Load a JavaScript agent, run the fixed evaluation suite and compare
-  safety outcomes, comfort, latency and cost. Save evaluations, import a previous baseline,
-  and inspect incident timelines with recorded decisions. Export versioned results.
-- **Just cruise.** Choose a neighbourhood, a car and a camera. Turn on sound, watch the daylight
-  change, or take a scenic drive in golden light.
+Jev Drive Lab builds real neighbourhoods from OpenStreetMap: the roads, lanes, stop signs, traffic
+lights and buildings. It lines the kerbs with parked cars and fills the streets with traffic,
+cyclists and people on foot. Then
+it lets you drive them yourself, or watch an AI driver do it. Every decision the AI makes is
+recorded. You can pause the drive, scrub back to the moment a car door swung open, and see what the
+driver could see, what it considered, and why it rejected each alternative.
 
-The public demo runs the free Rules and starter agents without installation or an API key.
-Jev uses a server-side TypeSafe key in the local app. This independent project is not affiliated
-with TypeSafe AI. It is a research simulator, not a system for controlling a real vehicle.
+It's part game, part teaching tool and part test bench for driving agents. The public demo runs
+entirely in your browser.
 
-## Run locally
+> This is a research simulator. It is not, and is not meant to become, software for controlling a
+> real vehicle.
 
-Install [uv](https://docs.astral.sh/uv/), then:
+## What you can do
+
+### 🚗 Drive real neighbourhoods
+
+Eight neighbourhoods across seven Canadian cities ship with the project, so the app works offline
+once its dependencies are installed:
+
+| Neighbourhood | City | | Neighbourhood | City |
+|---|---|---|---|---|
+| Kitsilano | Vancouver | | The Annex | Toronto |
+| Mount Pleasant | Vancouver | | Le Plateau | Montréal |
+| Old Town | Victoria | | Centretown | Ottawa |
+| Beltline | Calgary | | Saint-Roch | Québec City |
+
+Pick from six vehicles, including a city hatch, a sport coupe and a utility pickup. Each one has
+its own dimensions, mass, power and handling. Then choose a paint colour, the weather (dry, rain,
+fog or snow) and any time of day. The sun follows each city's real latitude, and street lights come
+on at dusk.
+
+### 🏁 Take on the challenges
+
+Six hand-built scenarios test the situations real drivers get wrong:
+
+| Challenge | Where | What it tests |
+|---|---|---|
+| **The door zone** | Kitsilano, afternoon | A parked car's door opens beside a cyclist |
+| **Into the unknown** | Victoria, fog | A junction you can't see across |
+| **Rain check** | Montréal, rainy night | A pedestrian crossing in poor light |
+| **Winter composure** | Toronto, snow | A full stop on slippery roads |
+| **Joining the flow** | Kitsilano | A car pulling out of a parking spot |
+| **Around the corner** | Kitsilano | Someone stepping out from behind a building |
+
+Drive them yourself, or set Rules, Jev or your own agent loose on the same seed and compare
+results. A pass means you arrived with no collision, no red light or stop sign run, no failure to
+yield, and less than a second off the road. A good coaching score on its own doesn't count.
+
+### 🧠 See through the AI's eyes
+
+Turn on **AI eyes** to see what the driver actually perceives. It shows which hazards are
+visible, which ones buildings are hiding, how far it can see in the fog, the trajectories it
+predicts for other road users, and the reason each candidate manoeuvre was rejected.
+
+![A recorded Rules drive with the perception overlay](docs/drive-demo.gif)
+
+### ⏪ Rewind and try a different decision
+
+The last two minutes of every drive are recorded. Scrub back, jump to the moment before an
+incident, take over manually, switch to a different driver, or force one of the other manoeuvres
+the AI considered. Then see how it plays out.
+
+### 📸 Photo mode and the cinematic camera
+
+Press **O** to freeze the world and step out of the car. The HUD disappears. You can orbit freely,
+or let the cinematic director frame the shot, then adjust exposure, contrast, saturation, vignette
+and even the time of day. **Save photo** downloads a clean PNG.
+
+The **cinematic** camera (press **C** to cycle to it) works like a car film director. It cuts
+between a roadside camera the car sweeps past, a low bumper chase, a slow helicopter orbit, a
+tracking shot from ahead and a wheel-height side profile.
+
+### 🤖 Bring your own driver
+
+Write a small JavaScript module with a `decide()` function, load it in **Settings**, and it drives
+under the same physics, sensing and safety checks as the built-in drivers. The
+[arena](http://127.0.0.1:8322/arena) runs the fixed challenge suite and compares safety, comfort,
+latency and cost. It saves evaluations and lets you diff a run against a previous baseline. See the
+[agent guide](docs/agents.md) for a starter template.
+
+## Quick start
+
+The fastest way to try it is the [browser demo](https://brendanh18.github.io/jev_fsd/). To run it
+locally with the full feature set, install [uv](https://docs.astral.sh/uv/) and run:
 
 ```sh
 git clone https://github.com/BrendanH18/jev_fsd
@@ -47,63 +105,114 @@ cd jev_fsd
 uv run server.py
 ```
 
-Open [localhost:8322](http://127.0.0.1:8322). No frontend build step. Bundled maps and Three.js
-let Rules driving run without external network access after Python dependencies are installed.
+Open **<http://127.0.0.1:8322>** in a desktop browser with WebGL. There is no frontend build step.
+Python 3.10+ is all you need, and uv fetches a suitable version if you don't have one.
 
-**WASD / arrows** drive and take over · **J** toggles autopilot · **P** pauses · **C** changes
-camera · **?** opens keyboard help. Use a desktop browser with WebGL and a keyboard.
-Held driving keys clear when focus enters a form or dialog, or the tab becomes hidden.
-Typing in editable fields and operating focused controls keeps their normal keyboard behaviour.
-Click the road view to use driving keys after interacting with controls.
+### Controls
 
-To enable Jev, copy `.env.example` to `.env`, set `TYPESAFE_API_KEY` from the
-[TypeSafe console](https://console.typesafe.ai), and restart. The key stays on the local server;
-spend and request-rate guards cap live model calls.
+| Key | Action | | Key | Action |
+|---|---|---|---|---|
+| `W A S D` / arrows | Drive (and take over from autopilot) | | `C` | Cycle cameras |
+| `Space` | Brake hard | | `O` | Photo mode |
+| `J` | Toggle autopilot | | Drag / scroll | Orbit and zoom the 360° camera |
+| `Q` / `E` | Left / right indicator | | `P` | Pause |
+| `H` | Horn (with sound on) | | `R` | Reset to the lane |
+| `1` / `2` | Jev / Rules driver | | `?` | Show every shortcut |
 
-## How the driver works
+Click the minimap to set a destination, or open **Explore cities** for suggested drives. If keys
+stop responding after you use a menu, click the road view to give it focus again.
 
-Every decision senses the visible world, proposes manoeuvres, simulates them three seconds
-ahead, and filters unsafe or illegal options. Rules, Jev or your adapter chooses among the
-survivors. They share physics, sensing, the controller and an emergency brake.
+### Enabling the Jev model (optional)
 
-Coaching scores measure safety, road rules, smoothness and control. Evaluation passes require
-arrival with no audited collision, red light, missed stop or failed yield, and less than one
-second off-road. A high coaching score alone is not an evaluation pass.
-
-Open [/arena](http://127.0.0.1:8322/arena) for the six authored challenges or
-[/bench](http://127.0.0.1:8322/bench) for seeded city routes. Rules and the cautious starter
-passed all six authored challenges in the recorded local checks. These individual runs do
-not guarantee performance across every map, seed or live model response.
-
-## Build, contribute and explore
+The free **Rules** driver and the cautious starter agent work out of the box. **Jev** is an
+LLM-backed driver served by [TypeSafe](https://console.typesafe.ai). To try it:
 
 ```sh
-uv run python -m unittest discover tests
-node scripts/test_drive_lab.mjs
-node scripts/test_drive_controls.mjs
-node scripts/test_replay.mjs
-node scripts/test_drive_score.mjs
-node scripts/test_arena_history.mjs
-node scripts/test_vehicle_models.mjs
-python3 scripts/build_demo.py
+cp .env.example .env
+# then set TYPESAFE_API_KEY=... in .env and restart the server
 ```
 
-CI on pull requests runs the Drive Lab and arena history checks, then builds the GitHub Pages
-demo. The [agent guide](docs/agents.md) includes a starter adapter and the evaluation contract.
-The [full reference](docs/project-reference.md#development) lists the simulation, rendering
-and scoring checks. Run seeded comparisons after changes to physics, sensing or planning.
-Contributions to agents, scenarios, accessibility and neighbourhood details are welcome.
+Your key stays on the local server and is never sent to the browser. A spend cap
+(`JEV_FSD_BUDGET_USD`, $1 per run by default) and a request-rate cap (`JEV_FSD_RPM`) limit live
+model calls. This project is independent and not affiliated with TypeSafe AI.
+
+## How the AI drives
+
+Every driver, whether it's Rules, Jev or yours, goes through the same loop for every decision:
+
+```mermaid
+flowchart LR
+    A[Sense<br/>what's visible] --> B[Propose<br/>candidate manoeuvres]
+    B --> C[Simulate each<br/>3 s ahead]
+    C --> D[Filter out unsafe<br/>or illegal options]
+    D --> E[Driver chooses<br/>among survivors]
+    E --> F[Controller +<br/>emergency brake]
+```
+
+Sensing is honest. Buildings block line of sight, fog and darkness shorten it, and traffic lights
+you can't see are treated as unknown. Every driver shares the physics, the controller and the
+emergency brake, so differences in results come from decision-making alone.
+
+## Graphics
+
+The renderer uses [Three.js](https://threejs.org) with no build step and a vendored runtime. In
+**Settings → Graphics** you can choose:
+
+- **Low**: direct rendering, for older laptops.
+- **High** (default): bloom, SMAA anti-aliasing, wet-road reflections and a cinematic colour grade.
+- **Ultra**: adds ground-truth ambient occlusion, 4K shadow maps and up to 2× pixel ratio.
+
+The sky is fully procedural. It has a physically placed sun and moon, stars, and a drifting cloud
+deck lit from the sun's side. The clouds follow the weather, glow orange at dusk, pick up the
+city's light at night, and show up in reflections on wet roads and car paint. Snow settles on
+upward-facing surfaces, and rain darkens and polishes the asphalt.
+
+## Development
+
+```sh
+uv run python -m unittest discover tests        # server, routing, maps, OSM pipeline
+node scripts/test_drive_lab.mjs                 # drive lab and replay features
+node scripts/test_arena_history.mjs             # saved evaluations and comparisons
+node scripts/test_cinematic_photo.mjs           # cinematic camera and photo mode
+node scripts/test_drive_score.mjs               # coaching score
+python3 scripts/build_demo.py                   # build the static GitHub Pages demo
+```
+
+Every `scripts/test_*.mjs` file is a standalone Node check. Node 22 or newer runs them directly; CI passes `--experimental-default-type=module` too.
+The [full reference](docs/project-reference.md#development) lists them all, along with the
+optional Playwright browser check. CI runs the Drive Lab and arena checks on every pull request,
+then builds and deploys the Pages demo from `main`.
+
+```
+server.py          local HTTP server and API (stdlib only)
+jev/               map fetching, OSM processing, routing, model client
+static/js/sim/     physics, traffic, pedestrians, signals, scoring
+static/js/brain/   sensing, candidate generation, safety filter, drivers
+static/js/render/  Three.js scene, sky, weather, cars, buildings, cameras
+static/js/lab/     challenges, recorder, replay, arena
+data/maps/         bundled neighbourhood map packs
+```
+
+If you change physics, sensing or planning, run a seeded comparison on `/bench` before and after.
+Contributions are welcome. Agents, new scenarios, accessibility fixes and neighbourhood details
+are especially appreciated.
+
+## Further reading
 
 - [Drive lab, perception and replay](docs/drive-lab.md)
-- [GitHub Pages build and deployment](docs/browser-demo.md)
+- [Writing your own agent](docs/agents.md)
+- [Scoring formula and driving details](docs/drive-experience.md)
 - [Maps, attribution and custom extracts](docs/maps.md)
-- [Scoring formula and controls](docs/drive-experience.md)
 - [Rendering measurements](docs/render-performance.md)
-- [Release history](CHANGELOG.md)
+- [Browser demo build and deployment](docs/browser-demo.md)
+- [Full project reference](docs/project-reference.md)
+- [Changelog](CHANGELOG.md)
 
-## Credits and license
+## Credits
 
-Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright),
-[ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Rendering by Three.js (MIT).
-Inspired by [JevPilot](https://github.com/standardagents/jevpilot).
+Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under
+the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Rendering by
+[Three.js](https://threejs.org) (MIT). Inspired by
+[JevPilot](https://github.com/standardagents/jevpilot).
+
 Released under the [MIT License](LICENSE).

@@ -18,7 +18,7 @@ export class Input {
         this.keys.add(k);
         return;
       }
-      const map = { j: "autopilot", c: "camera", r: "reset", p: "pause", q: "signalLeft", e: "signalRight", h: "horn", "1": "brain1", "2": "brain2", "?": "help", "/": "help", escape: "escape" };
+      const map = { j: "autopilot", c: "camera", r: "reset", p: "pause", q: "signalLeft", e: "signalRight", h: "horn", "1": "brain1", "2": "brain2", o: "photo", "?": "help", "/": "help", escape: "escape" };
       if (ev.repeat && map[k]) return;
       if (map[k] && this.actions[map[k]]) { ev.preventDefault(); this.actions[map[k]](); }
     });

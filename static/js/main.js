@@ -35,6 +35,7 @@ import { capturePose, interpolatePose } from "./sim/interpolate.js";
 import { WorldClock, formatClock, worldOptions } from "./sim/world-clock.js";
 import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-models.js";
 import { OrbitControls } from "./ui/orbit-controls.js";
+import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
 import { DriveRecorder } from "./lab/recorder.js";
 import { DriveLab } from "./ui/lab.js";
@@ -268,6 +269,7 @@ export async function boot() {
   function cameraChanged() {
     const orbit = view.mode === "orbit";
     $("#camera-view").textContent = `View: ${orbit ? "360°" : view.mode}`;
+    if (photo?.active) photo.setCamera(view.mode);
     $("#camera-orbit").setAttribute("aria-pressed", String(orbit));
     $("#orbit-actions").hidden = !orbit; $("#camera-help").hidden = !orbit;
   }
@@ -285,6 +287,16 @@ export async function boot() {
     pinch: scale => { enableOrbit(); view.orbit.setDistance(view.orbit.distance * scale, world.ego.spec); },
   });
   $("#camera-motion").addEventListener("change", ev => { view.cameraMotion = ev.target.checked; });
+  let pausedBeforePhoto = false;
+  const photo = new PhotoMode({
+    view,
+    place: status.map.synthetic ? "practice grid" : status.map.label,
+    getHour: () => hour,
+    setHour: value => setHour(value),
+    onEnter: () => { pausedBeforePhoto = world.paused; world.paused = true; input.keys.clear(); hud.toggleKeys(false); },
+    onExit: () => { world.paused = lab?.reviewing ? true : pausedBeforePhoto; cameraChanged(); $("#view").focus({ preventScroll: true }); },
+  });
+  $("#photo-mode").addEventListener("click", () => photo.enter());
   let manualSignal = null;
   function togglePause() {
     if (lab?.reviewing) { lab.live(); return; }
@@ -306,7 +318,8 @@ export async function boot() {
     brain1: () => selectBrain("jev"),
     brain2: () => selectBrain("rules"),
     help: () => hud.toggleKeys(),
-    escape: () => { hud.toggleKeys(false); panel.toggle(false); },
+    photo: () => photo.toggle(),
+    escape: () => { if (photo.active) { photo.exit(); return; } hud.toggleKeys(false); panel.toggle(false); },
   });
 
   let pausedBeforeReport = false;
@@ -473,7 +486,7 @@ export async function boot() {
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
     startDrive(`Replay ${replay.scenario.id}`, world.route);
   }
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, get drive() { return drive; }, finishDrive, setTime: setHour };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, get drive() { return drive; }, finishDrive, setTime: setHour };
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();
 

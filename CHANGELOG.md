@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Procedural, drifting cloud deck in the sky, lit from the sun's side with a silver rim near the
+  sun. Coverage follows the weather (scattered when dry, overcast in rain and snow, hidden in fog);
+  clouds take the sun's colour at dusk and the city's glow at night, and appear in reflections.
+- Colour-grade pass on High and Ultra: contrast, saturation, a time-of-day tint, soft vignette and
+  dithering that removes sky banding.
+- Cinematic camera (`C`): automatic cuts between roadside, bumper, aerial, lead and side-profile shots.
+- Photo mode (`O` or **Photo mode**): pause the world, hide the HUD, choose a camera, adjust exposure,
+  contrast, saturation, vignette and time of day, and save the frame as a PNG.
+- README rewritten as a friendlier introduction and quick-start guide.
+
 - Replay playback follows recorded timestamps, preserves its position when paused,
   catches up after slow frames and restarts from the beginning after reaching the end.
 - Held driving keys clear when focus enters forms or dialogs, or the tab becomes hidden;
