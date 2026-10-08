@@ -245,6 +245,7 @@ export async function boot() {
   status.configured ? "" : "no API key, Jev unavailable");
 
   function toggleAutopilot() {
+    if (photo?.active) return;
     if (lab?.reviewing) { lab.branch("manual"); return; }
     if (!autopilot.enabled && !world.route) { hud.badge("set a destination first (click the minimap)", "", 1500); return; }
     autopilot.setEnabled(!autopilot.enabled);
@@ -294,11 +295,12 @@ export async function boot() {
     getHour: () => hour,
     setHour: value => setHour(value),
     onEnter: () => { pausedBeforePhoto = world.paused; world.paused = true; input.keys.clear(); hud.toggleKeys(false); },
-    onExit: () => { world.paused = lab?.reviewing ? true : pausedBeforePhoto; cameraChanged(); $("#view").focus({ preventScroll: true }); },
+    onExit: () => { input.keys.clear(); world.paused = lab?.reviewing ? true : pausedBeforePhoto; cameraChanged(); $("#view").focus({ preventScroll: true }); },
   });
   $("#photo-mode").addEventListener("click", () => photo.enter());
   let manualSignal = null;
   function togglePause() {
+    if (photo?.active) return;   // photo mode holds the world still until it closes
     if (lab?.reviewing) { lab.live(); return; }
     world.paused = !world.paused;
     hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700);
@@ -313,7 +315,7 @@ export async function boot() {
     autopilot: toggleAutopilot,
     camera: switchCamera,
     signalLeft: () => signal("left"), signalRight: () => signal("right"), horn: () => audio.horn(),
-    reset: () => { if (challenge) challengeModified = true; drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
+    reset: () => { if (photo.active) return; if (challenge) challengeModified = true; drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
     pause: togglePause,
     brain1: () => selectBrain("jev"),
     brain2: () => selectBrain("rules"),
@@ -499,7 +501,7 @@ export async function boot() {
     // never negative: headless runs advance the clock by hand, ahead of requestAnimationFrame
     const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
     last = now;
-    if (!world.paused) {
+    if (!world.paused && !photo.active) {
       acc = Math.min(acc + dt, FIXED_DT * 5);
       let steps = 0;
       while (acc >= FIXED_DT && steps < 5) {
@@ -546,7 +548,7 @@ export async function boot() {
     if (pauseButton.getAttribute("aria-pressed") !== String(world.paused)) {
       pauseButton.setAttribute("aria-pressed", String(world.paused)); pauseButton.textContent = world.paused ? "Resume" : "Pause";
     }
-    const alpha = world.paused ? 1 : acc / FIXED_DT;
+    const alpha = world.paused || photo.active ? 1 : acc / FIXED_DT;
     const replayNext = lab.reviewing ? recorder.frames[Number(lab.slider.value) + 1]?.state : null;
     const replayAlpha = lab.replayAlpha;
     const renderEgo = replayNext ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
