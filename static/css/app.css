@@ -394,3 +394,18 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 #hud[data-quality="low"] .panel { box-shadow: none; }
+
+/* Photo mode: only the road view and the photo controls remain */
+body.photo-mode > :not(#view):not(.photo-panel):not(.photo-reveal) { display: none !important; }
+body.photo-mode canvas#view { cursor: grab; }
+.photo-panel { position: fixed; right: var(--gap); bottom: var(--gap); z-index: 30; width: 280px; padding: 14px; display: grid; gap: 10px; }
+.photo-cameras { display: flex; flex-wrap: wrap; gap: 6px; }
+.photo-cameras [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: #4cc2ff0c; }
+.photo-slider { display: grid; grid-template-columns: 78px 1fr 48px; align-items: center; gap: 8px; }
+.photo-slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.photo-value { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; }
+.photo-status { margin: 0; font-size: 11px; color: var(--muted); }
+.photo-actions { display: flex; gap: 8px; align-items: center; }
+.photo-actions .photo-capture { margin-left: auto; border-color: var(--accent); color: var(--accent); }
+.photo-reveal { position: fixed; right: var(--gap); bottom: var(--gap); z-index: 30; background: var(--panel); }
+@media (max-width: 520px) { .photo-panel { left: var(--gap); width: auto; } }

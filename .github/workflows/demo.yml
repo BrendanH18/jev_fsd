@@ -25,6 +25,7 @@ jobs:
         run: |
           node --experimental-default-type=module scripts/test_drive_lab.mjs
           node --experimental-default-type=module scripts/test_arena_history.mjs
+          node --experimental-default-type=module scripts/test_cinematic_photo.mjs
       - name: Build the browser demo
         run: python scripts/build_demo.py
       - uses: actions/upload-pages-artifact@v3

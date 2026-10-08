@@ -14,6 +14,7 @@ import { atmosphereFor, lighting, updateNightMaterials } from "./atmosphere.js";
 import { GroundReflection } from "./reflection.js";
 import { buildBackdrop, tintBackdrop } from "./backdrop.js";
 import { OrbitCamera } from "./orbit-camera.js";
+import { CinematicCamera } from "./cinematic-camera.js";
 
 export const toThree = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
@@ -54,6 +55,10 @@ function skyMaterial() {
       sunGlow: { value: 1 },
       stars: { value: 0 },
       sunDir: { value: new THREE.Vector3(0, 1, 0) },
+      cloudCover: { value: 0 },
+      cloudLit: { value: new THREE.Color() },
+      cloudShade: { value: new THREE.Color() },
+      cloudTime: { value: 0 },
     },
     vertexShader: `
       varying vec3 vDir;
@@ -63,10 +68,22 @@ function skyMaterial() {
         gl_Position = p.xyww;
       }`,
     fragmentShader: `
-      uniform vec3 zenith, horizon, groundColor, glowColor, sunColor, sunDir;
-      uniform float sunGlow, stars;
+      uniform vec3 zenith, horizon, groundColor, glowColor, sunColor, sunDir, cloudLit, cloudShade;
+      uniform float sunGlow, stars, cloudCover, cloudTime;
       varying vec3 vDir;
       float hash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float hash2(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+      float vnoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+      float fbm(vec2 p) {
+        float sum = 0.0, amp = 0.5;
+        mat2 turn = mat2(1.6, 1.2, -1.2, 1.6);
+        for (int i = 0; i < 5; i++) { sum += amp * vnoise(p); p = turn * p; amp *= 0.5; }
+        return sum;
+      }
       void main() {
         vec3 d = normalize(vDir);
         float h = d.y;
@@ -86,6 +103,22 @@ function skyMaterial() {
           // the moon, high in the south-east
           float m = dot(d, normalize(vec3(0.35, 0.72, 0.6)));
           col += vec3(0.75, 0.8, 0.9) * stars * (smoothstep(0.99985, 0.99992, m) * 1.6 + pow(max(m, 0.0), 400.0) * 0.12);
+        }
+        // A drifting cloud deck projected onto a flat ceiling, so cells shrink toward the horizon.
+        // A second sample nudged toward the sun estimates self-shadowing: the sunward edges of each
+        // cloud catch the light and the far sides fall into shade, with a silver rim near the sun.
+        if (cloudCover > 0.0 && h > 0.0) {
+          vec2 uv = d.xz / (h + 0.12) * 1.35 + vec2(cloudTime * 0.010, cloudTime * 0.004);
+          float n = fbm(uv);
+          float edge = mix(0.60, 0.28, cloudCover);
+          // Storm decks close into a continuous sheet with softer, lower-contrast mottling.
+          float sheet = smoothstep(0.7, 1.0, cloudCover);
+          float cover = max(smoothstep(edge, edge + 0.16, n), sheet * 0.92);
+          float toSun = fbm(uv + sunFlat * 0.18);
+          float lit = clamp(0.62 + (n - toSun) * 5.0 * (1.0 - 0.55 * sheet) - sheet * (0.55 - n), 0.0, 1.0);
+          vec3 cloud = mix(cloudShade, cloudLit, lit);
+          cloud += cloudLit * (pow(s, 10.0) * 0.9 + pow(s, 3.0) * 0.15) * (1.0 - cover * 0.6);
+          col = mix(col, cloud, cover * smoothstep(0.0, 0.16, h) * 0.96);
         }
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -113,6 +146,9 @@ export class SceneView {
     this.camera = new THREE.PerspectiveCamera(58, 1, 0.3, 6000);
     this.mode = "chase";
     this.orbit = new OrbitCamera();
+    this.cinematic = new CinematicCamera();
+    // Photo-mode adjustments on top of the atmosphere's own exposure and grade (0 = as lit).
+    this.look = { exposure: 0, contrast: 0, saturation: 0, vignette: 0 };
     this.camPos = new THREE.Vector3();
     this.camLook = new THREE.Vector3();
 
@@ -180,6 +216,9 @@ export class SceneView {
     u.glowColor.value.copy(a.sky.glow); u.sunColor.value.copy(a.sky.sun); u.sunDir.value.copy(a.sun.dir);
     u.sunGlow.value = a.sunGlow;
     u.stars.value = a.stars;
+    u.cloudCover.value = a.clouds.cover;
+    u.cloudLit.value.copy(a.clouds.lit);
+    u.cloudShade.value.copy(a.clouds.shade);
     this.scene.background.copy(a.fogColor);
     this.scene.fog.color.copy(a.fogColor);
     this.scene.fog.density = a.fogDensity;
@@ -190,8 +229,8 @@ export class SceneView {
     this.hemi.groundColor.copy(a.hemi.ground);
     this.hemi.intensity = a.hemi.intensity;
     this.scene.environmentIntensity = a.env;
-    this.renderer.toneMappingExposure = a.exposure;
     if (this.post) this.post.setBloom(a.bloom.strength, a.bloom.threshold);
+    this.applyLook();
     tintBackdrop(this.backdrop, a);
     lighting.night.value = a.night;
     lighting.wet.value = a.wet;
@@ -200,6 +239,28 @@ export class SceneView {
     if (this.scene.environment) this.scene.environment.dispose();
     this.scene.environment = this.buildEnvironment();
     this._basis = this.lightBasis();
+  }
+
+  // Exposure in stops and grade offsets chosen in photo mode, layered on the current atmosphere.
+  setLook(changes = {}) {
+    for (const [key, value] of Object.entries(changes)) if (key in this.look && Number.isFinite(value)) this.look[key] = value;
+    this.applyLook();
+    return { ...this.look };
+  }
+
+  applyLook() {
+    const a = this.atmosphere;
+    if (!a) return;
+    this.renderer.toneMappingExposure = a.exposure * Math.pow(2, this.look.exposure);
+    if (this.post) {
+      const g = a.grade;
+      this.post.setGrade({
+        contrast: Math.max(0.5, g.contrast + this.look.contrast),
+        saturation: Math.max(0, g.saturation + this.look.saturation),
+        tint: g.tint,
+        vignette: THREE.MathUtils.clamp(g.vignette + this.look.vignette, 0, 1),
+      });
+    }
   }
 
   // Reflections come from the same sky, rendered into a prefiltered environment map.
@@ -250,13 +311,14 @@ export class SceneView {
   }
 
   toggleCamera() {
-    const modes = ["chase", "orbit", "hood", "top", "far"];
+    const modes = ["chase", "orbit", "hood", "top", "far", "cinematic"];
     return this.setCamera(modes[(modes.indexOf(this.mode) + 1) % modes.length]);
   }
 
   setCamera(mode) {
     this.mode = mode;
     this.camPos.set(0, 0, 0);   // snap rather than swoop between very different views
+    if (mode === "cinematic") this.cinematic.reset();
     return this.mode;
   }
 
@@ -264,7 +326,14 @@ export class SceneView {
     const fx = Math.cos(ego.psi), fy = Math.sin(ego.psi);
     let target, look, up = new THREE.Vector3(0, 1, 0), lerp = 1 - Math.pow(0.002, dt);
     this.camera.fov = this.mode === "hood" ? 64 : 58;
-    if (this.mode === "orbit") {
+    if (this.mode === "cinematic") {
+      const shot = this.cinematic.pose(ego, dt, this.vehicleHeight);
+      target = toThree(...shot.position);
+      look = toThree(...shot.look);
+      this.camera.fov = shot.fov;
+      if (shot.cut) this.camPos.set(0, 0, 0);
+      lerp = 1 - Math.pow(shot.lag, dt);
+    } else if (this.mode === "orbit") {
       const pose = this.orbit.pose(ego, this.vehicleHeight);
       target = toThree(pose.x, pose.y, pose.z);
       look = toThree(...pose.look);
@@ -308,6 +377,7 @@ export class SceneView {
 
   render(dt = 0) {
     lighting.time.value += dt;
+    this.sky.material.uniforms.cloudTime.value = lighting.time.value;
     this.camera.updateMatrixWorld();
     // Select detail once from the viewing camera. A mirrored camera must not change the meshes
     // between the reflection, shadow and main passes within the same frame.

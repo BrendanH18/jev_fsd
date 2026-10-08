@@ -152,14 +152,15 @@ system's reduced-motion preference.
 | `1` / `2` | Select Jev / Rules (also available as buttons) |
 | `Q` / `E` | Toggle left / right indicators |
 | `H` | Horn when sound is enabled |
-| `C` or **View** | Cycle chase, 360°, hood, overhead and high chase cameras |
+| `C` or **View** | Cycle chase, 360°, hood, overhead, high chase and cinematic cameras |
+| `O` or **Photo mode** | Freeze the world, hide the HUD, adjust the look and save a PNG |
 | **360° view** or drag the driving view | Orbit freely around the car; follows it as you drive |
 | Wheel / pinch / camera + − | Zoom the 360° view |
 | Shift + arrow keys (view focused) | Rotate the 360° view without steering |
 | **Recenter** | Return the 360° camera behind the car |
 | `R` / `P` | Reset to the lane / pause |
 | `?` or `/` | Toggle keyboard shortcuts |
-| `Escape` | Close keyboard shortcuts or the decision inspector |
+| `Escape` | Leave photo mode, or close keyboard shortcuts or the decision inspector |
 | **Explore cities** / **Explore drives** | Pick a city or suggested route |
 | **Finish & review** / **History** | Review the current drive / saved drives |
 | **Inspect JSON** | Open the decision inspector; on narrow screens, find it under **Settings** |
@@ -185,6 +186,24 @@ speeding.
 ## Graphics and recent rendering fixes
 
 ![A rainy-night Rules drive in Kitsilano with the current HUD and lights reflected in the wet road](night-hud.jpg)
+
+The sky draws a drifting procedural cloud deck. Each cloud is lit from the sun's side, with a
+silver rim near the sun. Coverage follows the weather: scattered fair-weather cumulus when dry and
+a continuous low deck in rain or snow; fog hides it. At dusk the clouds take the sun's colour, and
+at night they reflect the city's glow. Wet roads and car paint reflect the same clouds through the
+environment map.
+
+On High and Ultra, a grade pass after tone mapping sets contrast, saturation, a time-of-day tint
+(warm at golden hour, cool at night) and a soft vignette. It also adds a ±½-step dither that removes
+8-bit banding in smooth sky gradients.
+
+The **cinematic** camera cuts automatically between five shots: a roadside camera the car sweeps
+past, a low bumper chase, a slow helicopter orbit, a tracking shot from ahead and a wheel-height
+side profile. **Photo mode** (`O`) pauses the world and hides the HUD. You can frame the car with
+the free, cinematic, chase or hood camera. Sliders set exposure (±2 EV), contrast, saturation,
+vignette and time of day. **Save photo** downloads the rendered frame as a PNG at the canvas
+resolution; the controls are never included. Leaving photo mode restores the previous camera,
+the default look and the previous pause state.
 
 Parked cars and trees use distance-based detail to reduce distant geometry. Nearby scenery
 retains detailed meshes and shadows, while hysteresis prevents repeated detail switches around
@@ -339,6 +358,7 @@ node --experimental-default-type=module scripts/test_drive_controls.mjs
 node --experimental-default-type=module scripts/test_replay.mjs
 node --experimental-default-type=module scripts/test_interpolate.mjs
 node --experimental-default-type=module scripts/test_orbit_camera.mjs
+node --experimental-default-type=module scripts/test_cinematic_photo.mjs
 node --experimental-default-type=module scripts/test_static_collision.mjs
 node --experimental-default-type=module scripts/test_scenery_collision.mjs
 node --experimental-default-type=module scripts/test_route_controls.mjs

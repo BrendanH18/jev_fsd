@@ -35,6 +35,7 @@ import { capturePose, interpolatePose } from "./sim/interpolate.js";
 import { WorldClock, formatClock, worldOptions } from "./sim/world-clock.js";
 import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-models.js";
 import { OrbitControls } from "./ui/orbit-controls.js";
+import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
 import { DriveRecorder } from "./lab/recorder.js";
 import { DriveLab } from "./ui/lab.js";
@@ -244,6 +245,7 @@ export async function boot() {
   status.configured ? "" : "no API key, Jev unavailable");
 
   function toggleAutopilot() {
+    if (photo?.active) return;
     if (lab?.reviewing) { lab.branch("manual"); return; }
     if (!autopilot.enabled && !world.route) { hud.badge("set a destination first (click the minimap)", "", 1500); return; }
     autopilot.setEnabled(!autopilot.enabled);
@@ -268,6 +270,7 @@ export async function boot() {
   function cameraChanged() {
     const orbit = view.mode === "orbit";
     $("#camera-view").textContent = `View: ${orbit ? "360°" : view.mode}`;
+    if (photo?.active) photo.setCamera(view.mode);
     $("#camera-orbit").setAttribute("aria-pressed", String(orbit));
     $("#orbit-actions").hidden = !orbit; $("#camera-help").hidden = !orbit;
   }
@@ -285,8 +288,19 @@ export async function boot() {
     pinch: scale => { enableOrbit(); view.orbit.setDistance(view.orbit.distance * scale, world.ego.spec); },
   });
   $("#camera-motion").addEventListener("change", ev => { view.cameraMotion = ev.target.checked; });
+  let pausedBeforePhoto = false;
+  const photo = new PhotoMode({
+    view,
+    place: status.map.synthetic ? "practice grid" : status.map.label,
+    getHour: () => hour,
+    setHour: value => setHour(value),
+    onEnter: () => { pausedBeforePhoto = world.paused; world.paused = true; input.keys.clear(); hud.toggleKeys(false); },
+    onExit: () => { input.keys.clear(); world.paused = lab?.reviewing ? true : pausedBeforePhoto; cameraChanged(); $("#view").focus({ preventScroll: true }); },
+  });
+  $("#photo-mode").addEventListener("click", () => photo.enter());
   let manualSignal = null;
   function togglePause() {
+    if (photo?.active) return;   // photo mode holds the world still until it closes
     if (lab?.reviewing) { lab.live(); return; }
     world.paused = !world.paused;
     hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700);
@@ -301,12 +315,13 @@ export async function boot() {
     autopilot: toggleAutopilot,
     camera: switchCamera,
     signalLeft: () => signal("left"), signalRight: () => signal("right"), horn: () => audio.horn(),
-    reset: () => { if (challenge) challengeModified = true; drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
+    reset: () => { if (photo.active) return; if (challenge) challengeModified = true; drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
     pause: togglePause,
     brain1: () => selectBrain("jev"),
     brain2: () => selectBrain("rules"),
     help: () => hud.toggleKeys(),
-    escape: () => { hud.toggleKeys(false); panel.toggle(false); },
+    photo: () => photo.toggle(),
+    escape: () => { if (photo.active) { photo.exit(); return; } hud.toggleKeys(false); panel.toggle(false); },
   });
 
   let pausedBeforeReport = false;
@@ -473,7 +488,7 @@ export async function boot() {
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
     startDrive(`Replay ${replay.scenario.id}`, world.route);
   }
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, get drive() { return drive; }, finishDrive, setTime: setHour };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, get drive() { return drive; }, finishDrive, setTime: setHour };
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();
 
@@ -486,7 +501,7 @@ export async function boot() {
     // never negative: headless runs advance the clock by hand, ahead of requestAnimationFrame
     const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
     last = now;
-    if (!world.paused) {
+    if (!world.paused && !photo.active) {
       acc = Math.min(acc + dt, FIXED_DT * 5);
       let steps = 0;
       while (acc >= FIXED_DT && steps < 5) {
@@ -533,7 +548,7 @@ export async function boot() {
     if (pauseButton.getAttribute("aria-pressed") !== String(world.paused)) {
       pauseButton.setAttribute("aria-pressed", String(world.paused)); pauseButton.textContent = world.paused ? "Resume" : "Pause";
     }
-    const alpha = world.paused ? 1 : acc / FIXED_DT;
+    const alpha = world.paused || photo.active ? 1 : acc / FIXED_DT;
     const replayNext = lab.reviewing ? recorder.frames[Number(lab.slider.value) + 1]?.state : null;
     const replayAlpha = lab.replayAlpha;
     const renderEgo = replayNext ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
