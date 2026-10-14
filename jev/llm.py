@@ -157,6 +157,10 @@ class EndpointConfig:
         if key_env is not None and (not isinstance(key_env, str) or not ENV_NAME_RE.match(key_env)):
             problems.append("%s: api_key_env must be an environment variable name such as OPENAI_API_KEY" % where)
             return
+        if key_env and parts.scheme == "http" and not is_local_host(base_url):
+            problems.append("%s: base_url must use https:// to send a key to %s; plain http is only for local servers"
+                            % (where, parts.hostname))
+            return
         response_format = str(raw.get("response_format") or "json_schema")
         if response_format not in RESPONSE_FORMATS:
             problems.append("%s: response_format must be one of %s" % (where, ", ".join(RESPONSE_FORMATS)))
@@ -554,6 +558,8 @@ class LlmEndpoint:
             except urllib.error.HTTPError as err:
                 if err.code in (401, 403):
                     out = {"name": name, "status": "key rejected", "reachable": True, "detail": "HTTP %d from /models" % err.code}
+                elif 300 <= err.code < 400:   # chat calls refuse redirects too, so this endpoint cannot work
+                    out = {"name": name, "status": "unreachable", "reachable": True, "detail": str(err.reason)[:200]}
                 else:  # the server answered; some servers just do not list models
                     out = {"name": name, "status": "ready", "reachable": True, "detail": "HTTP %d from /models" % err.code}
             except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as err:
@@ -647,6 +653,7 @@ def llm_decide(registry: LlmRegistry, body: dict) -> dict:
         meta["invalid"] = invalid
     request = dict(result.request, url=public_url(endpoint.config.base_url) + "/chat/completions",
                    api_key_env=endpoint.config.api_key_env)
-    trace = scrub({"request": request, "response": result.response, "meta": meta}, endpoint.api_key)
-    return {"tick": req["tick"], "epoch": req["epoch"], "answer": answer, "invalid": invalid,
-            "content": scrub(result.content, endpoint.api_key), "meta": meta, "trace": trace}
+    trace = {"request": request, "response": result.response, "meta": meta}
+    # Scrub everything: the answer, reason and invalid excerpt all quote the model's reply.
+    return scrub({"tick": req["tick"], "epoch": req["epoch"], "answer": answer, "invalid": invalid,
+                  "content": result.content, "meta": meta, "trace": trace}, endpoint.api_key)

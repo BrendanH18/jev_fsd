@@ -61,7 +61,8 @@ cp data/llm-endpoints.example.json data/llm-endpoints.json   # gitignored
 ```
 
 Keys never go in that file. `api_key_env` names a variable in `.env` (or the environment), and
-the server refuses an entry that contains an `api_key` field. Restart the server after editing
+the server refuses an entry that contains an `api_key` field. An endpoint with a key must use
+`https://` unless it is on this machine or your local network. Restart the server after editing
 either file; the startup banner lists each endpoint and any configuration problems.
 
 **OpenAI**

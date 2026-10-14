@@ -175,6 +175,16 @@ class ConfigTests(LlmTestCase):
             self.assertIn(fragment, " ".join(problems))
             self.assertNotIn(SECRET, " ".join(problems))
 
+    def test_keys_are_only_sent_over_https_or_to_local_servers(self):
+        for url, ok in (("http://api.example.com/v1", False), ("https://api.example.com/v1", True),
+                        ("http://127.0.0.1:8000/v1", True), ("http://192.168.1.20:1234/v1", True)):
+            problems = []
+            cfg = llm.EndpointConfig({"name": "e", "base_url": url, "model": "m", "api_key_env": "K"}, "endpoint 1", problems)
+            self.assertEqual(cfg.ok, ok, (url, problems))
+            if not ok:
+                self.assertIn("https://", " ".join(problems))
+        self.assertTrue(llm.EndpointConfig({"name": "e", "base_url": "http://api.example.com/v1", "model": "m"}, "endpoint 1", []).ok)
+
     def test_missing_or_broken_file_is_not_fatal(self):
         settings = Settings(environ={"JEV_FSD_LLM_ENDPOINTS": "/nonexistent/llm.json"}, env_file=Path("/nonexistent/.env"))
         reg = llm.LlmRegistry(settings, SpendGuard())
@@ -352,6 +362,23 @@ class EndpointTests(LlmTestCase):
             self.decide(reg, "r")
         self.assertIn("redirected", str(ctx.exception))
         self.assertEqual(target.requests, [])
+
+    def test_check_reports_a_redirect_as_unreachable(self):
+        target = self.mock(lambda h, body: (200, {"data": []}, {}))
+        source = self.mock(lambda h, body: (301, b"", {"Location": target.url + "/models"}))
+        reg = self.registry([{"name": "r", "base_url": source.url, "model": "x"}])
+        out = reg.endpoints["r"].check()
+        self.assertEqual(out["status"], "unreachable")
+        self.assertIn("redirected", out["detail"])
+        self.assertEqual(target.requests, [])
+
+    def test_quoted_reply_fields_are_scrubbed(self):
+        for reply in ('{"motion": "drive", "candidate": "%s"}' % SECRET,
+                      '{"motion": "drive", "candidate": "keep_lane_target", "reason": "key is %s"}' % SECRET):
+            mock = self.mock(lambda h, body, reply=reply: (200, completion(reply), {}))
+            reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "api_key_env": "K", "response_format": "none"}],
+                                environ={"K": SECRET})
+            self.assertNotIn(SECRET, json.dumps(self.decide(reg, "m")))
 
     def test_check_reports_reachability_without_spend(self):
         up = self.mock(lambda h, body: (200, {"data": [{"id": "x"}]}, {}))
