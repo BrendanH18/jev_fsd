@@ -1,4 +1,5 @@
 import json
+import math
 import unittest
 from urllib.parse import urlparse
 
@@ -6,8 +7,9 @@ from helpers import grid_pack, synthetic_osm
 
 from jev import geometry as g
 from jev.osm import fetch
-from jev.osm.graph import build_graph, lanes_per_direction, parse_maxspeed, way_direction
-from jev.osm.parse import parse_xml
+from jev.osm.buildings import extract_buildings
+from jev.osm.graph import build_graph, is_drivable, lanes_per_direction, parse_maxspeed, way_direction
+from jev.osm.parse import OsmData, parse_xml
 from jev.osm.project import Projection
 
 
@@ -42,6 +44,46 @@ class TagTests(unittest.TestCase):
         self.assertEqual(way_direction({"oneway": "-1"}), "backward")
         self.assertEqual(way_direction({"junction": "roundabout"}), "forward")
         self.assertEqual(way_direction({}), "both")
+
+    def test_streets_through_buildings_are_not_drivable(self):
+        self.assertTrue(is_drivable({"highway": "living_street"}))
+        self.assertTrue(is_drivable({"highway": "residential", "tunnel": "yes"}))
+        self.assertFalse(is_drivable({"highway": "living_street", "covered": "yes"}))
+        self.assertFalse(is_drivable({"highway": "tertiary", "tunnel": "building_passage"}))
+
+    def test_roundabout_split_over_ways_is_one_ring_on_its_carriageway(self):
+        osm = OsmData()
+        lat0, lon0, radius = 44.6450, -63.5800, 20.0
+        for k in range(16):
+            a = 2 * math.pi * k / 16
+            osm.add_node(k + 1, lat0 + radius * math.sin(a) / 110574, lon0 + radius * math.cos(a) / (111320 * math.cos(math.radians(lat0))))
+        ring = {"highway": "primary", "junction": "roundabout", "lanes": "2"}
+        osm.add_way(10, [1, 2, 3, 4, 5, 6, 7], ring)          # counter-clockwise, in three pieces
+        osm.add_way(11, [7, 8, 9, 10, 11, 12], ring)
+        osm.add_way(12, [12, 13, 14, 15, 16, 1], ring)
+        proj = Projection.for_bbox((-63.5810, 44.6440, -63.5790, 44.6460))
+        graph = build_graph(osm, proj)
+        self.assertEqual(len(graph.roundabouts), 1)
+        rb = graph.roundabouts[0]
+        cx, cy = proj.to_xy(lat0, lon0)
+        self.assertLess(math.hypot(rb["x"] - cx, rb["y"] - cy), 0.5)
+        self.assertAlmostEqual(rb["lane_r"], radius, delta=0.5)
+        ring_edges = [e for e in graph.edges.values() if e.get("ring")]
+        self.assertTrue(ring_edges)
+        self.assertTrue(all(e["lanes"] == 1 and len(e["lane_offsets"]) == 1 for e in ring_edges))
+
+    def test_raised_skywalks_are_not_ground_footprints(self):
+        osm = OsmData()
+        square = [(44.6450, -63.5800), (44.6450, -63.5795), (44.6455, -63.5795), (44.6455, -63.5800)]
+        for way_id, tags in enumerate(({"building": "yes"}, {"building": "yes", "building:min_level": "2", "layer": "2"},
+                                       {"building": "bridge", "min_height": "6.5"}, {"building": "yes", "min_height": "0"})):
+            ids = []
+            for k, (lat, lon) in enumerate(square):
+                osm.add_node(way_id * 10 + k, lat, lon)
+                ids.append(way_id * 10 + k)
+            osm.add_way(way_id, ids + ids[:1], tags)
+        proj = Projection.for_bbox((-63.5810, 44.6440, -63.5790, 44.6460))
+        self.assertEqual(len(extract_buildings(osm, proj)), 2)
 
 
 class GraphTests(unittest.TestCase):
