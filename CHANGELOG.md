@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Four new bundled neighbourhoods: Downtown Halifax, Winnipeg's Exchange District, Old Strathcona
+  in Edmonton and Downtown & Nutana in Saskatoon. Twelve neighbourhoods across eleven Canadian
+  cities, each with its own facade palette and a stylized silhouette (Citadel Hill, a prairie
+  glass spire, a river-valley truss bridge, a riverside château and arched bridge).
+- Map processing skips roofed streets and raised skywalk footprints, joins roundabouts split
+  across several OSM ways, and keeps large roundabout lanes on their mapped carriageway.
+
 - Re-baselined the seeded Rules benchmark on the current code. Kitsilano ran in dry, fog,
   rain and snow, and seven other cities ran smoke suites. The new committed run is
   `data/runs/20261014-091959-rules.json`. In the eight seeded dry suites tested in WebKit,

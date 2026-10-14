@@ -11,6 +11,7 @@ import { GroundReflection, reflection } from "../js/render/reflection.js";
 import { lighting, sunPosition } from "../js/render/atmosphere.js";
 import { PostFX } from "../js/render/post.js";
 import { buildStreetSigns } from "../js/render/signs.js";
+import { CITY_STYLES, buildCityIdentity } from "../js/render/city-identity.js";
 
 export function runRenderTests() {
   const results = [];
@@ -21,6 +22,12 @@ export function runRenderTests() {
   const torontoSun = sunPosition(13, { latitude: 43.6655, longitude: -79.403, utcOffset: -4 });
   check("Canadian cities use their own latitude for the sun", torontoSun.elevation > victoriaSun.elevation && Math.abs(torontoSun.dir.length() - 1) < 1e-8);
   check("local morning and evening put the sun on opposite sides", sunPosition(9, { latitude: 48.4255, longitude: -123.3655, utcOffset: -7 }).dir.x > 0 && sunPosition(17, { latitude: 48.4255, longitude: -123.3655, utcOffset: -7 }).dir.x < 0);
+
+  for (const [id, style] of Object.entries(CITY_STYLES).filter(([, s]) => s.skyline)) {
+    const group = buildCityIdentity({ extent: [-500, -400, 500, 400] }, id);
+    const finite = group.children.every(m => [m.position.x, m.position.y, m.position.z].every(Number.isFinite));
+    check(`${style.city} silhouette builds finite decorative geometry`, group.children.length >= 14 && finite && group.userData.decorative);
+  }
 
   const carFixtures = [], silhouettes = new Set();
   for (const model of VEHICLE_MODELS) {

@@ -24,6 +24,14 @@ MAP_CATALOG = (
      "description": "Bank Street shops, residential side streets and a dense one-way grid.", "character": "Capital streets", "accent": "#8ebbc0", "utc_offset": -4},
     {"id": "quebec_city", "name": "Saint-Roch", "city": "Québec City", "province": "Québec",
      "description": "Short lower-town blocks, irregular junctions and Boulevard Charest traffic.", "character": "Historic grid", "accent": "#c4b27f", "utc_offset": -4},
+    {"id": "halifax", "name": "Downtown", "city": "Halifax", "province": "Nova Scotia",
+     "description": "Harbourfront blocks below Citadel Hill, one-way pairs and Spring Garden Road shops.", "character": "Harbour town", "accent": "#e3928a", "utc_offset": -3},
+    {"id": "winnipeg", "name": "Exchange District", "city": "Winnipeg", "province": "Manitoba",
+     "description": "Warehouse-district one-ways, Main Street and the wide avenues around Portage and Main.", "character": "Warehouse district", "accent": "#d6c26f", "utc_offset": -5},
+    {"id": "edmonton", "name": "Old Strathcona", "city": "Edmonton", "province": "Alberta",
+     "description": "Whyte Avenue's signalled main street and quiet residential crossings with few signs.", "character": "Main street", "accent": "#9cc77c", "utc_offset": -6},
+    {"id": "saskatoon", "name": "Downtown & Nutana", "city": "Saskatoon", "province": "Saskatchewan",
+     "description": "Downtown one-way avenues, Broadway Avenue and bridges over the South Saskatchewan River.", "character": "River crossings", "accent": "#9b93dc", "utc_offset": -6},
 )
 
 

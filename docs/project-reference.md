@@ -3,7 +3,7 @@
 **Drive real Canadian streets, watch an AI choose its next move, and improve your driving score.**
 
 Jev FSD is a local driving simulator built from [OpenStreetMap](https://www.openstreetmap.org/)
-roads and buildings. Explore eight neighbourhoods across seven Canadian cities by hand, with the free
+roads and buildings. Explore twelve neighbourhoods across eleven Canadian cities by hand, with the free
 Rules driver, or with [TypeSafe AI's Jev](https://typesafe.ai/). The decision panel shows the
 situation, available manoeuvres, model probabilities, latency and API cost.
 
@@ -30,7 +30,7 @@ uv run server.py
 
 Open [127.0.0.1:8322](http://127.0.0.1:8322). Without an API key, the app selects the free Rules
 driver. There is no frontend build step; the simulation and renderer use JavaScript and Three.js,
-and the local server uses Python. The pinned Three.js runtime and all eight map packs are bundled,
+and the local server uses Python. The pinned Three.js runtime and all twelve map packs are bundled,
 so driving with Rules needs no external network after installing the Python dependencies.
 
 Try **Explore cities → Victoria → Neighbourhood cruise**. A suggested drive starts the selected
@@ -49,10 +49,10 @@ cp .env.example .env
 The key stays on the server. Jev sends decision requests to TypeSafe; Rules driving, drive
 scoring and the bundled maps need no API key.
 
-## Explore eight Canadian neighbourhoods
+## Explore twelve Canadian neighbourhoods
 
 The city picker includes neighbourhood-sized extracts of real roads, one-way streets, lane
-and speed-limit tags, traffic controls and buildings. All eight processed map packs are bundled.
+and speed-limit tags, traffic controls and buildings. All twelve processed map packs are bundled.
 Search by city or neighbourhood, and filter by region and road character. The explorer keeps
 your search and keyboard focus while loading maps or finding routes, and offers retries on errors.
 
@@ -66,6 +66,10 @@ your search and keyboard focus while loading maps or finding routes, and offers 
 | Calgary | Beltline | [/?map=calgary](http://127.0.0.1:8322/?map=calgary) |
 | Ottawa | Centretown | [/?map=ottawa](http://127.0.0.1:8322/?map=ottawa) |
 | Québec City | Saint-Roch | [/?map=quebec_city](http://127.0.0.1:8322/?map=quebec_city) |
+| Halifax | Downtown | [/?map=halifax](http://127.0.0.1:8322/?map=halifax) |
+| Winnipeg | Exchange District | [/?map=winnipeg](http://127.0.0.1:8322/?map=winnipeg) |
+| Edmonton | Old Strathcona | [/?map=edmonton](http://127.0.0.1:8322/?map=edmonton) |
+| Saskatoon | Downtown & Nutana | [/?map=saskatoon](http://127.0.0.1:8322/?map=saskatoon) |
 
 **Explore cities** offers three reachable drives from your current position: **Neighbourhood
 cruise**, **City precision** and **The long way home**. The world pauses while choosing a route
