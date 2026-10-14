@@ -74,5 +74,9 @@ introduced on these routes. Dry mean speed changed from 22.03 to 22.55 km/h and 
 from 17.08 to 17.06 km/h; the changes do not establish a performance or safety improvement.
 Rain, snow and night were not rerun as full seeded suites in this revision.
 
+The [2026-10-14 Rules baseline](rules-baseline.md) supersedes this table. That rerun reproduced this
+table's Kitsilano dry result under V8, but not under WebKit, with the same code. In WebKit,
+Ottawa and Québec City fail one smoke route on street-furniture contact.
+
 Run the commands in the README, then open `/tests` and run the renderer assertions from the
 simulator console. `/bench` reproduces the seeded city suites without graphics.

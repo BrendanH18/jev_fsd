@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Re-baselined the seeded Rules benchmark on the current code. Kitsilano ran in dry, fog,
+  rain and snow, and seven other cities ran smoke suites. The new committed run is
+  `data/runs/20261014-091959-rules.json`. Results vary by JavaScript engine, not by the
+  code changed since 2026-09-30. See [docs/rules-baseline.md](docs/rules-baseline.md).
+
 - CI runs every check on each pull request: Python tests, all Node checks, Jev fixture drift,
   offline Jev requests, and the `/tests`, renderer and arena suites in headless Chromium
   (`scripts/test_browser_pages.py`). The Pages demo builds only after they pass.
