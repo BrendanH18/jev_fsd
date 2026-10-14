@@ -162,7 +162,7 @@ export async function boot() {
   };
   syncFleetMeshes();
   world._road = world.roadInfo();
-  if (!status.configured) autopilot.setBrain("rules");
+  if (!agentAvailable(autopilot.brainName)) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
   panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };

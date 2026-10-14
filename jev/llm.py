@@ -144,6 +144,11 @@ class EndpointConfig:
         if parts.username or parts.password:
             problems.append("%s: base_url must not contain credentials; use api_key_env" % where)
             return
+        try:
+            parts.port
+        except ValueError:
+            problems.append("%s: base_url has an invalid port" % where)
+            return
         model = str(raw.get("model") or "").strip()
         if not model or len(model) > 200:
             problems.append("%s: model is required" % where)

@@ -144,10 +144,9 @@ class ConfigTests(LlmTestCase):
              "price_per_mtok_input": 1, "price_per_mtok_output": 2},
             {"name": "nokey", "base_url": "https://api.example.com/v1", "model": "m2", "api_key_env": "MISSING_KEY"},
             {"name": "local", "base_url": "http://localhost:11434/v1", "model": "llama3.2"},
-            {"name": "leaky", "base_url": "https://x.example/v1", "model": "m", "api_key": SECRET},
             {"name": "Bad Name", "base_url": "https://x.example/v1", "model": "m"},
-            {"name": "creds", "base_url": "https://user:%s@x.example/v1" % SECRET, "model": "m"},
             {"name": "ftp", "base_url": "ftp://x.example", "model": "m"},
+            {"name": "badport", "base_url": "https://x.example:notaport/v1", "model": "m"},
             {"name": "cloud", "base_url": "https://dup.example/v1", "model": "m"},
         ], environ={"CLOUD_KEY": SECRET, "JEV_FSD_LLM_BASE_URL": "http://127.0.0.1:1234/v1", "JEV_FSD_LLM_MODEL": "qwen"})
         public = reg.public()
@@ -163,9 +162,18 @@ class ConfigTests(LlmTestCase):
         self.assertFalse(by_name["local"]["priced"])
         self.assertEqual(by_name["default"]["model"], "qwen")
         problems = " ".join(public["problems"])
-        for fragment in ("do not put keys", "name must be", "credentials", "http(s)", "defined twice"):
+        for fragment in ("name must be", "http(s)", "invalid port", "defined twice"):
             self.assertIn(fragment, problems)
         self.assertNotIn(SECRET, json.dumps(public))
+
+    def test_keys_in_the_endpoint_entry_are_rejected_without_echoing_them(self):
+        # Checked on the entry directly so the test never writes a key-shaped value to disk.
+        for raw, fragment in (({"name": "leaky", "base_url": "https://x.example/v1", "model": "m", "api_key": SECRET}, "do not put keys"),
+                              ({"name": "creds", "base_url": "https://user:%s@x.example/v1" % SECRET, "model": "m"}, "credentials")):
+            problems = []
+            self.assertFalse(llm.EndpointConfig(raw, "endpoint 1", problems).ok)
+            self.assertIn(fragment, " ".join(problems))
+            self.assertNotIn(SECRET, " ".join(problems))
 
     def test_missing_or_broken_file_is_not_fatal(self):
         settings = Settings(environ={"JEV_FSD_LLM_ENDPOINTS": "/nonexistent/llm.json"}, env_file=Path("/nonexistent/.env"))
