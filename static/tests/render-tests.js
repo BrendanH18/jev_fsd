@@ -212,7 +212,25 @@ export function runRenderTests() {
     check("disabling AO releases its extra render targets", post.ao === null && post.blendRT === null);
     post.setAO(true); post.setAO(false);
     check("repeated quality transitions release AO cleanly", post.ao === null && post.blendRT === null);
+    check("without AO the scene target is multisampled", post.sceneRT.samples === 4 && !post.sceneRT.depthTexture && post.sceneRT.width === 100);
+    post.setAO(true);
+    check("with AO the scene target keeps a single-sample depth texture", post.sceneRT.samples === 0 && post.ao.depthTexture === post.sceneRT.depthTexture);
   } finally { post.dispose(); }
+
+  // Artifact regressions: noisy shadow filtering, eroding/darkening foliage mips, still leaf
+  // shadows under swaying leaves, and blocky wet-road smears.
+  const shadowChunk = THREE.ShaderChunk.shadowmap_pars_fragment;
+  const planarShadow = shadowChunk.slice(shadowChunk.indexOf("float getShadow( sampler2DShadow"), shadowChunk.indexOf("SHADOWMAP_TYPE_VSM", shadowChunk.indexOf("float getShadow( sampler2DShadow")));
+  check("sun shadows filter without per-pixel noise", planarShadow.length > 0 && !planarShadow.includes("interleavedGradientNoise") && planarShadow.includes("shadow /= 16.0"));
+  const leafMesh = trees.children.flatMap(lod => lod.levels[0].object.children).find(o => o.material.alphaTest > 0);
+  const leafMap = leafMesh.material.map, chain = leafMap.mipmaps;
+  const cover = m => { let n = 0; for (let i = 3; i < m.data.length; i += 4) if (m.data[i] >= 0.5 * 255) n++; return n / (m.width * m.height); };
+  check("leaf mip levels keep the full-size leaf coverage", chain.length >= 8 && chain.slice(1, 5).every(m => Math.abs(cover(m) - cover(chain[0])) < 0.03));
+  check("transparent leaf texels carry leaf colour, not black", chain.slice(0, 4).every(m => { for (let i = 0; i < m.data.length; i += 4) if (m.data[i + 3] === 0 && m.data[i] + m.data[i + 1] + m.data[i + 2] < 30) return false; return true; }));
+  check("leaf shadows sway with the leaves", leafMesh.customDepthMaterial.customProgramCacheKey().startsWith("wind-") && leafMesh.material.alphaToCoverage);
+  const wetMirror = new GroundReflection(fakeRenderer, new THREE.Scene(), camera);
+  check("wet-road smear reads a mipmapped reflection", wetMirror.rt.texture.generateMipmaps && wetMirror.rt.texture.minFilter === THREE.LinearMipmapLinearFilter);
+  wetMirror.dispose();
 
   // Exercise the real WebGL pipeline too: a uniform value of zero alone does not prevent an
   // attached texture/sampler feedback loop, which mocks cannot detect.

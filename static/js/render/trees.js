@@ -9,7 +9,7 @@ import { hash01 } from "./geo.js";
 import { toThree } from "./scene.js";
 import { snowable } from "./weather.js";
 import { lighting } from "./atmosphere.js";
-import { leafTexture, needleTexture, barkTexture } from "./textures.js";
+import { leafTexture, needleTexture, barkTexture, LEAF_CUTOFF } from "./textures.js";
 import { chunkLOD } from "./lod.js";
 
 const CHUNK = 180;
@@ -18,8 +18,9 @@ const PLUM = 0x7a3c4c;      // purple-leaf plums line many Vancouver side street
 const NEEDLE = [0x33502f, 0x2d4a36, 0x3b5a3c];
 const VARIANTS = 3;
 
-// A unit crown (radius ~1, centered on the origin) of leaf cards around a core.
-function crownGeometry(seed, count = 150) {
+// A unit crown (radius ~1, centered on the origin) of leaf cards around a core. Distant crowns
+// have fewer, larger cards, so they keep the same leaf cover with fewer triangles.
+function crownGeometry(seed, count = 150, cardScale = 1) {
   const rnd = mulberry(seed * 7919 + 13);
   const cards = [];
   for (let i = 0; i < count; i++) {
@@ -29,8 +30,9 @@ function crownGeometry(seed, count = 150) {
     const dir = new THREE.Vector3(r * Math.cos(th), u * 0.85, r * Math.sin(th));
     const lump = 0.8 + 0.25 * Math.sin(th * 3 + seed) * Math.cos(u * 4 + seed);
     const depth = 0.55 + 0.45 * Math.pow(rnd(), 0.5);
-    const c = dir.clone().multiplyScalar(lump * depth);
-    const size = 0.55 + rnd() * 0.35;
+    // larger cards sit a little deeper, so the crown's silhouette keeps its size
+    const c = dir.clone().multiplyScalar(lump * depth / Math.sqrt(cardScale));
+    const size = (0.55 + rnd() * 0.35) * cardScale;
     const g = new THREE.PlaneGeometry(size, size);
     g.rotateX(rnd() * Math.PI); g.rotateY(rnd() * Math.PI * 2); g.rotateZ(rnd() * Math.PI);
     g.translate(c.x, c.y, c.z);
@@ -52,12 +54,70 @@ function coreGeometry(seed, detail = 2) {
   g = mergeVertices(g);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
-    const k = 0.62 + 0.14 * hash01(i, seed);
+    const k = 0.5 + 0.12 * hash01(i, seed);
     p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.82, p.getZ(i) * k);
   }
   g.computeVertexNormals();
   g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(p.count * 2), 2));
   return g;
+}
+
+// The core used to be a smooth, evenly lit ball that showed through every gap as a dark sphere.
+// Texture it with the leaf clusters themselves (projected along the three axes, so the
+// icosphere needs no UV seams): leaves where the card is opaque, deep shade between them.
+function leafyCore(material, leafMap) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    if (prev) prev(shader, renderer);
+    shader.uniforms.coreLeaves = { value: leafMap };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vCorePos;\nvarying vec3 vCoreNormal;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvCorePos = position;\nvCoreNormal = normal;");
+    shader.fragmentShader = shader.fragmentShader
+      // The leaf card texture clamps at its edges; tile it here, with gradients taken from the
+      // continuous coordinate so the wrap does not pick a blurry mip level along a seam.
+      .replace("#include <common>", `#include <common>
+        uniform sampler2D coreLeaves;
+        varying vec3 vCorePos;
+        varying vec3 vCoreNormal;
+        vec4 coreLeafSample(vec2 uv) { return textureGrad(coreLeaves, fract(uv), dFdx(uv), dFdy(uv)); }`)
+      .replace("#include <map_fragment>", `#include <map_fragment>
+        vec3 coreW = pow(abs(normalize(vCoreNormal)), vec3(4.0));
+        coreW /= coreW.x + coreW.y + coreW.z;
+        vec4 leaves = coreLeafSample(vCorePos.yz * 2.2) * coreW.x
+          + coreLeafSample(vCorePos.xz * 2.2 + 0.31) * coreW.y
+          + coreLeafSample(vCorePos.xy * 2.2 + 0.67) * coreW.z;
+        diffuseColor.rgb *= mix(vec3(0.35), leaves.rgb * 1.8, leaves.a);`);
+  };
+  const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey.bind(material) : () => "";
+  material.customProgramCacheKey = () => `leafy-core-${prevKey()}`;
+  return material;
+}
+
+// Crown normals point out of the crown, not out of each card. A double-sided material normally
+// flips the normal on a card's back face, which turned the shading inside out on about half of
+// all leaves: a salt-and-pepper mix of lit and dark cards. Keep the crown normal on both faces,
+// and let leaves deeper inside the crown take less sky light, as the outer leaves shade them.
+function crownShading(material) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    if (prev) prev(shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying float vCrownDepth;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvCrownDepth = length(position);");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vCrownDepth;")
+      .replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
+        #ifdef DOUBLE_SIDED
+          normal *= faceDirection;
+          nonPerturbedNormal = normal;
+        #endif`)
+      .replace("#include <aomap_fragment>", `#include <aomap_fragment>
+        reflectedLight.indirectDiffuse *= mix(0.45, 1.0, smoothstep(0.35, 1.0, vCrownDepth));`);
+  };
+  const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey.bind(material) : () => "";
+  material.customProgramCacheKey = () => `crown-shading-${prevKey()}`;
+  return material;
 }
 
 // Trunk with three or four limbs forking into the crown; unit height of trunk to the fork.
@@ -143,14 +203,21 @@ export function buildTrees(map, roads, footprints) {
   for (let v = 0; v < VARIANTS; v++) {
     crowns.push(crownGeometry(v + 1)); cores.push(coreGeometry(v + 1)); trunks.push(trunkGeometry(v + 1)); conifers.push(coniferGeometry(v + 1));
   }
-  const distantCrown = crownGeometry(1, 40), distantCore = coreGeometry(1, 0);
+  const distantCrown = crownGeometry(1, 40, 1.6), distantCore = coreGeometry(1, 1);
   const distantTrunk = new THREE.CylinderGeometry(0.1, 0.17, 1, 5).translate(0, 0.5, 0);
   const distantConifer = coniferGeometry(1, false);
   const leafMap = leafTexture();
-  const leafMat = withWind(snowable(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), "leaf"), 0.05);
-  const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: 0.45, side: THREE.DoubleSide });
-  const coreMat = snowable(new THREE.MeshStandardMaterial({ color: 0x9aa597, roughness: 0.95 }), "leaf");
+  // Alpha to coverage turns the cutout edge into a partial-coverage edge wherever the target is
+  // multisampled (Low draws to the antialiased canvas, High to a multisampled scene target); on
+  // single-sample targets it behaves as the plain alpha test.
+  const leafMat = withWind(crownShading(snowable(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: LEAF_CUTOFF, alphaToCoverage: true,
+    side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), "leaf")), 0.05);
+  // Shadows sway with the leaves. A still shadow caster under moving leaves shadowed each card by
+  // its own offset copy, so dark blotches swam across the crowns in any wind.
+  const leafDepth = withWind(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: LEAF_CUTOFF, side: THREE.DoubleSide }), 0.05);
+  const coreMat = leafyCore(snowable(new THREE.MeshStandardMaterial({ roughness: 0.95 }), "leaf"), leafMap);
   const needleMat = withWind(snowable(new THREE.MeshStandardMaterial({ map: needleTexture(), side: THREE.DoubleSide, roughness: 0.85 }), "leaf"), 0.02);
+  const needleDepth = withWind(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide }), 0.02);
   const barkMat = new THREE.MeshStandardMaterial({ map: barkTexture(), color: 0x8a7462, roughness: 0.95 });
 
   const chunks = new Map();
@@ -179,7 +246,7 @@ export function buildTrees(map, roads, footprints) {
     b.trunk[v].push(inst(t.x, t.y, 0, 1.5 * t.size, trunkH, 1.5 * t.size, rot));
     const cz = trunkH + r * 0.72;
     b.crown[v].push(inst(t.x, t.y, cz, r, r * 0.95, r, rot, base));
-    b.core[v].push(inst(t.x, t.y, cz, r, r * 0.95, r, rot, base.clone().multiplyScalar(0.45)));
+    b.core[v].push(inst(t.x, t.y, cz, r, r * 0.95, r, rot, base.clone().multiplyScalar(0.8)));
   }
 
   const group = new THREE.Group();
@@ -199,7 +266,7 @@ export function buildTrees(map, roads, footprints) {
       emit(near, trunks[v], barkMat, c.trunk[v]);
       emit(near, cores[v], coreMat, c.core[v]);
       emit(near, crowns[v], leafMat, c.crown[v], leafDepth);
-      emit(near, conifers[v], needleMat, c.conifer[v]);
+      emit(near, conifers[v], needleMat, c.conifer[v], needleDepth);
     }
     // Merge distant variants into one batch per part; per-instance color and scale preserve variety.
     emit(far, distantTrunk, barkMat, c.trunk.flat());

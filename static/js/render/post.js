@@ -1,13 +1,15 @@
 // Post-processing. The scene renders into an HDR target that keeps its depth buffer; ambient
 // occlusion is reconstructed from that depth (no second pass over the geometry), bloom picks out
 // whatever is brighter than white (lamps, signals, headlights), the output pass tone-maps, a grade
-// pass sets contrast, colour and vignette and dithers away sky banding, and SMAA smooths the edges. (A multisampled target would antialias for free, but its depth does not
-// reliably resolve into a texture on every browser, and the occlusion needs it.)
+// pass sets contrast, colour and vignette and dithers away sky banding, and SMAA smooths the edges.
+// Without occlusion (High) the scene target is 4x multisampled. With it (Ultra) it is not: a
+// multisampled depth buffer does not reliably resolve into a texture on every browser, and the
+// occlusion needs one; Ultra's 2x pixel ratio supersamples instead.
 //
 // Quality presets:
-//   low     direct render, no post-processing, 1x pixel ratio
-//   high    bloom + SMAA, 1x pixel ratio, quarter-size wet reflections
-//   ultra   adds ambient occlusion, up to 2x pixel ratio and half-size wet reflections
+//   low     direct render to the antialiased canvas, no post-processing, 1x pixel ratio
+//   high    4x MSAA + bloom + SMAA, 1x pixel ratio, quarter-size wet reflections
+//   ultra   adds ambient occlusion (no MSAA), up to 2x pixel ratio and half-size wet reflections
 
 import * as THREE from "three";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
@@ -62,10 +64,8 @@ export class PostFX {
     this.scene = scene;
     this.camera = camera;
     const { x: w, y: h } = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const depthTexture = new THREE.DepthTexture(w, h);
-    depthTexture.format = THREE.DepthStencilFormat;
-    depthTexture.type = THREE.UnsignedInt248Type;
-    this.sceneRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthTexture });
+    this.samples = Math.min(4, renderer.capabilities?.maxSamples ?? 4);
+    this.sceneRT = this.sceneTarget(w, h, ao);
     this.blendRT = null;
     this.ldrRT = new THREE.WebGLRenderTarget(w, h);
     this.ao = null;
@@ -82,13 +82,30 @@ export class PostFX {
     this.smaa.renderToScreen = true;
   }
 
+  // With ambient occlusion the scene target keeps a depth texture for it to read. Without, the
+  // target is multisampled instead: real antialiasing for geometry and, through alpha to coverage,
+  // for the cut-out edges of leaves, which SMAA alone leaves stair-stepped and crawling.
+  sceneTarget(w, h, depth) {
+    if (!depth) return new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: this.samples });
+    const depthTexture = new THREE.DepthTexture(w, h);
+    depthTexture.format = THREE.DepthStencilFormat;
+    depthTexture.type = THREE.UnsignedInt248Type;
+    return new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthTexture });
+  }
+
   setAO(enabled) {
-    if (!!this.ao === enabled) return;
+    if (!!this.ao === enabled && !!this.sceneRT.depthTexture === enabled) return;
+    if (!!this.sceneRT.depthTexture !== enabled) {
+      const { width, height } = this.sceneRT;
+      this.sceneRT.dispose();
+      this.sceneRT = this.sceneTarget(width, height, enabled);
+    }
     if (!enabled) {
-      this.ao.dispose(); this.blendRT.dispose();
+      this.ao?.dispose(); this.blendRT?.dispose();
       this.ao = null; this.blendRT = null;
       return;
     }
+    if (this.ao) return;
     const { width: w, height: h, depthTexture } = this.sceneRT;
     this.blendRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
 
