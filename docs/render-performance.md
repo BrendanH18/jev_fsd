@@ -54,6 +54,49 @@ does not include CPU simulation or establish delivered FPS on another machine. W
 also been checked for zero GL errors across high/ultra/high/low transitions and during an
 eight-second Rules drive that moved 50 m.
 
+## Graphics artifact fixes (2026-10-14)
+
+Reported as "weird artifacting, particularly for clouds and trees". Causes and fixes:
+
+- **Dotted, crawling shading inside tree crowns and other partial shadows.** Three.js r183's PCF
+  filter takes five taps on a disk rotated by per-pixel interleaved-gradient noise, which only
+  averages out with temporal accumulation; this renderer has none, so every penumbra (most of each
+  crown) wore a fixed screen-space dot pattern. `scene.js` replaces it with a fixed 3×3 tent of
+  hardware-filtered taps (`shadow /= 16.0`): similar softness, no noise. Cost: four more shadow
+  taps per shaded fragment on every preset.
+- **Shadow blotches swimming over leaves.** Leaf cards sway in the vertex shader, but their shadow
+  caster did not, so each card was shadowed by its own offset copy. The leaf and conifer depth
+  materials now apply the same wind. No measurable cost.
+- **Salt-and-pepper leaf shading.** Leaf cards carry crown-space normals, but the double-sided
+  material flipped them on back faces, lighting about half the cards from inside the crown. The
+  flip is undone, and inner leaves receive less sky light (a cheap crown-depth term).
+- **Dark ball in every crown.** The core that hides the sky through gaps was a smooth, grey-tinted
+  sphere large enough to swallow the inner leaf cards. It is now about 20% smaller, coloured like
+  the crown's foliage and textured with the leaf clusters (triplanar: three extra texture reads,
+  on the core only).
+- **Distant trees thinning, sparkling and darkening.** The leaf texture's mip chain averaged alpha
+  below the cutoff (for a leaf-like test texture, the share of texels passing it fell from 0.20 at
+  full size to 0.06 at 8×8 and to zero below) and averaged black from transparent texels into the
+  leaf colour. `cutoutTexture` builds the chain by hand: alpha-weighted colour pushed into
+  transparent texels, and each level's alpha rescaled to keep full-size coverage (the real leaf
+  texture holds 0.34–0.36 from 256² down to 16²). Distant crowns use fewer, larger cards set slightly deeper,
+  so their leaf cover matches the detailed crowns. Startup cost only.
+- **Hard, crawling leaf edges.** High now renders the scene into a 4× multisampled target (no AO
+  there, so no depth texture is needed) and leaves use alpha to coverage; Low gets the same from the
+  antialiased canvas. Ultra keeps a single-sample target for AO and relies on its 2× pixel ratio.
+- **Cloud shimmer toward the horizon.** The deck is projected onto a flat ceiling, so cells shrink
+  without limit near the horizon and the finest octaves alias (and the sunward lighting term
+  amplifies them fivefold). The noise now measures its pixel footprint with screen derivatives and
+  fades each octave to its mean before it drops below about two pixels.
+- **Blocky wet-road reflections.** The smear's per-tap jitter was quantized to 3 cm road cells,
+  several pixels wide near the camera. The reflection target is now mipmapped and each smear tap
+  reads the level whose texels match the tap spacing, so taps overlap without jitter.
+- **Square snowflakes.** Points were hard-edged squares that grew into tiles in front of the lens;
+  they are round, soft-edged sprites capped at about 3% of the view height.
+
+Renderer assertions cover the noise-free shadow filter, leaf mip coverage and colour, swaying
+shadow casters, multisampling with and without AO, and the mipmapped reflection.
+
 ## HUD design review (2026-09-30)
 
 The redesigned HUD refreshes text and statistics at most once every 100 ms. Unchanged text and
@@ -123,7 +166,7 @@ The profiler restores the pause state and renderer statistics configuration afte
 Renderer tests cover world transforms, paint, detail selection, hysteresis, geometry reduction,
 nearby shadows, removal of a parked car from both detail levels without removing its neighbor,
 reflection clipping, sampler/state restoration, quality changes and actual wet WebGL draws
-(88 assertions when run from the simulator, including city lighting, sign proportions and
+(95 assertions when run from the simulator, including city lighting, sign proportions, artifact regressions and
 front/rear WebGL lettering).
 The `/tests` suite remains independent of Three.js and also passes (137 assertions: 99 simulation,
 18 HUD and 20 explorer), as do the 60 Python tests and offline fixture checks. The subsequent drive-experience changes add
