@@ -16,7 +16,8 @@ import { Hud } from "./ui/hud.js";
 import { Input } from "./ui/input.js";
 import { Panel } from "./ui/panel.js";
 import { Autopilot } from "./brain/brain.js";
-import { agentDefinitions } from "./brain/registry.js";
+import { agentDefinitions, agentAvailable, setAgentAvailability } from "./brain/registry.js";
+import { registerLlmAgents, checkLlmEndpoints, llmSummary } from "./brain/llm.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
@@ -59,6 +60,8 @@ export async function boot() {
   const mapQuery = challenge?.map || params.get("bbox") || params.get("map") || replay?.bbox?.join(",") || "";
   const query = mapQuery ? `?bbox=${encodeURIComponent(mapQuery)}` : "";
   const status = await api(`/api/status${query}`);
+  setAgentAvailability("jev", status.configured, status.configured ? "" : "no API key");
+  registerLlmAgents(status.llm);   // your own models from data/llm-endpoints.json: agents llm:<name>
   const options = worldOptions(params, status.npcs);
   const pack = await api(`/api/map${query}`);
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
@@ -112,7 +115,7 @@ export async function boot() {
     ({ world, fleet, autopilot } = setupChallenge(map, challenge, callbacks));
     autopilot.setEnabled(false);
   } else if (replay) {
-    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: status.configured ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
+    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: agentAvailable(replay.brain) ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
   } else {
     // fewer people out on foot late in the evening and at night
     const pedestrians = hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined;
@@ -257,6 +260,8 @@ export async function boot() {
   function selectBrain(name) {
     if (!autopilot.brains[name]) { hud.badge("Unknown agent. Choose a driver in Settings.", "safety", 1500); return; }
     if (name === "jev" && !status.configured) { hud.badge("Jev needs TYPESAFE_API_KEY in .env on the server", "safety", 2200); hud.setBrain(autopilot.brainName); return; }
+    const definition = agentDefinitions().find(agent => agent.id === name);
+    if (definition?.available === false) { hud.badge(`${definition.label}: ${definition.note || "unavailable"}`, "safety", 2200); hud.setBrain(autopilot.brainName); return; }
     if (name === autopilot.brainName) return;
     autopilot.setBrain(name);
     hud.setBrain(name);
@@ -408,7 +413,7 @@ export async function boot() {
     manualSignal = world.ego.signal && !autopilot.enabled ? { t: world.t, heading: world.ego.psi } : null;
     driveReport.lastUpdate = -Infinity; driveReport.update(drive);
   }
-  lab = new DriveLab({ city: { ...status.map, ...cityStyle }, configured: status.configured, demo: !!status.demo,
+  lab = new DriveLab({ city: { ...status.map, ...cityStyle }, configured: status.configured, demo: !!status.demo, llmNote: llmSummary(status),
     onPause: on => { if (on) { if (lab?.reviewing) lab.live(); pausedBeforeLab = world.paused; world.paused = true; input.keys.clear(); } else world.paused = pausedBeforeLab; },
     onScenic: async driver => {
       const { drives } = await api("/api/drives", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi } });
@@ -488,6 +493,7 @@ export async function boot() {
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
     startDrive(`Replay ${replay.scenario.id}`, world.route);
   }
+  if (status.llm?.endpoints?.length) checkLlmEndpoints().then(() => lab.refreshAgents(llmSummary(status))).catch(() => { /* status stays "configured" */ });
   window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, get drive() { return drive; }, finishDrive, setTime: setHour };
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();

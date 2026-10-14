@@ -109,7 +109,7 @@ export class Hud {
     if (this.el.speedWarning.hidden === speeding) this.el.speedWarning.hidden = !speeding;
     this.el.speedDisplay.classList.toggle("speeding", speeding);
     this.el.cluster.classList.toggle("speeding", speeding);
-    setText(this.el.mode, paused ? "PAUSED" : autopilot ? `${this.brain.toUpperCase()} PILOT` : "MANUAL");
+    setText(this.el.mode, paused ? "PAUSED" : autopilot ? `${this.brain.replace(/^llm:/, "").toUpperCase()} PILOT` : "MANUAL");
     setClass(this.el.mode, paused ? "paused" : autopilot ? "auto" : "");
     setText(this.el.speed, Math.round(Math.abs(ego.v) * 3.6));
     setText(this.el.limit, road?.limit ? Math.round(road.limit * 3.6) : "–");
@@ -180,7 +180,7 @@ export class Hud {
     motion.textContent = decision.motion === "stop" ? (decision.chosenId === "hard_brake" ? "Braking to stop" : "Holding still")
       : chosen ? `Driving · ${describe(chosen)}` : MOTIONS[decision.motion] || decision.motion;
     source.textContent = m.fallback ? `${m.source} · fallback` : m.source || "–";
-    source.className = `source-tag ${m.source === "rules_fallback" || m.fallback ? "fallback" : m.source === "jev" ? "live" : ""}`;
+    source.className = `source-tag ${m.source === "rules_fallback" || m.fallback ? "fallback" : m.source === "jev" || m.live_call ? "live" : ""}`;
     source.title = m.error || m.fallback || "";
     latency.textContent = m.source === "local" ? "local" : ms(m.latency_ms || 0);
     tokens.textContent = m.input_tokens ? num(m.input_tokens) : "–";

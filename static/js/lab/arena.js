@@ -2,12 +2,13 @@ import { api, $, h, usd } from "../common.js";
 import { MapData } from "../map/mapdata.js";
 import { CHALLENGES, CHALLENGE_VERSION } from "./challenges.js";
 import { evaluateChallenge } from "./evaluation.js";
-import { agentDefinitions, registerAgent } from "../brain/registry.js";
+import { agentDefinitions, registerAgent, setAgentAvailability, agentOptionLabel } from "../brain/registry.js";
+import { registerLlmAgents, checkLlmEndpoints, llmSummary } from "../brain/llm.js";
 import { readHistory } from "../sim/drive-score.js";
 import { EVALUATION_SCHEMA, EVALUATION_HISTORY_KEY, MAX_IMPORT_BYTES, validateEvaluation, readEvaluations,
   saveEvaluation, compareResult, incidentCount, summarizeResults } from "./history.js";
 
-let configured = false, running = false, stop = false, results = [], current = null, saved = [];
+let running = false, stop = false, results = [], current = null, saved = [];
 const agentLabel = id => agentDefinitions().find(a => a.id === id)?.label || id;
 const challengeLabel = id => CHALLENGES.find(c => c.id === id)?.title || id;
 const percent = n => `${Math.round(n * 100)}%`;
@@ -17,8 +18,8 @@ const visibleRun = () => $("#arena-history").value === "current" ? current : sav
 const baselineRun = () => $("#arena-baseline").value === "" ? null : saved[Number($("#arena-baseline").value)];
 function agents() {
   const selection = new Set([...$("#agents").querySelectorAll("input:checked")].map(i => i.value));
-  $("#agents").replaceChildren(...agentDefinitions().map(a => h("label", {}, h("input", { type: "checkbox", value: a.id,
-    checked: selection.size ? selection.has(a.id) : a.id === "rules" || a.id === "cautious", disabled: a.id === "jev" && !configured }), a.label)));
+  $("#agents").replaceChildren(...agentDefinitions().map(a => h("label", { title: a.llm ? `${a.llm.model} at ${a.llm.endpoint}` : a.description || null }, h("input", { type: "checkbox", value: a.id,
+    checked: (selection.size ? selection.has(a.id) : a.id === "rules" || a.id === "cautious") && a.available !== false, disabled: a.available === false || running }), agentOptionLabel(a))));
 }
 function historyControls() {
   const view = $("#arena-history").value, baseline = $("#arena-baseline").value;
@@ -101,7 +102,7 @@ function details(result) {
 }
 function busy(value) {
   for (const id of ["arena-history", "arena-baseline", "arena-baseline-agent", "arena-import", "arena-load", "arena-mode"]) $("#" + id).disabled = value;
-  $("#agents").querySelectorAll("input").forEach(i => { i.disabled = value || i.value === "jev" && !configured; });
+  $("#agents").querySelectorAll("input").forEach(i => { i.disabled = value || agentDefinitions().find(a => a.id === i.value)?.available === false; });
   if (!value) baselineAgents();
 }
 function persist(run) {
@@ -181,8 +182,12 @@ async function boot() {
   try { attempts = readHistory().filter(r => r.config?.challenge); } catch { /* Storage can be unavailable in private or embedded browsers. */ }
   $("#manual-attempts").replaceChildren(...(attempts.length ? attempts.map(r => h("p", {}, `${r.title} · ${r.driver} · ${r.status} · ${r.qualified ? `${r.score}/100` : "practice"}${r.branched ? " · replay branch" : ""}${r.modified ? " · modified challenge" : ""}`)) : [h("p", {}, "Complete a challenge in the simulator to see your drive here.")]));
   render();
-  const status = await api("/api/status"); configured = status.configured; agents();
-  $("#arena-status").textContent = "Ready · no model calls for Rules or the cautious starter. Jev evaluations use your server's API budget.";
+  const status = await api("/api/status");
+  setAgentAvailability("jev", status.configured, status.configured ? "" : "no API key");
+  registerLlmAgents(status.llm); agents();
+  $("#llm-status").textContent = llmSummary(status);
+  $("#arena-status").textContent = "Ready · no model calls for Rules or the cautious starter. Jev and LLM endpoint evaluations use your server's API budget.";
+  if (status.llm?.endpoints?.length) checkLlmEndpoints().then(() => { if (!running) agents(); $("#llm-status").textContent = llmSummary(status); }).catch(() => { /* keep "configured" */ });
 }
 window.__arena = { run, get results() { return results; } };
 boot().catch(error => { $("#arena-status").textContent = `Could not open arena: ${error.message}`; });

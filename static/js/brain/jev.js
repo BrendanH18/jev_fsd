@@ -4,7 +4,7 @@
 import { api } from "../common.js";
 
 export class JevBrain {
-  constructor() { this.name = "jev"; this.timeoutMs = 1500; }
+  constructor() { this.name = "jev"; this.timeoutMs = 1500; this.questionDriven = true; }
 
   async decide(snap, eligible, request, signal) {
     const started = performance.now();

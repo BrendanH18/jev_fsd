@@ -1,11 +1,11 @@
 import { $, h, appUrl } from "../common.js";
 import { CHALLENGES, challengeConfig } from "../lab/challenges.js";
 import { driveLink } from "../lab/share.js";
-import { agentDefinitions, registerAgent } from "../brain/registry.js";
+import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/registry.js";
 import { replayPosition } from "../lab/playback.js";
 
 export class DriveLab {
-  constructor({ city, demo, configured, onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception }) {
+  constructor({ city, demo, configured, llmNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception }) {
     Object.assign(this, { configured, onSeek, onBranch, onLive, onAgent });
     this.dialog = h("dialog", { class: "lab-dialog", "aria-label": "Drive lab" });
     this.dialog.addEventListener("close", () => onPause(false));
@@ -39,7 +39,7 @@ export class DriveLab {
           this.play = h("button", { class: "chip-button", onclick: () => this.togglePlayback() }, "Play replay"),
           h("button", { class: "chip-button", onclick: () => this.previousIncident() }, "Before incident"),
           h("button", { class: "chip-button", onclick: () => this.branch("manual") }, "Take over here"),
-          this.branchAgent = h("select", { "aria-label": "Branch driver" }, ...agentDefinitions().filter(a => a.id !== "jev" || configured).map(a => h("option", { value: a.id }, a.label))),
+          this.branchAgent = h("select", { "aria-label": "Branch driver" }),
           h("button", { class: "chip-button", onclick: () => this.branch(this.branchAgent.value) }, "Try this driver"),
           this.branchCandidate = h("select", { "aria-label": "Alternate manoeuvre" }),
           h("button", { class: "chip-button", onclick: () => this.branch(`candidate:${this.branchCandidate.value}`) }, "Try manoeuvre"),
@@ -47,11 +47,23 @@ export class DriveLab {
     document.body.append(this.replay);
     const settings = $("#settings");
     settings.append(h("h3", { class: "settings-section-heading" }, "Driving agents"),
-      h("label", { class: "wide" }, h("span", { class: "label" }, "Active agent"), this.agent = h("select", { "aria-label": "Active agent", onchange: () => onAgent(this.agent.value) }, ...agentDefinitions().map(a => h("option", { value: a.id, disabled: a.id === "jev" && !configured }, a.label)))),
+      h("label", { class: "wide" }, h("span", { class: "label" }, "Active agent"), this.agent = h("select", { "aria-label": "Active agent", onchange: () => onAgent(this.agent.value) })),
+      this.llmStatus = h("p", { class: "muted wide", role: "status" }, llmNote),
       h("label", { class: "wide" }, h("span", { class: "label" }, "Local agent module"), this.module = h("input", { type: "text", placeholder: "/js/agents/my-agent.js", "aria-label": "Local agent module" })),
       h("button", { class: "toggle wide", onclick: () => this.loadAgent() }, "Load agent"), this.agentStatus = h("p", { class: "muted wide", role: "status" }, "Trusted JavaScript modules run in this browser."));
     this.lastTick = -Infinity; this.playing = false; this.reviewing = false;
     this.replayElapsed = 0; this.replayAlpha = 0;
+    this.refreshAgents();
+  }
+  // Rebuild the driver pickers, e.g. after LLM endpoints report whether they are reachable.
+  refreshAgents(llmNote) {
+    if (llmNote !== undefined) this.llmStatus.textContent = llmNote;
+    const agents = agentDefinitions();
+    const active = this.agent.value, branch = this.branchAgent.value;
+    this.agent.replaceChildren(...agents.map(a => h("option", { value: a.id, disabled: a.available === false }, agentOptionLabel(a))));
+    this.branchAgent.replaceChildren(...agents.filter(a => a.available !== false).map(a => h("option", { value: a.id }, agentOptionLabel(a))));
+    if (active) this.agent.value = active;
+    if (branch && agents.some(a => a.id === branch && a.available !== false)) this.branchAgent.value = branch;
   }
   open(content) {
     this.dialog.replaceChildren(h("div", { class: "lab-dialog-top" }, h("span", { class: "brand" }, "JEV / DRIVE LAB"),
@@ -83,7 +95,7 @@ export class DriveLab {
       h("h1", { class: "challenge-title" }, "Can you beat the AI?"),
       h("p", { class: "lab-hero-copy" }, "Choose a short drive. Compare complete arrivals under the same conditions; a higher score alone does not mean a safer driver."),
       h("label", { class: "challenge-driver" }, "Drive with ", this.challengeDriver = h("select", { "aria-label": "Challenge driver" },
-        h("option", { value: "manual" }, "Me · manual"), ...agentDefinitions().filter(a => a.id !== "jev" || this.configured).map(a => h("option", { value: a.id }, a.label)))),
+        h("option", { value: "manual" }, "Me · manual"), ...agentDefinitions().filter(a => a.available !== false).map(a => h("option", { value: a.id }, agentOptionLabel(a))))),
       h("div", { class: "challenge-grid" }, CHALLENGES.map(c => h("button", { class: "challenge-card", onclick: () => location.assign(driveLink({ ...challengeConfig(c), drive: this.challengeDriver.value })) },
         h("div", { class: "challenge-card-top" }, h("span", { class: "challenge-icon" }, c.icon), h("span", { class: "label" }, c.difficulty)),
         h("h2", {}, c.title), h("p", {}, c.description), h("div", { class: "challenge-card-meta" }, `${c.map.replaceAll("_", " ")} · ${c.weather} · ${c.time}`), h("strong", {}, "Try challenge →")))),
@@ -97,7 +109,7 @@ export class DriveLab {
       if (url.origin !== location.origin || !url.pathname.endsWith(".js")) throw new Error("Use a trusted .js module served by this app.");
       const { default: definition } = await import(url.href);
       registerAgent(definition); this.onAgent(definition.id, definition);
-      for (const select of [this.agent, this.branchAgent]) select.append(h("option", { value: definition.id }, definition.label));
+      this.refreshAgents();
       this.agent.value = definition.id; this.agentStatus.textContent = `${definition.label} loaded. Set a destination and enable autopilot.`;
     } catch (error) { this.agentStatus.textContent = error.message; }
   }

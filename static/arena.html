@@ -12,7 +12,7 @@
     <h1>Bring your own driver.</h1>
     <p class="intro">Six fixed challenges. Shared physics, sensing and safety checks. Save a run, compare drivers and inspect the decisions around each incident.</p>
     <section class="arena-controls panel" aria-label="Evaluation controls">
-      <fieldset><legend>Agents to compare</legend><div id="agents"></div></fieldset>
+      <fieldset><legend>Agents to compare</legend><div id="agents"></div><p id="llm-status" class="llm-status"></p></fieldset>
       <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
       <button id="arena-run" class="toggle on">Run evaluation</button><button id="arena-export" class="toggle" disabled>Export results</button>
       <p id="arena-status" role="status">Loading the arena…</p>

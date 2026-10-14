@@ -1,6 +1,8 @@
 // The autopilot: executes the current maneuver every physics tick, fires a decision on a
 // schedule, and applies the brain's answer. One request in flight at a time; stale answers
-// (older epoch) are discarded; timeouts fall back to the rules brain for that tick. `now` is the
+// (older epoch) are discarded; timeouts fall back to the rules brain for that tick. A brain may set
+// `timeoutMs` (LLM endpoints use their configured timeout) and `questionDriven` (Jev and LLM
+// endpoints: when nothing needs asking, decide locally without a call). `now` is the
 // simulation clock in ms, so decision cadence follows sim time (pausing stops decisions and a
 // benchmark replays the same schedule).
 
@@ -16,6 +18,7 @@ import { createAgents, validAgentChoice } from "./registry.js";
 const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
 const TIMEOUT_MS = 1500;
+const SPEND_KEYS = ["model", "endpoint", "latency_ms", "input_tokens", "output_tokens", "cost_usd", "cost_known", "live_call"];
 
 export class Autopilot {
   constructor(world, { onDecision = () => {}, onEvent = () => {} } = {}) {
@@ -124,7 +127,7 @@ export class Autopilot {
       this.apply({ motion: "stop", candidateId: "hard_brake", meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" }, answers: { ...local } }, snap, candidates, request);
       return;
     }
-    if ((!Object.keys(questions).length && this.brainName === "jev") || this.brainName === "rules") {
+    if ((!Object.keys(questions).length && this.brain?.questionDriven) || this.brainName === "rules") {
       const r = this.brains.rules.decideSync(snap, eligible);
       if (this.brainName !== "rules") { r.meta.source = "local"; r.answers = { ...local }; } else r.answers = { ...local, motion: { type: "choice", choice: r.motion, probabilities: { [r.motion]: 1 }, confidence: 1 }, vector: { type: "choice", choice: r.candidateId, probabilities: { [r.candidateId]: 1 }, confidence: 1 } };
       this.apply(r, snap, candidates, request);
@@ -132,7 +135,8 @@ export class Autopilot {
     }
     const controller = new AbortController();
     this.inFlight = controller;
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timeoutMs = this.brain.timeoutMs > 0 ? this.brain.timeoutMs : TIMEOUT_MS;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const result = await Promise.race([
         this.brain.decide(snap, eligible, request, controller.signal),
@@ -140,7 +144,7 @@ export class Autopilot {
       ]);
       clearTimeout(timer);
       if (epoch !== this.epoch) return;
-      if (this.brainName !== "jev" && !validAgentChoice(result, eligible)) throw new Error("Agent returned a manoeuvre outside the eligible candidate set");
+      if (this.brainName !== "jev" && !validAgentChoice(result, eligible)) throw Object.assign(new Error("Agent returned a manoeuvre outside the eligible candidate set"), { meta: result?.meta, trace: result?.trace });
       result.meta ||= {};
       result.meta.source ||= this.brainName;
       for (const key of ["latency_ms", "input_tokens", "cost_usd"]) if (!Number.isFinite(result.meta[key]) || result.meta[key] < 0) result.meta[key] = 0;
@@ -156,8 +160,14 @@ export class Autopilot {
       clearTimeout(timer);
       if (epoch !== this.epoch) return;
       const r = this.brains.rules.decideSync(snap, eligible);
+      // A call that happened but returned an unusable answer still counts its tokens, cost and latency.
+      if (err.meta?.live_call) {
+        for (const key of SPEND_KEYS) if (err.meta[key] !== undefined) r.meta[key] = err.meta[key];
+        r.trace = err.trace;
+        this.totals.calls++;
+      }
       r.meta.source = "rules_fallback";
-      r.meta.error = err.name === "AbortError" ? `timeout after ${TIMEOUT_MS} ms` : err.message;
+      r.meta.error = err.name === "AbortError" ? `timeout after ${timeoutMs} ms` : err.message;
       r.answers = { ...local };
       this.world.violations.fallbacks++;
       this.onEvent({ type: "fallback", error: r.meta.error, status: err.status });
