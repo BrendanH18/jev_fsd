@@ -368,7 +368,7 @@ class EndpointTests(LlmTestCase):
         source = self.mock(lambda h, body: (301, b"", {"Location": target.url + "/models"}))
         reg = self.registry([{"name": "r", "base_url": source.url, "model": "x"}])
         out = reg.endpoints["r"].check()
-        self.assertEqual(out["status"], "unreachable")
+        self.assertEqual((out["status"], out["reachable"]), ("unreachable", False))
         self.assertIn("redirected", out["detail"])
         self.assertEqual(target.requests, [])
 

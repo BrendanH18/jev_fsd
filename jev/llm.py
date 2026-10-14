@@ -559,7 +559,7 @@ class LlmEndpoint:
                 if err.code in (401, 403):
                     out = {"name": name, "status": "key rejected", "reachable": True, "detail": "HTTP %d from /models" % err.code}
                 elif 300 <= err.code < 400:   # chat calls refuse redirects too, so this endpoint cannot work
-                    out = {"name": name, "status": "unreachable", "reachable": True, "detail": str(err.reason)[:200]}
+                    out = {"name": name, "status": "unreachable", "reachable": False, "detail": str(err.reason)[:200]}
                 else:  # the server answered; some servers just do not list models
                     out = {"name": name, "status": "ready", "reachable": True, "detail": "HTTP %d from /models" % err.code}
             except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as err:
