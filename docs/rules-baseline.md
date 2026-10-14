@@ -100,11 +100,17 @@ general.
 PORT=8331 uv run server.py
 ```
 
-Open `/bench?map=kitsilano`, or another preset such as `calgary`, and run the suite from the
-page or the console:
+Open `/bench?map=kitsilano` and run the 12-route suite from the page or the console, changing
+`weather` to `fog`, `rain` or `snow` for the other Kitsilano rows:
 
 ```js
 await window.__bench.run({ brain: "rules", count: 12, npcs: 40, seed: 1, mode: "lockstep", weather: "dry" })
+```
+
+The city smoke suites use two routes. Open another preset such as `/bench?map=calgary` and run:
+
+```js
+await window.__bench.run({ brain: "rules", count: 2, npcs: 40, seed: 1, mode: "lockstep", weather: "dry" })
 ```
 
 Headless runs pass the same call as the `pre_js` argument with a long timeout:
