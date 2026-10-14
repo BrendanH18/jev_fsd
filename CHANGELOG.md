@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- CI runs every check on each pull request: Python tests, all Node checks, Jev fixture drift,
+  offline Jev requests, and the `/tests`, renderer and arena suites in headless Chromium
+  (`scripts/test_browser_pages.py`). The Pages demo builds only after they pass.
+- Fixed the renderer assertions, which crashed after the cloud deck was added because the
+  render-loop test double had no sky.
+
 - Procedural, drifting cloud deck in the sky, lit from the sun's side with a silver rim near the
   sun. Coverage follows the weather (scattered when dry, overcast in rain and snow, hidden in fog);
   clouds take the sun's colour at dusk and the city's glow at night, and appear in reflections.

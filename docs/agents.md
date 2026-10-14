@@ -86,6 +86,6 @@ This is a decision log, not a saved 3D replay or a capture of custom-agent inter
 Run `node scripts/test_drive_lab.mjs` after changing an
 agent or scenario. For broader driving changes, also run the existing seeded city benchmark.
 Run `node scripts/test_arena_history.mjs` after changing history, comparisons or trace formats.
-These commands require Node 22 or newer. With Playwright installed and a running app, run
-`python3 scripts/test_arena_browser.py` for the complete arena workflow; use `--url` for a
+These commands require Node 22 or newer. With a running app, run
+`uv run --with playwright python scripts/test_arena_browser.py` for the complete arena workflow (CI runs it on every pull request); use `--url` for a
 static demo and `--chromium` for an existing browser executable.
