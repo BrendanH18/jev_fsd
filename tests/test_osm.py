@@ -72,6 +72,30 @@ class TagTests(unittest.TestCase):
         self.assertTrue(ring_edges)
         self.assertTrue(all(e["lanes"] == 1 and len(e["lane_offsets"]) == 1 for e in ring_edges))
 
+    def test_closed_roundabouts_sharing_a_node_stay_separate(self):
+        osm = OsmData()
+        lat0, lon0, radius = 44.6450, -63.5800, 20.0
+        m_lat, m_lon = 1 / 110574, 1 / (111320 * math.cos(math.radians(lat0)))
+        centres = [(-radius, 0.0), (radius, 0.0)]   # east point of the first is the west point of the second
+        ids = [[], []]
+        for r, (ox, oy) in enumerate(centres):
+            for k in range(16):
+                a = 2 * math.pi * k / 16 + (math.pi if r else 0.0)
+                node = 1 if k == 0 else 100 * (r + 1) + k
+                if node not in osm.nodes:
+                    osm.add_node(node, lat0 + (oy + radius * math.sin(a)) * m_lat, lon0 + (ox + radius * math.cos(a)) * m_lon)
+                ids[r].append(node)
+        ring = {"highway": "tertiary", "junction": "roundabout"}
+        osm.add_way(20, ids[0] + ids[0][:1], ring)
+        osm.add_way(21, ids[1] + ids[1][:1], ring)
+        proj = Projection.for_bbox((-63.5810, 44.6440, -63.5790, 44.6460))
+        graph = build_graph(osm, proj)
+        self.assertEqual(len(graph.roundabouts), 2)
+        for (ox, oy), rb in zip(sorted(centres), sorted(graph.roundabouts, key=lambda rb: rb["x"])):
+            cx, cy = proj.to_xy(lat0 + oy * m_lat, lon0 + ox * m_lon)
+            self.assertLess(math.hypot(rb["x"] - cx, rb["y"] - cy), 0.5)
+            self.assertAlmostEqual(rb["lane_r"], radius, delta=0.5)
+
     def test_raised_skywalks_are_not_ground_footprints(self):
         osm = OsmData()
         square = [(44.6450, -63.5800), (44.6450, -63.5795), (44.6455, -63.5795), (44.6455, -63.5800)]

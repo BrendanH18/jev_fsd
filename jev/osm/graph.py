@@ -396,9 +396,21 @@ def _roundabouts(graph: RoadGraph, osm: OsmData, proj: Projection) -> None:
                     parent[max(a, b)] = min(a, b)
                 else:
                     owner[v] = way_id
-    rings: Dict[int, List[int]] = {}
+    groups: Dict[int, List[int]] = {}
     for way_id in sorted(by_way):
-        rings.setdefault(find(way_id), []).append(way_id)
+        groups.setdefault(find(way_id), []).append(way_id)
+    # A ring meets two ring edges at every vertex. Two closed roundabouts sharing a node branch
+    # there; keep such ways as separate rings instead of fitting one false circle through both.
+    rings: Dict[int, List[int]] = {}
+    for root, way_ids in groups.items():
+        ends: Dict[str, int] = {}
+        for eid in (eid for w in way_ids for eid in by_way[w]):
+            for v in (graph.edges[eid]["from"], graph.edges[eid]["to"]):
+                ends[v] = ends.get(v, 0) + 1
+        if len(way_ids) > 1 and max(ends.values()) > 2:
+            rings.update((w, [w]) for w in way_ids)
+        else:
+            rings[root] = way_ids
     graph.roundabouts = []
     ways = {w["id"]: w for w in osm.ways}
     for k, (_first, way_ids) in enumerate(sorted(rings.items())):
