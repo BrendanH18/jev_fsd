@@ -1,0 +1,440 @@
+"""LLM endpoint drivers (jev/llm.py) against a mock OpenAI-compatible server. No network, no real key."""
+
+import http.client
+import json
+import tempfile
+import threading
+import time
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from unittest.mock import patch
+
+import helpers  # noqa: F401  (puts the project root on sys.path)
+
+import server
+from jev import llm, security
+from jev.client import JevError, SpendGuard
+from jev.config import Settings
+
+SECRET = "sk-test-SECRET-do-not-leak-4242"
+EXPECT = {"motion": ["drive", "stop"], "candidate": ["keep_lane_target", "stop_at_line", "hard_brake"]}
+MESSAGES = [{"role": "system", "content": "You drive."}, {"role": "user", "content": "{\"answer\": {}}"}]
+
+
+def completion(content, model="mock-model", prompt_tokens=1200, completion_tokens=12):
+    return {"id": "chatcmpl-1", "object": "chat.completion", "model": model,
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}}
+
+
+class MockLLM:
+    """A tiny OpenAI-compatible server. `reply(handler, body)` returns (status, payload, headers)."""
+
+    def __init__(self, reply=None):
+        self.requests = []
+        self.reply = reply or (lambda h, body: (200, completion('{"motion": "drive", "candidate": "keep_lane_target"}'), {}))
+        mock = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+            def _answer(self, body):
+                mock.requests.append({"method": self.command, "path": self.path, "headers": dict(self.headers), "body": body})
+                status, payload, headers = mock.reply(self, body)
+                data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+                self.send_response(status)
+                for k, v in headers.items():
+                    self.send_header(k, v)
+                self.send_header("Content-Length", str(len(data)))
+                try:
+                    self.end_headers()
+                    self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass   # the client gave up (the timeout test)
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                self._answer(json.loads(self.rfile.read(length) or b"{}"))
+
+            def do_GET(self):
+                self._answer(None)
+
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+        self.thread.start()
+
+    @property
+    def url(self):
+        return "http://127.0.0.1:%d/v1" % self.httpd.server_port
+
+    def close(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+class LlmTestCase(unittest.TestCase):
+    def mock(self, reply=None):
+        m = MockLLM(reply)
+        self.addCleanup(m.close)
+        return m
+
+    def registry(self, endpoints, environ=None, budget=10.0, rpm=100):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / "llm.json").write_text(json.dumps({"endpoints": endpoints}))
+        env = {"JEV_FSD_LLM_ENDPOINTS": str(tmp / "llm.json"), **(environ or {})}
+        settings = Settings(environ=env, env_file=tmp / ".env")
+        return llm.LlmRegistry(settings, SpendGuard(budget, rpm))
+
+    def decide(self, registry, name, expect=EXPECT, **extra):
+        return llm.llm_decide(registry, {"endpoint": name, "tick": 3, "epoch": 1, "messages": MESSAGES, "expect": expect, **extra})
+
+
+class ParseTests(unittest.TestCase):
+    def test_lenient_forms(self):
+        cases = [
+            '{"motion": "drive", "candidate": "keep_lane_target"}',
+            'Sure!\n```json\n{"Motion": "Drive", "candidate_id": "KEEP_LANE_TARGET"}\n```',
+            '<think>{"candidate": "hard_brake"} hmm</think>{"motion":"drive","manoeuvre":"keep_lane_target"}',
+            'I choose {"motion": "drive", "choice": "keep_lane_target", "reason": "green light"} because it is clear.',
+        ]
+        for text in cases:
+            with self.subTest(text=text):
+                answer, invalid = llm.parse_answer(text, EXPECT)
+                self.assertIsNone(invalid)
+                self.assertEqual((answer["motion"], answer["candidate"]), ("drive", "keep_lane_target"))
+
+    def test_invalid_replies_name_the_reason(self):
+        cases = {
+            "": "empty reply",
+            "drive, keep_lane_target": "not a JSON object",
+            '{"motion": "drive", "candidate": "teleport"}': "not an eligible manoeuvre",
+            '{"motion": "fly", "candidate": "keep_lane_target"}': "motion",
+            '{"candidate": "keep_lane_target"}': "no motion",
+            '{"motion": "stop"}': "no candidate",
+            '{"motion": "drive", "candidate": ["keep_lane_target"]}': "not an eligible manoeuvre",
+        }
+        for text, reason in cases.items():
+            with self.subTest(text=text):
+                answer, invalid = llm.parse_answer(text, EXPECT)
+                self.assertIsNone(answer)
+                self.assertIn(reason, invalid)
+
+    def test_only_asked_fields_are_required_and_bad_routes_are_ignored(self):
+        answer, invalid = llm.parse_answer('{"motion": "stop", "route": "nowhere"}', {"motion": ["drive", "stop"], "route": ["r1", "r2"]})
+        self.assertIsNone(invalid)
+        self.assertEqual(answer, {"motion": "stop"})
+        answer, _ = llm.parse_answer('{"candidate": "a", "route": "R2"}', {"candidate": ["a"], "route": ["r1", "R2"]})
+        self.assertEqual(answer, {"candidate": "a", "route": "R2"})
+
+    def test_structured_output_schema_lists_the_offered_ids(self):
+        fmt = llm.response_format_for("json_schema", EXPECT)
+        schema = fmt["json_schema"]["schema"]
+        self.assertEqual(schema["properties"]["candidate"]["enum"], EXPECT["candidate"])
+        self.assertEqual(schema["required"], ["motion", "candidate"])
+        self.assertEqual(llm.response_format_for("json_object", EXPECT), {"type": "json_object"})
+        self.assertIsNone(llm.response_format_for("none", EXPECT))
+
+
+class ConfigTests(LlmTestCase):
+    def test_file_and_environment_endpoints(self):
+        reg = self.registry([
+            {"name": "cloud", "base_url": "https://api.example.com/v1/", "model": "m1", "api_key_env": "CLOUD_KEY",
+             "price_per_mtok_input": 1, "price_per_mtok_output": 2},
+            {"name": "nokey", "base_url": "https://api.example.com/v1", "model": "m2", "api_key_env": "MISSING_KEY"},
+            {"name": "local", "base_url": "http://localhost:11434/v1", "model": "llama3.2"},
+            {"name": "leaky", "base_url": "https://x.example/v1", "model": "m", "api_key": SECRET},
+            {"name": "Bad Name", "base_url": "https://x.example/v1", "model": "m"},
+            {"name": "creds", "base_url": "https://user:%s@x.example/v1" % SECRET, "model": "m"},
+            {"name": "ftp", "base_url": "ftp://x.example", "model": "m"},
+            {"name": "cloud", "base_url": "https://dup.example/v1", "model": "m"},
+        ], environ={"CLOUD_KEY": SECRET, "JEV_FSD_LLM_BASE_URL": "http://127.0.0.1:1234/v1", "JEV_FSD_LLM_MODEL": "qwen"})
+        public = reg.public()
+        by_name = {e["name"]: e for e in public["endpoints"]}
+        self.assertEqual(list(by_name), ["cloud", "nokey", "local", "default"])
+        self.assertEqual(by_name["cloud"]["id"], "llm:cloud")
+        self.assertEqual(by_name["cloud"]["key"], "set")
+        self.assertEqual(by_name["cloud"]["endpoint"], "https://api.example.com/v1")
+        self.assertTrue(by_name["cloud"]["priced"])
+        self.assertEqual((by_name["nokey"]["key"], by_name["nokey"]["usable"], by_name["nokey"]["status"]), ("missing", False, "no key"))
+        self.assertEqual(by_name["local"]["key"], "not needed")
+        self.assertTrue(by_name["local"]["local"])
+        self.assertFalse(by_name["local"]["priced"])
+        self.assertEqual(by_name["default"]["model"], "qwen")
+        problems = " ".join(public["problems"])
+        for fragment in ("do not put keys", "name must be", "credentials", "http(s)", "defined twice"):
+            self.assertIn(fragment, problems)
+        self.assertNotIn(SECRET, json.dumps(public))
+
+    def test_missing_or_broken_file_is_not_fatal(self):
+        settings = Settings(environ={"JEV_FSD_LLM_ENDPOINTS": "/nonexistent/llm.json"}, env_file=Path("/nonexistent/.env"))
+        reg = llm.LlmRegistry(settings, SpendGuard())
+        self.assertEqual((reg.public()["endpoints"], reg.problems), ([], []))
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / "llm.json").write_text("{not json")
+        settings = Settings(environ={"JEV_FSD_LLM_ENDPOINTS": str(tmp / "llm.json")}, env_file=tmp / ".env")
+        self.assertIn("could not be read", llm.LlmRegistry(settings, SpendGuard()).problems[0])
+
+
+class EndpointTests(LlmTestCase):
+    def test_success_sends_schema_and_reports_tokens_and_cost(self):
+        mock = self.mock()
+        reg = self.registry([{"name": "a", "base_url": mock.url, "model": "mock-model", "api_key_env": "A_KEY",
+                              "price_per_mtok_input": 2.0, "price_per_mtok_output": 8.0}], environ={"A_KEY": SECRET})
+        out = self.decide(reg, "a")
+        self.assertEqual(out["answer"], {"motion": "drive", "candidate": "keep_lane_target"})
+        self.assertIsNone(out["invalid"])
+        meta = out["meta"]
+        self.assertEqual((meta["source"], meta["input_tokens"], meta["output_tokens"]), ("llm:a", 1200, 12))
+        self.assertAlmostEqual(meta["cost_usd"], (1200 * 2.0 + 12 * 8.0) / 1e6)
+        self.assertTrue(meta["cost_known"] and meta["live_call"])
+        sent = mock.requests[0]
+        self.assertEqual(sent["path"], "/v1/chat/completions")
+        self.assertEqual(sent["headers"]["Authorization"], "Bearer " + SECRET)
+        self.assertEqual(sent["body"]["model"], "mock-model")
+        self.assertEqual(sent["body"]["messages"], MESSAGES)
+        self.assertEqual(sent["body"]["response_format"]["json_schema"]["schema"]["properties"]["candidate"]["enum"], EXPECT["candidate"])
+        self.assertEqual(reg.guard.snapshot()["live_calls"], 1)
+        self.assertEqual(reg.guard.snapshot()["output_tokens"], 12)
+        self.assertNotIn(SECRET, json.dumps(out))
+
+    def test_local_endpoint_sends_no_authorization_and_unpriced_cost_is_unknown(self):
+        mock = self.mock()
+        reg = self.registry([{"name": "local", "base_url": mock.url, "model": "llama3.2", "response_format": "json_object"}])
+        out = self.decide(reg, "local")
+        self.assertNotIn("Authorization", mock.requests[0]["headers"])
+        self.assertEqual(mock.requests[0]["body"]["response_format"], {"type": "json_object"})
+        self.assertEqual(out["meta"]["cost_usd"], 0)
+        self.assertFalse(out["meta"]["cost_known"])
+
+    def test_malformed_model_output_is_an_invalid_answer_with_spend_recorded(self):
+        for content, reason in (("I would keep driving.", "not a JSON object"), ('{"motion": "drive", "candidate": "teleport"}', "teleport")):
+            with self.subTest(content=content):
+                mock = self.mock(lambda h, body, c=content: (200, completion(c), {}))
+                reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x"}])
+                out = self.decide(reg, "m")
+                self.assertIsNone(out["answer"])
+                self.assertIn(reason, out["invalid"])
+                self.assertEqual(out["meta"]["invalid"], out["invalid"])
+                self.assertEqual(out["meta"]["input_tokens"], 1200)
+                self.assertEqual(out["content"], content)
+                self.assertEqual(out["trace"]["response"]["choices"][0]["message"]["content"], content)
+
+    def test_non_json_and_malformed_completions_are_errors(self):
+        replies = {
+            "not JSON": lambda h, body: (200, b"<html>gateway</html>", {"Content-Type": "text/html"}),
+            "malformed completion": lambda h, body: (200, {"object": "chat.completion", "choices": []}, {}),
+        }
+        for reason, reply in replies.items():
+            with self.subTest(reason=reason):
+                reg = self.registry([{"name": "m", "base_url": self.mock(reply).url, "model": "x"}])
+                with self.assertRaises(llm.LlmError) as ctx:
+                    self.decide(reg, "m")
+                self.assertEqual(ctx.exception.status, 502)
+                self.assertIn(reason, str(ctx.exception))
+
+    def test_http_errors_map_to_statuses(self):
+        cases = [(429, 429, "rate limited"), (500, 502, "HTTP 500"), (503, 502, "HTTP 503"), (401, 401, "rejected the API key")]
+        for upstream, expected, text in cases:
+            with self.subTest(upstream=upstream):
+                mock = self.mock(lambda h, body, s=upstream: (s, {"error": {"message": "Incorrect API key provided: %s" % SECRET}}, {}))
+                reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "api_key_env": "K", "response_format": "none"}],
+                                    environ={"K": SECRET})
+                with self.assertRaises(llm.LlmError) as ctx:
+                    self.decide(reg, "m")
+                self.assertEqual(ctx.exception.status, expected)
+                self.assertIn(text, str(ctx.exception))
+                self.assertNotIn(SECRET, str(ctx.exception))
+                self.assertNotIn(SECRET, json.dumps(ctx.exception.body))
+                self.assertEqual(len(mock.requests), 1)   # no retries inside a decision deadline
+                self.assertNotIn(SECRET, json.dumps(reg.public()))
+
+    def test_timeout(self):
+        def slow(h, body):
+            time.sleep(1.6)
+            return 200, completion('{"motion": "drive", "candidate": "keep_lane_target"}'), {}
+        reg = self.registry([{"name": "slow", "base_url": self.mock(slow).url, "model": "x", "timeout_s": 1}])
+        started = time.monotonic()
+        with self.assertRaises(llm.LlmError) as ctx:
+            self.decide(reg, "slow")
+        self.assertEqual(ctx.exception.status, 504)
+        self.assertIn("timeout", str(ctx.exception))
+        self.assertLess(time.monotonic() - started, 1.5)
+
+    def test_missing_key_makes_no_call(self):
+        mock = self.mock()
+        reg = self.registry([{"name": "k", "base_url": mock.url, "model": "x", "api_key_env": "NOT_SET_KEY"}])
+        with self.assertRaises(llm.LlmError) as ctx:
+            self.decide(reg, "k")
+        self.assertEqual(ctx.exception.status, 401)
+        self.assertIn("NOT_SET_KEY", str(ctx.exception))
+        self.assertEqual(mock.requests, [])
+        self.assertEqual(reg.endpoints["k"].check()["status"], "no key")
+
+    def test_budget_cap_and_rate_limit_are_shared(self):
+        mock = self.mock()
+        # 1200 input tokens at $1000 per million: $1.20 per call against a $1 budget.
+        reg = self.registry([{"name": "a", "base_url": mock.url, "model": "x", "price_per_mtok_input": 1000},
+                             {"name": "b", "base_url": mock.url, "model": "y"}], budget=1.0)
+        self.decide(reg, "a")
+        for name in ("a", "b"):
+            with self.assertRaises(JevError) as ctx:
+                self.decide(reg, name)
+            self.assertEqual(ctx.exception.status, 402)
+        self.assertEqual(len(mock.requests), 1)
+        reg = self.registry([{"name": "a", "base_url": mock.url, "model": "x"}], rpm=2)
+        self.decide(reg, "a")
+        self.decide(reg, "a")
+        with self.assertRaises(JevError) as ctx:
+            self.decide(reg, "a")
+        self.assertEqual(ctx.exception.status, 429)
+
+    def test_multiple_endpoints_reach_their_own_servers(self):
+        one = self.mock(lambda h, body: (200, completion('{"motion":"drive","candidate":"keep_lane_target"}', model=body["model"]), {}))
+        two = self.mock(lambda h, body: (200, completion('{"motion":"stop","candidate":"stop_at_line"}', model=body["model"]), {}))
+        reg = self.registry([{"name": "one", "base_url": one.url, "model": "model-one", "api_key_env": "ONE"},
+                             {"name": "two", "base_url": two.url, "model": "model-two", "api_key_env": "TWO"}],
+                            environ={"ONE": "key-one", "TWO": "key-two"})
+        a, b = self.decide(reg, "one"), self.decide(reg, "two")
+        self.assertEqual((a["answer"]["candidate"], a["meta"]["model"]), ("keep_lane_target", "model-one"))
+        self.assertEqual((b["answer"]["motion"], b["meta"]["model"]), ("stop", "model-two"))
+        self.assertEqual(one.requests[0]["headers"]["Authorization"], "Bearer key-one")
+        self.assertEqual(two.requests[0]["headers"]["Authorization"], "Bearer key-two")
+        self.assertEqual((len(one.requests), len(two.requests)), (1, 1))
+        with self.assertRaises(llm.InvalidLlmRequest):
+            self.decide(reg, "three")
+
+    def test_structured_output_downgrades_once_when_unsupported(self):
+        def picky(h, body):
+            if "response_format" in body:
+                return 400, {"error": {"message": "response_format is not supported"}}, {}
+            return 200, completion('{"motion": "drive", "candidate": "keep_lane_target"}'), {}
+        mock = self.mock(picky)
+        reg = self.registry([{"name": "p", "base_url": mock.url, "model": "x"}])
+        out = self.decide(reg, "p")
+        self.assertEqual(out["meta"]["response_format"], "none")
+        self.assertEqual(out["answer"]["candidate"], "keep_lane_target")
+        self.decide(reg, "p")
+        self.assertEqual(["response_format" in r["body"] for r in mock.requests], [True, False, False])
+
+    def test_redirects_are_not_followed_with_the_key(self):
+        target = self.mock()
+        source = self.mock(lambda h, body: (307, b"", {"Location": target.url + "/chat/completions"}))
+        reg = self.registry([{"name": "r", "base_url": source.url, "model": "x", "api_key_env": "K", "response_format": "none"}],
+                            environ={"K": SECRET})
+        with self.assertRaises(llm.LlmError) as ctx:
+            self.decide(reg, "r")
+        self.assertIn("redirected", str(ctx.exception))
+        self.assertEqual(target.requests, [])
+
+    def test_check_reports_reachability_without_spend(self):
+        up = self.mock(lambda h, body: (200, {"data": [{"id": "x"}]}, {}))
+        down = MockLLM()
+        down_url = down.url
+        down.close()
+        reg = self.registry([{"name": "up", "base_url": up.url, "model": "x"}, {"name": "down", "base_url": down_url, "model": "x"}])
+        statuses = {s["name"]: s["status"] for s in reg.check_all()}
+        self.assertEqual(statuses, {"up": "ready", "down": "unreachable"})
+        self.assertEqual(up.requests[0]["path"], "/v1/models")
+        self.assertEqual(reg.guard.snapshot()["live_calls"], 0)
+
+    def test_request_validation(self):
+        reg = self.registry([{"name": "a", "base_url": "http://127.0.0.1:9/v1", "model": "x"}])
+        bad = [
+            {"messages": "hi", "expect": EXPECT},
+            {"messages": [{"role": "tool", "content": "x"}], "expect": EXPECT},
+            {"messages": [{"role": "user", "content": "x" * (llm.MAX_PROMPT_CHARS + 1)}], "expect": EXPECT},
+            {"messages": MESSAGES, "expect": {}},
+            {"messages": MESSAGES, "expect": {"motion": ["teleport"]}},
+            {"messages": MESSAGES, "expect": {"candidate": ["bad id with spaces"]}},
+            {"messages": MESSAGES, "expect": EXPECT, "tick": "3"},
+        ]
+        for body in bad:
+            with self.subTest(body=str(body)[:80]), self.assertRaises(llm.InvalidLlmRequest):
+                llm.llm_decide(reg, {"endpoint": "a", **body})
+
+
+class ServerRouteTests(LlmTestCase):
+    """The browser-facing routes: same security checks as Jev, and the key never leaves the server."""
+
+    def setUp(self):
+        self.upstream = self.mock(lambda h, body: (
+            (200, {"data": []}, {}) if body is None else
+            (200, completion('{"motion": "drive", "candidate": "keep_lane_target", "note": "%s"}' % SECRET), {})))
+        registry = self.registry([
+            {"name": "mock", "base_url": self.upstream.url, "model": "mock-model", "api_key_env": "MOCK_KEY"},
+            {"name": "broken", "base_url": self.mock(lambda h, body: (401, {"error": {"message": "bad key %s" % SECRET}}, {})).url,
+             "model": "m", "api_key_env": "MOCK_KEY", "response_format": "none"},
+        ], environ={"MOCK_KEY": SECRET})
+        self.enterContext(patch.object(server, "llm_registry", registry))
+
+        class QuietHandler(server.Handler):
+            def log_message(self, _fmt, *_args):
+                pass
+
+        self.httpd = server.LocalServer(("127.0.0.1", 0), QuietHandler)
+        QuietHandler.port = self.httpd.server_port
+        thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.01})
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+
+    def request(self, method, path, body=None, token=True, extra=None):
+        conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port, timeout=5)
+        headers = {"Host": "127.0.0.1:%d" % self.httpd.server_port, "Content-Type": "application/json"}
+        if token:
+            headers[security.TOKEN_HEADER] = server.SESSION_TOKEN
+        headers.update(extra or {})
+        try:
+            conn.request(method, path, body=json.dumps(body) if body is not None else None, headers=headers)
+            resp = conn.getresponse()
+            return resp.status, resp.read()
+        finally:
+            conn.close()
+
+    def decide_body(self, name="mock", **extra):
+        return {"endpoint": name, "tick": 1, "epoch": 0, "messages": MESSAGES, "expect": EXPECT, **extra}
+
+    def test_decide_route_and_the_key_never_reaches_the_browser(self):
+        responses = []
+        status, raw = self.request("POST", "/api/llm/decide", self.decide_body())
+        self.assertEqual(status, 200)
+        responses.append(raw)
+        self.assertEqual(json.loads(raw)["answer"]["candidate"], "keep_lane_target")
+        status, raw = self.request("POST", "/api/llm/decide", self.decide_body("broken"))
+        self.assertEqual(status, 401)
+        responses.append(raw)
+        status, raw = self.request("POST", "/api/llm/check", {})
+        self.assertEqual(status, 200)
+        responses.append(raw)
+        with patch.object(server, "load_map", return_value={"pack": {"edges": [], "stats": {}}, "bbox": (-123.17, 49.26, -123.15, 49.27), "error": None}):
+            status, raw = self.request("GET", "/api/status")
+        self.assertEqual(status, 200)
+        responses.append(raw)
+        self.assertEqual(json.loads(raw)["llm"]["endpoints"][0]["id"], "llm:mock")
+        for raw in responses:
+            self.assertNotIn(SECRET.encode(), raw)
+        self.assertEqual(self.upstream.requests[0]["headers"]["Authorization"], "Bearer " + SECRET)
+
+    def test_routes_need_the_session_token_and_same_origin(self):
+        self.assertEqual(self.request("POST", "/api/llm/decide", self.decide_body(), token=False)[0], 403)
+        self.assertEqual(self.request("POST", "/api/llm/check", {}, token=False)[0], 403)
+        self.assertEqual(self.request("POST", "/api/llm/decide", self.decide_body(), extra={"Origin": "https://evil.example"})[0], 403)
+        self.assertEqual(self.request("POST", "/api/llm/decide", self.decide_body(), extra={"Sec-Fetch-Site": "cross-site"})[0], 403)
+        self.assertEqual(self.request("GET", "/api/llm/decide")[0], 404)
+        self.assertEqual(self.upstream.requests, [])
+
+    def test_browser_cannot_choose_the_url_or_model(self):
+        status, raw = self.request("POST", "/api/llm/decide", self.decide_body(base_url="http://169.254.169.254/latest", model="other"))
+        self.assertEqual(status, 200)
+        self.assertEqual(len(self.upstream.requests), 1)
+        self.assertEqual(self.upstream.requests[0]["body"]["model"], "mock-model")
+        status, raw = self.request("POST", "/api/llm/decide", self.decide_body("http://169.254.169.254"))
+        self.assertEqual(status, 400)
+        self.assertIn(b"unknown LLM endpoint", raw)
+
+
+if __name__ == "__main__":
+    unittest.main()

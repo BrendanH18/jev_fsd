@@ -4,9 +4,9 @@
     uv run server.py        # or: python3 server.py
     open http://127.0.0.1:8322
 
-Serves the static app, the map pack, routing, and the Jev decision proxy. The TypeSafe API key
-stays on this server; every request is checked by jev/security.py so other websites cannot drive
-this server or spend your credits.
+Serves the static app, the map pack, routing, the Jev decision proxy and the LLM endpoint proxy
+(jev/llm.py). API keys and endpoint URLs stay on this server; every request is checked by
+jev/security.py so other websites cannot drive this server or spend your credits.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from jev import decide, security
+from jev import decide, llm, security
 from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
 from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
@@ -39,6 +39,7 @@ MAX_BODY_BYTES = 1024 * 1024
 
 settings = Settings()
 client = JevClient(settings)
+llm_registry = llm.LlmRegistry(settings, client.guard)   # shares Jev's budget and rate limit
 SESSION_TOKEN = security.new_token()
 _maps: dict = {}   # bbox key -> {"pack", "router", "error"}
 
@@ -84,6 +85,7 @@ def api_status(_body, query):
         "price_per_mtok_input": PRICE_PER_INPUT_TOKEN_USD * 1_000_000,
         "spend": client.guard.snapshot(),
         "npcs": settings.npcs,
+        "llm": llm_registry.public(),
         "map": {**map_identity(entry["bbox"]), "bbox": list(entry["bbox"]), "name": pack.get("name"), "synthetic": bool(pack.get("synthetic")),
                 "error": entry["error"], "stats": pack.get("stats", {})},
     }
@@ -133,6 +135,18 @@ def api_decide(body, _query):
         return decide.jev_decide(client, body)
     except decide.InvalidRequest as err:
         raise BadRequest(str(err))
+
+
+def api_llm_decide(body, _query):
+    try:
+        return llm.llm_decide(llm_registry, body)
+    except llm.InvalidLlmRequest as err:
+        raise BadRequest(str(err))
+
+
+def api_llm_check(body, _query):
+    """Probe every configured endpoint (GET {base_url}/models, no spend). POST so it needs the token."""
+    return {"endpoints": llm_registry.check_all(force=bool(body.get("force")))}
 
 
 def api_snapshot_save(body, _query):
@@ -202,6 +216,8 @@ ROUTES = {
     ("POST", "/api/drives"): api_drives,
     ("POST", "/api/route"): api_route,
     ("POST", "/api/decide"): api_decide,
+    ("POST", "/api/llm/decide"): api_llm_decide,
+    ("POST", "/api/llm/check"): api_llm_check,
     ("POST", "/api/snapshot/save"): api_snapshot_save,
     ("POST", "/api/bench/save"): api_bench_save,
     ("GET", "/api/bench/runs"): api_bench_runs,
@@ -224,7 +240,7 @@ class Handler(BaseHTTPRequestHandler):
     port = 8322
 
     def log_message(self, fmt, *args):
-        if os.environ.get("JEV_FSD_QUIET") or "/api/decide" in str(args[0]):
+        if os.environ.get("JEV_FSD_QUIET") or "/api/decide" in str(args[0]) or "/api/llm/decide" in str(args[0]):
             return
         log(fmt % args)
 
@@ -264,7 +280,7 @@ class Handler(BaseHTTPRequestHandler):
             except BadRequest as err:
                 self._send(400, {"error": str(err)})
             except JevError as err:
-                status = err.status if err.status in (401, 402, 403, 422, 429) else 502
+                status = err.status if err.status in (401, 402, 403, 422, 429, 504) else 502
                 self._send(status, {"error": str(err), "jev_status": err.status})
             except (KeyError, ValueError, TypeError) as err:
                 traceback.print_exc()
@@ -310,6 +326,10 @@ def main():
     print("\n  Jev FSD %s  ->  http://127.0.0.1:%d" % (VERSION, port))
     print("  model %s via %s . %s" % (client.model, client.backend, key_note))
     print("  spend guard $%.2f per run (JEV_FSD_BUDGET_USD) . map bbox %s" % (client.guard.budget_usd, ",".join(str(v) for v in settings.bbox)))
+    for e in llm_registry.public()["endpoints"]:
+        print("  llm:%s  %s at %s . key %s%s" % (e["name"], e["model"], e["endpoint"], e["key"], "" if e["priced"] else " . no price set"))
+    for problem in llm_registry.problems:
+        print("  llm config: %s" % problem)
     entry = load_map()
     print("  map: %d edges, %d signals, %d stops, %d buildings%s\n" % (
         len(entry["pack"]["edges"]), len(entry["pack"]["intersections"]), len(entry["pack"]["stops"]),
