@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Bring your own LLM: any OpenAI-compatible Chat Completions endpoint (OpenAI, OpenRouter, Groq,
+  vLLM, LM Studio, Ollama and others) can drive. Configure several in the gitignored
+  `data/llm-endpoints.json` (template: `data/llm-endpoints.example.json`) or one with
+  `JEV_FSD_LLM_*` in `.env`; each becomes a selectable driver `llm:<name>` in Settings, challenges,
+  replay branches, the arena and `/bench`, labelled ready, unreachable, key rejected or no key.
+  Keys and URLs stay on the server; the model picks among safety-checked candidates only and
+  falls back to Rules (with the reason in the HUD and arena timelines) on invalid output, timeouts,
+  HTTP errors or an exhausted budget. Calls share `JEV_FSD_BUDGET_USD` and `JEV_FSD_RPM`; optional
+  per-endpoint prices give costs, otherwise tokens are reported with an unknown cost. The prompt
+  lives in `static/js/brain/llm-prompt.js`; Inspect JSON shows the messages, raw reply and a curl.
+  No new dependencies.
+
 - Graphics artifact fixes. Sun shadows filter without screen-space noise, removing the crawling dot
   pattern inside tree crowns and other partial shadows. Leaf shadows sway with the leaves, leaf
   cards keep their crown shading on both faces, and crown interiors read as shaded foliage instead

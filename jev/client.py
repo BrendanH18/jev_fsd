@@ -99,13 +99,16 @@ class SpendGuard:
         self._times: deque = deque()
         self._lock = threading.Lock()
 
-    def check(self) -> None:
+    def check(self, rate: bool = True) -> None:
+        """Raise when the budget is spent or (with `rate`) the per-minute cap is reached."""
         with self._lock:
             if self.budget_usd > 0 and self.spent_usd >= self.budget_usd:
                 raise JevError(
                     "This server run has spent its $%.2f budget (%d live calls). Restart it with "
                     "JEV_FSD_BUDGET_USD=<amount> to allow more." % (self.budget_usd, self.live_calls),
                     status=402)
+            if not rate:
+                return
             now = time.monotonic()
             while self._times and self._times[0] < now - 60:
                 self._times.popleft()

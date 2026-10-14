@@ -290,6 +290,23 @@ class EndpointTests(LlmTestCase):
             self.decide(reg, "a")
         self.assertEqual(ctx.exception.status, 429)
 
+    def test_endpoint_rpm_replaces_the_shared_rate_limit_but_not_the_budget(self):
+        mock = self.mock()
+        reg = self.registry([{"name": "fast", "base_url": mock.url, "model": "x", "rpm": 0, "price_per_mtok_input": 100},
+                             {"name": "own", "base_url": mock.url, "model": "y", "rpm": 1}], budget=1.0, rpm=1)
+        for _ in range(5):   # 5 x 1200 tokens x $100/M = $0.60, under the $1 budget, over the shared rpm of 1
+            self.decide(reg, "fast")
+        self.decide(reg, "own")
+        with self.assertRaises(JevError) as ctx:
+            self.decide(reg, "own")
+        self.assertEqual(ctx.exception.status, 429)
+        self.assertEqual(reg.public()["endpoints"][0]["rpm"], 0)
+        for _ in range(4):   # $0.72, $0.84, $0.96, then $1.08: the next call is refused by the shared budget
+            self.decide(reg, "fast")
+        with self.assertRaises(JevError) as ctx:
+            self.decide(reg, "fast")
+        self.assertEqual(ctx.exception.status, 402)
+
     def test_multiple_endpoints_reach_their_own_servers(self):
         one = self.mock(lambda h, body: (200, completion('{"motion":"drive","candidate":"keep_lane_target"}', model=body["model"]), {}))
         two = self.mock(lambda h, body: (200, completion('{"motion":"stop","candidate":"stop_at_line"}', model=body["model"]), {}))

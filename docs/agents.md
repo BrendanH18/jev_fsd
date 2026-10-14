@@ -1,7 +1,7 @@
 # Bring your own driving agent
 
-Open `/arena` to evaluate Rules, Jev (when configured), the free cautious starter, or your own
-agent on six fixed challenges. The public demo uses `arena.html` and supports browser agents.
+Open `/arena` to evaluate Rules, Jev (when configured), the free cautious starter, your own
+LLM endpoints, or your own agent on six fixed challenges. The public demo uses `arena.html` and supports browser agents.
 Select **Realtime** when comparing model latency or manual attempts; **Lockstep** waits for a
 decision and measures the resulting choices. Changing clocks changes the experiment.
 
@@ -37,12 +37,134 @@ timeout is 1.5 seconds even if an agent ignores the abort signal; stale results 
 The emergency brake and safety filtering remain shared. An agent can still choose a poor
 eligible manoeuvre, and the simulator still audits collisions and violations.
 
-For a remote model, implement `decide` using `request.state` and `request.questions`, with
-the supplied abort signal. Keep provider keys behind a server endpoint, as `JevBrain` does;
-GitHub Pages has no private server or secret store. Return measured latency, token counts and
-cost in `meta`; set `live_call: true` for a remote request. The adapter contract does not provide
-a server proxy for arbitrary providers. An agent factory should return a fresh instance for
+For a remote model, the easiest route is an [LLM endpoint](#llm-endpoints-test-your-own-model):
+no code, and the local server keeps the key. To write your own adapter instead, implement
+`decide` using `request.state` and `request.questions`, with the supplied abort signal. Keep
+provider keys behind a server endpoint, as `JevBrain` and `LlmBrain` do; GitHub Pages has no
+private server or secret store. Return measured latency, token counts and cost in `meta`; set
+`live_call: true` for a remote request. An agent factory should return a fresh instance for
 each run. Stateful agent internals are not rewound by the simulator's replay recorder.
+
+## LLM endpoints: test your own model
+
+Any server that speaks OpenAI-compatible Chat Completions (`POST {base_url}/chat/completions`)
+can drive: OpenAI, OpenRouter, Together, Groq, vLLM, LM Studio, Ollama, Anthropic's
+OpenAI-compatible endpoint and others. Each configured endpoint becomes its own driver,
+`llm:<name>`, in **Settings → Active agent**, the challenge picker, replay branches, the
+[arena](http://127.0.0.1:8322/arena) and the [`/bench`](http://127.0.0.1:8322/bench) brain list,
+so several models can be compared side by side under identical conditions.
+
+Copy the template and keep the entries you want:
+
+```sh
+cp data/llm-endpoints.example.json data/llm-endpoints.json   # gitignored
+```
+
+Keys never go in that file. `api_key_env` names a variable in `.env` (or the environment), and
+the server refuses an entry that contains an `api_key` field. Restart the server after editing
+either file; the startup banner lists each endpoint and any configuration problems.
+
+**OpenAI**
+
+```json
+{"endpoints": [
+  {"name": "gpt-4o-mini", "label": "GPT-4o mini", "base_url": "https://api.openai.com/v1",
+   "model": "gpt-4o-mini", "api_key_env": "OPENAI_API_KEY",
+   "price_per_mtok_input": 0.15, "price_per_mtok_output": 0.60}
+]}
+```
+
+Then add `OPENAI_API_KEY=sk-...` to `.env`. Reasoning models that reject `max_tokens` or
+`temperature` can drop them and pass their own options:
+`"max_tokens": null, "temperature": null, "extra_body": {"max_completion_tokens": 600, "reasoning_effort": "low"}`.
+
+**OpenRouter**
+
+```json
+{"name": "llama-70b", "base_url": "https://openrouter.ai/api/v1",
+ "model": "meta-llama/llama-3.3-70b-instruct", "api_key_env": "OPENROUTER_API_KEY",
+ "response_format": "json_object"}
+```
+
+**Ollama** (`ollama pull llama3.2` first; no key)
+
+```json
+{"name": "ollama", "base_url": "http://localhost:11434/v1", "model": "llama3.2", "timeout_s": 20, "rpm": 0}
+```
+
+**LM Studio** (start the local server in LM Studio's Developer tab; no key)
+
+```json
+{"name": "lmstudio", "base_url": "http://localhost:1234/v1", "model": "qwen2.5-7b-instruct", "timeout_s": 20, "rpm": 0}
+```
+
+For a single endpoint you can skip the file and set `JEV_FSD_LLM_BASE_URL`,
+`JEV_FSD_LLM_MODEL` and, if needed, `JEV_FSD_LLM_API_KEY` in `.env`; it appears as
+`llm:default` (rename it with `JEV_FSD_LLM_NAME`). See `.env.example` for the price and timeout
+variables. `JEV_FSD_LLM_ENDPOINTS` points at a different config file.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `name` | required | Driver id `llm:<name>`; lowercase letters, digits, `-`, `_` |
+| `base_url`, `model` | required | The API root (up to `/v1`) and the model name it expects |
+| `label` | `name` | Name shown in pickers and results |
+| `api_key_env` | none | Variable holding the key; omit for local servers that need none |
+| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens; without them cost is reported as unknown ($0) |
+| `timeout_s` | `10` | Server and browser deadline for one decision (1–60) |
+| `response_format` | `json_schema` | `json_schema`, `json_object` or `none` |
+| `max_tokens`, `temperature` | `400`, `0` | Sent when not `null` |
+| `rpm` | shared | This endpoint's own calls-per-minute cap instead of the shared `JEV_FSD_RPM`; `0` = none |
+| `extra_body` | `{}` | Extra request fields, e.g. `reasoning_effort`; cannot replace model or messages |
+
+**Status.** Pickers label each endpoint: unlabelled when the server can reach it, or
+*unreachable*, *key rejected* or *no key* (set the named variable). The server checks with
+`GET {base_url}/models`, which costs nothing. An endpoint without its key stays listed but
+cannot be selected. The public browser demo has no server, so LLM drivers are not offered there.
+
+**What the model sees.** The prompt lives in one place, `static/js/brain/llm-prompt.js`; edit
+it and reload the page. The system message explains the input and says *when* each kind of
+manoeuvre is correct. The user message is the same decision state Jev receives, as compact JSON:
+the driving style, the plain-language situation rules, observed speeds, gaps, signals, traffic
+and pedestrians, the eligible candidates with their 3-second predictions (`end_speed`,
+`vs_target`, `progress_m`, comfort, clearance, `outcome`), the definitions of `drive` and `stop`
+when that question is asked, and the ids it may answer with. Computed targets such as
+`car.target_speed` and each candidate's `vs_target` are handed over, so the model never needs
+arithmetic. **Inspect JSON** shows the exact messages under *Questions*, the raw reply under
+*Answers*, and **Copy as curl** reproduces the request with `$YOUR_KEY_VARIABLE`.
+
+**What it must answer.** One JSON object, for example
+`{"motion": "drive", "candidate": "keep_lane_target"}`. When the endpoint supports it, the
+server requests structured output whose schema enumerates exactly the offered ids; an endpoint
+that rejects `response_format` is retried once without it and then called in plain mode.
+Parsing is lenient about form (code fences, prose around the JSON, `<think>` blocks, key
+spelling, case) and strict about content: the motion and candidate must be among the offered
+values. The browser then re-checks the choice with `validAgentChoice`.
+
+**Fallbacks.** The model only ever chooses among candidates that already passed the shared
+safety filter; the controller and emergency brake still run underneath it. When the reply is
+not usable, the call times out, the endpoint returns an HTTP error (429, 5xx, 401), the key is
+missing or the budget is spent, Rules makes that decision instead, exactly as for Jev. The HUD
+shows an amber `rules_fallback` tag with the reason, the fallback counter increases, and arena
+timelines record a *fallback* event with the reason. Tokens and cost of a call whose reply was
+unusable still count. Decisions with nothing to ask (one eligible manoeuvre and no stop
+question) are made locally without a call.
+
+**Cost and limits.** Every LLM call shares Jev's per-run budget (`JEV_FSD_BUDGET_USD`) and rate
+limit (`JEV_FSD_RPM`). With prices set, the HUD, bench and arena report cost from the returned
+token usage; without prices they report tokens and $0, so the budget cannot stop that endpoint
+and only the rate limit applies. A lockstep run makes several calls per simulated second, far
+faster than real time, so a fast model can reach the shared 240-per-minute cap within a
+minute; every call after that falls back with *Local rate limit* as the reason. Raise
+`JEV_FSD_RPM`, or give the endpoint its own `rpm` (`0` for an unlimited local server; the
+budget still applies). Use **Lockstep** to compare decision quality: the simulation
+waits for each answer. **Realtime** includes latency, so a slow model drives on its previous
+choice for longer. The decision deadline is the endpoint's `timeout_s`, not Jev's 1.5 s.
+
+**Security.** The browser sends only the endpoint *name*, the prompt and the allowed ids; the
+URL, model and key come from server configuration, so a page cannot redirect calls elsewhere.
+The routes use the same host, origin, fetch-metadata and session-token checks as Jev. Keys never
+appear in responses, traces or error messages, and redirects are refused rather than forwarding
+the key. Prompts go to whichever provider you configure.
 
 Evaluation exports include every result, per-challenge version, map-pack version, seed, weather,
 time, vehicle, decision clock, time limit, simulation version and scoring version. A pass
@@ -84,7 +206,8 @@ Traces retain at most 600 decisions and 1,000 events per attempt; truncation is 
 This is a decision log, not a saved 3D replay or a capture of custom-agent internals.
 
 Run `node scripts/test_drive_lab.mjs` after changing an
-agent or scenario. For broader driving changes, also run the existing seeded city benchmark.
+agent or scenario, and `node scripts/test_llm_agent.mjs` plus `uv run python -m unittest
+tests.test_llm` after changing the LLM prompt, adapter or server proxy. For broader driving changes, also run the existing seeded city benchmark.
 Run `node scripts/test_arena_history.mjs` after changing history, comparisons or trace formats.
 These commands require Node 22 or newer. With a running app, run
 `uv run --with playwright python scripts/test_arena_browser.py` for the complete arena workflow (CI runs it on every pull request); use `--url` for a

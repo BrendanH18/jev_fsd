@@ -96,6 +96,13 @@ under the same physics, sensing and safety checks as the built-in drivers. The
 latency and cost. It saves evaluations and lets you diff a run against a previous baseline. See the
 [agent guide](docs/agents.md) for a starter template.
 
+Got a model of your own? Point the local server at any OpenAI-compatible endpoint (OpenAI,
+OpenRouter, Groq, vLLM, LM Studio, Ollama on your laptop…) in `data/llm-endpoints.json`, and each
+one shows up as a driver called `llm:<name>`, ready to race the others in the arena and on
+`/bench`. It picks among the same safety-checked manoeuvres, the keys stay on your machine, and
+the prompt lives in one file you can tweak. The [agent guide](docs/agents.md#llm-endpoints-test-your-own-model)
+has copy-paste examples.
+
 ## Quick start
 
 The fastest way to try it is the [browser demo](https://brendanh18.github.io/jev_fsd/). To run it
@@ -177,6 +184,7 @@ node scripts/test_drive_lab.mjs                 # drive lab and replay features
 node scripts/test_arena_history.mjs             # saved evaluations and comparisons
 node scripts/test_cinematic_photo.mjs           # cinematic camera and photo mode
 node scripts/test_drive_score.mjs               # coaching score
+node scripts/test_llm_agent.mjs                 # LLM endpoint drivers (prompt, parsing, fallback)
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

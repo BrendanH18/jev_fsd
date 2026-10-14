@@ -166,8 +166,10 @@ class EndpointConfig:
             max_tokens = None if max_tokens is None else int(max_tokens)
             temperature = raw.get("temperature", 0)
             temperature = None if temperature is None else float(temperature)
+            rpm = raw.get("rpm")
+            rpm = None if rpm is None else max(0, int(rpm))
         except (TypeError, ValueError):
-            problems.append("%s: timeout_s, max_tokens and temperature must be numbers (or null)" % where)
+            problems.append("%s: timeout_s, max_tokens, temperature and rpm must be numbers (or null)" % where)
             return
         self.name = name
         self.label = str(raw.get("label") or name)[:60]
@@ -180,6 +182,9 @@ class EndpointConfig:
         self.timeout_s = min(60.0, max(1.0, timeout_s))
         self.max_tokens = max_tokens if max_tokens is None else max(1, max_tokens)
         self.temperature = temperature
+        # None: share JEV_FSD_RPM with Jev and the other endpoints. A number: this endpoint's own
+        # per-minute cap instead (0 = none, for fast local servers in lockstep benchmarks).
+        self.rpm = rpm
         self.response_format = response_format
         self.extra_body = extra
         self.ok = True
@@ -406,6 +411,8 @@ class LlmEndpoint:
         self.spent_usd = 0.0
         self.last_error: Optional[str] = None
         self._check: Optional[Tuple[float, dict]] = None
+        # Budget-free guard used only for this endpoint's own rate limit (see EndpointConfig.rpm).
+        self._rate = SpendGuard(budget_usd=0, rpm=config.rpm) if config.rpm is not None else None
 
     @property
     def api_key(self) -> Optional[str]:
@@ -429,7 +436,7 @@ class LlmEndpoint:
             "api_key_env": c.api_key_env, "key": self.key_state, "usable": self.key_state != "missing",
             "status": "no key" if self.key_state == "missing" else "configured",
             "priced": c.priced, "price_per_mtok_input": c.price_in, "price_per_mtok_output": c.price_out,
-            "timeout_s": c.timeout_s, "response_format": self._format, **stats,
+            "timeout_s": c.timeout_s, "rpm": c.rpm, "response_format": self._format, **stats,
         }
 
     def _fail(self, message: str, status: int, body: Any = None) -> LlmError:
@@ -463,7 +470,9 @@ class LlmEndpoint:
         if self.key_state == "missing":
             raise self._fail("no API key. Set %s in .env (or the environment) and restart the server."
                              % self.config.api_key_env, 401)
-        self.guard.check()
+        self.guard.check(rate=self._rate is None)   # the budget is always shared
+        if self._rate is not None:
+            self._rate.check()
         fmt = self._format
         downgraded = False
         while True:
