@@ -298,13 +298,16 @@ brakes, gaps, tokens, cost and latency. This pass criterion is separate from the
 weighted score.
 
 Recorded validation includes a 500 m Rules drive through Victoria in rain with no audited
-collision, red-light, stop or yield violations and a score of 97. The historical 12-route
-realism suite passed 10/12 routes in both dry weather and fog. These are individual recorded
-checks, not guarantees for every city or seed. Live Jev behaviour with the revised prompt has
+collision, red-light, stop or yield violations and a score of 97. The
+[2026-10-14 Rules baseline](rules-baseline.md) is the current seeded record. In WebKit, the
+12-route Kitsilano suite passed 11/12 dry, 10/12 fog, 11/12 rain and 10/12 snow, and every route
+arrived. Five of seven two-route city smoke suites failed one route on street-furniture contact.
+Results vary between JavaScript engines, so compare runs from the same browser. These are
+individual recorded checks, not guarantees for every city or seed. Live Jev behaviour with the revised prompt has
 not been validated; offline fixtures establish request consistency, not model judgment.
 
-Detailed results: [drive experience](drive-experience.md), [realism validation](realism-validation.md)
-and [rendering validation](render-performance.md). Release history is in [CHANGELOG.md](../CHANGELOG.md).
+Detailed results: [Rules benchmark baseline](rules-baseline.md), [drive experience](drive-experience.md),
+[realism validation](realism-validation.md) and [rendering validation](render-performance.md). Release history is in [CHANGELOG.md](../CHANGELOG.md).
 The [world expansion validation](world-validation.md) records the new maps, physical building
 collisions, darkness, startup reliability and final seeded comparisons.
 

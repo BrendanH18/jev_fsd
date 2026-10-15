@@ -204,6 +204,7 @@ are especially appreciated.
 - [Writing your own agent](docs/agents.md)
 - [Scoring formula and driving details](docs/drive-experience.md)
 - [Maps, attribution and custom extracts](docs/maps.md)
+- [Rules benchmark baseline](docs/rules-baseline.md)
 - [Rendering measurements](docs/render-performance.md)
 - [Browser demo build and deployment](docs/browser-demo.md)
 - [Full project reference](docs/project-reference.md)

@@ -1,0 +1,3505 @@
+{
+  "date": "2026-10-14",
+  "commit": "62fe05046f18c47562b67b2d9d6d7df9f81e205a",
+  "previous_commit": "bbc9012331dfb175a555c76c50487467ce93fb40",
+  "config": {
+    "brain": "rules",
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "clock": "bench default (no time of day; daylight sensing)",
+    "kitsilano_routes": 12,
+    "smoke_routes": 2
+  },
+  "engine": "WebKit (WKWebView through scripts/shot.swift), macOS 27.0.1",
+  "baseline_run": "data/runs/20261014-091959-rules.json",
+  "notes": [
+    "Results are the /bench page's own output, saved through /api/bench/save. Per-route records keep the fields below; repeated 'deadlock' events are dropped and counted in deadlock_events_in_first_50.",
+    "Night is not covered: /bench has no time-of-day option and the bench world keeps visibility.night = 0.",
+    "previous.* summaries are copied from world-expansion-rules.json (final and new_maps)."
+  ],
+  "previous": {
+    "kitsilano/dry": {
+      "scenarios": 12,
+      "pass_rate": 0.833,
+      "arrived_rate": 1,
+      "km": 10.53,
+      "collisions": 2,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0.2,
+      "safety_brakes": 10,
+      "deadlocks": 0,
+      "fallbacks": 0,
+      "violations_per_km": 0.19,
+      "avg_kmh": 22.55,
+      "min_gap_m": 2.1,
+      "min_ttc_s": 1.1,
+      "hard_brakes": 0,
+      "rms_jerk": 4.05,
+      "max_lat_accel": 5.09,
+      "lane_rms_m": 0.14,
+      "speeding_s": 0,
+      "decisions": 5600,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "kitsilano/fog": {
+      "scenarios": 12,
+      "pass_rate": 0.833,
+      "arrived_rate": 1,
+      "km": 10.53,
+      "collisions": 1,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 1.4,
+      "safety_brakes": 4,
+      "deadlocks": 12,
+      "fallbacks": 0,
+      "violations_per_km": 0.09,
+      "avg_kmh": 17.06,
+      "min_gap_m": 2.3,
+      "min_ttc_s": 1.1,
+      "hard_brakes": 0,
+      "rms_jerk": 4.21,
+      "max_lat_accel": 4.73,
+      "lane_rms_m": 0.12,
+      "speeding_s": 0,
+      "decisions": 6975,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "mount_pleasant/dry": {
+      "scenarios": 2,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 1.34,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0,
+      "safety_brakes": 1,
+      "deadlocks": 0,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 19.3,
+      "min_gap_m": 7.3,
+      "min_ttc_s": 3.1,
+      "hard_brakes": 0,
+      "rms_jerk": 3.23,
+      "max_lat_accel": 5.44,
+      "lane_rms_m": 0.38,
+      "speeding_s": 0.7,
+      "decisions": 802,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "calgary/dry": {
+      "scenarios": 2,
+      "pass_rate": 0.5,
+      "arrived_rate": 1,
+      "km": 1.17,
+      "collisions": 1,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0.6,
+      "safety_brakes": 1,
+      "deadlocks": 8,
+      "fallbacks": 0,
+      "violations_per_km": 0.85,
+      "avg_kmh": 16.4,
+      "min_gap_m": 2.5,
+      "min_ttc_s": 2.9,
+      "hard_brakes": 0,
+      "rms_jerk": 23.97,
+      "max_lat_accel": 5.1,
+      "lane_rms_m": 0.33,
+      "speeding_s": 0,
+      "decisions": 893,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "ottawa/dry": {
+      "scenarios": 2,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 1.4,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0,
+      "safety_brakes": 1,
+      "deadlocks": 0,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 18.4,
+      "min_gap_m": 13.5,
+      "min_ttc_s": null,
+      "hard_brakes": 0,
+      "rms_jerk": 2.16,
+      "max_lat_accel": 5.08,
+      "lane_rms_m": 0.45,
+      "speeding_s": 0,
+      "decisions": 858,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "quebec_city/dry": {
+      "scenarios": 2,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 1.45,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0,
+      "safety_brakes": 0,
+      "deadlocks": 0,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 28.25,
+      "min_gap_m": 29.6,
+      "min_ttc_s": 12.4,
+      "hard_brakes": 0,
+      "rms_jerk": 2.47,
+      "max_lat_accel": 5.27,
+      "lane_rms_m": 0.2,
+      "speeding_s": 0,
+      "decisions": 537,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    }
+  },
+  "current": {
+    "kitsilano/dry": {
+      "run": "20261014-091959-rules",
+      "map_label": "Kitsilano, Vancouver",
+      "summary": {
+        "scenarios": 12,
+        "pass_rate": 0.917,
+        "arrived_rate": 1,
+        "km": 10.53,
+        "collisions": 1,
+        "at_fault": 0,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0.2,
+        "safety_brakes": 10,
+        "deadlocks": 0,
+        "fallbacks": 0,
+        "violations_per_km": 0.09,
+        "avg_kmh": 22.83,
+        "min_gap_m": 1.6,
+        "min_ttc_s": 1.1,
+        "hard_brakes": 0,
+        "rms_jerk": 4.02,
+        "max_lat_accel": 5.09,
+        "lane_rms_m": 0.14,
+        "speeding_s": 0.4,
+        "decisions": 5479,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 565,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 0,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 99.3,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 29.4,
+          "avg_kmh": 20.4,
+          "events": [
+            {
+              "t": 26.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 10.380318365464865,
+                "closing": 10.449152715390422
+              }
+            },
+            {
+              "t": 99.2,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 662,
+            "signals": 2,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 84.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 1.6,
+          "avg_kmh": 28,
+          "events": [
+            {
+              "t": 76.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 5.302423920897054,
+                "closing": 5.326295599385001
+              }
+            },
+            {
+              "t": 78.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 6.243705903298077,
+                "closing": 6.274677417189423
+              }
+            },
+            {
+              "t": 84.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-3",
+          "tags": {
+            "length_m": 520,
+            "signals": 0,
+            "stops": 2,
+            "lefts": 1,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 88.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 4.8,
+          "avg_kmh": 21,
+          "events": [
+            {
+              "t": 30,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 4.462782497704227,
+                "closing": 4.469610813834109
+              }
+            },
+            {
+              "t": 79.3,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 88.6,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-4",
+          "tags": {
+            "length_m": 898,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 131.8,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 16.6,
+          "avg_kmh": 24.4,
+          "events": [
+            {
+              "t": 131.8,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-5",
+          "tags": {
+            "length_m": 794,
+            "signals": 3,
+            "stops": 2,
+            "lefts": 2,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 111.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 8.5,
+          "avg_kmh": 25.5,
+          "events": [
+            {
+              "t": 7.9,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 4.138769321197184,
+                "closing": 4.222630041258435
+              }
+            },
+            {
+              "t": 111.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-6",
+          "tags": {
+            "length_m": 1157,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 3
+          },
+          "pass": false,
+          "failures": [
+            "collision"
+          ],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 208.1,
+          "collisions": 1,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 37.2,
+          "avg_kmh": 20,
+          "events": [
+            {
+              "type": "collision",
+              "with": "car_9",
+              "kind": "car",
+              "fault": "shared",
+              "at_fault": false,
+              "t": 62.8,
+              "ego_v": 5,
+              "other_v": 5.1,
+              "other_ahead": 1,
+              "other_right": 3.4,
+              "relative_heading_deg": 62
+            },
+            {
+              "t": 208.1,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-7",
+          "tags": {
+            "length_m": 1243,
+            "signals": 0,
+            "stops": 5,
+            "lefts": 1,
+            "rights": 5
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 211.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 3,
+          "deadlocks": 0,
+          "stopped_s": 13,
+          "avg_kmh": 21.1,
+          "events": [
+            {
+              "t": 27.3,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.188449352016857,
+                "gap": 3.563374104170907
+              }
+            },
+            {
+              "t": 79.5,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 2.737173940340675,
+                "closing": 2.77382594508636
+              }
+            },
+            {
+              "t": 79.8,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.3113574472558778,
+                "gap": 1.9815876269162684
+              }
+            },
+            {
+              "t": 211.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-8",
+          "tags": {
+            "length_m": 945,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 154.7,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 18.9,
+          "avg_kmh": 21.9,
+          "events": [
+            {
+              "t": 154.7,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-9",
+          "tags": {
+            "length_m": 1171,
+            "signals": 4,
+            "stops": 1,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 139.3,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0.2,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 3.3,
+          "avg_kmh": 30.2,
+          "events": [
+            {
+              "t": 139.3,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-10",
+          "tags": {
+            "length_m": 908,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 198,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 55.6,
+          "avg_kmh": 16.5,
+          "events": [
+            {
+              "t": 21.6,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 198,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-11",
+          "tags": {
+            "length_m": 619,
+            "signals": 1,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 110.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 32.7,
+          "avg_kmh": 20.1,
+          "events": [
+            {
+              "t": 110.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-12",
+          "tags": {
+            "length_m": 1087,
+            "signals": 2,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 157,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 11.1,
+          "avg_kmh": 24.9,
+          "events": [
+            {
+              "t": 157,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "kitsilano/fog": {
+      "run": "20261014-092113-rules",
+      "map_label": "Kitsilano, Vancouver",
+      "summary": {
+        "scenarios": 12,
+        "pass_rate": 0.833,
+        "arrived_rate": 1,
+        "km": 10.53,
+        "collisions": 1,
+        "at_fault": 0,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 1.4,
+        "safety_brakes": 8,
+        "deadlocks": 12,
+        "fallbacks": 0,
+        "violations_per_km": 0.09,
+        "avg_kmh": 17.18,
+        "min_gap_m": 1,
+        "min_ttc_s": 1.1,
+        "hard_brakes": 0,
+        "rms_jerk": 4.23,
+        "max_lat_accel": 4.71,
+        "lane_rms_m": 0.12,
+        "speeding_s": 0,
+        "decisions": 6895,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 565,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 0,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 123.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 20.3,
+          "avg_kmh": 16.4,
+          "events": [
+            {
+              "t": 123.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 662,
+            "signals": 2,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 144.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 24.4,
+          "avg_kmh": 16.4,
+          "events": [
+            {
+              "t": 136.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 4.8867149016262275,
+                "closing": 4.911746662149593
+              }
+            },
+            {
+              "t": 138,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 5.981949141975607,
+                "closing": 6.04437525829534
+              }
+            },
+            {
+              "t": 144.6,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-3",
+          "tags": {
+            "length_m": 520,
+            "signals": 0,
+            "stops": 2,
+            "lefts": 1,
+            "rights": 1
+          },
+          "pass": false,
+          "failures": [
+            "collision"
+          ],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 164.8,
+          "collisions": 1,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 12,
+          "stopped_s": 58.1,
+          "avg_kmh": 11.3,
+          "events": [
+            {
+              "type": "collision",
+              "with": "car_p2",
+              "kind": "car",
+              "fault": "other",
+              "at_fault": false,
+              "t": 50.5,
+              "ego_v": 6.7,
+              "other_v": 1.4,
+              "other_ahead": -1,
+              "other_right": 2.3,
+              "relative_heading_deg": 10
+            },
+            {
+              "t": 158.6,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.1916546103262804,
+                "gap": 3.4580671114070816
+              }
+            },
+            {
+              "t": 164.8,
+              "type": "arrived"
+            }
+          ],
+          "deadlock_events_in_first_50": 12
+        },
+        {
+          "id": "s1-4",
+          "tags": {
+            "length_m": 898,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 155.9,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 1.5,
+          "avg_kmh": 20.7,
+          "events": [
+            {
+              "t": 57.3,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": null,
+                "gap": 1.3100208968217544
+              }
+            },
+            {
+              "t": 155.9,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-5",
+          "tags": {
+            "length_m": 794,
+            "signals": 3,
+            "stops": 2,
+            "lefts": 2,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 154.9,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 11.4,
+          "avg_kmh": 18.4,
+          "events": [
+            {
+              "t": 8.3,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 3.9909188898775008,
+                "closing": 4.040967507515291
+              }
+            },
+            {
+              "t": 154.9,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-6",
+          "tags": {
+            "length_m": 1157,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 3
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 225.2,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 19,
+          "avg_kmh": 18.4,
+          "events": [
+            {
+              "t": 225.2,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-7",
+          "tags": {
+            "length_m": 1243,
+            "signals": 0,
+            "stops": 5,
+            "lefts": 1,
+            "rights": 5
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 252.8,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 12.6,
+          "avg_kmh": 17.6,
+          "events": [
+            {
+              "t": 252.8,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-8",
+          "tags": {
+            "length_m": 945,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 216.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 47.8,
+          "avg_kmh": 15.6,
+          "events": [
+            {
+              "t": 72.5,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.1958761270910765,
+                "gap": 3.2958484959285106
+              }
+            },
+            {
+              "t": 216.6,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-9",
+          "tags": {
+            "length_m": 1171,
+            "signals": 4,
+            "stops": 1,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": false,
+          "failures": [
+            "off road"
+          ],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 234.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 1.4,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 39.1,
+          "avg_kmh": 17.9,
+          "events": [
+            {
+              "t": 234.4,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-10",
+          "tags": {
+            "length_m": 908,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 211.1,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 32.6,
+          "avg_kmh": 15.4,
+          "events": [
+            {
+              "t": 101.8,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.1910190454071419,
+                "gap": 3.4837885000158626
+              }
+            },
+            {
+              "t": 206.8,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 211,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-11",
+          "tags": {
+            "length_m": 619,
+            "signals": 1,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 126.8,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 28.5,
+          "avg_kmh": 17.5,
+          "events": [
+            {
+              "t": 126.8,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-12",
+          "tags": {
+            "length_m": 1087,
+            "signals": 2,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 189.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 5.6,
+          "avg_kmh": 20.6,
+          "events": [
+            {
+              "t": 189.5,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "kitsilano/rain": {
+      "run": "20261014-092203-rules",
+      "map_label": "Kitsilano, Vancouver",
+      "summary": {
+        "scenarios": 12,
+        "pass_rate": 0.917,
+        "arrived_rate": 1,
+        "km": 10.53,
+        "collisions": 1,
+        "at_fault": 1,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0.2,
+        "safety_brakes": 8,
+        "deadlocks": 0,
+        "fallbacks": 0,
+        "violations_per_km": 0.09,
+        "avg_kmh": 19.21,
+        "min_gap_m": 1,
+        "min_ttc_s": 1.2,
+        "hard_brakes": 0,
+        "rms_jerk": 3.48,
+        "max_lat_accel": 3.4,
+        "lane_rms_m": 0.13,
+        "speeding_s": 0,
+        "decisions": 6447,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 565,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 0,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 108,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 26,
+          "avg_kmh": 18.8,
+          "events": [
+            {
+              "t": 108,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 662,
+            "signals": 2,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 152,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 35.4,
+          "avg_kmh": 15.6,
+          "events": [
+            {
+              "t": 144.7,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 5.352563717239553,
+                "closing": 5.402072906909138
+              }
+            },
+            {
+              "t": 152,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-3",
+          "tags": {
+            "length_m": 520,
+            "signals": 0,
+            "stops": 2,
+            "lefts": 1,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 97.4,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 5.1,
+          "avg_kmh": 19.1,
+          "events": [
+            {
+              "t": 91.7,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.198634953023346,
+                "gap": 3.0086905836372804
+              }
+            },
+            {
+              "t": 92.3,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 2.0770194616063375,
+                "gap": 1.9965295069926923
+              }
+            },
+            {
+              "t": 97.4,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-4",
+          "tags": {
+            "length_m": 898,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 0
+          },
+          "pass": false,
+          "failures": [
+            "collision"
+          ],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 155.6,
+          "collisions": 1,
+          "at_fault": 1,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 11.4,
+          "avg_kmh": 20.7,
+          "events": [
+            {
+              "t": 57.8,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 5.045446491967962,
+                "gap": 1.3118144185109486
+              }
+            },
+            {
+              "type": "collision",
+              "with": "car_23",
+              "kind": "car",
+              "fault": "ego",
+              "at_fault": true,
+              "t": 118,
+              "ego_v": 4.1,
+              "other_v": 6.8,
+              "other_ahead": 4.3,
+              "other_right": -1.1,
+              "relative_heading_deg": -23
+            },
+            {
+              "t": 155.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-5",
+          "tags": {
+            "length_m": 794,
+            "signals": 3,
+            "stops": 2,
+            "lefts": 2,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 151,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 16.6,
+          "avg_kmh": 18.9,
+          "events": [
+            {
+              "t": 151,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-6",
+          "tags": {
+            "length_m": 1157,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 3
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 223.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 34.3,
+          "avg_kmh": 18.6,
+          "events": [
+            {
+              "t": 223.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-7",
+          "tags": {
+            "length_m": 1243,
+            "signals": 0,
+            "stops": 5,
+            "lefts": 1,
+            "rights": 5
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 233.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 11.4,
+          "avg_kmh": 19.1,
+          "events": [
+            {
+              "t": 233.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-8",
+          "tags": {
+            "length_m": 945,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 183.9,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 29.8,
+          "avg_kmh": 18.4,
+          "events": [
+            {
+              "t": 53.5,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.1946757511573904,
+                "gap": 3.03642773273873
+              }
+            },
+            {
+              "t": 54.2,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 5.301870276965189,
+                "gap": 1.9945041834463382
+              }
+            },
+            {
+              "t": 183.9,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-9",
+          "tags": {
+            "length_m": 1171,
+            "signals": 4,
+            "stops": 1,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 173.4,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0.2,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 12.2,
+          "avg_kmh": 24.3,
+          "events": [
+            {
+              "t": 173.4,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-10",
+          "tags": {
+            "length_m": 908,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 205.7,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 42.4,
+          "avg_kmh": 15.8,
+          "events": [
+            {
+              "t": 102.4,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.1970970102636476,
+                "gap": 3.016901431300539
+              }
+            },
+            {
+              "t": 103,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 3.0904262108475407,
+                "gap": 1.990804309407622
+              }
+            },
+            {
+              "t": 205.7,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-11",
+          "tags": {
+            "length_m": 619,
+            "signals": 1,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 131.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 31.6,
+          "avg_kmh": 16.9,
+          "events": [
+            {
+              "t": 131.6,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-12",
+          "tags": {
+            "length_m": 1087,
+            "signals": 2,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 160.3,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 3.9,
+          "avg_kmh": 24.3,
+          "events": [
+            {
+              "t": 160.3,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "kitsilano/snow": {
+      "run": "20261014-092307-rules",
+      "map_label": "Kitsilano, Vancouver",
+      "summary": {
+        "scenarios": 12,
+        "pass_rate": 0.833,
+        "arrived_rate": 1,
+        "km": 10.54,
+        "collisions": 2,
+        "at_fault": 0,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0.4,
+        "safety_brakes": 5,
+        "deadlocks": 7,
+        "fallbacks": 0,
+        "violations_per_km": 0.19,
+        "avg_kmh": 15.01,
+        "min_gap_m": 1.8,
+        "min_ttc_s": 1.5,
+        "hard_brakes": 0,
+        "rms_jerk": 3.06,
+        "max_lat_accel": 1.87,
+        "lane_rms_m": 0.11,
+        "speeding_s": 0,
+        "decisions": 8036,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 565,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 0,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 155.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 3,
+          "stopped_s": 38.4,
+          "avg_kmh": 13,
+          "events": [
+            {
+              "t": 155.5,
+              "type": "arrived"
+            }
+          ],
+          "deadlock_events_in_first_50": 3
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 662,
+            "signals": 2,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 155.7,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 16.6,
+          "avg_kmh": 15.2,
+          "events": [
+            {
+              "t": 155.7,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-3",
+          "tags": {
+            "length_m": 520,
+            "signals": 0,
+            "stops": 2,
+            "lefts": 1,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 143.9,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 10.5,
+          "avg_kmh": 12.9,
+          "events": [
+            {
+              "t": 94.3,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 143.9,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-4",
+          "tags": {
+            "length_m": 898,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 171.3,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 1.6,
+          "avg_kmh": 18.8,
+          "events": [
+            {
+              "t": 171.3,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-5",
+          "tags": {
+            "length_m": 794,
+            "signals": 3,
+            "stops": 2,
+            "lefts": 2,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 220.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 60.7,
+          "avg_kmh": 12.9,
+          "events": [
+            {
+              "t": 220.6,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-6",
+          "tags": {
+            "length_m": 1157,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 3
+          },
+          "pass": false,
+          "failures": [
+            "collision"
+          ],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 259.2,
+          "collisions": 1,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 4,
+          "stopped_s": 20.1,
+          "avg_kmh": 16,
+          "events": [
+            {
+              "type": "collision",
+              "with": "car_27",
+              "kind": "car",
+              "fault": "other",
+              "at_fault": false,
+              "t": 141.6,
+              "ego_v": 3.7,
+              "other_v": 5.2,
+              "other_ahead": -3.5,
+              "other_right": -2.8,
+              "relative_heading_deg": -29
+            },
+            {
+              "t": 239.2,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 259.2,
+              "type": "arrived"
+            }
+          ],
+          "deadlock_events_in_first_50": 4
+        },
+        {
+          "id": "s1-7",
+          "tags": {
+            "length_m": 1243,
+            "signals": 0,
+            "stops": 5,
+            "lefts": 1,
+            "rights": 5
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 308.3,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 10.2,
+          "avg_kmh": 14.5,
+          "events": [
+            {
+              "t": 231.1,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 308.3,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-8",
+          "tags": {
+            "length_m": 945,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 231.4,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 31.6,
+          "avg_kmh": 14.7,
+          "events": [
+            {
+              "t": 75,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 3.7822041877953105,
+                "closing": 3.8248350109034615
+              }
+            },
+            {
+              "t": 231.4,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-9",
+          "tags": {
+            "length_m": 1171,
+            "signals": 4,
+            "stops": 1,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 238.2,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0.4,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 22.8,
+          "avg_kmh": 17.7,
+          "events": [
+            {
+              "t": 238.2,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-10",
+          "tags": {
+            "length_m": 908,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 2
+          },
+          "pass": false,
+          "failures": [
+            "collision"
+          ],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 226.1,
+          "collisions": 1,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 33.6,
+          "avg_kmh": 14.4,
+          "events": [
+            {
+              "type": "collision",
+              "with": "car_5",
+              "kind": "car",
+              "fault": "shared",
+              "at_fault": false,
+              "t": 185.3,
+              "ego_v": 3.3,
+              "other_v": 2.8,
+              "other_ahead": 4.2,
+              "other_right": -1.5,
+              "relative_heading_deg": -147
+            },
+            {
+              "t": 226.1,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-11",
+          "tags": {
+            "length_m": 619,
+            "signals": 1,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 148.8,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 24.9,
+          "avg_kmh": 14.9,
+          "events": [
+            {
+              "t": 63.3,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": null,
+                "gap": 1.9946569469553879
+              }
+            },
+            {
+              "t": 148.8,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-12",
+          "tags": {
+            "length_m": 1087,
+            "signals": 2,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 258.9,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 38.5,
+          "avg_kmh": 15.1,
+          "events": [
+            {
+              "t": 258.9,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "mount_pleasant/dry": {
+      "run": "20261014-091834-rules",
+      "map_label": "Mount Pleasant, Vancouver",
+      "summary": {
+        "scenarios": 2,
+        "pass_rate": 1,
+        "arrived_rate": 1,
+        "km": 1.34,
+        "collisions": 0,
+        "at_fault": 0,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0,
+        "safety_brakes": 1,
+        "deadlocks": 0,
+        "fallbacks": 0,
+        "violations_per_km": 0,
+        "avg_kmh": 19.6,
+        "min_gap_m": 7.3,
+        "min_ttc_s": 3.1,
+        "hard_brakes": 0,
+        "rms_jerk": 3.02,
+        "max_lat_accel": 5.44,
+        "lane_rms_m": 0.39,
+        "speeding_s": 0.7,
+        "decisions": 789,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 753,
+            "signals": 0,
+            "stops": 3,
+            "lefts": 0,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 121.7,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 4.2,
+          "avg_kmh": 22.1,
+          "events": [
+            {
+              "t": 121.7,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 592,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 2,
+            "rights": 3
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 123.8,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 28.9,
+          "avg_kmh": 17.1,
+          "events": [
+            {
+              "t": 116.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 4.0798666164002775,
+                "closing": 4.159921361527658
+              }
+            },
+            {
+              "t": 123.8,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "calgary/dry": {
+      "run": "20261014-092102-rules",
+      "map_label": "Beltline, Calgary",
+      "summary": {
+        "scenarios": 2,
+        "pass_rate": 0.5,
+        "arrived_rate": 0.5,
+        "km": 1.1,
+        "collisions": 2,
+        "at_fault": 1,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0,
+        "safety_brakes": 1,
+        "deadlocks": 392,
+        "fallbacks": 0,
+        "violations_per_km": 1.83,
+        "avg_kmh": 13.85,
+        "min_gap_m": 2.5,
+        "min_ttc_s": 2.9,
+        "hard_brakes": 0,
+        "rms_jerk": 22.75,
+        "max_lat_accel": 5.1,
+        "lane_rms_m": 0.38,
+        "speeding_s": 0,
+        "decisions": 1243,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 665,
+            "signals": 2,
+            "stops": 1,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": false,
+          "failures": [
+            "stuck",
+            "collision"
+          ],
+          "arrived": false,
+          "progress": 0.883,
+          "time_s": 266,
+          "collisions": 2,
+          "at_fault": 1,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 392,
+          "stopped_s": 167.7,
+          "avg_kmh": 7.9,
+          "events": [
+            {
+              "type": "collision",
+              "with": "car_p1",
+              "kind": "car",
+              "fault": "other",
+              "at_fault": false,
+              "t": 24.4,
+              "ego_v": 13.6,
+              "other_v": 1.3,
+              "other_ahead": -3.2,
+              "other_right": 2.3,
+              "relative_heading_deg": 10
+            },
+            {
+              "type": "collision",
+              "with": "lamp_post:e516:11.935982120223343",
+              "kind": "lamp_post",
+              "fault": "ego",
+              "at_fault": true,
+              "t": 156.8,
+              "ego_v": 7.5,
+              "other_v": 0
+            }
+          ],
+          "deadlock_events_in_first_50": 48
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 511,
+            "signals": 2,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 92.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 16.2,
+          "avg_kmh": 19.8,
+          "events": [
+            {
+              "t": 18,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 6.222115616878577,
+                "closing": 7.182089711191167
+              }
+            },
+            {
+              "t": 92.5,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "ottawa/dry": {
+      "run": "20261014-092118-rules",
+      "map_label": "Centretown, Ottawa",
+      "summary": {
+        "scenarios": 2,
+        "pass_rate": 0.5,
+        "arrived_rate": 0.5,
+        "km": 1.23,
+        "collisions": 1,
+        "at_fault": 1,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0,
+        "safety_brakes": 1,
+        "deadlocks": 867,
+        "fallbacks": 0,
+        "violations_per_km": 0.81,
+        "avg_kmh": 12.85,
+        "min_gap_m": null,
+        "min_ttc_s": null,
+        "hard_brakes": 0,
+        "rms_jerk": 8.87,
+        "max_lat_accel": 4.81,
+        "lane_rms_m": 0.35,
+        "speeding_s": 0,
+        "decisions": 1576,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 895,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 1,
+            "rights": 2
+          },
+          "pass": false,
+          "failures": [
+            "stuck",
+            "collision"
+          ],
+          "arrived": false,
+          "progress": 0.805,
+          "time_s": 358,
+          "collisions": 1,
+          "at_fault": 1,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 867,
+          "stopped_s": 260.1,
+          "avg_kmh": 7.3,
+          "events": [
+            {
+              "t": 3,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 7.888698913968799,
+                "closing": 8.039987387960371
+              }
+            },
+            {
+              "type": "collision",
+              "with": "lamp_post:e578:12.456867622211576",
+              "kind": "lamp_post",
+              "fault": "ego",
+              "at_fault": true,
+              "t": 123.2,
+              "ego_v": 6.6,
+              "other_v": 0
+            }
+          ],
+          "deadlock_events_in_first_50": 48
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 512,
+            "signals": 1,
+            "stops": 0,
+            "lefts": 0,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 99.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 32.9,
+          "avg_kmh": 18.4,
+          "events": [
+            {
+              "t": 99.5,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "quebec_city/dry": {
+      "run": "20261014-092134-rules",
+      "map_label": "Saint-Roch, Québec City",
+      "summary": {
+        "scenarios": 2,
+        "pass_rate": 0.5,
+        "arrived_rate": 0.5,
+        "km": 0.87,
+        "collisions": 1,
+        "at_fault": 1,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0,
+        "safety_brakes": 0,
+        "deadlocks": 1003,
+        "fallbacks": 0,
+        "violations_per_km": 1.15,
+        "avg_kmh": 17.3,
+        "min_gap_m": null,
+        "min_ttc_s": null,
+        "hard_brakes": 0,
+        "rms_jerk": 2.48,
+        "max_lat_accel": 5.08,
+        "lane_rms_m": 0.2,
+        "speeding_s": 0,
+        "decisions": 1451,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 867,
+            "signals": 4,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 2
+          },
+          "pass": false,
+          "failures": [
+            "stuck",
+            "collision"
+          ],
+          "arrived": false,
+          "progress": 0.327,
+          "time_s": 346.8,
+          "collisions": 1,
+          "at_fault": 1,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 1003,
+          "stopped_s": 294.4,
+          "avg_kmh": 2.9,
+          "events": [
+            {
+              "type": "collision",
+              "with": "signal_post:sig3:e353",
+              "kind": "signal_post",
+              "fault": "ego",
+              "at_fault": true,
+              "t": 88.7,
+              "ego_v": 0.9,
+              "other_v": 0
+            }
+          ],
+          "deadlock_events_in_first_50": 49
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 592,
+            "signals": 0,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 3
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 66.8,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 0.3,
+          "avg_kmh": 31.7,
+          "events": [
+            {
+              "t": 66.8,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "victoria/dry": {
+      "run": "20261014-092156-rules",
+      "map_label": "Old Town, Victoria",
+      "summary": {
+        "scenarios": 2,
+        "pass_rate": 0.5,
+        "arrived_rate": 0.5,
+        "km": 1.29,
+        "collisions": 2,
+        "at_fault": 1,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 13.5,
+        "safety_brakes": 0,
+        "deadlocks": 276,
+        "fallbacks": 0,
+        "violations_per_km": 1.55,
+        "avg_kmh": 9.5,
+        "min_gap_m": 14.9,
+        "min_ttc_s": null,
+        "hard_brakes": 0,
+        "rms_jerk": 3.06,
+        "max_lat_accel": 4.72,
+        "lane_rms_m": 0.46,
+        "speeding_s": 0,
+        "decisions": 2207,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 940,
+            "signals": 3,
+            "stops": 2,
+            "lefts": 2,
+            "rights": 2
+          },
+          "pass": false,
+          "failures": [
+            "stuck",
+            "collision",
+            "off road"
+          ],
+          "arrived": false,
+          "progress": 0.175,
+          "time_s": 376,
+          "collisions": 2,
+          "at_fault": 1,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 13.5,
+          "safety_brakes": 0,
+          "deadlocks": 276,
+          "stopped_s": 334.5,
+          "avg_kmh": 1.6,
+          "events": [
+            {
+              "type": "collision",
+              "with": "sign_post:e392:street",
+              "kind": "sign_post",
+              "fault": "ego",
+              "at_fault": true,
+              "t": 145.1,
+              "ego_v": 1.3,
+              "other_v": 0
+            }
+          ],
+          "deadlock_events_in_first_50": 49
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 1134,
+            "signals": 4,
+            "stops": 1,
+            "lefts": 4,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 233.4,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 70.7,
+          "avg_kmh": 17.4,
+          "events": [
+            {
+              "t": 233.4,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    },
+    "toronto/dry": {
+      "run": "20261014-092224-rules",
+      "map_label": "The Annex, Toronto",
+      "summary": {
+        "scenarios": 2,
+        "pass_rate": 0.5,
+        "arrived_rate": 0.5,
+        "km": 1.5,
+        "collisions": 2,
+        "at_fault": 1,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0,
+        "safety_brakes": 0,
+        "deadlocks": 330,
+        "fallbacks": 0,
+        "violations_per_km": 1.34,
+        "avg_kmh": 10.35,
+        "min_gap_m": 2.3,
+        "min_ttc_s": 1.3,
+        "hard_brakes": 0,
+        "rms_jerk": 5.52,
+        "max_lat_accel": 5.49,
+        "lane_rms_m": 0.46,
+        "speeding_s": 0,
+        "decisions": 2398,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 1220,
+            "signals": 4,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 3
+          },
+          "pass": false,
+          "failures": [
+            "stuck",
+            "collision"
+          ],
+          "arrived": false,
+          "progress": 0.593,
+          "time_s": 488,
+          "collisions": 2,
+          "at_fault": 1,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 326,
+          "stopped_s": 381.8,
+          "avg_kmh": 5.3,
+          "events": [
+            {
+              "type": "collision",
+              "with": "lamp_post:e392:11.745163477957249",
+              "kind": "lamp_post",
+              "fault": "ego",
+              "at_fault": true,
+              "t": 130.6,
+              "ego_v": 3.9,
+              "other_v": 0
+            }
+          ],
+          "deadlock_events_in_first_50": 49
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 776,
+            "signals": 1,
+            "stops": 4,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 181,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 4,
+          "stopped_s": 27.7,
+          "avg_kmh": 15.4,
+          "events": [
+            {
+              "t": 181,
+              "type": "arrived"
+            }
+          ],
+          "deadlock_events_in_first_50": 4
+        }
+      ]
+    },
+    "montreal/dry": {
+      "run": "20261014-092232-rules",
+      "map_label": "Le Plateau, Montréal",
+      "summary": {
+        "scenarios": 2,
+        "pass_rate": 1,
+        "arrived_rate": 1,
+        "km": 0.92,
+        "collisions": 0,
+        "at_fault": 0,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0,
+        "safety_brakes": 1,
+        "deadlocks": 0,
+        "fallbacks": 0,
+        "violations_per_km": 0,
+        "avg_kmh": 25.6,
+        "min_gap_m": 25.8,
+        "min_ttc_s": 24.8,
+        "hard_brakes": 0,
+        "rms_jerk": 2.02,
+        "max_lat_accel": 5.14,
+        "lane_rms_m": 0.19,
+        "speeding_s": 0,
+        "decisions": 361,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 475,
+            "signals": 0,
+            "stops": 1,
+            "lefts": 1,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 73,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 1.5,
+          "avg_kmh": 23.3,
+          "events": [
+            {
+              "t": 73,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 448,
+            "signals": 1,
+            "stops": 0,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 57.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 0.3,
+          "avg_kmh": 27.9,
+          "events": [
+            {
+              "t": 8.6,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 4.082524982979788,
+                "closing": 4.167045363847446
+              }
+            },
+            {
+              "t": 57.4,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "checks": {
+    "repeat_kitsilano_dry": {
+      "run": "20261014-092318-rules",
+      "identical_to": "20261014-091959-rules",
+      "identical": true
+    },
+    "previous_commit_same_engine": {
+      "commit": "bbc9012331dfb175a555c76c50487467ce93fb40",
+      "description": "The same suites run from a git archive of bbc9012 (the commit whose numbers world-validation.md records) in the same WebKit harness. Summaries and every per-route result, excluding wall-clock time, are compared.",
+      "maps": {
+        "kitsilano/dry": {
+          "run": "20261014-092319-rules",
+          "identical_to_current": true
+        },
+        "mount_pleasant/dry": {
+          "run": "20261014-091956-rules",
+          "identical_to_current": true
+        },
+        "calgary/dry": {
+          "run": "20261014-092410-rules",
+          "identical_to_current": true
+        },
+        "ottawa/dry": {
+          "run": "20261014-092428-rules",
+          "identical_to_current": true
+        },
+        "quebec_city/dry": {
+          "run": "20261014-092446-rules",
+          "identical_to_current": true
+        },
+        "victoria/dry": {
+          "run": "20261014-092505-rules",
+          "identical_to_current": true
+        },
+        "toronto/dry": {
+          "run": "20261014-092531-rules",
+          "identical_to_current": true
+        },
+        "montreal/dry": {
+          "run": "20261014-092539-rules",
+          "identical_to_current": true
+        }
+      }
+    },
+    "cross_engine_kitsilano_dry": {
+      "engine": "node v22.23.2",
+      "code": "62fe05046f18c47562b67b2d9d6d7df9f81e205a",
+      "description": "The production buildSuite, runScenario and aggregate imported into Node with a stubbed document, against the same server and map.",
+      "summary": {
+        "scenarios": 12,
+        "pass_rate": 0.833,
+        "arrived_rate": 1,
+        "km": 10.53,
+        "collisions": 2,
+        "at_fault": 0,
+        "red_lights": 0,
+        "stop_signs": 0,
+        "failed_to_yield": 0,
+        "off_road_s": 0.2,
+        "safety_brakes": 10,
+        "deadlocks": 0,
+        "fallbacks": 0,
+        "violations_per_km": 0.19,
+        "avg_kmh": 22.6,
+        "min_gap_m": 2.1,
+        "min_ttc_s": 1.1,
+        "hard_brakes": 0,
+        "rms_jerk": 4.03,
+        "max_lat_accel": 5.09,
+        "lane_rms_m": 0.14,
+        "speeding_s": 0,
+        "decisions": 5581,
+        "calls": 0,
+        "tokens": 0,
+        "cost_usd": 0
+      },
+      "results": [
+        {
+          "id": "s1-1",
+          "tags": {
+            "length_m": 565,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 0,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 99.3,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 29.4,
+          "avg_kmh": 20.4,
+          "events": [
+            {
+              "t": 26.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 10.380318365464865,
+                "closing": 10.449152715390419
+              }
+            },
+            {
+              "t": 99.2,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-2",
+          "tags": {
+            "length_m": 662,
+            "signals": 2,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 84.5,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 1.6,
+          "avg_kmh": 28,
+          "events": [
+            {
+              "t": 76.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 5.302423920897031,
+                "closing": 5.326295599385002
+              }
+            },
+            {
+              "t": 78.1,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 6.2437059032980144,
+                "closing": 6.274677417189428
+              }
+            },
+            {
+              "t": 84.5,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-3",
+          "tags": {
+            "length_m": 520,
+            "signals": 0,
+            "stops": 2,
+            "lefts": 1,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 88.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 2,
+          "deadlocks": 0,
+          "stopped_s": 4.8,
+          "avg_kmh": 21,
+          "events": [
+            {
+              "t": 30,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 4.462782497704227,
+                "closing": 4.469610813834109
+              }
+            },
+            {
+              "t": 79.3,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 88.6,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-4",
+          "tags": {
+            "length_m": 898,
+            "signals": 3,
+            "stops": 1,
+            "lefts": 3,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 133.4,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 16.6,
+          "avg_kmh": 24.2,
+          "events": [
+            {
+              "t": 133.4,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-5",
+          "tags": {
+            "length_m": 794,
+            "signals": 3,
+            "stops": 2,
+            "lefts": 2,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 111.6,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 8.5,
+          "avg_kmh": 25.5,
+          "events": [
+            {
+              "t": 7.9,
+              "type": "safety",
+              "brake": {
+                "reason": "ahead",
+                "gap": 4.138769321197184,
+                "closing": 4.222630041258436
+              }
+            },
+            {
+              "t": 111.6,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-6",
+          "tags": {
+            "length_m": 1157,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 3
+          },
+          "pass": false,
+          "failures": [
+            "collision"
+          ],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 213.4,
+          "collisions": 1,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 41.8,
+          "avg_kmh": 19.5,
+          "events": [
+            {
+              "type": "collision",
+              "with": "car_9",
+              "kind": "car",
+              "fault": "shared",
+              "at_fault": false,
+              "t": 62.8,
+              "ego_v": 5,
+              "other_v": 5,
+              "other_ahead": 1,
+              "other_right": 3.4,
+              "relative_heading_deg": 62
+            },
+            {
+              "t": 90.6,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.1999188552200764,
+                "gap": 3.5612843511362944
+              }
+            },
+            {
+              "t": 213.3,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-7",
+          "tags": {
+            "length_m": 1243,
+            "signals": 0,
+            "stops": 5,
+            "lefts": 1,
+            "rights": 5
+          },
+          "pass": false,
+          "failures": [
+            "collision"
+          ],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 205,
+          "collisions": 1,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 15.3,
+          "avg_kmh": 21.8,
+          "events": [
+            {
+              "t": 27.3,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.188449352016857,
+                "gap": 3.563374104170907
+              }
+            },
+            {
+              "type": "collision",
+              "with": "car_p3",
+              "kind": "car",
+              "fault": "other",
+              "at_fault": false,
+              "t": 79,
+              "ego_v": 0,
+              "other_v": 4.6,
+              "other_ahead": 3.7,
+              "other_right": -2.5,
+              "relative_heading_deg": -165
+            },
+            {
+              "t": 205,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-8",
+          "tags": {
+            "length_m": 945,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 154.3,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 18.6,
+          "avg_kmh": 21.9,
+          "events": [
+            {
+              "t": 154.3,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-9",
+          "tags": {
+            "length_m": 1171,
+            "signals": 4,
+            "stops": 1,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.999,
+          "time_s": 139.4,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0.2,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 4.3,
+          "avg_kmh": 30.2,
+          "events": [
+            {
+              "t": 139.4,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-10",
+          "tags": {
+            "length_m": 908,
+            "signals": 3,
+            "stops": 3,
+            "lefts": 1,
+            "rights": 2
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 197.1,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 51.7,
+          "avg_kmh": 16.5,
+          "events": [
+            {
+              "t": 21.6,
+              "type": "safety",
+              "brake": {
+                "reason": "open door"
+              }
+            },
+            {
+              "t": 197.1,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-11",
+          "tags": {
+            "length_m": 619,
+            "signals": 1,
+            "stops": 0,
+            "lefts": 1,
+            "rights": 0
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.997,
+          "time_s": 126,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 0,
+          "deadlocks": 0,
+          "stopped_s": 32.7,
+          "avg_kmh": 17.6,
+          "events": [
+            {
+              "t": 126,
+              "type": "arrived"
+            }
+          ]
+        },
+        {
+          "id": "s1-12",
+          "tags": {
+            "length_m": 1087,
+            "signals": 2,
+            "stops": 3,
+            "lefts": 2,
+            "rights": 1
+          },
+          "pass": true,
+          "failures": [],
+          "arrived": true,
+          "progress": 0.998,
+          "time_s": 159,
+          "collisions": 0,
+          "at_fault": 0,
+          "red_lights": 0,
+          "stop_signs": 0,
+          "failed_to_yield": 0,
+          "off_road_s": 0,
+          "safety_brakes": 1,
+          "deadlocks": 0,
+          "stopped_s": 9.6,
+          "avg_kmh": 24.6,
+          "events": [
+            {
+              "t": 91.5,
+              "type": "safety",
+              "brake": {
+                "reason": "following",
+                "ttc": 1.1943832079261234,
+                "gap": 2.9861722163783497
+              }
+            },
+            {
+              "t": 158.9,
+              "type": "arrived"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
