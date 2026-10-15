@@ -1,10 +1,13 @@
 """The Connect a model dialog's server side (jev/llm_setup.py). Temporary files and a mock server only."""
 
+import http.client
 import json
 import stat
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import helpers  # noqa: F401  (puts the project root on sys.path)
 
@@ -12,7 +15,7 @@ import server
 from jev import llm, llm_setup
 from jev.client import SpendGuard
 from jev.config import Settings
-from test_llm import MockLLM
+from test_llm import SLACK, MockLLM
 
 KEY = "sk-or-test-SETUP-key-9876"
 
@@ -239,6 +242,38 @@ class ModelListTests(SetupTestCase):
             llm_setup.list_models(self.settings, {"provider": "custom", "base_url": url})
         self.assertIn("Could not reach", str(ctx.exception))
         self.assertIn("Is it running?", str(ctx.exception))
+
+    def test_a_trickled_model_list_cannot_outlast_the_deadline(self):
+        def trickle(h, body):
+            data = json.dumps({"data": [{"id": "m%d" % i} for i in range(200)]}).encode()
+            try:
+                h.send_response(200)
+                h.send_header("Content-Length", str(len(data)))
+                h.end_headers()
+                for i in range(0, len(data), 16):   # each read arrives well inside the socket timeout
+                    h.wfile.write(data[i:i + 16])
+                    h.wfile.flush()
+                    time.sleep(0.1)
+            except OSError:
+                pass   # the client gave up
+        mock = self.mock(trickle)
+        self.enterContext(patch.object(llm_setup, "MODELS_TIMEOUT_S", 1.0))
+        started = time.monotonic()
+        with self.assertRaises(llm_setup.SetupError) as ctx:
+            llm_setup.list_models(self.settings, {"provider": "custom", "base_url": mock.url})
+        self.assertLess(time.monotonic() - started, 1 + SLACK)   # without the watchdog: about 20 s
+        self.assertIn("did not send its model list within 1 s", str(ctx.exception))
+
+    def test_a_list_read_in_time_is_not_late_because_closing_was_slow(self):
+        mock = self.mock(lambda h, body: (200, {"data": [{"id": "m"}]}, {}))
+        self.enterContext(patch.object(llm_setup, "MODELS_TIMEOUT_S", 0.3))
+        close = http.client.HTTPResponse.close
+        def slow_close(resp):
+            time.sleep(0.5)
+            close(resp)
+        self.enterContext(patch.object(http.client.HTTPResponse, "close", slow_close))
+        res = llm_setup.list_models(self.settings, {"provider": "custom", "base_url": mock.url})
+        self.assertEqual([m["id"] for m in res["models"]], ["m"])
 
     def test_a_redirect_is_not_followed(self):
         target = self.mock()

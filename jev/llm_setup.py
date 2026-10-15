@@ -24,13 +24,14 @@ import http.client
 import json
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
 
 from . import envfile
 from .config import Settings
-from .llm import USER_AGENT, EndpointConfig, LlmRegistry, _OPENER, is_local_host, public_url, scrub
+from .llm import USER_AGENT, EndpointConfig, LlmRegistry, _OPENER, _Watchdog, is_local_host, public_url, scrub
 
 MODELS_TIMEOUT_S = 8.0
 MAX_MODELS_BYTES = 16 * 1024 * 1024   # OpenRouter lists hundreds of models with descriptions
@@ -185,18 +186,31 @@ def list_models(settings: Settings, body: dict) -> dict:
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(config.base_url + "/models", headers=headers)
     where = public_url(config.base_url)
+    # One total deadline, as for decisions: a socket timeout bounds each read, so a server that
+    # trickles its reply could otherwise hold this request open indefinitely.
+    req.watchdog = watchdog = _Watchdog(time.monotonic() + MODELS_TIMEOUT_S)
+    late = SetupError("%s did not send its model list within %g s." % (where, MODELS_TIMEOUT_S))
     try:
         with _OPENER.open(req, timeout=MODELS_TIMEOUT_S) as resp:
             raw = resp.read(MAX_MODELS_BYTES + 1)
+            expired = watchdog.cancel()   # stop it before closing: a slow close is not a late list
+        if expired:   # the socket was shut mid-reply, so the list may be cut short
+            raise late
     except urllib.error.HTTPError as err:
         err.close()
+        if watchdog.cancel():
+            raise late
         if err.code in (401, 403):
             raise SetupError("%s rejected the key (HTTP %d). Check it and try again." % (p["label"], err.code))
         raise SetupError(scrub("%s answered HTTP %d for /models: %s" % (where, err.code, err.reason), key))
     except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as err:
+        if watchdog.cancel():
+            raise late
         reason = getattr(err, "reason", err)
         local = " Is it running?" if is_local_host(config.base_url) else ""
         raise SetupError(scrub("Could not reach %s: %s.%s" % (where, reason, local), key))
+    finally:
+        watchdog.cancel()
     if len(raw) > MAX_MODELS_BYTES:
         raise SetupError("The model list from %s is too large." % where)
     try:
