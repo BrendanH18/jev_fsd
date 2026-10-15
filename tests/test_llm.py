@@ -2,10 +2,12 @@
 
 import http.client
 import json
+import socket
 import tempfile
 import threading
 import time
 import unittest
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
@@ -139,6 +141,17 @@ class ParseTests(unittest.TestCase):
                 answer, invalid = llm.parse_answer(text, EXPECT)
                 self.assertIsNone(answer)
                 self.assertIn("not a JSON object", invalid)
+
+    def test_scrub_summarises_what_it_cannot_walk(self):
+        deep = "x"
+        for _ in range(5_000):
+            deep = [deep]
+        out = llm.scrub({"a": ["key %s" % SECRET], "deep": deep}, SECRET)
+        self.assertEqual(out["a"], ["key ***"])
+        inner = out["deep"]
+        for _ in range(llm.MAX_SCRUB_DEPTH - 1):
+            inner = inner[0]
+        self.assertIn("not shown", inner)
 
     def test_structured_output_schema_lists_the_offered_ids(self):
         fmt = llm.response_format_for("json_schema", EXPECT)
@@ -318,13 +331,14 @@ class EndpointTests(LlmTestCase):
                 self.assertEqual((snap["live_calls"], snap["output_tokens"]), (1, 7))
 
     def test_deeply_nested_replies_are_invalid_answers_with_meta(self):
+        # 600 levels parse on every supported Python; see the next test for replies too deep to parse.
         usage = '"usage": {"prompt_tokens": 1200, "completion_tokens": 12}'
         good = json.dumps('{"motion": "drive", "candidate": "keep_lane_target"}')
         replies = {
             "nested list text": json.dumps(completion("[" * 10_000)),
             "nested object text": json.dumps(completion('{"a": ' * 3_900)),
-            "nested content value": '{"choices": [{"message": {"content": %s1%s}}], %s}' % ('{"a": ' * 5_000, "}" * 5_000, usage),
-            "nested envelope": '{"choices": [{"message": {"content": %s}}], "extra": %s0%s, %s}' % (good, "[" * 5_000, "]" * 5_000, usage),
+            "nested content value": '{"choices": [{"message": {"content": %s1%s}}], %s}' % ('{"a": ' * 600, "}" * 600, usage),
+            "nested envelope": '{"choices": [{"message": {"content": %s}}], "extra": %s0%s, %s}' % (good, "[" * 600, "]" * 600, usage),
         }
         for name, data in replies.items():
             with self.subTest(name=name):
@@ -341,6 +355,45 @@ class EndpointTests(LlmTestCase):
                     self.assertIsNone(out["answer"])
                     self.assertTrue(out["invalid"])
 
+    def test_a_reply_too_deep_to_parse_is_a_counted_malformed_completion(self):
+        # Every supported Python's parser gives up long before 100,000 levels (3.11 near 1,000).
+        good = json.dumps('{"motion": "drive", "candidate": "keep_lane_target"}')
+        replies = {
+            "content value": '{"choices": [{"message": {"content": %s1%s}}]}' % ('{"a": ' * 100_000, "}" * 100_000),
+            "envelope": '{"choices": [{"message": {"content": %s}}], "extra": %s0%s}' % (good, "[" * 100_000, "]" * 100_000),
+        }
+        for name, data in replies.items():
+            with self.subTest(name=name):
+                mock = self.mock(lambda h, body, d=data.encode(): (200, d, {}))
+                reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "api_key_env": "K",
+                                      "price_per_mtok_input": 1}], environ={"K": SECRET})
+                out = self.decide(reg, "m")
+                json.dumps(out)
+                self.assertIsNone(out["answer"])
+                self.assertEqual(out["invalid"], "malformed completion (nested too deeply to parse)")
+                meta = out["meta"]
+                self.assertEqual((meta["input_tokens"], meta["output_tokens"], meta["cost_usd"], meta["live_call"]), (0, 0, 0, True))
+                self.assertIn("not shown", out["trace"]["response"]["note"])
+                self.assertEqual(reg.guard.snapshot()["live_calls"], 1)
+                stats = reg.public()["endpoints"][0]
+                self.assertEqual((stats["calls"], stats["errors"]), (1, 1))
+                self.assertIn("malformed completion", stats["last_error"])
+
+    def test_deeply_nested_error_bodies_are_quoted_as_text(self):
+        bodies = ("[" * 900 + json.dumps("key %s" % SECRET) + "]" * 900,
+                  '{"error": ' * 300 + json.dumps("key %s" % SECRET) + "}" * 300)
+        for data in bodies:
+            with self.subTest(data=data[:12]):
+                mock = self.mock(lambda h, body, d=data.encode(): (500, d, {}))
+                reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "api_key_env": "K",
+                                      "response_format": "none"}], environ={"K": SECRET})
+                with self.assertRaises(llm.LlmError) as ctx:
+                    self.decide(reg, "m")
+                self.assertEqual(ctx.exception.status, 502)
+                self.assertIn("HTTP 500", str(ctx.exception))
+                self.assertIsInstance(ctx.exception.body, str)
+                self.assertNotIn(SECRET, str(ctx.exception) + ctx.exception.body + json.dumps(reg.public()))
+
     def test_http_errors_map_to_statuses(self):
         cases = [(429, 429, "rate limited"), (500, 502, "HTTP 500"), (503, 502, "HTTP 503"), (401, 401, "rejected the API key")]
         for upstream, expected, text in cases:
@@ -356,6 +409,7 @@ class EndpointTests(LlmTestCase):
                 self.assertNotIn(SECRET, json.dumps(ctx.exception.body))
                 self.assertEqual(len(mock.requests), 1)   # no retries inside a decision deadline
                 self.assertNotIn(SECRET, json.dumps(reg.public()))
+                self.assertTrue(ctx.exception.__context__.fp.closed)   # the error response is not left open
 
     def test_timeout(self):
         def slow(h, body):
@@ -442,6 +496,18 @@ class EndpointTests(LlmTestCase):
         self.decide(reg, "p")
         self.assertEqual(["response_format" in r["body"] for r in mock.requests], [True, False, False])
 
+    def test_a_request_refused_in_both_modes_keeps_its_response_format(self):
+        for code in (400, 422):
+            with self.subTest(code=code):
+                mock = self.mock(lambda h, body, c=code: (c, {"error": {"message": "model 'nope' does not exist"}}, {}))
+                reg = self.registry([{"name": "p", "base_url": mock.url, "model": "nope"}])
+                with self.assertRaises(llm.LlmError) as ctx:
+                    self.decide(reg, "p")
+                self.assertEqual(ctx.exception.status, 502)
+                self.assertIn("does not exist", str(ctx.exception))
+                self.assertEqual(["response_format" in r["body"] for r in mock.requests], [True, False])
+                self.assertEqual(reg.public()["endpoints"][0]["response_format"], "json_schema")
+
     def test_the_plain_retry_shares_one_deadline(self):
         def slow_picky(h, body):
             if "response_format" in body:
@@ -509,6 +575,66 @@ class EndpointTests(LlmTestCase):
         self.assertEqual(ctx.exception.status, 504)
         self.assertLess(time.monotonic() - started, 1.3)
         self.assertEqual(reg.guard.snapshot()["live_calls"], 0)
+
+    def stalling_proxy(self, tunnel_after=None):
+        """A local HTTPS proxy that trickles its CONNECT reply a header line at a time. With
+        `tunnel_after` it opens the tunnel after that many seconds and then never answers the TLS
+        handshake. Either way it gives up after 3 s, so a regression fails rather than hangs."""
+        listener = socket.create_server(("127.0.0.1", 0))
+        listener.settimeout(5)
+
+        def serve():
+            try:
+                conn, _ = listener.accept()
+            except OSError:
+                return
+            with conn:
+                try:
+                    conn.recv(4096)   # the CONNECT request
+                    conn.sendall(b"HTTP/1.1 200 Connection established\r\n")
+                    started = time.monotonic()
+                    while time.monotonic() - started < 3:
+                        if tunnel_after is not None and time.monotonic() - started >= tunnel_after:
+                            conn.sendall(b"\r\n")
+                            time.sleep(3)   # the client's TLS hello goes unanswered
+                            return
+                        conn.sendall(b"X-Wait: 1\r\n")
+                        time.sleep(0.1)
+                except OSError:
+                    pass   # the client gave up
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        self.addCleanup(listener.close)
+        return "http://127.0.0.1:%d" % listener.getsockname()[1]
+
+    def test_the_deadline_covers_the_proxy_tunnel_and_tls_handshake(self):
+        for name, tunnel_after in (("trickled CONNECT reply", None), ("stalled TLS handshake", 0.5)):
+            with self.subTest(name=name):
+                proxy = urllib.request.ProxyHandler({"https": self.stalling_proxy(tunnel_after)})
+                self.enterContext(patch.object(llm, "_OPENER", urllib.request.build_opener(
+                    proxy, llm._NoRedirect, llm._HTTPHandler, llm._HTTPSHandler)))
+                reg = self.registry([{"name": "t", "base_url": "https://llm.example.com/v1", "model": "x", "timeout_s": 1}])
+                started = time.monotonic()
+                with self.assertRaises(llm.LlmError) as ctx:
+                    self.decide(reg, "t")
+                self.assertEqual(ctx.exception.status, 504)
+                self.assertLess(time.monotonic() - started, 1.3)
+
+    def test_a_cancelled_watchdog_never_fires(self):
+        # The timer callback can already be waiting for the lock when cancel() runs; it must then do nothing.
+        a, b = socket.socketpair()
+        self.addCleanup(a.close)
+        self.addCleanup(b.close)
+        watchdog = llm._Watchdog(time.monotonic() + 60)
+        watchdog.attach(a)
+        self.assertFalse(watchdog.cancel())
+        watchdog._expire()
+        self.assertFalse(watchdog.expired)
+        b.sendall(b"still open")
+        self.assertEqual(a.recv(16), b"still open")
+        fired = llm._Watchdog(time.monotonic())
+        time.sleep(0.05)
+        self.assertTrue(fired.cancel())
 
     def test_redirects_are_not_followed_with_the_key(self):
         target = self.mock()
@@ -637,16 +763,19 @@ class ServerRouteTests(LlmTestCase):
 
     def test_unreadable_completions_are_answers_the_browser_can_count(self):
         usage = '"usage": {"prompt_tokens": 1200, "completion_tokens": 12}'
+        # name: (completion, output tokens the browser is told about). Each answer is invalid for its content:
+        # "{}" names no manoeuvre. Non-finite usage alone only counts as 0 tokens (see EndpointTests).
         replies = {
-            "nested": json.dumps(completion("[" * 10_000)),
-            "infinite": '{"choices": [{"message": {"content": "{}"}}], "usage": {"prompt_tokens": Infinity, "completion_tokens": 12}}',
-            "empty": '{"choices": [], %s}' % usage,
+            "nested": (json.dumps(completion("[" * 10_000)), 12),
+            "infinite": ('{"choices": [{"message": {"content": "{}"}}], "usage": {"prompt_tokens": Infinity, "completion_tokens": 12}}', 12),
+            "empty": ('{"choices": [], %s}' % usage, 12),
+            "unparseable": ('{"choices": [], %s, "extra": %s%s}' % (usage, "[" * 100_000, "]" * 100_000), 0),
         }
         registry = self.registry([{"name": name, "base_url": self.mock(lambda h, body, d=data.encode(): (200, d, {})).url,
-                                   "model": "m", "api_key_env": "MOCK_KEY"} for name, data in replies.items()],
+                                   "model": "m", "api_key_env": "MOCK_KEY"} for name, (data, _) in replies.items()],
                                  environ={"MOCK_KEY": SECRET})
         with patch.object(server, "llm_registry", registry):
-            for name in replies:
+            for name, (_, output_tokens) in replies.items():
                 with self.subTest(name=name):
                     status, raw = self.request("POST", "/api/llm/decide", self.decide_body(name))
                     self.assertEqual(status, 200)
@@ -654,8 +783,8 @@ class ServerRouteTests(LlmTestCase):
                     self.assertIsNone(out["answer"])
                     self.assertTrue(out["invalid"])
                     self.assertTrue(out["meta"]["live_call"])
-                    self.assertEqual(out["meta"]["output_tokens"], 12)
-        self.assertEqual(registry.guard.snapshot()["live_calls"], 3)
+                    self.assertEqual(out["meta"]["output_tokens"], output_tokens)
+        self.assertEqual(registry.guard.snapshot()["live_calls"], 4)
 
     def test_browser_cannot_choose_the_url_or_model(self):
         status, raw = self.request("POST", "/api/llm/decide", self.decide_body(base_url="http://169.254.169.254/latest", model="other"))

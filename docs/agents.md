@@ -113,7 +113,7 @@ variables. `JEV_FSD_LLM_ENDPOINTS` points at a different config file.
 | `label` | `name` | Name shown in pickers and results |
 | `api_key_env` | none | Variable holding the key; omit for local servers that need none |
 | `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens; without them cost is reported as unknown ($0) and the budget cannot stop the endpoint |
-| `timeout_s` | `10` | Total server deadline for one decision, covering connect, reply and any plain retry (1–60); the browser waits 0.75 s more |
+| `timeout_s` | `10` | Total server deadline for one decision, covering the TCP connect, any proxy tunnel, the TLS handshake, the whole reply and any plain retry; only DNS lookup is outside it (1–60); the browser waits 0.75 s more |
 | `response_format` | `json_schema` | `json_schema`, `json_object` or `none` |
 | `max_tokens`, `temperature` | `400`, `0` | Sent when not `null` |
 | `rpm` | shared | This endpoint's own calls-per-minute cap instead of the shared `JEV_FSD_RPM`; `0` = no rate limit at all |
@@ -151,8 +151,10 @@ not usable, the call times out, the endpoint returns an HTTP error (429, 5xx, 40
 missing or the budget is spent, Rules makes that decision instead, exactly as for Jev. The HUD
 shows an amber `rules_fallback` tag with the reason, the fallback counter increases, and arena
 timelines record a *fallback* event with the reason. A call whose reply was unusable (not JSON
-inside, an unoffered id, a completion with no message, unreadable usage numbers) still counts as
-a call with its reported tokens and cost. Decisions with nothing to ask (one eligible manoeuvre and no stop
+inside, an unoffered id, a completion with no message or one nested too deeply to parse) still
+counts as a call with its reported tokens and cost; a completion too deep to parse reports no
+tokens. A usage count that is missing or not a finite number is recorded as 0 tokens, and the
+answer is still used. Decisions with nothing to ask (one eligible manoeuvre and no stop
 question) are made locally without a call.
 
 **Cost and limits.** Every LLM call shares Jev's per-run budget (`JEV_FSD_BUDGET_USD`) and rate
@@ -168,8 +170,9 @@ including a plain retry, passes the budget and rate checks and counts toward the
 Use **Lockstep** to compare decision quality: the simulation
 waits for each answer. **Realtime** includes latency, so a slow model drives on its previous
 choice for longer. The decision deadline is the endpoint's `timeout_s`, not Jev's 1.5 s: one
-deadline on the server for connecting, receiving the whole reply and any plain retry, after
-which the call fails as a timeout.
+deadline on the server for the TCP connect, any HTTPS proxy tunnel, the TLS handshake, the
+headers, the whole body and any plain retry, after which the call fails as a timeout. Only DNS
+resolution falls outside it; the system resolver's own timeout bounds that.
 
 **Security.** The browser sends only the endpoint *name*, the prompt and the allowed ids; the
 URL, model and key come from server configuration, so a page cannot redirect calls elsewhere.

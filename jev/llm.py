@@ -62,6 +62,7 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_CONTENT_CHARS = 20_000
 MAX_USAGE_TOKENS = 10 ** 9      # a larger token count is a broken usage block, not a real call
 MAX_TRACE_DEPTH = 64            # deeper completions are summarised in the trace instead of copied
+MAX_SCRUB_DEPTH = 2 * MAX_TRACE_DEPTH   # scrub() summarises anything deeper; traces fit well inside it
 CHECK_TTL_S = 15.0
 CHECK_TIMEOUT_S = 3.0
 USER_AGENT = "jev-fsd/0.2.0 (llm)"
@@ -84,10 +85,12 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 class _Watchdog:
     """Shuts a request's socket at its deadline. A socket timeout only bounds each read, so a server
-    that trickles headers or body could otherwise hold a call far past `timeout_s`."""
+    or proxy that trickles the tunnel reply, headers or body could otherwise hold a call far past
+    `timeout_s`. DNS resolution happens before there is a socket, so only the resolver bounds that."""
 
     def __init__(self, deadline: float):
         self.expired = False
+        self._finished = False
         self._sock: Optional[socket.socket] = None
         self._lock = threading.Lock()
         self._timer = threading.Timer(max(0.0, deadline - time.monotonic()), self._expire)
@@ -100,11 +103,17 @@ class _Watchdog:
             if self.expired:
                 self._shutdown()
 
-    def cancel(self) -> None:
+    def cancel(self) -> bool:
+        """Stops the watchdog for good. True if it had already fired."""
         self._timer.cancel()
+        with self._lock:   # a timer already waiting for the lock then finds the watchdog finished
+            self._finished = True
+            return self.expired
 
     def _expire(self) -> None:
         with self._lock:
+            if self._finished:
+                return
             self.expired = True
             self._shutdown()
 
@@ -116,8 +125,31 @@ class _Watchdog:
                 pass
 
 
+class _WatchedContext:
+    """An SSL context whose sockets reach the watchdog before the TLS handshake. Wrapping detaches
+    the raw socket, so shutting that one down would no longer reach the connection."""
+
+    def __init__(self, context, watchdog: _Watchdog):
+        self._context = context
+        self._watchdog = watchdog
+
+    def __getattr__(self, name):
+        return getattr(self._context, name)
+
+    def wrap_socket(self, sock, **kwargs):
+        tls = self._context.wrap_socket(sock, **dict(kwargs, do_handshake_on_connect=False))
+        self._watchdog.attach(tls)
+        try:
+            tls.do_handshake()
+        except BaseException:
+            tls.close()
+            raise
+        return tls
+
+
 class _WatchedHandler:
-    """Hands each new connection's socket to the request's watchdog, when it has one."""
+    """Hands each new connection's socket to the request's watchdog, when it has one, as soon as
+    the TCP connection exists: before any proxy tunnel or TLS handshake."""
 
     def do_open(self, http_class, req, **kwargs):
         watchdog = getattr(req, "watchdog", None)
@@ -126,12 +158,15 @@ class _WatchedHandler:
 
         def connection(*args, **kw):
             conn = http_class(*args, **kw)
-            connect = conn.connect
+            create = conn._create_connection   # socket.create_connection; its timeout bounds the TCP connect
 
-            def watched_connect():
-                connect()
-                watchdog.attach(conn.sock)
-            conn.connect = watched_connect
+            def watched_create(*a, **k):
+                sock = create(*a, **k)
+                watchdog.attach(sock)
+                return sock
+            conn._create_connection = watched_create
+            if getattr(conn, "_context", None) is not None:
+                conn._context = _WatchedContext(conn._context, watchdog)
             return conn
         return super().do_open(connection, req, **kwargs)
 
@@ -325,10 +360,14 @@ class LlmResult:
     """One chat completion: the reply text plus everything the UI shows about the call.
 
     Never raises. Usage is read first, so tokens and cost are always recorded; a completion without
-    a usable choice or message sets `malformed` and leaves `content` empty."""
+    a usable choice or message sets `malformed` and leaves `content` empty. `response` is None for a
+    completion nested too deeply to parse at all: its tokens are unknown and count as 0."""
 
-    def __init__(self, endpoint: "LlmEndpoint", request: dict, response: dict, latency_ms: float, format_used: str):
+    def __init__(self, endpoint: "LlmEndpoint", request: dict, response: Optional[dict], latency_ms: float,
+                 format_used: str):
         self.request = request
+        unparsed = response is None
+        response = {} if response is None else response
         usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
         self.input_tokens = _int(usage.get("prompt_tokens", usage.get("input_tokens")))
         self.output_tokens = _int(usage.get("completion_tokens", usage.get("output_tokens")))
@@ -336,9 +375,13 @@ class LlmResult:
         self.cost_usd = ((self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)) / 1_000_000
                          if config.priced else 0.0)
         # The trace copies the completion, so an absurdly nested one is summarised rather than walked.
-        self.response = response if not _deeper_than(response, MAX_TRACE_DEPTH) else {
-            "note": "completion nested deeper than %d levels; not shown" % MAX_TRACE_DEPTH,
-            "usage": {"prompt_tokens": self.input_tokens, "completion_tokens": self.output_tokens}}
+        if unparsed:
+            self.response = {"note": "completion nested too deeply to parse; not shown"}
+        elif _deeper_than(response, MAX_TRACE_DEPTH):
+            self.response = {"note": "completion nested deeper than %d levels; not shown" % MAX_TRACE_DEPTH,
+                             "usage": {"prompt_tokens": self.input_tokens, "completion_tokens": self.output_tokens}}
+        else:
+            self.response = response
         self.latency_ms = latency_ms
         self.format_used = format_used
         self.endpoint = endpoint
@@ -346,6 +389,8 @@ class LlmResult:
         self.model = (model if isinstance(model, str) and model else str(request.get("model") or ""))[:200]
         self.malformed: Optional[str] = None
         try:
+            if unparsed:
+                raise ValueError("nested too deeply to parse")
             self.content, self.refusal = _message_text(response)
         except Exception as err:   # ValueError for a missing choice or message; RecursionError for absurd nesting
             self.content, self.refusal = "", ""
@@ -497,16 +542,19 @@ def response_format_for(kind: str, expect: dict) -> Optional[dict]:
         "type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}}}
 
 
-def scrub(value: Any, secret: Optional[str]) -> Any:
-    """A copy of `value` with every occurrence of the key replaced, for anything sent to the browser."""
+def scrub(value: Any, secret: Optional[str], _depth: int = 0) -> Any:
+    """A copy of `value` with every occurrence of the key replaced, for anything sent to the browser.
+    Containers nested deeper than MAX_SCRUB_DEPTH become a note, so no reply can exhaust the stack."""
     if not secret:
         return value
     if isinstance(value, str):
         return value.replace(secret, "***")
+    if isinstance(value, (dict, list)) and _depth >= MAX_SCRUB_DEPTH:
+        return "(nested deeper than %d levels; not shown)" % MAX_SCRUB_DEPTH
     if isinstance(value, dict):
-        return {scrub(k, secret): scrub(v, secret) for k, v in value.items()}
+        return {scrub(k, secret): scrub(v, secret, _depth + 1) for k, v in value.items()}
     if isinstance(value, list):
-        return [scrub(v, secret) for v in value]
+        return [scrub(v, secret, _depth + 1) for v in value]
     return value
 
 
@@ -571,9 +619,10 @@ class LlmEndpoint:
             self.last_error = message
         return LlmError(message, status=status, body=scrub(body, self.api_key))
 
-    def _post(self, payload: dict, deadline: float) -> Tuple[dict, float]:
-        """One POST that must finish by `deadline` (time.monotonic()): connect, headers and body.
-        Raises TimeoutError past it; an HTTPError carries its (short) body as `body_text`."""
+    def _post(self, payload: dict, deadline: float) -> Tuple[Optional[dict], float]:
+        """One POST that must finish by `deadline` (time.monotonic()): TCP connect, proxy tunnel, TLS
+        handshake, headers and body. Raises TimeoutError past it; an HTTPError carries its (short)
+        body as `body_text`. Returns None for a whole reply nested too deeply to parse."""
         headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": USER_AGENT}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
@@ -587,21 +636,24 @@ class LlmEndpoint:
         try:
             with _OPENER.open(req, timeout=remaining) as resp:
                 raw = resp.read(MAX_RESPONSE_BYTES + 1)
+                expired = watchdog.cancel()   # only a watchdog that fired before the read returned counts
         except urllib.error.HTTPError as err:
             try:   # read the error body while the watchdog still guards the socket
                 err.body_text = err.read(4096).decode("utf-8", errors="replace") if err.fp else ""
             except (OSError, http.client.HTTPException):
                 err.body_text = ""
-            if watchdog.expired:
+            finally:
+                err.close()
+            if watchdog.cancel():
                 raise TimeoutError("deadline passed") from err
             raise
         except (OSError, http.client.HTTPException, ValueError):
-            if watchdog.expired:
+            if watchdog.cancel():
                 raise TimeoutError("deadline passed")
             raise
         finally:
             watchdog.cancel()
-        if watchdog.expired:   # the socket was shut mid-reply, so what arrived may be cut short
+        if expired:   # the socket was shut mid-reply, so what arrived may be cut short
             raise TimeoutError("deadline passed")
         latency_ms = (time.perf_counter() - started) * 1000
         if len(raw) > MAX_RESPONSE_BYTES:
@@ -609,7 +661,9 @@ class LlmEndpoint:
         try:   # Infinity, NaN and 1e400 become null: the trace goes to the browser, whose JSON has no such values
             data = json.loads(raw.decode("utf-8", errors="replace"), parse_constant=lambda _: None,
                               parse_float=lambda s: _finite(float(s)))
-        except (ValueError, RecursionError):
+        except RecursionError:   # a whole reply too deep for this Python's parser (3.11 stops near 1000 levels)
+            return None, latency_ms
+        except ValueError:
             raise ValueError("reply was not JSON (%s)" % raw[:80].decode("utf-8", errors="replace").strip())
         if not isinstance(data, dict):
             raise ValueError("reply was not a JSON object")
@@ -623,6 +677,7 @@ class LlmEndpoint:
                              % self.config.api_key_env, 401)
         deadline = time.monotonic() + self.config.timeout_s
         fmt = self._format
+        downgraded_from: Optional[str] = None
         while True:
             self.guard.check(rate=self._rate is None)   # the budget is always shared
             if self._rate is not None:
@@ -646,10 +701,13 @@ class LlmEndpoint:
                     body: Any = json.loads(body_text)
                 except (ValueError, RecursionError):
                     body = body_text or err.reason
+                if _deeper_than(body, MAX_TRACE_DEPTH):   # quoted as text, so nothing has to walk it
+                    body = body_text[:300]
                 # Not every server supports structured output. Remember plain mode at once, and retry
                 # this decision only if the rest of the deadline comfortably fits another attempt.
                 if err.code in (400, 422) and fmt != "none":
                     rejected, fmt = fmt, "none"
+                    downgraded_from = rejected
                     with self._lock:
                         self._format = "none"
                     now = time.monotonic()
@@ -658,6 +716,11 @@ class LlmEndpoint:
                     raise self._fail("the endpoint rejected response_format %s (HTTP %d: %s); later calls use plain "
                                      "mode, but too little of timeout_s was left to retry this one"
                                      % (rejected, err.code, _error_text(body)), 502, body)
+                if err.code in (400, 422) and downgraded_from:
+                    # The plain retry was refused too, so the request itself is wrong (a bad model name,
+                    # say), not its response_format: keep the format this endpoint had.
+                    with self._lock:
+                        self._format = downgraded_from
                 if 300 <= err.code < 400:
                     raise self._fail(str(err.reason), 502)
                 if err.code in (401, 403):
@@ -674,7 +737,7 @@ class LlmEndpoint:
             except (ValueError, OSError, http.client.HTTPException) as err:
                 raise self._fail(str(err) or type(err).__name__, 502)
         # The call happened, so its usage is recorded whatever the reply holds. A completion without a
-        # usable message comes back as `malformed` and becomes an invalid answer, not an error.
+        # usable message, or one too deep to parse, comes back as `malformed`: an invalid answer, not an error.
         result = LlmResult(self, payload, response, latency_ms, fmt)
         self.guard.record(result)
         with self._lock:

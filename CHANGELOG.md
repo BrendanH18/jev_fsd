@@ -13,7 +13,9 @@
   and errors. The model picks among safety-checked candidates only and falls back to Rules (with
   the reason in the HUD and arena timelines) on invalid output, timeouts, HTTP errors or an
   exhausted budget; unusable replies still count their calls, tokens and cost. `timeout_s` is one
-  real deadline per decision, including a plain retry when an endpoint rejects structured output.
+  real deadline per decision, covering the TCP connect, any proxy tunnel, the TLS handshake, the
+  whole reply and a plain retry when an endpoint rejects structured output; only DNS resolution is
+  left to the system resolver.
   Calls share `JEV_FSD_BUDGET_USD` and `JEV_FSD_RPM`; optional per-endpoint prices give costs,
   otherwise tokens are reported with an unknown ($0) cost that the budget cannot stop, and
   `rpm: 0` removes the rate limit too. The prompt lives in `static/js/brain/llm-prompt.js`;

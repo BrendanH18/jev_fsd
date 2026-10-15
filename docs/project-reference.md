@@ -393,7 +393,7 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 102 Python tests (37 for LLM endpoints against a local mock
+The documented validation covers 108 Python tests (43 for LLM endpoints against a local mock
 OpenAI-compatible server; no real provider is tested), 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
 106 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
 22 vehicle model regressions, 14 LLM agent checks, six route-control regressions,
