@@ -29,12 +29,21 @@ def _height(tags: dict, rng: random.Random) -> float:
     return rng.uniform(6.0, 12.0)
 
 
+def _raised(tags: dict) -> bool:
+    """Skywalks and other structures that start above street level and span roads."""
+    for key in ("building:min_level", "min_height"):
+        m = re.match(r"\s*(\d+(?:\.\d+)?)", tags.get(key, ""))
+        if m and float(m.group(1)) > 0:
+            return True
+    return False
+
+
 def extract_buildings(osm: OsmData, proj: Projection, seed: int = 7) -> List[dict]:
     rng = random.Random(seed)
     out = []
     for w in osm.ways:
         tags = w["tags"]
-        if "building" not in tags or tags.get("building") == "no":
+        if "building" not in tags or tags.get("building") == "no" or _raised(tags):
             continue
         ids = w["nodes"]
         if len(ids) < 4 or ids[0] != ids[-1]:

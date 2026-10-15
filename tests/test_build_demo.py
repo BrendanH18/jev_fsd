@@ -29,7 +29,7 @@ class BrowserDemoBuildTests(unittest.TestCase):
                 build_demo.build(output)
             self.assertIn('name="jev-demo"', (output / "index.html").read_text())
             maps = json.loads((output / "demo-data/catalog.json").read_text())
-            self.assertEqual(len(maps), 8)
+            self.assertEqual(len(maps), 12)
             for item in maps:
                 self.assertTrue((output / f"demo-data/{item['id']}.json").is_file())
             self.assertTrue((output / "arena.html").is_file())

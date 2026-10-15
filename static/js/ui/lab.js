@@ -67,7 +67,7 @@ export class DriveLab {
         this.welcomeCard("01", "Take a scenic drive", "Real neighbourhoods. Golden light. Find your rhythm.", "Start cruising →", () => this.scenic("manual")),
         this.welcomeCard("02", "Can you beat the AI?", "Six authored challenges. The same conditions for every driver.", "Pick a challenge →", () => this.challenges()),
         this.welcomeCard("03", "Watch the AI drive", "Follow its choices, then rewind and try your own.", "Watch Rules →", () => this.scenic("rules"))),
-      h("div", { class: "lab-footer" }, h("span", {}, "8 neighbourhoods · 7 Canadian cities · No key needed for Rules"),
+      h("div", { class: "lab-footer" }, h("span", {}, "12 neighbourhoods · 11 Canadian cities · No key needed for Rules"),
         h("a", { href: "https://github.com/BrendanH18/jev_fsd", target: "_blank", rel: "noopener" }, "Star on GitHub ↗")),
       h("p", { class: "lab-footnote" }, this.demo ? "Public browser demo · Rules and starter agents run locally in your browser. Keyboard driving on desktop." : "Local drive lab · WASD to drive · J for autopilot · P to pause. Research simulator.")));
   }

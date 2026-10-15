@@ -30,7 +30,7 @@ entirely in your browser.
 
 ### 🚗 Drive real neighbourhoods
 
-Eight neighbourhoods across seven Canadian cities ship with the project, so the app works offline
+Twelve neighbourhoods across eleven Canadian cities ship with the project, so the app works offline
 once its dependencies are installed:
 
 | Neighbourhood | City | | Neighbourhood | City |
@@ -39,6 +39,8 @@ once its dependencies are installed:
 | Mount Pleasant | Vancouver | | Le Plateau | Montréal |
 | Old Town | Victoria | | Centretown | Ottawa |
 | Beltline | Calgary | | Saint-Roch | Québec City |
+| Downtown | Halifax | | Exchange District | Winnipeg |
+| Old Strathcona | Edmonton | | Downtown & Nutana | Saskatoon |
 
 Pick from six vehicles, including a city hatch, a sport coupe and a utility pickup. Each one has
 its own dimensions, mass, power and handling. Then choose a paint colour, the weather (dry, rain,

@@ -7,7 +7,7 @@ python3 scripts/build_demo.py
 python3 -m http.server 8323 --directory .demo-site
 ```
 
-Open `http://localhost:8323`. All eight map packs and the Three.js runtime are bundled.
+Open `http://localhost:8323`. All twelve map packs and the Three.js runtime are bundled.
 Routing and suggested drives run against the directed lane graph in the browser. Rules and
 the cautious starter make no model requests. Jev remains discoverable but requires the local
 Python application. Custom map downloads are also local-app features.

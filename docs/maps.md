@@ -1,7 +1,8 @@
 # Canadian city maps
 
-Use **Explore cities** in the simulator, then select a neighbourhood. Eight maps across seven
-Canadian cities cover residential streets, downtown avenues and historic street grids. Each is
+Use **Explore cities** in the simulator, then select a neighbourhood. Twelve maps across eleven
+Canadian cities cover residential streets, downtown avenues, historic street grids, a harbour
+front, a warehouse district, a prairie main street and river crossings. Each is
 a neighbourhood-sized extract of real OpenStreetMap roads, lane tags, buildings and traffic controls. The processed
 packs are bundled, so these choices work without a map download. Three suggested drives are
 routed from the car's current position when the explorer opens; the world pauses while choosing.
@@ -16,11 +17,17 @@ routed from the car's current position when the explorer opens; the world pauses
 | `?map=calgary` | Beltline, Calgary | 553 | 40 | 56 | 1,183 |
 | `?map=ottawa` | Centretown, Ottawa | 675 | 48 | 147 | 3,000 |
 | `?map=quebec_city` | Saint-Roch, Québec City | 757 | 25 | 49 | 1,647 |
+| `?map=halifax` | Downtown, Halifax | 581 | 25 | 31 | 1,020 |
+| `?map=winnipeg` | Exchange District, Winnipeg | 598 | 17 | 5 | 783 |
+| `?map=edmonton` | Old Strathcona, Edmonton | 404 | 11 | 4 | 1,614 |
+| `?map=saskatoon` | Downtown & Nutana, Saskatoon | 639 | 27 | 9 | 1,552 |
 
 A two-way road segment contributes two directed segments. Routes retain OSM street names,
 one-way directions, lane tags and speed limits; missing lane and speed tags use road-class
 defaults. Only the largest connected driving network is retained, so a suggested drive cannot
 lead to an isolated street. Building counts are processed footprints, capped at 3,000 per pack.
+Edmonton and Winnipeg have few mapped stop signs: many of their residential and warehouse
+crossings are uncontrolled in OpenStreetMap, as they often are on the street.
 
 Changing city starts a new world and keeps the selected weather, time and graphics setting.
 An active drive with distance recorded is saved as **map changed**, without an arrival claim.
@@ -35,7 +42,8 @@ Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright
 under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/1-0/).
 Victoria, Toronto and Montréal were downloaded on 2026-09-29 from the OpenStreetMap main API.
 Mount Pleasant, Calgary and Québec City were downloaded on 2026-09-30 from the same API;
-Ottawa was downloaded that day through the `overpass-api.de` fallback. These are actual OSM
+Ottawa was downloaded that day through the `overpass-api.de` fallback. Halifax, Winnipeg,
+Edmonton and Saskatoon were downloaded on 2026-10-14 from the OpenStreetMap main API. These are actual OSM
 extracts processed without changing the existing map-pack schema. Raw XML downloads are a
 local cache; the processed packs are the redistributable database extracts included here.
 
@@ -49,6 +57,17 @@ local cache; the processed packs are the redistributable database extracts inclu
 | Calgary | `-114.0870,51.0340,-114.0630,51.0450` | `data/maps/a53c5bcf6438.v5.pack.json` |
 | Ottawa | `-75.7080,45.4070,-75.6870,45.4210` | `data/maps/d25b07def0d2.v5.pack.json` |
 | Québec City | `-71.2350,46.8050,-71.2180,46.8150` | `data/maps/8e99888cb743.v5.pack.json` |
+| Halifax | `-63.5900,44.6400,-63.5700,44.6520` | `data/maps/49db0d437c8c.v5.pack.json` |
+| Winnipeg | `-97.1500,49.8920,-97.1310,49.9030` | `data/maps/19bb885c9cae.v5.pack.json` |
+| Edmonton | `-113.5120,53.5130,-113.4880,53.5230` | `data/maps/3e794edbefcb.v5.pack.json` |
+| Saskatoon | `-106.6720,52.1170,-106.6500,52.1310` | `data/maps/ca5573a8d934.v5.pack.json` |
+
+Processing skips streets roofed by a building (`covered=yes`, `tunnel=building_passage`, such
+as Grafton Street through Halifax's Nova Centre) and footprints that start above street level
+(`building:min_level` or `min_height` above zero: skywalks and pedways over roads). A roundabout
+split across several OSM ways is joined into one ring with a fitted centre, and rings of 9 m
+radius or more keep their single circulating lane on the mapped carriageway. The eight earlier
+packs were not rebuilt; refreshing one may drop a raised footprint (Kitsilano: one).
 
 To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
 data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep

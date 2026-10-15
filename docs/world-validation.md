@@ -78,5 +78,29 @@ The [2026-10-14 Rules baseline](rules-baseline.md) supersedes this table. That r
 table's Kitsilano dry result under V8, but not under WebKit, with the same code. In WebKit,
 Ottawa and Québec City fail one smoke route on street-furniture contact.
 
+## New cities — 2026-10-14
+
+Halifax, Winnipeg, Edmonton and Saskatoon were added; see [map coverage](maps.md). Seeded Rules
+smoke suites ran on `/bench` with production `buildSuite` and `runScenario`: 2 routes, seed 1,
+40 traffic cars, lockstep, dry, unsaved. Engine: WebKit (headless WKWebView via
+`scripts/shot.swift`); results can differ in V8.
+
+| Map and conditions | Passed | Arrived | km | Mean km/h | Remaining failures |
+|---|---:|---:|---:|---:|---|
+| Halifax, dry | 1/2 | 2/2 | 1.83 | 19.2 | One at-fault contact at 2.3 m/s with a car on the right, 29° apart in heading; 1.2 s off-road on that route (0.7 s on the passing route) |
+| Winnipeg, dry | 2/2 | 2/2 | 2.02 | 36.4 | None in this smoke suite |
+| Edmonton, dry | 2/2 | 2/2 | 1.88 | 33.1 | None in this smoke suite |
+| Saskatoon, dry | 2/2 | 2/2 | 1.48 | 29.9 | None in this smoke suite |
+
+No red-light, stop-sign or yield violations were recorded, and none of the new cities showed the
+known street-furniture contact. The Halifax contact is car-to-car, and no map defect was found
+behind it; it was recorded rather than tuned around. Before the processing fixes below, Winnipeg
+passed 1/2 with one other-fault contact.
+
+The first Halifax run failed 0/2: the ego drove into the Nova Centre footprint, because
+Grafton Street is mapped through the building as a covered street, and the downtown roundabouts
+are split across several OSM ways, which produced ring lanes 11-17 m off their carriageway. The
+processing fixes in [maps](maps.md) removed both; the bounding box was not changed.
+
 Run the commands in the README, then open `/tests` and run the renderer assertions from the
 simulator console. `/bench` reproduces the seeded city suites without graphics.

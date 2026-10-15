@@ -42,6 +42,7 @@ RING_MIN_LANE_R = 5.0
 RING_MAX_ISLAND_R = 4.5
 RING_LANE_TO_ISLAND_M = 2.4
 RING_OUTER_M = 2.0              # asphalt beyond the lane centerline
+RING_LARGE_R = 9.0              # rings this big are drawn along their carriageway, not round an island
 
 
 def parse_maxspeed(value: Optional[str], cls: str) -> float:
@@ -129,6 +130,9 @@ def is_drivable(tags: dict, include_service: bool = False) -> bool:
     if tags.get("access") in ("private", "no") and tags.get("motor_vehicle") not in ("yes", "permissive"):
         return False
     if cls == "service" and tags.get("service") in ("parking_aisle", "driveway"):
+        return False
+    # A street roofed by a building would drive the car into that building's footprint.
+    if tags.get("covered") == "yes" or tags.get("tunnel") == "building_passage":
         return False
     return True
 
@@ -341,30 +345,108 @@ def _lane_centerlines(graph: RoadGraph) -> None:
         e["asphalt"] = (-e["width"] / 2.0 - park_left, e["width"] / 2.0 + park_right)
 
 
+def _circle_center(pts: List[Tuple[float, float]]) -> Tuple[float, float]:
+    """Least-squares (Kasa) circle center through points; the centroid when they are collinear."""
+    mx = sum(p[0] for p in pts) / len(pts)
+    my = sum(p[1] for p in pts) / len(pts)
+    suu = suv = svv = suuu = svvv = suvv = svuu = 0.0
+    for x, y in pts:
+        u, v = x - mx, y - my
+        suu += u * u
+        suv += u * v
+        svv += v * v
+        suuu += u * u * u
+        svvv += v * v * v
+        suvv += u * v * v
+        svuu += v * u * u
+    det = suu * svv - suv * suv
+    if abs(det) < 1e-9:
+        return mx, my
+    bu, bv = (suuu + suvv) / 2, (svvv + svuu) / 2
+    return mx + (bu * svv - bv * suv) / det, my + (bv * suu - bu * suv) / det
+
+
 def _roundabouts(graph: RoadGraph, osm: OsmData, proj: Projection) -> None:
     """Center and radius of every roundabout ring, and its lane moved out to a drivable radius.
 
     OSM draws a small traffic circle as a ring of radius 3-6 m around the island, tighter than a
     car can turn. The ring's lane is placed at least RING_MIN_LANE_R from the center (outward is to
     the right of travel on a counter-clockwise ring) and its asphalt runs from the island to
-    RING_OUTER_M beyond the lane."""
-    rings: Dict[int, List[str]] = {}
+    RING_OUTER_M beyond the lane. Larger roundabouts keep their lane on the mapped carriageway.
+    A ring split over several OSM ways is joined into one, its center fitted to all of them."""
+    by_way: Dict[int, List[str]] = {}
     for eid, e in graph.edges.items():
         if e.get("ring"):
-            rings.setdefault(e["ring"], []).append(eid)
+            by_way.setdefault(e["ring"], []).append(eid)
+    # OSM often splits one roundabout into several ring ways; ways whose edges meet are one ring
+    parent = {w: w for w in by_way}
+
+    def find(w):
+        while parent[w] != w:
+            parent[w] = parent[parent[w]]
+            w = parent[w]
+        return w
+
+    owner: Dict[str, int] = {}
+    for way_id, eids in sorted(by_way.items()):
+        for eid in eids:
+            for v in (graph.edges[eid]["from"], graph.edges[eid]["to"]):
+                if v in owner:
+                    a, b = find(owner[v]), find(way_id)
+                    parent[max(a, b)] = min(a, b)
+                else:
+                    owner[v] = way_id
+    groups: Dict[int, List[int]] = {}
+    for way_id in sorted(by_way):
+        groups.setdefault(find(way_id), []).append(way_id)
+    # A ring meets two ring edges at every vertex. Two roundabouts sharing a node branch there, so
+    # a branched group is split back into rings joined only through unbranched vertices; one false
+    # circle through both would misplace every lane, and fitting each piece alone would too.
+    rings: Dict[int, List[int]] = {}
+    for root, way_ids in groups.items():
+        ends: Dict[str, int] = {}
+        for eid in (eid for w in way_ids for eid in by_way[w]):
+            for v in (graph.edges[eid]["from"], graph.edges[eid]["to"]):
+                ends[v] = ends.get(v, 0) + 1
+        if len(way_ids) == 1 or max(ends.values()) <= 2:
+            rings[root] = way_ids
+            continue
+        for w in way_ids:
+            parent[w] = w
+        owner = {}
+        for way_id in way_ids:
+            for eid in by_way[way_id]:
+                for v in (graph.edges[eid]["from"], graph.edges[eid]["to"]):
+                    if ends[v] > 2:
+                        continue
+                    if v in owner:
+                        a, b = find(owner[v]), find(way_id)
+                        parent[max(a, b)] = min(a, b)
+                    else:
+                        owner[v] = way_id
+        for w in way_ids:
+            rings.setdefault(find(w), []).append(w)
     graph.roundabouts = []
     ways = {w["id"]: w for w in osm.ways}
-    for k, (way_id, eids) in enumerate(sorted(rings.items())):
-        way = ways[way_id]
-        pts = [proj.to_xy(osm.nodes[n][0], osm.nodes[n][1]) for n in way["nodes"] if n in osm.nodes]
-        if len(pts) < 4:
+    for k, (_first, way_ids) in enumerate(sorted(rings.items())):
+        eids = [eid for w in way_ids for eid in by_way[w]]
+        node_ids = [n for w in way_ids for n in ways[w]["nodes"] if n in osm.nodes]
+        closed_way = len(way_ids) == 1 and node_ids and node_ids[0] == node_ids[-1]
+        node_ids = list(dict.fromkeys(node_ids))
+        if len(node_ids) < 3 + (not closed_way):
             continue
-        ring_pts = pts[:-1] if pts[0] == pts[-1] else pts
-        cx = sum(p[0] for p in ring_pts) / len(ring_pts)
-        cy = sum(p[1] for p in ring_pts) / len(ring_pts)
+        ring_pts = [proj.to_xy(osm.nodes[n][0], osm.nodes[n][1]) for n in node_ids]
+        if closed_way:
+            cx = sum(p[0] for p in ring_pts) / len(ring_pts)
+            cy = sum(p[1] for p in ring_pts) / len(ring_pts)
+        else:  # pieces or a clipped arc: the centroid is biased, fit the circle instead
+            cx, cy = _circle_center(ring_pts)
         radius = sum(math.hypot(p[0] - cx, p[1] - cy) for p in ring_pts) / len(ring_pts)
-        island = max(1.5, min(RING_MAX_ISLAND_R, radius - 1.0))
-        lane_r = max(RING_MIN_LANE_R, island + RING_LANE_TO_ISLAND_M)
+        if radius >= RING_LARGE_R:
+            lane_r, island = radius, radius - RING_LANE_TO_ISLAND_M
+        else:
+            island = max(1.5, min(RING_MAX_ISLAND_R, radius - 1.0))
+            lane_r = max(RING_MIN_LANE_R, island + RING_LANE_TO_ISLAND_M)
         rid = "rb%d" % k
         vertices = set()
         ccw = True
@@ -378,6 +460,7 @@ def _roundabouts(graph: RoadGraph, osm: OsmData, proj: Projection) -> None:
             ccw = outward > 0
             e_r = sum(math.hypot(p[0] - cx, p[1] - cy) for p in e["pts"]) / len(e["pts"])
             d = outward * (lane_r - e_r)
+            e["lanes"] = 1   # one circulating lane, however many the ring is tagged with
             e["lane_offsets"] = [d]
             e["lane_pts"] = [g.offset_polyline(e["pts"], d)]
             inner, outer = -outward * (e_r - island), outward * (lane_r + RING_OUTER_M - e_r)

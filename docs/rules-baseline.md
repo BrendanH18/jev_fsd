@@ -8,7 +8,9 @@ Rain and snow had not been run as full suites since the realism work. This is th
 ## Method
 
 Production `/bench`, Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano ran 12 routes in
-dry, fog, rain and snow. The other bundled maps ran two-route dry smoke suites.
+dry, fog, rain and snow. The other bundled maps ran two-route dry smoke suites. Halifax, Winnipeg,
+Edmonton and Saskatoon were added after this baseline; their smoke results are in
+[world validation](world-validation.md#new-cities--2026-10-14).
 
 Each suite ran in WebKit through `scripts/shot.swift` on macOS 27.0.1. The script calls
 `window.__bench.run(...)` on `/bench?map=<preset>`, and the page saves its own result through
