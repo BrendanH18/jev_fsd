@@ -125,9 +125,13 @@ function makeSnow(count = 6000) {
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   // Round, soft-edged flakes. Plain points are hard squares, and a flake passing just in front of
   // the lens grew into a large flat tile, so the on-screen size is also capped.
-  const material = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, map: flakeTexture(), transparent: true, opacity: 0.95, depthWrite: false });
+  // Three sets `scale` to half the CSS height but `size` to the flake size times the pixel ratio,
+  // so `size / FLAKE` is the pixel ratio and the cap is 1.5% of the view height on any screen.
+  const FLAKE = 0.12;
+  const material = new THREE.PointsMaterial({ color: 0xffffff, size: FLAKE, map: flakeTexture(), transparent: true, opacity: 0.95, depthWrite: false });
   material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace("#include <fog_vertex>", "#include <fog_vertex>\n  gl_PointSize = min( gl_PointSize, scale * 0.03 );");
+    shader.vertexShader = shader.vertexShader.replace("#include <fog_vertex>",
+      `#include <fog_vertex>\n  gl_PointSize = min( gl_PointSize, scale * 0.03 * size / ${FLAKE.toFixed(2)} );`);
   };
   const mesh = new THREE.Points(geo, material);
   mesh.frustumCulled = false;

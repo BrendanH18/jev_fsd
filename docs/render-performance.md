@@ -66,7 +66,7 @@ Reported as "weird artifacting, particularly for clouds and trees". Causes and f
   taps per shaded fragment on every preset.
 - **Shadow blotches swimming over leaves.** Leaf cards sway in the vertex shader, but their shadow
   caster did not, so each card was shadowed by its own offset copy. The leaf and conifer depth
-  materials now apply the same wind. No measurable cost.
+  materials now apply the same wind. The cost was not measured.
 - **Salt-and-pepper leaf shading.** Leaf cards carry crown-space normals, but the double-sided
   material flipped them on back faces, lighting about half the cards from inside the crown. The
   flip is undone, and inner leaves receive less sky light (a cheap crown-depth term).
@@ -78,14 +78,16 @@ Reported as "weird artifacting, particularly for clouds and trees". Causes and f
   below the cutoff (for a leaf-like test texture, the share of texels passing it fell from 0.20 at
   full size to 0.06 at 8×8 and to zero below) and averaged black from transparent texels into the
   leaf colour. `cutoutTexture` builds the chain by hand: alpha-weighted colour pushed into
-  transparent texels, and each level's alpha rescaled to keep full-size coverage (the real leaf
-  texture holds 0.34–0.36 from 256² down to 16²). Distant crowns use fewer, larger cards set slightly deeper,
+  transparent texels, and each level's alpha rescaled to approximate full-size coverage. The real
+  leaf texture holds 0.34–0.36 from 256² down to 16²; smaller levels have too few texels to match it
+  (0.39 at 8², 0.31 at 4², 0.25 at 2², none at 1²), which only matters for cards about two pixels wide. Distant crowns use fewer, larger cards set slightly deeper,
   so their leaf cover matches the detailed crowns. Startup cost only.
 - **Hard, crawling leaf edges.** High now renders the scene into a 4× multisampled target (no AO
   there, so no depth texture is needed) and leaves use alpha to coverage; Low gets the same from the
   antialiased canvas. Ultra keeps a single-sample target for AO and relies on its 2× pixel ratio,
   so the view switches alpha to coverage off there: on a single-sample target Three keeps the
-  partly transparent edge texels as opaque fragments, which sparkled across every crown.
+  partly transparent edge texels as opaque fragments, which sparkled across every crown. The
+  wet-road mirror pass draws the same leaves, so its target takes the main target's sample count.
 - **Cloud shimmer toward the horizon.** The deck is projected onto a flat ceiling, so cells shrink
   without limit near the horizon and the finest octaves alias (and the sunward lighting term
   amplifies them fivefold). The noise now measures its pixel footprint with screen derivatives and
@@ -94,12 +96,12 @@ Reported as "weird artifacting, particularly for clouds and trees". Causes and f
   several pixels wide near the camera. The reflection target is now mipmapped and each smear tap
   reads the level whose texels match the tap spacing, so taps overlap without jitter.
 - **Square snowflakes.** Points were hard-edged squares that grew into tiles in front of the lens;
-  they are round, soft-edged sprites capped at about 1.5% of the view height
-  (`scale` is half the canvas height).
+  they are round, soft-edged sprites capped at about 1.5% of the view height. Three's `scale`
+  uniform is half the CSS height, so the cap also multiplies by the pixel ratio.
 
 Renderer assertions cover the noise-free shadow filter, leaf mip coverage and colour, swaying
-shadow casters, multisampling with and without AO, alpha to coverage only where multisampled,
-and the mipmapped reflection. They pass on
+shadow casters, multisampling with and without AO, alpha to coverage only where multisampled
+(including the reflection pass), and the mipmapped reflection. They pass on
 Low, High (rain, 4× MSAA) and Ultra (rain) with no GL errors.
 
 Timing after the change, in a headless WKWebView (Metal) at a 1440 × 900 viewport, spawn pose,

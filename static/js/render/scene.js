@@ -434,9 +434,11 @@ export class SceneView {
 
   // Cut-out materials marked coverageEdges use alpha to coverage only where the scene target is
   // multisampled. On a single-sample target (Ultra keeps one for ambient occlusion) Three no longer
-  // discards the partly transparent edge texels, and they sparkle across every tree crown.
+  // discards the partly transparent edge texels, and they sparkle across every tree crown. The wet-road
+  // mirror pass draws the same materials, so it takes the main target's sample count.
   applyCoverage() {
     const on = this.post ? this.post.sceneRT.samples > 0 : !!this.renderer.getContextAttributes?.()?.antialias;
+    this.reflection?.setSamples(this.post ? this.post.sceneRT.samples : 0);
     this.scene.traverse((o) => {
       const m = o.material;
       if (m?.userData?.coverageEdges && m.alphaToCoverage !== on) { m.alphaToCoverage = on; m.needsUpdate = true; }

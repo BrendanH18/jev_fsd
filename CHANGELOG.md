@@ -5,10 +5,11 @@
 - Graphics artifact fixes. Sun shadows filter without screen-space noise, removing the crawling dot
   pattern inside tree crowns and other partial shadows. Leaf shadows sway with the leaves, leaf
   cards keep their crown shading on both faces, and crown interiors read as shaded foliage instead
-  of a dark ball. Leaf textures keep their coverage and colour at a distance, so far trees no
-  longer thin out or darken. Clouds fade detail that is too fine to draw near the horizon, wet-road
+  of a dark ball. Leaf textures keep their colour and roughly their coverage at a distance, so far
+  trees no longer thin out or darken. Clouds fade detail that is too fine to draw near the horizon, wet-road
   reflections smear smoothly instead of in blocks, and snowflakes are round and size-capped.
-- High quality renders the scene with 4x multisampling and alpha-to-coverage foliage edges.
+- High quality renders the scene, and the wet-road reflection, with 4x multisampling and
+  alpha-to-coverage foliage edges. Frame-time cost has not been measured against a baseline.
 
 - Four new bundled neighbourhoods: Downtown Halifax, Winnipeg's Exchange District, Old Strathcona
   in Edmonton and Downtown & Nutana in Saskatoon. Twelve neighbourhoods across eleven Canadian

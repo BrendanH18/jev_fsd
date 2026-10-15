@@ -33,6 +33,15 @@ export class GroundReflection {
     this._q = new THREE.Vector4();
   }
 
+  // Multisample the mirror pass to match the main scene target. Leaf cut-outs use alpha to coverage
+  // whenever the main target is multisampled, and on a single-sample target their partly transparent
+  // edge texels would be drawn opaque. Three resolves the samples before building the mip chain.
+  setSamples(samples) {
+    if (this.rt.samples === samples) return;
+    this.rt.samples = samples;
+    this.rt.dispose();   // reallocated with the new sample count on next use
+  }
+
   setSize(w, h) { this.rt.setSize(Math.max(2, Math.ceil(w * this.resolutionScale)), Math.max(2, Math.ceil(h * this.resolutionScale))); }
 
   render() {
