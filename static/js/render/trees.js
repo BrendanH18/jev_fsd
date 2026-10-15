@@ -208,10 +208,11 @@ export function buildTrees(map, roads, footprints) {
   const distantConifer = coniferGeometry(1, false);
   const leafMap = leafTexture();
   // Alpha to coverage turns the cutout edge into a partial-coverage edge wherever the target is
-  // multisampled (Low draws to the antialiased canvas, High to a multisampled scene target); on
-  // single-sample targets it behaves as the plain alpha test.
+  // multisampled (Low draws to the antialiased canvas, High to a multisampled scene target). The
+  // view switches it off on single-sample targets (see SceneView.applyCoverage).
   const leafMat = withWind(crownShading(snowable(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: LEAF_CUTOFF, alphaToCoverage: true,
     side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), "leaf")), 0.05);
+  leafMat.userData.coverageEdges = true;
   // Shadows sway with the leaves. A still shadow caster under moving leaves shadowed each card by
   // its own offset copy, so dark blotches swam across the crowns in any wind.
   const leafDepth = withWind(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: LEAF_CUTOFF, side: THREE.DoubleSide }), 0.05);

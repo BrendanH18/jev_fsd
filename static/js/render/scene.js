@@ -228,6 +228,7 @@ export class SceneView {
     if (!q.post && this.post) { this.post.dispose(); this.post = null; }
     this.reflection.enabled = q.post;
     this.reflection.resolutionScale = q.reflectionScale;
+    this.applyCoverage();
     this.resize();
     if (this.atmosphere) this.setAtmosphere(this.atmosphere);
     return this.quality;
@@ -428,5 +429,17 @@ export class SceneView {
       if (child.isLOD) { child.autoUpdate = false; this.sceneryLODs.push(child); }
     });
     this.scene.add(object);
+    this.applyCoverage();
+  }
+
+  // Cut-out materials marked coverageEdges use alpha to coverage only where the scene target is
+  // multisampled. On a single-sample target (Ultra keeps one for ambient occlusion) Three no longer
+  // discards the partly transparent edge texels, and they sparkle across every tree crown.
+  applyCoverage() {
+    const on = this.post ? this.post.sceneRT.samples > 0 : !!this.renderer.getContextAttributes?.()?.antialias;
+    this.scene.traverse((o) => {
+      const m = o.material;
+      if (m?.userData?.coverageEdges && m.alphaToCoverage !== on) { m.alphaToCoverage = on; m.needsUpdate = true; }
+    });
   }
 }

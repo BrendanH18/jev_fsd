@@ -389,7 +389,7 @@ runRenderTests(); // Every result should have ok: true.
 ```
 
 The documented validation covers 65 Python tests, 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
-105 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
+106 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
 22 vehicle model regressions, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality

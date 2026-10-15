@@ -83,7 +83,9 @@ Reported as "weird artifacting, particularly for clouds and trees". Causes and f
   so their leaf cover matches the detailed crowns. Startup cost only.
 - **Hard, crawling leaf edges.** High now renders the scene into a 4× multisampled target (no AO
   there, so no depth texture is needed) and leaves use alpha to coverage; Low gets the same from the
-  antialiased canvas. Ultra keeps a single-sample target for AO and relies on its 2× pixel ratio.
+  antialiased canvas. Ultra keeps a single-sample target for AO and relies on its 2× pixel ratio,
+  so the view switches alpha to coverage off there: on a single-sample target Three keeps the
+  partly transparent edge texels as opaque fragments, which sparkled across every crown.
 - **Cloud shimmer toward the horizon.** The deck is projected onto a flat ceiling, so cells shrink
   without limit near the horizon and the finest octaves alias (and the sunward lighting term
   amplifies them fivefold). The noise now measures its pixel footprint with screen derivatives and
@@ -96,7 +98,8 @@ Reported as "weird artifacting, particularly for clouds and trees". Causes and f
   (`scale` is half the canvas height).
 
 Renderer assertions cover the noise-free shadow filter, leaf mip coverage and colour, swaying
-shadow casters, multisampling with and without AO, and the mipmapped reflection. They pass on
+shadow casters, multisampling with and without AO, alpha to coverage only where multisampled,
+and the mipmapped reflection. They pass on
 Low, High (rain, 4× MSAA) and Ultra (rain) with no GL errors.
 
 Timing after the change, in a headless WKWebView (Metal) at a 1440 × 900 viewport, spawn pose,
@@ -175,7 +178,7 @@ The profiler restores the pause state and renderer statistics configuration afte
 Renderer tests cover world transforms, paint, detail selection, hysteresis, geometry reduction,
 nearby shadows, removal of a parked car from both detail levels without removing its neighbor,
 reflection clipping, sampler/state restoration, quality changes and actual wet WebGL draws
-(95 assertions when run from the simulator, including city lighting, sign proportions, artifact regressions and
+(96 assertions when run from the simulator, including city lighting, sign proportions, artifact regressions and
 front/rear WebGL lettering).
 The `/tests` suite remains independent of Three.js and also passes (137 assertions: 99 simulation,
 18 HUD and 20 explorer), as do the 60 Python tests and offline fixture checks. The subsequent drive-experience changes add

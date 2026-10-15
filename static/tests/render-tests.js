@@ -175,7 +175,7 @@ export function runRenderTests() {
   view.post.render = () => { throw new Error("test render failure"); };
   try { SceneView.prototype.render.call(view, 0); } catch { /* verify state restoration below */ }
   check("render errors restore shadow updates", renderer.shadowMap.autoUpdate);
-  const registration = { scene: new THREE.Scene(), sceneryLODs: [] };
+  const registration = { scene: new THREE.Scene(), sceneryLODs: [], applyCoverage() {} };
   SceneView.prototype.addScenery.call(registration, parked);
   check("reflection camera cannot independently select detail", registration.sceneryLODs.includes(lod) && !lod.autoUpdate);
 
@@ -273,16 +273,24 @@ export function runRenderTests() {
     }
     const quality = live.quality, wet = lighting.wet.value, gl = live.renderer.getContext();
     for (let i = 0; i < 10 && gl.getError() !== gl.NO_ERROR; i++) { /* drain earlier errors */ }
+    const coverageEdges = [];
+    live.scene.traverse(o => { if (o.material?.userData?.coverageEdges) coverageEdges.push(o.material); });
+    const coverage = {};
     try {
       lighting.wet.value = 1;
       for (const [i, quality] of ['high', 'ultra', 'high', 'low'].entries()) {
         live.setQuality(quality);
+        coverage[quality] = coverageEdges.map(m => m.alphaToCoverage);
         // setQuality reapplies the atmosphere, so re-enable wet sampling for each case.
         lighting.wet.value = 1;
         live.render(0);
         check(`wet WebGL frame after quality transition ${i} (${quality})`, gl.getError() === gl.NO_ERROR);
       }
     } finally { live.setQuality(quality); lighting.wet.value = wet; }
+    // Alpha to coverage on Ultra's single-sample target turned leaf edges into sparkling specks.
+    check("leaf edges use alpha to coverage only on multisampled targets", coverageEdges.length > 0
+      && coverage.high.every(Boolean) && coverage.ultra.every(on => !on)
+      && coverage.low.every(on => on === !!gl.getContextAttributes().antialias));
   }
 
   // Dispose fixture buffers; materials/geometries shared with the live scene stay cached.
