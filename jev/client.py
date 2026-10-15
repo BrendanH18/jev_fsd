@@ -85,7 +85,9 @@ class JevResult:
 
 
 class SpendGuard:
-    """Per-process budget and rate limit for live calls."""
+    """Per-process budget and rate limit for live calls. One guard is shared by Jev and every
+    configured LLM endpoint (jev/llm.py), so JEV_FSD_BUDGET_USD and JEV_FSD_RPM cap them together.
+    `record` takes any result with `input_tokens` and `cost_usd` (and optionally `output_tokens`)."""
 
     def __init__(self, budget_usd: float = 2.0, rpm: int = 120):
         self.budget_usd = budget_usd
@@ -93,16 +95,20 @@ class SpendGuard:
         self.spent_usd = 0.0
         self.live_calls = 0
         self.input_tokens = 0
+        self.output_tokens = 0
         self._times: deque = deque()
         self._lock = threading.Lock()
 
-    def check(self) -> None:
+    def check(self, rate: bool = True) -> None:
+        """Raise when the budget is spent or (with `rate`) the per-minute cap is reached."""
         with self._lock:
             if self.budget_usd > 0 and self.spent_usd >= self.budget_usd:
                 raise JevError(
                     "This server run has spent its $%.2f budget (%d live calls). Restart it with "
                     "JEV_FSD_BUDGET_USD=<amount> to allow more." % (self.budget_usd, self.live_calls),
                     status=402)
+            if not rate:
+                return
             now = time.monotonic()
             while self._times and self._times[0] < now - 60:
                 self._times.popleft()
@@ -111,16 +117,17 @@ class SpendGuard:
                                % self.rpm, status=429)
             self._times.append(now)
 
-    def record(self, result: JevResult) -> None:
+    def record(self, result) -> None:
         with self._lock:
             self.live_calls += 1
             self.input_tokens += result.input_tokens
+            self.output_tokens += int(getattr(result, "output_tokens", 0) or 0)
             self.spent_usd += result.cost_usd
 
     def snapshot(self) -> dict:
         with self._lock:
             return {"budget_usd": self.budget_usd, "spent_usd": self.spent_usd, "live_calls": self.live_calls,
-                    "input_tokens": self.input_tokens, "rpm": self.rpm}
+                    "input_tokens": self.input_tokens, "output_tokens": self.output_tokens, "rpm": self.rpm}
 
 
 class JevClient:

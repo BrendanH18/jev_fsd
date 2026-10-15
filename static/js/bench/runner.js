@@ -42,7 +42,7 @@ export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "
 
 export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", style = null, vehicleSpec = undefined, shouldStop = () => false } = {}) {
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
-  const ctx = setupScenario(map, sc, { brain, npcs, weather, style, vehicleSpec, onDecision: (d) => { if (d.meta && d.meta.source === "jev" && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
+  const ctx = setupScenario(map, sc, { brain, npcs, weather, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
   const { world, autopilot, events } = ctx;
   const limit = Math.max(120, sc.tags.length_m / 2.5);
   const wallStart = performance.now();

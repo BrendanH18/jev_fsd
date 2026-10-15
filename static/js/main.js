@@ -16,7 +16,9 @@ import { Hud } from "./ui/hud.js";
 import { Input } from "./ui/input.js";
 import { Panel } from "./ui/panel.js";
 import { Autopilot } from "./brain/brain.js";
-import { agentDefinitions } from "./brain/registry.js";
+import { agentDefinitions, agentAvailable, setAgentAvailability } from "./brain/registry.js";
+import { registerLlmAgents, checkLlmEndpoints, llmSummary, defaultLlmId, llmBrainFor } from "./brain/llm.js";
+import { LlmSetup, LlmMenu } from "./ui/llm-setup.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
@@ -59,6 +61,8 @@ export async function boot() {
   const mapQuery = challenge?.map || params.get("bbox") || params.get("map") || replay?.bbox?.join(",") || "";
   const query = mapQuery ? `?bbox=${encodeURIComponent(mapQuery)}` : "";
   const status = await api(`/api/status${query}`);
+  setAgentAvailability("jev", status.configured, status.configured ? "" : "no API key");
+  registerLlmAgents(status.llm);   // your own models from data/llm-endpoints.json: agents llm:<name>
   const options = worldOptions(params, status.npcs);
   const pack = await api(`/api/map${query}`);
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
@@ -112,7 +116,7 @@ export async function boot() {
     ({ world, fleet, autopilot } = setupChallenge(map, challenge, callbacks));
     autopilot.setEnabled(false);
   } else if (replay) {
-    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: status.configured ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
+    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: agentAvailable(replay.brain) ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
   } else {
     // fewer people out on foot late in the evening and at night
     const pedestrians = hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined;
@@ -159,7 +163,7 @@ export async function boot() {
   };
   syncFleetMeshes();
   world._road = world.roadInfo();
-  if (!status.configured) autopilot.setBrain("rules");
+  if (!agentAvailable(autopilot.brainName)) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
   panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };
@@ -254,9 +258,48 @@ export async function boot() {
     if (!autopilot.enabled) overlays.setCandidates(null);
   }
   hud.onAutopilotClick(toggleAutopilot);
+  // Your own models: the LLM button drives with the last one chosen; ▾ picks another or opens setup.
+  let rememberedLlm = null, pausedBeforeSetup = false;
+  try { rememberedLlm = localStorage.getItem("jev-fsd-llm"); } catch { /* preferences are optional */ }
+  const llmDefault = () => defaultLlmId(autopilot.brainName.startsWith("llm:") ? autopilot.brainName : rememberedLlm);
+  function showLlm() {
+    const d = agentDefinitions().find(agent => agent.id === llmDefault());
+    hud.setLlm({ label: d?.label || "", available: d ? d.available !== false : false, offered: !status.demo });
+  }
+  // Models added, changed or removed in the setup dialog get fresh brains; removing the active one hands back to Rules.
+  function syncLlmBrains(changed) {
+    for (const id of changed) {
+      const brain = llmBrainFor(id);
+      if (brain) autopilot.brains[id] = brain; else delete autopilot.brains[id];
+      if (autopilot.brainName === id) { if (brain) autopilot.bumpEpoch(); else selectBrain("rules"); }
+    }
+  }
+  async function llmChanged(result) {
+    status.llm = result.llm;
+    syncLlmBrains(registerLlmAgents(result.llm));
+    llmSetup.setProviders(result.llm.providers);
+    lab?.refreshAgents(llmSummary(status)); showLlm();
+    try { await checkLlmEndpoints(); lab?.refreshAgents(llmSummary(status)); showLlm(); } catch { /* status stays "configured" */ }
+  }
+  const llmSetup = new LlmSetup({ onSaved: llmChanged, onUse: id => selectBrain(id),
+    onPause: on => { if (on) { pausedBeforeSetup = world.paused; world.paused = true; input.keys.clear(); } else world.paused = pausedBeforeSetup; } });
+  llmSetup.setProviders(status.llm?.providers);
+  new LlmMenu($("#llm-menu-toggle"), { onPick: id => selectBrain(id), onSetup: () => llmSetup.open(), current: llmDefault });
   function selectBrain(name) {
+    if (name === "llm") {
+      name = llmDefault();
+      if (!name) { hud.setBrain(autopilot.brainName); llmSetup.open(); return; }
+    }
     if (!autopilot.brains[name]) { hud.badge("Unknown agent. Choose a driver in Settings.", "safety", 1500); return; }
     if (name === "jev" && !status.configured) { hud.badge("Jev needs TYPESAFE_API_KEY in .env on the server", "safety", 2200); hud.setBrain(autopilot.brainName); return; }
+    const definition = agentDefinitions().find(agent => agent.id === name);
+    if (definition?.available === false) {
+      hud.badge(`${definition.label}: ${definition.note || "unavailable"}`, "safety", 2200); hud.setBrain(autopilot.brainName);
+      if (definition.llm && !definition.llm.usable) llmSetup.open();   // no key: offer to add one
+      return;
+    }
+    if (definition?.llm) { rememberedLlm = name; try { localStorage.setItem("jev-fsd-llm", name); } catch { /* preferences are optional */ } }
+    showLlm();
     if (name === autopilot.brainName) return;
     autopilot.setBrain(name);
     hud.setBrain(name);
@@ -319,6 +362,7 @@ export async function boot() {
     pause: togglePause,
     brain1: () => selectBrain("jev"),
     brain2: () => selectBrain("rules"),
+    brain3: () => selectBrain("llm"),
     help: () => hud.toggleKeys(),
     photo: () => photo.toggle(),
     escape: () => { if (photo.active) { photo.exit(); return; } hud.toggleKeys(false); panel.toggle(false); },
@@ -408,7 +452,7 @@ export async function boot() {
     manualSignal = world.ego.signal && !autopilot.enabled ? { t: world.t, heading: world.ego.psi } : null;
     driveReport.lastUpdate = -Infinity; driveReport.update(drive);
   }
-  lab = new DriveLab({ city: { ...status.map, ...cityStyle }, configured: status.configured, demo: !!status.demo,
+  lab = new DriveLab({ city: { ...status.map, ...cityStyle }, configured: status.configured, demo: !!status.demo, llmNote: llmSummary(status), onConnectModel: () => llmSetup.open(),
     onPause: on => { if (on) { if (lab?.reviewing) lab.live(); pausedBeforeLab = world.paused; world.paused = true; input.keys.clear(); } else world.paused = pausedBeforeLab; },
     onScenic: async driver => {
       const { drives } = await api("/api/drives", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi } });
@@ -488,6 +532,8 @@ export async function boot() {
     hud.badge(`REPLAY ${replay.scenario.id}: ${autopilot.brainName.toUpperCase()}`, "", 2200);
     startDrive(`Replay ${replay.scenario.id}`, world.route);
   }
+  showLlm();
+  if (status.llm?.endpoints?.length) checkLlmEndpoints().then(() => { lab.refreshAgents(llmSummary(status)); showLlm(); }).catch(() => { /* status stays "configured" */ });
   window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, get drive() { return drive; }, finishDrive, setTime: setHour };
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();

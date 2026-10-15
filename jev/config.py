@@ -8,6 +8,8 @@ Environment variables (the first three are the official TypeSafe SDK names):
   JEV_FSD_BUDGET_USD      stop making live calls after this much spend in one server run (default 1.00)
   JEV_FSD_RPM             local cap on live calls per minute (default 240)
   JEV_FSD_NPCS            number of traffic cars (default 40)
+  JEV_FSD_LLM_ENDPOINTS   LLM driver config file (default data/llm-endpoints.json; see jev/llm.py)
+  JEV_FSD_LLM_BASE_URL    one OpenAI-compatible endpoint without a config file (also _MODEL, _API_KEY, _NAME)
   PORT                    listen port (default 8322)
 """
 
@@ -24,6 +26,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 MAPS_DIR = DATA_DIR / "maps"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 RUNS_DIR = DATA_DIR / "runs"
+LLM_ENDPOINTS_PATH = DATA_DIR / "llm-endpoints.json"
 ENV_PATH = PROJECT_ROOT / ".env"
 
 KEY_ENV = "TYPESAFE_API_KEY"
@@ -101,6 +104,14 @@ class Settings:
     @property
     def npcs(self) -> int:
         return int(_float(self.get("JEV_FSD_NPCS"), 40))
+
+    @property
+    def llm_endpoints_path(self) -> Path:
+        value = self.get("JEV_FSD_LLM_ENDPOINTS")
+        if not value:
+            return LLM_ENDPOINTS_PATH
+        path = Path(value).expanduser()
+        return path if path.is_absolute() else PROJECT_ROOT / path
 
     @property
     def port(self) -> int:

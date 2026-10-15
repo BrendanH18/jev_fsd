@@ -1,0 +1,38 @@
+{
+  "_comment": "Copy to data/llm-endpoints.json (gitignored) and keep the entries you want. Each entry becomes a driver named llm:<name>. Keys never go in this file: api_key_env names a variable in .env or the environment. Omit api_key_env for local servers that need no key. Prices are USD per million tokens; leave them out to report tokens with an unknown cost. rpm 0 removes the rate limit for a free local server; the budget still applies but counts an unpriced endpoint as $0, so an unpriced endpoint with rpm 0 has no limit. The driver speaks the OpenAI Chat Completions protocol and has been tested only against a local mock server. See docs/agents.md.",
+  "endpoints": [
+    {
+      "name": "gpt-4o-mini",
+      "label": "GPT-4o mini",
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "price_per_mtok_input": 0.15,
+      "price_per_mtok_output": 0.60
+    },
+    {
+      "name": "openrouter-llama",
+      "label": "Llama 3.3 70B (OpenRouter)",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "meta-llama/llama-3.3-70b-instruct",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "response_format": "json_object"
+    },
+    {
+      "name": "ollama",
+      "label": "Llama 3.2 (Ollama)",
+      "base_url": "http://localhost:11434/v1",
+      "model": "llama3.2",
+      "timeout_s": 20,
+      "rpm": 0
+    },
+    {
+      "name": "lmstudio",
+      "label": "LM Studio",
+      "base_url": "http://localhost:1234/v1",
+      "model": "qwen2.5-7b-instruct",
+      "timeout_s": 20,
+      "rpm": 0
+    }
+  ]
+}

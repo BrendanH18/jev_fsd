@@ -14,7 +14,7 @@ export class Hud {
       cluster: find(".cluster"), speedDisplay: find(".speed"), mode: find("#drive-mode"), speedWarning: find("#speed-warning"),
       root: find("#hud"), speed: find("#speed"), limit: find("#limit"), limitSign: find("#limit-sign"), street: find("#street"),
       nav: find("#nav"), navCard: find("#nav-card"), navArrow: find("#nav-arrow"), navDistance: find("#nav-distance"), navRemaining: find("#nav-remaining"),
-      brainButtons: [...root.querySelectorAll("[data-brain]")],
+      brainButtons: [...root.querySelectorAll("[data-brain]")], llmMenu: find("#llm-menu-toggle"),
       weather: find("#weather"), time: find("#time"), quality: find("#quality"), autopilot: find("#autopilot"),
       settingsToggle: find("#settings-toggle"), settings: find("#settings"), keysToggle: find("#keys-toggle"), keysHelp: find("#keys-help"),
       latency: find("#latency"), p50: find("#p50"), tokens: find("#tokens"), cost: find("#cost"), rate: find("#rate"), source: find("#source"),
@@ -52,7 +52,8 @@ export class Hud {
       b.addEventListener("keydown", (ev) => {
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(ev.key)) return;
         ev.preventDefault();
-        const buttons = this.el.brainButtons, i = buttons.indexOf(b);
+        // Arrows skip hidden and unavailable drivers, so an unavailable Jev does not trap focus on Rules.
+        const buttons = this.el.brainButtons.filter((button) => button === b || (!button.hidden && button.getAttribute("aria-disabled") !== "true")), i = buttons.indexOf(b);
         const next = ev.key === "Home" ? buttons[0] : ev.key === "End" ? buttons.at(-1)
           : buttons[(i + (["ArrowLeft", "ArrowUp"].includes(ev.key) ? -1 : 1) + buttons.length) % buttons.length];
         fn(next.dataset.brain);
@@ -62,11 +63,22 @@ export class Hud {
   }
   setBrain(name) {
     this.brain = name;
+    const group = name.startsWith("llm:") ? "llm" : name;   // every LLM endpoint drives under the LLM button
+    const shown = this.el.brainButtons.some(button => button.dataset.brain === group);
     for (const b of this.el.brainButtons) {
-      const selected = b.dataset.brain === name;
+      const selected = b.dataset.brain === group;
       b.setAttribute("aria-checked", String(selected));
-      b.tabIndex = selected || (!this.el.brainButtons.some(button => button.dataset.brain === name) && b.dataset.brain === "rules") ? 0 : -1;
+      b.tabIndex = selected || (!shown && b.dataset.brain === "rules") ? 0 : -1;
     }
+  }
+  // The LLM button drives with `label`, or offers setup when no model is connected. Hidden in the
+  // public demo, which has no server to hold keys.
+  setLlm({ label = "", available = false, offered = true } = {}) {
+    const b = this.el.brainButtons.find((x) => x.dataset.brain === "llm");
+    if (!b) return;
+    b.hidden = !offered; if (this.el.llmMenu) this.el.llmMenu.hidden = !offered;
+    b.classList.toggle("unavailable", !!label && !available);
+    b.title = label ? `3 · ${label}${available ? "" : " (unavailable)"} · choose another with ▾` : "3 · connect your own model";
   }
   // Jev needs a server-side key; keep the option visible so people know it exists.
   setJevAvailable(ok) {
@@ -109,7 +121,7 @@ export class Hud {
     if (this.el.speedWarning.hidden === speeding) this.el.speedWarning.hidden = !speeding;
     this.el.speedDisplay.classList.toggle("speeding", speeding);
     this.el.cluster.classList.toggle("speeding", speeding);
-    setText(this.el.mode, paused ? "PAUSED" : autopilot ? `${this.brain.toUpperCase()} PILOT` : "MANUAL");
+    setText(this.el.mode, paused ? "PAUSED" : autopilot ? `${this.brain.replace(/^llm:/, "").toUpperCase()} PILOT` : "MANUAL");
     setClass(this.el.mode, paused ? "paused" : autopilot ? "auto" : "");
     setText(this.el.speed, Math.round(Math.abs(ego.v) * 3.6));
     setText(this.el.limit, road?.limit ? Math.round(road.limit * 3.6) : "–");
@@ -180,7 +192,7 @@ export class Hud {
     motion.textContent = decision.motion === "stop" ? (decision.chosenId === "hard_brake" ? "Braking to stop" : "Holding still")
       : chosen ? `Driving · ${describe(chosen)}` : MOTIONS[decision.motion] || decision.motion;
     source.textContent = m.fallback ? `${m.source} · fallback` : m.source || "–";
-    source.className = `source-tag ${m.source === "rules_fallback" || m.fallback ? "fallback" : m.source === "jev" ? "live" : ""}`;
+    source.className = `source-tag ${m.source === "rules_fallback" || m.fallback ? "fallback" : m.source === "jev" || m.live_call ? "live" : ""}`;
     source.title = m.error || m.fallback || "";
     latency.textContent = m.source === "local" ? "local" : ms(m.latency_ms || 0);
     tokens.textContent = m.input_tokens ? num(m.input_tokens) : "–";

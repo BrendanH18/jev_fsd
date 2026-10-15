@@ -2,6 +2,8 @@
 
 import { $, h, pct, ms, usd, num, copyText, api } from "../common.js";
 
+const llmRequest = d => (Array.isArray(d?.trace?.request?.messages) ? d.trace.request : null);
+
 export class Panel {
   constructor(autopilot, hud) {
     this.autopilot = autopilot;
@@ -51,7 +53,7 @@ export class Panel {
     const d = this.last;
     if (!d) { this.body.replaceChildren(h("pre", {}, "No decision yet. Set a destination and press J.")); return; }
     if (this.tab === "state") this.body.replaceChildren(h("pre", {}, JSON.stringify(d.state, null, 1)));
-    else if (this.tab === "questions") this.body.replaceChildren(h("pre", {}, JSON.stringify(d.questions, null, 1)));
+    else if (this.tab === "questions") this.body.replaceChildren(...(llmRequest(d) ? this.renderPrompt(llmRequest(d)) : [h("pre", {}, JSON.stringify(d.questions, null, 1))]));
     else if (this.tab === "answers") this.body.replaceChildren(...this.renderAnswers(d));
     else this.body.replaceChildren(...this.renderMeta(d));
   }
@@ -72,8 +74,24 @@ export class Panel {
       }
       if (a.confidence !== undefined && a.confidence !== null && !a.local) out.push(h("div", { class: "muted" }, `confidence ${pct(a.confidence)}`));
     }
+    const reply = llmRequest(d) && d.trace.response?.choices?.[0]?.message?.content;
+    if (typeof reply === "string") {
+      out.push(h("div", { class: "label", style: { margin: "10px 0 4px" } }, d.meta?.error ? "model reply (not used)" : "model reply"));
+      out.push(h("pre", {}, reply || "(empty)"));
+    }
     out.push(h("div", { class: "label", style: { margin: "10px 0 4px" } }, "executing"));
     out.push(h("pre", {}, `${d.motion} → ${d.chosenId}`));
+    return out;
+  }
+
+  // LLM endpoint drivers: the chat messages exactly as sent (the key never reaches the browser).
+  renderPrompt(request) {
+    const out = [h("div", { class: "muted" }, `${request.model} · POST ${request.url}`)];
+    for (const m of request.messages || []) {
+      let text = m.content;
+      try { text = JSON.stringify(JSON.parse(m.content), null, 1); } catch { /* plain text */ }
+      out.push(h("div", { class: "label", style: { margin: "8px 0 4px" } }, m.role), h("pre", {}, text));
+    }
     return out;
   }
 
@@ -82,7 +100,10 @@ export class Panel {
     const rows = [
       ["source", m.source], ["model", m.model], ["latency", m.latency_ms !== undefined ? ms(m.latency_ms) : "–"],
       ["round trip", m.round_trip_ms !== undefined ? ms(m.round_trip_ms) : "–"], ["input tokens", num(m.input_tokens)],
-      ["cost", usd(m.cost_usd)], ["questions", Object.keys(d.questions || {}).join(", ") || "none (local)"],
+      ...(m.output_tokens !== undefined ? [["output tokens", num(m.output_tokens)]] : []),
+      ["cost", m.cost_known === false ? "unknown (no price set for this endpoint)" : usd(m.cost_usd)], ["questions", Object.keys(d.questions || {}).join(", ") || "none (local)"],
+      ...(m.endpoint ? [["endpoint", `${m.endpoint}${m.response_format ? ` · ${m.response_format}` : ""}`]] : []),
+      ...(m.reason ? [["model's reason", m.reason]] : []),
       ["hazard flags", (d.flags || []).join(", ") || "none"], ["candidates", `${d.candidates.filter((c) => c.eligible).length} eligible / ${d.candidates.length}`],
       ["fallback", m.fallback || m.error || "–"],
     ];
@@ -96,8 +117,16 @@ export class Panel {
   async copyCurl() {
     const d = this.last;
     if (!d) return;
-    const body = JSON.stringify({ model: "jev-latest", state: d.state, questions: d.questions }, null, 2);
-    const curl = `curl -s https://api.typesafe.ai/v1/systemone \\\n  -H "Authorization: Bearer $TYPESAFE_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '${body.replace(/'/g, "'\\''")}'`;
+    const request = llmRequest(d);
+    let curl;
+    if (request) {
+      const { url, api_key_env: keyEnv, ...payload } = request;
+      const body = JSON.stringify(payload, null, 2);
+      curl = `curl -s ${url} \\\n${keyEnv ? `  -H "Authorization: Bearer $${keyEnv}" \\\n` : ""}  -H "Content-Type: application/json" \\\n  -d '${body.replace(/'/g, "'\\''")}'`;
+    } else {
+      const body = JSON.stringify({ model: "jev-latest", state: d.state, questions: d.questions }, null, 2);
+      curl = `curl -s https://api.typesafe.ai/v1/systemone \\\n  -H "Authorization: Bearer $TYPESAFE_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '${body.replace(/'/g, "'\\''")}'`;
+    }
     this.hud.badge((await copyText(curl)) ? "copied curl" : "copy failed", "", 900);
   }
 

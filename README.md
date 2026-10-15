@@ -96,6 +96,17 @@ under the same physics, sensing and safety checks as the built-in drivers. The
 latency and cost. It saves evaluations and lets you diff a run against a previous baseline. See the
 [agent guide](docs/agents.md) for a starter template.
 
+Got a model of your own? The local server speaks the OpenAI Chat Completions protocol, so it
+should work with OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama on your laptop and similar
+servers; so far it has been tested only against a local mock server, not a real provider. Click
+**LLM** next to Rules and Jev (or ▾ → **Connect a model**), pick a provider, paste a key and
+choose a model: the key is saved to `.env`, and the model drives straight away. Each model shows up
+as a driver called `llm:<name>`, ready to race the others in the arena and on `/bench`; the ▾ menu
+switches between them, and `3` drives with the last one chosen. You can also list endpoints in
+`data/llm-endpoints.json` by hand. It picks among the same safety-checked
+manoeuvres, the keys stay on the server, and the prompt lives in one file you can tweak. The
+[agent guide](docs/agents.md#llm-endpoints-test-your-own-model) has copy-paste examples.
+
 ## Quick start
 
 The fastest way to try it is the [browser demo](https://brendanh18.github.io/jev_fsd/). To run it
@@ -136,7 +147,8 @@ cp .env.example .env
 
 Your key stays on the local server and is never sent to the browser. A spend cap
 (`JEV_FSD_BUDGET_USD`, $1 per run by default) and a request-rate cap (`JEV_FSD_RPM`) limit live
-model calls. This project is independent and not affiliated with TypeSafe AI.
+model calls. The spend cap only sees priced calls: an LLM endpoint without prices counts as $0,
+and one with `rpm: 0` also skips the rate cap. This project is independent and not affiliated with TypeSafe AI.
 
 ## How the AI drives
 
@@ -177,6 +189,7 @@ node scripts/test_drive_lab.mjs                 # drive lab and replay features
 node scripts/test_arena_history.mjs             # saved evaluations and comparisons
 node scripts/test_cinematic_photo.mjs           # cinematic camera and photo mode
 node scripts/test_drive_score.mjs               # coaching score
+node scripts/test_llm_agent.mjs                 # LLM endpoint drivers (prompt, parsing, fallback)
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

@@ -10,6 +10,8 @@ body.arena { background: radial-gradient(ellipse at 80% 0, #193a34, #0b131d 50%)
 .arena fieldset { padding: 0; border: 0; margin: 0; }
 .arena legend { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
 #agents { display: flex; gap: 18px; flex-wrap: wrap; }
+.arena .llm-status { color: var(--muted); font-size: 11px; line-height: 1.6; margin: 10px 0 0; max-width: 70ch; }
+.arena .llm-status:empty { display: none; }
 .arena label { font-size: 12px; display: flex; gap: 8px; align-items: center; }
 .arena input[type="checkbox"] { accent-color: #83d9c4; }
 #arena-status, .arena details { flex-basis: 100%; color: #afc0cc; font-size: 12px; line-height: 1.7; }

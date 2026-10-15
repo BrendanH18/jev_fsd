@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Bring your own LLM: an endpoint driver that speaks the OpenAI Chat Completions protocol, so it
+  should work with OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama and others; it has been
+  tested only against a local mock server, not a real provider. **LLM** sits next to Rules and Jev
+  (key `3`), with a ▾ menu to switch models. **Connect a model** sets one up in the app: pick a
+  provider, paste a key, choose from the provider's model list (OpenRouter's includes prices) and
+  save. The server writes the key to `.env` (only if it is gitignored and untracked) and the endpoint
+  to `data/llm-endpoints.json`, then reloads; the key never returns to the browser, and a saved key is
+  never sent to a URL other than its provider's. Or configure several by hand in the gitignored
+  `data/llm-endpoints.json` (template: `data/llm-endpoints.example.json`) or one with
+  `JEV_FSD_LLM_*` in `.env`; each becomes a selectable driver `llm:<name>` in Settings, challenges,
+  replay branches, the arena and `/bench`, labelled ready, unreachable, key rejected or no key.
+  Keys and the choice of destination stay on the server (the browser sees only a
+  credential-stripped base URL), and the configured key value is scrubbed from responses, traces
+  and errors. The model picks among safety-checked candidates only and falls back to Rules (with
+  the reason in the HUD and arena timelines) on invalid output, timeouts, HTTP errors or an
+  exhausted budget; unusable replies still count their calls, tokens and cost. `timeout_s` is one
+  real deadline per decision, covering the TCP connect, any proxy tunnel, the TLS handshake, the
+  whole reply and a plain retry when an endpoint rejects structured output; only DNS resolution is
+  left to the system resolver.
+  Calls share `JEV_FSD_BUDGET_USD` and `JEV_FSD_RPM`; optional per-endpoint prices give costs,
+  otherwise tokens are reported with an unknown ($0) cost that the budget cannot stop, and
+  `rpm: 0` removes the rate limit too. The prompt lives in `static/js/brain/llm-prompt.js`;
+  Inspect JSON shows the messages, raw reply and a curl. No new dependencies.
+
 - Graphics artifact fixes. Sun shadows filter without screen-space noise, removing the crawling dot
   pattern inside tree crowns and other partial shadows. Leaf shadows sway with the leaves, leaf
   cards keep their crown shading on both faces, and crown interiors read as shaded foliage instead
