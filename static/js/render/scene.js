@@ -96,9 +96,9 @@ function skyMaterial() {
         f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
       }
-      // fw is the pixel footprint in noise cells. Octaves finer than about half a pixel cannot be
-      // drawn without aliasing (the deck's cells shrink without limit toward the horizon), so each
-      // one fades to its mean value before it reaches that size.
+      // fw is the pixel footprint in noise cells. An octave whose cells are narrower than about two
+      // pixels cannot be drawn without aliasing (the deck's cells shrink without limit toward the
+      // horizon), so each one fades to its mean value before it reaches that size.
       float fbm(vec2 p, float fw) {
         float sum = 0.0, amp = 0.5;
         mat2 turn = mat2(1.6, 1.2, -1.2, 1.6);

@@ -92,10 +92,19 @@ Reported as "weird artifacting, particularly for clouds and trees". Causes and f
   several pixels wide near the camera. The reflection target is now mipmapped and each smear tap
   reads the level whose texels match the tap spacing, so taps overlap without jitter.
 - **Square snowflakes.** Points were hard-edged squares that grew into tiles in front of the lens;
-  they are round, soft-edged sprites capped at about 3% of the view height.
+  they are round, soft-edged sprites capped at about 1.5% of the view height
+  (`scale` is half the canvas height).
 
 Renderer assertions cover the noise-free shadow filter, leaf mip coverage and colour, swaying
-shadow casters, multisampling with and without AO, and the mipmapped reflection.
+shadow casters, multisampling with and without AO, and the mipmapped reflection. They pass on
+Low, High (rain, 4× MSAA) and Ultra (rain) with no GL errors.
+
+Timing after the change, in a headless WKWebView (Metal) at a 1440 × 900 viewport, spawn pose,
+afternoon: each render followed by a 1-pixel readback to wait for the GPU, median of 40 after 15
+warm-up renders (1 ms timer resolution). Low 13 ms dry / 13 ms rain; High 15 / 24; Ultra 23 / 33.
+A matching baseline run could not be completed in that session, so the added cost is not
+measured; the main new cost is High's multisampled scene target (resolve plus 4× colour/depth
+storage), then four extra shadow taps per lit fragment on every preset.
 
 ## HUD design review (2026-09-30)
 
