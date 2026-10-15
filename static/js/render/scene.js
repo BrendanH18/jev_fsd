@@ -18,6 +18,24 @@ import { CinematicCamera } from "./cinematic-camera.js";
 
 export const toThree = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
+// Three's PCF filter takes five shadow taps on a disk rotated by per-pixel noise. Nothing here
+// accumulates frames to average that noise away, so partly shadowed surfaces (the dappled inside
+// of every tree crown above all) wore a fixed screen-space dot pattern that crawled as the camera
+// moved. A fixed 3x3 tent of hardware-filtered compares is about as soft and has no noise.
+const NOISY_PCF = /float phi = interleavedGradientNoise\( gl_FragCoord\.xy \) \* PI2;\s*shadow = \(\s*(?:texture\( shadowMap, vec3\( shadowCoord\.xy \+ vogelDiskSample\( \d, 5, phi \) \* radius, shadowCoord\.z \) \)\s*\+?\s*){5}\) \* 0\.2;/;
+export const STABLE_PCF = `vec2 tap = texelSize * max( shadowRadius * 0.5, 0.5 );
+				shadow = 0.0;
+				for ( int sx = - 1; sx <= 1; sx ++ ) for ( int sy = - 1; sy <= 1; sy ++ ) {
+					float w = ( 2.0 - abs( float( sx ) ) ) * ( 2.0 - abs( float( sy ) ) );
+					shadow += w * texture( shadowMap, vec3( shadowCoord.xy + vec2( sx, sy ) * tap, shadowCoord.z ) );
+				}
+				shadow /= 16.0;`;
+if (NOISY_PCF.test(THREE.ShaderChunk.shadowmap_pars_fragment)) {
+  THREE.ShaderChunk.shadowmap_pars_fragment = THREE.ShaderChunk.shadowmap_pars_fragment.replace(NOISY_PCF, STABLE_PCF);
+} else if (!THREE.ShaderChunk.shadowmap_pars_fragment.includes(STABLE_PCF)) {
+  console.warn("scene: PCF shadow chunk changed; keeping Three's default filter");
+}
+
 export const LAYER = { sky: -100, grass: -50, water: -46, sidewalk: -40, curb: -38, asphalt: -30, patch: -28, islandCurb: -27, island: -26, marking: -20, pool: -10 };
 
 // Only the base plane writes depth. Color layers use a small raster depth bias to pass the test
@@ -78,10 +96,16 @@ function skyMaterial() {
         f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
       }
-      float fbm(vec2 p) {
+      // fw is the pixel footprint in noise cells. An octave whose cells are narrower than about two
+      // pixels cannot be drawn without aliasing (the deck's cells shrink without limit toward the
+      // horizon), so each one fades to its mean value before it reaches that size.
+      float fbm(vec2 p, float fw) {
         float sum = 0.0, amp = 0.5;
         mat2 turn = mat2(1.6, 1.2, -1.2, 1.6);
-        for (int i = 0; i < 5; i++) { sum += amp * vnoise(p); p = turn * p; amp *= 0.5; }
+        for (int i = 0; i < 5; i++) {
+          sum += amp * mix(0.5, vnoise(p), 1.0 - smoothstep(0.2, 0.5, fw));
+          p = turn * p; amp *= 0.5; fw *= 2.0;
+        }
         return sum;
       }
       void main() {
@@ -107,14 +131,16 @@ function skyMaterial() {
         // A drifting cloud deck projected onto a flat ceiling, so cells shrink toward the horizon.
         // A second sample nudged toward the sun estimates self-shadowing: the sunward edges of each
         // cloud catch the light and the far sides fall into shade, with a silver rim near the sun.
+        // Derivatives are taken outside the branch, where every pixel of a quad computes them.
+        vec2 uv = d.xz / (max(h, 0.0) + 0.12) * 1.35 + vec2(cloudTime * 0.010, cloudTime * 0.004);
+        float fw = max(length(dFdx(uv)), length(dFdy(uv)));
         if (cloudCover > 0.0 && h > 0.0) {
-          vec2 uv = d.xz / (h + 0.12) * 1.35 + vec2(cloudTime * 0.010, cloudTime * 0.004);
-          float n = fbm(uv);
+          float n = fbm(uv, fw);
           float edge = mix(0.60, 0.28, cloudCover);
           // Storm decks close into a continuous sheet with softer, lower-contrast mottling.
           float sheet = smoothstep(0.7, 1.0, cloudCover);
           float cover = max(smoothstep(edge, edge + 0.16, n), sheet * 0.92);
-          float toSun = fbm(uv + sunFlat * 0.18);
+          float toSun = fbm(uv + sunFlat * 0.18, fw);
           float lit = clamp(0.62 + (n - toSun) * 5.0 * (1.0 - 0.55 * sheet) - sheet * (0.55 - n), 0.0, 1.0);
           vec3 cloud = mix(cloudShade, cloudLit, lit);
           cloud += cloudLit * (pow(s, 10.0) * 0.9 + pow(s, 3.0) * 0.15) * (1.0 - cover * 0.6);
@@ -202,6 +228,7 @@ export class SceneView {
     if (!q.post && this.post) { this.post.dispose(); this.post = null; }
     this.reflection.enabled = q.post;
     this.reflection.resolutionScale = q.reflectionScale;
+    this.applyCoverage();
     this.resize();
     if (this.atmosphere) this.setAtmosphere(this.atmosphere);
     return this.quality;
@@ -402,5 +429,19 @@ export class SceneView {
       if (child.isLOD) { child.autoUpdate = false; this.sceneryLODs.push(child); }
     });
     this.scene.add(object);
+    this.applyCoverage();
+  }
+
+  // Cut-out materials marked coverageEdges use alpha to coverage only where the scene target is
+  // multisampled. On a single-sample target (Ultra keeps one for ambient occlusion) Three no longer
+  // discards the partly transparent edge texels, and they sparkle across every tree crown. The wet-road
+  // mirror pass draws the same materials, so it takes the main target's sample count.
+  applyCoverage() {
+    const on = this.post ? this.post.sceneRT.samples > 0 : !!this.renderer.getContextAttributes?.()?.antialias;
+    this.reflection?.setSamples(this.post ? this.post.sceneRT.samples : 0);
+    this.scene.traverse((o) => {
+      const m = o.material;
+      if (m?.userData?.coverageEdges && m.alphaToCoverage !== on) { m.alphaToCoverage = on; m.needsUpdate = true; }
+    });
   }
 }

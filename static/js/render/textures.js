@@ -229,14 +229,89 @@ export const leafTexture = () => once("leaf", () => {
     ctx.beginPath(); ctx.moveTo(-len * 0.9, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
     ctx.restore();
   }
-  // a few twigs holding the cluster together
+  // a few twigs holding the cluster together, short enough not to read as straight scratches
+  // across the crown where cards overlap
   ctx.strokeStyle = "rgba(70,55,40,0.9)"; ctx.lineWidth = 2.5;
   for (let i = 0; i < 4; i++) {
     const a = rnd() * Math.PI * 2;
-    ctx.beginPath(); ctx.moveTo(size / 2, size / 2); ctx.lineTo(size / 2 + Math.cos(a) * size * 0.3, size / 2 + Math.sin(a) * size * 0.3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(size / 2, size / 2); ctx.lineTo(size / 2 + Math.cos(a) * size * 0.16, size / 2 + Math.sin(a) * size * 0.16); ctx.stroke();
   }
-  return toTexture(c, { repeat: false });
+  return cutoutTexture(ctx.getImageData(0, 0, size, size), LEAF_CUTOFF);
 });
+
+// Three's shadow pass tests alpha-to-coverage materials at 0.5, so the leaves use the same cutoff.
+export const LEAF_CUTOFF = 0.5;
+
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+
+// Mip levels for an alpha-tested texture, built by hand because the GPU's own chain fails it in two
+// ways. Transparent canvas texels are black, so filtering darkens every leaf edge and whole distant
+// crowns. And box-filtered alpha drops below the alpha-test cutoff as levels shrink, so foliage
+// thins out and sparkles with distance. Here colour is averaged with alpha weights and pushed back
+// into transparent texels from the coarser levels, and each level's alpha is rescaled so the same
+// share of texels passes the cutoff as at full size (alpha-coverage-preserving mipmaps).
+export function cutoutTexture(image, cutoff) {
+  const pyramid = [];
+  let w = image.width, h = image.height;
+  let rgb = new Float32Array(w * h * 3), alpha = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const a = image.data[i * 4 + 3] / 255;
+    alpha[i] = a;
+    for (let k = 0; k < 3; k++) rgb[i * 3 + k] = toLinear(image.data[i * 4 + k] / 255) * a;   // premultiplied
+  }
+  pyramid.push({ w, h, rgb, alpha });
+  while (w > 1 || h > 1) {
+    const nw = Math.max(1, w >> 1), nh = Math.max(1, h >> 1);
+    const nrgb = new Float32Array(nw * nh * 3), nalpha = new Float32Array(nw * nh);
+    for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
+      const o = y * nw + x;
+      for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+        const i = Math.min(h - 1, y * 2 + dy) * w + Math.min(w - 1, x * 2 + dx);
+        nalpha[o] += alpha[i] / 4;
+        for (let k = 0; k < 3; k++) nrgb[o * 3 + k] += rgb[i * 3 + k] / 4;
+      }
+    }
+    w = nw; h = nh; rgb = nrgb; alpha = nalpha;
+    pyramid.push({ w, h, rgb, alpha });
+  }
+  const coverage = (a, s) => { let n = 0; for (const v of a) if (v * s >= cutoff) n++; return n / a.length; };
+  const target = coverage(pyramid[0].alpha, 1);
+  // straight (unpremultiplied) colour, falling back to the coarser level where a texel is empty
+  let coarser = null;
+  const levels = new Array(pyramid.length);
+  for (let l = pyramid.length - 1; l >= 0; l--) {
+    const { w: lw, h: lh, rgb: lrgb, alpha: la } = pyramid[l];
+    const color = new Float32Array(lw * lh * 3);
+    for (let y = 0; y < lh; y++) for (let x = 0; x < lw; x++) {
+      const i = y * lw + x;
+      const c = coarser ? (Math.min(coarser.h - 1, y >> 1) * coarser.w + Math.min(coarser.w - 1, x >> 1)) * 3 : -1;
+      for (let k = 0; k < 3; k++) color[i * 3 + k] = la[i] > 1e-3 ? lrgb[i * 3 + k] / la[i] : c >= 0 ? coarser.color[c + k] : 0;
+    }
+    coarser = { w: lw, h: lh, color };
+    let lo = 1, hi = 1;
+    if (l > 0 && target > 0) {
+      hi = 16;
+      for (let it = 0; it < 18; it++) { const mid = (lo + hi) / 2; if (coverage(la, mid) < target) lo = mid; else hi = mid; }
+      if (target - coverage(la, lo) < coverage(la, hi) - target) hi = lo;   // the nearer of the two
+    }
+    const data = new Uint8Array(lw * lh * 4);
+    for (let i = 0; i < lw * lh; i++) {
+      for (let k = 0; k < 3; k++) data[i * 4 + k] = Math.round(toSRGB(Math.min(1, color[i * 3 + k])) * 255);
+      data[i * 4 + 3] = Math.round(Math.min(1, la[i] * hi) * 255);
+    }
+    levels[l] = { data, width: lw, height: lh };
+  }
+  const t = new THREE.DataTexture(levels[0].data, levels[0].width, levels[0].height);
+  t.mipmaps = levels;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAnisotropy;
+  t.generateMipmaps = false;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
 
 // Needles: fine streaks of light and dark along the cone's slope.
 export const needleTexture = () => once("needle", () => toTexture(paint(256, (x, y) => {
@@ -303,6 +378,17 @@ export const glowTexture = () => once("glow", () => {
   g.addColorStop(0, "rgba(255,255,255,1)");
   g.addColorStop(0.18, "rgba(255,255,255,0.75)");
   g.addColorStop(0.45, "rgba(255,255,255,0.16)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+  return toTexture(c, { repeat: false });
+});
+
+// A snowflake: a solid disc with a soft rim.
+export const flakeTexture = () => once("flake", () => {
+  const size = 32, c = canvas(size), ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.95)");
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
   return toTexture(c, { repeat: false });

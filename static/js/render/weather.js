@@ -4,6 +4,7 @@
 // tops of trees and parked cars turn white while walls stay as they are.
 
 import * as THREE from "three";
+import { flakeTexture } from "./textures.js";
 
 // what each weather does to surfaces and the air around the camera (the sky and light are in
 // atmosphere.js)
@@ -122,7 +123,17 @@ function makeSnow(count = 6000) {
   const pos = new Float32Array(count * 3);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  const mesh = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.09, transparent: true, opacity: 0.9, depthWrite: false }));
+  // Round, soft-edged flakes. Plain points are hard squares, and a flake passing just in front of
+  // the lens grew into a large flat tile, so the on-screen size is also capped.
+  // Three sets `scale` to half the CSS height but `size` to the flake size times the pixel ratio,
+  // so `size / FLAKE` is the pixel ratio and the cap is 1.5% of the view height on any screen.
+  const FLAKE = 0.12;
+  const material = new THREE.PointsMaterial({ color: 0xffffff, size: FLAKE, map: flakeTexture(), transparent: true, opacity: 0.95, depthWrite: false });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace("#include <fog_vertex>",
+      `#include <fog_vertex>\n  gl_PointSize = min( gl_PointSize, scale * 0.03 * size / ${FLAKE.toFixed(2)} );`);
+  };
+  const mesh = new THREE.Points(geo, material);
   mesh.frustumCulled = false;
   let t = 0;
   return {

@@ -175,7 +175,7 @@ export function runRenderTests() {
   view.post.render = () => { throw new Error("test render failure"); };
   try { SceneView.prototype.render.call(view, 0); } catch { /* verify state restoration below */ }
   check("render errors restore shadow updates", renderer.shadowMap.autoUpdate);
-  const registration = { scene: new THREE.Scene(), sceneryLODs: [] };
+  const registration = { scene: new THREE.Scene(), sceneryLODs: [], applyCoverage() {} };
   SceneView.prototype.addScenery.call(registration, parked);
   check("reflection camera cannot independently select detail", registration.sceneryLODs.includes(lod) && !lod.autoUpdate);
 
@@ -212,7 +212,25 @@ export function runRenderTests() {
     check("disabling AO releases its extra render targets", post.ao === null && post.blendRT === null);
     post.setAO(true); post.setAO(false);
     check("repeated quality transitions release AO cleanly", post.ao === null && post.blendRT === null);
+    check("without AO the scene target is multisampled", post.sceneRT.samples === 4 && !post.sceneRT.depthTexture && post.sceneRT.width === 100);
+    post.setAO(true);
+    check("with AO the scene target keeps a single-sample depth texture", post.sceneRT.samples === 0 && post.ao.depthTexture === post.sceneRT.depthTexture);
   } finally { post.dispose(); }
+
+  // Artifact regressions: noisy shadow filtering, eroding/darkening foliage mips, still leaf
+  // shadows under swaying leaves, and blocky wet-road smears.
+  const shadowChunk = THREE.ShaderChunk.shadowmap_pars_fragment;
+  const planarShadow = shadowChunk.slice(shadowChunk.indexOf("float getShadow( sampler2DShadow"), shadowChunk.indexOf("SHADOWMAP_TYPE_VSM", shadowChunk.indexOf("float getShadow( sampler2DShadow")));
+  check("sun shadows filter without per-pixel noise", planarShadow.length > 0 && !planarShadow.includes("interleavedGradientNoise") && planarShadow.includes("shadow /= 16.0"));
+  const leafMesh = trees.children.flatMap(lod => lod.levels[0].object.children).find(o => o.material.alphaTest > 0);
+  const leafMap = leafMesh.material.map, chain = leafMap.mipmaps;
+  const cover = m => { let n = 0; for (let i = 3; i < m.data.length; i += 4) if (m.data[i] >= 0.5 * 255) n++; return n / (m.width * m.height); };
+  check("leaf mip levels keep the full-size leaf coverage", chain.length >= 8 && chain.slice(1, 5).every(m => Math.abs(cover(m) - cover(chain[0])) < 0.03));
+  check("transparent leaf texels carry leaf colour, not black", chain.slice(0, 4).every(m => { for (let i = 0; i < m.data.length; i += 4) if (m.data[i + 3] === 0 && m.data[i] + m.data[i + 1] + m.data[i + 2] < 30) return false; return true; }));
+  check("leaf shadows sway with the leaves", leafMesh.customDepthMaterial.customProgramCacheKey().startsWith("wind-") && leafMesh.material.alphaToCoverage);
+  const wetMirror = new GroundReflection(fakeRenderer, new THREE.Scene(), camera);
+  check("wet-road smear reads a mipmapped reflection", wetMirror.rt.texture.generateMipmaps && wetMirror.rt.texture.minFilter === THREE.LinearMipmapLinearFilter);
+  wetMirror.dispose();
 
   // Exercise the real WebGL pipeline too: a uniform value of zero alone does not prevent an
   // attached texture/sampler feedback loop, which mocks cannot detect.
@@ -255,16 +273,28 @@ export function runRenderTests() {
     }
     const quality = live.quality, wet = lighting.wet.value, gl = live.renderer.getContext();
     for (let i = 0; i < 10 && gl.getError() !== gl.NO_ERROR; i++) { /* drain earlier errors */ }
+    const coverageEdges = [];
+    live.scene.traverse(o => { if (o.material?.userData?.coverageEdges) coverageEdges.push(o.material); });
+    const coverage = {}, mirrorSamples = {}, sceneSamples = {};
     try {
       lighting.wet.value = 1;
       for (const [i, quality] of ['high', 'ultra', 'high', 'low'].entries()) {
         live.setQuality(quality);
+        coverage[quality] = coverageEdges.map(m => m.alphaToCoverage);
+        mirrorSamples[quality] = live.reflection.rt.samples;
+        sceneSamples[quality] = live.post ? live.post.sceneRT.samples : 0;
         // setQuality reapplies the atmosphere, so re-enable wet sampling for each case.
         lighting.wet.value = 1;
         live.render(0);
         check(`wet WebGL frame after quality transition ${i} (${quality})`, gl.getError() === gl.NO_ERROR);
       }
     } finally { live.setQuality(quality); lighting.wet.value = wet; }
+    // Alpha to coverage on Ultra's single-sample target turned leaf edges into sparkling specks. The
+    // wet-road mirror pass draws the same leaves, so it must be multisampled exactly when they use it.
+    check("leaf edges use alpha to coverage only on multisampled targets, mirror pass included", coverageEdges.length > 0
+      && coverage.high.every(Boolean) && coverage.ultra.every(on => !on)
+      && coverage.low.every(on => on === !!gl.getContextAttributes().antialias)
+      && mirrorSamples.high > 0 && mirrorSamples.high === sceneSamples.high && mirrorSamples.ultra === 0);
   }
 
   // Dispose fixture buffers; materials/geometries shared with the live scene stay cached.

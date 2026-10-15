@@ -21,7 +21,8 @@ export class GroundReflection {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
-    this.rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType });
+    // mipmapped, so the wet-road smear can read pre-blurred levels (see wetReflective)
+    this.rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
     this.mirror = new THREE.PerspectiveCamera();
     this.enabled = true;
     this.resolutionScale = 0.25;
@@ -30,6 +31,15 @@ export class GroundReflection {
     this._clipPlane = new THREE.Plane();
     this._clip = new THREE.Vector4();
     this._q = new THREE.Vector4();
+  }
+
+  // Multisample the mirror pass to match the main scene target. Leaf cut-outs use alpha to coverage
+  // whenever the main target is multisampled, and on a single-sample target their partly transparent
+  // edge texels would be drawn opaque. Three resolves the samples before building the mip chain.
+  setSamples(samples) {
+    if (this.rt.samples === samples) return;
+    this.rt.samples = samples;
+    this.rt.dispose();   // reallocated with the new sample count on next use
   }
 
   setSize(w, h) { this.rt.setSize(Math.max(2, Math.ceil(w * this.resolutionScale)), Math.max(2, Math.ceil(h * this.resolutionScale))); }
@@ -114,11 +124,13 @@ export function wetReflective(material, gloss = 1) {
           float puddle = smoothstep( 0.55, 0.62, texture2D( puddleMap, vGroundXZ * 0.021 ).r * 0.7 + texture2D( puddleMap, vGroundXZ * 0.093 + 0.37 ).r * 0.3 );
           // a wet road smears reflections toward the viewer; a puddle is a clean mirror
           float smear = ( 1.0 - puddle ) * 0.01;
-          // Dither in road coordinates, so the blur follows the road instead of crawling with
-          // screen pixels. Eight taps avoid discrete repeated bars around reflected tail lamps.
-          float jitter = fract( sin( dot( floor( vGroundXZ * 32.0 ), vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
+          // Eight taps a few texels apart would leave gaps (repeated bars around reflected tail
+          // lamps). Each tap reads the mip level whose texels are as wide as the tap spacing, so
+          // neighbours overlap into one smooth streak. (A random per-tap offset hid the bars before,
+          // but near the camera its road-space cells were several pixels wide and showed as blocks.)
+          float lod = log2( max( 1.0, smear * float( textureSize( tReflect, 0 ).y ) ) );
           vec3 refl = vec3( 0.0 );
-          for ( int k = 0; k < 8; k++ ) refl += texture2D( tReflect, clamp( ruv + vec2( 0.0, ( float( k ) + jitter - 4.0 ) * smear ), vec2( 0.0 ), vec2( 1.0 ) ) ).rgb;
+          for ( int k = 0; k < 8; k++ ) refl += textureLod( tReflect, clamp( ruv + vec2( 0.0, ( float( k ) - 3.5 ) * smear ), vec2( 0.0 ), vec2( 1.0 ) ), lod ).rgb;
           refl /= 8.0;
           float ndv = clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 );
           float fres = 0.03 + 0.97 * pow( 1.0 - ndv, 5.0 );
