@@ -399,18 +399,33 @@ def _roundabouts(graph: RoadGraph, osm: OsmData, proj: Projection) -> None:
     groups: Dict[int, List[int]] = {}
     for way_id in sorted(by_way):
         groups.setdefault(find(way_id), []).append(way_id)
-    # A ring meets two ring edges at every vertex. Two closed roundabouts sharing a node branch
-    # there; keep such ways as separate rings instead of fitting one false circle through both.
+    # A ring meets two ring edges at every vertex. Two roundabouts sharing a node branch there, so
+    # a branched group is split back into rings joined only through unbranched vertices; one false
+    # circle through both would misplace every lane, and fitting each piece alone would too.
     rings: Dict[int, List[int]] = {}
     for root, way_ids in groups.items():
         ends: Dict[str, int] = {}
         for eid in (eid for w in way_ids for eid in by_way[w]):
             for v in (graph.edges[eid]["from"], graph.edges[eid]["to"]):
                 ends[v] = ends.get(v, 0) + 1
-        if len(way_ids) > 1 and max(ends.values()) > 2:
-            rings.update((w, [w]) for w in way_ids)
-        else:
+        if len(way_ids) == 1 or max(ends.values()) <= 2:
             rings[root] = way_ids
+            continue
+        for w in way_ids:
+            parent[w] = w
+        owner = {}
+        for way_id in way_ids:
+            for eid in by_way[way_id]:
+                for v in (graph.edges[eid]["from"], graph.edges[eid]["to"]):
+                    if ends[v] > 2:
+                        continue
+                    if v in owner:
+                        a, b = find(owner[v]), find(way_id)
+                        parent[max(a, b)] = min(a, b)
+                    else:
+                        owner[v] = way_id
+        for w in way_ids:
+            rings.setdefault(find(w), []).append(w)
     graph.roundabouts = []
     ways = {w["id"]: w for w in osm.ways}
     for k, (_first, way_ids) in enumerate(sorted(rings.items())):

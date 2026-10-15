@@ -388,7 +388,7 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 64 Python tests, 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
+The documented validation covers 65 Python tests, 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
 98 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
 22 vehicle model regressions, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.

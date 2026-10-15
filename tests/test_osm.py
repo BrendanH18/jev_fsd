@@ -96,6 +96,34 @@ class TagTests(unittest.TestCase):
             self.assertLess(math.hypot(rb["x"] - cx, rb["y"] - cy), 0.5)
             self.assertAlmostEqual(rb["lane_r"], radius, delta=0.5)
 
+    def test_split_roundabouts_sharing_a_node_stay_separate(self):
+        # Each ring is drawn in three pieces and the two share one node: the pieces of each ring
+        # must still be fitted together, not as one circle through both or six separate arcs.
+        osm = OsmData()
+        lat0, lon0, radius = 44.6450, -63.5800, 20.0
+        m_lat, m_lon = 1 / 110574, 1 / (111320 * math.cos(math.radians(lat0)))
+        centres = [(-radius, 0.0), (radius, 0.0)]
+        ring = {"highway": "tertiary", "junction": "roundabout"}
+        for r, (ox, oy) in enumerate(centres):
+            ids = []
+            for k in range(12):
+                a = 2 * math.pi * k / 12 + (math.pi if r else 0.0)
+                node = 1 if k == 0 else 100 * (r + 1) + k
+                if node not in osm.nodes:
+                    osm.add_node(node, lat0 + (oy + radius * math.sin(a)) * m_lat, lon0 + (ox + radius * math.cos(a)) * m_lon)
+                ids.append(node)
+            ids.append(ids[0])
+            for piece, (i, j) in enumerate(((0, 4), (4, 8), (8, 12))):
+                osm.add_way(30 + 10 * r + piece, ids[i:j + 1], ring)
+        proj = Projection.for_bbox((-63.5810, 44.6440, -63.5790, 44.6460))
+        graph = build_graph(osm, proj)
+        self.assertEqual(len(graph.roundabouts), 2)
+        for (ox, oy), rb in zip(sorted(centres), sorted(graph.roundabouts, key=lambda rb: rb["x"])):
+            cx, cy = proj.to_xy(lat0 + oy * m_lat, lon0 + ox * m_lon)
+            self.assertLess(math.hypot(rb["x"] - cx, rb["y"] - cy), 0.5)
+            self.assertAlmostEqual(rb["lane_r"], radius, delta=0.5)
+            self.assertEqual(len({graph.edges[eid]["ring_center"] for eid in rb["edges"]}), 1)
+
     def test_raised_skywalks_are_not_ground_footprints(self):
         osm = OsmData()
         square = [(44.6450, -63.5800), (44.6450, -63.5795), (44.6455, -63.5795), (44.6455, -63.5800)]

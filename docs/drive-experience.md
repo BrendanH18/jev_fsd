@@ -113,7 +113,7 @@ without changing simulation state, wrapped headings and teleport handling.
 The browser suite passes 137 assertions (99 simulation, 18 HUD and 20 explorer) and the renderer suite 98, including
 manual-steering, city-sun, sign proportions, atlas padding, actual front/rear sign rasterization and
 the skyline silhouettes of every bundled city.
-The 64 Python tests include bundled-map,
+The 65 Python tests include bundled-map,
 selected-city routing, distinct reachable suggestions and fallback checks. Fixture checks remain
 clean with 20 valid offline Jev requests.
 
