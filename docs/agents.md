@@ -131,7 +131,8 @@ cp data/decision-endpoints.example.json data/decision-endpoints.json   # gitigno
 **Answers.** The server checks every answer against the question it was asked: it must be a
 choice, and the choice one of the offered options. Probabilities outside 0–1, for options that
 were not offered, or not numbers are dropped. A missing or unusable answer to the route question
-is ignored, since the car already follows the first route. Any other unusable answer is an
+is ignored: the car keeps the first route, which it already follows, and the question is not asked
+again. Any other unusable answer is an
 invalid reply: the browser falls back to Rules for that decision, and the call still counts with
 its tokens and cost. HTTP errors are reported as they come: 401 or 403 (key rejected), 402
 (OpenRouter: out of credits), 429 or 529 (rate limited or overloaded), 4xx validation errors

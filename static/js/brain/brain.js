@@ -196,6 +196,11 @@ export class Autopilot {
       world.route = new Route(pick, world.map, world.ego.spec);
       this.pendingRoutes = null;
       this.bumpEpoch();
+    } else if (this.pendingRoutes && request.questions?.route && !["rules_fallback", "local"].includes(result.meta?.source)) {
+      // The model answered without a usable route: keep the first option, which the car already
+      // follows, rather than paying to ask the same route question on every later decision. A
+      // fallback or a local decision (an emergency stop) never asked the model, so it asks again.
+      this.pendingRoutes = null;
     }
     this.totals.decisions++;
     this.totals.tokens += result.meta.input_tokens || 0;

@@ -403,7 +403,7 @@ The documented validation covers 158 Python tests (68 for LLM endpoints and thei
 OpenAI-compatible server, and 25 for decision-model endpoints and their setup against a local mock System One
 server, both with temporary files; no real provider is tested), 146 browser assertions (99 simulation, 27 HUD and 20 explorer),
 106 renderer assertions, one HUD layout check, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
-22 vehicle model regressions, 15 LLM agent checks, 13 decision agent checks, six route-control regressions,
+22 vehicle model regressions, 15 LLM agent checks, 14 decision agent checks, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality
 transitions. HUD checks cover fallback and stop labels, the three pillar buttons and an unavailable

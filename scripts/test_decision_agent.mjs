@@ -138,6 +138,24 @@ await test("a vector outside the eligible set keeps the model's motion and takes
   assert.equal(d.meta.source, "decision:d1"); assert.equal(d.meta.fallback, "invalid vector"); assert.equal(world.violations.fallbacks, 1);
   assert.ok(d.candidates.find(c => c.id === d.chosenId)?.eligible);
 });
+await test("an answer without a route keeps the first route and stops asking; a fallback asks again", async () => {
+  const routes = [{ id: "r0", summary: "shortest" }, { id: "r1", summary: "via Broadway" }];
+  const asked = [];
+  for (const [reply, cleared] of [[body => ({ ...good(body), answers: { ...good(body).answers, route: undefined } }), true],
+                                  [() => ({ status: 502, error: "Decision endpoint 'd1': HTTP 500" }), false]]) {
+    const { autopilot, world } = await firstDecision(reply, a => { a.pendingRoutes = routes; });
+    asked.push(calls.at(-1).body.questions.route?.criteria);
+    assert.equal(autopilot.pendingRoutes, cleared ? null : routes);
+    assert.ok(world.route, "the car keeps the route it follows");
+  }
+  assert.deepEqual(Object.keys(asked[0]), ["r0", "r1"]);
+  const { autopilot, world } = setupChallenge(map, CHALLENGES[0], { brain: "decision:d1" });   // nothing eligible: a local stop
+  const snap0 = buildSnapshot(world, null), candidates = sampleCandidates(snap0, world);
+  autopilot.pendingRoutes = routes;
+  autopilot.apply({ motion: "stop", candidateId: "hard_brake", meta: { source: "local" }, answers: {} }, snap0, candidates,
+    { state: {}, questions: { route: { type: "choice", instructions: "x", criteria: { r0: null, r1: null } } }, flags: [] });
+  assert.equal(autopilot.pendingRoutes, routes, "an emergency stop never asked the model, so the route question stays");
+});
 for (const [name, reply, configure, pattern] of [
   ["an invalid answer", body => ({ ...good(body), answers: {}, invalid: "the reply has no answers" }), undefined, /invalid answer: the reply has no answers/],
   ["an HTTP error", () => ({ status: 502, error: "Decision endpoint 'd1': HTTP 422: noul criteria must be strings" }), undefined, /HTTP 422/],
