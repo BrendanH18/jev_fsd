@@ -165,14 +165,16 @@ def _connect_by(deadline: float, address: Tuple[str, int], timeout: Any, source_
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
-        sock = _open_socket(family, kind, proto)
-        try:
+        sock = None
+        try:   # creating the socket can fail too (no IPv6 here, say): move on to the next address
+            sock = _open_socket(family, kind, proto)
             sock.settimeout(remaining)
             if source_address:
                 sock.bind(source_address)
             sock.connect(sockaddr)
         except OSError as err:
-            sock.close()
+            if sock is not None:
+                sock.close()
             error = err
             continue
         if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:

@@ -651,6 +651,22 @@ class EndpointTests(LlmTestCase):
         self.assertLessEqual(len(attempts), 2)
         self.assertLess(sum(attempts), 1.05)
 
+    def test_an_unsupported_address_family_falls_through_to_the_next(self):
+        # As socket.create_connection does: an IPv6 address this machine cannot open is skipped.
+        mock = self.mock()
+        port = int(mock.url.rsplit(":", 1)[1].split("/")[0])
+        addresses = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", port, 0, 0)),
+                     (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", port))]
+
+        def open_socket(family, kind, proto):
+            if family == socket.AF_INET6:
+                raise OSError(97, "Address family not supported by protocol")
+            return socket.socket(family, kind, proto)
+        self.enterContext(patch.object(llm, "_resolve", lambda host, port: addresses))
+        self.enterContext(patch.object(llm, "_open_socket", open_socket))
+        reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "response_format": "none"}])
+        self.assertEqual(self.decide(reg, "m")["answer"]["candidate"], "keep_lane_target")
+
     def test_a_cancelled_watchdog_never_fires(self):
         # The timer callback can already be waiting for the lock when cancel() runs; it must then do nothing.
         a, b = socket.socketpair()
