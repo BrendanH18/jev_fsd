@@ -67,6 +67,14 @@ def public(settings: Settings, registry: DecisionRegistry, client: JevClient) ->
     return {**registry.public(), "providers": DECISION.providers_public(settings), "jev": jev_public(client)}
 
 
+def _typesafe_models(data) -> List[dict]:
+    """TypeSafe lists {"models": [{"name", "description", "release_date"}]}: the name is the model id."""
+    models = data.get("models") if isinstance(data, dict) else None
+    if not isinstance(models, list):
+        return parse_models(data)
+    return parse_models([{"id": m.get("name"), "name": m.get("description")} for m in models if isinstance(m, dict)])
+
+
 def list_models(settings: Settings, body: dict) -> dict:
     """The model picker's list. OpenRouter's decision catalog is public, so it is loaded without a key.
     TypeSafe's needs one; without it (or if it cannot be loaded) the documented Jev models are shown."""
@@ -80,7 +88,7 @@ def list_models(settings: Settings, body: dict) -> dict:
         note = None
         if key:
             try:   # a wrong key is worth saying now; an unreachable list is not worth blocking on
-                listed = parse_models(fetch_json(p["base_url"] + "/v1/models", key, p["label"], MODELS_TIMEOUT_S))
+                listed = _typesafe_models(fetch_json(p["base_url"] + "/v1/models", key, p["label"], MODELS_TIMEOUT_S))
             except SetupError as err:
                 if "rejected the key" in str(err):
                     raise

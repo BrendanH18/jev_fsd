@@ -146,8 +146,7 @@ def check_answers(response: Optional[dict], questions: Dict[str, dict]) -> Tuple
     or unusable route answer is dropped rather than failing the decision: the car already follows
     the first route option, as for LLM drivers."""
     raw = response.get("answers") if isinstance(response, dict) else None
-    if not isinstance(raw, dict):
-        return {}, "the reply has no answers"
+    raw = raw if isinstance(raw, dict) else {}   # judged per question, so a route-only request can still pass
     answers: Dict[str, dict] = {}
     for qid, question in questions.items():
         answer, why = _choice_answer(raw.get(qid), list(question["criteria"]), qid)

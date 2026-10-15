@@ -118,7 +118,7 @@ the skyline silhouettes of every bundled city and the graphics artifact regressi
 A layout check on the simulator page confirms that the three pillar buttons, their menus and the
 autopilot switch fit inside the 300 px HUD panel: the pillars take its full width on one line,
 with the switch below them.
-The 155 Python tests include bundled-map,
+The 158 Python tests include bundled-map,
 selected-city routing, distinct reachable suggestions and fallback checks. Fixture checks remain
 clean with 20 valid offline Jev requests.
 

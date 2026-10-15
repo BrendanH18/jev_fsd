@@ -162,11 +162,13 @@ def _setup(action, body):
 
 def _saved(result):
     """After a save or removal in either pillar: both registries re-read .env, since a provider key
-    (OPENROUTER_API_KEY) can serve both, and the reply carries both blocks and Jev's state."""
-    llm_registry.reload()
-    decision_registry.reload()
-    return {**result, "llm": llm_setup.public(settings, llm_registry),
-            "decision": decision_setup.public(settings, decision_registry, client)}
+    (OPENROUTER_API_KEY) can serve both, and the reply carries both blocks and Jev's state. The setup
+    lock keeps a reload from pairing one save's endpoint file with another save's key."""
+    with llm_setup._lock:
+        llm_registry.reload()
+        decision_registry.reload()
+        return {**result, "llm": llm_setup.public(settings, llm_registry),
+                "decision": decision_setup.public(settings, decision_registry, client)}
 
 
 def api_llm_models(body, _query):

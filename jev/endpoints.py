@@ -517,8 +517,10 @@ class Endpoint:
             url = self.check_url()
             path = urlsplit(url).path
             req = urllib.request.Request(url, headers=headers_for(self.api_key))
+            limit = min(CHECK_TIMEOUT_S, self.config.timeout_s)
+            req.watchdog = watchdog = _Watchdog(time.monotonic() + limit)   # a trickled reply cannot hold the probe
             try:
-                with _OPENER.open(req, timeout=min(CHECK_TIMEOUT_S, self.config.timeout_s)) as resp:
+                with _OPENER.open(req, timeout=limit) as resp:
                     resp.read(MAX_RESPONSE_BYTES)
                 out = {"name": name, "status": "ready", "reachable": True, "detail": "reachable"}
             except urllib.error.HTTPError as err:
@@ -531,6 +533,9 @@ class Endpoint:
             except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as err:
                 reason = getattr(err, "reason", err)
                 out = {"name": name, "status": "unreachable", "reachable": False, "detail": str(reason)[:200]}
+            finally:
+                if watchdog.cancel():
+                    out = {"name": name, "status": "unreachable", "reachable": False, "detail": "no reply within %g s" % limit}
         out = scrub(out, self.api_key)
         self._check = (now, out)
         return out

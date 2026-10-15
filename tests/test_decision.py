@@ -167,6 +167,14 @@ class DecideTests(DecisionTestCase):
         self.assertEqual(out["answers"]["vector"]["probabilities"], {"keep_lane_target": 0.7})
         self.assertIsNone(out["answers"]["vector"]["confidence"])
 
+    def test_a_route_only_question_survives_a_reply_without_answers(self):
+        reg = self.registry([{"name": "d", "base_url": base(self.mock(lambda h, b: (200, {"model": "m", "usage": {"input_tokens": 500}}, {}))),
+                              "model": "m"}])
+        out = self.decide(reg, "d", questions={"route": ROUTE})
+        self.assertIsNone(out["invalid"])
+        self.assertEqual(out["answers"], {})
+        self.assertEqual(reg.get("d").public()["errors"], 0)
+
     def test_http_errors_map_to_statuses_without_leaking_the_key(self):
         cases = [(401, {"detail": {"message": "bad key %s" % SECRET}}, 401, "rejected the API key"),
                  (402, {"error": {"code": 402, "message": "Insufficient credits"}}, 402, "out of credits"),
@@ -260,6 +268,24 @@ class CheckTests(DecisionTestCase):
         self.assertEqual(ok.requests[0]["path"], "/api/v1/key")
         self.assertEqual(ok.requests[0]["headers"]["Authorization"], "Bearer " + SECRET)
 
+    def test_a_trickled_status_reply_cannot_outlast_the_probe_deadline(self):
+        def trickle(h, body):
+            try:
+                h.send_response(200)
+                h.send_header("Content-Length", "400")
+                h.end_headers()
+                for _ in range(40):   # each byte arrives well inside the socket timeout
+                    h.wfile.write(b" ")
+                    h.wfile.flush()
+                    time.sleep(0.1)
+            except OSError:
+                pass
+        reg = self.registry([{"name": "slow", "base_url": base(self.mock(trickle)), "model": "m", "timeout_s": 1}])
+        started = time.monotonic()
+        status = reg.get("slow").check(force=True)
+        self.assertLess(time.monotonic() - started, 1 + SLACK)
+        self.assertEqual((status["status"], status["detail"]), ("unreachable", "no reply within 1 s"))
+
 
 class SetupTests(DecisionTestCase):
     def setUp(self):
@@ -352,7 +378,9 @@ class ModelListTests(DecisionTestCase):
         res = decision_setup.list_models(self.s, {"provider": "typesafe"})
         self.assertEqual([m["id"] for m in res["models"]][:2], ["jev-latest", "jev-preview"])
         self.assertTrue(all(m["price_per_mtok_input"] == 0.042 for m in res["models"]))
-        live = self.mock(lambda h, body: (200, {"data": [{"id": "jev-1.15.0"}, {"id": "jev-latest"}]}, {}))
+        live = self.mock(lambda h, body: (200, {"models": [   # TypeSafe's ModelMetadataList (api.typesafe.ai/openapi.json)
+            {"name": "jev-1.15.0", "description": "Jev 1.15", "release_date": "2026-11-01"},
+            {"name": "jev-latest", "description": "General-purpose system one model.", "release_date": "2026-09-15"}]}, {}))
         typesafe = dict(decision_setup.DECISION.by_id["typesafe"], base_url=base(live))
         with patch.dict(decision_setup.DECISION.by_id, {"typesafe": typesafe}):
             res = decision_setup.list_models(self.s, {"provider": "typesafe", "api_key": SECRET})
@@ -437,6 +465,15 @@ class ServerTests(DecisionTestCase):
         replies.append(raw)
         for raw in replies:
             self.assertNotIn(SECRET.encode(), raw)
+
+    def test_reloading_after_a_save_holds_the_setup_lock(self):
+        # Without it, a reload could read one save's endpoint file and another save's key.
+        held = []
+        for registry in (server.llm_registry, server.decision_registry):
+            reload = registry.reload
+            self.enterContext(patch.object(registry, "reload", lambda reload=reload: (held.append(llm_setup._lock.locked()), reload())))
+        server._saved({"saved": "x", "id": "decision:x"})
+        self.assertEqual(held, [True, True])
 
     def test_a_key_saved_for_one_pillar_reaches_the_other_at_once(self):
         (self.root / "llm.json").write_text(json.dumps({"endpoints": [
