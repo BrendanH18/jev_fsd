@@ -56,6 +56,35 @@ against a local mock server, not against any of these providers, so expect to ad
 [arena](http://127.0.0.1:8322/arena) and the [`/bench`](http://127.0.0.1:8322/bench) brain list,
 so several models can be compared side by side under identical conditions.
 
+### Connect a model in the app
+
+The quickest way: in the drive app, click **LLM** next to Rules and Jev (or ▾ → **Connect a
+model**, or **Settings → Connect a model**).
+
+1. Pick a provider: OpenRouter, OpenAI, Groq, Ollama, LM Studio, or **Other** for any
+   OpenAI-compatible URL.
+2. Paste your API key (local servers need none). **Get a key** links to the provider's key page.
+3. Choose a model. The list loads from the provider's `/models` (OpenRouter lists without a key,
+   with prices); type to search, or type any model id.
+4. **Save and drive.**
+
+The server saves the key in `.env` under the provider's usual variable (`OPENROUTER_API_KEY`,
+`OPENAI_API_KEY`, `GROQ_API_KEY`) and adds the endpoint to `data/llm-endpoints.json`, then reloads
+without a restart. It refuses to write the key unless `.env` is gitignored and untracked, and keeps
+the file owner-only. The key is never sent back to the browser; the dialog only shows whether one is
+saved. A preset always uses its provider's URL, so a saved provider key only goes to that provider.
+An **Other** endpoint's key gets a variable of its own (`JEV_FSD_LLM_KEY_<NAME>_<hash>`), and moving it to a
+different URL needs the key again. If the variable is also set in the shell that started the
+server, the shell value wins; the dialog says so.
+
+With prices (filled in from OpenRouter's list, or typed), spend counts toward
+`JEV_FSD_BUDGET_USD`. The **LLM** button drives with the last model chosen; the ▾ menu switches
+models, and **Connect or manage models…** adds or removes them. Removing an endpoint keeps a
+provider key in `.env` (other endpoints may use it) but deletes an **Other** endpoint's own key.
+Options the dialog does not show, such as `extra_body`, survive saving the same model again.
+
+### Configure by hand
+
 Copy the template and keep the entries you want:
 
 ```sh
@@ -65,7 +94,7 @@ cp data/llm-endpoints.example.json data/llm-endpoints.json   # gitignored
 Keys never go in that file. `api_key_env` names a variable in `.env` (or the environment), and
 the server refuses an entry that contains an `api_key` field. An endpoint with a key must use
 `https://` unless it is on this machine or your local network. Restart the server after editing
-either file; the startup banner lists each endpoint and any configuration problems.
+either file by hand (the dialog reloads by itself); the startup banner lists each endpoint and any configuration problems.
 
 **OpenAI**
 
@@ -223,7 +252,7 @@ This is a decision log, not a saved 3D replay or a capture of custom-agent inter
 
 Run `node scripts/test_drive_lab.mjs` after changing an
 agent or scenario, and `node scripts/test_llm_agent.mjs` plus `uv run python -m unittest
-discover tests -p test_llm.py` after changing the LLM prompt, adapter or server proxy. For broader driving changes, also run the existing seeded city benchmark.
+discover tests -p 'test_llm*.py'` after changing the LLM prompt, adapter, server proxy or setup dialog. For broader driving changes, also run the existing seeded city benchmark.
 Run `node scripts/test_arena_history.mjs` after changing history, comparisons or trace formats.
 These commands require Node 22 or newer. With a running app, run
 `uv run --with playwright python scripts/test_arena_browser.py` for the complete arena workflow (CI runs it on every pull request); use `--url` for a

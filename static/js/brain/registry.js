@@ -17,6 +17,12 @@ export function setAgentAvailability(id, available, note = "") {
   if (d) { d.available = !!available; d.note = note; }
 }
 export const agentAvailable = id => definitions.get(id)?.available === true;
+// LLM endpoints can be added, changed or removed while the app runs (the Connect a model dialog).
+export function updateAgent(id, { label, description, llm }) {
+  const d = definitions.get(id);
+  if (d) Object.assign(d, { label, description, llm });
+}
+export function removeAgent(id) { return !definitions.get(id)?.builtin && definitions.delete(id); }
 export const agentOptionLabel = d => d.note ? `${d.label} · ${d.note}` : d.label;
 registerAgent({ id: "rules", label: "Rules", create: () => new RulesBrain(), builtin: true });
 registerAgent({ id: "jev", label: "Jev", create: () => new JevBrain(), builtin: true });

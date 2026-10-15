@@ -393,10 +393,10 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 110 Python tests (45 for LLM endpoints against a local mock
-OpenAI-compatible server; no real provider is tested), 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
+The documented validation covers 131 Python tests (66 for LLM endpoints and their setup against a local mock
+OpenAI-compatible server and temporary files; no real provider is tested), 140 browser assertions (99 simulation, 21 HUD and 20 explorer),
 106 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
-22 vehicle model regressions, 14 LLM agent checks, six route-control regressions,
+22 vehicle model regressions, 15 LLM agent checks, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality
 transitions. HUD checks cover fallback and stop labels, unavailable Jev, keyboard driver

@@ -1,8 +1,9 @@
 """Read and write the project's `.env` file safely.
 
-The app can save the TypeSafe API key here so it survives restarts. Before writing, the
-server checks that the file cannot be committed by accident (it must be gitignored and not already
-tracked), writes atomically, and sets owner-only permissions. Nothing here ever prints a key.
+The app can save API keys here (the TypeSafe key, or a provider key entered in the LLM setup
+dialog) so they survive restarts. Before writing, the server checks that the file cannot be committed
+by accident (it must be gitignored and not already tracked), writes atomically, and sets owner-only
+permissions. Nothing here ever prints a key.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 KEY_NAME = "TYPESAFE_API_KEY"
+VAR_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 _LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 
 
@@ -110,23 +112,25 @@ def _atomic_write(path: Path, text: str) -> None:
     os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
 
-def write_key(root: Path, key: str, name: str = ".env") -> Path:
-    """Insert or replace TYPESAFE_API_KEY in `.env`, keeping every other line intact."""
+def write_key(root: Path, key: str, name: str = ".env", var: str = KEY_NAME) -> Path:
+    """Insert or replace `var` (TYPESAFE_API_KEY by default) in `.env`, keeping every other line intact."""
+    if not VAR_NAME.match(var or ""):
+        raise EnvFileError("Not an environment variable name.")
     problems = preflight(root, name)
     if problems:
         raise EnvFileError(" ".join(problems))
-    if not key or any(ch.isspace() for ch in key) or len(key) > 512:
+    if not key or len(key) > 512 or any(ch.isspace() or ord(ch) < 32 or ch in "\"'#" for ch in key):
         raise EnvFileError("That does not look like an API key.")
     path = root / name
     try:
         lines = path.read_text().splitlines()
     except FileNotFoundError:
         lines = []
-    new_line = "%s=%s" % (KEY_NAME, key)
+    new_line = "%s=%s" % (var, key)
     replaced = False
     for i, line in enumerate(lines):
         m = _LINE.match(line)
-        if m and m.group(1) == KEY_NAME:
+        if m and m.group(1) == var:
             lines[i] = new_line
             replaced = True
     if not replaced:
@@ -135,8 +139,8 @@ def write_key(root: Path, key: str, name: str = ".env") -> Path:
     return path
 
 
-def forget_key(root: Path, name: str = ".env") -> bool:
-    """Remove the key line. Deletes the file if nothing else is in it. Returns True if a key was removed."""
+def forget_key(root: Path, name: str = ".env", var: str = KEY_NAME) -> bool:
+    """Remove the `var` line. Deletes the file if nothing else is in it. Returns True if a key was removed."""
     path = root / name
     try:
         lines = path.read_text().splitlines()
@@ -146,7 +150,7 @@ def forget_key(root: Path, name: str = ".env") -> bool:
     removed = False
     for line in lines:
         m = _LINE.match(line)
-        if m and m.group(1) == KEY_NAME:
+        if m and m.group(1) == var:
             removed = True
             continue
         kept.append(line)

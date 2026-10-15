@@ -10,7 +10,7 @@ const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, buildQuestions } = await import("../static/js/brain/state.js");
 const { SYSTEM_PROMPT, buildLlmPrompt } = await import("../static/js/brain/llm-prompt.js");
-const { LlmBrain, llmDecision, registerLlmAgents, llmSummary } = await import("../static/js/brain/llm.js");
+const { LlmBrain, llmDecision, registerLlmAgents, llmSummary, defaultLlmId, llmBrainFor } = await import("../static/js/brain/llm.js");
 const { agentDefinitions, agentAvailable, agentOptionLabel } = await import("../static/js/brain/registry.js");
 
 const map = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v5.pack.json", import.meta.url))));
@@ -95,7 +95,7 @@ await test("endpoints register as llm:<name> agents; missing keys are listed but
   assert.ok(ids.includes("llm:mock") && ids.includes("llm:nokey"));
   assert.ok(agentAvailable("llm:mock")); assert.ok(!agentAvailable("llm:nokey"));
   assert.match(agentOptionLabel(agentDefinitions().find(a => a.id === "llm:nokey")), /no key: set MOCK_KEY/);
-  registerLlmAgents({ endpoints: [ENDPOINT] });   // idempotent
+  assert.deepEqual(registerLlmAgents({ endpoints: [ENDPOINT, NO_KEY] }), []);   // idempotent
   assert.equal(agentDefinitions().filter(a => a.id === "llm:mock").length, 1);
   assert.match(llmSummary({ llm: { endpoints: [ENDPOINT, NO_KEY], problems: [] } }), /Mock model \(mock-1\)/);
   assert.match(llmSummary({ demo: true }), /local app/);
@@ -166,6 +166,22 @@ await test("an arena evaluation runs the LLM agent in lockstep and reports its c
   assert.equal(result.tokens, 900 * result.calls);
   assert.ok(result.decisions_trace.some(d => d.source === "llm:mock"));
   assert.equal(result.fallbacks, 0);
+});
+await test("the setup dialog's changes add, update and remove drivers, and the LLM button picks a sensible default", async () => {
+  assert.equal(defaultLlmId("llm:nokey"), "llm:mock");   // a remembered model without a key is skipped
+  assert.equal(defaultLlmId("llm:gone"), "llm:mock");
+  const added = { ...ENDPOINT, id: "llm:luna", name: "luna", label: "GPT-6 Luna (OpenRouter)", model: "openai/gpt-6-luna" };
+  assert.deepEqual(registerLlmAgents({ endpoints: [ENDPOINT, NO_KEY, added] }), ["llm:luna"]);
+  assert.equal(defaultLlmId("llm:luna"), "llm:luna");
+  assert.deepEqual(registerLlmAgents({ endpoints: [ENDPOINT, NO_KEY, added] }), []);   // unchanged: brains are kept
+  const moved = { ...added, model: "openai/gpt-6-luna-20260922", timeout_s: 15 };
+  assert.deepEqual(registerLlmAgents({ endpoints: [ENDPOINT, NO_KEY, moved] }), ["llm:luna"]);
+  assert.equal(agentDefinitions().find(d => d.id === "llm:luna").llm.model, "openai/gpt-6-luna-20260922");
+  assert.equal(llmBrainFor("llm:luna").timeoutMs, 15750);   // a fresh brain uses the new settings
+  assert.deepEqual(registerLlmAgents({ endpoints: [ENDPOINT, NO_KEY] }), ["llm:luna"]);
+  assert.ok(!agentDefinitions().some(d => d.id === "llm:luna"));
+  assert.equal(llmBrainFor("llm:luna"), null);
+  assert.ok(agentDefinitions().some(d => d.id === "rules") && agentDefinitions().some(d => d.id === "jev"));   // built-ins stay
 });
 console.log(`${assertions} LLM agent checks passed.`);
 process.exit(0);   // the runner's MessageChannel would otherwise keep Node alive

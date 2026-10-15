@@ -98,9 +98,12 @@ latency and cost. It saves evaluations and lets you diff a run against a previou
 
 Got a model of your own? The local server speaks the OpenAI Chat Completions protocol, so it
 should work with OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama on your laptop and similar
-servers; so far it has been tested only against a local mock server, not a real provider. List
-endpoints in `data/llm-endpoints.json` and each one shows up as a driver called `llm:<name>`,
-ready to race the others in the arena and on `/bench`. It picks among the same safety-checked
+servers; so far it has been tested only against a local mock server, not a real provider. Click
+**LLM** next to Rules and Jev (or ▾ → **Connect a model**), pick a provider, paste a key and
+choose a model: the key is saved to `.env`, and the model drives straight away. Each model shows up
+as a driver called `llm:<name>`, ready to race the others in the arena and on `/bench`; the ▾ menu
+switches between them, and `3` drives with the last one chosen. You can also list endpoints in
+`data/llm-endpoints.json` by hand. It picks among the same safety-checked
 manoeuvres, the keys stay on the server, and the prompt lives in one file you can tweak. The
 [agent guide](docs/agents.md#llm-endpoints-test-your-own-model) has copy-paste examples.
 

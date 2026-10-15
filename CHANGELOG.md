@@ -4,7 +4,12 @@
 
 - Bring your own LLM: an endpoint driver that speaks the OpenAI Chat Completions protocol, so it
   should work with OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama and others; it has been
-  tested only against a local mock server, not a real provider. Configure several in the gitignored
+  tested only against a local mock server, not a real provider. **LLM** sits next to Rules and Jev
+  (key `3`), with a ▾ menu to switch models. **Connect a model** sets one up in the app: pick a
+  provider, paste a key, choose from the provider's model list (OpenRouter's includes prices) and
+  save. The server writes the key to `.env` (only if it is gitignored and untracked) and the endpoint
+  to `data/llm-endpoints.json`, then reloads; the key never returns to the browser, and a saved key is
+  never sent to a URL other than its provider's. Or configure several by hand in the gitignored
   `data/llm-endpoints.json` (template: `data/llm-endpoints.example.json`) or one with
   `JEV_FSD_LLM_*` in `.env`; each becomes a selectable driver `llm:<name>` in Settings, challenges,
   replay branches, the arena and `/bench`, labelled ready, unreachable, key rejected or no key.

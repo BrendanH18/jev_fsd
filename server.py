@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from jev import decide, llm, security
+from jev import decide, llm, llm_setup, security
 from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
 from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
@@ -86,7 +86,7 @@ def api_status(_body, query):
         "price_per_mtok_input": PRICE_PER_INPUT_TOKEN_USD * 1_000_000,
         "spend": client.guard.snapshot(),
         "npcs": settings.npcs,
-        "llm": llm_registry.public(),
+        "llm": llm_setup.public(settings, llm_registry),
         "map": {**map_identity(entry["bbox"]), "bbox": list(entry["bbox"]), "name": pack.get("name"), "synthetic": bool(pack.get("synthetic")),
                 "error": entry["error"], "stats": pack.get("stats", {})},
     }
@@ -148,6 +148,31 @@ def api_llm_decide(body, _query):
 def api_llm_check(body, _query):
     """Probe every configured endpoint (GET {base_url}/models, no spend). POST so it needs the token."""
     return {"endpoints": llm_registry.check_all(force=bool(body.get("force")))}
+
+
+def _setup(action, body):
+    try:
+        return action(body)
+    except llm_setup.SetupError as err:
+        raise BadRequest(str(err))
+
+
+def api_llm_models(body, _query):
+    """The Connect a model dialog's model list: GET {base_url}/models for a provider (no spend)."""
+    return _setup(lambda b: llm_setup.list_models(settings, b), body)
+
+
+def api_llm_save(body, _query):
+    """Save a model from the dialog: key to .env, endpoint to the endpoints file, then reload."""
+    result = _setup(lambda b: llm_setup.save(settings, llm_registry, b), body)
+    log("llm setup: saved llm:%s" % result["saved"])
+    return result
+
+
+def api_llm_remove(body, _query):
+    result = _setup(lambda b: llm_setup.remove(settings, llm_registry, b), body)
+    log("llm setup: removed llm:%s" % result["removed"])
+    return result
 
 
 def api_snapshot_save(body, _query):
@@ -219,6 +244,9 @@ ROUTES = {
     ("POST", "/api/decide"): api_decide,
     ("POST", "/api/llm/decide"): api_llm_decide,
     ("POST", "/api/llm/check"): api_llm_check,
+    ("POST", "/api/llm/models"): api_llm_models,
+    ("POST", "/api/llm/save"): api_llm_save,
+    ("POST", "/api/llm/remove"): api_llm_remove,
     ("POST", "/api/snapshot/save"): api_snapshot_save,
     ("POST", "/api/bench/save"): api_bench_save,
     ("GET", "/api/bench/runs"): api_bench_runs,

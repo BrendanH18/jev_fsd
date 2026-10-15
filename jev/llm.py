@@ -7,8 +7,9 @@ in server-side config, calls `POST {base_url}/chat/completions`, parses the repl
 checks the chosen manoeuvre against the ids the browser offered. Only already-safe candidates are
 offered, and the browser re-checks the answer with validAgentChoice before anything executes.
 
-Configuration lives only on the server, so a page can never point the server at another URL or read
-a key:
+Configuration lives only on the server, so a page can never read a key, and decisions name an endpoint,
+never a URL. Endpoints change only by editing these files or through the token-protected setup API
+(jev/llm_setup.py), which never sends a saved key to a URL other than the one it was saved for:
 
   data/llm-endpoints.json (gitignored; start from data/llm-endpoints.example.json)
       {"endpoints": [
@@ -611,6 +612,7 @@ class LlmEndpoint:
         self.guard = guard
         self._lock = threading.Lock()
         self._format = config.response_format
+        self._key = settings.get(config.api_key_env) if config.api_key_env else None   # see api_key
         self.calls = 0
         self.errors = 0
         self.input_tokens = 0
@@ -623,7 +625,9 @@ class LlmEndpoint:
 
     @property
     def api_key(self) -> Optional[str]:
-        return self.settings.get(self.config.api_key_env) if self.config.api_key_env else None
+        # Read once: this object's key belongs to this object's URL. A key saved later reaches only the
+        # replacement endpoint that reload() builds, never a request (or retry) still in flight here.
+        return self._key
 
     @property
     def key_state(self) -> str:
@@ -826,6 +830,21 @@ class LlmRegistry:
         self.guard = guard
         configs, self.problems = load_configs(settings)
         self.endpoints: Dict[str, LlmEndpoint] = {c.name: LlmEndpoint(c, settings, guard) for c in configs}
+
+    def reload(self) -> None:
+        """Re-read .env and the endpoints file, e.g. after the setup dialog saved a model. An endpoint
+        whose settings did not change keeps its object, so its call counts and spend carry over."""
+        self.settings.reload_file()
+        configs, problems = load_configs(self.settings)
+        endpoints: Dict[str, LlmEndpoint] = {}
+        for c in configs:
+            old = self.endpoints.get(c.name)
+            key = self.settings.get(c.api_key_env) if c.api_key_env else None
+            same = old is not None and vars(old.config) == vars(c) and old.api_key == key
+            endpoints[c.name] = old if same else LlmEndpoint(c, self.settings, self.guard)
+        for e in endpoints.values():
+            e._check = None   # a key may have changed in .env, so check reachability afresh
+        self.endpoints, self.problems = endpoints, problems
 
     def public(self) -> dict:
         path = self.settings.llm_endpoints_path

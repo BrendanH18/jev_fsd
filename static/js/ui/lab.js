@@ -5,7 +5,7 @@ import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/regi
 import { replayPosition } from "../lab/playback.js";
 
 export class DriveLab {
-  constructor({ city, demo, configured, llmNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception }) {
+  constructor({ city, demo, configured, llmNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception, onConnectModel }) {
     Object.assign(this, { configured, onSeek, onBranch, onLive, onAgent });
     this.dialog = h("dialog", { class: "lab-dialog", "aria-label": "Drive lab" });
     this.dialog.addEventListener("close", () => onPause(false));
@@ -49,6 +49,7 @@ export class DriveLab {
     settings.append(h("h3", { class: "settings-section-heading" }, "Driving agents"),
       h("label", { class: "wide" }, h("span", { class: "label" }, "Active agent"), this.agent = h("select", { "aria-label": "Active agent", onchange: () => onAgent(this.agent.value) })),
       this.llmStatus = h("p", { class: "muted wide", role: "status" }, llmNote),
+      demo ? null : h("button", { class: "toggle wide", onclick: () => onConnectModel?.() }, "Connect a model"),
       h("label", { class: "wide" }, h("span", { class: "label" }, "Local agent module"), this.module = h("input", { type: "text", placeholder: "/js/agents/my-agent.js", "aria-label": "Local agent module" })),
       h("button", { class: "toggle wide", onclick: () => this.loadAgent() }, "Load agent"), this.agentStatus = h("p", { class: "muted wide", role: "status" }, "Trusted JavaScript modules run in this browser."));
     this.lastTick = -Infinity; this.playing = false; this.reviewing = false;

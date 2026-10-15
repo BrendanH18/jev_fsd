@@ -44,8 +44,21 @@ export async function runUiTests() {
   const [rules, jev] = hud.el.brainButtons;
   rules.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
   check('Brain radio buttons support arrow-key selection and one tab stop', jev.getAttribute('aria-checked') === 'true' && jev.tabIndex === 0 && rules.tabIndex === -1);
+  const llm = hud.el.brainButtons.find(b => b.dataset.brain === 'llm');
+  hud.setLlm({ label: 'GPT-6 Luna (OpenRouter)', available: true });
+  hud.setBrain('llm:luna');
+  check('Every LLM driver selects the LLM button, which names the model and keeps one tab stop', llm.getAttribute('aria-checked') === 'true' && llm.tabIndex === 0
+    && rules.tabIndex === -1 && llm.title.includes('GPT-6 Luna') && !llm.hidden);
+  hud.setLlm({ offered: false });
+  check('The LLM button and its menu are hidden without a server to hold keys', llm.hidden && hud.el.llmMenu.hidden);
+  hud.setBrain('jev');
   hud.setJevAvailable(false);
   check('Unavailable Jev is exposed to assistive technology', jev.getAttribute('aria-disabled') === 'true');
+  hud.setLlm({ label: 'GPT-6 Luna (OpenRouter)', available: true });
+  hud.setBrain('rules');
+  rules.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  check('Arrow keys skip an unavailable Jev and reach the LLM button', llm.getAttribute('aria-checked') === 'true');
+  hud.setJevAvailable(true);
   hud.toggleKeys(true);
   check('Shortcut help synchronizes its button state', !hud.el.keysHelp.hidden && hud.el.keysToggle.getAttribute('aria-pressed') === 'true');
 
