@@ -72,7 +72,6 @@ class ConfigTests(DecisionTestCase):
              "model": "liquid/d1", "api_key_env": "OPENROUTER_API_KEY", "price_per_mtok_input": 0.02},
             {"name": "local", "base_url": "http://localhost:8080", "model": "kev-4b", "rpm": 0},
             {"name": "plain", "base_url": "http://decide.example.com", "model": "m", "api_key_env": "K"},
-            {"name": "leaky", "base_url": "https://x.example", "model": "m", "api_key": SECRET},
             {"name": "badpath", "base_url": "https://x.example", "model": "m", "path": "/v1/../admin"},
             {"name": "query", "base_url": "https://x.example", "model": "m", "path": "/v1/systemone?x=1"},
             {"name": "or", "base_url": "https://dup.example", "model": "m"},
@@ -81,10 +80,14 @@ class ConfigTests(DecisionTestCase):
         local = reg.get("local").config
         self.assertEqual((local.path, local.check_path, local.timeout_s, local.rpm), ("/v1/systemone", "/v1/models", 5.0, 0))
         joined = " | ".join(reg.problems)
-        for fragment in ("https://", "do not put keys", "path and check_path", "defined twice"):
+        for fragment in ("https://", "path and check_path", "defined twice"):
             self.assertIn(fragment, joined)
-        self.assertEqual(len(reg.problems), 5)
-        self.assertNotIn(SECRET, joined)
+        self.assertEqual(len(reg.problems), 4)
+        problems = []   # checked in memory, as for LLM endpoints: a test never writes a key to disk
+        self.assertFalse(decision.DecisionConfig({"name": "leaky", "base_url": "https://x.example", "model": "m", "api_key": SECRET},
+                                                 "entry", problems).ok)
+        self.assertIn("do not put keys", problems[0])
+        self.assertNotIn(SECRET, problems[0])
         public = reg.get("or").public()
         self.assertEqual((public["id"], public["endpoint"], public["path"], public["key"], public["usable"]),
                          ("decision:or", "https://openrouter.ai", "/api/alpha/decisions", "missing", False))
