@@ -180,8 +180,9 @@ python3 scripts/build_demo.py                   # build the static GitHub Pages 
 
 Every `scripts/test_*.mjs` file is a standalone Node check. Node 22 or newer runs them directly; CI passes `--experimental-default-type=module` too.
 The [full reference](docs/project-reference.md#development) lists them all, along with the
-optional Playwright browser check. CI runs the Drive Lab and arena checks on every pull request,
-then builds and deploys the Pages demo from `main`.
+Playwright browser checks. CI runs every check on every pull request: the Python tests, all Node
+checks, the Jev fixture and offline request checks, and the browser, renderer and arena suites in
+headless Chromium. It then builds the Pages demo and deploys it from `main`.
 
 ```
 server.py          local HTTP server and API (stdlib only)

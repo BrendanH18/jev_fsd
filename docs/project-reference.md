@@ -368,6 +368,11 @@ node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```
 
+With a running app, `uv run --with playwright python scripts/test_browser_pages.py` runs the `/tests`
+page and the renderer assertions in headless Chromium, and `scripts/test_arena_browser.py` runs the
+arena workflow (install the browser once with `uv run --with playwright python -m playwright install chromium`).
+CI runs all of the above on every pull request.
+
 Open [/tests](http://127.0.0.1:8322/tests) for simulation and HUD checks. From the simulator's browser
 console, run the WebGL renderer checks:
 

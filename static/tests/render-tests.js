@@ -160,7 +160,7 @@ export function runRenderTests() {
   check("atlas gutters are opaque around both sign shapes", pixels.getImageData(0, 0, 1, 1).data[3] === 255 && pixels.getImageData(256, 0, 1, 1).data[3] === 255);
 
   const calls = [], renderer = { shadowMap: { autoUpdate: true } };
-  const view = { renderer, camera, sceneryLODs: [lod],
+  const view = { renderer, camera, sceneryLODs: [lod], sky: { material: { uniforms: { cloudTime: { value: 0 } } } },
     reflection: { render: () => { calls.push(renderer.shadowMap.autoUpdate); return true; } },
     post: { render: () => calls.push(renderer.shadowMap.autoUpdate) } };
   SceneView.prototype.render.call(view, 0);
