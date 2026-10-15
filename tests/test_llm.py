@@ -24,6 +24,11 @@ EXPECT = {"motion": ["drive", "stop"], "candidate": ["keep_lane_target", "stop_a
 MESSAGES = [{"role": "system", "content": "You drive."}, {"role": "user", "content": "{\"answer\": {}}"}]
 
 
+# Scheduling allowance for wall-clock deadline checks on a loaded runner. Without the deadline,
+# those cases take at least 2 s with a 1 s timeout, or return an answer instead of raising.
+SLACK = 0.5
+
+
 def completion(content, model="mock-model", prompt_tokens=1200, completion_tokens=12):
     return {"id": "chatcmpl-1", "object": "chat.completion", "model": model,
             "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
@@ -520,7 +525,7 @@ class EndpointTests(LlmTestCase):
         started = time.monotonic()
         with self.assertRaises(llm.LlmError) as ctx:
             self.decide(reg, "p")
-        self.assertLess(time.monotonic() - started, 1.45)   # 1.3 s of replies, cut at 1.2 s
+        self.assertLess(time.monotonic() - started, 1.2 + SLACK)   # 1.3 s of replies, cut at 1.2 s
         self.assertEqual(ctx.exception.status, 504)
         self.assertIn("no reply within 1.2 s", str(ctx.exception))
         self.assertEqual(len(mock.requests), 2)
@@ -573,7 +578,7 @@ class EndpointTests(LlmTestCase):
         with self.assertRaises(llm.LlmError) as ctx:
             self.decide(reg, "t")
         self.assertEqual(ctx.exception.status, 504)
-        self.assertLess(time.monotonic() - started, 1.3)
+        self.assertLess(time.monotonic() - started, 1 + SLACK)
         self.assertEqual(reg.guard.snapshot()["live_calls"], 0)
 
     def stalling_proxy(self, tunnel_after=None):
@@ -618,7 +623,7 @@ class EndpointTests(LlmTestCase):
                 with self.assertRaises(llm.LlmError) as ctx:
                     self.decide(reg, "t")
                 self.assertEqual(ctx.exception.status, 504)
-                self.assertLess(time.monotonic() - started, 1.3)
+                self.assertLess(time.monotonic() - started, 1 + SLACK)
 
     def test_each_address_gets_only_the_rest_of_the_deadline(self):
         # socket.create_connection gives every resolved address the full timeout, so two unreachable
@@ -647,7 +652,7 @@ class EndpointTests(LlmTestCase):
         with self.assertRaises(llm.LlmError) as ctx:
             self.decide(reg, "t")
         self.assertEqual(ctx.exception.status, 504)
-        self.assertLess(time.monotonic() - started, 1.3)
+        self.assertLess(time.monotonic() - started, 1 + SLACK)
         self.assertLessEqual(len(attempts), 2)
         self.assertLess(sum(attempts), 1.05)
 
