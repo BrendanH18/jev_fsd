@@ -41,24 +41,44 @@ export async function runUiTests() {
 
   hud.setBrain('rules');
   hud.onBrainChange(name => hud.setBrain(name));
-  const [rules, jev] = hud.el.brainButtons;
+  const [rules, pillar] = hud.el.brainButtons;
+  check('The pilot row offers the three pillars in order: Rules, Decision, LLM', hud.el.brainButtons.map(b => b.dataset.brain).join() === 'rules,decision,llm'
+    && pillar.textContent === 'Decision' && hud.el.menus.decision?.getAttribute('aria-haspopup') === 'menu');
+  hud.setDecision({ label: 'Jev', available: true });
   rules.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-  check('Brain radio buttons support arrow-key selection and one tab stop', jev.getAttribute('aria-checked') === 'true' && jev.tabIndex === 0 && rules.tabIndex === -1);
+  check('Brain radio buttons support arrow-key selection and one tab stop', pillar.getAttribute('aria-checked') === 'true' && pillar.tabIndex === 0 && rules.tabIndex === -1);
+  hud.setBrain('rules');
+  hud.setDecision({ label: 'LiquidAI: d1 (OpenRouter)', available: true });
+  hud.setBrain('decision:d1');
+  check('Jev and every decision:<name> driver select the Decision button, which names the model', pillar.getAttribute('aria-checked') === 'true'
+    && pillar.title.includes('LiquidAI: d1') && pillar.title.startsWith('1 ·'));
+  hud.setBrain('jev');
+  check('The built-in Jev drives under the Decision button too', pillar.getAttribute('aria-checked') === 'true');
   const llm = hud.el.brainButtons.find(b => b.dataset.brain === 'llm');
   hud.setLlm({ label: 'GPT-6 Luna (OpenRouter)', available: true });
   hud.setBrain('llm:luna');
   check('Every LLM driver selects the LLM button, which names the model and keeps one tab stop', llm.getAttribute('aria-checked') === 'true' && llm.tabIndex === 0
-    && rules.tabIndex === -1 && llm.title.includes('GPT-6 Luna') && !llm.hidden);
+    && rules.tabIndex === -1 && pillar.tabIndex === -1 && llm.title.includes('GPT-6 Luna') && !llm.hidden);
   hud.setLlm({ offered: false });
-  check('The LLM button and its menu are hidden without a server to hold keys', llm.hidden && hud.el.llmMenu.hidden);
+  check('The LLM button and its menu are hidden without a server to hold keys', llm.hidden && hud.el.menus.llm.hidden);
+  hud.setDecision({ label: 'Jev', available: false, menu: false });
+  check('Without a server the Decision button stays, unavailable, without its menu', !pillar.hidden && hud.el.menus.decision.hidden
+    && pillar.getAttribute('aria-disabled') === 'true' && pillar.title.includes('local app'));
   hud.setBrain('jev');
-  hud.setJevAvailable(false);
-  check('Unavailable Jev is exposed to assistive technology', jev.getAttribute('aria-disabled') === 'true');
+  hud.setDecision({ label: 'Jev', available: false });
+  check('An unavailable decision model is exposed to assistive technology and offers a key', pillar.getAttribute('aria-disabled') === 'true'
+    && pillar.classList.contains('unavailable') && pillar.title.includes('needs a key') && !hud.el.menus.decision.hidden);
   hud.setLlm({ label: 'GPT-6 Luna (OpenRouter)', available: true });
   hud.setBrain('rules');
   rules.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-  check('Arrow keys skip an unavailable Jev and reach the LLM button', llm.getAttribute('aria-checked') === 'true');
-  hud.setJevAvailable(true);
+  check('Arrow keys skip an unavailable Decision button and reach the LLM button', llm.getAttribute('aria-checked') === 'true');
+  hud.setDecision({ label: 'Jev', available: true });
+  check('A usable decision model clears the unavailable state', pillar.getAttribute('aria-disabled') === 'false' && !pillar.classList.contains('unavailable'));
+  hud.brain = 'decision:d1';
+  hud.update({ ego: { v: 0 }, road: null, nav: null, violations: { collisions: 0, red_lights_run: 0, stop_signs_run: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0 },
+    decision: null, totals: { cost: 0 }, paused: false, autopilot: true, hasRoute: true }, -1000);
+  check('The drive mode names a decision driver without its prefix', hud.el.mode.textContent === 'D1 PILOT');
+  hud.brain = 'rules'; hud.lastUpdate = -Infinity;
   hud.toggleKeys(true);
   check('Shortcut help synchronizes its button state', !hud.el.keysHelp.hidden && hud.el.keysToggle.getAttribute('aria-pressed') === 'true');
 

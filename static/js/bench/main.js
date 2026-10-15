@@ -6,8 +6,9 @@ import { MapData } from "../map/mapdata.js";
 import { buildSuite } from "./scenarios.js";
 import { runScenario, yieldNow } from "./runner.js";
 import { aggregate } from "./metrics.js";
-import { agentDefinitions, agentOptionLabel, setAgentAvailability } from "../brain/registry.js";
+import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
+import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
 
 // [key, header, format, better: "low" | "high" | null]
 const COLUMNS = [
@@ -40,24 +41,31 @@ async function boot() {
   const query = selection ? `?bbox=${encodeURIComponent(selection)}` : "";
   status = await api(`/api/status${query}`);
   map = new MapData(await api(`/api/map${query}`));
-  setAgentAvailability("jev", status.configured, status.configured ? "" : "no API key");
-  const endpoints = registerLlmAgents(status.llm);
-  $("#map-note").textContent = `${status.map.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${status.configured ? "Jev available" : "no API key: Rules only"}${endpoints.length ? ` · ${endpoints.length} LLM endpoint${endpoints.length > 1 ? "s" : ""}` : ""}`;
+  const decisions = registerDecisionAgents(status.decision, { demo: !!status.demo }), endpoints = registerLlmAgents(status.llm);
+  const count = (n, what) => (n ? ` · ${n} ${what}${n > 1 ? "s" : ""}` : "");
+  $("#map-note").textContent = `${status.map.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${agentAvailable("jev") ? "Jev available" : "no TypeSafe key: no Jev"}${count(decisions.length, "decision model")}${count(endpoints.length, "LLM endpoint")}`;
   $("#npcs").value = status.npcs;
-  if (!status.configured) $("#brain").querySelector('option[value="jev"]').disabled = true;
-  llmOptions();
-  if (endpoints.length) checkLlmEndpoints().then(llmOptions).catch(() => { /* keep "configured" */ });
+  $("#brain").querySelector('option[value="jev"]').disabled = !agentAvailable("jev");
+  endpointOptions();
+  if (decisions.length) checkDecisionEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
+  if (endpoints.length) checkLlmEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
   $("#run").addEventListener("click", () => (running ? (stopRequested = true) : runFromForm()));
   $("#compare").addEventListener("change", () => lastRun && render(lastRun));
   await loadRuns();
 }
 
-// Configured LLM endpoints (agents llm:<name>) join the brain list, labelled with their status.
-function llmOptions() {
+// Configured decision models and LLM endpoints (agents decision:<name>, llm:<name>) join the brain
+// list, labelled with their status. Decision models sit with Jev, LLMs at the end.
+function endpointOptions() {
   const select = $("#brain");
-  for (const d of agentDefinitions().filter(a => a.llm)) {
-    const option = select.querySelector(`option[value="${d.id}"]`) || select.appendChild(h("option", { value: d.id }));
-    option.textContent = `${agentOptionLabel(d)} (${d.llm.model})`;
+  for (const d of agentDefinitions().filter(a => a.decision || a.llm)) {
+    let option = select.querySelector(`option[value="${d.id}"]`);
+    if (!option) {
+      option = h("option", { value: d.id });
+      const anchor = [...select.querySelectorAll('option[value^="decision:"]')].at(-1) || select.querySelector('option[value="jev"]');
+      if (d.decision) anchor.after(option); else select.appendChild(option);
+    }
+    option.textContent = `${agentOptionLabel(d)} (${(d.decision || d.llm).model})`;
     option.disabled = d.available === false;
   }
 }
@@ -82,8 +90,8 @@ function runFromForm() {
 export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", save = true } = {}) {
   running = true; stopRequested = false;
   $("#run").textContent = "Stop";
-  const llm = agentDefinitions().find(a => a.id === brain)?.llm;
-  const config = { brain, ...(llm ? { model: llm.model, endpoint: llm.endpoint } : {}), count, npcs, seed, mode, weather, map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
+  const definition = agentDefinitions().find(a => a.id === brain), endpoint = definition?.decision || definition?.llm;
+  const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
   const setStatus = (t) => { $("#status").textContent = t; };
   setStatus("building the scenario suite…");
   const suite = await buildSuite(map, { count, seed });

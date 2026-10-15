@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Decision models are the second of three driver pillars: **Rules | Decision ▾ | LLM ▾** in the
+  HUD (keys `2`, `1`, `3`). A decision model answers typed questions with probabilities, as Jev
+  does; besides the built-in Jev, any endpoint that speaks TypeSafe's System One protocol becomes a
+  driver `decision:<name>`: OpenRouter's Decisions API (Perplexity Decider, Liquid d1, Microsoft
+  Decision 1, Jev and others), llama.cpp 0.6.0+ for local open models, or any compatible server.
+  Each gets exactly the state and questions Jev gets. **Connect a model** now has Decision models
+  and LLMs tabs. On the Decision tab, a TypeSafe key is saved as `TYPESAFE_API_KEY` and turns Jev
+  on without a restart (another Jev version, such as `jev-preview`, becomes its own driver);
+  OpenRouter's decision catalog loads without a key, with prices, and its key is the same
+  `OPENROUTER_API_KEY` the LLM tab uses, so saving it in either tab enables both. The server checks
+  every answer against the offered options; unusable answers, HTTP errors (including OpenRouter's
+  402 for exhausted credits), timeouts and an exhausted budget fall back to Rules, and calls that
+  happened still count. Cost uses the provider's `usage.cost` when reported, else configured
+  prices. Configure by hand in the gitignored `data/decision-endpoints.json` (template:
+  `data/decision-endpoints.example.json`). Decision drivers appear in Settings, challenges, replay
+  branches, the arena and `/bench`. The built-in `jev` driver still calls TypeSafe directly, so
+  saved replays and runs keep their meaning. Tested only against a local mock server, not against
+  TypeSafe, OpenRouter or llama.cpp. The pillar buttons now take the full width of the HUD panel,
+  with the autopilot switch below them. LLM and decision endpoints share one transport
+  (`jev/endpoints.py`): no redirects, one total deadline, key scrubbing and per-endpoint key
+  snapshots.
+
 - Bring your own LLM: an endpoint driver that speaks the OpenAI Chat Completions protocol, so it
   should work with OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama and others; it has been
   tested only against a local mock server, not a real provider. **LLM** sits next to Rules and Jev

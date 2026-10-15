@@ -3,6 +3,7 @@
 
 import { $, h, ms, usd, num, pct, percentile } from "../common.js";
 import { SPEED_GRACE_MPS } from "../sim/drive-score.js";
+import { pillarOf } from "../brain/registry.js";
 
 const TURN_ARROWS = { left: "↰", right: "↱", "slight left": "↖", "slight right": "↗", sharp_left: "↰", sharp_right: "↱", uturn: "↶", roundabout: "↻", none: "↑" };
 const MOTIONS = { drive: "Driving", stop: "Holding still" };
@@ -14,7 +15,7 @@ export class Hud {
       cluster: find(".cluster"), speedDisplay: find(".speed"), mode: find("#drive-mode"), speedWarning: find("#speed-warning"),
       root: find("#hud"), speed: find("#speed"), limit: find("#limit"), limitSign: find("#limit-sign"), street: find("#street"),
       nav: find("#nav"), navCard: find("#nav-card"), navArrow: find("#nav-arrow"), navDistance: find("#nav-distance"), navRemaining: find("#nav-remaining"),
-      brainButtons: [...root.querySelectorAll("[data-brain]")], llmMenu: find("#llm-menu-toggle"),
+      brainButtons: [...root.querySelectorAll("[data-brain]")], menus: { decision: find("#decision-menu-toggle"), llm: find("#llm-menu-toggle") },
       weather: find("#weather"), time: find("#time"), quality: find("#quality"), autopilot: find("#autopilot"),
       settingsToggle: find("#settings-toggle"), settings: find("#settings"), keysToggle: find("#keys-toggle"), keysHelp: find("#keys-help"),
       latency: find("#latency"), p50: find("#p50"), tokens: find("#tokens"), cost: find("#cost"), rate: find("#rate"), source: find("#source"),
@@ -52,7 +53,7 @@ export class Hud {
       b.addEventListener("keydown", (ev) => {
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(ev.key)) return;
         ev.preventDefault();
-        // Arrows skip hidden and unavailable drivers, so an unavailable Jev does not trap focus on Rules.
+        // Arrows skip hidden and unavailable drivers, so an unavailable Decision button does not trap focus on Rules.
         const buttons = this.el.brainButtons.filter((button) => button === b || (!button.hidden && button.getAttribute("aria-disabled") !== "true")), i = buttons.indexOf(b);
         const next = ev.key === "Home" ? buttons[0] : ev.key === "End" ? buttons.at(-1)
           : buttons[(i + (["ArrowLeft", "ArrowUp"].includes(ev.key) ? -1 : 1) + buttons.length) % buttons.length];
@@ -63,7 +64,7 @@ export class Hud {
   }
   setBrain(name) {
     this.brain = name;
-    const group = name.startsWith("llm:") ? "llm" : name;   // every LLM endpoint drives under the LLM button
+    const group = pillarOf(name);   // Jev and every decision:<name> drive under Decision; every llm:<name> under LLM
     const shown = this.el.brainButtons.some(button => button.dataset.brain === group);
     for (const b of this.el.brainButtons) {
       const selected = b.dataset.brain === group;
@@ -71,23 +72,23 @@ export class Hud {
       b.tabIndex = selected || (!shown && b.dataset.brain === "rules") ? 0 : -1;
     }
   }
-  // The LLM button drives with `label`, or offers setup when no model is connected. Hidden in the
-  // public demo, which has no server to hold keys.
-  setLlm({ label = "", available = false, offered = true } = {}) {
-    const b = this.el.brainButtons.find((x) => x.dataset.brain === "llm");
+  // The Decision and LLM buttons drive with the model named `label`. With no usable model they offer
+  // setup instead; `menu: false` hides the ▾ (the public demo has no server to hold keys), and
+  // `offered: false` hides the button too. An unavailable Decision button is skipped by arrow keys.
+  setPillar(pillar, { label = "", available = false, offered = true, menu = offered } = {}) {
+    const b = this.el.brainButtons.find((x) => x.dataset.brain === pillar);
     if (!b) return;
-    b.hidden = !offered; if (this.el.llmMenu) this.el.llmMenu.hidden = !offered;
+    const toggle = this.el.menus[pillar];
+    b.hidden = !offered; if (toggle) toggle.hidden = !menu;
     b.classList.toggle("unavailable", !!label && !available);
-    b.title = label ? `3 · ${label}${available ? "" : " (unavailable)"} · choose another with ▾` : "3 · connect your own model";
+    const key = pillar === "decision" ? "1" : "3";
+    if (pillar === "decision") b.setAttribute("aria-disabled", String(!available));
+    b.title = !menu && !available ? `${key} · decision models need the local app (uv run server.py)`
+      : label ? `${key} · ${label}${available ? "" : " (needs a key: click to add one)"} · choose another with ▾`
+      : `${key} · connect your own model`;
   }
-  // Jev needs a server-side key; keep the option visible so people know it exists.
-  setJevAvailable(ok) {
-    const b = this.el.brainButtons.find((x) => x.dataset.brain === "jev");
-    b.classList.toggle("unavailable", !ok);
-    b.setAttribute("aria-disabled", String(!ok));
-    if (ok) b.title = "1 · TypeSafe Jev model";
-    else b.title = "Set TYPESAFE_API_KEY in .env and restart the server to enable Jev";
-  }
+  setLlm(options) { this.setPillar("llm", options); }
+  setDecision(options) { this.setPillar("decision", options); }
   onWeatherChange(fn) { this.el.weather.addEventListener("change", () => fn(this.el.weather.value)); }
   setWeather(name) { this.el.weather.value = name; }
   onTimeChange(fn) { this.el.time.addEventListener("change", () => fn(this.el.time.value)); }
@@ -121,7 +122,7 @@ export class Hud {
     if (this.el.speedWarning.hidden === speeding) this.el.speedWarning.hidden = !speeding;
     this.el.speedDisplay.classList.toggle("speeding", speeding);
     this.el.cluster.classList.toggle("speeding", speeding);
-    setText(this.el.mode, paused ? "PAUSED" : autopilot ? `${this.brain.replace(/^llm:/, "").toUpperCase()} PILOT` : "MANUAL");
+    setText(this.el.mode, paused ? "PAUSED" : autopilot ? `${this.brain.replace(/^(?:llm|decision):/, "").toUpperCase()} PILOT` : "MANUAL");
     setClass(this.el.mode, paused ? "paused" : autopilot ? "auto" : "");
     setText(this.el.speed, Math.round(Math.abs(ego.v) * 3.6));
     setText(this.el.limit, road?.limit ? Math.round(road.limit * 3.6) : "–");

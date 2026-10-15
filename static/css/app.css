@@ -74,11 +74,14 @@ canvas#view.orbit-dragging { cursor: grabbing; }
 .segmented { display: inline-flex; padding: 2px; border-radius: 9px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); }
 .segmented button { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 7px; padding: 5px 13px; cursor: pointer; }
 .segmented button[aria-checked="true"] { color: var(--text); background: rgba(255, 255, 255, 0.12); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
-.segmented button.unavailable { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.3); }
+.segmented button.unavailable { opacity: 0.55; }
 .segmented button { padding-inline: 9px; }
-.segmented .llm-menu-toggle { padding-inline: 5px; margin-left: 1px; border-left: 1px solid var(--border); border-radius: 0 7px 7px 0; }
-.segmented .llm-menu-toggle[aria-expanded="true"] { color: var(--accent); }
-.pilot-row { position: relative; }
+.segmented .menu-toggle { padding-inline: 5px; margin-left: 1px; border-left: 1px solid var(--border); border-radius: 0 7px 7px 0; }
+.segmented .menu-toggle[aria-expanded="true"] { color: var(--accent); }
+/* Three pillars (Rules | Decision ▾ | LLM ▾) take the full width; the autopilot switch sits below. */
+.pilot-row { position: relative; flex-wrap: wrap; }
+.pilot-row .segmented { flex: 1 1 100%; }
+.pilot-row .segmented > [data-brain] { flex: 1 1 auto; }
 .llm-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 230px; max-width: 272px; padding: 5px; display: flex; flex-direction: column; background: var(--panel-solid); }
 .llm-menu button { font: inherit; font-size: 12px; text-align: left; color: var(--text); background: none; border: 0; border-radius: 7px; padding: 7px 10px 7px 26px; cursor: pointer; position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .llm-menu button:hover, .llm-menu button:focus-visible { background: rgba(255, 255, 255, 0.08); outline: none; }
@@ -445,3 +448,5 @@ body.photo-mode canvas#view { cursor: grab; }
 .photo-actions .photo-capture { margin-left: auto; border-color: var(--accent); color: var(--accent); }
 .photo-reveal { position: fixed; right: var(--gap); bottom: var(--gap); z-index: 30; background: var(--panel); }
 @media (max-width: 520px) { .photo-panel { left: var(--gap); width: auto; } }
+.model-tabs { display: flex; gap: 6px; margin: 4px 0 2px; }
+.model-tabs .llm-provider[aria-selected="true"] { color: var(--text); border-color: rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.12); }

@@ -96,7 +96,9 @@ create different demands, so use the seeded benchmark for controlled driver comp
 ## Validation
 
 The HUD checks in `static/tests/ui-tests.js` run automatically on `/tests`. They cover fallback
-and stop wording, unavailable Jev, radio keyboard selection, probability rows, telemetry reset,
+and stop wording, the Rules / Decision / LLM buttons (every decision model drives under Decision,
+an unavailable one is skipped by the arrow keys, and the public demo hides its ▾ menu), radio
+keyboard selection, probability rows, telemetry reset,
 unchanged DOM reuse, the 10 Hz update bound and expiry of the rolling decision count. The
 2026-09-30 design review also checked layouts at 1280 × 800, 950 × 600, 800 × 600, 640 × 480,
 390 × 640 and 320 × 480, including expanded settings, scroll access to drive actions and the
@@ -110,10 +112,13 @@ tests, including violation caps, fresh-session baselines, pauses, duration, hard
 gaps, history corruption and blocked storage. `scripts/test_interpolate.mjs` checks interpolation
 without changing simulation state, wrapped headings and teleport handling.
 
-The browser suite passes 140 assertions (99 simulation, 21 HUD and 20 explorer) and the renderer suite 106, including
+The browser suite passes 146 assertions (99 simulation, 27 HUD and 20 explorer) and the renderer suite 106, including
 manual-steering, city-sun, sign proportions, atlas padding, actual front/rear sign rasterization,
 the skyline silhouettes of every bundled city and the graphics artifact regressions.
-The 133 Python tests include bundled-map,
+A layout check on the simulator page confirms that the three pillar buttons, their menus and the
+autopilot switch fit inside the 300 px HUD panel: the pillars take its full width on one line,
+with the switch below them.
+The 155 Python tests include bundled-map,
 selected-city routing, distinct reachable suggestions and fallback checks. Fixture checks remain
 clean with 20 valid offline Jev requests.
 

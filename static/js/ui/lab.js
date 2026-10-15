@@ -5,8 +5,8 @@ import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/regi
 import { replayPosition } from "../lab/playback.js";
 
 export class DriveLab {
-  constructor({ city, demo, configured, llmNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception, onConnectModel }) {
-    Object.assign(this, { configured, onSeek, onBranch, onLive, onAgent });
+  constructor({ city, demo, agentNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception, onConnectModel }) {
+    Object.assign(this, { onSeek, onBranch, onLive, onAgent });
     this.dialog = h("dialog", { class: "lab-dialog", "aria-label": "Drive lab" });
     this.dialog.addEventListener("close", () => onPause(false));
     document.body.append(this.dialog);
@@ -48,7 +48,7 @@ export class DriveLab {
     const settings = $("#settings");
     settings.append(h("h3", { class: "settings-section-heading" }, "Driving agents"),
       h("label", { class: "wide" }, h("span", { class: "label" }, "Active agent"), this.agent = h("select", { "aria-label": "Active agent", onchange: () => onAgent(this.agent.value) })),
-      this.llmStatus = h("p", { class: "muted wide", role: "status" }, llmNote),
+      this.modelsStatus = h("p", { class: "muted wide", role: "status" }, agentNote),
       demo ? null : h("button", { class: "toggle wide", onclick: () => onConnectModel?.() }, "Connect a model"),
       h("label", { class: "wide" }, h("span", { class: "label" }, "Local agent module"), this.module = h("input", { type: "text", placeholder: "/js/agents/my-agent.js", "aria-label": "Local agent module" })),
       h("button", { class: "toggle wide", onclick: () => this.loadAgent() }, "Load agent"), this.agentStatus = h("p", { class: "muted wide", role: "status" }, "Trusted JavaScript modules run in this browser."));
@@ -56,9 +56,9 @@ export class DriveLab {
     this.replayElapsed = 0; this.replayAlpha = 0;
     this.refreshAgents();
   }
-  // Rebuild the driver pickers, e.g. after LLM endpoints report whether they are reachable.
-  refreshAgents(llmNote) {
-    if (llmNote !== undefined) this.llmStatus.textContent = llmNote;
+  // Rebuild the driver pickers, e.g. after endpoints report whether they are reachable.
+  refreshAgents(agentNote) {
+    if (agentNote !== undefined) this.modelsStatus.textContent = agentNote;
     const agents = agentDefinitions();
     const active = this.agent.value, branch = this.branchAgent.value;
     this.agent.replaceChildren(...agents.map(a => h("option", { value: a.id, disabled: a.available === false }, agentOptionLabel(a))));

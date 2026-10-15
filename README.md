@@ -60,7 +60,7 @@ Six hand-built scenarios test the situations real drivers get wrong:
 | **Joining the flow** | Kitsilano | A car pulling out of a parking spot |
 | **Around the corner** | Kitsilano | Someone stepping out from behind a building |
 
-Drive them yourself, or set Rules, Jev or your own agent loose on the same seed and compare
+Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same seed and compare
 results. A pass means you arrived with no collision, no red light or stop sign run, no failure to
 yield, and less than a second off the road. A good coaching score on its own doesn't count.
 
@@ -96,13 +96,25 @@ under the same physics, sensing and safety checks as the built-in drivers. The
 latency and cost. It saves evaluations and lets you diff a run against a previous baseline. See the
 [agent guide](docs/agents.md) for a starter template.
 
-Got a model of your own? The local server speaks the OpenAI Chat Completions protocol, so it
+Three kinds of driver sit side by side in the HUD: **Rules** (deterministic code, free),
+**Decision** (decision models) and **LLM** (chat models). Keys `1`, `2` and `3` select them.
+
+**Decision models** answer typed questions with probabilities instead of writing text. Jev is the
+built-in one; OpenRouter's Decisions API adds Perplexity Decider, Liquid d1, Microsoft Decision 1
+and others, and llama.cpp runs open ones such as Kev 4B locally. Click **Decision ▾ → Connect a
+decision model…**, pick TypeSafe, OpenRouter, llama.cpp or any other server, paste a key and choose
+from the live model list with prices. A TypeSafe key turns on the built-in Jev; any other model
+becomes a driver called `decision:<name>`. Every decision model gets exactly the state and
+questions Jev gets, so comparisons are fair. The [agent guide](docs/agents.md#decision-models-jev-and-others)
+has the details.
+
+Got a chat model of your own? The local server speaks the OpenAI Chat Completions protocol, so it
 should work with OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama on your laptop and similar
-servers; so far it has been tested only against a local mock server, not a real provider. Click
-**LLM** next to Rules and Jev (or ▾ → **Connect a model**), pick a provider, paste a key and
+servers. Click **LLM** (or **LLM ▾ → Connect a model**), pick a provider, paste a key and
 choose a model: the key is saved to `.env`, and the model drives straight away. Each model shows up
 as a driver called `llm:<name>`, ready to race the others in the arena and on `/bench`; the ▾ menu
-switches between them, and `3` drives with the last one chosen. You can also list endpoints in
+switches between them, and `3` drives with the last one chosen. Both kinds of endpoint have been
+tested only against local mock servers so far, not against a real provider. You can also list endpoints in
 `data/llm-endpoints.json` by hand. It picks among the same safety-checked
 manoeuvres, the keys stay on the server, and the prompt lives in one file you can tweak. The
 [agent guide](docs/agents.md#llm-endpoints-test-your-own-model) has copy-paste examples.
@@ -130,15 +142,17 @@ Python 3.10+ is all you need, and uv fetches a suitable version if you don't hav
 | `J` | Toggle autopilot | | Drag / scroll | Orbit and zoom the 360° camera |
 | `Q` / `E` | Left / right indicator | | `P` | Pause |
 | `H` | Horn (with sound on) | | `R` | Reset to the lane |
-| `1` / `2` | Jev / Rules driver | | `?` | Show every shortcut |
+| `1` / `2` / `3` | Decision / Rules / LLM driver | | `?` | Show every shortcut |
 
 Click the minimap to set a destination, or open **Explore cities** for suggested drives. If keys
 stop responding after you use a menu, click the road view to give it focus again.
 
 ### Enabling the Jev model (optional)
 
-The free **Rules** driver and the cautious starter agent work out of the box. **Jev** is an
-LLM-backed driver served by [TypeSafe](https://console.typesafe.ai). To try it:
+The free **Rules** driver and the cautious starter agent work out of the box. **Jev** is a
+decision model served by [TypeSafe](https://console.typesafe.ai). To try it, click **Decision**
+(or press `1`): the **Connect a model** dialog opens on TypeSafe. Paste your key and choose
+**Save and drive**; Jev is available at once, without a restart. Or set it by hand:
 
 ```sh
 cp .env.example .env
@@ -147,12 +161,12 @@ cp .env.example .env
 
 Your key stays on the local server and is never sent to the browser. A spend cap
 (`JEV_FSD_BUDGET_USD`, $1 per run by default) and a request-rate cap (`JEV_FSD_RPM`) limit live
-model calls. The spend cap only sees priced calls: an LLM endpoint without prices counts as $0,
+model calls. The spend cap only sees priced calls: an endpoint without prices counts as $0,
 and one with `rpm: 0` also skips the rate cap. This project is independent and not affiliated with TypeSafe AI.
 
 ## How the AI drives
 
-Every driver, whether it's Rules, Jev or yours, goes through the same loop for every decision:
+Every driver, whether it's Rules, a decision model, an LLM or yours, goes through the same loop for every decision:
 
 ```mermaid
 flowchart LR
@@ -189,6 +203,7 @@ node scripts/test_drive_lab.mjs                 # drive lab and replay features
 node scripts/test_arena_history.mjs             # saved evaluations and comparisons
 node scripts/test_cinematic_photo.mjs           # cinematic camera and photo mode
 node scripts/test_drive_score.mjs               # coaching score
+node scripts/test_decision_agent.mjs            # decision-model drivers (registry, answers, fallback)
 node scripts/test_llm_agent.mjs                 # LLM endpoint drivers (prompt, parsing, fallback)
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
@@ -201,7 +216,7 @@ headless Chromium. It then builds the Pages demo and deploys it from `main`.
 
 ```
 server.py          local HTTP server and API (stdlib only)
-jev/               map fetching, OSM processing, routing, model client
+jev/               map fetching, OSM processing, routing, model clients and endpoint proxies
 static/js/sim/     physics, traffic, pedestrians, signals, scoring
 static/js/brain/   sensing, candidate generation, safety filter, drivers
 static/js/render/  Three.js scene, sky, weather, cars, buildings, cameras
