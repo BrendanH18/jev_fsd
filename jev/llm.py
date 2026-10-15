@@ -22,7 +22,8 @@ a key:
 
 Keys are read from the environment or `.env` by variable name (`api_key_env`); the JSON file never
 holds a key. Calls share Jev's SpendGuard (JEV_FSD_BUDGET_USD, JEV_FSD_RPM). Without prices an
-endpoint reports tokens and an unknown ($0) cost, so the budget cannot stop it; the RPM cap still does.
+endpoint reports tokens and an unknown ($0) cost, so the budget cannot stop it; the RPM cap still does,
+unless the endpoint sets `rpm: 0`, which removes that too.
 
 Standard library only (urllib), no SDK.
 """
@@ -32,6 +33,7 @@ from __future__ import annotations
 import http.client
 import ipaddress
 import json
+import math
 import re
 import socket
 import threading
@@ -58,6 +60,8 @@ MAX_PROMPT_CHARS = 64 * 1024
 MAX_CHOICES = 32
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_CONTENT_CHARS = 20_000
+MAX_USAGE_TOKENS = 10 ** 9      # a larger token count is a broken usage block, not a real call
+MAX_TRACE_DEPTH = 64            # deeper completions are summarised in the trace instead of copied
 CHECK_TTL_S = 15.0
 CHECK_TIMEOUT_S = 3.0
 USER_AGENT = "jev-fsd/0.2.0 (llm)"
@@ -78,7 +82,69 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
                                      headers, fp)
 
 
-_OPENER = urllib.request.build_opener(_NoRedirect)
+class _Watchdog:
+    """Shuts a request's socket at its deadline. A socket timeout only bounds each read, so a server
+    that trickles headers or body could otherwise hold a call far past `timeout_s`."""
+
+    def __init__(self, deadline: float):
+        self.expired = False
+        self._sock: Optional[socket.socket] = None
+        self._lock = threading.Lock()
+        self._timer = threading.Timer(max(0.0, deadline - time.monotonic()), self._expire)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def attach(self, sock: socket.socket) -> None:
+        with self._lock:
+            self._sock = sock
+            if self.expired:
+                self._shutdown()
+
+    def cancel(self) -> None:
+        self._timer.cancel()
+
+    def _expire(self) -> None:
+        with self._lock:
+            self.expired = True
+            self._shutdown()
+
+    def _shutdown(self) -> None:
+        if self._sock is not None:
+            try:   # the plain socket call: an SSL socket's own shutdown is not safe from another thread
+                socket.socket.shutdown(self._sock, socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+
+class _WatchedHandler:
+    """Hands each new connection's socket to the request's watchdog, when it has one."""
+
+    def do_open(self, http_class, req, **kwargs):
+        watchdog = getattr(req, "watchdog", None)
+        if watchdog is None:
+            return super().do_open(http_class, req, **kwargs)
+
+        def connection(*args, **kw):
+            conn = http_class(*args, **kw)
+            connect = conn.connect
+
+            def watched_connect():
+                connect()
+                watchdog.attach(conn.sock)
+            conn.connect = watched_connect
+            return conn
+        return super().do_open(connection, req, **kwargs)
+
+
+class _HTTPHandler(_WatchedHandler, urllib.request.HTTPHandler):
+    pass
+
+
+class _HTTPSHandler(_WatchedHandler, urllib.request.HTTPSHandler):
+    pass
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect, _HTTPHandler, _HTTPSHandler)
 
 
 # Configuration
@@ -89,13 +155,23 @@ def _price(value: Any, field: str, problems: List[str], where: str) -> Optional[
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         problems.append("%s: %s must be a number" % (where, field))
         return None
-    if number < 0 or number != number:
-        problems.append("%s: %s must be zero or more" % (where, field))
+    if not math.isfinite(number) or number < 0:
+        problems.append("%s: %s must be a finite number, zero or more" % (where, field))
         return None
     return number
+
+
+def _number(value: Any, integer: bool = False) -> Optional[float]:
+    """A finite number from config, or None for null. Raises TypeError, ValueError or OverflowError otherwise."""
+    if value is None:
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("not finite")
+    return int(number) if integer else number
 
 
 def public_url(base_url: str) -> str:
@@ -170,15 +246,14 @@ class EndpointConfig:
             problems.append("%s: extra_body must be an object without %s" % (where, ", ".join(sorted(RESERVED_BODY_KEYS))))
             return
         try:
-            timeout_s = float(raw.get("timeout_s", 10))
-            max_tokens = raw.get("max_tokens", 400)
-            max_tokens = None if max_tokens is None else int(max_tokens)
-            temperature = raw.get("temperature", 0)
-            temperature = None if temperature is None else float(temperature)
-            rpm = raw.get("rpm")
-            rpm = None if rpm is None else max(0, int(rpm))
-        except (TypeError, ValueError):
-            problems.append("%s: timeout_s, max_tokens, temperature and rpm must be numbers (or null)" % where)
+            timeout_s = float(_number(raw.get("timeout_s", 10)))   # float(None) raises: timeout_s cannot be null
+            max_tokens = _number(raw.get("max_tokens", 400), integer=True)
+            temperature = _number(raw.get("temperature", 0))
+            rpm = _number(raw.get("rpm"), integer=True)
+            rpm = None if rpm is None else max(0, rpm)
+        except (TypeError, ValueError, OverflowError):
+            problems.append("%s: timeout_s, max_tokens, temperature and rpm must be finite numbers "
+                            "(max_tokens, temperature and rpm may be null)" % where)
             return
         self.name = name
         self.label = str(raw.get("label") or name)[:60]
@@ -247,22 +322,34 @@ def load_configs(settings: Settings) -> Tuple[List[EndpointConfig], List[str]]:
 
 
 class LlmResult:
-    """One chat completion: the reply text plus everything the UI shows about the call."""
+    """One chat completion: the reply text plus everything the UI shows about the call.
+
+    Never raises. Usage is read first, so tokens and cost are always recorded; a completion without
+    a usable choice or message sets `malformed` and leaves `content` empty."""
 
     def __init__(self, endpoint: "LlmEndpoint", request: dict, response: dict, latency_ms: float, format_used: str):
         self.request = request
-        self.response = response
-        self.latency_ms = latency_ms
-        self.format_used = format_used
-        self.endpoint = endpoint
         usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
         self.input_tokens = _int(usage.get("prompt_tokens", usage.get("input_tokens")))
         self.output_tokens = _int(usage.get("completion_tokens", usage.get("output_tokens")))
-        self.model = str(response.get("model") or request.get("model") or "")
         config = endpoint.config
         self.cost_usd = ((self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)) / 1_000_000
                          if config.priced else 0.0)
-        self.content, self.refusal = _message_text(response)
+        # The trace copies the completion, so an absurdly nested one is summarised rather than walked.
+        self.response = response if not _deeper_than(response, MAX_TRACE_DEPTH) else {
+            "note": "completion nested deeper than %d levels; not shown" % MAX_TRACE_DEPTH,
+            "usage": {"prompt_tokens": self.input_tokens, "completion_tokens": self.output_tokens}}
+        self.latency_ms = latency_ms
+        self.format_used = format_used
+        self.endpoint = endpoint
+        model = response.get("model")
+        self.model = (model if isinstance(model, str) and model else str(request.get("model") or ""))[:200]
+        self.malformed: Optional[str] = None
+        try:
+            self.content, self.refusal = _message_text(response)
+        except Exception as err:   # ValueError for a missing choice or message; RecursionError for absurd nesting
+            self.content, self.refusal = "", ""
+            self.malformed = str(err) if isinstance(err, ValueError) else type(err).__name__
 
     def meta(self) -> dict:
         config = self.endpoint.config
@@ -275,10 +362,27 @@ class LlmResult:
 
 
 def _int(value: Any) -> int:
+    """A token count from a usage block: 0 when missing, negative or not finite (JSON Infinity, NaN)."""
     try:
-        return max(0, int(value or 0))
-    except (TypeError, ValueError):
+        return min(MAX_USAGE_TOKENS, max(0, int(value or 0)))
+    except (TypeError, ValueError, OverflowError):
         return 0
+
+
+def _finite(number: float) -> Optional[float]:
+    return number if math.isfinite(number) else None
+
+
+def _deeper_than(value: Any, limit: int) -> bool:
+    """Is `value` nested more than `limit` levels? Iterative, so it is safe on any parsed JSON."""
+    stack = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, (dict, list)):
+            if depth > limit:
+                return True
+            stack.extend((v, depth + 1) for v in (item.values() if isinstance(item, dict) else item))
+    return False
 
 
 def _message_text(response: dict) -> Tuple[str, str]:
@@ -301,7 +405,8 @@ _ROUTE_KEYS = ("route", "route_id")
 
 
 def extract_json(text: str) -> Optional[dict]:
-    """The reply as a JSON object: the whole text, a fenced block, or the first object inside prose."""
+    """The reply as a JSON object: the whole text, a fenced block, or the first object inside prose.
+    A reply nested too deeply for the parser counts as no object."""
     text = _THINK_BLOCK.sub("", text or "").strip()
     if not text:
         return None
@@ -311,6 +416,8 @@ def extract_json(text: str) -> Optional[dict]:
             return whole
     except ValueError:
         pass
+    except RecursionError:
+        return None
     decoder = json.JSONDecoder()
     start = text.find("{")
     while start != -1:
@@ -320,8 +427,17 @@ def extract_json(text: str) -> Optional[dict]:
                 return value
         except ValueError:
             pass
+        except RecursionError:
+            return None
         start = text.find("{", start + 1)
     return None
+
+
+def _quote(value: Any, limit: int) -> str:
+    try:
+        return json.dumps(value)[:limit]
+    except (ValueError, RecursionError):
+        return type(value).__name__
 
 
 def _match(value: Any, allowed: List[str]) -> Optional[str]:
@@ -350,14 +466,14 @@ def parse_answer(content: str, expect: dict) -> Tuple[Optional[dict], Optional[s
         motion = _match(value, expect["motion"])
         if motion is None:
             return None, ("no motion in the reply" if value is None else
-                          "motion %s is not one of %s" % (json.dumps(value)[:40], "/".join(expect["motion"])))
+                          "motion %s is not one of %s" % (_quote(value, 40), "/".join(expect["motion"])))
         answer["motion"] = motion
     if expect.get("candidate"):
         value = next((fields[k] for k in _CANDIDATE_KEYS if k in fields), None)
         candidate = _match(value, expect["candidate"])
         if candidate is None:
             return None, ("no candidate in the reply" if value is None else
-                          "candidate %s is not an eligible manoeuvre" % json.dumps(value)[:60])
+                          "candidate %s is not an eligible manoeuvre" % _quote(value, 60))
         answer["candidate"] = candidate
     if expect.get("route"):
         route = _match(next((fields[k] for k in _ROUTE_KEYS if k in fields), None), expect["route"])
@@ -455,36 +571,62 @@ class LlmEndpoint:
             self.last_error = message
         return LlmError(message, status=status, body=scrub(body, self.api_key))
 
-    def _post(self, payload: dict) -> Tuple[dict, float]:
+    def _post(self, payload: dict, deadline: float) -> Tuple[dict, float]:
+        """One POST that must finish by `deadline` (time.monotonic()): connect, headers and body.
+        Raises TimeoutError past it; an HTTPError carries its (short) body as `body_text`."""
         headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": USER_AGENT}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
         req = urllib.request.Request(self.config.base_url + "/chat/completions", data=json.dumps(payload).encode(),
                                      method="POST", headers=headers)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("deadline passed")
+        req.watchdog = watchdog = _Watchdog(deadline)
         started = time.perf_counter()
-        with _OPENER.open(req, timeout=self.config.timeout_s) as resp:
-            raw = resp.read(MAX_RESPONSE_BYTES + 1)
+        try:
+            with _OPENER.open(req, timeout=remaining) as resp:
+                raw = resp.read(MAX_RESPONSE_BYTES + 1)
+        except urllib.error.HTTPError as err:
+            try:   # read the error body while the watchdog still guards the socket
+                err.body_text = err.read(4096).decode("utf-8", errors="replace") if err.fp else ""
+            except (OSError, http.client.HTTPException):
+                err.body_text = ""
+            if watchdog.expired:
+                raise TimeoutError("deadline passed") from err
+            raise
+        except (OSError, http.client.HTTPException, ValueError):
+            if watchdog.expired:
+                raise TimeoutError("deadline passed")
+            raise
+        finally:
+            watchdog.cancel()
+        if watchdog.expired:   # the socket was shut mid-reply, so what arrived may be cut short
+            raise TimeoutError("deadline passed")
         latency_ms = (time.perf_counter() - started) * 1000
         if len(raw) > MAX_RESPONSE_BYTES:
             raise ValueError("reply larger than %d bytes" % MAX_RESPONSE_BYTES)
-        try:
-            data = json.loads(raw.decode("utf-8", errors="replace"))
-        except ValueError:
+        try:   # Infinity, NaN and 1e400 become null: the trace goes to the browser, whose JSON has no such values
+            data = json.loads(raw.decode("utf-8", errors="replace"), parse_constant=lambda _: None,
+                              parse_float=lambda s: _finite(float(s)))
+        except (ValueError, RecursionError):
             raise ValueError("reply was not JSON (%s)" % raw[:80].decode("utf-8", errors="replace").strip())
         if not isinstance(data, dict):
             raise ValueError("reply was not a JSON object")
         return data, latency_ms
 
     def chat(self, messages: List[dict], expect: dict) -> LlmResult:
+        """One decision call. `timeout_s` is a single deadline for every attempt, including the plain
+        retry after a rejected response_format, and each attempt passes the budget and rate limit."""
         if self.key_state == "missing":
             raise self._fail("no API key. Set %s in .env (or the environment) and restart the server."
                              % self.config.api_key_env, 401)
-        self.guard.check(rate=self._rate is None)   # the budget is always shared
-        if self._rate is not None:
-            self._rate.check()
+        deadline = time.monotonic() + self.config.timeout_s
         fmt = self._format
-        downgraded = False
         while True:
+            self.guard.check(rate=self._rate is None)   # the budget is always shared
+            if self._rate is not None:
+                self._rate.check()
             payload: Dict[str, Any] = {"model": self.config.model, "messages": messages}
             if self.config.temperature is not None:
                 payload["temperature"] = self.config.temperature
@@ -494,19 +636,28 @@ class LlmEndpoint:
             if response_format:
                 payload["response_format"] = response_format
             payload.update(self.config.extra_body)
+            attempt_started = time.monotonic()
             try:
-                response, latency_ms = self._post(payload)
+                response, latency_ms = self._post(payload, deadline)
                 break
             except urllib.error.HTTPError as err:
-                body_text = err.read(4096).decode("utf-8", errors="replace") if err.fp else ""
+                body_text = getattr(err, "body_text", "")
                 try:
                     body: Any = json.loads(body_text)
-                except ValueError:
+                except (ValueError, RecursionError):
                     body = body_text or err.reason
-                # Not every server supports structured output: retry once in plain mode and remember.
+                # Not every server supports structured output. Remember plain mode at once, and retry
+                # this decision only if the rest of the deadline comfortably fits another attempt.
                 if err.code in (400, 422) and fmt != "none":
-                    fmt, downgraded = "none", True
-                    continue
+                    rejected, fmt = fmt, "none"
+                    with self._lock:
+                        self._format = "none"
+                    now = time.monotonic()
+                    if deadline - now > 1.5 * (now - attempt_started):
+                        continue
+                    raise self._fail("the endpoint rejected response_format %s (HTTP %d: %s); later calls use plain "
+                                     "mode, but too little of timeout_s was left to retry this one"
+                                     % (rejected, err.code, _error_text(body)), 502, body)
                 if 300 <= err.code < 400:
                     raise self._fail(str(err.reason), 502)
                 if err.code in (401, 403):
@@ -515,26 +666,26 @@ class LlmEndpoint:
                     raise self._fail("rate limited by the endpoint (429): %s" % _error_text(body), 429, body)
                 raise self._fail("HTTP %d: %s" % (err.code, _error_text(body)), 502, body)
             except (socket.timeout, TimeoutError):
-                raise self._fail("no reply within %.0f s (timeout_s)" % self.config.timeout_s, 504)
+                raise self._fail("no reply within %g s (timeout_s)" % self.config.timeout_s, 504)
             except urllib.error.URLError as err:
                 if isinstance(err.reason, (socket.timeout, TimeoutError)):
-                    raise self._fail("no reply within %.0f s (timeout_s)" % self.config.timeout_s, 504)
+                    raise self._fail("no reply within %g s (timeout_s)" % self.config.timeout_s, 504)
                 raise self._fail("could not reach %s: %s" % (public_url(self.config.base_url), err.reason), 502)
             except (ValueError, OSError, http.client.HTTPException) as err:
                 raise self._fail(str(err) or type(err).__name__, 502)
-        if downgraded:
-            with self._lock:
-                self._format = "none"
-        try:
-            result = LlmResult(self, payload, response, latency_ms, fmt)
-        except ValueError as err:
-            raise self._fail("malformed completion (%s)" % err, 502, response)
+        # The call happened, so its usage is recorded whatever the reply holds. A completion without a
+        # usable message comes back as `malformed` and becomes an invalid answer, not an error.
+        result = LlmResult(self, payload, response, latency_ms, fmt)
         self.guard.record(result)
         with self._lock:
             self.calls += 1
             self.input_tokens += result.input_tokens
             self.output_tokens += result.output_tokens
             self.spent_usd += result.cost_usd
+            if result.malformed:
+                self.errors += 1
+                self.last_error = scrub("LLM endpoint %r: malformed completion (%s)" % (self.config.name, result.malformed),
+                                       self.api_key)
         return result
 
     def check(self, force: bool = False) -> dict:
@@ -644,10 +795,17 @@ def llm_decide(registry: LlmRegistry, body: dict) -> dict:
     req = validate_request(body)
     endpoint = registry.get(req["endpoint"])
     result = endpoint.chat(req["messages"], req["expect"])
-    if result.refusal and not result.content:
-        answer, invalid = None, "the model refused: %s" % result.refusal[:160]
-    else:
-        answer, invalid = parse_answer(result.content, req["expect"])
+    # Any reply the server cannot interpret is an invalid answer with the call's meta, so the browser
+    # falls back to Rules and still counts the call, its tokens and its cost.
+    try:
+        if result.malformed:
+            answer, invalid = None, "malformed completion (%s)" % result.malformed
+        elif result.refusal and not result.content:
+            answer, invalid = None, "the model refused: %s" % result.refusal[:160]
+        else:
+            answer, invalid = parse_answer(result.content, req["expect"])
+    except Exception as err:   # e.g. RecursionError from an absurdly nested reply
+        answer, invalid = None, "could not read the reply (%s)" % type(err).__name__
     meta = dict(result.meta(), source="llm:" + endpoint.config.name)
     if invalid:
         meta["invalid"] = invalid

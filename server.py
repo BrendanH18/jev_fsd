@@ -5,7 +5,8 @@
     open http://127.0.0.1:8322
 
 Serves the static app, the map pack, routing, the Jev decision proxy and the LLM endpoint proxy
-(jev/llm.py). API keys and endpoint URLs stay on this server; every request is checked by
+(jev/llm.py). API keys and the choice of endpoint stay on this server (the browser sees only a
+credential-stripped base URL); every request is checked by
 jev/security.py so other websites cannot drive this server or spend your credits.
 """
 

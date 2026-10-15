@@ -29,7 +29,8 @@ def completion(content, model="mock-model", prompt_tokens=1200, completion_token
 
 
 class MockLLM:
-    """A tiny OpenAI-compatible server. `reply(handler, body)` returns (status, payload, headers)."""
+    """A tiny OpenAI-compatible server. `reply(handler, body)` returns (status, payload, headers), or
+    None when it wrote the response itself."""
 
     def __init__(self, reply=None):
         self.requests = []
@@ -42,7 +43,10 @@ class MockLLM:
 
             def _answer(self, body):
                 mock.requests.append({"method": self.command, "path": self.path, "headers": dict(self.headers), "body": body})
-                status, payload, headers = mock.reply(self, body)
+                out = mock.reply(self, body)
+                if out is None:
+                    return
+                status, payload, headers = out
                 data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
                 self.send_response(status)
                 for k, v in headers.items():
@@ -128,6 +132,14 @@ class ParseTests(unittest.TestCase):
         answer, _ = llm.parse_answer('{"candidate": "a", "route": "R2"}', {"candidate": ["a"], "route": ["r1", "R2"]})
         self.assertEqual(answer, {"candidate": "a", "route": "R2"})
 
+    def test_deeply_nested_replies_are_invalid_not_errors(self):
+        for text in ("[" * 10_000, '{"a": ' * 5_000, 'ok {"motion": ' + "[" * 10_000):
+            with self.subTest(text=text[:20]):
+                self.assertIsNone(llm.extract_json(text))
+                answer, invalid = llm.parse_answer(text, EXPECT)
+                self.assertIsNone(answer)
+                self.assertIn("not a JSON object", invalid)
+
     def test_structured_output_schema_lists_the_offered_ids(self):
         fmt = llm.response_format_for("json_schema", EXPECT)
         schema = fmt["json_schema"]["schema"]
@@ -185,6 +197,26 @@ class ConfigTests(LlmTestCase):
                 self.assertIn("https://", " ".join(problems))
         self.assertTrue(llm.EndpointConfig({"name": "e", "base_url": "http://api.example.com/v1", "model": "m"}, "endpoint 1", []).ok)
 
+    def test_non_finite_numbers_are_config_problems(self):
+        fields = ("timeout_s", "max_tokens", "temperature", "rpm", "price_per_mtok_input", "price_per_mtok_output")
+        for field in fields:
+            for value in (float("inf"), float("-inf"), float("nan"), 10 ** 400):
+                with self.subTest(field=field, value=str(value)[:8]):
+                    problems = []
+                    raw = {"name": "e", "base_url": "http://localhost:1234/v1", "model": "m", field: value}
+                    cfg = llm.EndpointConfig(raw, "endpoint 1", problems)
+                    self.assertIn(field, " ".join(problems))
+                    self.assertTrue("finite" in " ".join(problems) or "must be a number" in " ".join(problems))
+                    if cfg.ok:   # a bad price is dropped with a problem; the endpoint stays usable, unpriced
+                        self.assertIsNone(getattr(cfg, field.replace("price_per_mtok_input", "price_in").replace("price_per_mtok_output", "price_out")))
+        # JSON's Infinity and NaN in the file: the registry still builds and its status is valid JSON.
+        reg = self.registry([{"name": "a", "base_url": "http://localhost:1234/v1", "model": "m", "rpm": float("inf")},
+                             {"name": "b", "base_url": "http://localhost:1234/v1", "model": "m", "price_per_mtok_input": float("inf")}])
+        public = reg.public()
+        json.dumps(public, allow_nan=False)
+        self.assertEqual([e["name"] for e in public["endpoints"]], ["b"])
+        self.assertEqual(len(public["problems"]), 2)
+
     def test_missing_or_broken_file_is_not_fatal(self):
         settings = Settings(environ={"JEV_FSD_LLM_ENDPOINTS": "/nonexistent/llm.json"}, env_file=Path("/nonexistent/.env"))
         reg = llm.LlmRegistry(settings, SpendGuard())
@@ -239,18 +271,75 @@ class EndpointTests(LlmTestCase):
                 self.assertEqual(out["content"], content)
                 self.assertEqual(out["trace"]["response"]["choices"][0]["message"]["content"], content)
 
-    def test_non_json_and_malformed_completions_are_errors(self):
-        replies = {
-            "not JSON": lambda h, body: (200, b"<html>gateway</html>", {"Content-Type": "text/html"}),
-            "malformed completion": lambda h, body: (200, {"object": "chat.completion", "choices": []}, {}),
+    def test_non_json_reply_is_an_error(self):
+        reply = lambda h, body: (200, b"<html>gateway</html>", {"Content-Type": "text/html"})  # noqa: E731
+        reg = self.registry([{"name": "m", "base_url": self.mock(reply).url, "model": "x"}])
+        with self.assertRaises(llm.LlmError) as ctx:
+            self.decide(reg, "m")
+        self.assertEqual(ctx.exception.status, 502)
+        self.assertIn("not JSON", str(ctx.exception))
+
+    def test_completion_without_a_message_is_invalid_and_its_usage_still_counts(self):
+        envelopes = {
+            "no choices": {"object": "chat.completion", "choices": [], "usage": {"prompt_tokens": 900, "completion_tokens": 4}},
+            "no message": {"choices": [{"index": 0}], "usage": {"prompt_tokens": 900, "completion_tokens": 4}},
         }
-        for reason, reply in replies.items():
+        for reason, envelope in envelopes.items():
             with self.subTest(reason=reason):
-                reg = self.registry([{"name": "m", "base_url": self.mock(reply).url, "model": "x"}])
-                with self.assertRaises(llm.LlmError) as ctx:
-                    self.decide(reg, "m")
-                self.assertEqual(ctx.exception.status, 502)
-                self.assertIn(reason, str(ctx.exception))
+                mock = self.mock(lambda h, body, e=envelope: (200, e, {}))
+                reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "price_per_mtok_input": 10}])
+                out = self.decide(reg, "m")
+                self.assertIsNone(out["answer"])
+                self.assertEqual(out["invalid"], "malformed completion (%s)" % reason)
+                meta = out["meta"]
+                self.assertEqual((meta["input_tokens"], meta["output_tokens"], meta["live_call"]), (900, 4, True))
+                self.assertAlmostEqual(meta["cost_usd"], 900 * 10 / 1e6)
+                snap = reg.guard.snapshot()
+                self.assertEqual((snap["live_calls"], snap["input_tokens"], snap["output_tokens"]), (1, 900, 4))
+                stats = reg.public()["endpoints"][0]
+                self.assertEqual((stats["calls"], stats["errors"], stats["input_tokens"]), (1, 1, 900))
+                self.assertIn("malformed completion", stats["last_error"])
+
+    def test_non_finite_usage_counts_as_zero_and_keeps_the_rest(self):
+        content = json.dumps('{"motion": "drive", "candidate": "keep_lane_target"}')
+        for usage in ('{"prompt_tokens": Infinity, "completion_tokens": 7}', '{"prompt_tokens": NaN, "completion_tokens": 7}',
+                      '{"prompt_tokens": 1e400, "completion_tokens": 7}', '{"prompt_tokens": -Infinity, "completion_tokens": 7}'):
+            with self.subTest(usage=usage):
+                raw = ('{"model": "x", "choices": [{"message": {"role": "assistant", "content": %s}}], "usage": %s}'
+                       % (content, usage)).encode()
+                reg = self.registry([{"name": "m", "base_url": self.mock(lambda h, body, r=raw: (200, r, {})).url,
+                                      "model": "x", "price_per_mtok_input": 1, "price_per_mtok_output": 1}])
+                out = self.decide(reg, "m")
+                self.assertEqual(out["answer"]["candidate"], "keep_lane_target")
+                self.assertEqual((out["meta"]["input_tokens"], out["meta"]["output_tokens"]), (0, 7))
+                self.assertAlmostEqual(out["meta"]["cost_usd"], 7 / 1e6)
+                json.dumps(out, allow_nan=False)
+                snap = reg.guard.snapshot()
+                self.assertEqual((snap["live_calls"], snap["output_tokens"]), (1, 7))
+
+    def test_deeply_nested_replies_are_invalid_answers_with_meta(self):
+        usage = '"usage": {"prompt_tokens": 1200, "completion_tokens": 12}'
+        good = json.dumps('{"motion": "drive", "candidate": "keep_lane_target"}')
+        replies = {
+            "nested list text": json.dumps(completion("[" * 10_000)),
+            "nested object text": json.dumps(completion('{"a": ' * 3_900)),
+            "nested content value": '{"choices": [{"message": {"content": %s1%s}}], %s}' % ('{"a": ' * 5_000, "}" * 5_000, usage),
+            "nested envelope": '{"choices": [{"message": {"content": %s}}], "extra": %s0%s, %s}' % (good, "[" * 5_000, "]" * 5_000, usage),
+        }
+        for name, data in replies.items():
+            with self.subTest(name=name):
+                mock = self.mock(lambda h, body, d=data.encode(): (200, d, {}))
+                reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "api_key_env": "K"}], environ={"K": SECRET})
+                out = self.decide(reg, "m")
+                json.dumps(out)
+                self.assertEqual((out["meta"]["input_tokens"], out["meta"]["output_tokens"]), (1200, 12))
+                self.assertEqual(reg.guard.snapshot()["live_calls"], 1)
+                if name == "nested envelope":   # usable answer; the trace summarises the absurd envelope
+                    self.assertEqual(out["answer"]["candidate"], "keep_lane_target")
+                    self.assertIn("not shown", out["trace"]["response"]["note"])
+                else:
+                    self.assertIsNone(out["answer"])
+                    self.assertTrue(out["invalid"])
 
     def test_http_errors_map_to_statuses(self):
         cases = [(429, 429, "rate limited"), (500, 502, "HTTP 500"), (503, 502, "HTTP 503"), (401, 401, "rejected the API key")]
@@ -352,6 +441,74 @@ class EndpointTests(LlmTestCase):
         self.assertEqual(out["answer"]["candidate"], "keep_lane_target")
         self.decide(reg, "p")
         self.assertEqual(["response_format" in r["body"] for r in mock.requests], [True, False, False])
+
+    def test_the_plain_retry_shares_one_deadline(self):
+        def slow_picky(h, body):
+            if "response_format" in body:
+                time.sleep(0.3)
+                return 400, {"error": {"message": "response_format is not supported"}}, {}
+            time.sleep(1.0)
+            return 200, completion('{"motion": "drive", "candidate": "keep_lane_target"}'), {}
+        mock = self.mock(slow_picky)
+        reg = self.registry([{"name": "p", "base_url": mock.url, "model": "x", "timeout_s": 1.2}])
+        started = time.monotonic()
+        with self.assertRaises(llm.LlmError) as ctx:
+            self.decide(reg, "p")
+        self.assertLess(time.monotonic() - started, 1.45)   # 1.3 s of replies, cut at 1.2 s
+        self.assertEqual(ctx.exception.status, 504)
+        self.assertIn("no reply within 1.2 s", str(ctx.exception))
+        self.assertEqual(len(mock.requests), 2)
+
+    def test_no_retry_without_time_for_it_but_plain_mode_is_remembered(self):
+        def slow_picky(h, body):
+            if "response_format" in body:
+                time.sleep(0.6)
+                return 400, {"error": {"message": "response_format is not supported"}}, {}
+            return 200, completion('{"motion": "drive", "candidate": "keep_lane_target"}'), {}
+        mock = self.mock(slow_picky)
+        reg = self.registry([{"name": "p", "base_url": mock.url, "model": "x", "timeout_s": 1}])
+        with self.assertRaises(llm.LlmError) as ctx:   # 0.4 s left is less than 1.5 x 0.6 s
+            self.decide(reg, "p")
+        self.assertEqual(ctx.exception.status, 502)
+        self.assertIn("rejected response_format json_schema", str(ctx.exception))
+        self.assertEqual(len(mock.requests), 1)
+        self.assertEqual(reg.public()["endpoints"][0]["response_format"], "none")
+        self.assertEqual(self.decide(reg, "p")["answer"]["candidate"], "keep_lane_target")
+        self.assertEqual(["response_format" in r["body"] for r in mock.requests], [True, False])
+
+    def test_every_attempt_passes_the_rate_limit(self):
+        def picky(h, body):
+            if "response_format" in body:
+                return 400, {"error": {"message": "response_format is not supported"}}, {}
+            return 200, completion('{"motion": "drive", "candidate": "keep_lane_target"}'), {}
+        mock = self.mock(picky)
+        reg = self.registry([{"name": "p", "base_url": mock.url, "model": "x", "rpm": 1}])
+        with self.assertRaises(JevError) as ctx:
+            self.decide(reg, "p")
+        self.assertEqual(ctx.exception.status, 429)
+        self.assertEqual(len(mock.requests), 1)
+        self.assertEqual(reg.public()["endpoints"][0]["response_format"], "none")
+
+    def test_a_trickled_reply_cannot_outlast_the_deadline(self):
+        def trickle(h, body):
+            data = json.dumps(completion('{"motion": "drive", "candidate": "keep_lane_target"}')).encode()
+            try:
+                h.send_response(200)
+                h.send_header("Content-Length", str(len(data)))
+                h.end_headers()
+                for i in range(0, len(data), 8):   # each read arrives well inside the socket timeout
+                    h.wfile.write(data[i:i + 8])
+                    h.wfile.flush()
+                    time.sleep(0.1)
+            except OSError:
+                pass   # the client gave up
+        reg = self.registry([{"name": "t", "base_url": self.mock(trickle).url, "model": "x", "timeout_s": 1}])
+        started = time.monotonic()
+        with self.assertRaises(llm.LlmError) as ctx:
+            self.decide(reg, "t")
+        self.assertEqual(ctx.exception.status, 504)
+        self.assertLess(time.monotonic() - started, 1.3)
+        self.assertEqual(reg.guard.snapshot()["live_calls"], 0)
 
     def test_redirects_are_not_followed_with_the_key(self):
         target = self.mock()
@@ -477,6 +634,28 @@ class ServerRouteTests(LlmTestCase):
         self.assertEqual(self.request("POST", "/api/llm/decide", self.decide_body(), extra={"Sec-Fetch-Site": "cross-site"})[0], 403)
         self.assertEqual(self.request("GET", "/api/llm/decide")[0], 404)
         self.assertEqual(self.upstream.requests, [])
+
+    def test_unreadable_completions_are_answers_the_browser_can_count(self):
+        usage = '"usage": {"prompt_tokens": 1200, "completion_tokens": 12}'
+        replies = {
+            "nested": json.dumps(completion("[" * 10_000)),
+            "infinite": '{"choices": [{"message": {"content": "{}"}}], "usage": {"prompt_tokens": Infinity, "completion_tokens": 12}}',
+            "empty": '{"choices": [], %s}' % usage,
+        }
+        registry = self.registry([{"name": name, "base_url": self.mock(lambda h, body, d=data.encode(): (200, d, {})).url,
+                                   "model": "m", "api_key_env": "MOCK_KEY"} for name, data in replies.items()],
+                                 environ={"MOCK_KEY": SECRET})
+        with patch.object(server, "llm_registry", registry):
+            for name in replies:
+                with self.subTest(name=name):
+                    status, raw = self.request("POST", "/api/llm/decide", self.decide_body(name))
+                    self.assertEqual(status, 200)
+                    out = json.loads(raw, parse_constant=lambda c: self.fail("non-JSON constant %s" % c))
+                    self.assertIsNone(out["answer"])
+                    self.assertTrue(out["invalid"])
+                    self.assertTrue(out["meta"]["live_call"])
+                    self.assertEqual(out["meta"]["output_tokens"], 12)
+        self.assertEqual(registry.guard.snapshot()["live_calls"], 3)
 
     def test_browser_cannot_choose_the_url_or_model(self):
         status, raw = self.request("POST", "/api/llm/decide", self.decide_body(base_url="http://169.254.169.254/latest", model="other"))

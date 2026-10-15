@@ -141,6 +141,7 @@ await test("a valid answer executes the chosen eligible candidate and counts the
 });
 for (const [name, reply, configure, pattern] of [
   ["invalid output", body => ({ ...good(body), answer: null, invalid: "reply was not a JSON object" }), undefined, /invalid output: reply was not a JSON object/],
+  ["a malformed completion", body => ({ ...good(body), answer: null, invalid: "malformed completion (no choices)" }), undefined, /invalid output: malformed completion/],
   ["an HTTP error", () => ({ status: 502, error: "LLM endpoint 'mock': HTTP 500: overloaded" }), undefined, /HTTP 500/],
   ["an exhausted budget", () => ({ status: 402, error: "This server run has spent its $1.00 budget" }), undefined, /budget/],
   ["a timeout", (body, signal) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))), a => { a.brain.timeoutMs = 40; }, /timeout after 40 ms/],
@@ -151,7 +152,10 @@ for (const [name, reply, configure, pattern] of [
     assert.equal(d.meta.source, "rules_fallback"); assert.match(d.meta.error, pattern);
     assert.ok(d.candidates.find(c => c.id === d.chosenId)?.eligible);
     assert.equal(world.violations.fallbacks, 1);
-    if (name === "invalid output") { assert.equal(d.meta.input_tokens, 900); assert.equal(autopilot.totals.calls, 1); assert.ok(d.trace.request.messages); }
+    if (/invalid|malformed/.test(name)) {   // the call happened: it counts its call, tokens and cost
+      assert.equal(d.meta.input_tokens, 900); assert.equal(autopilot.totals.calls, 1); assert.ok(d.trace.request.messages);
+      assert.equal(autopilot.totals.tokens, 900); assert.equal(autopilot.totals.cost, 0.0002);
+    }
   });
 }
 await test("an arena evaluation runs the LLM agent in lockstep and reports its calls and tokens", async () => {
