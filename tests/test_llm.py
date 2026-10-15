@@ -620,6 +620,37 @@ class EndpointTests(LlmTestCase):
                 self.assertEqual(ctx.exception.status, 504)
                 self.assertLess(time.monotonic() - started, 1.3)
 
+    def test_each_address_gets_only_the_rest_of_the_deadline(self):
+        # socket.create_connection gives every resolved address the full timeout, so two unreachable
+        # addresses took twice timeout_s. Each attempt now gets only what is left.
+        attempts = []
+
+        class Unreachable:
+            def __init__(self, *args):
+                self.timeout = None
+
+            def settimeout(self, value):
+                self.timeout = value
+
+            def connect(self, address):
+                attempts.append(self.timeout)
+                time.sleep(self.timeout)
+                raise socket.timeout("timed out")
+
+            def close(self):
+                pass
+        addresses = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.%d" % i, 443)) for i in (1, 2)]
+        self.enterContext(patch.object(llm, "_resolve", lambda host, port: addresses))
+        self.enterContext(patch.object(llm, "_open_socket", Unreachable))
+        reg = self.registry([{"name": "t", "base_url": "https://llm.example.com/v1", "model": "x", "timeout_s": 1}])
+        started = time.monotonic()
+        with self.assertRaises(llm.LlmError) as ctx:
+            self.decide(reg, "t")
+        self.assertEqual(ctx.exception.status, 504)
+        self.assertLess(time.monotonic() - started, 1.3)
+        self.assertLessEqual(len(attempts), 2)
+        self.assertLess(sum(attempts), 1.05)
+
     def test_a_cancelled_watchdog_never_fires(self):
         # The timer callback can already be waiting for the lock when cancel() runs; it must then do nothing.
         a, b = socket.socketpair()

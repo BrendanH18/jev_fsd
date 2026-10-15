@@ -89,6 +89,7 @@ class _Watchdog:
     `timeout_s`. DNS resolution happens before there is a socket, so only the resolver bounds that."""
 
     def __init__(self, deadline: float):
+        self.deadline = deadline
         self.expired = False
         self._finished = False
         self._sock: Optional[socket.socket] = None
@@ -147,6 +148,39 @@ class _WatchedContext:
         return tls
 
 
+def _resolve(host: str, port: int) -> list:
+    return socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+
+
+def _open_socket(family: int, kind: int, proto: int) -> socket.socket:
+    return socket.socket(family, kind, proto)
+
+
+def _connect_by(deadline: float, address: Tuple[str, int], timeout: Any, source_address: Any = None) -> socket.socket:
+    """socket.create_connection, except that each resolved address gets only what is left of the
+    deadline rather than the full timeout, so a host with several unreachable addresses cannot
+    stretch the TCP connect past it."""
+    error: Optional[OSError] = None
+    for family, kind, proto, _, sockaddr in _resolve(*address):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        sock = _open_socket(family, kind, proto)
+        try:
+            sock.settimeout(remaining)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sockaddr)
+        except OSError as err:
+            sock.close()
+            error = err
+            continue
+        if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
+            sock.settimeout(timeout)   # later reads keep the per-operation timeout; the watchdog bounds the total
+        return sock
+    raise error if error is not None and not isinstance(error, TimeoutError) else TimeoutError("deadline passed")
+
+
 class _WatchedHandler:
     """Hands each new connection's socket to the request's watchdog, when it has one, as soon as
     the TCP connection exists: before any proxy tunnel or TLS handshake."""
@@ -158,10 +192,8 @@ class _WatchedHandler:
 
         def connection(*args, **kw):
             conn = http_class(*args, **kw)
-            create = conn._create_connection   # socket.create_connection; its timeout bounds the TCP connect
-
-            def watched_create(*a, **k):
-                sock = create(*a, **k)
+            def watched_create(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
+                sock = _connect_by(watchdog.deadline, address, timeout, source_address)
                 watchdog.attach(sock)
                 return sock
             conn._create_connection = watched_create
