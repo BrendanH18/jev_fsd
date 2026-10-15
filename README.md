@@ -96,12 +96,13 @@ under the same physics, sensing and safety checks as the built-in drivers. The
 latency and cost. It saves evaluations and lets you diff a run against a previous baseline. See the
 [agent guide](docs/agents.md) for a starter template.
 
-Got a model of your own? Point the local server at any OpenAI-compatible endpoint (OpenAI,
-OpenRouter, Groq, vLLM, LM Studio, Ollama on your laptop…) in `data/llm-endpoints.json`, and each
-one shows up as a driver called `llm:<name>`, ready to race the others in the arena and on
-`/bench`. It picks among the same safety-checked manoeuvres, the keys stay on your machine, and
-the prompt lives in one file you can tweak. The [agent guide](docs/agents.md#llm-endpoints-test-your-own-model)
-has copy-paste examples.
+Got a model of your own? The local server speaks the OpenAI Chat Completions protocol, so it
+should work with OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama on your laptop and similar
+servers; so far it has been tested only against a local mock server, not a real provider. List
+endpoints in `data/llm-endpoints.json` and each one shows up as a driver called `llm:<name>`,
+ready to race the others in the arena and on `/bench`. It picks among the same safety-checked
+manoeuvres, the keys stay on the server, and the prompt lives in one file you can tweak. The
+[agent guide](docs/agents.md#llm-endpoints-test-your-own-model) has copy-paste examples.
 
 ## Quick start
 
@@ -143,7 +144,8 @@ cp .env.example .env
 
 Your key stays on the local server and is never sent to the browser. A spend cap
 (`JEV_FSD_BUDGET_USD`, $1 per run by default) and a request-rate cap (`JEV_FSD_RPM`) limit live
-model calls. This project is independent and not affiliated with TypeSafe AI.
+model calls. The spend cap only sees priced calls: an LLM endpoint without prices counts as $0,
+and one with `rpm: 0` also skips the rate cap. This project is independent and not affiliated with TypeSafe AI.
 
 ## How the AI drives
 

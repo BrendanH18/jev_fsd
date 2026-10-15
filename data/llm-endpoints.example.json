@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy to data/llm-endpoints.json (gitignored) and keep the entries you want. Each entry becomes a driver named llm:<name>. Keys never go in this file: api_key_env names a variable in .env or the environment. Omit api_key_env for local servers that need no key. Prices are USD per million tokens; leave them out to report tokens with an unknown cost. rpm 0 lifts the shared JEV_FSD_RPM cap for a free local server (the budget still applies). See docs/agents.md.",
+  "_comment": "Copy to data/llm-endpoints.json (gitignored) and keep the entries you want. Each entry becomes a driver named llm:<name>. Keys never go in this file: api_key_env names a variable in .env or the environment. Omit api_key_env for local servers that need no key. Prices are USD per million tokens; leave them out to report tokens with an unknown cost. rpm 0 removes the rate limit for a free local server; the budget still applies but counts an unpriced endpoint as $0, so an unpriced endpoint with rpm 0 has no limit. The driver speaks the OpenAI Chat Completions protocol and has been tested only against a local mock server. See docs/agents.md.",
   "endpoints": [
     {
       "name": "gpt-4o-mini",

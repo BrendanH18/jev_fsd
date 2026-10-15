@@ -332,11 +332,11 @@ synthetic practice grid and labels it. Refresh a bundled preset with
 | Environment setting | Default | Purpose |
 |---|---|---|
 | `TYPESAFE_API_KEY` | None | Enable Jev |
-| `JEV_FSD_BUDGET_USD` | `1.00` | Cap live Jev and LLM endpoint spend per server run |
-| `JEV_FSD_RPM` | `240` | Cap live Jev and LLM endpoint calls per minute |
+| `JEV_FSD_BUDGET_USD` | `1.00` | Cap live Jev and LLM endpoint spend per server run; an unpriced endpoint counts as $0 |
+| `JEV_FSD_RPM` | `240` | Cap live Jev and LLM endpoint calls per minute; an endpoint's own `rpm` replaces it (`0` = none) |
 | `JEV_FSD_LLM_ENDPOINTS` | `data/llm-endpoints.json` | LLM endpoint drivers ([agent guide](agents.md#llm-endpoints-test-your-own-model)) |
 | `JEV_FSD_LLM_BASE_URL`, `_MODEL`, `_API_KEY`, `_NAME` | None | One OpenAI-compatible endpoint without a config file (`llm:default`) |
-| `JEV_FSD_LLM_PRICE_INPUT_PER_MTOK`, `_OUTPUT_PER_MTOK`, `_TIMEOUT_S` | None, None, `10` | Prices (USD per million tokens) and deadline for that endpoint |
+| `JEV_FSD_LLM_PRICE_INPUT_PER_MTOK`, `_OUTPUT_PER_MTOK`, `_TIMEOUT_S` | None, None, `10` | Prices (USD per million tokens) and total per-decision deadline for that endpoint |
 | `JEV_FSD_NPCS` | `40` | Set traffic-car count |
 | `JEV_FSD_BBOX` | Kitsilano | Select a default area by bounding box or preset |
 | `PORT` | `8322` | Set the server port |
@@ -346,7 +346,7 @@ synthetic practice grid and labels it. Refresh a bundled preset with
 ## Privacy and limitations
 
 The server binds to `127.0.0.1`, keeps the API key out of the browser and checks hosts, origins,
-fetch metadata and session tokens. A per-run budget and rate limit guard live API spending.
+fetch metadata and session tokens. A per-run budget and rate limit guard live API spending; the budget counts an LLM endpoint without prices as $0.
 TypeSafe receives the decision state and questions shown in the inspector: distances, speeds,
 street names and manoeuvre descriptions, without map coordinates. LLM endpoint drivers send
 the same information, as a chat prompt, to whichever provider you configure. Drive reports stay in this
@@ -393,10 +393,10 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 88 Python tests (23 for LLM endpoints against a mock
-OpenAI-compatible server), 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
+The documented validation covers 102 Python tests (37 for LLM endpoints against a local mock
+OpenAI-compatible server; no real provider is tested), 137 browser assertions (99 simulation, 18 HUD and 20 explorer),
 106 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
-22 vehicle model regressions, 13 LLM agent checks, six route-control regressions,
+22 vehicle model regressions, 14 LLM agent checks, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality
 transitions. HUD checks cover fallback and stop labels, unavailable Jev, keyboard driver

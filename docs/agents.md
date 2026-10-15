@@ -47,9 +47,11 @@ each run. Stateful agent internals are not rewound by the simulator's replay rec
 
 ## LLM endpoints: test your own model
 
-Any server that speaks OpenAI-compatible Chat Completions (`POST {base_url}/chat/completions`)
-can drive: OpenAI, OpenRouter, Together, Groq, vLLM, LM Studio, Ollama, Anthropic's
-OpenAI-compatible endpoint and others. Each configured endpoint becomes its own driver,
+The driver speaks the OpenAI Chat Completions protocol (`POST {base_url}/chat/completions`),
+so it should work with servers that offer it: OpenAI, OpenRouter, Together, Groq, vLLM,
+LM Studio, Ollama, Anthropic's OpenAI-compatible endpoint and others. It has been tested only
+against a local mock server, not against any of these providers, so expect to adjust
+`response_format`, `max_tokens` or `extra_body` for some of them. Each configured endpoint becomes its own driver,
 `llm:<name>`, in **Settings → Active agent**, the challenge picker, replay branches, the
 [arena](http://127.0.0.1:8322/arena) and the [`/bench`](http://127.0.0.1:8322/bench) brain list,
 so several models can be compared side by side under identical conditions.
@@ -110,11 +112,11 @@ variables. `JEV_FSD_LLM_ENDPOINTS` points at a different config file.
 | `base_url`, `model` | required | The API root (up to `/v1`) and the model name it expects |
 | `label` | `name` | Name shown in pickers and results |
 | `api_key_env` | none | Variable holding the key; omit for local servers that need none |
-| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens; without them cost is reported as unknown ($0) |
-| `timeout_s` | `10` | Server and browser deadline for one decision (1–60) |
+| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens; without them cost is reported as unknown ($0) and the budget cannot stop the endpoint |
+| `timeout_s` | `10` | Total server deadline for one decision, covering connect, reply and any plain retry (1–60); the browser waits 0.75 s more |
 | `response_format` | `json_schema` | `json_schema`, `json_object` or `none` |
 | `max_tokens`, `temperature` | `400`, `0` | Sent when not `null` |
-| `rpm` | shared | This endpoint's own calls-per-minute cap instead of the shared `JEV_FSD_RPM`; `0` = none |
+| `rpm` | shared | This endpoint's own calls-per-minute cap instead of the shared `JEV_FSD_RPM`; `0` = no rate limit at all |
 | `extra_body` | `{}` | Extra request fields, e.g. `reasoning_effort`; cannot replace model or messages |
 
 **Status.** Pickers label each endpoint: unlabelled when the server can reach it, or
@@ -135,8 +137,10 @@ arithmetic. **Inspect JSON** shows the exact messages under *Questions*, the raw
 
 **What it must answer.** One JSON object, for example
 `{"motion": "drive", "candidate": "keep_lane_target"}`. When the endpoint supports it, the
-server requests structured output whose schema enumerates exactly the offered ids; an endpoint
-that rejects `response_format` is retried once without it and then called in plain mode.
+server requests structured output whose schema enumerates exactly the offered ids. An endpoint
+that rejects `response_format` is called in plain mode from then on; the rejected decision is
+retried without it only when more than 1.5 times the first attempt's duration remains of
+`timeout_s`, and otherwise falls back to Rules.
 Parsing is lenient about form (code fences, prose around the JSON, `<think>` blocks, key
 spelling, case) and strict about content: the motion and candidate must be among the offered
 values. The browser then re-checks the choice with `validAgentChoice`.
@@ -146,26 +150,34 @@ safety filter; the controller and emergency brake still run underneath it. When 
 not usable, the call times out, the endpoint returns an HTTP error (429, 5xx, 401), the key is
 missing or the budget is spent, Rules makes that decision instead, exactly as for Jev. The HUD
 shows an amber `rules_fallback` tag with the reason, the fallback counter increases, and arena
-timelines record a *fallback* event with the reason. Tokens and cost of a call whose reply was
-unusable still count. Decisions with nothing to ask (one eligible manoeuvre and no stop
+timelines record a *fallback* event with the reason. A call whose reply was unusable (not JSON
+inside, an unoffered id, a completion with no message, unreadable usage numbers) still counts as
+a call with its reported tokens and cost. Decisions with nothing to ask (one eligible manoeuvre and no stop
 question) are made locally without a call.
 
 **Cost and limits.** Every LLM call shares Jev's per-run budget (`JEV_FSD_BUDGET_USD`) and rate
 limit (`JEV_FSD_RPM`). With prices set, the HUD, bench and arena report cost from the returned
-token usage; without prices they report tokens and $0, so the budget cannot stop that endpoint
-and only the rate limit applies. A lockstep run makes several calls per simulated second, far
+token usage; without prices they report tokens and $0, so `JEV_FSD_BUDGET_USD` cannot stop that
+endpoint and only the rate limit applies. A lockstep run makes several calls per simulated second, far
 faster than real time, so a fast model can reach the shared 240-per-minute cap within a
 minute; every call after that falls back with *Local rate limit* as the reason. Raise
-`JEV_FSD_RPM`, or give the endpoint its own `rpm` (`0` for an unlimited local server; the
-budget still applies). Use **Lockstep** to compare decision quality: the simulation
+`JEV_FSD_RPM`, or give the endpoint its own `rpm`. `rpm: 0` removes the rate limit for that
+endpoint; the budget still applies, but only to spend it can price, so an unpriced endpoint
+with `rpm: 0` has no limit at all. Use that for free local servers only. Each HTTP attempt,
+including a plain retry, passes the budget and rate checks and counts toward the rate limit.
+Use **Lockstep** to compare decision quality: the simulation
 waits for each answer. **Realtime** includes latency, so a slow model drives on its previous
-choice for longer. The decision deadline is the endpoint's `timeout_s`, not Jev's 1.5 s.
+choice for longer. The decision deadline is the endpoint's `timeout_s`, not Jev's 1.5 s: one
+deadline on the server for connecting, receiving the whole reply and any plain retry, after
+which the call fails as a timeout.
 
 **Security.** The browser sends only the endpoint *name*, the prompt and the allowed ids; the
 URL, model and key come from server configuration, so a page cannot redirect calls elsewhere.
-The routes use the same host, origin, fetch-metadata and session-token checks as Jev. Keys never
-appear in responses, traces or error messages, and redirects are refused rather than forwarding
-the key. Prompts go to whichever provider you configure.
+The browser sees each endpoint's base URL with any credentials, query and fragment stripped;
+keys and the choice of destination stay on the server. The routes use the same host, origin,
+fetch-metadata and session-token checks as Jev. The configured key value is scrubbed (exact
+match) from responses, traces and error messages, and redirects are refused rather than
+forwarding the key. Prompts go to whichever provider you configure.
 
 Evaluation exports include every result, per-challenge version, map-pack version, seed, weather,
 time, vehicle, decision clock, time limit, simulation version and scoring version. A pass
@@ -208,7 +220,7 @@ This is a decision log, not a saved 3D replay or a capture of custom-agent inter
 
 Run `node scripts/test_drive_lab.mjs` after changing an
 agent or scenario, and `node scripts/test_llm_agent.mjs` plus `uv run python -m unittest
-tests.test_llm` after changing the LLM prompt, adapter or server proxy. For broader driving changes, also run the existing seeded city benchmark.
+discover tests -p test_llm.py` after changing the LLM prompt, adapter or server proxy. For broader driving changes, also run the existing seeded city benchmark.
 Run `node scripts/test_arena_history.mjs` after changing history, comparisons or trace formats.
 These commands require Node 22 or newer. With a running app, run
 `uv run --with playwright python scripts/test_arena_browser.py` for the complete arena workflow (CI runs it on every pull request); use `--url` for a
