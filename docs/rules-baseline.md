@@ -26,22 +26,29 @@ the same limitation.
 "Before" is the 2026-09-30 record in [world-validation.md](world-validation.md). The counts are
 collisions / at-fault and red / stop / yield. Off-road and safety brakes are suite totals.
 
-| Map and conditions | Before | Now | Arrived | Collisions | Red / stop / yield | Off-road s | Safety brakes | Mean km/h (before → now) |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| Kitsilano, dry | 10/12 | 11/12 | 12/12 | 1 / 0 | 0 / 0 / 0 | 0.2 | 10 | 22.55 → 22.83 |
-| Kitsilano, fog | 10/12 | 10/12 | 12/12 | 1 / 0 | 0 / 0 / 0 | 1.4 | 8 | 17.06 → 17.18 |
-| Kitsilano, rain | not run | 11/12 | 12/12 | 1 / 1 | 0 / 0 / 0 | 0.2 | 8 | — → 19.21 |
-| Kitsilano, snow | not run | 10/12 | 12/12 | 2 / 0 | 0 / 0 / 0 | 0.4 | 5 | — → 15.01 |
-| Mount Pleasant, dry | 2/2 | 2/2 | 2/2 | 0 / 0 | 0 / 0 / 0 | 0 | 1 | 19.3 → 19.6 |
-| Calgary, dry | 1/2 | 1/2 | 1/2 | 2 / 1 | 0 / 0 / 0 | 0 | 1 | 16.4 → 13.85 |
-| Ottawa, dry | 2/2 | 1/2 | 1/2 | 1 / 1 | 0 / 0 / 0 | 0 | 1 | 18.4 → 12.85 |
-| Québec City, dry | 2/2 | 1/2 | 1/2 | 1 / 1 | 0 / 0 / 0 | 0 | 0 | 28.25 → 17.3 |
-| Victoria, dry | not run | 1/2 | 1/2 | 2 / 1 | 0 / 0 / 0 | 13.5 | 0 | — → 9.5 |
-| Toronto, dry | not run | 1/2 | 1/2 | 2 / 1 | 0 / 0 / 0 | 0 | 0 | — → 10.35 |
-| Montréal, dry | not run | 2/2 | 2/2 | 0 / 0 | 0 / 0 / 0 | 0 | 1 | — → 25.6 |
+| Map and conditions | Before | Now | Arrived | Collisions | Red / stop / yield | Off-road s | Safety brakes | Deadlock overrides | Mean km/h (before → now) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Kitsilano, dry | 10/12 | 11/12 | 12/12 | 1 / 0 | 0 / 0 / 0 | 0.2 | 10 | 0 | 22.55 → 22.83 |
+| Kitsilano, fog | 10/12 | 10/12 | 12/12 | 1 / 0 | 0 / 0 / 0 | 1.4 | 8 | 12 | 17.06 → 17.18 |
+| Kitsilano, rain | not run | 11/12 | 12/12 | 1 / 1 | 0 / 0 / 0 | 0.2 | 8 | 0 | — → 19.21 |
+| Kitsilano, snow | not run | 10/12 | 12/12 | 2 / 0 | 0 / 0 / 0 | 0.4 | 5 | 7 | — → 15.01 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 2/2 | 0 / 0 | 0 / 0 / 0 | 0 | 1 | 0 | 19.3 → 19.6 |
+| Calgary, dry | 1/2 | 1/2 | 1/2 | 2 / 1 | 0 / 0 / 0 | 0 | 1 | 392 | 16.4 → 13.85 |
+| Ottawa, dry | 2/2 | 1/2 | 1/2 | 1 / 1 | 0 / 0 / 0 | 0 | 1 | 867 | 18.4 → 12.85 |
+| Québec City, dry | 2/2 | 1/2 | 1/2 | 1 / 1 | 0 / 0 / 0 | 0 | 0 | 1003 | 28.25 → 17.3 |
+| Victoria, dry | not run | 1/2 | 1/2 | 2 / 1 | 0 / 0 / 0 | 13.5 | 0 | 276 | — → 9.5 |
+| Toronto, dry | not run | 1/2 | 1/2 | 2 / 1 | 0 / 0 / 0 | 0 | 0 | 330 | — → 10.35 |
+| Montréal, dry | not run | 2/2 | 2/2 | 0 / 0 | 0 / 0 / 0 | 0 | 1 | 0 | — → 25.6 |
 
-All Kitsilano routes arrived, and Kitsilano had no red-light, stop or yield violations in any
-weather. Before this run, Calgary had 0.6 s off-road and every new-map smoke route arrived.
+All results in this table come from WebKit; under V8 the same code scores Kitsilano dry 10/12
+(see below). All Kitsilano routes arrived, and Kitsilano had no red-light, stop or yield
+violations in any weather.
+
+Deadlock overrides count the times ego had been stuck for 12 s and the brain forced a 2 m/s
+creep along its lane (`brain.js`). They are not failures in themselves. In Kitsilano fog all 12 were on `s1-3`, which arrived but failed for its
+contact. In snow, 3 were on `s1-1`, which passed, and 4 on `s1-6`, which arrived but failed for
+its collision. The 2026-09-30 fog suite also recorded 12. The large counts in the other cities
+come from the blocked `s1-1` routes described below. Before this run, Calgary had 0.6 s off-road and every new-map smoke route arrived.
 
 ## Failures
 
@@ -68,9 +75,10 @@ approximate judgement.
 
 ## Why the numbers moved
 
-Code changes are not the cause. All eight dry suites ran again from a `git archive` of `bbc9012`,
-the commit behind the 2026-09-30 record, in the same WebKit harness. Every summary and per-route
-result matched `62fe050` exactly, except wall-clock time.
+In the suites retested, code changes are not the cause. All eight dry suites ran again from a
+`git archive` of `bbc9012`, the commit behind the 2026-09-30 record, in the same WebKit harness.
+Every summary and per-route result matched `62fe050` exactly, except wall-clock time. Fog, rain
+and snow were not rerun on the old code, so this shows only that the dry results did not move.
 
 Within one engine, the runs are deterministic. A second Kitsilano dry run matched the first
 exactly. The old-code runs also matched despite running alongside other suites on a different

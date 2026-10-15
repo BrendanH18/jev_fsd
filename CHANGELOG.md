@@ -4,8 +4,10 @@
 
 - Re-baselined the seeded Rules benchmark on the current code. Kitsilano ran in dry, fog,
   rain and snow, and seven other cities ran smoke suites. The new committed run is
-  `data/runs/20261014-091959-rules.json`. Results vary by JavaScript engine, not by the
-  code changed since 2026-09-30. See [docs/rules-baseline.md](docs/rules-baseline.md).
+  `data/runs/20261014-091959-rules.json`. In the eight seeded dry suites tested in WebKit,
+  `bbc9012` and `62fe050` produced identical summaries and per-route results, excluding wall
+  time. On `62fe050`, Kitsilano dry scored 11/12 in WebKit and 10/12 in Node 22.23.2 (V8); the
+  numerical cause was not traced. See [docs/rules-baseline.md](docs/rules-baseline.md).
 
 - CI runs every check on each pull request: Python tests, all Node checks, Jev fixture drift,
   offline Jev requests, and the `/tests`, renderer and arena suites in headless Chromium
