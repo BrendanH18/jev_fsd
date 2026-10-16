@@ -174,7 +174,7 @@ system's reduced-motion preference.
 | **Sound** | Toggle driving audio |
 
 Use `Tab` to reach controls. The Rules / Decision / LLM group has one tab stop; arrow keys,
-`Home` and `End` select a driver. Decision remains visible when no decision model has a key;
+`Home` and `End` select a driver. Decision remains visible when no decision model is usable;
 arrow keys skip it, and clicking it opens **Connect a model** on TypeSafe. Focused controls retain their normal keyboard behaviour; click the road view
 to use WASD, Space or arrows for driving. Driving shortcuts are ignored in form fields and
 open dialogs, and shortcuts with Ctrl, Cmd or Alt keep their normal browser behaviour.

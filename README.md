@@ -102,9 +102,10 @@ Three kinds of driver sit side by side in the HUD: **Rules** (deterministic code
 **Decision models** answer typed questions with probabilities instead of writing text. Jev is the
 built-in one; OpenRouter's Decisions API adds Perplexity Decider, Liquid d1, Microsoft Decision 1
 and others, and llama.cpp runs open ones such as Kev 4B locally. Click **Decision ▾ → Connect a
-decision model…**, pick TypeSafe, OpenRouter, llama.cpp or any other server, paste a key and choose
-from the live model list with prices. A TypeSafe key turns on the built-in Jev; any other model
-becomes a driver called `decision:<name>`. Every decision model gets exactly the state and
+decision model…** and pick a provider: **TypeSafe** (paste a key; it turns on the built-in Jev,
+and other Jev versions can be added), **OpenRouter** (a live model list with prices, loaded without
+a key; paste a key to drive), **llama.cpp** on this computer (no key), or any other compatible
+server. Every model other than the built-in Jev becomes a driver called `decision:<name>`. Every decision model gets exactly the state and
 questions Jev gets, so comparisons are fair. The [agent guide](docs/agents.md#decision-models-jev-and-others)
 has the details.
 
@@ -161,8 +162,9 @@ cp .env.example .env
 
 Your key stays on the local server and is never sent to the browser. A spend cap
 (`JEV_FSD_BUDGET_USD`, $1 per run by default) and a request-rate cap (`JEV_FSD_RPM`) limit live
-model calls. The spend cap only sees priced calls: an endpoint without prices counts as $0,
-and one with `rpm: 0` also skips the rate cap. This project is independent and not affiliated with TypeSafe AI.
+model calls. The spend cap counts the cost a provider reports for each call (`usage.cost`, which
+OpenRouter sends), else the configured prices; a call with neither counts as $0, and an endpoint
+with `rpm: 0` also skips the rate cap. This project is independent and not affiliated with TypeSafe AI.
 
 ## How the AI drives
 

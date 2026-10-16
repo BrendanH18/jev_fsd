@@ -14,7 +14,7 @@ report, including the event timeline and scoring-model version.
 
 ## HUD and controls
 
-The left column contains the trip card, Rules/Jev buttons, autopilot switch and drive coach.
+The left column contains the trip card, the Rules / Decision ▾ / LLM ▾ buttons, autopilot switch and drive coach.
 The trip card gives distances and turn directions while driving manually as well as under
 an autopilot. The centre cluster shows speed in km/h, the mapped maximum and the driving mode.
 Speeding highlights the speed and limit using the same 5 km/h grace as scoring.
@@ -22,14 +22,15 @@ Speeding highlights the speed and limit using the same 5 km/h grace as scoring.
 The right column shows the minimap, latest autopilot decision and cumulative incident counts.
 Decision labels convert candidate speeds from m/s to km/h. Up to five probability rows are
 shown, keeping the executed candidate visible when it has a probability. Rules probabilities
-are deterministic choices, not model confidence. A green `jev` label identifies a model
-response; an amber fallback label identifies a Rules substitute. Local resolution and failed
+are deterministic choices, not model confidence. A green label (`jev`, `decision:<name>` or
+`llm:<name>`) identifies a model response; an amber fallback label identifies a Rules substitute. Local resolution and failed
 model vectors do not invent probabilities or claim that only one option passed safety checks.
 Turning autopilot off clears the current decision's latency and token fields; cost and p50
 remain cumulative/session statistics.
 
 **Settings** contains weather, time, quality, wipers and camera motion. **?** or `/` toggles
-keyboard help; `Escape` closes help and the JSON inspector. `1` selects Jev and `2` Rules.
+keyboard help; `Escape` closes help and the JSON inspector. `1` selects the decision model, `2`
+Rules and `3` the LLM.
 The brain buttons also support arrow keys, Home and End, with one tab stop in the radio group.
 Space and arrows retain their normal behaviour while a button is focused. Browser shortcuts
 with Ctrl, Cmd or Alt do not trigger driving actions.
