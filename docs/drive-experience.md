@@ -14,7 +14,7 @@ report, including the event timeline and scoring-model version.
 
 ## HUD and controls
 
-The left column contains the trip card, Rules/Jev buttons, autopilot switch and drive coach.
+The left column contains the trip card, the Rules / Decision ▾ / LLM ▾ buttons, autopilot switch and drive coach.
 The trip card gives distances and turn directions while driving manually as well as under
 an autopilot. The centre cluster shows speed in km/h, the mapped maximum and the driving mode.
 Speeding highlights the speed and limit using the same 5 km/h grace as scoring.
@@ -22,14 +22,15 @@ Speeding highlights the speed and limit using the same 5 km/h grace as scoring.
 The right column shows the minimap, latest autopilot decision and cumulative incident counts.
 Decision labels convert candidate speeds from m/s to km/h. Up to five probability rows are
 shown, keeping the executed candidate visible when it has a probability. Rules probabilities
-are deterministic choices, not model confidence. A green `jev` label identifies a model
-response; an amber fallback label identifies a Rules substitute. Local resolution and failed
+are deterministic choices, not model confidence. A green label (`jev`, `decision:<name>` or
+`llm:<name>`) identifies a model response; an amber fallback label identifies a Rules substitute. Local resolution and failed
 model vectors do not invent probabilities or claim that only one option passed safety checks.
 Turning autopilot off clears the current decision's latency and token fields; cost and p50
 remain cumulative/session statistics.
 
 **Settings** contains weather, time, quality, wipers and camera motion. **?** or `/` toggles
-keyboard help; `Escape` closes help and the JSON inspector. `1` selects Jev and `2` Rules.
+keyboard help; `Escape` closes help and the JSON inspector. `1` selects the decision model, `2`
+Rules and `3` the LLM.
 The brain buttons also support arrow keys, Home and End, with one tab stop in the radio group.
 Space and arrows retain their normal behaviour while a button is focused. Browser shortcuts
 with Ctrl, Cmd or Alt do not trigger driving actions.
@@ -96,7 +97,9 @@ create different demands, so use the seeded benchmark for controlled driver comp
 ## Validation
 
 The HUD checks in `static/tests/ui-tests.js` run automatically on `/tests`. They cover fallback
-and stop wording, unavailable Jev, radio keyboard selection, probability rows, telemetry reset,
+and stop wording, the Rules / Decision / LLM buttons (every decision model drives under Decision,
+an unavailable one is skipped by the arrow keys, and the public demo hides its ▾ menu), radio
+keyboard selection, probability rows, telemetry reset,
 unchanged DOM reuse, the 10 Hz update bound and expiry of the rolling decision count. The
 2026-09-30 design review also checked layouts at 1280 × 800, 950 × 600, 800 × 600, 640 × 480,
 390 × 640 and 320 × 480, including expanded settings, scroll access to drive actions and the
@@ -110,10 +113,13 @@ tests, including violation caps, fresh-session baselines, pauses, duration, hard
 gaps, history corruption and blocked storage. `scripts/test_interpolate.mjs` checks interpolation
 without changing simulation state, wrapped headings and teleport handling.
 
-The browser suite passes 140 assertions (99 simulation, 21 HUD and 20 explorer) and the renderer suite 106, including
+The browser suite passes 146 assertions (99 simulation, 27 HUD and 20 explorer) and the renderer suite 106, including
 manual-steering, city-sun, sign proportions, atlas padding, actual front/rear sign rasterization,
 the skyline silhouettes of every bundled city and the graphics artifact regressions.
-The 133 Python tests include bundled-map,
+A layout check on the simulator page confirms that the three pillar buttons, their menus and the
+autopilot switch fit inside the 300 px HUD panel: the pillars take its full width on one line,
+with the switch below them.
+The 158 Python tests include bundled-map,
 selected-city routing, distinct reachable suggestions and fallback checks. Fixture checks remain
 clean with 20 valid offline Jev requests.
 

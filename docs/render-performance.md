@@ -182,7 +182,7 @@ nearby shadows, removal of a parked car from both detail levels without removing
 reflection clipping, sampler/state restoration, quality changes and actual wet WebGL draws
 (106 assertions when run from the simulator, including city lighting, sign proportions, city skyline
 silhouettes, artifact regressions and front/rear WebGL lettering).
-The `/tests` suite remains independent of Three.js and also passes (140 assertions: 99 simulation,
-21 HUD and 20 explorer), as do the 133 Python tests and offline fixture checks. The subsequent drive-experience changes add
+The `/tests` suite remains independent of Three.js and also passes (146 assertions: 99 simulation,
+27 HUD and 20 explorer), as do the 158 Python tests and offline fixture checks. The subsequent drive-experience changes add
 visual interpolation and gentler manual steering; the Rules/Jev controller and decision pipeline
 remain shared with the benchmark.

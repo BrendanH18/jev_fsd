@@ -13,6 +13,8 @@ data/snapshots/*.json
 
 # Your LLM endpoints (keys stay in .env; the committed template is data/llm-endpoints.example.json).
 data/llm-endpoints.json
+# Your decision-model endpoints (template: data/decision-endpoints.example.json).
+data/decision-endpoints.json
 
 # Benchmark runs are local results; commit a baseline on purpose with `git add -f`.
 data/runs/

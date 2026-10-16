@@ -4,9 +4,10 @@
     uv run server.py        # or: python3 server.py
     open http://127.0.0.1:8322
 
-Serves the static app, the map pack, routing, the Jev decision proxy and the LLM endpoint proxy
-(jev/llm.py). API keys and the choice of endpoint stay on this server (the browser sees only a
-credential-stripped base URL); every request is checked by
+Serves the static app, the map pack, routing, and the three kinds of driver that need a server: Jev
+(jev/client.py), other decision models (jev/decision.py) and LLM endpoints (jev/llm.py). API keys and
+the choice of endpoint stay on this server (the browser sees only a credential-stripped base URL);
+every request is checked by
 jev/security.py so other websites cannot drive this server or spend your credits.
 """
 
@@ -24,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from jev import decide, llm, llm_setup, security
+from jev import decide, decision, decision_setup, llm, llm_setup, security
 from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
 from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
@@ -41,6 +42,7 @@ MAX_BODY_BYTES = 1024 * 1024
 settings = Settings()
 client = JevClient(settings)
 llm_registry = llm.LlmRegistry(settings, client.guard)   # shares Jev's budget and rate limit
+decision_registry = decision.DecisionRegistry(settings, client.guard)
 SESSION_TOKEN = security.new_token()
 _maps: dict = {}   # bbox key -> {"pack", "router", "error"}
 
@@ -87,6 +89,7 @@ def api_status(_body, query):
         "spend": client.guard.snapshot(),
         "npcs": settings.npcs,
         "llm": llm_setup.public(settings, llm_registry),
+        "decision": decision_setup.public(settings, decision_registry, client),
         "map": {**map_identity(entry["bbox"]), "bbox": list(entry["bbox"]), "name": pack.get("name"), "synthetic": bool(pack.get("synthetic")),
                 "error": entry["error"], "stats": pack.get("stats", {})},
     }
@@ -157,6 +160,17 @@ def _setup(action, body):
         raise BadRequest(str(err))
 
 
+def _saved(result):
+    """After a save or removal in either pillar: both registries re-read .env, since a provider key
+    (OPENROUTER_API_KEY) can serve both, and the reply carries both blocks and Jev's state. The setup
+    lock keeps a reload from pairing one save's endpoint file with another save's key."""
+    with llm_setup._lock:
+        llm_registry.reload()
+        decision_registry.reload()
+        return {**result, "llm": llm_setup.public(settings, llm_registry),
+                "decision": decision_setup.public(settings, decision_registry, client)}
+
+
 def api_llm_models(body, _query):
     """The Connect a model dialog's model list: GET {base_url}/models for a provider (no spend)."""
     return _setup(lambda b: llm_setup.list_models(settings, b), body)
@@ -166,13 +180,42 @@ def api_llm_save(body, _query):
     """Save a model from the dialog: key to .env, endpoint to the endpoints file, then reload."""
     result = _setup(lambda b: llm_setup.save(settings, llm_registry, b), body)
     log("llm setup: saved llm:%s" % result["saved"])
-    return result
+    return _saved(result)
 
 
 def api_llm_remove(body, _query):
     result = _setup(lambda b: llm_setup.remove(settings, llm_registry, b), body)
     log("llm setup: removed llm:%s" % result["removed"])
-    return result
+    return _saved(result)
+
+
+def api_decision_decide(body, _query):
+    try:
+        return decision.decision_decide(decision_registry, body)
+    except decision.InvalidDecisionRequest as err:
+        raise BadRequest(str(err))
+
+
+def api_decision_check(body, _query):
+    """Probe every decision endpoint (one free GET each). POST so it needs the token."""
+    return {"endpoints": decision_registry.check_all(force=bool(body.get("force")))}
+
+
+def api_decision_models(body, _query):
+    return _setup(lambda b: decision_setup.list_models(settings, b), body)
+
+
+def api_decision_save(body, _query):
+    """Save a decision model, or just the TypeSafe key for the built-in Jev driver."""
+    result = _setup(lambda b: decision_setup.save(settings, decision_registry, client, b), body)
+    log("decision setup: saved %s" % result["id"])
+    return _saved(result)
+
+
+def api_decision_remove(body, _query):
+    result = _setup(lambda b: decision_setup.remove(settings, decision_registry, client, b), body)
+    log("decision setup: removed decision:%s" % result["removed"])
+    return _saved(result)
 
 
 def api_snapshot_save(body, _query):
@@ -247,6 +290,11 @@ ROUTES = {
     ("POST", "/api/llm/models"): api_llm_models,
     ("POST", "/api/llm/save"): api_llm_save,
     ("POST", "/api/llm/remove"): api_llm_remove,
+    ("POST", "/api/decision/decide"): api_decision_decide,
+    ("POST", "/api/decision/check"): api_decision_check,
+    ("POST", "/api/decision/models"): api_decision_models,
+    ("POST", "/api/decision/save"): api_decision_save,
+    ("POST", "/api/decision/remove"): api_decision_remove,
     ("POST", "/api/snapshot/save"): api_snapshot_save,
     ("POST", "/api/bench/save"): api_bench_save,
     ("GET", "/api/bench/runs"): api_bench_runs,
@@ -269,7 +317,7 @@ class Handler(BaseHTTPRequestHandler):
     port = 8322
 
     def log_message(self, fmt, *args):
-        if os.environ.get("JEV_FSD_QUIET") or "/api/decide" in str(args[0]) or "/api/llm/decide" in str(args[0]):
+        if os.environ.get("JEV_FSD_QUIET") or any(p in str(args[0]) for p in ("/api/decide", "/api/llm/decide", "/api/decision/decide")):
             return
         log(fmt % args)
 
@@ -351,7 +399,7 @@ def main():
     except OSError as err:
         print("Could not listen on 127.0.0.1:%d (%s). Set PORT=<other port> and try again." % (port, err))
         return 1
-    key_note = ("API key from %s" % client.key_source) if client.configured else "no API key: add TYPESAFE_API_KEY to .env"
+    key_note = ("API key from %s" % client.key_source) if client.configured else "no API key: Connect a model in the app, or add TYPESAFE_API_KEY to .env"
     print("\n  Jev FSD %s  ->  http://127.0.0.1:%d" % (VERSION, port))
     print("  model %s via %s . %s" % (client.model, client.backend, key_note))
     print("  spend guard $%.2f per run (JEV_FSD_BUDGET_USD) . map bbox %s" % (client.guard.budget_usd, ",".join(str(v) for v in settings.bbox)))
@@ -359,6 +407,10 @@ def main():
         print("  llm:%s  %s at %s . key %s%s" % (e["name"], e["model"], e["endpoint"], e["key"], "" if e["priced"] else " . no price set"))
     for problem in llm_registry.problems:
         print("  llm config: %s" % problem)
+    for e in decision_registry.public()["endpoints"]:
+        print("  decision:%s  %s at %s%s . key %s" % (e["name"], e["model"], e["endpoint"], e["path"], e["key"]))
+    for problem in decision_registry.problems:
+        print("  decision config: %s" % problem)
     entry = load_map()
     print("  map: %d edges, %d signals, %d stops, %d buildings%s\n" % (
         len(entry["pack"]["edges"]), len(entry["pack"]["intersections"]), len(entry["pack"]["stops"]),

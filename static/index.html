@@ -44,9 +44,10 @@
         <div class="pilot-row">
           <div class="segmented" role="radiogroup" aria-label="Autopilot brain">
             <button id="brain-rules" role="radio" data-brain="rules" title="2 · deterministic code, free">Rules</button>
-            <button id="brain-jev" role="radio" data-brain="jev" title="1 · TypeSafe Jev model">Jev</button>
+            <button id="brain-decision" role="radio" data-brain="decision" title="1 · a decision model: Jev, or another chosen with ▾">Decision</button>
+            <button id="decision-menu-toggle" class="menu-toggle" aria-haspopup="menu" aria-expanded="false" aria-label="Choose or connect a decision model">▾</button>
             <button id="brain-llm" role="radio" data-brain="llm" title="3 · your own model: connect one with ▾">LLM</button>
-            <button id="llm-menu-toggle" class="llm-menu-toggle" aria-haspopup="menu" aria-expanded="false" aria-label="Choose or connect an LLM">▾</button>
+            <button id="llm-menu-toggle" class="menu-toggle" aria-haspopup="menu" aria-expanded="false" aria-label="Choose or connect an LLM">▾</button>
           </div>
           <button id="autopilot" class="switch" role="switch" aria-checked="false" title="J"><i aria-hidden="true"></i><span>Autopilot</span></button>
         </div>
@@ -252,7 +253,7 @@
         <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Drive (takes over from autopilot)</dd>
         <dt><kbd>Space</kbd></dt><dd>Brake hard</dd>
         <dt><kbd>J</kbd></dt><dd>Toggle autopilot</dd>
-        <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dt><dd>Jev / Rules / LLM brain</dd>
+        <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dt><dd>Decision model / Rules / LLM brain</dd>
         <dt><kbd>Q</kbd><kbd>E</kbd></dt><dd>Left / right indicator</dd>
         <dt><kbd>H</kbd></dt><dd>Horn (with sound on)</dd>
         <dt><kbd>C</kbd></dt><dd>Cycle camera (chase, 360°, hood, top, far, cinematic)</dd>

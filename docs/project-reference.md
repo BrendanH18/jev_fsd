@@ -38,8 +38,10 @@ autopilot; `W A S D` takes over manually. You can also click a destination on th
 start a free drive with the keyboard. Cycle **View** to hood view and enable **Sound** for driving
 ambience. Open **Settings** to change weather, time and graphics, or press `?` for keyboard help.
 
-To enable Jev, obtain a key from the [TypeSafe console](https://console.typesafe.ai) and create
-a local environment file:
+To enable Jev, obtain a key from the [TypeSafe console](https://console.typesafe.ai), click
+**Decision** (or press `1`), paste the key under **TypeSafe** and choose **Save and drive**. The
+server saves it to `.env` as `TYPESAFE_API_KEY` and Jev is available at once. Or create the file
+by hand:
 
 ```sh
 cp .env.example .env
@@ -124,7 +126,7 @@ The redesigned HUD groups route guidance, driving instruments and pilot feedback
 
 | Area | What it shows |
 |---|---|
-| Left column | City and current street, next turn and distance, Rules/Jev buttons, autopilot switch, Settings and live drive coach |
+| Left column | City and current street, next turn and distance, Rules / Decision ▾ / LLM ▾ buttons, autopilot switch, Settings and live drive coach |
 | Instrument cluster | Speed in km/h, mapped speed limit, indicators and manual, pilot or paused mode |
 | Right column | Minimap, latest pilot decision, candidate probabilities, latency, tokens, cost, fallbacks and incident counts |
 
@@ -153,7 +155,7 @@ system's reduced-motion preference.
 | `W A S D` or arrows | Drive manually and take over from autopilot |
 | `Space` | Brake hard |
 | `J` | Toggle autopilot |
-| `1` / `2` | Select Jev / Rules (also available as buttons) |
+| `1` / `2` / `3` | Select the decision model / Rules / the LLM (also available as buttons; ▾ picks the model) |
 | `Q` / `E` | Toggle left / right indicators |
 | `H` | Horn when sound is enabled |
 | `C` or **View** | Cycle chase, 360°, hood, overhead, high chase and cinematic cameras |
@@ -171,9 +173,9 @@ system's reduced-motion preference.
 | **Settings** | Weather, time, graphics quality, wipers and camera motion |
 | **Sound** | Toggle driving audio |
 
-Use `Tab` to reach controls. The Rules/Jev group has one tab stop; arrow keys, `Home` and `End`
-select a driver. Jev remains visible when no API key is configured, and selecting it explains
-how to enable it. Focused controls retain their normal keyboard behaviour; click the road view
+Use `Tab` to reach controls. The Rules / Decision / LLM group has one tab stop; arrow keys,
+`Home` and `End` select a driver. Decision remains visible when no decision model is usable;
+arrow keys skip it, and clicking it opens **Connect a model** on TypeSafe. Focused controls retain their normal keyboard behaviour; click the road view
 to use WASD, Space or arrows for driving. Driving shortcuts are ignored in form fields and
 open dialogs, and shortcuts with Ctrl, Cmd or Alt keep their normal browser behaviour.
 
@@ -273,11 +275,12 @@ Every 250 ms of simulated time near hazards, or 650 ms on open road, the shared 
 1. **Senses** the visible world and projects the car onto its route.
 2. **Proposes** up to 16 manoeuvres, including speed changes, small lateral shifts and stops.
 3. **Simulates** each manoeuvre three seconds ahead and rejects unsafe or illegal options.
-4. **Chooses** among the survivors using Jev or Rules.
+4. **Chooses** among the survivors using Rules, a decision model (Jev or another) or an LLM.
 5. **Executes** the chosen manoeuvre while the next decision is pending.
 
-Jev answers typed multiple-choice questions with probabilities. Rules scores the same candidate
-set locally. Both share sensing, safety filtering, physics and the controller. Jev reads
+Jev answers typed multiple-choice questions with probabilities; other decision models
+([agent guide](agents.md#decision-models-jev-and-others)) receive the same questions and answer
+the same way. Rules scores the same candidate set locally. Both share sensing, safety filtering, physics and the controller. Jev reads
 `driving_style`; Rules uses a fixed score. If Jev exceeds 1.5 seconds, returns an invalid choice
 or errors, Rules handles that step and the fallback counter increases. Settled questions can
 be answered locally without an API call.
@@ -332,8 +335,9 @@ synthetic practice grid and labels it. Refresh a bundled preset with
 | Environment setting | Default | Purpose |
 |---|---|---|
 | `TYPESAFE_API_KEY` | None | Enable Jev |
-| `JEV_FSD_BUDGET_USD` | `1.00` | Cap live Jev and LLM endpoint spend per server run; an unpriced endpoint counts as $0 |
-| `JEV_FSD_RPM` | `240` | Cap live Jev and LLM endpoint calls per minute; an endpoint's own `rpm` replaces it (`0` = none) |
+| `JEV_FSD_BUDGET_USD` | `1.00` | Cap live Jev, decision-model and LLM spend per server run; an endpoint without a price or reported cost counts as $0 |
+| `JEV_FSD_RPM` | `240` | Cap live model calls per minute; an endpoint's own `rpm` replaces it (`0` = none) |
+| `JEV_FSD_DECISION_ENDPOINTS` | `data/decision-endpoints.json` | Decision-model drivers ([agent guide](agents.md#decision-models-jev-and-others)) |
 | `JEV_FSD_LLM_ENDPOINTS` | `data/llm-endpoints.json` | LLM endpoint drivers ([agent guide](agents.md#llm-endpoints-test-your-own-model)) |
 | `JEV_FSD_LLM_BASE_URL`, `_MODEL`, `_API_KEY`, `_NAME` | None | One OpenAI-compatible endpoint without a config file (`llm:default`) |
 | `JEV_FSD_LLM_PRICE_INPUT_PER_MTOK`, `_OUTPUT_PER_MTOK`, `_TIMEOUT_S` | None, None, `10` | Prices (USD per million tokens) and total per-decision deadline for that endpoint |
@@ -346,10 +350,11 @@ synthetic practice grid and labels it. Refresh a bundled preset with
 ## Privacy and limitations
 
 The server binds to `127.0.0.1`, keeps the API key out of the browser and checks hosts, origins,
-fetch metadata and session tokens. A per-run budget and rate limit guard live API spending; the budget counts an LLM endpoint without prices as $0.
+fetch metadata and session tokens. A per-run budget and rate limit guard live API spending; the budget counts an endpoint without prices or a reported cost as $0.
 TypeSafe receives the decision state and questions shown in the inspector: distances, speeds,
-street names and manoeuvre descriptions, without map coordinates. LLM endpoint drivers send
-the same information, as a chat prompt, to whichever provider you configure. Drive reports stay in this
+street names and manoeuvre descriptions, without map coordinates. Other decision models receive
+the same request, and LLM endpoint drivers the same information as a chat prompt, from whichever
+provider you configure. Drive reports stay in this
 browser's local storage unless you export them.
 
 Map tags and procedural geometry limit realism. There is no road elevation or camber, and
@@ -376,12 +381,13 @@ node --experimental-default-type=module scripts/test_route_controls.mjs
 node --experimental-default-type=module scripts/test_world_conditions.mjs
 node --experimental-default-type=module scripts/test_vehicle_models.mjs
 node --experimental-default-type=module scripts/test_llm_agent.mjs
+node --experimental-default-type=module scripts/test_decision_agent.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```
 
 With a running app, `uv run --with playwright python scripts/test_browser_pages.py` runs the `/tests`
-page and the renderer assertions in headless Chromium, and `scripts/test_arena_browser.py` runs the
+page, the renderer assertions and a check that the pilot controls fit the HUD panel in headless Chromium, and `scripts/test_arena_browser.py` runs the
 arena workflow (install the browser once with `uv run --with playwright python -m playwright install chromium`).
 CI runs all of the above on every pull request.
 
@@ -393,14 +399,15 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 133 Python tests (68 for LLM endpoints and their setup against a local mock
-OpenAI-compatible server and temporary files; no real provider is tested), 140 browser assertions (99 simulation, 21 HUD and 20 explorer),
-106 renderer assertions, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
-22 vehicle model regressions, 15 LLM agent checks, six route-control regressions,
+The documented validation covers 158 Python tests (68 for LLM endpoints and their setup against a local mock
+OpenAI-compatible server, and 25 for decision-model endpoints and their setup against a local mock System One
+server, both with temporary files; no real provider is tested), 146 browser assertions (99 simulation, 27 HUD and 20 explorer),
+106 renderer assertions, one HUD layout check, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
+22 vehicle model regressions, 15 LLM agent checks, 14 decision agent checks, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality
-transitions. HUD checks cover fallback and stop labels, unavailable Jev, keyboard driver
-selection, probability rows, telemetry reset and the 10 Hz update bound. See
+transitions. HUD checks cover fallback and stop labels, the three pillar buttons and an unavailable
+Decision button, keyboard driver selection, probability rows, telemetry reset and the 10 Hz update bound. See
 [HUD validation and viewport-review limits](drive-experience.md#validation) and
 [rendering performance](render-performance.md) for DOM measurements and GPU profiling.
 
@@ -411,9 +418,9 @@ credits. The fixtures are generated by the real production pipeline.
 
 | Path | Contents |
 |---|---|
-| `server.py`, `jev/` | Local server, TypeSafe client, spend guard, OSM processing and routing |
+| `server.py`, `jev/` | Local server, TypeSafe client, decision-model and LLM endpoint proxies, spend guard, OSM processing and routing |
 | `static/js/sim/` | Physics, traffic, collisions, signals, parking, pedestrians and sensing |
-| `static/js/brain/` | Candidates, Jev questions, drivers and safety brake |
+| `static/js/brain/` | Candidates, Jev questions, drivers (Rules, decision models, LLMs) and safety brake |
 | `static/js/ui/` | City explorer, drive reports, cockpit and driving audio |
 | `static/js/render/` | Three.js scene, scenery, lighting, signs, reflections and post-processing |
 | `static/js/bench/` | Seeded suites, headless runs and metrics |

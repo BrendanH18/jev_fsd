@@ -2,8 +2,9 @@ import { api, $, h, usd } from "../common.js";
 import { MapData } from "../map/mapdata.js";
 import { CHALLENGES, CHALLENGE_VERSION } from "./challenges.js";
 import { evaluateChallenge } from "./evaluation.js";
-import { agentDefinitions, registerAgent, setAgentAvailability, agentOptionLabel } from "../brain/registry.js";
+import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints, llmSummary } from "../brain/llm.js";
+import { registerDecisionAgents, checkDecisionEndpoints, decisionSummary } from "../brain/decision.js";
 import { readHistory } from "../sim/drive-score.js";
 import { EVALUATION_SCHEMA, EVALUATION_HISTORY_KEY, MAX_IMPORT_BYTES, validateEvaluation, readEvaluations,
   saveEvaluation, compareResult, incidentCount, summarizeResults } from "./history.js";
@@ -18,7 +19,7 @@ const visibleRun = () => $("#arena-history").value === "current" ? current : sav
 const baselineRun = () => $("#arena-baseline").value === "" ? null : saved[Number($("#arena-baseline").value)];
 function agents() {
   const selection = new Set([...$("#agents").querySelectorAll("input:checked")].map(i => i.value));
-  $("#agents").replaceChildren(...agentDefinitions().map(a => h("label", { title: a.llm ? `${a.llm.model} at ${a.llm.endpoint}` : a.description || null }, h("input", { type: "checkbox", value: a.id,
+  $("#agents").replaceChildren(...agentDefinitions().map(a => h("label", { title: a.decision || a.llm ? `${(a.decision || a.llm).model} at ${(a.decision || a.llm).endpoint}` : a.description || null }, h("input", { type: "checkbox", value: a.id,
     checked: (selection.size ? selection.has(a.id) : a.id === "rules" || a.id === "cautious") && a.available !== false, disabled: a.available === false || running }), agentOptionLabel(a))));
 }
 function historyControls() {
@@ -183,11 +184,13 @@ async function boot() {
   $("#manual-attempts").replaceChildren(...(attempts.length ? attempts.map(r => h("p", {}, `${r.title} · ${r.driver} · ${r.status} · ${r.qualified ? `${r.score}/100` : "practice"}${r.branched ? " · replay branch" : ""}${r.modified ? " · modified challenge" : ""}`)) : [h("p", {}, "Complete a challenge in the simulator to see your drive here.")]));
   render();
   const status = await api("/api/status");
-  setAgentAvailability("jev", status.configured, status.configured ? "" : "no API key");
-  registerLlmAgents(status.llm); agents();
-  $("#llm-status").textContent = llmSummary(status);
-  $("#arena-status").textContent = "Ready · no model calls for Rules or the cautious starter. Jev and LLM endpoint evaluations use your server's API budget.";
-  if (status.llm?.endpoints?.length) checkLlmEndpoints().then(() => { if (!running) agents(); $("#llm-status").textContent = llmSummary(status); }).catch(() => { /* keep "configured" */ });
+  registerDecisionAgents(status.decision, { demo: !!status.demo }); registerLlmAgents(status.llm); agents();
+  const summary = () => { $("#llm-status").textContent = `${decisionSummary(status)} ${llmSummary(status)}`; };
+  summary();
+  $("#arena-status").textContent = "Ready · no model calls for Rules or the cautious starter. Decision-model and LLM evaluations use your server's API budget.";
+  const refresh = () => { if (!running) agents(); summary(); };
+  if (status.decision?.endpoints?.length) checkDecisionEndpoints().then(refresh).catch(() => { /* keep "configured" */ });
+  if (status.llm?.endpoints?.length) checkLlmEndpoints().then(refresh).catch(() => { /* keep "configured" */ });
 }
 window.__arena = { run, get results() { return results; } };
 boot().catch(error => { $("#arena-status").textContent = `Could not open arena: ${error.message}`; });

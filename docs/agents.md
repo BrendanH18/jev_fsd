@@ -1,7 +1,12 @@
 # Bring your own driving agent
 
+The app has three kinds of driver, one button each in the HUD: **Rules** (deterministic code,
+free), **Decision** (decision models: Jev, or any other model that answers typed questions with
+probabilities) and **LLM** (any OpenAI-compatible chat model). Keys 1, 2 and 3 select Decision,
+Rules and LLM.
+
 Open `/arena` to evaluate Rules, Jev (when configured), the free cautious starter, your own
-LLM endpoints, or your own agent on six fixed challenges. The public demo uses `arena.html` and supports browser agents.
+decision models and LLM endpoints, or your own agent on six fixed challenges. The public demo uses `arena.html` and supports browser agents.
 Select **Realtime** when comparing model latency or manual attempts; **Lockstep** waits for a
 decision and measures the resulting choices. Changing clocks changes the experiment.
 
@@ -37,13 +42,103 @@ timeout is 1.5 seconds even if an agent ignores the abort signal; stale results 
 The emergency brake and safety filtering remain shared. An agent can still choose a poor
 eligible manoeuvre, and the simulator still audits collisions and violations.
 
-For a remote model, the easiest route is an [LLM endpoint](#llm-endpoints-test-your-own-model):
-no code, and the local server keeps the key. To write your own adapter instead, implement
+For a remote model, the easiest route is a [decision model](#decision-models-jev-and-others) or an
+[LLM endpoint](#llm-endpoints-test-your-own-model): no code, and the local server keeps the key. To write your own adapter instead, implement
 `decide` using `request.state` and `request.questions`, with the supplied abort signal. Keep
-provider keys behind a server endpoint, as `JevBrain` and `LlmBrain` do; GitHub Pages has no
+provider keys behind a server endpoint, as `JevBrain`, `DecisionBrain` and `LlmBrain` do; GitHub Pages has no
 private server or secret store. Return measured latency, token counts and cost in `meta`; set
 `live_call: true` for a remote request. An agent factory should return a fresh instance for
 each run. Stateful agent internals are not rewound by the simulator's replay recorder.
+
+## Decision models: Jev and others
+
+A decision model takes a state and typed questions and returns each answer with probabilities.
+Jev introduced the protocol (TypeSafe's System One API, `POST /v1/systemone` with
+`{model, state, questions}`), and other services now speak it with the same request and answer
+shapes: OpenRouter's Decisions API (`POST /api/alpha/decisions`) serves Jev, Perplexity Decider,
+Liquid d1, Microsoft Decision 1, GPT-6 Luna Decisions and others with one key, and llama.cpp
+0.6.0 or later serves open models such as Kev 4B at `/v1/systemone`. Jev is the built-in decision
+driver, `jev`; every other decision model you connect becomes its own driver, `decision:<name>`,
+in the HUD's **Decision ▾** menu, **Settings → Active agent**, the challenge picker, replay
+branches, the arena and the `/bench` brain list.
+
+Every decision model receives exactly the state and questions Jev does (built by
+`static/js/brain/state.js`): which manoeuvre to take among those that passed the safety filter,
+whether to drive or stop when that is in question, and which route when there are several. So
+a comparison between Jev and another decision model measures the model, not the prompt. These
+drivers have been tested only against a local mock server, not against TypeSafe, OpenRouter or
+llama.cpp.
+
+### Connect a decision model in the app
+
+Click **Decision** (or press 1) when no decision model is usable, or choose **Decision ▾ →
+Connect a decision model…**. The **Connect a model** dialog opens on its **Decision models** tab:
+
+- **TypeSafe** is the API option for Jev. Paste a TypeSafe key and save: the key is written to
+  `.env` as `TYPESAFE_API_KEY`, the variable the built-in Jev driver reads, and Jev becomes
+  available at once, without a restart. The model starts on the built-in driver's model
+  (`jev-latest` unless `TYPESAFE_DEFAULT_MODEL` says otherwise). Choosing another version, such as
+  `jev-preview`, saves it as a driver of its own (`decision:jev-preview`) on the same key, so the
+  two can be compared.
+- **OpenRouter** lists every model OpenRouter offers with the `decisions` output modality
+  (`GET /api/v1/models?output_modalities=decisions`, which needs no key), with prices. The key is
+  `OPENROUTER_API_KEY`, the same variable the LLM tab uses, so one key serves both pillars; saving
+  it in either tab makes it available to both at once. OpenRouter reports each call's cost
+  (`usage.cost`), which is counted instead of the listed price.
+- **llama.cpp** points at `http://localhost:8080` and needs no key.
+- **Other** takes the URL of any server that answers `POST {URL}/v1/systemone`. A key typed here
+  is private to that endpoint (`JEV_FSD_DECISION_KEY_<NAME>_<hash>`) and is never sent to a new URL.
+
+The key handling is the same as for LLMs below: `.env` must be gitignored and untracked, it is
+written atomically and kept owner-only, and the key never comes back to the browser.
+
+The built-in `jev` driver always calls TypeSafe directly, even when only an OpenRouter key is
+saved. Replays, fixtures and saved benchmark runs that say `jev` then keep meaning TypeSafe's
+API, its price and its latency. OpenRouter's Jev is one click away as its own driver instead
+(`typesafe/jev-1.13` or `~typesafe/jev-latest` in the OpenRouter list).
+
+The **Decision** button drives with the last decision model chosen, else Jev, else the first
+usable one. Respan's Span-01 accepts only yes/no questions with plain-string criteria, so expect
+it to refuse this app's choice questions; each refusal falls back to Rules.
+
+### Configure decision models by hand
+
+```sh
+cp data/decision-endpoints.example.json data/decision-endpoints.json   # gitignored
+```
+
+```json
+{"endpoints": [
+  {"name": "pplx-decider", "label": "Perplexity Decider (OpenRouter)", "base_url": "https://openrouter.ai",
+   "path": "/api/alpha/decisions", "check_path": "/api/v1/key", "model": "perplexity/pplx-decider-v1.1-27b",
+   "api_key_env": "OPENROUTER_API_KEY", "price_per_mtok_input": 0.02},
+  {"name": "kev-4b", "base_url": "http://localhost:8080", "model": "kev-4b", "timeout_s": 20, "rpm": 0}
+]}
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `name` | required | Driver id `decision:<name>`; lowercase letters, digits, `-`, `_` |
+| `base_url`, `model` | required | The server root (without the path) and the model it expects |
+| `path` | `/v1/systemone` | Where decisions are posted; `/api/alpha/decisions` for OpenRouter |
+| `check_path` | `/v1/models` | A free GET for the status label; `/api/v1/key` for OpenRouter checks the key |
+| `label`, `api_key_env`, `rpm` | | As for LLM endpoints |
+| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens, used when the reply has no `usage.cost` |
+| `timeout_s` | `5` | Total server deadline for one decision (1–60); the browser waits 0.75 s more. There are no retries: a late decision is already stale |
+
+`JEV_FSD_DECISION_ENDPOINTS` points at a different file. Restart after editing it by hand.
+
+**Answers.** The server checks every answer against the question it was asked: it must be a
+choice, and the choice one of the offered options. Probabilities outside 0–1, for options that
+were not offered, or not numbers are dropped. A missing or unusable answer to the route question
+is ignored: the car keeps the first route, which it already follows, and the question is not asked
+again. Any other unusable answer is an
+invalid reply: the browser falls back to Rules for that decision, and the call still counts with
+its tokens and cost. HTTP errors are reported as they come: 401 or 403 (key rejected), 402
+(OpenRouter: out of credits), 429 or 529 (rate limited or overloaded), 4xx validation errors
+with the provider's message. The status label uses the endpoint's `check_path`: *unreachable*,
+*key rejected* or *no key*, as for LLMs. Budget, rate limit, redirects, key scrubbing and the
+total deadline work exactly as for LLM endpoints below.
 
 ## LLM endpoints: test your own model
 
@@ -58,8 +153,8 @@ so several models can be compared side by side under identical conditions.
 
 ### Connect a model in the app
 
-The quickest way: in the drive app, click **LLM** next to Rules and Jev (or ▾ → **Connect a
-model**, or **Settings → Connect a model**).
+The quickest way: in the drive app, click **LLM** next to Rules and Decision (or **LLM ▾ → Connect a
+model**, or **Settings → Connect a model** and its **LLMs** tab).
 
 1. Pick a provider: OpenRouter, OpenAI, Groq, Ollama, LM Studio, or **Other** for any
    OpenAI-compatible URL.
@@ -252,7 +347,9 @@ This is a decision log, not a saved 3D replay or a capture of custom-agent inter
 
 Run `node scripts/test_drive_lab.mjs` after changing an
 agent or scenario, and `node scripts/test_llm_agent.mjs` plus `uv run python -m unittest
-discover tests -p 'test_llm*.py'` after changing the LLM prompt, adapter, server proxy or setup dialog. For broader driving changes, also run the existing seeded city benchmark.
+discover tests -p 'test_llm*.py'` after changing the LLM prompt, adapter, server proxy or setup dialog.
+For decision models, run `node scripts/test_decision_agent.mjs` and `uv run python -m unittest
+discover tests -p 'test_decision.py'`. For broader driving changes, also run the existing seeded city benchmark.
 Run `node scripts/test_arena_history.mjs` after changing history, comparisons or trace formats.
 These commands require Node 22 or newer. With a running app, run
 `uv run --with playwright python scripts/test_arena_browser.py` for the complete arena workflow (CI runs it on every pull request); use `--url` for a

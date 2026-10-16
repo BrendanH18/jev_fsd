@@ -15,7 +15,7 @@ from unittest.mock import patch
 import helpers  # noqa: F401  (puts the project root on sys.path)
 
 import server
-from jev import llm, security
+from jev import endpoints, llm, security
 from jev.client import JevError, SpendGuard
 from jev.config import Settings
 
@@ -616,8 +616,8 @@ class EndpointTests(LlmTestCase):
         for name, tunnel_after in (("trickled CONNECT reply", None), ("stalled TLS handshake", 0.5)):
             with self.subTest(name=name):
                 proxy = urllib.request.ProxyHandler({"https": self.stalling_proxy(tunnel_after)})
-                self.enterContext(patch.object(llm, "_OPENER", urllib.request.build_opener(
-                    proxy, llm._NoRedirect, llm._HTTPHandler, llm._HTTPSHandler)))
+                self.enterContext(patch.object(endpoints, "_OPENER", urllib.request.build_opener(
+                    proxy, endpoints._NoRedirect, endpoints._HTTPHandler, endpoints._HTTPSHandler)))
                 reg = self.registry([{"name": "t", "base_url": "https://llm.example.com/v1", "model": "x", "timeout_s": 1}])
                 started = time.monotonic()
                 with self.assertRaises(llm.LlmError) as ctx:
@@ -645,8 +645,8 @@ class EndpointTests(LlmTestCase):
             def close(self):
                 pass
         addresses = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.%d" % i, 443)) for i in (1, 2)]
-        self.enterContext(patch.object(llm, "_resolve", lambda host, port: addresses))
-        self.enterContext(patch.object(llm, "_open_socket", Unreachable))
+        self.enterContext(patch.object(endpoints, "_resolve", lambda host, port: addresses))
+        self.enterContext(patch.object(endpoints, "_open_socket", Unreachable))
         reg = self.registry([{"name": "t", "base_url": "https://llm.example.com/v1", "model": "x", "timeout_s": 1}])
         started = time.monotonic()
         with self.assertRaises(llm.LlmError) as ctx:
@@ -667,8 +667,8 @@ class EndpointTests(LlmTestCase):
             if family == socket.AF_INET6:
                 raise OSError(97, "Address family not supported by protocol")
             return socket.socket(family, kind, proto)
-        self.enterContext(patch.object(llm, "_resolve", lambda host, port: addresses))
-        self.enterContext(patch.object(llm, "_open_socket", open_socket))
+        self.enterContext(patch.object(endpoints, "_resolve", lambda host, port: addresses))
+        self.enterContext(patch.object(endpoints, "_open_socket", open_socket))
         reg = self.registry([{"name": "m", "base_url": mock.url, "model": "x", "response_format": "none"}])
         self.assertEqual(self.decide(reg, "m")["answer"]["candidate"], "keep_lane_target")
 
@@ -677,14 +677,14 @@ class EndpointTests(LlmTestCase):
         a, b = socket.socketpair()
         self.addCleanup(a.close)
         self.addCleanup(b.close)
-        watchdog = llm._Watchdog(time.monotonic() + 60)
+        watchdog = endpoints._Watchdog(time.monotonic() + 60)
         watchdog.attach(a)
         self.assertFalse(watchdog.cancel())
         watchdog._expire()
         self.assertFalse(watchdog.expired)
         b.sendall(b"still open")
         self.assertEqual(a.recv(16), b"still open")
-        fired = llm._Watchdog(time.monotonic())
+        fired = endpoints._Watchdog(time.monotonic())
         time.sleep(0.05)
         self.assertTrue(fired.cancel())
 

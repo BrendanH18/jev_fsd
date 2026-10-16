@@ -10,6 +10,7 @@ Environment variables (the first three are the official TypeSafe SDK names):
   JEV_FSD_NPCS            number of traffic cars (default 40)
   JEV_FSD_LLM_ENDPOINTS   LLM driver config file (default data/llm-endpoints.json; see jev/llm.py)
   JEV_FSD_LLM_BASE_URL    one OpenAI-compatible endpoint without a config file (also _MODEL, _API_KEY, _NAME)
+  JEV_FSD_DECISION_ENDPOINTS  decision-model driver config file (default data/decision-endpoints.json; see jev/decision.py)
   PORT                    listen port (default 8322)
 """
 
@@ -27,6 +28,7 @@ MAPS_DIR = DATA_DIR / "maps"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 RUNS_DIR = DATA_DIR / "runs"
 LLM_ENDPOINTS_PATH = DATA_DIR / "llm-endpoints.json"
+DECISION_ENDPOINTS_PATH = DATA_DIR / "decision-endpoints.json"
 ENV_PATH = PROJECT_ROOT / ".env"
 
 KEY_ENV = "TYPESAFE_API_KEY"
@@ -107,9 +109,16 @@ class Settings:
 
     @property
     def llm_endpoints_path(self) -> Path:
-        value = self.get("JEV_FSD_LLM_ENDPOINTS")
+        return self._path("JEV_FSD_LLM_ENDPOINTS", LLM_ENDPOINTS_PATH)
+
+    @property
+    def decision_endpoints_path(self) -> Path:
+        return self._path("JEV_FSD_DECISION_ENDPOINTS", DECISION_ENDPOINTS_PATH)
+
+    def _path(self, name: str, default: Path) -> Path:
+        value = self.get(name)
         if not value:
-            return LLM_ENDPOINTS_PATH
+            return default
         path = Path(value).expanduser()
         return path if path.is_absolute() else PROJECT_ROOT / path
 

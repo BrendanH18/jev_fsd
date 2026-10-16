@@ -180,8 +180,8 @@ class JevClient:
     def system_one(self, state: Any, questions: Dict[str, dict]) -> JevResult:
         payload = {"state": state, "model": self.model, "questions": questions}
         if not self.api_key:
-            raise JevError("No TypeSafe API key yet. Add "
-                           "TYPESAFE_API_KEY to .env and restart the server.", status=401)
+            raise JevError("No TypeSafe API key yet. Paste one in the app (Decision ▾ > Connect a decision "
+                           "model > TypeSafe), or add TYPESAFE_API_KEY to .env.", status=401)
         self.guard.check()
         started = time.perf_counter()
         response = self._post_system_one(payload)

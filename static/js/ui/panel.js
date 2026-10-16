@@ -117,7 +117,8 @@ export class Panel {
   async copyCurl() {
     const d = this.last;
     if (!d) return;
-    const request = llmRequest(d);
+    // LLM and decision endpoints record their (credential-free) URL and key variable in the trace.
+    const request = d.trace?.request?.url ? d.trace.request : null;
     let curl;
     if (request) {
       const { url, api_key_env: keyEnv, ...payload } = request;

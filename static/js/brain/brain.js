@@ -1,8 +1,9 @@
 // The autopilot: executes the current maneuver every physics tick, fires a decision on a
 // schedule, and applies the brain's answer. One request in flight at a time; stale answers
 // (older epoch) are discarded; timeouts fall back to the rules brain for that tick. A brain may set
-// `timeoutMs` (LLM endpoints use their configured timeout) and `questionDriven` (Jev and LLM
-// endpoints: when nothing needs asking, decide locally without a call). `now` is the
+// `timeoutMs` (endpoints use their configured timeout) and `questionDriven` (decision models and LLM
+// endpoints: when nothing needs asking, decide locally without a call). Decision models answer the
+// questions with probabilities and go through the same checks as Jev. `now` is the
 // simulation clock in ms, so decision cadence follows sim time (pausing stops decisions and a
 // benchmark replays the same schedule).
 
@@ -13,7 +14,7 @@ import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
 import { safetyBrake, DeadlockDetector } from "./safety.js";
 import { api } from "../common.js";
 import { Route } from "../map/route.js";
-import { createAgents, validAgentChoice } from "./registry.js";
+import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
 
 const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
@@ -144,7 +145,7 @@ export class Autopilot {
       ]);
       clearTimeout(timer);
       if (epoch !== this.epoch) return;
-      if (this.brainName !== "jev" && !validAgentChoice(result, eligible)) throw Object.assign(new Error("Agent returned a manoeuvre outside the eligible candidate set"), { meta: result?.meta, trace: result?.trace });
+      if (!isDecisionAgent(this.brainName) && !validAgentChoice(result, eligible)) throw Object.assign(new Error("Agent returned a manoeuvre outside the eligible candidate set"), { meta: result?.meta, trace: result?.trace });
       result.meta ||= {};
       result.meta.source ||= this.brainName;
       for (const key of ["latency_ms", "input_tokens", "cost_usd"]) if (!Number.isFinite(result.meta[key]) || result.meta[key] < 0) result.meta[key] = 0;
@@ -154,7 +155,7 @@ export class Autopilot {
         result.meta.fallback = "invalid vector";
         this.world.violations.fallbacks++;
       }
-      if (this.brainName === "jev" || result.meta.live_call) this.totals.calls++;
+      if (isDecisionAgent(this.brainName) || result.meta.live_call) this.totals.calls++;
       this.apply(result, snap, candidates, request);
     } catch (err) {
       clearTimeout(timer);
@@ -195,6 +196,11 @@ export class Autopilot {
       world.route = new Route(pick, world.map, world.ego.spec);
       this.pendingRoutes = null;
       this.bumpEpoch();
+    } else if (this.pendingRoutes && request.questions?.route && !["rules_fallback", "local"].includes(result.meta?.source)) {
+      // The model answered without a usable route: keep the first option, which the car already
+      // follows, rather than paying to ask the same route question on every later decision. A
+      // fallback or a local decision (an emergency stop) never asked the model, so it asks again.
+      this.pendingRoutes = null;
     }
     this.totals.decisions++;
     this.totals.tokens += result.meta.input_tokens || 0;
@@ -220,7 +226,7 @@ export class Autopilot {
           this.rerouting = false;
           this.bumpEpoch();
         } else {
-          this.pendingRoutes = res.routes;         // the next decision asks Jev which one
+          this.pendingRoutes = res.routes;         // the next decision asks the model which one
           world.route = new Route(res.routes[0], world.map, world.ego.spec);
         }
         this.offRouteFor = 0;

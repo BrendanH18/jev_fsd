@@ -8,7 +8,8 @@
 // to Rules for that decision; the reason shows in the HUD, the Inspect drawer and arena timelines.
 
 import { api } from "../common.js";
-import { agentDefinitions, registerAgent, removeAgent, setAgentAvailability, updateAgent } from "./registry.js";
+import { agentDefinitions } from "./registry.js";
+import { syncEndpointAgents, checkEndpoints, checkedStatus, defaultFrom } from "./endpoints.js";
 import { buildLlmPrompt } from "./llm-prompt.js";
 
 const TIMEOUT_MARGIN_MS = 750;   // the server's own timeout fires first and explains itself
@@ -52,47 +53,15 @@ export function llmDecision(answer, request, meta, trace = null) {
 // Register the endpoints listed in /api/status (or returned by the setup dialog). Safe to call more
 // than once: changed endpoints are updated and endpoints no longer configured are removed. The
 // public demo has no server, so it lists none. Returns the ids that were added, changed or removed.
-export function registerLlmAgents(llm) {
-  const endpoints = llm?.endpoints || [];
-  const changed = [];
-  for (const d of agentDefinitions().filter(d => d.llm && !endpoints.some(e => e.id === d.id))) {
-    removeAgent(d.id); checked.delete(d.id); changed.push(d.id);
-  }
-  for (const e of endpoints) {
-    const current = agentDefinitions().find(d => d.id === e.id);
-    const description = `${e.model} at ${e.endpoint}`;
-    if (!current) {
-      registerAgent({ id: e.id, label: e.label, description, create: () => llmBrainFor(e.id), llm: e });
-      changed.push(e.id);
-    } else if (JSON.stringify(endpointShape(current.llm)) !== JSON.stringify(endpointShape(e))) {
-      updateAgent(e.id, { label: e.label, description, llm: e });
-      checked.delete(e.id); changed.push(e.id);
-    } else updateAgent(e.id, { label: e.label, description, llm: e });   // fresh stats, same driver
-    setAgentAvailability(e.id, e.usable, e.usable ? "" : `no key: set ${e.api_key_env}`);
-  }
-  return changed;
-}
-const endpointShape = e => e && { label: e.label, model: e.model, endpoint: e.endpoint, key: e.key, timeout_s: e.timeout_s };
+export const registerLlmAgents = llm => syncEndpointAgents("llm", llm?.endpoints || [], llmBrainFor);
 export const llmBrainFor = id => { const e = agentDefinitions().find(d => d.id === id)?.llm; return e ? new LlmBrain(e) : null; };
 
-// The LLM button next to Rules and Jev drives with the last LLM chosen, else the first usable one.
-export function defaultLlmId(remembered) {
-  const llms = agentDefinitions().filter(d => d.llm);
-  return (llms.find(d => d.id === remembered && d.available !== false) || llms.find(d => d.available !== false) || llms[0])?.id || null;
-}
+// The LLM button drives with the last LLM chosen, else the first usable one.
+export const defaultLlmId = remembered => defaultFrom(agentDefinitions().filter(d => d.llm).map(d => d.id), remembered);
 
 // Probe the endpoints (GET /models on the server side: no tokens, no spend) and label each agent
 // "ready", "unreachable", "key rejected" or "no key". Returns the statuses.
-const checked = new Map();
-export async function checkLlmEndpoints() {
-  const { endpoints } = await api("/api/llm/check", {});
-  for (const s of endpoints) {
-    const id = `llm:${s.name}`;
-    checked.set(id, s.status);
-    setAgentAvailability(id, s.status !== "no key", s.status === "ready" ? "" : s.status);
-  }
-  return endpoints;
-}
+export const checkLlmEndpoints = () => checkEndpoints("llm:", "/api/llm/check");
 
 // One line for Settings and the arena: what is configured and how to add more.
 export function llmSummary(status) {
@@ -100,6 +69,6 @@ export function llmSummary(status) {
   const llm = status?.llm;
   const problems = llm?.problems?.length ? ` Config problem: ${llm.problems[0]}` : "";
   if (!llm?.endpoints?.length) return `Test your own model: choose Connect a model, or list OpenAI-compatible endpoints in ${llm?.config_file || "data/llm-endpoints.json"} (see docs/agents.md).${problems}`;
-  const parts = agentDefinitions().filter(d => d.llm).map(d => `${d.label} (${d.llm.model}) · ${checked.get(d.id) || d.note || "configured"}`);
+  const parts = agentDefinitions().filter(d => d.llm).map(d => `${d.label} (${d.llm.model}) · ${checkedStatus(d.id) || d.note || "configured"}`);
   return `LLM endpoints: ${parts.join("; ")}.${problems}`;
 }

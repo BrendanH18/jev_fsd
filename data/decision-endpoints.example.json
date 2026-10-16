@@ -1,0 +1,42 @@
+{
+  "_comment": "Copy to data/decision-endpoints.json (gitignored) and keep the entries you want, or use the app's Decision ▾ > Connect a decision model. Each entry becomes a driver named decision:<name> that receives exactly the state and questions the built-in Jev driver does. The endpoint must speak TypeSafe's System One protocol: POST {base_url}{path} with {model, state, questions}. path defaults to /v1/systemone (TypeSafe, llama.cpp); OpenRouter's Decisions API is /api/alpha/decisions. check_path is a free GET used to report whether the endpoint is reachable and the key accepted (default /v1/models). Keys never go in this file: api_key_env names a variable in .env or the environment. Prices are USD per million tokens; when the provider reports usage.cost (OpenRouter does) that is used instead. rpm 0 removes the rate limit for a free local server. These drivers have been tested only against a local mock server. See docs/agents.md.",
+  "endpoints": [
+    {
+      "name": "pplx-decider",
+      "label": "Perplexity Decider (OpenRouter)",
+      "base_url": "https://openrouter.ai",
+      "path": "/api/alpha/decisions",
+      "check_path": "/api/v1/key",
+      "model": "perplexity/pplx-decider-v1.1-27b",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "price_per_mtok_input": 0.02
+    },
+    {
+      "name": "liquid-d1",
+      "label": "Liquid d1 (OpenRouter)",
+      "base_url": "https://openrouter.ai",
+      "path": "/api/alpha/decisions",
+      "check_path": "/api/v1/key",
+      "model": "liquid/d1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "price_per_mtok_input": 0.02
+    },
+    {
+      "name": "jev-preview",
+      "label": "Jev preview (TypeSafe)",
+      "base_url": "https://api.typesafe.ai",
+      "model": "jev-preview",
+      "api_key_env": "TYPESAFE_API_KEY",
+      "price_per_mtok_input": 0.042,
+      "timeout_s": 3
+    },
+    {
+      "name": "kev-4b",
+      "label": "Kev 4B (llama.cpp)",
+      "base_url": "http://localhost:8080",
+      "model": "kev-4b",
+      "timeout_s": 20,
+      "rpm": 0
+    }
+  ]
+}
