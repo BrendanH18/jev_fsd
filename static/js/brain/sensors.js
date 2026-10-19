@@ -23,7 +23,7 @@ const CHANGE_JUNCTION_M = 8;
 const LANE_GAP_M = 6;
 const GAP_AHEAD_S = 2.0;
 const GAP_BEHIND_S = 2.5;
-const LANE_CLEAR_M = 2.2;   // a car this far across has left its old lane
+export const LANE_CLEAR_M = 2.2;   // a car this far across has left its old lane
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;

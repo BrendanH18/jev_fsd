@@ -4,7 +4,7 @@
 // node --experimental-default-type=module scripts/test_lane_change.mjs
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
-const { MapData } = await import("../static/js/map/mapdata.js");
+const { MapData, pointAt } = await import("../static/js/map/mapdata.js");
 const { Route } = await import("../static/js/map/route.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
@@ -121,6 +121,85 @@ function decide(world, executing = null) {
   const tooLate = decide(setup({ x: 287, y: LEFT, v: 4 }), executing);
   assert.ok(tooLate.candidates.filter((c) => c.change).every((c) => c.reject === "lane_change_too_late"));
   console.log("✓ a return finishes before the lane it leaves ends, or waits");
+}
+
+{
+  // where two lanes narrow to the route's one at a junction, a late return is offered only if the
+  // predicted car is actually across before the left lane ends
+  const lanes2 = { lanes: 2, lane_width: 3.5, lane_offsets: [-1.75, 1.75], asphalt: [-3.5, 3.5] };
+  const edges = [
+    { id: "wide", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300, ...lanes2 },
+    { id: "narrow", from: "b", to: "c", pts: [[300, RIGHT], [500, RIGHT]], length: 200, lanes: 1, lane_width: 3.5, lane_offsets: [0], asphalt: [-1.75, 1.75] },
+  ].map((e) => ({ ...e, parking: [0, 0], cls: "secondary", limit: 13.9, oneway: true, name: e.id }));
+  const dropMap = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -60, 520, 60], edges,
+    lanes: [{ edge: "wide", idx: 0, pts: [[0, LEFT], [300, LEFT]] }, { edge: "wide", idx: 1, pts: [[0, RIGHT], [300, RIGHT]] }, { edge: "narrow", idx: 0, pts: [[300, RIGHT], [500, RIGHT]] }],
+    nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }, { id: "c", x: 500, y: 0 }], intersections: [], stops: [], buildings: [] });
+  const drop = (x, v) => {
+    const world = new World(dropMap, { parked: 0, pedestrians: 0 });
+    Object.assign(world.ego, { x, y: LEFT, psi: 0, v });
+    world.route = new Route({ id: "d", polyline: Array.from({ length: 501 }, (_, i) => [i, RIGHT]), edges: ["wide", "narrow"], turns: [], start_s: 0, goal_s: 200 }, dropMap);
+    world._road = world.roadInfo();
+    return decide(world, { law: { kind: "lane", offset: -3.5, center: -3.5, lane: -1, vTarget: v } });
+  };
+  assert.equal(drop(200, 10).snap.lane.until_s, 300);
+  const fast = drop(284, 13.9);
+  assert.ok(fast.candidates.some((c) => c.change));
+  assert.ok(fast.candidates.filter((c) => c.change).every((c) => c.reject === "lane_change_too_late"), fast.candidates.filter((c) => c.change).map((c) => `${c.id}:${c.reject}`).join(" "));
+  assert.ok(drop(230, 10).eligible.some((c) => c.id.startsWith("change_right_")));
+  console.log("✓ a late return is offered only if the car is across before the lane ends");
+}
+
+{
+  // a route that starts late on an edge still finds its lane from the part it drives (Winnipeg)
+  const fs = await import("node:fs");
+  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/19bb885c9cae.v5.pack.json", import.meta.url))));
+  const a = city.lane("e0", 1), b = city.lane("e209", 1), start = 83.5357;
+  const polyline = a.pts.filter((_, i) => a.cum[i] > start).concat(b.pts.slice(1));
+  polyline.unshift(pointAt(a.pts, a.cum, start));
+  const route = new Route({ id: "w", polyline, edges: ["e0", "e209"], turns: [], start_s: start, goal_s: b.length }, city);
+  assert.deepEqual([route.laneInfo(0).idx, route.laneInfo(1).idx], [1, 1]);
+  assert.ok(route.laneSpan(1, -1) && !route.laneSpan(1, 1));
+  console.log("✓ a route starting late on an edge finds the lane it drives");
+}
+
+{
+  // the router's own lane choice wins: an Ottawa route blends from the right lane of a three-lane
+  // street toward the left lane of the next, which the polyline alone misreads
+  const fs = await import("node:fs");
+  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/8e99888cb743.v5.pack.json", import.meta.url))));
+  const a = city.lane("e668", 2), b = city.lane("e142", 0), start = 63.14;
+  const polyline = [pointAt(a.pts, a.cum, start), ...a.pts.filter((_, i) => a.cum[i] > start), ...b.pts.slice(1)];
+  const data = { id: "o", polyline, edges: ["e668", "e142"], turns: [], start_s: start, goal_s: b.length };
+  const route = new Route({ ...data, lanes: [2, 0] }, city);
+  assert.deepEqual([route.laneInfo(0).idx, route.laneInfo(1).idx], [2, 0]);
+  assert.equal(route.laneSpan(1, 1), null);
+  assert.equal(route.laneSpan(1, -1).until, route.laneEdgeStarts()[1]);
+  assert.equal(new Route(data, city).edgeLanes, null);  // an older route without lanes infers them
+  console.log("✓ the route follows the lane the router chose on each edge");
+}
+
+{
+  // a route that comes back through a junction places the later edges at the second visit
+  const one = { lanes: 1, lane_width: 3.5, lane_offsets: [0], asphalt: [-1.75, 1.75] };
+  const two = { lanes: 2, lane_width: 3.5, lane_offsets: [-1.75, 1.75], asphalt: [-3.5, 3.5] };
+  const legs = [["a", "o", "j", [[0, 0], [100, 0]], one], ["b", "j", "p", [[100, 0], [100, 100]], one], ["c", "p", "q", [[100, 100], [200, 100]], one],
+    ["d", "q", "r", [[200, 100], [200, 0]], one], ["e", "r", "j", [[200, 0], [100, 0]], two], ["f", "j", "s", [[100, 0], [100, -100]], one]];
+  const edges = legs.map(([id, from, to, pts, l]) => ({ id, from, to, pts, length: 100, ...l, parking: [0, 0], cls: "secondary", limit: 13.9, oneway: true, name: id }));
+  const loopMap = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -120, 220, 120], edges,
+    lanes: edges.flatMap((e) => e.lane_offsets.map((o, idx) => {
+      const [[x0, y0], [x1, y1]] = e.pts, L = Math.hypot(x1 - x0, y1 - y0), rx = (y1 - y0) / L, ry = -(x1 - x0) / L;
+      return { edge: e.id, idx, pts: [[x0 + rx * o, y0 + ry * o], [x1 + rx * o, y1 + ry * o]] };
+    })),
+    nodes: [["o", 0, 0], ["j", 100, 0], ["p", 100, 100], ["q", 200, 100], ["r", 200, 0], ["s", 100, -100]].map(([id, x, y]) => ({ id, x, y })),
+    intersections: [], stops: [], buildings: [] });
+  const polyline = [];
+  for (const [, , , [[x0, y0], [x1, y1]]] of legs) for (let k = polyline.length ? 1 : 0; k <= 100; k++) polyline.push([x0 + (x1 - x0) * k / 100, y0 + (y1 - y0) * k / 100]);
+  const route = new Route({ id: "loop", polyline, edges: legs.map((l) => l[0]), turns: [], start_s: 0, goal_s: 100 }, loopMap);
+  const starts = route.laneEdgeStarts();
+  assert.ok(Math.abs(starts[5] - 500) < 1, starts.join(","));
+  assert.equal(route.laneEdgeAt(450), 4);
+  assert.ok(route.laneSpan(450, -1) || route.laneSpan(450, 1));
+  console.log("✓ a route that loops back through a junction keeps its edges in order");
 }
 
 {

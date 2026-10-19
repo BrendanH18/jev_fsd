@@ -6,7 +6,7 @@ import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
-import { CROSSWALK_STOP_M } from "./sensors.js";
+import { CROSSWALK_STOP_M, LANE_CLEAR_M } from "./sensors.js";
 import { poseOf } from "../sim/static-obstacles.js";
 
 export const HORIZON_S = 3.0;
@@ -64,8 +64,10 @@ export function sampleCandidates(snap, world) {
     }
     // Change into a lane beside this one: to pass, to return toward the route's lane, or to go back
     // to the lane a change started from. The car signals and eases across over about 3.5 s, or
-    // more sharply to finish before the lane it is leaving ends; too late for that, it waits.
+    // more sharply to finish before the lane it is leaving ends; too late for that, it waits. The
+    // prediction checks the car is actually across by then (`leave`).
     const leaving = lane && lane.delta ? lane.until_s - s - FRONT : Infinity;
+    const leave = lane && lane.delta ? { by: lane.until_s, center: lane.center } : null;
     const len = Math.max(MIN_CHANGE_M, Math.min(laneChangeLength(v), leaving));
     for (const side of lane ? Object.values(lane.sides) : []) {
       if (!side.offer) continue;
@@ -74,7 +76,7 @@ export function sampleCandidates(snap, world) {
       for (const vt of [...vs].sort((a, b) => b - a)) {
         if (vt <= 0.05) continue;
         const name = Math.abs(vt - v) < 0.3 ? "hold" : vt > v ? "faster" : "slow";
-        out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M }, laneUntil: side.until_s, laneTarget: side.target_v,
+        out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M, leave }, laneUntil: side.until_s, laneTarget: side.target_v,
           law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, fromLane: lane.delta, vTarget: vt,
             shift: { from: snap.routeProj.lateral, start: s, len } },
           steer: side.offer === "pass" ? `change to the ${side.dir} lane to pass` : side.offer === "abort" ? `move back to the ${side.dir} lane` : `return to the ${side.dir} lane${toRoute}`, speed: speedLabel(vt, v, limit) });
@@ -139,7 +141,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let pedCross = false, closePass = false, collision = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let lateLeaving = false, pedCross = false, closePass = false, collision = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     const law = { ...c.law, s0: startS };
     if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - startS;
@@ -161,6 +163,8 @@ export function simulateAll(candidates, snap, world) {
         hint = p.index; s = p.s; lateral = p.lateral; headingErr = wrap(car.psi - p.heading);
         if (Math.abs(lateral - lateralAt(law, s)) > LANE_TOL && Math.abs(lateral - laneCenterAt(law, s)) > LANE_TOL) staysInLane = false;
         if (mustStop && !crosses && s + FRONT > control.s_line_route + 0.2) crosses = true;
+        const leave = c.change?.leave;
+        if (leave && s + FRONT > leave.by && Math.abs(lateral - leave.center) < LANE_CLEAR_M) lateLeaving = true;
         if (ped && !pedCross && s + FRONT > ped.s_route - 0.8) pedCross = true;
       }
       if (k % 3 === 0 || k === steps) {
@@ -201,7 +205,7 @@ export function simulateAll(candidates, snap, world) {
     let reject = null;
     if (collision) reject = "collision";
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
-    else if (c.change && c.change.too_late) reject = "lane_change_too_late";
+    else if (c.change && (c.change.too_late || lateLeaving)) reject = "lane_change_too_late";
     else if (laneEnds) reject = "must_return_to_route_lane";
     else if (snap.visibility && car.v > snap.visibility.safe_speed_mps + 0.5 && car.v >= snap.ego.v - 0.5 && c.law.kind !== "hard_brake") reject = "visibility_stopping_distance";
     else if (closePass && c.law.kind !== "hard_brake") reject = "passes_cyclist_too_close";
