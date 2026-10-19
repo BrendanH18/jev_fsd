@@ -41,16 +41,17 @@ export function sampleCandidates(snap, world) {
   // and stops keep the same lane.
   const lane = snap.lane;
   const s = snap.routeProj ? snap.routeProj.s : 0;
-  const keep = { lane: lane ? lane.delta : 0, center: lane ? lane.center : 0, shift: lane?.shift || null };
+  const keep = { lane: lane ? lane.delta : 0, center: lane ? lane.center : 0, ...(lane ? { laneIdx: lane.index, chain: lane.chain } : {}) };
+  const shifting = lane?.shift || null;
   const laneUntil = lane && lane.delta ? lane.until_s : null;
   // A continuing change keeps the lane it started from, so going back stays on offer.
-  const carry = keep.shift ? { shift: keep.shift, ...(lane.from_delta !== null ? { fromLane: lane.from_delta } : {}) } : {};
-  const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), center: keep.center, lane: keep.lane, ...(law.offset ? {} : carry) });
+  const carry = shifting ? { shift: shifting, ...(lane.from_delta !== null ? { fromLane: lane.from_delta, fromIdx: lane.route_index + lane.from_delta } : {}) } : {};
+  const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry) });
 
   if (!lost && !offRoad) {
-    const offsets = keep.shift ? [0] : [0, -0.5, 0.5];
+    const offsets = shifting ? [0] : [0, -0.5, 0.5];
     const lateral = lane ? Math.abs(lane.lateral) : snap.routeProj ? Math.abs(snap.routeProj.lateral) : 0;
-    if (!keep.shift && (lateral > 0.5 || snap.following || (snap.traffic.length || snap.roadside?.length))) offsets.push(-1.0, 1.0);
+    if (!shifting && (lateral > 0.5 || snap.following || (snap.traffic.length || snap.roadside?.length))) offsets.push(-1.0, 1.0);
     const target = snap.target ? snap.target.v : limit;
     const speeds = new Set([0, Math.max(0, v - 3), v, Math.min(limit, v + 2), limit, target, target * 0.75].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
     for (const d of offsets) {
@@ -59,7 +60,7 @@ export function sampleCandidates(snap, world) {
         const prefix = d === 0 ? "keep_lane" : `${d < 0 ? "left" : "right"}_${Math.abs(d)}`;
         if (d !== 0 && name !== "hold" && name !== "target") continue;  // lateral shifts only at hold/target speeds
         out.push({ id: `${prefix}_${name}`, law: inLane({ kind: "lane", offset: d, vTarget: vt }), laneUntil,
-          steer: d === 0 ? (keep.shift ? `continue into the ${lane.shift.from > keep.center ? "left" : "right"} lane` : "hold lane") : `shift ${Math.abs(d)} m ${d < 0 ? "left" : "right"}`, speed: speedLabel(vt, v, limit) });
+          steer: d === 0 ? (shifting ? `continue into the ${lane.from_center > keep.center ? "left" : "right"} lane` : "hold lane") : `shift ${Math.abs(d)} m ${d < 0 ? "left" : "right"}`, speed: speedLabel(vt, v, limit) });
       }
     }
     // Change into a lane beside this one: to pass, to return toward the route's lane, or to go back
@@ -71,15 +72,16 @@ export function sampleCandidates(snap, world) {
     const len = Math.max(MIN_CHANGE_M, Math.min(laneChangeLength(v), leaving));
     for (const side of lane ? Object.values(lane.sides) : []) {
       if (!side.offer) continue;
-      const toRoute = side.delta === 0 ? " (the route's lane)" : "";
+      const prepare = side.delta === 0 && lane.route_ahead && side.offer === "return";
+      const toRoute = side.delta === 0 ? (prepare ? " for the turn ahead" : " (the route's lane)") : "";
       const vs = new Set([v, Math.min(side.target_v, v + 2), ...(side.offer === "pass" ? [] : [Math.max(0, v - 3)])].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
       for (const vt of [...vs].sort((a, b) => b - a)) {
         if (vt <= 0.05) continue;
         const name = Math.abs(vt - v) < 0.3 ? "hold" : vt > v ? "faster" : "slow";
-        out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M, leave }, laneUntil: side.until_s, laneTarget: side.target_v,
-          law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, fromLane: lane.delta, vTarget: vt,
+        out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, ...(prepare ? { prepare } : {}), gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M, leave }, laneUntil: side.until_s, laneTarget: side.target_v,
+          law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, laneIdx: lane.route_index + side.delta, chain: lane.chain, fromLane: lane.delta, fromIdx: lane.index, vTarget: vt,
             shift: { from: snap.routeProj.lateral, start: s, len } },
-          steer: side.offer === "pass" ? `change to the ${side.dir} lane to pass` : side.offer === "abort" ? `move back to the ${side.dir} lane` : `return to the ${side.dir} lane${toRoute}`, speed: speedLabel(vt, v, limit) });
+          steer: side.offer === "pass" ? `change to the ${side.dir} lane to pass` : side.offer === "abort" ? `move back to the ${side.dir} lane` : `${prepare ? "change" : "return"} to the ${side.dir} lane${toRoute}`, speed: speedLabel(vt, v, limit) });
       }
     }
     // Stopping maneuvers stop at their mark or queue 2.5 m behind whoever is in front of it, and
@@ -143,8 +145,9 @@ export function simulateAll(candidates, snap, world) {
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
     let lateLeaving = false, pedCross = false, closePass = false, collision = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
-    const law = { ...c.law, s0: startS };
-    if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - startS;
+    // a law already executing keeps the frame it was chosen in (its s0)
+    const law = { ...c.law, s0: c.law.s0 ?? startS };
+    if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - law.s0;
     for (let k = 1; k <= steps; k++) {
       const t = k * SIM_DT;
       const previousPose = poseOf(car);
@@ -161,10 +164,10 @@ export function simulateAll(candidates, snap, world) {
       if (route && snap.onRoute) {
         const p = route.project(car.x, car.y, hint);
         hint = p.index; s = p.s; lateral = p.lateral; headingErr = wrap(car.psi - p.heading);
-        if (Math.abs(lateral - lateralAt(law, s)) > LANE_TOL && Math.abs(lateral - laneCenterAt(law, s)) > LANE_TOL) staysInLane = false;
+        if (Math.abs(lateral - lateralAt(law, s, route)) > LANE_TOL && Math.abs(lateral - laneCenterAt(law, s, route)) > LANE_TOL) staysInLane = false;
         if (mustStop && !crosses && s + FRONT > control.s_line_route + 0.2) crosses = true;
         const leave = c.change?.leave;
-        if (leave && s + FRONT > leave.by && Math.abs(lateral - leave.center) < LANE_CLEAR_M) lateLeaving = true;
+        if (leave && s + FRONT > leave.by && Math.abs(lateral + route.frameMove(startS, s) - leave.center) < LANE_CLEAR_M) lateLeaving = true;
         if (ped && !pedCross && s + FRONT > ped.s_route - 0.8) pedCross = true;
       }
       if (k % 3 === 0 || k === steps) {
@@ -194,7 +197,7 @@ export function simulateAll(candidates, snap, world) {
     c.sim = {
       max_accel: maxAccel, max_decel: maxDecel, max_lateral_accel: maxLat, min_clearance_m: minClearance,
       end_speed: car.v, progress_m: (route && snap.onRoute) ? s - startS : Math.hypot(car.x - snap.ego.x, car.y - snap.ego.y) * (car.v >= 0 ? 1 : -1),
-      lane_err_end: lateral - laneCenterAt(law, s), heading_err_deg: headingErr * 180 / Math.PI, stays_on_road: staysOnRoad, stays_in_lane: staysInLane,
+      lane_err_end: lateral - laneCenterAt(law, s, route), heading_err_deg: headingErr * 180 / Math.PI, stays_on_road: staysOnRoad, stays_in_lane: staysInLane,
       crosses_stop_line: crosses, collision, min_gap_m: minGap, off_road_fraction: offSteps / Math.ceil(steps / 3),
       end: [car.x, car.y],
     };
@@ -223,7 +226,7 @@ export function simulateAll(candidates, snap, world) {
 // Re-simulate only the currently executing law against fresh traffic: returns a hazard or null.
 export function pathHazard(executing, snap, world) {
   if (!executing || !executing.candidate) return null;
-  const c = { id: executing.candidate.id, law: executing.candidate.law };
+  const c = { id: executing.candidate.id, law: executing.law || executing.candidate.law };
   simulateAll([c], snap, world);
   if (c.sim.collision) return { id: c.sim.collision.id, in_s: c.sim.collision.t, kind: c.sim.collision.kind };
   return null;

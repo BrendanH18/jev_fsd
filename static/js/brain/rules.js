@@ -24,12 +24,18 @@ export class RulesBrain {
     const motion = stop ? "stop" : "drive";
 
     const vDesired = snap.target ? snap.target.v : desiredSpeed(snap).v;
+    // A manoeuvre that leaves the car outside the lane its route takes for a turn ahead gains
+    // nothing by driving faster than that lane's traffic, since the car has to move into it anyway:
+    // it joins a queue there from behind instead of driving past it.
+    const l = snap.lane;
+    const toward = l && l.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
+    const vTurnLane = !l || !l.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
 
     let best = null;
     for (const c of eligible) {
       const s = c.sim;
       // a lane change is judged against the speed the car could keep in the new lane
-      const vWant = Math.min(c.laneTarget ?? vDesired, snap.limit);
+      const vWant = Math.min(c.laneTarget ?? vDesired, snap.limit, c.law.lane ? vTurnLane : Infinity);
       let cost = -1.0 * s.progress_m + 2.0 * Math.abs(s.lane_err_end) + 0.05 * Math.abs(s.heading_err_deg) + 0.8 * Math.abs(s.end_speed - vWant);
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);

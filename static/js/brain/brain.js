@@ -71,7 +71,7 @@ export class Autopilot {
     world.ego.signal = nav && nav.turn_in_m < 40 && (nav.next_turn === "left" || nav.next_turn === "right") ? nav.next_turn : null;
     // A lane change signals toward the new lane until the car is across.
     const shift = snap.lane && snap.lane.shift && this.executing?.law;
-    if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s) > shift.offset ? "left" : "right";
+    if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s, world.route) > lateralAt({ ...shift, shift: null }, snap.routeProj.s, world.route) ? "left" : "right";
     this.deadlock.update(world, snap, dt);
     if (snap.nav && snap.nav.arrived && world.ego.v < 0.3) {
       this.setEnabled(false);
@@ -105,8 +105,9 @@ export class Autopilot {
     }
     if (world.stuckFor > 12 && !this.executing?.override) {
       // Creep along the route's lane, easing back to it from another lane.
-      const back = snap.lane && snap.lane.delta !== 0 ? { shift: { from: snap.routeProj.lateral, start: s, len: 18 } } : {};
-      const law = { kind: "lane", offset: 0, center: 0, lane: 0, vTarget: 2, ...back };
+      const l = snap.lane, center = l ? l.route_center : 0;
+      const back = l && l.delta !== 0 ? { shift: { from: snap.routeProj.lateral, start: s, len: 18 } } : {};
+      const law = { kind: "lane", offset: center, center, lane: 0, ...(l ? { laneIdx: l.route_index, chain: l.chain } : {}), vTarget: 2, ...back };
       this.executing = { candidate: { id: "creep", law }, law: { ...law, s0: s }, s0: s, override: true };
       world.violations.deadlock_overrides++;
       this.onEvent({ type: "deadlock" });
