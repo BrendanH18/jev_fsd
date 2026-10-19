@@ -50,13 +50,18 @@ export function browserRoute(map, from, to) {
   if (!found) return null;
   const ids = [goal.lane.edge];
   while (ids[0] !== start.lane.edge) { ids.unshift(parents.get(ids[0])); if (ids.length > map.edges.size) return null; }
-  const chain = [start.lane];
-  for (const id of ids.slice(1)) {
-    const dir = map.classifyTurn(map.turnAngle(chain.at(-1).edge, id)), e = map.edges.get(id);
-    chain.push(map.lane(id, dir === "left" ? 0 : dir === "right" ? e.lanes - 1 : Math.min(chain.at(-1).idx, e.lanes - 1)));
-  }
+  // Each edge's lane as the server router picks it (jev/routing.py `_lane_index`): the leftmost
+  // before a left turn, otherwise the rightmost. The car then gets into a turn lane ahead of time.
+  const chain = ids.map((id, i) => {
+    const lanes = map.edges.get(id).lanes;
+    const left = i + 1 < ids.length && map.classifyTurn(map.turnAngle(id, ids[i + 1])) === "left";
+    return map.lane(id, lanes <= 1 || left ? 0 : lanes - 1);
+  });
+  // the start is measured along the lane the route takes, which on a curve differs in length from
+  // the one the car snapped to
+  const first = chain[0] === start.lane ? start.s : projectPoint(chain[0].pts, chain[0].cum, [from.x, from.y]).s;
   const final = projectPoint(chain.at(-1).pts, chain.at(-1).cum, [to.x, to.y]);
-  return routeFromLanes(map, chain, start.s, final.s);
+  return routeFromLanes(map, chain, first, final.s);
 }
 
 export function browserDrives(map, from) {

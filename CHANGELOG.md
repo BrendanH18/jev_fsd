@@ -13,8 +13,10 @@
   drive past such a queue in the next lane, because the extra speed there gains nothing. Decision
   models and LLMs are told the route moves to that lane for the turn and get a
   `change_*` candidate described as a change "for the turn ahead". Junctions where the lane count
-  or layout changes still slide across as before. More checks in
-  `scripts/test_lane_change.mjs`.
+  or layout changes still slide across as before. The public demo's browser router now picks each
+  street's lane the way the server does (the left lane before a left turn, otherwise the right), so
+  demo drives prepare for turns too; before, it moved into the turn lane only at the turn itself.
+  More checks in `scripts/test_lane_change.mjs`.
 
 - The driven car changes lanes. On streets with more than one lane in its direction, a
   `change_left_*` or `change_right_*` manoeuvre is offered to pass a stopped vehicle, cyclist,

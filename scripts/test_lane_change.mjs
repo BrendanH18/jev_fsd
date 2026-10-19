@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { MapData, pointAt, projectPoint } = await import("../static/js/map/mapdata.js");
 const { Route, PREPARE_LANE_M } = await import("../static/js/map/route.js");
-const { routeFromLanes } = await import("../static/js/demo/routing.js");
+const { routeFromLanes, browserRoute } = await import("../static/js/demo/routing.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
@@ -500,4 +500,22 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
     assert.ok(Math.abs(a - b) < 0.05, `${ds} m ahead: ${a.toFixed(2)} vs ${b.toFixed(2)}`);
   }
   console.log("✓ a lane change carried on across the route's move keeps its path");
+}
+
+{
+  // the public demo's browser router picks lanes as the server does: the left lane on the block
+  // before a left turn, so its routes get the same early change into the turn lane
+  const data = browserRoute(turnMap, { x: 5, y: RIGHT, heading: 0 }, { x: TURN_X + 1.75, y: 100 });
+  assert.deepEqual(data.lanes, [1, 0, 1]);
+  const route = new Route(data, turnMap);
+  assert.deepEqual(route.laneShifts().map((sh) => [sh.from, sh.to]), [[1, 0]]);
+  assert.deepEqual([route.laneAt(150).idx, route.laneAt(150).ahead], [0, true]);
+  // the start is measured along the lane the route takes: on this curved Ottawa street the lane the
+  // car snaps to is longer, and its distance once collapsed the route's first segment
+  const fs = await import("node:fs");
+  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/d25b07def0d2.v5.pack.json", import.meta.url))));
+  const curved = browserRoute(city, { x: 692.19, y: -456.92, heading: -0.0427 }, { x: 779.29, y: -398.87 });
+  const [p0, , , p3] = curved.polyline;
+  assert.ok(Math.abs(Math.atan2(p3[1] - p0[1], p3[0] - p0[0])) < 0.15, `starts along the street (${curved.start_s})`);
+  console.log("✓ the browser router takes the turn lane on the block before a left turn");
 }
