@@ -252,8 +252,9 @@ cannot be selected. The public browser demo has no server, so LLM drivers are no
 it and reload the page. The system message explains the input and says *when* each kind of
 manoeuvre is correct. The user message is the same decision state Jev receives, as compact JSON:
 the driving style, the plain-language situation rules, observed speeds, gaps, signals, traffic
-and pedestrians, the eligible candidates with their 3-second predictions (`end_speed`,
-`vs_target`, `progress_m`, comfort, clearance, `outcome`), the definitions of `drive` and `stop`
+and pedestrians, the lanes on multi-lane streets (which lane the car and its route are in, the gaps
+beside it, and how far it has to return), the eligible candidates with their 3-second predictions
+(`end_speed`, `vs_target`, `progress_m`, comfort, clearance, `outcome`), the definitions of `drive` and `stop`
 when that question is asked, and the ids it may answer with. Computed targets such as
 `car.target_speed` and each candidate's `vs_target` are handed over, so the model never needs
 arithmetic. **Inspect JSON** shows the exact messages under *Questions*, the raw reply under

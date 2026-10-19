@@ -28,7 +28,8 @@ export class RulesBrain {
     let best = null;
     for (const c of eligible) {
       const s = c.sim;
-      const vWant = Math.min(vDesired, snap.limit);
+      // a lane change is judged against the speed the car could keep in the new lane
+      const vWant = Math.min(c.laneTarget ?? vDesired, snap.limit);
       let cost = -1.0 * s.progress_m + 2.0 * Math.abs(s.lane_err_end) + 0.05 * Math.abs(s.heading_err_deg) + 0.8 * Math.abs(s.end_speed - vWant);
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
@@ -38,6 +39,11 @@ export class RulesBrain {
       if (c.law.kind === "hard_brake") cost += 3;
       if (c.law.kind === "reverse") cost += 2;
       if (!s.stays_in_lane) cost += 2;
+      // Changing lanes costs a little and so does staying outside the route's lane, so the car
+      // passes only for a clear gain and goes back once there is room. A change under way is
+      // finished unless finishing it is no longer safe.
+      if (c.change) cost += c.change.offer === "abort" ? 5.0 : 1.0;
+      if (c.law.lane) cost += 2.0 * Math.abs(c.law.lane);
       if (s.min_gap_m < 3) cost += (3 - s.min_gap_m) * 3;
       if (best === null || cost < best.cost) best = { c, cost };
     }

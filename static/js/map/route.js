@@ -1,5 +1,6 @@
 // A route as returned by /api/route: a 1 m polyline plus edge list and turns. Provides projection
-// with a hint so following the route is O(1) per tick, and offset points for lateral maneuvers.
+// with a hint so following the route is O(1) per tick, offset points for lateral maneuvers, and the
+// same-direction lanes beside the route for lane changes.
 
 import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js";
 import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
@@ -97,6 +98,43 @@ export class Route {
     return Math.sqrt(aLat * radius);
   }
   remaining(s) { return Math.max(0, this.length - s); }
+
+  // The lanes of route edge i: their count, which one the route follows (0 is the leftmost) and
+  // their offsets right of the street's centreline. The router picks the lane, so the route's own
+  // polyline is located among the edge's lanes halfway along it.
+  laneInfo(i) {
+    this._lanes ||= [];
+    if (this._lanes[i]) return this._lanes[i];
+    const e = this.map.edges.get(this.edges[i]);
+    const info = { lanes: e ? e.lanes || 1 : 1, idx: 0, offsets: e?.lane_offsets || [0], ring: !!e?.ring };
+    if (info.lanes > 1) {
+      const p = this.pointAt(Math.min(this.length, Math.max(0, (this.edgeStarts[i] + this.edgeStarts[i + 1]) / 2)));
+      let best = Infinity;
+      for (let k = 0; k < info.lanes; k++) {
+        const lane = this.map.lane(e.id, k);
+        const proj = lane && projectPoint(lane.pts, lane.cum, p);
+        if (proj && proj.distance < best) { best = proj.distance; info.idx = k; }
+      }
+    }
+    return (this._lanes[i] = info);
+  }
+
+  // The lane `delta` lanes right of the route's lane at s (negative is left): its centre in metres
+  // right of the route, and the route arc length where it stops running beside the route (a turn, a
+  // change in the lanes, a roundabout or the destination). Null when there is no such lane here.
+  laneSpan(s, delta) {
+    const i = this.edgeIndexAt(s), a = this.laneInfo(i), to = a.idx + delta;
+    if (a.ring || to < 0 || to >= a.lanes) return null;
+    const offset = a.offsets[to] - a.offsets[a.idx];
+    let j = i;
+    while (j + 1 < this.edges.length && this.edgeStarts[j + 1] - s < 400) {
+      const b = this.laneInfo(j + 1), prev = this.laneInfo(j);
+      const straight = this.map.classifyTurn(this.map.turnAngle(this.edges[j], this.edges[j + 1])) === "straight";
+      if (!straight || b.ring || b.lanes !== prev.lanes || b.idx !== prev.idx || Math.abs(b.offsets[to] - b.offsets[b.idx] - offset) > 0.4) break;
+      j++;
+    }
+    return { offset, until: Math.min(this.length, this.edgeStarts[j + 1]) };
+  }
   endPoint() { return this.pts[this.pts.length - 1]; }
   static distanceBetween(a, b) { return dist(a, b); }
 }

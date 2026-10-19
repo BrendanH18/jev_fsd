@@ -235,6 +235,7 @@ node scripts/test_cinematic_photo.mjs           # cinematic camera and photo mod
 node scripts/test_drive_score.mjs               # coaching score
 node scripts/test_decision_agent.mjs            # decision-model drivers (registry, answers, fallback)
 node scripts/test_llm_agent.mjs                 # LLM endpoint drivers (prompt, parsing, fallback)
+node scripts/test_lane_change.mjs               # lane changes (gaps, lane ends, a full pass)
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

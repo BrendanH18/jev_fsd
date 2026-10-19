@@ -273,7 +273,7 @@ use observed hazards; collisions and violations are audited against the full wor
 Every 250 ms of simulated time near hazards, or 650 ms on open road, the shared driving pipeline:
 
 1. **Senses** the visible world and projects the car onto its route.
-2. **Proposes** up to 16 manoeuvres, including speed changes, small lateral shifts and stops.
+2. **Proposes** up to 16 manoeuvres, including speed changes, small lateral shifts, lane changes and stops.
 3. **Simulates** each manoeuvre three seconds ahead and rejects unsafe or illegal options.
 4. **Chooses** among the survivors using Rules, a decision model (Jev or another) or an LLM.
 5. **Executes** the chosen manoeuvre while the next decision is pending.
@@ -284,6 +284,21 @@ the same way. Rules scores the same candidate set locally. Both share sensing, s
 `driving_style`; Rules uses a fixed score. If Jev exceeds 1.5 seconds, returns an invalid choice
 or errors, Rules handles that step and the fallback counter increases. Settled questions can
 be answered locally without an API call.
+
+On streets with more than one lane in its direction, the car can change lanes. A change into
+the next lane is offered to pass a vehicle ahead that is stopped, is a cyclist, door or parking
+car, or is at least 2.5 m/s slower than the car would drive. A pass needs at least 80 m of lane
+beside the route, no stop line within 25 m and no queue at a junction just ahead. While the car is
+outside its route's lane, a return is offered except in the 8 m before a stop line. A change needs
+a gap in the target lane: 6 m plus 2 s of closing speed to the vehicle ahead and 6 m plus 2.5 s to
+the one behind, and nothing alongside. The car signals and eases across over about 3.5 s of travel
+(18–50 m). Any manoeuvre that would keep the car outside its route's lane too close to where that
+lane ends is rejected. That point can be a turn, a junction where the lanes change, or the
+destination. Without a gap the car slows in its lane and waits. Rules weighs a lane change and
+time outside the route's lane as small costs, so it passes only for a clear gain and returns once
+there is room. Abandoning a change already under way is offered but costs more, so Rules finishes
+a change unless finishing it is no longer safe. Decision models and LLMs see the lanes and the gaps beside the car, and the
+situation tells them when a change is on offer.
 
 The decision inspector exposes requests, answers, confidence, timing and spend; decisions can
 be saved or copied as `curl` commands. The emergency brake responds to imminent observed
@@ -300,7 +315,8 @@ latency affects the drive. Runs save under `data/runs/`, support side-by-side co
 open as 3D replays on their recorded map.
 
 A benchmark drive passes only if it arrives with no collision, red light, rolled stop or failed
-yield, and less than one second off-road. It also reports comfort, lane keeping, fault, safety
+yield, and less than one second off-road. It also reports comfort, lane keeping (measured from
+the centre of the lane the car is in or moving into), lane changes, fault, safety
 brakes, gaps, tokens, cost and latency. This pass criterion is separate from the live coach's
 weighted score.
 
@@ -360,8 +376,9 @@ browser's local storage unless you export them.
 Map tags and procedural geometry limit realism. There is no road elevation or camber, and
 visual body pitch and roll do not add a physical suspension model. Buildings, weather and darkness
 determine sensing; trees and vehicles do not occlude it, and individual street lamps do not extend
-detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car makes small lateral shifts rather than full lane changes;
-traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
+detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car changes lanes only to pass and
+then returns; the router still picks each street's lane, so the car moves into a turning lane in
+the junction before that street. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
 against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information.
 Low curbs remain traversable, and scenery beyond the playable map is decorative with simplified geography.
 
@@ -382,6 +399,7 @@ node --experimental-default-type=module scripts/test_world_conditions.mjs
 node --experimental-default-type=module scripts/test_vehicle_models.mjs
 node --experimental-default-type=module scripts/test_llm_agent.mjs
 node --experimental-default-type=module scripts/test_decision_agent.mjs
+node --experimental-default-type=module scripts/test_lane_change.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```

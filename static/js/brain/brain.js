@@ -7,7 +7,7 @@
 // simulation clock in ms, so decision cadence follows sim time (pausing stops decisions and a
 // benchmark replays the same schedule).
 
-import { applyLaw } from "../sim/controller.js";
+import { applyLaw, lateralAt } from "../sim/controller.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
@@ -69,6 +69,9 @@ export class Autopilot {
     const snap = this.snap = buildSnapshot(world, this.executing);
     const nav = snap.nav;
     world.ego.signal = nav && nav.turn_in_m < 40 && (nav.next_turn === "left" || nav.next_turn === "right") ? nav.next_turn : null;
+    // A lane change signals toward the new lane until the car is across.
+    const shift = snap.lane && snap.lane.shift && this.executing?.law;
+    if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s) > shift.offset ? "left" : "right";
     this.deadlock.update(world, snap, dt);
     if (snap.nav && snap.nav.arrived && world.ego.v < 0.3) {
       this.setEnabled(false);
@@ -101,7 +104,10 @@ export class Autopilot {
       }
     }
     if (world.stuckFor > 12 && !this.executing?.override) {
-      this.executing = { candidate: { id: "creep", law: { kind: "lane", offset: 0, vTarget: 2 } }, law: { kind: "lane", offset: 0, vTarget: 2, s0: s }, s0: s, override: true };
+      // Creep along the route's lane, easing back to it from another lane.
+      const back = snap.lane && snap.lane.delta !== 0 ? { shift: { from: snap.routeProj.lateral, start: s, len: 18 } } : {};
+      const law = { kind: "lane", offset: 0, center: 0, lane: 0, vTarget: 2, ...back };
+      this.executing = { candidate: { id: "creep", law }, law: { ...law, s0: s }, s0: s, override: true };
       world.violations.deadlock_overrides++;
       this.onEvent({ type: "deadlock" });
     }
@@ -183,7 +189,7 @@ export class Autopilot {
     let chosen = candidates.find((c) => c.id === result.candidateId) || null;
     if (result.motion === "stop") {
       const brakeCand = candidates.find((c) => c.id === "hard_brake");
-      chosen = world.ego.v > 0.5 ? brakeCand : { id: "hold", law: { kind: "lane", offset: 0, vTarget: 0 }, sim: null };
+      chosen = world.ego.v > 0.5 ? brakeCand : { id: "hold", law: { ...(brakeCand?.law || { offset: 0 }), kind: "lane", vTarget: 0 }, sim: null };
     }
     if (chosen) {
       const s0 = snap.routeProj ? snap.routeProj.s : 0;

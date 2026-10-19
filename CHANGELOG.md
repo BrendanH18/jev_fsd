@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- The driven car changes lanes. On streets with more than one lane in its direction, a
+  `change_left_*` or `change_right_*` manoeuvre is offered to pass a stopped vehicle, cyclist,
+  open door, parking car or traffic at least 2.5 m/s slower, and then to return to the route's
+  lane. A change needs a gap in the target lane (6 m plus 2 s of closing speed ahead, 6 m plus
+  2.5 s behind, nothing alongside), at least 80 m of lane beside the route for a pass, and no stop
+  line within 25 m. The car signals and eases across over about 3.5 s (18–50 m). Manoeuvres that
+  would leave it outside its route's lane too close to where that lane ends (a turn, a change in
+  the lanes or the destination) are rejected, so without a gap it slows and waits. Stops, hard
+  braking and the deadlock creep keep or return to the car's lane instead of steering for the
+  route's. Rules counts a change and time outside the route's lane as small costs, and abandons a
+  change under way only when finishing it is no longer safe. Decision
+  models and LLMs get a `lanes` block (the car's lane, the route's lane, the gaps on either side and
+  `return_within_m`) and a situation line when a pass or return is on offer; the LLM system prompt
+  says when to choose one. Bench lane keeping is now measured from the centre of the lane the car
+  is in or moving into, and runs report `lane_changes`. New check: `scripts/test_lane_change.mjs`.
+
 - Decision models are the second of three driver pillars: **Rules | Decision ▾ | LLM ▾** in the
   HUD (keys `2`, `1`, `3`). A decision model answers typed questions with probabilities, as Jev
   does; besides the built-in Jev, any endpoint that speaks TypeSafe's System One protocol becomes a
