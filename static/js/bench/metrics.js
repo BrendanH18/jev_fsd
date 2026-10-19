@@ -13,7 +13,7 @@ export class DriveMetrics {
     this.acc = 0; this.lastV = null; this.lastA = null;
     this.maxAccel = 0; this.maxDecel = 0; this.jerkSq = 0; this.jerkN = 0; this.maxJerk = 0;
     this.maxLatAccel = 0; this.hardBrakes = 0; this.hardFor = 0;
-    this.latSq = 0; this.latN = 0; this.maxLat = 0;
+    this.latSq = 0; this.latN = 0; this.maxLat = 0; this.laneChanges = 0; this.lastShift = null;
     this.minGap = Infinity; this.minTtc = Infinity; this.minHeadway = Infinity;
     this.speeding = 0; this.stopped = 0; this.maxProgress = 0;
     this.latencies = [];
@@ -30,8 +30,12 @@ export class DriveMetrics {
     this.maxLatAccel = Math.max(this.maxLatAccel, lat);
     if (snap && snap.routeProj) {
       this.maxProgress = Math.max(this.maxProgress, snap.routeProj.s);
+      // lane keeping is measured from the lane centre the car is tracking, which moves during a change
+      const shift = snap.lane && snap.lane.from_delta !== null ? snap.lane.shift : null;
+      if (shift && shift !== this.lastShift) this.laneChanges++;
+      this.lastShift = shift;
       if (snap.onRoute) {
-        const l = Math.abs(snap.routeProj.lateral);
+        const l = Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral);
         this.latSq += l * l; this.latN++; this.maxLat = Math.max(this.maxLat, l);
       }
     }
@@ -92,6 +96,7 @@ export class DriveMetrics {
       max_lat_accel: r(this.maxLatAccel, 2),
       lane_rms_m: r(Math.sqrt(this.latSq / Math.max(1, this.latN)), 2),
       lane_max_m: r(this.maxLat, 2),
+      lane_changes: this.laneChanges,
       speeding_s: r(this.speeding),
       stopped_s: r(this.stopped),
       decisions: autopilot.totals.decisions,
@@ -144,7 +149,7 @@ export function aggregate(results) {
     avg_kmh: mean("avg_kmh"),
     min_gap_m: min("min_gap_m"), min_ttc_s: min("min_ttc_s"),
     hard_brakes: sum("hard_brakes"), rms_jerk: mean("rms_jerk"), max_lat_accel: mean("max_lat_accel"),
-    lane_rms_m: mean("lane_rms_m"), speeding_s: Math.round(sum("speeding_s") * 10) / 10,
+    lane_rms_m: mean("lane_rms_m"), lane_changes: sum("lane_changes"), speeding_s: Math.round(sum("speeding_s") * 10) / 10,
     decisions: sum("decisions"), calls: sum("calls"), tokens: sum("tokens"),
     cost_usd: Math.round(sum("cost_usd") * 1e6) / 1e6,
   };

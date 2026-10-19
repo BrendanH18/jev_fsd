@@ -23,7 +23,7 @@ export function routeFromLanes(map, chain, startS = 0, goalS = null) {
   const cum = cumulative(polyline), length = cum.at(-1), pts = [];
   for (let s = 0; s < length; s += 1) pts.push(pointAt(polyline, cum, s));
   pts.push(polyline.at(-1));
-  return { id: "browser-route", polyline: pts, edges: chain.map(l => l.edge), turns, start_s: startS,
+  return { id: "browser-route", polyline: pts, edges: chain.map(l => l.edge), lanes: chain.map(l => l.idx), turns, start_s: startS,
     goal_s: goalS ?? chain.at(-1).length, summary: `${Math.round(length)} m · ${turns.length} turns` };
 }
 

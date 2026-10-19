@@ -5,7 +5,7 @@ import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
 import { signalFor, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
-import { curveProfileSpeed } from "../sim/controller.js";
+import { curveProfileSpeed, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
 import { crosswalkConflict } from "../sim/pedestrians.js";
 import { current as weather } from "../sim/weather.js";
@@ -16,6 +16,14 @@ const YIELD_ENTRY_MPS = 4.0;
 const PED_LOOK_M = 45;
 const CROSS_ETA_S = 4.5;
 export const CROSSWALK_STOP_M = 2.0;   // stop this far short of a crosswalk centerline
+// Lane changes: no new pass within 25 m of a stop line or inside a junction, and no change at all in
+// the last 8 m before a line. A gap needs 6 m plus 2 s of closing speed ahead and 2.5 s behind.
+const PASS_JUNCTION_M = 25;
+const CHANGE_JUNCTION_M = 8;
+const LANE_GAP_M = 6;
+const GAP_AHEAD_S = 2.0;
+const GAP_BEHIND_S = 2.5;
+export const LANE_CLEAR_M = 2.2;   // a car this far across has left its old lane
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -27,7 +35,7 @@ export function buildSnapshot(world, executing = null) {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
     road, route, routeProj: null, onRoute: false, nav: null, intersection: null, following: null, pedestrian: null,
-    rear_follower: null, traffic: [], current_path_hazard: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
+    rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
     roadside: [],
@@ -35,7 +43,7 @@ export function buildSnapshot(world, executing = null) {
   if (route) {
     const p = route.project(ego.x, ego.y);
     const headingErr = wrap(ego.psi - p.heading);
-    snap.routeProj = { s: p.s, lateral: p.lateral, headingErr, distance: p.distance, point: p.point };
+    snap.routeProj = { s: p.s, lateral: p.lateral, headingErr, distance: p.distance, point: p.point, index: p.index };
     let clearPath = Math.min(world.visibility.range, route.length - p.s);
     for (let d = 6; d <= Math.min(world.visibility.range, 60, route.length - p.s); d += 3) {
       if (!world.visibility.canSee(ego, ...route.pointAt(p.s + d))) { clearPath = d - 3; break; }
@@ -97,10 +105,16 @@ export function buildSnapshot(world, executing = null) {
     const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, { list: world.crowd.list.filter((p) => visible.includes(p)) });
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
     const vehicles = visible.filter((o) => o.kind !== "pedestrian");
+    const lane = snap.lane = laneState(route, p, executing && executing.law);
     // Ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed.
     // Oncoming traffic that is passing is not a follow target; a stopped car facing us still is.
-    const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2, vehicles, p.index)
-      .filter((a) => Math.abs(a.lateral) <= 1.7 || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking)
+    // During a lane change the lane being left still counts while the car overlaps it, for vehicles
+    // the car reaches before its planned path has cleared that lane.
+    const clearS = lane.from_center !== null ? laneClearS(lane.shift, lane.from_center, lane.center) : -Infinity;
+    const inOrigin = (a) => lane.from_center !== null && Math.abs(p.lateral - lane.from_center) < LANE_CLEAR_M
+      && Math.abs(a.lateral - lane.from_center) <= 1.7 && a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
+    const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center)
+      .filter((a) => Math.abs(a.lateral - lane.center) <= 1.7 || inOrigin(a) || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking)
       .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6));
     if (ahead.length) {
       const lead = ahead[0];
@@ -108,7 +122,7 @@ export function buildSnapshot(world, executing = null) {
       snap.following = { id: lead.vehicle.id, gap_m: gap, speed: lead.vehicle.v, closing_mps: ego.v - lead.vehicle.v, vehicle: lead.vehicle, s: lead.s,
         kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : lead.vehicle.parked ? "parked car" : "car" };
     }
-    const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index);
+    const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center);
     if (behind.length) {
       const b = behind[behind.length - 1];
       const bs = b.vehicle.spec || CAR;
@@ -136,7 +150,87 @@ export function buildSnapshot(world, executing = null) {
   snap.traffic = snap.traffic.slice(0, 8);
   if (executing && executing.hazard) snap.current_path_hazard = executing.hazard;
   snap.target = desiredSpeed(snap);
+  if (snap.lane) laneOptions(snap, world);
   return snap;
+}
+
+// The car's lane relative to the route's lane. `delta` counts lanes right of it (negative: left),
+// `center` is that lane's centre in metres right of the route and `lateral` the car's offset from the
+// centre it is tracking (which moves during a lane change). A lane change in progress keeps its plan;
+// otherwise, or when the planned lane has ended, the car is in the lane nearest to it.
+function laneState(route, p, law) {
+  const info = route.laneInfo(route.laneEdgeAt(p.s));
+  const spanOf = (d) => d === 0 ? { offset: 0, until: route.length } : route.laneSpan(p.s, d);
+  const planned = law && (law.kind === "lane" || law.kind === "hard_brake") && Number.isInteger(law.lane) ? law.lane : null;
+  let delta = planned !== null && spanOf(planned) ? planned : null;
+  if (delta === null) {
+    delta = 0;
+    for (let d = -info.idx; d < info.lanes - info.idx; d++) {
+      const span = spanOf(d);
+      if (span && Math.abs(p.lateral - span.offset) < Math.abs(p.lateral - spanOf(delta).offset)) delta = d;
+    }
+  }
+  const span = spanOf(delta);
+  const shifting = delta === planned && law.shift && p.s < law.shift.start + law.shift.len - 0.5;
+  const from = shifting && Number.isInteger(law.fromLane) ? spanOf(law.fromLane) : null;
+  const centerNow = shifting ? laneCenterAt(law, p.s) : span.offset;
+  return {
+    lanes: info.lanes, index: info.idx + delta, route_index: info.idx, delta, center: span.offset,
+    until_s: delta ? span.until : null, lateral: p.lateral - centerNow,
+    shift: shifting ? law.shift : null, from_delta: shifting ? law.fromLane ?? null : null,
+    from_center: shifting ? (from ? from.offset : law.shift.from) : null, sides: {},
+  };
+}
+
+// Route arc length at which a lane change has moved the car LANE_CLEAR_M away from the lane it left.
+function laneClearS(shift, fromCenter, toCenter) {
+  const need = LANE_CLEAR_M / Math.max(LANE_CLEAR_M, Math.abs(toCenter - fromCenter));
+  let u = 0;
+  while (u < 1 && u * u * (3 - 2 * u) < need) u += 0.02;
+  return shift.start + u * shift.len;
+}
+
+// The lanes either side of the car's lane that run beside the route: the nearest vehicle ahead and
+// behind in each, whether the gap fits a lane change, the speed the car could keep there, and
+// whether a change is on offer: "pass" to get past a slow or stopped vehicle in this lane, "return"
+// toward the route's lane, or "abort" to go back to the lane a change started from.
+function laneOptions(snap, world) {
+  const { route, lane, ego } = snap;
+  const p = snap.routeProj, s = p.s, FRONT = ego.front_m, REAR = world.ego.spec.rearOverhang;
+  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian");
+  const free = desiredSpeed({ ...snap, following: null }).v;
+  const i = snap.intersection;
+  const line = i ? i.bumper_to_line_m : Infinity;
+  const inJunction = (limit) => line < limit && line > -12;
+  const f = snap.following;
+  const slowAhead = f && f.gap_m < 60 && (f.speed < 0.5 || f.speed < free - 2.5 || f.kind !== "car")
+    && !(i && line < f.gap_m + 20);  // a car waiting at the junction is a queue, not something to pass
+  for (const dir of ["left", "right"]) {
+    const delta = lane.delta + (dir === "left" ? -1 : 1);
+    const span = route.laneSpan(s, delta);
+    if (!span) continue;
+    const side = { delta, dir, center: span.offset, until_s: delta ? span.until : null, leader: null, rear: null, alongside: false };
+    for (const o of vehicles) {
+      const q = route.project(o.x, o.y, p.index);
+      if (!q || Math.abs(q.lateral - span.offset) > 1.7 || Math.abs(q.s - s) > TRAFFIC_RADIUS_M) continue;
+      if (Math.abs(o.v) > 0.5 && Math.abs(wrap(o.psi - q.heading)) > Math.PI / 2) continue;
+      const spec = o.spec || CAR;
+      const ahead = q.s - spec.rearOverhang - (s + FRONT), behind = s - REAR - (q.s + spec.length - spec.rearOverhang);
+      if (ahead > 0) { if (!side.leader || ahead < side.leader.gap_m) side.leader = { id: o.id, gap_m: ahead, speed: Math.max(0, o.v) }; }
+      else if (behind > 0) { if (!side.rear || behind < side.rear.gap_m) side.rear = { id: o.id, gap_m: behind, speed: Math.max(0, o.v) }; }
+      else side.alongside = true;
+    }
+    const v = Math.max(0, ego.v);
+    side.gap_ok = !side.alongside
+      && (!side.leader || side.leader.gap_m >= LANE_GAP_M + Math.max(0, v - side.leader.speed) * GAP_AHEAD_S)
+      && (!side.rear || side.rear.gap_m >= LANE_GAP_M + Math.max(0, side.rear.speed - v) * GAP_BEHIND_S);
+    side.target_v = desiredSpeed({ ...snap, following: side.leader ? { gap_m: side.leader.gap_m, speed: side.leader.speed } : null }).v;
+    const room = (side.until_s ?? route.length) - (s + FRONT);
+    if (lane.shift) side.offer = delta === lane.from_delta && !inJunction(CHANGE_JUNCTION_M) ? "abort" : null;
+    else if (Math.abs(delta) < Math.abs(lane.delta)) side.offer = inJunction(CHANGE_JUNCTION_M) ? null : "return";
+    else side.offer = slowAhead && side.target_v > f.speed + 2 && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M) ? "pass" : null;
+    lane.sides[dir] = side;
+  }
 }
 
 // The speed code would like right now: limit, upcoming curvature, the gap ahead, a required stop
@@ -214,7 +308,8 @@ export function hazardFlags(snap) {
   if (snap.roadside?.some((o) => o.kind !== "parked car")) f.push("roadside activity");
   if (snap.pedestrian) f.push("pedestrian");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
-  if (snap.routeProj && Math.abs(snap.routeProj.lateral) > 0.8) f.push("lane");
+  if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
+  if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");
   if (!snap.road.on_road) f.push("off_road");
   if (snap.stuck) f.push("stuck");
   if (snap.current_path_hazard) f.push("hazard");

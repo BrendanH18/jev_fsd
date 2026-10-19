@@ -243,7 +243,9 @@ function describe(c) {
   if (law.stopAtRoute !== undefined) return capital(c.speed);
   if (law.kind === "reverse") return "Reverse toward the road";
   if (law.kind === "steer") return `Creep ${c.steer}`;
-  const shift = law.offset ? ` · ${Math.abs(law.offset)} m ${law.offset < 0 ? "left" : "right"}` : "";
+  if (c.change) return `${capital(c.change.dir)} lane · ${Math.round(law.vTarget * 3.6)} km/h`;
+  const nudge = (law.offset || 0) - (law.center || 0);
+  const shift = nudge ? ` · ${Math.abs(nudge)} m ${nudge < 0 ? "left" : "right"}` : "";
   if (law.vTarget <= 0.05) return `Stop${shift}`;
   const kmh = Math.round(law.vTarget * 3.6);
   if (kmh < 2) return `Creep forward${shift}`;

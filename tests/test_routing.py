@@ -22,6 +22,15 @@ class RouterTests(unittest.TestCase):
                     return e
         raise KeyError(name)
 
+    def test_route_reports_the_lane_it_follows_on_each_edge(self):
+        # Ottawa: a three-lane street, straight on, then a left turn; the polyline blends from the
+        # right lane to the left one across the junction, so the lanes cannot be read off it
+        import json
+        from pathlib import Path
+        pack = json.loads((Path(__file__).resolve().parent.parent / "data/maps/8e99888cb743.v5.pack.json").read_text())
+        route = Router(pack).build_route(["e668", "e142", "e125", "e123"], {"s": 63.14}, {"s": 20.68})
+        self.assertEqual(route["lanes"], [2, 0, 0, 0])
+
     def test_snap_prefers_matching_heading(self):
         # a point on Row 0 St (y = -180), between the first two vertices, heading east
         snap = self.router.snap(-120.0, -180.0, heading=0.0)
@@ -71,6 +80,10 @@ class RouterTests(unittest.TestCase):
         self.assertLessEqual(max(gaps), 1.1)
         self.assertGreater(len(r["turns"]), 0)
         self.assertIn(r["turns"][0]["dir"], ("left", "right"))
+        # the lane the polyline follows on each edge, for lane changes beside it
+        self.assertEqual(len(r["lanes"]), len(r["edges"]))
+        for eid, idx in zip(r["edges"], r["lanes"]):
+            self.assertIn((eid, idx), self.router.lanes)
         self.assertTrue(r["summary"].startswith("turn ") or r["summary"].startswith("make a U-turn"))
 
     def test_alternatives_are_distinct(self):

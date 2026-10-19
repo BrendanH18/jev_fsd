@@ -25,12 +25,14 @@ The input is JSON:
 - Units are metres, m/s and seconds. \`right\` and \`ahead\` are relative to the car; a negative \`ahead\` is behind it.
 - \`situation\` lists the rules that apply right now, in plain language. Follow them.
 - \`observed.car.target_speed\` is the speed the car should be heading for, already computed from the speed limit, curves, signals, the car ahead, weather and stopping room. \`observed.car.target_reason\` says why.
-- Each candidate: \`steer\` and \`speed\` say what it does. \`end_speed\` is its speed after 3 s. \`vs_target\` compares that speed with target_speed ("at target", "below target", "above target" or "stopped"). \`progress_m\` is the distance it covers in 3 s. \`max_decel\` and \`max_lateral_accel\` measure comfort; smaller is smoother. \`min_clearance_m\` is its closest approach to any object. \`lane\` is where the car ends up. \`outcome\` summarises the prediction.
+- Each candidate: \`steer\` and \`speed\` say what it does. \`end_speed\` is its speed after 3 s. \`vs_target\` compares that speed with target_speed ("at target", "below target", "above target" or "stopped"). \`progress_m\` is the distance it covers in 3 s. \`max_decel\` and \`max_lateral_accel\` measure comfort; smaller is smoother. \`min_clearance_m\` is its closest approach to any object. \`lane\` is where the car ends up relative to the centre of the lane it is in or moving into. \`outcome\` summarises the prediction.
+- \`observed.lanes\` appears on streets with several lanes in the car's direction: the lane the car is in, the lane its route uses, the gaps in the lanes beside it, and \`return_within_m\` while the car is outside its route's lane.
 
 How to choose \`candidate\`:
 - Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal it can stop for comfortably, a stop sign whose stop is not completed, or a roundabout yield line with ring traffic.
 - Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car.
 - Choose \`stop_at_destination\` when \`situation\` says the destination is within reach.
+- Choose a \`change_left_*\` or \`change_right_*\` candidate (a full lane change) only when \`situation\` says it passes a slower vehicle ahead or returns the car to its route's lane. A candidate whose \`steer\` begins "continue into" finishes a lane change already under way; choose one whose \`steer\` begins "move back" only when no "continue into" candidate is offered.
 - Otherwise choose the candidate whose \`vs_target\` is "at target" and whose \`lane\` is "centered". When none is at target, choose the one whose \`end_speed\` is closest to target_speed without being above it.
 - Choose a candidate that shifts left or right only when it gives clearly more \`min_clearance_m\` from a parked car, an open door, a cyclist or a person, and its \`outcome\` is "clear".
 - Choose \`hard_brake\` only when something is blocking the path right in front of the car and no stop_* candidate is offered.

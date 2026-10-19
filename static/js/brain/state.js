@@ -13,6 +13,8 @@ const gapLabel = (gap, closing) => (gap < 4 || (closing > 0 && gap / closing < 1
 const laneLabel = (d) => Math.abs(d) < 0.3 ? "centered" : Math.abs(d) < 0.8 ? `slightly ${d > 0 ? "right" : "left"}` : `far ${d > 0 ? "right" : "left"}`;
 const distLabel = (m) => m < STOP_ZONE_M ? "at" : m < 25 ? "close" : m < 60 ? "approaching" : "far";
 const speedVsLimit = (v, limit) => v > limit + 0.5 ? "over" : v > limit - 1 ? "at" : "under";
+const laneName = (index, count) => count === 2 ? (index === 0 ? "left" : "right") : index === 0 ? "left" : index === count - 1 ? "right" : count === 3 ? "middle" : `lane ${index + 1} from the left`;
+const passing = (snap) => snap.lane && Object.values(snap.lane.sides).find((side) => side.offer === "pass" && side.gap_ok);
 
 export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   const { ego, limit } = snap;
@@ -36,13 +38,27 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     if (snap.nav.turn_street) state.nav.turn_street = snap.nav.turn_street;
     if (snap.nav.exit) state.nav.roundabout_exit = snap.nav.exit;
   }
+  const laneLateral = snap.lane ? snap.lane.lateral : snap.routeProj ? snap.routeProj.lateral : snap.road.lateral;
   state.road = {
     name: snap.road.name || "unnamed", on_road: snap.road.on_road,
-    lane_offset_m: r1(snap.routeProj ? snap.routeProj.lateral : snap.road.lateral),
-    lane_position: laneLabel(snap.routeProj ? snap.routeProj.lateral : snap.road.lateral),
+    lane_offset_m: r1(laneLateral),
+    lane_position: laneLabel(laneLateral),
     heading_error_deg: r1((snap.routeProj ? snap.routeProj.headingErr : snap.road.heading_error) * 180 / Math.PI),
   };
   if (!snap.road.on_road) state.road.distance_to_road_m = r1(snap.road.distance_to_road);
+  if (snap.lane && snap.lane.lanes > 1) {
+    const l = snap.lane;
+    state.lanes = { count: l.lanes, car_lane: laneName(l.index, l.lanes), route_lane: laneName(l.route_index, l.lanes) };
+    if (l.shift) state.lanes.changing_to = laneName(l.index, l.lanes);
+    if (l.delta) state.lanes.return_within_m = r1(Math.max(0, l.until_s - snap.routeProj.s - snap.ego.front_m));
+    for (const side of Object.values(l.sides)) {
+      state.lanes[side.dir] = {
+        gap_ok: side.gap_ok, ...(side.alongside ? { alongside: true } : {}),
+        ...(side.leader ? { ahead_gap_m: r1(side.leader.gap_m), ahead_speed: r1(side.leader.speed) } : {}),
+        ...(side.rear ? { behind_gap_m: r1(side.rear.gap_m), behind_speed: r1(side.rear.speed) } : {}),
+      };
+    }
+  }
   if (weather.name !== "dry") state.road.conditions = weather.description;
   if (snap.intersection) {
     const i = snap.intersection;
@@ -70,7 +86,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   if (meta.routeOptions) state.route_options = meta.routeOptions.map((r) => ({ id: r.id, summary: r.summary }));
   const target = snap.target ? snap.target.v : limit;
   state.candidates = candidates.filter((c) => c.eligible).map((c) => ({
-    id: c.id, steer: c.steer, speed: c.speed, end_speed: r1(c.sim.end_speed), vs_target: speedVsTarget(c.sim.end_speed, target),
+    id: c.id, steer: c.steer, speed: c.speed, end_speed: r1(c.sim.end_speed), vs_target: speedVsTarget(c.sim.end_speed, c.laneTarget ?? target),
     max_accel: r1(c.sim.max_accel || 0), max_decel: r1(c.sim.max_decel || 0), max_lateral_accel: r1(c.sim.max_lateral_accel || 0),
     ...(Number.isFinite(c.sim.min_clearance_m) ? { min_clearance_m: r1(c.sim.min_clearance_m) } : {}),
     progress_m: r1(c.sim.progress_m), lane: laneLabel(c.sim.lane_err_end), outcome: outcomeLabel(c, snap),
@@ -84,6 +100,7 @@ function outcomeLabel(c, snap) {
   if (c.id === "stop_at_destination") return "clear, reaches the destination";
   if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
   if (!c.sim.stays_on_road) return c.sim.off_road_fraction > 0.5 ? "leaves the road" : "touches the road edge";
+  if (c.change) return `clear, ${c.change.offer === "pass" ? "moves into" : "moves back into"} the ${c.change.dir} lane${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
   if (!c.sim.stays_in_lane) return "clear, drifts out of lane";
   if (c.sim.min_gap_m < 4) return `clear, but closes to ${r1(c.sim.min_gap_m)} m of a car`;
   return "clear";
@@ -121,6 +138,13 @@ export function situationClauses(snap) {
   if (snap.nav && snap.nav.next_turn !== "none" && snap.nav.next_turn !== "roundabout" && snap.nav.turn_in_m < 40) out.push(`A ${snap.nav.next_turn === "uturn" ? "U-turn" : snap.nav.next_turn + " turn"} is coming in ${Math.round(snap.nav.turn_in_m)} m; \`car.target_speed\` already accounts for it.`);
   if (weather.name !== "dry") out.push(`Conditions: ${weather.description}. Grip is reduced, so \`car.target_speed\` sits below the limit and braking needs more room.`);
   if (snap.visibility) out.push(`Objects beyond ${snap.visibility.range_m} m or behind buildings are unseen; an empty traffic list does not prove the road is clear.`);
+  const pass = passing(snap);
+  if (pass) out.push(`The ${snap.following.kind} ahead is slower than this lane allows and the ${pass.dir} lane has room: a \`change_${pass.dir}_*\` candidate passes it, and staying behind is also acceptable. Change lanes only to get past it.`);
+  if (snap.lane && snap.lane.delta && !snap.lane.shift) {
+    const back = snap.lane.delta < 0 ? "right" : "left";
+    const within = Math.max(0, Math.round(snap.lane.until_s - snap.routeProj.s - snap.ego.front_m));
+    out.push(`The car is in the ${laneName(snap.lane.index, snap.lane.lanes)} lane, but its route continues in the ${laneName(snap.lane.route_index, snap.lane.lanes)} lane. Choose a \`change_${back}_*\` candidate to return when one is offered; the car must be back within ${within} m.`);
+  }
   if (snap.roadside?.length) out.push("Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes.");
   if (!snap.road.on_road) out.push("The car is off the road; the candidates steer back toward the lane.");
   if (snap.stuck) out.push(`The car has been stopped with nothing blocking it for ${Math.round(snap.stuck.for_s)} s; if the way is clear, drive.`);
