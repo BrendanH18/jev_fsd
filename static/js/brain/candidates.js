@@ -15,6 +15,7 @@ const LANE_TOL = 1.2;
 const CYCLIST_CLEARANCE_M = 1.0;
 const QUEUE_GAP_M = 2.5;
 const LANE_RETURN_MARGIN_M = 8;
+const MIN_CHANGE_M = 12;   // the sharpest lane change offered, for leaving a lane about to end
 
 function speedLabel(v, ego, limit) {
   if (v <= 0.05) return "stop";
@@ -62,7 +63,10 @@ export function sampleCandidates(snap, world) {
       }
     }
     // Change into a lane beside this one: to pass, to return toward the route's lane, or to go back
-    // to the lane a change started from. The car signals and eases across over about 3.5 s.
+    // to the lane a change started from. The car signals and eases across over about 3.5 s, or
+    // more sharply to finish before the lane it is leaving ends; too late for that, it waits.
+    const leaving = lane && lane.delta ? lane.until_s - s - FRONT : Infinity;
+    const len = Math.max(MIN_CHANGE_M, Math.min(laneChangeLength(v), leaving));
     for (const side of lane ? Object.values(lane.sides) : []) {
       if (!side.offer) continue;
       const toRoute = side.delta === 0 ? " (the route's lane)" : "";
@@ -70,9 +74,9 @@ export function sampleCandidates(snap, world) {
       for (const vt of [...vs].sort((a, b) => b - a)) {
         if (vt <= 0.05) continue;
         const name = Math.abs(vt - v) < 0.3 ? "hold" : vt > v ? "faster" : "slow";
-        out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, gap_ok: side.gap_ok }, laneUntil: side.until_s, laneTarget: side.target_v,
+        out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M }, laneUntil: side.until_s, laneTarget: side.target_v,
           law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, fromLane: lane.delta, vTarget: vt,
-            shift: { from: snap.routeProj.lateral, start: s, len: laneChangeLength(v) } },
+            shift: { from: snap.routeProj.lateral, start: s, len } },
           steer: side.offer === "pass" ? `change to the ${side.dir} lane to pass` : side.offer === "abort" ? `move back to the ${side.dir} lane` : `return to the ${side.dir} lane${toRoute}`, speed: speedLabel(vt, v, limit) });
       }
     }
@@ -197,6 +201,7 @@ export function simulateAll(candidates, snap, world) {
     let reject = null;
     if (collision) reject = "collision";
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
+    else if (c.change && c.change.too_late) reject = "lane_change_too_late";
     else if (laneEnds) reject = "must_return_to_route_lane";
     else if (snap.visibility && car.v > snap.visibility.safe_speed_mps + 0.5 && car.v >= snap.ego.v - 0.5 && c.law.kind !== "hard_brake") reject = "visibility_stopping_distance";
     else if (closePass && c.law.kind !== "hard_brake") reject = "passes_cyclist_too_close";

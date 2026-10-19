@@ -159,7 +159,7 @@ export function buildSnapshot(world, executing = null) {
 // centre it is tracking (which moves during a lane change). A lane change in progress keeps its plan;
 // otherwise, or when the planned lane has ended, the car is in the lane nearest to it.
 function laneState(route, p, law) {
-  const info = route.laneInfo(route.edgeIndexAt(p.s));
+  const info = route.laneInfo(route.laneEdgeAt(p.s));
   const spanOf = (d) => d === 0 ? { offset: 0, until: route.length } : route.laneSpan(p.s, d);
   const planned = law && (law.kind === "lane" || law.kind === "hard_brake") && Number.isInteger(law.lane) ? law.lane : null;
   let delta = planned !== null && spanOf(planned) ? planned : null;

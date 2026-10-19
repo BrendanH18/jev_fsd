@@ -112,6 +112,41 @@ function decide(world, executing = null) {
 }
 
 {
+  // a return close to where the left lane ends is made sharper to finish in time, and is not
+  // offered once even the sharpest change would carry past that point
+  const executing = { law: { kind: "lane", offset: -3.5, center: -3.5, lane: -1, vTarget: 8 } };
+  const late = decide(setup({ x: 270, y: LEFT, v: 8 }), executing);
+  const back = late.eligible.find((c) => c.id.startsWith("change_right_"));
+  assert.ok(back && back.law.shift.start + back.law.shift.len + late.snap.ego.front_m <= LENGTH + 0.01);
+  const tooLate = decide(setup({ x: 287, y: LEFT, v: 4 }), executing);
+  assert.ok(tooLate.candidates.filter((c) => c.change).every((c) => c.reject === "lane_change_too_late"));
+  console.log("✓ a return finishes before the lane it leaves ends, or waits");
+}
+
+{
+  // lane geometry follows the route's own polyline, which rounds a left turn off the edge lengths
+  const edges = [
+    { id: "west", from: "w", to: "j", pts: [[0, 0], [100, 0]], length: 100 },
+    { id: "north", from: "j", to: "n", pts: [[100, 0], [100, 200]], length: 200 },
+  ].map((e) => ({ ...e, lanes: 2, lane_width: 3.5, lane_offsets: [-1.75, 1.75], asphalt: [-3.5, 3.5], parking: [0, 0], cls: "secondary", limit: 13.9, oneway: true, name: e.id }));
+  const turnMap = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -20, 140, 220], edges,
+    lanes: [{ edge: "west", idx: 0, pts: [[0, 1.75], [100, 1.75]] }, { edge: "west", idx: 1, pts: [[0, -1.75], [100, -1.75]] },
+      { edge: "north", idx: 0, pts: [[98.25, 0], [98.25, 200]] }, { edge: "north", idx: 1, pts: [[101.75, 0], [101.75, 200]] }],
+    nodes: [{ id: "w", x: 0, y: 0 }, { id: "j", x: 100, y: 0 }, { id: "n", x: 100, y: 200 }], intersections: [], stops: [], buildings: [] });
+  // left lane up to a 12 m fillet, then the left lane of the new street
+  const polyline = [];
+  for (let x = 0; x <= 86; x++) polyline.push([x, 1.75]);
+  for (let k = 1; k <= 18; k++) { const a = (k / 18) * Math.PI / 2; polyline.push([86 + 12 * Math.sin(a), 1.75 + 12 * (1 - Math.cos(a))]); }
+  for (let y = 15; y <= 200; y++) polyline.push([98.25, y]);
+  const route = new Route({ id: "t", polyline, edges: ["west", "north"], turns: [{ at_m: 100, dir: "left", street: "north" }], start_s: 0, goal_s: 200 }, turnMap);
+  assert.deepEqual([route.laneInfo(0).idx, route.laneInfo(1).idx], [0, 0]);
+  const corner = route.project(100, 0, 0).s;
+  assert.ok(Math.abs(route.laneEdgeStarts()[1] - corner) < 0.5 && route.edgeStarts[1] - corner > 3, `${route.laneEdgeStarts()[1]} vs ${corner}`);
+  assert.ok(Math.abs(route.laneSpan(20, 1).until - corner) < 0.5);
+  console.log("✓ lanes beside the route end where the rounded route turns, not at summed edge lengths");
+}
+
+{
   // halfway into a pass, a continuing manoeuvre keeps the lane the change began in, so going back
   // stays on offer when a fast car closes in the target lane
   const world = setup({ x: 40, y: 0, v: 10, npcs: [car("stalled", 90, RIGHT)] });

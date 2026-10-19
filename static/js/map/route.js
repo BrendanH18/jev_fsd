@@ -99,20 +99,40 @@ export class Route {
   }
   remaining(s) { return Math.max(0, this.length - s); }
 
+  // Route arc length at which each edge begins, measured on the route's own polyline (turns are
+  // rounded and the polyline resampled, so summed edge lengths drift from it): where the edge's
+  // first node projects onto the route, kept in order. The last entry is the route's end.
+  laneEdgeStarts() {
+    if (this._laneEdgeStarts) return this._laneEdgeStarts;
+    const out = [0];
+    for (let i = 1; i < this.edges.length; i++) {
+      const node = this.map.nodes.get(this.map.edges.get(this.edges[i])?.from);
+      const p = node ? projectPoint(this.pts, this.cum, [node.x, node.y]) : null;
+      out.push(Math.min(this.length, Math.max(out[i - 1], p ? p.s : this.edgeStarts[i])));
+    }
+    out.push(this.length);
+    return (this._laneEdgeStarts = out);
+  }
+  laneEdgeAt(s) {
+    const starts = this.laneEdgeStarts();
+    let i = 0;
+    while (i + 1 < this.edges.length && starts[i + 1] <= s) i++;
+    return i;
+  }
+
   // The lanes of route edge i: their count, which one the route follows (0 is the leftmost) and
-  // their offsets right of the street's centreline. The router picks the lane, so the route's own
-  // polyline is located among the edge's lanes halfway along it.
+  // their offsets right of the street's centreline. The router picks the lane, so it is the lane
+  // whose middle lies closest to the route's own polyline.
   laneInfo(i) {
     this._lanes ||= [];
     if (this._lanes[i]) return this._lanes[i];
     const e = this.map.edges.get(this.edges[i]);
     const info = { lanes: e ? e.lanes || 1 : 1, idx: 0, offsets: e?.lane_offsets || [0], ring: !!e?.ring };
     if (info.lanes > 1) {
-      const p = this.pointAt(Math.min(this.length, Math.max(0, (this.edgeStarts[i] + this.edgeStarts[i + 1]) / 2)));
       let best = Infinity;
       for (let k = 0; k < info.lanes; k++) {
         const lane = this.map.lane(e.id, k);
-        const proj = lane && projectPoint(lane.pts, lane.cum, p);
+        const proj = lane && projectPoint(this.pts, this.cum, pointAt(lane.pts, lane.cum, lane.length / 2));
         if (proj && proj.distance < best) { best = proj.distance; info.idx = k; }
       }
     }
@@ -123,17 +143,18 @@ export class Route {
   // right of the route, and the route arc length where it stops running beside the route (a turn, a
   // change in the lanes, a roundabout or the destination). Null when there is no such lane here.
   laneSpan(s, delta) {
-    const i = this.edgeIndexAt(s), a = this.laneInfo(i), to = a.idx + delta;
+    const starts = this.laneEdgeStarts();
+    const i = this.laneEdgeAt(s), a = this.laneInfo(i), to = a.idx + delta;
     if (a.ring || to < 0 || to >= a.lanes) return null;
     const offset = a.offsets[to] - a.offsets[a.idx];
     let j = i;
-    while (j + 1 < this.edges.length && this.edgeStarts[j + 1] - s < 400) {
+    while (j + 1 < this.edges.length && starts[j + 1] - s < 400) {
       const b = this.laneInfo(j + 1), prev = this.laneInfo(j);
       const straight = this.map.classifyTurn(this.map.turnAngle(this.edges[j], this.edges[j + 1])) === "straight";
       if (!straight || b.ring || b.lanes !== prev.lanes || b.idx !== prev.idx || Math.abs(b.offsets[to] - b.offsets[b.idx] - offset) > 0.4) break;
       j++;
     }
-    return { offset, until: Math.min(this.length, this.edgeStarts[j + 1]) };
+    return { offset, until: Math.min(this.length, starts[j + 1]) };
   }
   endPoint() { return this.pts[this.pts.length - 1]; }
   static distanceBetween(a, b) { return dist(a, b); }

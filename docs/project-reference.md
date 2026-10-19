@@ -292,7 +292,8 @@ beside the route, no stop line within 25 m and no queue at a junction just ahead
 outside its route's lane, a return is offered except in the 8 m before a stop line. A change needs
 a gap in the target lane: 6 m plus 2 s of closing speed to the vehicle ahead and 6 m plus 2.5 s to
 the one behind, and nothing alongside. The car signals and eases across over about 3.5 s of travel
-(18–50 m). Any manoeuvre that would keep the car outside its route's lane too close to where that
+(18–50 m), or more sharply (down to 12 m) to finish before the lane it is leaving ends; with less
+room than that it waits. Any manoeuvre that would keep the car outside its route's lane too close to where that
 lane ends is rejected. That point can be a turn, a junction where the lanes change, or the
 destination. Without a gap the car slows in its lane and waits. Rules weighs a lane change and
 time outside the route's lane as small costs, so it passes only for a clear gain and returns once
