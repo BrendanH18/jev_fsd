@@ -46,7 +46,8 @@ const brains = agentDefinitions().map((d) => d.id);
 if (!brains.includes(String(args.brain || "rules"))) fail(`Unknown brain "${args.brain}": use one of ${brains.join(", ")}.`);
 if (!Object.hasOwn(WEATHER, String(args.weather || "dry"))) fail(`Unknown weather "${args.weather}": use one of ${Object.keys(WEATHER).join(", ")}.`);
 const integer = (name, fallback, min) => {
-  const v = args[name] === undefined ? fallback : Number(args[name]);
+  // Plain digits only: Number() also reads " " as 0 and accepts forms such as 1e2 or 0x10.
+  const v = args[name] === undefined ? fallback : /^\d+$/.test(args[name]) ? Number(args[name]) : NaN;
   if (!Number.isSafeInteger(v) || v < min) fail(`--${name} must be a whole number of at least ${min}, not "${args[name]}".`);
   return v;
 };
