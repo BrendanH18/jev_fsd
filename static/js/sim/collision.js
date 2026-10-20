@@ -63,14 +63,16 @@ export function obbPolygonOverlap(box, pts, margin = 0) {
 
 // Vehicles whose position projects onto the route between s0 and s1 within halfWidth of `center`
 // (metres right of the route, so a corridor can follow another lane).
-export function corridorQuery(route, s0, s1, halfWidth, vehicles, hint = null, center = 0) {
+export function corridorQuery(route, s0, s1, halfWidth, vehicles, hint = null, center = 0, frame = null) {
   const out = [];
   for (const v of vehicles) {
     const p = route.project(v.x, v.y, hint);
-    if (!p || p.distance > halfWidth + Math.abs(center) + 3) continue;
-    if (p.s < s0 || p.s > s1) continue;
-    if (Math.abs(p.lateral - center) > halfWidth) continue;
-    out.push({ vehicle: v, s: p.s, lateral: p.lateral });
+    if (!p || p.s < s0 || p.s > s1) continue;
+    // `frame(s)` re-measures a lateral from where the route was at the query's start, when the
+    // route has moved to another lane in between
+    const lateral = frame ? p.lateral + frame(p.s) : p.lateral;
+    if (p.distance > halfWidth + Math.abs(center) + Math.abs(lateral - p.lateral) + 3 || Math.abs(lateral - center) > halfWidth) continue;
+    out.push({ vehicle: v, s: p.s, lateral });
   }
   return out.sort((a, b) => a.s - b.s);
 }

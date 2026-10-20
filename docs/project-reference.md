@@ -301,6 +301,16 @@ there is room. Abandoning a change already under way is offered but costs more, 
 a change unless finishing it is no longer safe. Decision models and LLMs see the lanes and the gaps beside the car, and the
 situation tells them when a change is on offer.
 
+Before a turn the router takes the turn lane on the last block, so its route line slides across
+the lanes at the junction before that block. The car does not follow that slide. From 150 m before
+it, the turn lane counts as the route's lane, so the car signals and changes into it with the same
+gap checks, then holds it while the route line moves across. It has to be in the lane before the
+turn. A slow or stopped car in the turn lane within 150 m of the turn is treated as a queue: the car
+doesn't pass it, and Rules doesn't drive past it in the next lane, because that lane's extra speed
+gains nothing. This applies where the block before the turn continues the street straight on with
+the same lanes; where the lane count or layout changes at that junction, the route line still
+slides across inside it.
+
 The decision inspector exposes requests, answers, confidence, timing and spend; decisions can
 be saved or copied as `curl` commands. The emergency brake responds to imminent observed
 collisions, not traffic-rule violations, so driving mistakes remain visible.
@@ -378,8 +388,8 @@ Map tags and procedural geometry limit realism. There is no road elevation or ca
 visual body pitch and roll do not add a physical suspension model. Buildings, weather and darkness
 determine sensing; trees and vehicles do not occlude it, and individual street lamps do not extend
 detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car changes lanes only to pass and
-then returns; the router still picks each street's lane, so the car moves into a turning lane in
-the junction before that street. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
+then returns, and to get into the lane for a turn. Where a street's lanes change at the junction
+before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
 against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information.
 Low curbs remain traversable, and scenery beyond the playable map is decorative with simplified geography.
 

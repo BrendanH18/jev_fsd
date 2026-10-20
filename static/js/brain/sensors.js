@@ -8,6 +8,7 @@ import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
 import { crosswalkConflict } from "../sim/pedestrians.js";
+import { PREPARE_LANE_M } from "../map/route.js";
 import { current as weather } from "../sim/weather.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -113,7 +114,8 @@ export function buildSnapshot(world, executing = null) {
     const clearS = lane.from_center !== null ? laneClearS(lane.shift, lane.from_center, lane.center) : -Infinity;
     const inOrigin = (a) => lane.from_center !== null && Math.abs(p.lateral - lane.from_center) < LANE_CLEAR_M
       && Math.abs(a.lateral - lane.from_center) <= 1.7 && a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
-    const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center)
+    const frame = (s) => route.frameMove(p.s, s);
+    const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center, frame)
       .filter((a) => Math.abs(a.lateral - lane.center) <= 1.7 || inOrigin(a) || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking)
       .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6));
     if (ahead.length) {
@@ -122,7 +124,7 @@ export function buildSnapshot(world, executing = null) {
       snap.following = { id: lead.vehicle.id, gap_m: gap, speed: lead.vehicle.v, closing_mps: ego.v - lead.vehicle.v, vehicle: lead.vehicle, s: lead.s,
         kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : lead.vehicle.parked ? "parked car" : "car" };
     }
-    const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center);
+    const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
     if (behind.length) {
       const b = behind[behind.length - 1];
       const bs = b.vehicle.spec || CAR;
@@ -157,28 +159,35 @@ export function buildSnapshot(world, executing = null) {
 // The car's lane relative to the route's lane. `delta` counts lanes right of it (negative: left),
 // `center` is that lane's centre in metres right of the route and `lateral` the car's offset from the
 // centre it is tracking (which moves during a lane change). A lane change in progress keeps its plan;
-// otherwise, or when the planned lane has ended, the car is in the lane nearest to it.
+// otherwise, or when the planned lane has ended, the car is in the lane nearest to it. A law names
+// its lanes by index within a straight run of the same lanes (`chain`), which holds where the route
+// moves to another lane; a law from before a turn names them by lanes from the route's lane.
+// `route_ahead` marks a route's lane that the route itself moves to only further on, for a turn.
 function laneState(route, p, law) {
-  const info = route.laneInfo(route.laneEdgeAt(p.s));
-  const spanOf = (d) => d === 0 ? { offset: 0, until: route.length } : route.laneSpan(p.s, d);
-  const planned = law && (law.kind === "lane" || law.kind === "hard_brake") && Number.isInteger(law.lane) ? law.lane : null;
+  const here = route.laneAt(p.s);
+  const spanOf = (d) => d === 0 ? { offset: here.center, until: route.length } : route.laneSpan(p.s, d);
+  // (a law from before lane indexes counted from the lane the route line is in)
+  const toDelta = (idx, rel) => !Number.isInteger(idx) ? (Number.isInteger(rel) ? here.lineIdx + rel - here.idx : null)
+    : law.chain === here.chain ? idx - here.idx : Number.isInteger(rel) ? rel : null;
+  const planned = law && (law.kind === "lane" || law.kind === "hard_brake") ? toDelta(law.laneIdx, law.lane) : null;
   let delta = planned !== null && spanOf(planned) ? planned : null;
   if (delta === null) {
     delta = 0;
-    for (let d = -info.idx; d < info.lanes - info.idx; d++) {
+    for (let d = -here.idx; d < here.lanes - here.idx; d++) {
       const span = spanOf(d);
       if (span && Math.abs(p.lateral - span.offset) < Math.abs(p.lateral - spanOf(delta).offset)) delta = d;
     }
   }
   const span = spanOf(delta);
   const shifting = delta === planned && law.shift && p.s < law.shift.start + law.shift.len - 0.5;
-  const from = shifting && Number.isInteger(law.fromLane) ? spanOf(law.fromLane) : null;
-  const centerNow = shifting ? laneCenterAt(law, p.s) : span.offset;
+  const fromDelta = shifting ? toDelta(law.fromIdx, law.fromLane) : null;
+  const from = fromDelta !== null ? spanOf(fromDelta) : null;
+  const centerNow = shifting ? laneCenterAt(law, p.s, route) : span.offset;
   return {
-    lanes: info.lanes, index: info.idx + delta, route_index: info.idx, delta, center: span.offset,
+    lanes: here.lanes, index: here.idx + delta, route_index: here.idx, route_center: here.center, route_ahead: here.ahead, chain: here.chain, delta, center: span.offset,
     until_s: delta ? span.until : null, lateral: p.lateral - centerNow,
-    shift: shifting ? law.shift : null, from_delta: shifting ? law.fromLane ?? null : null,
-    from_center: shifting ? (from ? from.offset : law.shift.from) : null, sides: {},
+    shift: shifting ? law.shift : null, from_delta: fromDelta,
+    from_center: shifting ? (from ? from.offset : law.shift.from - route.frameMove(law.shift.start, p.s)) : null, sides: {},
   };
 }
 
@@ -203,8 +212,11 @@ function laneOptions(snap, world) {
   const line = i ? i.bumper_to_line_m : Infinity;
   const inJunction = (limit) => line < limit && line > -12;
   const f = snap.following;
+  // A car waiting at the junction is a queue, not something to pass, and so is a slow or stopped car
+  // in the lane the route takes for a turn coming up: the car waits behind it rather than overtake.
+  const turnLane = lane.route_ahead || (snap.nav && snap.nav.next_turn !== "none" && snap.nav.turn_in_m < PREPARE_LANE_M);
   const slowAhead = f && f.gap_m < 60 && (f.speed < 0.5 || f.speed < free - 2.5 || f.kind !== "car")
-    && !(i && line < f.gap_m + 20);  // a car waiting at the junction is a queue, not something to pass
+    && !(i && line < f.gap_m + 20) && !(turnLane && f.kind === "car");
   for (const dir of ["left", "right"]) {
     const delta = lane.delta + (dir === "left" ? -1 : 1);
     const span = route.laneSpan(s, delta);
@@ -212,7 +224,7 @@ function laneOptions(snap, world) {
     const side = { delta, dir, center: span.offset, until_s: delta ? span.until : null, leader: null, rear: null, alongside: false };
     for (const o of vehicles) {
       const q = route.project(o.x, o.y, p.index);
-      if (!q || Math.abs(q.lateral - span.offset) > 1.7 || Math.abs(q.s - s) > TRAFFIC_RADIUS_M) continue;
+      if (!q || Math.abs(q.lateral + route.frameMove(s, q.s) - span.offset) > 1.7 || Math.abs(q.s - s) > TRAFFIC_RADIUS_M) continue;
       if (Math.abs(o.v) > 0.5 && Math.abs(wrap(o.psi - q.heading)) > Math.PI / 2) continue;
       const spec = o.spec || CAR;
       const ahead = q.s - spec.rearOverhang - (s + FRONT), behind = s - REAR - (q.s + spec.length - spec.rearOverhang);

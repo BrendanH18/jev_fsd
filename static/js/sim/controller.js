@@ -39,17 +39,23 @@ export function stopSpeedFor(distance, decel = comfort().decel) {
 
 // A lane law's lateral target in metres right of the route at route arc length s. With `shift` it
 // eases from `shift.from` (at route s = shift.start) to `offset` over `shift.len` metres: a lane change.
-export function lateralAt(law, s) {
-  const shift = law.shift, to = law.offset || 0;
+// Offsets are measured from the route where the law was chosen (s0), and `shift.from` where the change
+// started; where the route itself moves to another lane after that, the target moves back by as
+// much, so the car holds its lane.
+export function lateralAt(law, s, route = null) {
+  const shift = law.shift;
+  const move = (s0) => (route && route.frameMove ? route.frameMove(s0, s) : 0);
+  const to = (law.offset || 0) - move(law.s0);
   if (!shift) return to;
+  const from = shift.from - move(shift.start);
   const u = clamp((s - shift.start) / shift.len, 0, 1);
-  return shift.from + (to - shift.from) * u * u * (3 - 2 * u);
+  return from + (to - from) * u * u * (3 - 2 * u);
 }
 
 // The lane centre a law tracks at s, without its small lateral nudge (`center` is the target lane's
 // centre; laws that predate lane changes track the route lane).
-export function laneCenterAt(law, s) {
-  return lateralAt(law, s) - ((law.offset || 0) - (law.center ?? 0));
+export function laneCenterAt(law, s, route = null) {
+  return lateralAt(law, s, route) - ((law.offset || 0) - (law.center ?? 0));
 }
 
 // Distance over which a lane change completes: about 3.5 s of travel, at least 18 m and at most 50 m,
@@ -81,7 +87,7 @@ export function curveProfileSpeed(route, s) {
 export function applyLaw(vehicle, law, route, s, dt) {
   switch (law.kind) {
     case "hard_brake":
-      return vehicle.step(dt, { steer: route ? purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v))) : vehicle.delta, accel: -comfort().hardDecel });
+      return vehicle.step(dt, { steer: route ? purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)) : vehicle.delta, accel: -comfort().hardDecel });
     case "reverse": {
       const steer = law.target ? -steerToward(vehicle, law.target) : 0;
       return vehicle.step(dt, { steer, accel: speedControl(vehicle.v, -2, { maxAccel: 2, maxBrake: 4 }), reverse: true });
@@ -93,7 +99,7 @@ export function applyLaw(vehicle, law, route, s, dt) {
       const stopAt = law.stopAt;
       let vTarget = Math.min(law.vTarget, curveProfileSpeed(route, s).v);
       if (stopAt !== undefined && stopAt !== null) vTarget = Math.min(vTarget, stopSpeedFor(stopAt - (s - (law.s0 ?? s))));
-      return vehicle.step(dt, { steer: purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v))), accel: speedControl(vehicle.v, vTarget) });
+      return vehicle.step(dt, { steer: purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)), accel: speedControl(vehicle.v, vTarget) });
     }
   }
 }

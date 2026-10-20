@@ -6,6 +6,12 @@ import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js
 import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
 import { CAR } from "../sim/vehicle.js";
 
+// Within this distance of where the route moves to another lane of the same street (the router
+// takes the left lane on the block before a left turn), that lane already counts as the route's
+// lane, so the car changes into it as a lane change instead of sliding across with the polyline.
+export const PREPARE_LANE_M = 150;
+const RAMP_M = 40;   // the polyline's own move between lanes is measured up to this far either side of the join
+
 export class Route {
   constructor(data, map, vehicleSpec = CAR) {
     this.id = data.id;
@@ -155,22 +161,112 @@ export class Route {
     return (this._lanes[i] = info);
   }
 
+  // Whether route edge j runs straight on into edge j + 1 with the same lanes (count and positions),
+  // so each lane carries on as the same lane.
+  sameLanes(j) {
+    this._same ||= [];
+    if (this._same[j] !== undefined) return this._same[j];
+    let same = false;
+    if (j + 1 < this.edges.length) {
+      const a = this.laneInfo(j), b = this.laneInfo(j + 1);
+      same = !a.ring && !b.ring && a.lanes === b.lanes && a.offsets.every((o, k) => Math.abs(o - b.offsets[k]) <= 0.4)
+        && this.map.classifyTurn(this.map.turnAngle(this.edges[j], this.edges[j + 1])) === "straight";
+    }
+    return (this._same[j] = same);
+  }
+  // The first edge of the straight run of same-lane edges that edge i belongs to.
+  chainOf(i) {
+    if (!this._chains) {
+      this._chains = [0];
+      for (let j = 1; j < this.edges.length; j++) this._chains.push(this.sameLanes(j - 1) ? this._chains[j - 1] : j);
+    }
+    return this._chains[i];
+  }
+
+  // Where the route moves to another lane of the same street: the edge it moves on (i), the lanes
+  // it moves between, the move in metres right, its chain, and the fraction of the move the
+  // polyline has made at each metre from RAMP_M before the join until it is across (the polyline
+  // blends between the two lanes over a few metres).
+  laneShifts() {
+    if (this._shifts) return this._shifts;
+    const starts = this.laneEdgeStarts(), out = [];
+    for (let i = 1; i < this.edges.length; i++) {
+      const a = this.laneInfo(i - 1), b = this.laneInfo(i);
+      const at = starts[i], by = b.offsets[b.idx] - b.offsets[a.idx];
+      if (!this.sameLanes(i - 1) || a.idx === b.idx || Math.abs(by) < 0.5) continue;
+      // measured outward from the join, so a corner just before it does not count as part of the move
+      const made = (d) => {
+        const lane = this.map.lane(this.edges[d < 0 ? i - 1 : i], a.idx);
+        const q = lane ? projectPoint(lane.pts, lane.cum, this.pointAt(Math.max(0, Math.min(this.length, at + d)))) : null;
+        return q ? Math.max(0, Math.min(1, q.lateral / by)) : d < 0 ? 0 : 1;
+      };
+      const ramp = [made(0)];
+      let lo = 0;
+      for (let d = -1; d >= Math.max(-RAMP_M, starts[i - 1] - at) && ramp[0] > 0.001; d--, lo--) ramp.unshift(Math.min(ramp[0], made(d)));
+      for (let d = 1; d <= Math.min(RAMP_M, starts[i + 1] - at) && ramp[ramp.length - 1] < 0.999; d++) ramp.push(Math.max(ramp[ramp.length - 1], made(d)));
+      // the move is complete beyond the measured stretch (it is only cut short by a very short edge)
+      ramp[0] = 0;
+      ramp[ramp.length - 1] = 1;
+      out.push({ i, at, from: a.idx, to: b.idx, by, chain: this.chainOf(i), lo, ramp });
+    }
+    return (this._shifts = out);
+  }
+  // How far right the polyline has moved at s through the route's own lane moves, counted from the
+  // route's start. Lane laws subtract the move since they were chosen, so a car holds its lane
+  // where the polyline moves to another one.
+  frameShift(s) {
+    let sum = 0;
+    for (const sh of this.laneShifts()) {
+      const k = s - sh.at - sh.lo;
+      if (k <= 0) continue;
+      if (k >= sh.ramp.length - 1) { sum += sh.by; continue; }
+      const j = Math.floor(k);
+      sum += sh.by * (sh.ramp[j] + (sh.ramp[j + 1] - sh.ramp[j]) * (k - j));
+    }
+    return sum;
+  }
+  frameMove(s0, s) {
+    return Number.isFinite(s0) && this.laneShifts().length ? this.frameShift(s) - this.frameShift(s0) : 0;
+  }
+
+  // The route's lane at s as the car drives it: the lane the route follows here or, within
+  // PREPARE_LANE_M of a move to another lane of the same street, the lane it moves to (`ahead`). Its
+  // index (0 is the leftmost), the edge's lane count and offsets, the chain the edge belongs to and
+  // the lane's centre in metres right of the polyline at s.
+  laneAt(s) {
+    const i = this.laneEdgeAt(s), info = this.laneInfo(i), chain = this.chainOf(i);
+    let idx = info.idx;
+    for (const sh of this.laneShifts()) {
+      if (sh.at <= s || sh.chain !== chain) continue;
+      if (sh.at - s > PREPARE_LANE_M) break;
+      idx = sh.to;
+    }
+    return { lanes: info.lanes, idx, lineIdx: info.idx, offsets: info.offsets, ring: info.ring, chain, ahead: idx !== info.idx, center: this.laneOffsetAt(s, idx) };
+  }
+  // Centre of lane k of the edge at s, in metres right of the polyline there.
+  laneOffsetAt(s, k) {
+    const i = this.laneEdgeAt(s), info = this.laneInfo(i);
+    let settled = 0;
+    for (const sh of this.laneShifts()) if (sh.i <= i) settled += sh.by;
+    return info.offsets[k] - info.offsets[info.idx] - (this.frameShift(s) - settled);
+  }
+
   // The lane `delta` lanes right of the route's lane at s (negative is left): its centre in metres
   // right of the route, and the route arc length where it stops running beside the route (a turn, a
   // change in the lanes, a roundabout or the destination). Null when there is no such lane here.
   laneSpan(s, delta) {
     const starts = this.laneEdgeStarts();
-    const i = this.laneEdgeAt(s), a = this.laneInfo(i), to = a.idx + delta;
-    if (a.ring || to < 0 || to >= a.lanes) return null;
-    const offset = a.offsets[to] - a.offsets[a.idx];
+    const here = this.laneAt(s), to = here.idx + delta;
+    if (here.ring || to < 0 || to >= here.lanes) return null;
+    const i = this.laneEdgeAt(s), beside = here.offsets[to] - here.offsets[here.idx];
     let j = i;
     while (j + 1 < this.edges.length && starts[j + 1] - s < 400) {
       const b = this.laneInfo(j + 1), prev = this.laneInfo(j);
       const straight = this.map.classifyTurn(this.map.turnAngle(this.edges[j], this.edges[j + 1])) === "straight";
-      if (!straight || b.ring || b.lanes !== prev.lanes || b.idx !== prev.idx || Math.abs(b.offsets[to] - b.offsets[b.idx] - offset) > 0.4) break;
+      if (!straight || b.ring || b.lanes !== prev.lanes || this.laneAt(starts[j + 1]).idx !== here.idx || Math.abs(b.offsets[to] - b.offsets[here.idx] - beside) > 0.4) break;
       j++;
     }
-    return { offset, until: Math.min(this.length, starts[j + 1]) };
+    return { offset: this.laneOffsetAt(s, to), until: Math.min(this.length, starts[j + 1]) };
   }
   endPoint() { return this.pts[this.pts.length - 1]; }
   static distanceBetween(a, b) { return dist(a, b); }

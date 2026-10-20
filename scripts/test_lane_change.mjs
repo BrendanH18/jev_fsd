@@ -1,16 +1,19 @@
 // Lane changes on a two-lane one-way street: lane geometry beside the route, pass and return
 // offers, gap acceptance, the lane-end rule, what models are told, and a closed-loop Rules drive
-// that passes a stopped car and returns to its lane.
+// that passes a stopped car and returns to its lane. Then the lane before a turn: the route moves
+// to the left lane on the block before a left turn, and the car changes into it well before.
 // node --experimental-default-type=module scripts/test_lane_change.mjs
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
-const { MapData, pointAt } = await import("../static/js/map/mapdata.js");
-const { Route } = await import("../static/js/map/route.js");
+const { MapData, pointAt, projectPoint } = await import("../static/js/map/mapdata.js");
+const { Route, PREPARE_LANE_M } = await import("../static/js/map/route.js");
+const { routeFromLanes, browserRoute } = await import("../static/js/demo/routing.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
-const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
+const { sampleCandidates, simulateAll, pathHazard } = await import("../static/js/brain/candidates.js");
+const { lateralAt } = await import("../static/js/sim/controller.js");
 const { toJevState, buildQuestions, situationClauses } = await import("../static/js/brain/state.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
@@ -172,8 +175,11 @@ function decide(world, executing = null) {
   const data = { id: "o", polyline, edges: ["e668", "e142"], turns: [], start_s: start, goal_s: b.length };
   const route = new Route({ ...data, lanes: [2, 0] }, city);
   assert.deepEqual([route.laneInfo(0).idx, route.laneInfo(1).idx], [2, 0]);
-  assert.equal(route.laneSpan(1, 1), null);
-  assert.equal(route.laneSpan(1, -1).until, route.laneEdgeStarts()[1]);
+  // the route moves from the right lane to the left one on the next block, so the left lane is
+  // already the route's lane and the right lane runs beside it
+  assert.deepEqual([route.laneAt(1).idx, route.laneAt(1).ahead], [0, true]);
+  assert.equal(route.laneSpan(1, -1), null);
+  assert.ok(Math.abs(route.laneSpan(1, 2).offset) < 0.01 && route.laneSpan(1, 2).until === route.length);
   assert.equal(new Route(data, city).edgeLanes, null);  // an older route without lanes infers them
   console.log("✓ the route follows the lane the router chose on each edge");
 }
@@ -292,4 +298,224 @@ function decide(world, executing = null) {
   assert.ok(metrics.maxLat < 1.5, `lane tracking error stays small (${metrics.maxLat.toFixed(2)} m)`);
   assert.ok(metrics.maxLatAccel < 2.5, `lateral acceleration ${metrics.maxLatAccel.toFixed(2)} m/s^2`);
   console.log(`✓ Rules passes a stalled car, returns to its lane and arrives (${metrics.laneChanges} changes, max lateral accel ${metrics.maxLatAccel.toFixed(2)} m/s^2)`);
+}
+
+// A one-way two-lane street, a 60 m block (`e2`) and a left turn. The router takes the right lane,
+// then the left lane on the block before the turn, so its polyline slides across the lanes over a
+// few metres at the junction at x = 250.
+const TURN_X = 310;
+// `xs`: where the street's junctions are before the turn (the route moves across at the last one)
+function buildTurnMap(xs = [0, 250]) {
+  const two = { lanes: 2, lane_width: 3.5, lane_offsets: [-1.75, 1.75], asphalt: [-3.5, 3.5], parking: [0, 0], cls: "secondary", limit: 13.9, oneway: true };
+  const stops = [...xs, TURN_X];
+  const edges = [
+    ...stops.slice(0, -1).map((x, k) => ({ id: `e${k + 1}`, from: `n${k}`, to: `n${k + 1}`, pts: [[x, 0], [stops[k + 1], 0]], length: stops[k + 1] - x, name: "Main Street" })),
+    { id: "north", from: `n${stops.length - 1}`, to: "d", pts: [[TURN_X, 0], [TURN_X, 150]], length: 150, name: "North Street" },
+  ].map((e) => ({ ...e, ...two }));
+  const lanes = edges.flatMap((e) => e.lane_offsets.map((o, idx) => {
+    const [[x0, y0], [x1, y1]] = e.pts, L = Math.hypot(x1 - x0, y1 - y0), rx = (y1 - y0) / L, ry = -(x1 - x0) / L;
+    return { edge: e.id, idx, pts: [[x0 + rx * o, y0 + ry * o], [x1 + rx * o, y1 + ry * o]] };
+  }));
+  return new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -60, TURN_X + 40, 170], edges, lanes,
+    nodes: [...stops.map((x, k) => ({ id: `n${k}`, x, y: 0 })), { id: "d", x: TURN_X, y: 150 }], intersections: [], stops: [], buildings: [] });
+}
+const turnMap = buildTurnMap();
+const routeOn = (m) => {
+  const ids = [...m.edges.keys()];
+  return new Route(routeFromLanes(m, ids.map((id, k) => m.lane(id, k < ids.length - 2 ? 1 : 0)), 0, 100), m);
+};
+const turnRoute = () => routeOn(turnMap);
+function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
+  const world = new World(m, { parked: 0, pedestrians: 0 });
+  Object.assign(world.ego, { x, y, psi: 0, v });
+  world.route = routeOn(m);
+  world.destination = world.route.endPoint();
+  world.npcs = npcs;
+  world._road = world.roadInfo();
+  return world;
+}
+
+{
+  const route = turnRoute();
+  const [shift] = route.laneShifts();
+  assert.equal(route.laneShifts().length, 1);
+  assert.deepEqual([shift.from, shift.to, shift.by], [1, 0, -3.5]);
+  assert.ok(Math.abs(shift.at - 250) < 5, `${shift.at}`);
+  // the route's lane is the right one until PREPARE_LANE_M before the move, then the left one
+  assert.deepEqual([route.laneAt(shift.at - PREPARE_LANE_M - 5).idx, route.laneAt(shift.at - PREPARE_LANE_M - 5).ahead], [1, false]);
+  assert.deepEqual([route.laneAt(shift.at - PREPARE_LANE_M + 5).idx, route.laneAt(shift.at - PREPARE_LANE_M + 5).ahead], [0, true]);
+  assert.deepEqual([route.laneAt(shift.at + 20).idx, route.laneAt(shift.at + 20).ahead], [0, false]);
+  // the right lane runs beside the route's lane until the turn
+  assert.ok(Math.abs(route.laneSpan(shift.at - 50, 1).until - route.laneEdgeStarts()[2]) < 0.01);
+  // each lane's centre stays on its lane line while the polyline slides across
+  for (let s = shift.at - 20; s <= shift.at + 20; s += 0.5) {
+    const p = route.pointAt(s);
+    for (const k of [0, 1]) {
+      const lane = turnMap.lane(s < route.laneEdgeStarts()[1] ? "e1" : "e2", k);
+      const off = -projectPoint(lane.pts, lane.cum, p).lateral;
+      assert.ok(Math.abs(route.laneOffsetAt(s, k) - off) < 0.1, `lane ${k} at ${(s - shift.at).toFixed(1)}: ${route.laneOffsetAt(s, k).toFixed(2)} vs ${off.toFixed(2)}`);
+    }
+  }
+  assert.ok(Math.abs(route.frameShift(shift.at + 20) - -3.5) < 1e-9 && route.frameShift(shift.at - 20) === 0);
+  console.log("✓ the route's lane becomes the turn lane well before the route itself moves across");
+}
+
+{
+  // before that, the car keeps to the route's right lane; inside it, the left lane is the route's
+  const early = decide(turnSetup({ x: 60 }));
+  assert.equal(early.snap.lane.delta, 0);
+  assert.equal(early.snap.lane.sides.left.offer, null);
+  const world = turnSetup({ x: 130, v: 13.9 });
+  const { snap, candidates, eligible } = decide(world);
+  assert.deepEqual([snap.lane.delta, snap.lane.route_ahead, snap.lane.sides.left.offer], [1, true, "return"]);
+  const change = eligible.find((c) => c.id.startsWith("change_left_"));
+  assert.ok(change && change.change.prepare, candidates.map((c) => `${c.id}:${c.reject}`).join(" "));
+  assert.equal(change.steer, "change to the left lane for the turn ahead");
+  assert.match(new RulesBrain().decideSync(snap, eligible).candidateId, /^change_left_/);
+  const state = toJevState(snap, candidates, {}, "test");
+  assert.deepEqual([state.lanes.car_lane, state.lanes.route_lane], ["right", "left"]);
+  assert.ok(situationClauses(snap).some((c) => c.includes("moves to the left lane ahead for the left turn onto North Street") && c.includes("change_left_*")), situationClauses(snap).join("\n"));
+  console.log("✓ inside that stretch the car is offered a change into the turn lane, and Rules takes it");
+}
+
+{
+  // a car alongside in the left lane blocks the change; staying in the right lane is fine for now
+  // but not so close to the turn that the car could no longer get across
+  const blocked = decide(turnSetup({ x: 130, npcs: [car("beside", 131, LEFT, 10)] }));
+  assert.equal(blocked.snap.lane.sides.left.gap_ok, false);
+  assert.ok(blocked.candidates.filter((c) => c.change).every((c) => c.reject === "lane_change_gap" || c.reject === "collision"));
+  assert.ok(blocked.eligible.some((c) => c.id === "keep_lane_target"));
+  const lateWorld = turnSetup({ x: 262, v: 8 });
+  // still in the right lane on a law chosen before the junction, when that was the route's lane
+  const late = decide(lateWorld, { law: { kind: "lane", offset: 0, center: 0, lane: 0, laneIdx: 1, chain: 0, vTarget: 8, s0: lateWorld.route.project(200, RIGHT, 0).s } });
+  assert.equal(late.snap.lane.delta, 1);
+  assert.ok(late.candidates.filter((c) => c.id.startsWith("keep_lane_") && c.sim.end_speed >= 7.9).every((c) => c.reject === "must_return_to_route_lane"));
+  console.log("✓ without a gap the car waits in its lane, but not past the point it must be across");
+}
+
+{
+  // a lane law chosen before the route's move keeps the car in its lane through the junction
+  const world = turnSetup({ x: 200, y: LEFT, v: 10 });
+  const snap = buildSnapshot(world, { law: { kind: "lane", offset: -3.5, center: -3.5, lane: 0, laneIdx: 0, chain: 0, vTarget: 10, s0: world.route.project(200, LEFT).s } });
+  assert.equal(snap.lane.delta, 0);
+  const keep = sampleCandidates(snap, world).find((c) => c.id === "keep_lane_target");
+  simulateAll([keep], snap, world);
+  const ys = keep.trace.map(([, y]) => y);
+  assert.ok(keep.trace.at(-1)[0] > 230 && ys.every((y) => Math.abs(y - LEFT) < 0.2), ys.map((y) => y.toFixed(2)).join(" "));
+  assert.ok(keep.sim.stays_in_lane && Math.abs(keep.sim.lane_err_end) < 0.2);
+  console.log("✓ a car already in the turn lane holds it while the route slides across to it");
+}
+
+{
+  // closed loop: Rules signals and changes into the left lane well before the junction where the
+  // route moves across, holds it, turns left and arrives
+  const world = turnSetup({ x: 2, v: 8 });
+  const autopilot = new Autopilot(world);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  const metrics = new DriveMetrics(world.route.length);
+  const fleet = { step() {} };
+  let signalledAt = null, acrossAt = null, drift = 0;
+  const dt = 1 / 30;
+  for (let i = 0; i < 60 / dt && world.route; i++) {
+    const road = stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+    if (autopilot.snap) metrics.record(world, autopilot.snap, road, dt);
+    const { x, y } = world.ego;
+    if (signalledAt === null && world.ego.signal === "left") signalledAt = x;
+    if (acrossAt === null && Math.abs(y - LEFT) < 0.3) acrossAt = x;
+    if (acrossAt !== null && x < TURN_X - 15) drift = Math.max(drift, Math.abs(y - LEFT));
+  }
+  assert.equal(world.violations.collisions, 0);
+  assert.equal(world.violations.safety_brakes, 0);
+  assert.equal(world.route, null, "arrived");
+  assert.ok(signalledAt !== null && signalledAt < 150, `signalled left at x=${signalledAt}`);
+  assert.ok(acrossAt !== null && acrossAt < 250 - 80, `in the left lane by x=${acrossAt?.toFixed(1)}`);
+  assert.ok(drift < 0.3, `holds the left lane through the junction (drift ${drift.toFixed(2)} m)`);
+  assert.equal(metrics.laneChanges, 1);
+  console.log(`✓ Rules changes into the turn lane ${Math.round(250 - acrossAt)} m before the route moves across, then turns and arrives`);
+}
+
+{
+  // closed loop: cars queued in the left lane before the turn; the car changes in behind them
+  const queue = [200, 207, 214].map((x, k) => car(`queued${k}`, x, LEFT, 0));
+  const world = turnSetup({ x: 2, v: 8, npcs: queue });
+  const autopilot = new Autopilot(world);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  const fleet = { step() {} };
+  const dt = 1 / 30;
+  for (let i = 0; i < 40 / dt; i++) stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+  assert.equal(world.violations.collisions, 0);
+  assert.equal(world.violations.safety_brakes, 0);
+  assert.ok(Math.abs(world.ego.y - LEFT) < 0.4 && world.ego.x < 200 - 4 && world.ego.x > 180 && world.ego.v < 0.3, `waits behind the queue in the left lane (${world.ego.x.toFixed(1)}, ${world.ego.y.toFixed(2)})`);
+  console.log("✓ Rules joins the back of a queue in the turn lane");
+}
+
+{
+  // with the right lane kept over two blocks before the move, the right lane still runs on to the turn
+  const split = buildTurnMap([0, 150, 250]);
+  const world = turnSetup({ x: 140, v: 5, m: split });
+  const s0 = world.route.project(100, RIGHT, 0).s;
+  const { snap, eligible } = decide(world, { law: { kind: "lane", offset: 0, center: 0, lane: 0, laneIdx: 1, chain: 0, vTarget: 5, s0 } });
+  assert.equal(snap.lane.delta, 1);
+  assert.ok(Math.abs(snap.lane.until_s - world.route.laneEdgeStarts()[3]) < 0.01, `${snap.lane.until_s}`);
+  assert.ok(eligible.some((c) => c.id.startsWith("keep_lane_")) && eligible.some((c) => c.id.startsWith("change_left_")));
+  // a law from before lane indexes counts lanes from the lane the route line is in
+  const legacy = decide(turnSetup({ x: 130 }), { law: { kind: "lane", offset: 0, center: 0, lane: 0, vTarget: 10, s0: 60 } });
+  assert.deepEqual([legacy.snap.lane.index, legacy.snap.lane.delta], [1, 1]);
+  console.log("✓ the lane beside the turn lane runs on across blocks, and older laws keep their lane");
+}
+
+{
+  // re-checking the executing law for hazards uses the frame it was chosen in: a car holding the
+  // left lane through the route's move is not predicted to swerve further left
+  const world = turnSetup({ x: 200, y: LEFT, v: 10 });
+  const s200 = world.route.project(200, LEFT, 0).s;
+  const law = { kind: "lane", offset: -3.5, center: -3.5, lane: 0, laneIdx: 0, chain: 0, vTarget: 10 };
+  Object.assign(world.ego, { x: 260, y: LEFT });
+  world.route.hint = 0;
+  world.npcs = [car("beyond", 272, 5.6)];
+  world._road = world.roadInfo();
+  const executing = { candidate: { id: "keep_lane_target", law }, law: { ...law, s0: s200 } };
+  const snap = buildSnapshot(world, executing);
+  assert.equal(pathHazard(executing, snap, world), null);
+  console.log("✓ the executing law is re-checked in the frame it was chosen in");
+}
+
+{
+  // carrying a lane change on across the route's move keeps the same path
+  const world = turnSetup({ x: 230, v: 10 });
+  const first = decide(world).candidates.find((c) => c.id.startsWith("change_left_"));
+  const s230 = world.route.project(230, RIGHT, 0).s;
+  const executing = { law: { ...first.law, s0: s230 } };
+  Object.assign(world.ego, { x: 249.5, y: RIGHT + 1.2 });
+  world.route.hint = 0;
+  world._road = world.roadInfo();
+  const mid = decide(world, executing);
+  const cont = mid.candidates.find((c) => c.id === "keep_lane_target" || c.id === "keep_lane_hold");
+  assert.ok(cont && cont.law.shift, mid.candidates.map((c) => c.id).join(" "));
+  const sNow = mid.snap.routeProj.s;
+  for (const ds of [0, 4, 8, 12]) {
+    const a = lateralAt(executing.law, sNow + ds, world.route), b = lateralAt({ ...cont.law, s0: sNow }, sNow + ds, world.route);
+    assert.ok(Math.abs(a - b) < 0.05, `${ds} m ahead: ${a.toFixed(2)} vs ${b.toFixed(2)}`);
+  }
+  console.log("✓ a lane change carried on across the route's move keeps its path");
+}
+
+{
+  // the public demo's browser router picks lanes as the server does: the left lane on the block
+  // before a left turn, so its routes get the same early change into the turn lane
+  const data = browserRoute(turnMap, { x: 5, y: RIGHT, heading: 0 }, { x: TURN_X + 1.75, y: 100 });
+  assert.deepEqual(data.lanes, [1, 0, 1]);
+  const route = new Route(data, turnMap);
+  assert.deepEqual(route.laneShifts().map((sh) => [sh.from, sh.to]), [[1, 0]]);
+  assert.deepEqual([route.laneAt(150).idx, route.laneAt(150).ahead], [0, true]);
+  // the start is measured along the lane the route takes: on this curved Ottawa street the lane the
+  // car snaps to is longer, and its distance once collapsed the route's first segment
+  const fs = await import("node:fs");
+  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/d25b07def0d2.v5.pack.json", import.meta.url))));
+  const curved = browserRoute(city, { x: 692.19, y: -456.92, heading: -0.0427 }, { x: 779.29, y: -398.87 });
+  const [p0, , , p3] = curved.polyline;
+  assert.ok(Math.abs(Math.atan2(p3[1] - p0[1], p3[0] - p0[0])) < 0.15, `starts along the street (${curved.start_s})`);
+  console.log("✓ the browser router takes the turn lane on the block before a left turn");
 }

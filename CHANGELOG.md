@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- The driven car gets into the turn lane early. The router takes the left lane on the block before
+  a left turn, so its route line used to slide the car across the lanes inside the junction before
+  that block, without a signal or a gap check. That happens at 547 junctions across the twelve
+  maps. Now, from 150 m before the route moves across, that lane counts as the route's lane: the car
+  signals, changes into it with the gap checks lane changes already use, and holds it while the
+  route line moves over (lane laws are measured against where the route was when they were chosen).
+  Without a gap it slows and waits, and it must be across before the turn. A slow or stopped car in
+  the turn lane within 150 m of the turn is treated as a queue and not passed, and Rules doesn't
+  drive past such a queue in the next lane, because the extra speed there gains nothing. Decision
+  models and LLMs are told the route moves to that lane for the turn and get a
+  `change_*` candidate described as a change "for the turn ahead". Junctions where the lane count
+  or layout changes still slide across as before. The public demo's browser router now picks each
+  street's lane the way the server does (the left lane before a left turn, otherwise the right), so
+  demo drives prepare for turns too; before, it moved into the turn lane only at the turn itself.
+  More checks in `scripts/test_lane_change.mjs`.
+
 - The driven car changes lanes. On streets with more than one lane in its direction, a
   `change_left_*` or `change_right_*` manoeuvre is offered to pass a stopped vehicle, cyclist,
   open door, parking car or traffic at least 2.5 m/s slower, and then to return to the route's
