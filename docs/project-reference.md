@@ -390,7 +390,7 @@ determine sensing; trees and vehicles do not occlude it, and individual street l
 detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car changes lanes only to pass and
 then returns, and to get into the lane for a turn. Where a street's lanes change at the junction
 before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
-against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information.
+against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information. No post or trunk stands in a lane or on the asphalt: where map topology would put one there (a slip road leaving a main road at a shallow angle, or a street continuing wider past a junction), it moves outward, a signal pole to the stop line's curb if the far side has no room, and otherwise is left out (across the twelve maps: 4 of 1,127 signal poles, 27 of 13,358 lamp posts, 11 street-sign and 2 stop-sign posts, and 4 trees).
 Low curbs remain traversable, and scenery beyond the playable map is decorative with simplified geography.
 
 ## Development
@@ -428,10 +428,10 @@ const { runRenderTests } = await import('/tests/render-tests.js');
 runRenderTests(); // Every result should have ok: true.
 ```
 
-The documented validation covers 158 Python tests (68 for LLM endpoints and their setup against a local mock
+The documented validation covers 160 Python tests (68 for LLM endpoints and their setup against a local mock
 OpenAI-compatible server, and 25 for decision-model endpoints and their setup against a local mock System One
 server, both with temporary files; no real provider is tested), 146 browser assertions (99 simulation, 27 HUD and 20 explorer),
-106 renderer assertions, one HUD layout check, 19 scoring tests, 13 building collision regressions, 11 scenery collision regressions,
+106 renderer assertions, one HUD layout check, 19 scoring tests, 13 building collision regressions, 17 scenery collision regressions,
 22 vehicle model regressions, 15 LLM agent checks, 14 decision agent checks, six route-control regressions,
 world-condition and interpolation checks, and 20 offline Jev requests.
 Renderer checks include actual front/rear sign rasterization and wet frames across quality

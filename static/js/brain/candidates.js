@@ -143,7 +143,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let lateLeaving = false, pedCross = false, closePass = false, collision = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let lateLeaving = false, pedCross = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -154,9 +154,11 @@ export function simulateAll(candidates, snap, world) {
       applyLaw(car, law, route, s, SIM_DT);
       // Static map geometry is known even when fog or a corner hides moving traffic. Use the
       // same footprint sweep as execution, including reverse and sideways body motion.
-      if (!collision && world.staticObstacles) {
+      // Keep sweeping after a predicted vehicle contact, so a later static hit is still known.
+      if (!staticHit && world.staticObstacles) {
         const hit = world.staticObstacles.sweep(previousPose, poseOf(car), car.spec);
-        if (hit) collision = { id: hit.obstacle.id, t: Math.round((t - SIM_DT + hit.fraction * SIM_DT) * 10) / 10, kind: hit.obstacle.kind };
+        if (hit) staticHit = { id: hit.obstacle.id, t: Math.round((t - SIM_DT + hit.fraction * SIM_DT) * 10) / 10, kind: hit.obstacle.kind, static: true };
+        if (!collision) collision = staticHit;
       }
       maxAccel = Math.max(maxAccel, car.ax || 0);
       maxDecel = Math.max(maxDecel, -(car.ax || 0));
@@ -198,7 +200,7 @@ export function simulateAll(candidates, snap, world) {
       max_accel: maxAccel, max_decel: maxDecel, max_lateral_accel: maxLat, min_clearance_m: minClearance,
       end_speed: car.v, progress_m: (route && snap.onRoute) ? s - startS : Math.hypot(car.x - snap.ego.x, car.y - snap.ego.y) * (car.v >= 0 ? 1 : -1),
       lane_err_end: lateral - laneCenterAt(law, s, route), heading_err_deg: headingErr * 180 / Math.PI, stays_on_road: staysOnRoad, stays_in_lane: staysInLane,
-      crosses_stop_line: crosses, collision, min_gap_m: minGap, off_road_fraction: offSteps / Math.ceil(steps / 3),
+      crosses_stop_line: crosses, collision, static_collision: staticHit, min_gap_m: minGap, off_road_fraction: offSteps / Math.ceil(steps / 3),
       end: [car.x, car.y],
     };
     // A lane beside the route's lane must leave room to change back before it ends (a turn, a

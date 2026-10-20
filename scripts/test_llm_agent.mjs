@@ -13,7 +13,7 @@ const { SYSTEM_PROMPT, buildLlmPrompt } = await import("../static/js/brain/llm-p
 const { LlmBrain, llmDecision, registerLlmAgents, llmSummary, defaultLlmId, llmBrainFor } = await import("../static/js/brain/llm.js");
 const { agentDefinitions, agentAvailable, agentOptionLabel } = await import("../static/js/brain/registry.js");
 
-const map = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v5.pack.json", import.meta.url))));
+const map = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v6.pack.json", import.meta.url))));
 let assertions = 0;
 async function test(name, fn) { await fn(); assertions++; console.log(`✓ ${name}`); }
 

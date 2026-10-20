@@ -13,7 +13,7 @@ const { toJevState, buildQuestions } = await import("../static/js/brain/state.js
 const { DecisionBrain, registerDecisionAgents, defaultDecisionId, decisionBrainFor, decisionIds, decisionSummary } = await import("../static/js/brain/decision.js");
 const { agentDefinitions, agentAvailable, agentOptionLabel, isDecisionAgent, pillarOf } = await import("../static/js/brain/registry.js");
 
-const map = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v5.pack.json", import.meta.url))));
+const map = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v6.pack.json", import.meta.url))));
 let assertions = 0;
 async function test(name, fn) { await fn(); assertions++; console.log(`✓ ${name}`); }
 

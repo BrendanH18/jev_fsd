@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- The driven car no longer crashes into lamp, sign and signal posts standing in its lane. On
+  two-way streets with more lanes one way than the other (378 directed segments in eleven of the
+  twelve maps, among them Belleville Street in Victoria, Bloor Street West, Gladstone Avenue and
+  8 Street SW), the lanes sat either side of the mapped centreline but the asphalt was centred on it, so
+  the outer lane on the wider side ran past the curb: the car drove over the curb line, counted as
+  off-road there, and hit the curbside posts. Each side's asphalt now ends beyond its own lanes
+  (map pack v6). The committed packs were upgraded in place by `scripts/migrate_packs.py`, without
+  new OSM data, which also moved back 202 signal and 2 stop lines set back from those curbs.
+  Separately, posts and trees no longer stand in any lane or on any asphalt: a slip road leaving
+  at a shallow angle or a street continuing wider past a junction (Québec City's `sig3`) used to
+  put some there. They move outward, a signal pole to the near side of the junction when the far
+  side has no room, or are left out (4 of 1,127 signal poles, 27 lamp posts, 13 sign posts, 4
+  trees). The deadlock creep now looks ahead first and does not drive into static scenery, and
+  rechecks each second while it runs. In the seeded WebKit benchmark, `s1-1` passes in Ottawa,
+  Québec City, Toronto and Victoria, Kitsilano passes 46 of 48 routes across four weathers (44
+  before) and the city smoke suites 20 of 22 (16 before); Kitsilano rain `s1-2` and `s1-5` and
+  Halifax `s1-1` newly fail. See [docs/rules-baseline.md](docs/rules-baseline.md). New checks in
+  `scripts/test_scenery_collision.mjs`; `scripts/bench_node.mjs` runs the bench suites under Node.
+
 - The driven car gets into the turn lane early. The router takes the left lane on the block before
   a left turn, so its route line used to slide the car across the lanes inside the junction before
   that block, without a signal or a gap check. That happens at 547 junctions across the twelve

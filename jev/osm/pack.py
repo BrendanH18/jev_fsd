@@ -23,7 +23,7 @@ from .graph import RoadGraph, build_graph
 from .parse import OsmData, parse_xml
 from .project import Projection
 
-PACK_VERSION = "5"
+PACK_VERSION = "6"
 Bbox = Tuple[float, float, float, float]
 
 

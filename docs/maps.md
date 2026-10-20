@@ -49,18 +49,18 @@ local cache; the processed packs are the redistributable database extracts inclu
 
 | City | Bounding box W,S,E,N | Pack |
 |---|---|---|
-| Vancouver · Kitsilano | `-123.1700,49.2600,-123.1500,49.2700` | `data/maps/623b012bc8b5.v5.pack.json` |
-| Vancouver · Mount Pleasant | `-123.1120,49.2570,-123.0940,49.2680` | `data/maps/7165f1c807a8.v5.pack.json` |
-| Victoria | `-123.3740,48.4190,-123.3570,48.4320` | `data/maps/d7454a9751b7.v5.pack.json` |
-| Toronto | `-79.4120,43.6600,-79.3940,43.6710` | `data/maps/4a96d42cb3f2.v5.pack.json` |
-| Montréal | `-73.5900,45.5160,-73.5740,45.5280` | `data/maps/bb9df59633e0.v5.pack.json` |
-| Calgary | `-114.0870,51.0340,-114.0630,51.0450` | `data/maps/a53c5bcf6438.v5.pack.json` |
-| Ottawa | `-75.7080,45.4070,-75.6870,45.4210` | `data/maps/d25b07def0d2.v5.pack.json` |
-| Québec City | `-71.2350,46.8050,-71.2180,46.8150` | `data/maps/8e99888cb743.v5.pack.json` |
-| Halifax | `-63.5900,44.6400,-63.5700,44.6520` | `data/maps/49db0d437c8c.v5.pack.json` |
-| Winnipeg | `-97.1500,49.8920,-97.1310,49.9030` | `data/maps/19bb885c9cae.v5.pack.json` |
-| Edmonton | `-113.5120,53.5130,-113.4880,53.5230` | `data/maps/3e794edbefcb.v5.pack.json` |
-| Saskatoon | `-106.6720,52.1170,-106.6500,52.1310` | `data/maps/ca5573a8d934.v5.pack.json` |
+| Vancouver · Kitsilano | `-123.1700,49.2600,-123.1500,49.2700` | `data/maps/623b012bc8b5.v6.pack.json` |
+| Vancouver · Mount Pleasant | `-123.1120,49.2570,-123.0940,49.2680` | `data/maps/7165f1c807a8.v6.pack.json` |
+| Victoria | `-123.3740,48.4190,-123.3570,48.4320` | `data/maps/d7454a9751b7.v6.pack.json` |
+| Toronto | `-79.4120,43.6600,-79.3940,43.6710` | `data/maps/4a96d42cb3f2.v6.pack.json` |
+| Montréal | `-73.5900,45.5160,-73.5740,45.5280` | `data/maps/bb9df59633e0.v6.pack.json` |
+| Calgary | `-114.0870,51.0340,-114.0630,51.0450` | `data/maps/a53c5bcf6438.v6.pack.json` |
+| Ottawa | `-75.7080,45.4070,-75.6870,45.4210` | `data/maps/d25b07def0d2.v6.pack.json` |
+| Québec City | `-71.2350,46.8050,-71.2180,46.8150` | `data/maps/8e99888cb743.v6.pack.json` |
+| Halifax | `-63.5900,44.6400,-63.5700,44.6520` | `data/maps/49db0d437c8c.v6.pack.json` |
+| Winnipeg | `-97.1500,49.8920,-97.1310,49.9030` | `data/maps/19bb885c9cae.v6.pack.json` |
+| Edmonton | `-113.5120,53.5130,-113.4880,53.5230` | `data/maps/3e794edbefcb.v6.pack.json` |
+| Saskatoon | `-106.6720,52.1170,-106.6500,52.1310` | `data/maps/ca5573a8d934.v6.pack.json` |
 
 Processing skips streets roofed by a building (`covered=yes`, `tunnel=building_passage`, such
 as Grafton Street through Halifax's Nova Centre) and footprints that start above street level
@@ -68,6 +68,16 @@ as Grafton Street through Halifax's Nova Centre) and footprints that start above
 split across several OSM ways is joined into one ring with a fitted centre, and rings of 9 m
 radius or more keep their single circulating lane on the mapped carriageway. The eight earlier
 packs were not rebuilt; refreshing one may drop a raised footprint (Kitsilano: one).
+
+Pack version 6 fixes two-way streets with more lanes one way than the other, such as Belleville
+Street in Victoria (three lanes one way, one the other). Their lanes already sat on either side of
+the mapped centreline, but the asphalt was centred on it, so the outer lane on the wider side ran
+past the curb, and curbside lamp and sign posts stood in it. Now each side's asphalt ends beyond
+its own lanes. The committed packs were upgraded in place by `scripts/migrate_packs.py`, without
+new OSM data: it widened or narrowed the asphalt of 378 directed segments (all but Saskatoon have
+some) and moved back the 202 signal and 2 stop lines set back from those streets' curbs. A fresh
+build of Kitsilano from its cached OSM with the fixed code gives the same roads, lanes and controls
+as its migrated pack, except for one stop line 1 cm away (packs store lengths to the centimetre).
 
 To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
 data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep

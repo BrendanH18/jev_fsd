@@ -36,6 +36,8 @@ export class Autopilot {
     this.onDecision = onDecision;
     this.onEvent = onEvent;
     this.deadlock = new DeadlockDetector();
+    this.creepBlockedAt = -Infinity;
+    this.creepCheckedAt = -Infinity;
     this.totals = { tokens: 0, cost: 0, decisions: 0, calls: 0 };
     this.snap = null;
     this.offRouteFor = 0;
@@ -103,14 +105,34 @@ export class Autopilot {
         world.ego.step(dt, { steer: 0, accel: world.ego.v > 0 ? -3 : 0 });
       }
     }
-    if (world.stuckFor > 12 && !this.executing?.override) {
-      // Creep along the route's lane, easing back to it from another lane.
+    if (world.stuckFor > 12 && !this.executing?.override && now - this.creepBlockedAt >= 1000) {
+      // Creep along the route's lane, easing back to it from another lane. Never into static
+      // scenery: a creep cannot push a post or a wall aside, so it would only add a collision.
       const l = snap.lane, center = l ? l.route_center : 0;
       const back = l && l.delta !== 0 ? { shift: { from: snap.routeProj.lateral, start: s, len: 18 } } : {};
       const law = { kind: "lane", offset: center, center, lane: 0, ...(l ? { laneIdx: l.route_index, chain: l.chain } : {}), vTarget: 2, ...back };
-      this.executing = { candidate: { id: "creep", law }, law: { ...law, s0: s }, s0: s, override: true };
-      world.violations.deadlock_overrides++;
-      this.onEvent({ type: "deadlock" });
+      const creep = { id: "creep", law };
+      simulateAll([creep], snap, world);
+      if (creep.sim.static_collision) this.creepBlockedAt = now;   // look again in a second
+      else {
+        this.creepCheckedAt = now;
+        this.executing = { candidate: creep, law: { ...law, s0: s }, s0: s, override: true };
+        world.violations.deadlock_overrides++;
+        this.onEvent({ type: "deadlock" });
+      }
+    }
+    if (this.executing?.override && now - this.creepCheckedAt >= 1000) {
+      // A creep runs until the next decision, which a slow model answer can delay past the 3 s it
+      // was checked for: look ahead again each second, and stop short of static scenery. The stop
+      // keeps steering along the creep's path, which may be curving around something nearer.
+      this.creepCheckedAt = now;
+      const creep = { id: "creep", law: this.executing.law };
+      simulateAll([creep], snap, world);
+      if (creep.sim.static_collision) {
+        const law = { ...this.executing.law, kind: "hard_brake" };
+        this.executing = { ...this.executing, candidate: { id: "creep_stop", law }, law };
+        this.creepBlockedAt = now;
+      }
     }
     const flags = hazardFlags(snap);
     const interval = flags.length ? INTERVAL_HAZARD_MS : INTERVAL_CLEAR_MS;
