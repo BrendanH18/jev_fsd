@@ -138,8 +138,8 @@ test('a far-side signal pole stands beyond the curb of a wider street the approa
 });
 test('no post or trunk stands in a lane or on the asphalt of any bundled map',()=>{
   const dir=new URL('../data/maps/',import.meta.url);
-  const packs=fs.readdirSync(dir).filter(f=>f.endsWith('.pack.json'));
-  assert.equal(packs.length,12);
+  // The twelve bundled packs (docs/maps.md); packs built for custom areas share the directory.
+  const packs=['623b012bc8b5','7165f1c807a8','d7454a9751b7','4a96d42cb3f2','bb9df59633e0','a53c5bcf6438','d25b07def0d2','8e99888cb743','49db0d437c8c','19bb885c9cae','3e794edbefcb','ca5573a8d934'].map(h=>`${h}.v6.pack.json`);
   for(const file of packs) {
     const map=new MapData(JSON.parse(fs.readFileSync(new URL(file,dir),'utf8')));
     const bad=[];

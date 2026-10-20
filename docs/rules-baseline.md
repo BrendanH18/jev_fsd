@@ -82,8 +82,11 @@ As below for WebKit. For V8, start a server and run the same suites from Node:
 
 ```sh
 PORT=8331 uv run server.py
-node --experimental-default-type=module scripts/bench_node.mjs --map halifax --count 2 [--weather rain] [--only s1-1] [--json out.json]
+node --experimental-default-type=module scripts/bench_node.mjs --map halifax --count 2
 ```
+
+Add `--weather rain` (or `fog`, `snow`) to change the weather, `--only s1-1` to run only the listed
+scenarios (comma-separated), and `--json out.json` to write the run's settings and full results.
 
 Compare V8 runs only with V8 runs.
 
