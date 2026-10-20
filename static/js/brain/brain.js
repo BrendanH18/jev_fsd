@@ -78,12 +78,19 @@ export class Autopilot {
     const shift = snap.lane && snap.lane.shift && this.executing?.law;
     if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s, world.route) > lateralAt({ ...shift, shift: null }, snap.routeProj.s, world.route) ? "left" : "right";
     this.deadlock.update(world, snap, dt);
-    const blockedBy = atGoal(snap) ? this.goalBlockedBy : null;
+    let blockedBy = atGoal(snap) && world.ego.v < 0.3 && !snap.nav.arrived ? this.goalBlockedBy : null;
+    if (blockedBy) {
+      // Found at the last decision: check it is still in the way (a parked car can pull out) before
+      // ending the drive.
+      const candidates = sampleCandidates(snap, world);
+      simulateAll(candidates, snap, world);
+      blockedBy = this.goalBlockedBy = goalBlocker(candidates, world);
+    }
     if (snap.nav && (snap.nav.arrived || blockedBy) && world.ego.v < 0.3) {
       this.setEnabled(false);
       world.route = null;
       world.destination = null;
-      this.onEvent(blockedBy && !snap.nav.arrived ? { type: "arrived", blocked_by: blockedBy } : { type: "arrived" });
+      this.onEvent(blockedBy ? { type: "arrived", blocked_by: blockedBy } : { type: "arrived" });
       return;
     }
     // off route for a while: ask the server for fresh routes from here

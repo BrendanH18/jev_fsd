@@ -165,6 +165,36 @@ function drive(blocker) {
 }
 
 {
+  // The blocker is found at a decision and used until the next one: a parked car that pulls out in
+  // between must not end the drive, and one still there does
+  const stoppedBehind = () => {
+    const world = new World(map, { parked: 0, pedestrians: 0 });
+    const car = parkedCar(world, "across", 299, 0);
+    Object.assign(world.ego, { x: 299 - CAR.length - 2.5, y: 0, psi: 0, v: 0 });
+    world.route = new Route({ id: "r", polyline: Array.from({ length: 301 }, (_, i) => [i, 0]), edges: ["main"], turns: [], start_s: 0, goal_s: 300 }, map);
+    world.destination = [300, 0];
+    world.npcs = [];
+    const autopilot = new Autopilot(world);
+    const events = [];
+    autopilot.onEvent = (e) => events.push(e);
+    autopilot.brainName = "rules";
+    autopilot.setEnabled(true);
+    autopilot.goalBlockedBy = "across";
+    return { world, car, autopilot, events };
+  };
+  const gone = stoppedBehind();
+  gone.world.parked.remove(gone.car);
+  gone.autopilot.step(1 / 30, 0);
+  assert.equal(gone.events.some((e) => e.type === "arrived"), false);
+  assert.ok(gone.world.route, "still has its route");
+  assert.equal(gone.autopilot.goalBlockedBy, null);
+  const still = stoppedBehind();
+  still.autopilot.step(1 / 30, 0);
+  assert.deepEqual(still.events.find((e) => e.type === "arrived"), { type: "arrived", blocked_by: "across" });
+  console.log("✓ a parked car that pulls out after the decision that found it no longer ends the drive");
+}
+
+{
   // Nothing in the way: the ordinary arrival, with no blocker reported
   const { events, remaining } = drive(() => {});
   const arrived = events.find((e) => e.type === "arrived");
