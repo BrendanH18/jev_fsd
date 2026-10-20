@@ -27,7 +27,7 @@ class RouterTests(unittest.TestCase):
         # right lane to the left one across the junction, so the lanes cannot be read off it
         import json
         from pathlib import Path
-        pack = json.loads((Path(__file__).resolve().parent.parent / "data/maps/8e99888cb743.v5.pack.json").read_text())
+        pack = json.loads((Path(__file__).resolve().parent.parent / "data/maps/8e99888cb743.v6.pack.json").read_text())
         route = Router(pack).build_route(["e668", "e142", "e125", "e123"], {"s": 63.14}, {"s": 20.68})
         self.assertEqual(route["lanes"], [2, 0, 0, 0])
 

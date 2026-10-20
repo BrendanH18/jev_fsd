@@ -15,7 +15,7 @@ const { validAgentChoice, registerAgent } = await import("../static/js/brain/reg
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
 const names = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2" };
-const load = id => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v5.pack.json`, import.meta.url))));
+const load = id => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url))));
 let assertions = 0;
 function test(name, fn) { fn(); assertions++; console.log(`✓ ${name}`); }
 

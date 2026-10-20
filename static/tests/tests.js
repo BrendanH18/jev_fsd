@@ -289,9 +289,15 @@ async function run() {
     check("door closes and leaves the obstacle list", !car.door && !world.parked.doorsNear(door.x, door.y, 20).length);
   }
   {
-    const world = new World(map, { seed: 2, pedestrians: 0 });
-    const fleet = new NpcFleet(world, { count: 40, bikes: 0, seed: 2 });
-    const n = fleet.maybePark(), slot = n?.parking.slot;
+    // Whether a car is near a free bay at the first try depends on where the seeded traffic and
+    // parked cars happen to be, so take the first seed that has one.
+    let world, fleet, n = null;
+    for (let seed = 2; seed < 12 && !n; seed++) {
+      world = new World(map, { seed, pedestrians: 0 });
+      fleet = new NpcFleet(world, { count: 40, bikes: 0, seed });
+      n = fleet.maybePark();
+    }
+    const slot = n?.parking.slot;
     check("traffic reserves a vacant curb bay", n && slot.reserved === n && !slot.occupant);
     if (n) {
       world.npcs = fleet.vehicles = [n]; world.ego.x = -1e5;

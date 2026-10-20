@@ -1,6 +1,6 @@
 // One deterministic source of roadside placements for rendering and collision geometry.
 // This module has no browser/Three dependency, so headless worlds see the same solid scenery.
-import { pointAt, headingAt } from "./mapdata.js";
+import { pointAt, headingAt, projectPoint } from "./mapdata.js";
 import { GUTTER, CURB } from "./streets.js";
 import { sceneryHash } from "./scenery-hash.js";
 import { buildingShapes, boxPolygon } from "./building-scenery.js";
@@ -76,6 +76,33 @@ export function crossingHalf(map, e) {
     w = Math.max(w, surfaceHalf(o));
   }
   return w;
+}
+
+// Posts belong beyond every curb. Map topology can put a placement made beside one street inside
+// another's carriageway: a slip road leaving a main road at a shallow angle, or a junction where
+// the street continues wider than it arrived. This tests a post of radius `r` against every lane
+// nearby (with room to spare beyond the lane's edge) and every street's asphalt.
+const LANE_CLEARANCE_M = 0.3;
+const POST_SHIFT_M = 0.5,
+  POST_MAX_SHIFT_M = 3;
+function trafficClearance(map) {
+  if (typeof map.lanesNear !== "function") return () => true;
+  return (x, y, r) => {
+    const edges = new Set();
+    for (const lane of map.lanesNear(x, y, 15)) {
+      const w = lane.edgeRef.lane_width || 3.5;
+      if (projectPoint(lane.pts, lane.cum, [x, y]).distance < w / 2 + r + LANE_CLEARANCE_M)
+        return false;
+      edges.add(lane.edgeRef);
+    }
+    for (const e of edges) {
+      const p = projectPoint(e.pts, e.cum, [x, y]);
+      // beside the street's polyline, not past one of its ends
+      if (p.distance > Math.abs(p.lateral) + 0.01) continue;
+      if (p.lateral > e.asphalt[0] - r && p.lateral < e.asphalt[1] + r) return false;
+    }
+    return true;
+  };
 }
 
 // Match the renderer's inset building walls when keeping trees clear of buildings.
@@ -177,6 +204,16 @@ export function sceneryFor(map) {
     !nearBuilding(x, y, margin) &&
     typeof map.roadDistance === "function" &&
     map.roadDistance(x, y).distance > 1;
+  // A post `lat` right of `e` at `s`, moved outward in 0.5 m steps (at most 3 m) until it stands
+  // clear of every carriageway; null when no such spot exists.
+  const clearOfTraffic = trafficClearance(map);
+  const post = (e, s, lat, r) => {
+    for (let shift = 0; shift <= POST_MAX_SHIFT_M; shift += POST_SHIFT_M) {
+      const p = roadside(e, s, lat + shift);
+      if (clearOfTraffic(p.x, p.y, r)) return p;
+    }
+    return null;
+  };
   for (const st of roads.streets) {
     const e = st.edge,
       blvd = BOULEVARD[e.cls];
@@ -197,7 +234,7 @@ export function sceneryFor(map) {
         const key = `${e.id}:${sign}:${Math.round(s)}`;
         if (hash01(key, 1) < 0.14) continue;
         const { x, y } = roadside(e, s, lat);
-        if (!clear(x, y, 2)) continue;
+        if (!clear(x, y, 2) || !clearOfTraffic(x, y, 0.3)) continue;
         spots.push({
           x,
           y,
@@ -257,8 +294,9 @@ export function sceneryFor(map) {
         s < to;
         s += spacing
       ) {
-        const p = roadside(e, s, e.asphalt[1] + GUTTER + CURB + 0.45),
+        const p = post(e, s, e.asphalt[1] + GUTTER + CURB + 0.45, 0.22),
           reach = tall ? 2.3 : 1.5;
+        if (!p) continue;
         const lamp = {
           ...p,
           h: tall ? 8.4 : 7,
@@ -303,10 +341,12 @@ export function sceneryFor(map) {
     for (const plate of plates) {
       const label = `${plate.speed ? "speed" : "street"}:${plate.text}`;
       if (!labels.has(label) && labels.size >= 128) continue;
+      const p = post(e, plate.s, e.asphalt[1] + 1.25, 0.035);
+      if (!p) continue;
       labels.add(label);
       const item = {
         ...plate,
-        ...roadside(e, plate.s, e.asphalt[1] + 1.25),
+        ...p,
         z: plate.speed ? 2.3 : 2.7,
         id: `sign_post:${e.id}:${plate.speed ? "speed" : "street"}`,
       };
@@ -323,27 +363,17 @@ export function sceneryFor(map) {
   for (const stop of (map.stops || new Map()).values()) {
     const e = map.edges.get(stop.edge);
     if (!e) continue;
-    const item = {
-      ...roadside(
-        e,
-        Math.min(stop.s_line + 0.4, e.cum.at(-1)),
-        e.asphalt[1] + GUTTER + CURB + 0.7,
-      ),
-      id: `stop_post:${stop.id}`,
-    };
+    const p = post(e, Math.min(stop.s_line + 0.4, e.cum.at(-1)), e.asphalt[1] + GUTTER + CURB + 0.7, 0.035);
+    if (!p) continue;
+    const item = { ...p, id: `stop_post:${stop.id}` };
     result.stopSigns.push(item);
     result.circles.push({ ...item, kind: "stop_post", radius: 0.035 });
   }
   for (const e of (map.edges || new Map()).values()) {
     if (e.control?.type !== "yield") continue;
-    const item = {
-      ...roadside(
-        e,
-        Math.max(0, e.control.s_line - 0.6),
-        e.asphalt[1] + GUTTER + CURB + 0.7,
-      ),
-      id: `yield_post:${e.id}`,
-    };
+    const p = post(e, Math.max(0, e.control.s_line - 0.6), e.asphalt[1] + GUTTER + CURB + 0.7, 0.035);
+    if (!p) continue;
+    const item = { ...p, id: `yield_post:${e.id}` };
     result.yieldSigns.push(item);
     result.circles.push({ ...item, kind: "yield_post", radius: 0.035 });
   }
@@ -352,17 +382,40 @@ export function sceneryFor(map) {
       const e = map.edges.get(a.edge);
       if (!e) continue;
       const end = e.pts.at(-1),
-        heading = headingAt(e.pts, e.cum, e.cum.at(-1) - 0.5),
-        ahead = crossingHalf(map, e) + 2.2,
-        poleLat = e.asphalt[1] + GUTTER + CURB + 1;
+        L = e.cum.at(-1),
+        curbLat = e.asphalt[1] + GUTTER + CURB + 1,
+        base = crossingHalf(map, e) + 2.2;
+      // The pole stands on the far side, beyond the curb of the street the approach continues
+      // into, which can be wider than the approach or another street's lanes; the arm reaches back
+      // over the approach's lanes. With no clear spot there, it stands at the stop line on the
+      // approach's own curb (a near-side signal).
+      let place = null;
+      const heading = headingAt(e.pts, e.cum, L - 0.5);
+      for (const ahead of [base, base + 2, base + 4]) {
+        for (let lat = curbLat; lat <= curbLat + POST_MAX_SHIFT_M * 2 && !place; lat += POST_SHIFT_M) {
+          const x = end[0] + Math.cos(heading) * ahead + Math.sin(heading) * lat,
+            y = end[1] + Math.sin(heading) * ahead - Math.cos(heading) * lat;
+          if (clearOfTraffic(x, y, 0.17)) place = { x, y, heading, poleLat: lat };
+        }
+        if (place) break;
+      }
+      if (!place) {
+        const s = Math.min(a.s_line + 0.5, L);
+        for (let lat = curbLat; lat <= curbLat + POST_MAX_SHIFT_M && !place; lat += POST_SHIFT_M) {
+          const p = roadside(e, s, lat);
+          if (clearOfTraffic(p.x, p.y, 0.17)) place = { ...p, poleLat: lat };
+        }
+      }
+      if (!place) continue;
+      const { x, y, poleLat } = place;
       const item = {
         inter,
         a,
         e,
-        heading,
+        heading: place.heading,
         poleLat,
-        x: end[0] + Math.cos(heading) * ahead + Math.sin(heading) * poleLat,
-        y: end[1] + Math.sin(heading) * ahead - Math.cos(heading) * poleLat,
+        x,
+        y,
         id: `signal_post:${inter.id}:${a.edge}`,
       };
       result.signals.push(item);

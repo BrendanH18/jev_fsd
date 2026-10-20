@@ -155,7 +155,7 @@ function decide(world, executing = null) {
 {
   // a route that starts late on an edge still finds its lane from the part it drives (Winnipeg)
   const fs = await import("node:fs");
-  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/19bb885c9cae.v5.pack.json", import.meta.url))));
+  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/19bb885c9cae.v6.pack.json", import.meta.url))));
   const a = city.lane("e0", 1), b = city.lane("e209", 1), start = 83.5357;
   const polyline = a.pts.filter((_, i) => a.cum[i] > start).concat(b.pts.slice(1));
   polyline.unshift(pointAt(a.pts, a.cum, start));
@@ -169,7 +169,7 @@ function decide(world, executing = null) {
   // the router's own lane choice wins: an Ottawa route blends from the right lane of a three-lane
   // street toward the left lane of the next, which the polyline alone misreads
   const fs = await import("node:fs");
-  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/8e99888cb743.v5.pack.json", import.meta.url))));
+  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/8e99888cb743.v6.pack.json", import.meta.url))));
   const a = city.lane("e668", 2), b = city.lane("e142", 0), start = 63.14;
   const polyline = [pointAt(a.pts, a.cum, start), ...a.pts.filter((_, i) => a.cum[i] > start), ...b.pts.slice(1)];
   const data = { id: "o", polyline, edges: ["e668", "e142"], turns: [], start_s: start, goal_s: b.length };
@@ -513,7 +513,7 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
   // the start is measured along the lane the route takes: on this curved Ottawa street the lane the
   // car snaps to is longer, and its distance once collapsed the route's first segment
   const fs = await import("node:fs");
-  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/d25b07def0d2.v5.pack.json", import.meta.url))));
+  const city = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/d25b07def0d2.v6.pack.json", import.meta.url))));
   const curved = browserRoute(city, { x: 692.19, y: -456.92, heading: -0.0427 }, { x: 779.29, y: -398.87 });
   const [p0, , , p3] = curved.polyline;
   assert.ok(Math.abs(Math.atan2(p3[1] - p0[1], p3[0] - p0[0])) < 0.15, `starts along the street (${curved.start_s})`);

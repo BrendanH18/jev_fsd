@@ -53,6 +53,30 @@ class ParkingTests(unittest.TestCase):
         residential = [e for e in pack["edges"] if e["cls"] == "residential" and not e["oneway"]]
         self.assertTrue(residential and all(e["parking"] == [PARKING_LANE_M, PARKING_LANE_M] for e in residential))
 
+    def test_asphalt_follows_lanes_on_an_asymmetric_street(self):
+        # Two lanes one way and one the other: each direction's curb sits beyond its own lanes.
+        proj = Projection(49.0, -123.0)
+        osm = OsmData()
+        for i, x in enumerate((-100.0, 0.0, 100.0)):
+            lat, lon = proj.to_latlon(x, 0.0)
+            osm.add_node(1 + i, lat, lon)
+        osm.add_way(1, [1, 2, 3], {"highway": "secondary", "lanes": "3", "lanes:forward": "2", "lanes:backward": "1", "name": "Wide Street"})
+        s, w = proj.to_latlon(-150, -150)
+        n, e = proj.to_latlon(150, 150)
+        pack = pack_from_osm(osm, (w, s, e, n))
+        forward = next(edge for edge in pack["edges"] if edge["lanes"] == 2)
+        backward = next(edge for edge in pack["edges"] if edge["lanes"] == 1)
+        width = forward["lane_width"]
+        self.assertEqual(forward["lane_offsets"], [width / 2, width * 1.5])
+        self.assertAlmostEqual(forward["asphalt"][1], 2 * width, places=2)
+        self.assertAlmostEqual(forward["asphalt"][0], -width, places=2)
+        # The reverse edge sees the same carriageway from the other side.
+        self.assertAlmostEqual(backward["asphalt"][1], -forward["asphalt"][0], places=2)
+        self.assertAlmostEqual(backward["asphalt"][0], -forward["asphalt"][1], places=2)
+        for edge in (forward, backward):
+            outer = max(edge["lane_offsets"]) + width / 2
+            self.assertLessEqual(outer, edge["asphalt"][1] + 1e-6)
+
     def test_bike_routes(self):
         self.assertTrue(is_bike_route({"cycleway": "shared_lane"}))
         self.assertTrue(is_bike_route({"lcn": "yes"}))

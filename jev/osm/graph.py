@@ -338,11 +338,19 @@ def _lane_centerlines(graph: RoadGraph) -> None:
             lanes.append(g.offset_polyline(e["pts"], d))
         e["lane_pts"] = lanes
         e["lane_offsets"] = [((i + 0.5) * w if not e["oneway"] else (i - (n - 1) / 2.0) * w) for i in range(n)]
-        # asphalt edges: roads span [-width/2, +width/2] around the way's centerline, so the forward
-        # direction sees asphalt from -width/2 (left, oncoming side) to +width/2, widened by the
-        # parking lanes along each curb.
-        park_left, park_right = e.get("parking", (0.0, 0.0))
-        e["asphalt"] = (-e["width"] / 2.0 - park_left, e["width"] / 2.0 + park_right)
+        e["asphalt"] = asphalt_span(e)
+
+
+def asphalt_span(e: dict) -> Tuple[float, float]:
+    """Asphalt edges right of travel, widened by the parking lanes along each curb. A one-way road's
+    lanes straddle the way's centerline, so its asphalt spans [-width/2, +width/2]. A two-way road's
+    centerline divides the directions: its own lanes run to the right of it and the oncoming lanes
+    (the rest of the width) to the left, so a street with more lanes one way is wider on that side."""
+    park_left, park_right = e.get("parking", (0.0, 0.0))
+    if e["oneway"]:
+        return (-e["width"] / 2.0 - park_left, e["width"] / 2.0 + park_right)
+    own = e["lanes"] * e["lane_width"]
+    return (-(e["width"] - own) - park_left, own + park_right)
 
 
 def _circle_center(pts: List[Tuple[float, float]]) -> Tuple[float, float]:

@@ -2,7 +2,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 globalThis.document = { querySelector: () => null };
-const { MapData } = await import('../static/js/map/mapdata.js');
+const { MapData, projectPoint } = await import('../static/js/map/mapdata.js');
+const { Route } = await import('../static/js/map/route.js');
+const { Autopilot } = await import('../static/js/brain/brain.js');
 const { sceneryFor, sceneryHash } = await import('../static/js/map/scenery.js');
 const { buildingShapes, boxPolygon } = await import('../static/js/map/building-scenery.js');
 const { StaticObstacles, obbCircleOverlap } = await import('../static/js/sim/static-obstacles.js');
@@ -114,10 +116,90 @@ test('every rendered porch/hedge boundary is indexed with identical geometry',()
   assert(!manifest.polygons.some(o=>o.kind==='porch_roof'));
 });
 test('real map scenery remains spatially bounded for physics queries',()=>{
-  const pack=JSON.parse(fs.readFileSync(new URL('../data/maps/623b012bc8b5.v5.pack.json',import.meta.url),'utf8'));
+  const pack=JSON.parse(fs.readFileSync(new URL('../data/maps/623b012bc8b5.v6.pack.json',import.meta.url),'utf8'));
   const map=new MapData(pack),manifest=sceneryFor(map),index=new StaticObstacles(map);
   assert(manifest.trees.length>500&&manifest.circles.length>1000);
   assert(index.query([-5,-5,5,5]).length<30);
   for(const kind of ['tree','sign_post','signal_post','stop_post','yield_post','lamp_post','porch','porch_step','hedge'])assert(index.list.some(o=>o.kind===kind),kind);
+});
+test('a far-side signal pole stands beyond the curb of a wider street the approach continues into',()=>{
+  // A one-lane approach (asphalt 3.5 m right of its centre) continues straight into a street whose
+  // right lane is centred 5.25 m right of the same line; a cross street makes the junction.
+  const two=(id,from,to,pts,lanes,asphalt,offs)=>({id,from,to,pts,length:Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]),lanes,lane_width:3.5,lane_offsets:offs,asphalt,parking:[0,0],cls:'primary',limit:13.9,oneway:false,name:id});
+  const edges=[two('in','w','j',[[-100,0],[0,0]],1,[-3.5,3.5],[1.75]),two('out','j','e',[[0,0],[100,0]],2,[-7,7],[1.75,5.25]),
+    two('cross','n','j',[[0,100],[0,0]],1,[-3.5,3.5],[1.75]),two('cross_back','j','n',[[0,0],[0,100]],1,[-3.5,3.5],[1.75])];
+  const lanes=edges.flatMap(e=>e.lane_offsets.map((d,idx)=>{const [a,b]=e.pts,h=Math.atan2(b[1]-a[1],b[0]-a[0]),nx=Math.sin(h),ny=-Math.cos(h);return {edge:e.id,idx,pts:[[a[0]+nx*d,a[1]+ny*d],[b[0]+nx*d,b[1]+ny*d]]};}));
+  const map=new MapData({bbox:[0,0,1,1],extent:[-120,-120,120,120],edges,lanes,nodes:['w','j','e','n'].map(id=>({id,x:0,y:0})),
+    intersections:[{id:'sig',x:0,y:0,vertices:['j'],approaches:[{edge:'in',group:'A',s_line:90},{edge:'cross',group:'B',s_line:90}]}],stops:[],buildings:[]});
+  const pole=sceneryFor(map).signals.find(p=>p.a.edge==='in');
+  assert(pole&&pole.x>0,'the pole stays on the far side');
+  assert(-pole.y>=7+0.17,`the pole stands beyond the wider street's asphalt (${(-pole.y).toFixed(2)} m)`);
+  assert.equal(pole.poleLat,-pole.y);
+});
+test('no post or trunk stands in a lane or on the asphalt of any bundled map',()=>{
+  const dir=new URL('../data/maps/',import.meta.url);
+  // The twelve bundled packs (docs/maps.md); packs built for custom areas share the directory.
+  const packs=['623b012bc8b5','7165f1c807a8','d7454a9751b7','4a96d42cb3f2','bb9df59633e0','a53c5bcf6438','d25b07def0d2','8e99888cb743','49db0d437c8c','19bb885c9cae','3e794edbefcb','ca5573a8d934'].map(h=>`${h}.v6.pack.json`);
+  for(const file of packs) {
+    const map=new MapData(JSON.parse(fs.readFileSync(new URL(file,dir),'utf8')));
+    const bad=[];
+    for(const c of sceneryFor(map).circles) {
+      const lanes=map.lanesNear(c.x,c.y,15),edges=new Set(lanes.map(l=>l.edgeRef));
+      const inLane=lanes.find(l=>projectPoint(l.pts,l.cum,[c.x,c.y]).distance<(l.edgeRef.lane_width||3.5)/2+c.radius);
+      const onAsphalt=[...edges].find(e=>{const p=projectPoint(e.pts,e.cum,[c.x,c.y]);return p.distance<=Math.abs(p.lateral)+0.01&&p.lateral>e.asphalt[0]-c.radius&&p.lateral<e.asphalt[1]+c.radius;});
+      if(inLane||onAsphalt)bad.push(`${c.id} ${inLane?`in a lane of ${inLane.edgeRef.id}`:`on ${onAsphalt.id}`}`);
+    }
+    assert.deepEqual(bad,[],`${map.pack.name}: ${bad.slice(0,5).join('; ')}`);
+    // two-way streets: every lane lies within its street's asphalt
+    for(const e of map.edges.values())for(const d of e.lane_offsets)assert(d+(e.lane_width||3.5)/2<=e.asphalt[1]+1e-6&&d-(e.lane_width||3.5)/2>=e.asphalt[0]-1e-6,`${map.pack.name} ${e.id}`);
+  }
+});
+test('a car stuck behind solid scenery does not creep into it',()=>{
+  const edge={id:'road',from:'a',to:'b',pts:[[0,0],[140,0]],length:140,cls:'residential',name:'Blocked Street',limit:11.2,lanes:1,lane_width:3.5,lane_offsets:[0],asphalt:[-4,4],parking:[0,0],oneway:true};
+  const map=new MapData({bbox:[0,0,1,1],extent:[-10,-60,150,60],edges:[edge],lanes:[{edge:'road',idx:0,pts:edge.pts}],nodes:[{id:'a',x:0,y:0},{id:'b',x:140,y:0}],intersections:[],stops:[],buildings:[]});
+  sceneryFor(map).circles.length=0;
+  sceneryFor(map).circles.push({id:'tree:block',kind:'tree',x:30,y:0,radius:2.5});
+  const world=new World(map,{parked:0,pedestrians:0});
+  Object.assign(world.ego,{x:22,y:0,psi:0,v:0});world.resetContactHistory();
+  world.route=new Route({id:'r',polyline:Array.from({length:141},(_,i)=>[i,0]),edges:['road'],turns:[],start_s:0,goal_s:140},map);
+  world.destination=[140,0];
+  const autopilot=new Autopilot(world);autopilot.setBrain('rules');autopilot.setEnabled(true);
+  for(let i=0;i<60*20;i++){autopilot.step(1/60,world.t*1000);world.t+=1/60;world.audit(1/60,world.roadInfo());}
+  assert.equal(world.violations.collisions,0);
+  assert.equal(world.violations.deadlock_overrides,0);
+  assert(world.stuckFor>12,'the car is stuck long enough for the deadlock creep');
+  assert(world.ego.x<23,'the car stays behind the tree');
+});
+function blockedStreet(circles,{npcs=[],brain=null,psi=0,seconds=25}={}) {
+  const edge={id:'road',from:'a',to:'b',pts:[[0,0],[140,0]],length:140,cls:'residential',name:'Post Street',limit:11.2,lanes:1,lane_width:3.5,lane_offsets:[0],asphalt:[-4,4],parking:[0,0],oneway:true};
+  const map=new MapData({bbox:[0,0,1,1],extent:[-10,-60,150,60],edges:[edge],lanes:[{edge:'road',idx:0,pts:edge.pts}],nodes:[{id:'a',x:0,y:0},{id:'b',x:140,y:0}],intersections:[],stops:[],buildings:[]});
+  sceneryFor(map).circles.length=0;sceneryFor(map).circles.push(...circles);
+  const world=new World(map,{parked:0,pedestrians:0});
+  Object.assign(world.ego,{x:22,y:0,psi,v:0});world.resetContactHistory();world.npcs=npcs;
+  world.route=new Route({id:'r',polyline:Array.from({length:141},(_,i)=>[i,0]),edges:['road'],turns:[],start_s:0,goal_s:140},map);
+  world.destination=[140,0];
+  const autopilot=new Autopilot(world);
+  if(brain){autopilot.brains.slow=brain;autopilot.brainName='slow';}else autopilot.setBrain('rules');
+  autopilot.setEnabled(true);
+  for(let i=0;i<60*seconds;i++){autopilot.step(1/60,world.t*1000);world.t+=1/60;world.audit(1/60,world.roadInfo());}
+  return world;
+}
+test('a predicted contact with a car alongside does not hide a post ahead from the creep check',()=>{
+  const parked=new Vehicle(22,2.1,0,0);parked.id='alongside';
+  const world=blockedStreet([{id:'lamp_post:ahead',kind:'lamp_post',x:25.92,y:0,radius:0.22}],{npcs:[parked]});
+  assert.equal(world.violations.collisions,0);
+});
+test('a creep that outlives its check while a model answer is pending stops short of a post',()=>{
+  const pending={timeoutMs:60000,decide:()=>new Promise(()=>{})};
+  const world=blockedStreet([{id:'lamp_post:ahead',kind:'lamp_post',x:34,y:0,radius:0.22}],{brain:pending});
+  assert(world.violations.deadlock_overrides>0,'the creep starts');
+  assert.equal(world.violations.collisions,0);
+  assert(world.ego.x<34);
+});
+test('a creep stopped for a post further on keeps steering around a nearer one',()=>{
+  const pending={timeoutMs:60000,decide:()=>new Promise(()=>{})};
+  const world=blockedStreet([{id:'lamp_post:near',kind:'lamp_post',x:26.32,y:1.9,radius:0.1},{id:'lamp_post:far',kind:'lamp_post',x:30.5,y:0,radius:0.1}],{brain:pending,psi:0.3,seconds:14});
+  assert(world.violations.deadlock_overrides>0,'the creep starts');
+  assert.equal(world.violations.collisions,0);
 });
 console.log(`${passed} scenery collision tests passed`);
