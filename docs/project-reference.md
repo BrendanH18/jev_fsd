@@ -327,8 +327,8 @@ open as 3D replays on their recorded map.
 
 A benchmark drive passes only if it arrives with no collision, red light, rolled stop or failed
 yield, and less than one second off-road. A car arrives within 3.5 m of its destination, or
-within 10 m when every manoeuvre along the route's lane that would get it closer hits a parked car
-or static scenery. It also reports comfort, lane keeping (measured from
+within 10 m, stopped on its route and in the route's lane, when every manoeuvre along that lane
+that would get it closer hits a parked car or static scenery. It also reports comfort, lane keeping (measured from
 the centre of the lane the car is in or moving into), lane changes, fault, safety
 brakes, gaps, tokens, cost and latency. This pass criterion is separate from the live coach's
 weighted score.

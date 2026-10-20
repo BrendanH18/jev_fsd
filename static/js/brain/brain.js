@@ -19,6 +19,7 @@ import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
 const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
 const TIMEOUT_MS = 1500;
+const GOAL_LATERAL_M = 1.5;   // a blocked destination counts only this close to the route lane's centre
 const SPEND_KEYS = ["model", "endpoint", "latency_ms", "input_tokens", "output_tokens", "cost_usd", "cost_known", "live_call"];
 
 export class Autopilot {
@@ -77,7 +78,7 @@ export class Autopilot {
     const shift = snap.lane && snap.lane.shift && this.executing?.law;
     if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s, world.route) > lateralAt({ ...shift, shift: null }, snap.routeProj.s, world.route) ? "left" : "right";
     this.deadlock.update(world, snap, dt);
-    const blockedBy = snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M ? this.goalBlockedBy : null;
+    const blockedBy = atGoal(snap) ? this.goalBlockedBy : null;
     if (snap.nav && (snap.nav.arrived || blockedBy) && world.ego.v < 0.3) {
       this.setEnabled(false);
       world.route = null;
@@ -148,7 +149,7 @@ export class Autopilot {
     const epoch = this.epoch;
     const candidates = sampleCandidates(snap, world);
     const { eligible, rejected, mustStop } = simulateAll(candidates, snap, world);
-    this.goalBlockedBy = snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M ? goalBlocker(candidates, world) : null;
+    this.goalBlockedBy = atGoal(snap) ? goalBlocker(candidates, world) : null;
     if (this.executing && this.executing.candidate) {
       this.executing.hazard = pathHazard(this.executing, snap, world);
       if (this.executing.hazard) snap.current_path_hazard = this.executing.hazard;
@@ -273,6 +274,15 @@ export class Autopilot {
   }
 }
 
+// Within the last few metres of the route, on it and in its lane: only there can something parked
+// in the way mean the car has arrived. The route's projection alone does not say how far the car is
+// from the destination, or which way it faces.
+function atGoal(snap) {
+  const l = snap.lane;
+  return !!(snap.nav && snap.onRoute && snap.nav.remaining_m < DESTINATION_ZONE_M && (!l || l.delta === 0)
+    && Math.abs(l ? l.lateral : snap.routeProj.lateral) < GOAL_LATERAL_M);
+}
+
 // Something parked across the last few metres to the destination: every manoeuvre along the
 // route's lane that would get the car more than a metre closer hits a parked car or static
 // scenery. Edging out around it or changing lanes does not reach a destination it stands on, and
@@ -281,6 +291,7 @@ export class Autopilot {
 export function goalBlocker(candidates, world) {
   let by = null;
   for (const c of candidates) {
+    if (c.law.kind !== "lane" && c.law.kind !== "hard_brake") continue;
     if (c.change || c.law.lane || c.law.shift || (c.law.offset ?? 0) !== (c.law.center ?? 0)) continue;
     if (!c.sim || !(c.sim.progress_m > 1)) continue;
     const hit = c.sim.collision;

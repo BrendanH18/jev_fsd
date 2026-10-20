@@ -73,6 +73,29 @@ function parkedCar(world, id, x, y = CURB_Y) {
   console.log("✓ with the street clear, a boxed-in car still pulls out");
 }
 
+{
+  // However long the car in front holds it, a pull-out stays one (signalling, and checking for a
+  // gap) until the car is moving: drivers who are slow to move off must not lose it at the curb.
+  for (let seed = 1; seed <= 8; seed++) {
+    const world = new World(map, { parked: 0, pedestrians: 0 });
+    const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed });
+    const x = 150;
+    const leaving = parkedCar(world, "leaving", x);
+    parkedCar(world, "in_front", x + CAR.length + 1.2);
+    Object.assign(world.ego, { x: 20, y: 0, psi: 0, v: 0 });
+    const merging = fleet.startPullOut(leaving);
+    let movedOff = false;
+    for (let i = 0; i < 15 * 60; i++) {
+      fleet.step(1 / 60);
+      world.t += 1 / 60;
+      if (merging.v > 0.3) movedOff = true;
+      assert.ok(merging.pull || movedOff, `seed ${seed}: the pull-out ended at ${world.t.toFixed(2)} s with the car still at the curb (v=${merging.v.toFixed(2)})`);
+    }
+    assert.ok(movedOff && !merging.pull, `seed ${seed}: pulled out`);
+  }
+  console.log("✓ a boxed-in car keeps signalling and checking for a gap until it is moving");
+}
+
 function drive(blocker) {
   const world = new World(map, { parked: 0, pedestrians: 0 });
   const goal = 300;
@@ -119,6 +142,29 @@ function drive(blocker) {
 }
 
 {
+  // Stopped 4 m from the end of the route but facing away from it, with a car parked in front: the
+  // car is off its route, so a blocker found from there says nothing about the destination
+  const world = new World(map, { parked: 0, pedestrians: 0 });
+  parkedCar(world, "facing", 287, 0);
+  Object.assign(world.ego, { x: 296, y: 0, psi: Math.PI, v: 0 });
+  world.route = new Route({ id: "r", polyline: Array.from({ length: 301 }, (_, i) => [i, 0]), edges: ["main"], turns: [], start_s: 0, goal_s: 300 }, map);
+  world.destination = [300, 0];
+  world.npcs = [];
+  const autopilot = new Autopilot(world);
+  const events = [];
+  autopilot.onEvent = (e) => events.push(e);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  autopilot.goalBlockedBy = "facing";
+  autopilot.step(1 / 30, 0);
+  assert.equal(autopilot.snap.onRoute, false);
+  assert.ok(autopilot.snap.nav.remaining_m < 10);
+  assert.equal(events.some((e) => e.type === "arrived"), false);
+  assert.ok(world.route, "still has its route");
+  console.log("✓ off its route near the end of it, a parked car in front does not count as arrival");
+}
+
+{
   // Nothing in the way: the ordinary arrival, with no blocker reported
   const { events, remaining } = drive(() => {});
   const arrived = events.find((e) => e.type === "arrived");
@@ -144,6 +190,9 @@ function drive(blocker) {
   // A nudge around it does not count as a way on; traffic in the way does count against arrival
   assert.equal(goalBlocker([stop, lane("keep_lane_target", 6, { collision: hits("beyond") }), lane("left_1_target", 5, { offset: -1 })], world), "beyond");
   assert.equal(goalBlocker([stop, lane("keep_lane_target", 6, { collision: hits("car_3") })], world), null);
+  // Off-route creeping has no lane to judge the destination by
+  const creep = { id: "creep_straight", law: { kind: "steer", steer: 0, vTarget: 2 }, eligible: false, reject: "collision", sim: { progress_m: 4, collision: hits("beyond") } };
+  assert.equal(goalBlocker([creep], world), null);
   console.log("✓ a blocked destination needs every move along the route's lane to hit something parked, not a red light or traffic");
 }
 

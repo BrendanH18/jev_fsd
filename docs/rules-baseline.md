@@ -2,8 +2,9 @@
 
 This rerun covers two fixes for the failures the 2026-10-19 record left. A traffic car pulling out
 of a parking spot now checks for a gap again on every tick until it is actually moving, instead of
-once before it starts. And within 10 m of the destination, a stopped car has arrived when every
-manoeuvre along the route's lane that would get it closer hits a parked car or static scenery.
+once before it starts. And within 10 m of the destination, a car stopped on its route and in the
+route's lane has arrived when every manoeuvre along that lane that would get it closer hits a
+parked car or static scenery.
 "Before" is `1a8d7b5` from a `git archive`; "after" is the same commit with this change. Both ran
 on the same day in the same harness, in WebKit and in V8, so the difference between them is this
 change alone.
@@ -32,7 +33,7 @@ light or a stop sign or failed to yield.
 | Kitsilano, dry | 12/12 | 12/12 | 12/12 | 0/0 → 0/0 | 0.2 → 0.2 | 0 → 0 | 23.08 → 23.66 |
 | Kitsilano, fog | 12/12 | 11/12 | 12/12 | 0/0 → 1/0 | 0.4 → 0.4 | 0 → 0 | 16.77 → 17.25 |
 | Kitsilano, rain | 10/12 | 12/12 | 12/12 | 2/1 → 0/0 | 0.2 → 0.2 | 4 → 0 | 18.63 → 19.23 |
-| Kitsilano, snow | 12/12 | 12/12 | 12/12 | 0/0 → 0/0 | 0.3 → 0.3 | 4 → 4 | 14.61 → 14.58 |
+| Kitsilano, snow | 12/12 | 12/12 | 12/12 | 0/0 → 0/0 | 0.3 → 0.3 | 4 → 4 | 14.61 → 14.51 |
 | Mount Pleasant, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 18.95 → 19.25 |
 | Victoria, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 17.65 → 17.65 |
 | Toronto, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 4 → 4 | 18.25 → 18.25 |

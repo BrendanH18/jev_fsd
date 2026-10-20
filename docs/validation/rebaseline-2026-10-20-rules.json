@@ -2,7 +2,7 @@
  "date": "2026-10-20",
  "method": "Production /bench suite builder, runner and metrics, Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano 12 routes in dry, fog, rain and snow; the other maps two-route dry smoke suites.",
  "before_code": "1a8d7b5 (git archive), map packs v6",
- "after_code": "1a8d7b5 plus the working-tree changes of this record (pull-out gap recheck, arrival when a parked car blocks the destination)",
+ "after_code": "1a8d7b5 plus the working-tree changes of this record (pull-out gap recheck held until the car moves, arrival when a parked car blocks the destination on the route's lane)",
  "webkit": {
   "engine": "WebKit (WKWebView via scripts/shot.swift, macOS 27.0.1)",
   "before": {
@@ -2232,7 +2232,7 @@
       49.27
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:32:21.525Z"
+     "started_at": "2026-10-20T17:14:24.842Z"
     },
     "summary": {
      "scenarios": 12,
@@ -2523,7 +2523,7 @@
       49.27
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:32:21.570Z"
+     "started_at": "2026-10-20T17:14:24.788Z"
     },
     "summary": {
      "scenarios": 12,
@@ -2829,7 +2829,7 @@
       49.27
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:32:21.816Z"
+     "started_at": "2026-10-20T17:14:24.788Z"
     },
     "summary": {
      "scenarios": 12,
@@ -3120,7 +3120,7 @@
       49.27
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:32:21.683Z"
+     "started_at": "2026-10-20T17:14:24.784Z"
     },
     "summary": {
      "scenarios": 12,
@@ -3137,16 +3137,16 @@
      "deadlocks": 4,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 14.58,
+     "avg_kmh": 14.51,
      "min_gap_m": 2.1,
      "min_ttc_s": 1.7,
      "hard_brakes": 0,
-     "rms_jerk": 1.6,
-     "max_lat_accel": 1.93,
+     "rms_jerk": 1.59,
+     "max_lat_accel": 1.92,
      "lane_rms_m": 0.11,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 8435,
+     "decisions": 8494,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -3196,18 +3196,18 @@
       "id": "s1-3",
       "pass": true,
       "arrived": true,
-      "time_s": 135.5,
+      "time_s": 137.3,
       "collisions": 0,
       "at_fault": 0,
       "off_road_s": 0,
       "deadlocks": 0,
       "safety_brakes": 0,
-      "avg_kmh": 13.7,
+      "avg_kmh": 13.6,
       "lane_changes": 0,
       "failures": [],
       "events": [
        {
-        "t": 135.5,
+        "t": 137.3,
         "type": "arrived"
        }
       ]
@@ -3296,18 +3296,18 @@
       "id": "s1-8",
       "pass": true,
       "arrived": true,
-      "time_s": 232.4,
+      "time_s": 244,
       "collisions": 0,
       "at_fault": 0,
       "off_road_s": 0,
       "deadlocks": 0,
       "safety_brakes": 0,
-      "avg_kmh": 14.6,
+      "avg_kmh": 13.9,
       "lane_changes": 0,
       "failures": [],
       "events": [
        {
-        "t": 232.4,
+        "t": 244,
         "type": "arrived"
        }
       ]
@@ -3411,7 +3411,7 @@
       49.268
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.351Z"
+     "started_at": "2026-10-20T17:20:19.080Z"
     },
     "summary": {
      "scenarios": 2,
@@ -3502,7 +3502,7 @@
       48.432
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.686Z"
+     "started_at": "2026-10-20T17:20:19.263Z"
     },
     "summary": {
      "scenarios": 2,
@@ -3593,7 +3593,7 @@
       43.671
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.206Z"
+     "started_at": "2026-10-20T17:20:19.038Z"
     },
     "summary": {
      "scenarios": 2,
@@ -3684,7 +3684,7 @@
       45.528
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.691Z"
+     "started_at": "2026-10-20T17:20:19.038Z"
     },
     "summary": {
      "scenarios": 2,
@@ -3775,7 +3775,7 @@
       51.045
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.198Z"
+     "started_at": "2026-10-20T17:20:19.479Z"
     },
     "summary": {
      "scenarios": 2,
@@ -3866,7 +3866,7 @@
       45.421
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.686Z"
+     "started_at": "2026-10-20T17:20:19.270Z"
     },
     "summary": {
      "scenarios": 2,
@@ -3957,7 +3957,7 @@
       46.815
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.761Z"
+     "started_at": "2026-10-20T17:20:19.410Z"
     },
     "summary": {
      "scenarios": 2,
@@ -4048,7 +4048,7 @@
       44.652
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.677Z"
+     "started_at": "2026-10-20T17:20:19.222Z"
     },
     "summary": {
      "scenarios": 2,
@@ -4140,7 +4140,7 @@
       49.903
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.795Z"
+     "started_at": "2026-10-20T17:20:19.308Z"
     },
     "summary": {
      "scenarios": 2,
@@ -4231,7 +4231,7 @@
       53.523
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.225Z"
+     "started_at": "2026-10-20T17:20:19.029Z"
     },
     "summary": {
      "scenarios": 2,
@@ -4322,7 +4322,7 @@
       52.131
      ],
      "pack": "6",
-     "started_at": "2026-10-20T16:39:54.701Z"
+     "started_at": "2026-10-20T17:20:19.652Z"
     },
     "summary": {
      "scenarios": 2,
@@ -7208,7 +7208,7 @@
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 19.49,
+     "avg_kmh": 19.5,
      "min_gap_m": 0.7,
      "min_ttc_s": 1.2,
      "hard_brakes": 0,
@@ -7217,7 +7217,7 @@
      "lane_rms_m": 0.14,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 6346,
+     "decisions": 6344,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -7447,18 +7447,18 @@
       "id": "s1-12",
       "pass": true,
       "arrived": true,
-      "time_s": 167,
+      "time_s": 166,
       "collisions": 0,
       "at_fault": 0,
       "off_road_s": 0,
       "deadlocks": 0,
       "safety_brakes": 0,
-      "avg_kmh": 23.4,
+      "avg_kmh": 23.5,
       "lane_changes": 0,
       "failures": [],
       "events": [
        {
-        "t": 167,
+        "t": 165.9,
         "type": "arrived"
        }
       ]
@@ -7498,16 +7498,16 @@
      "deadlocks": 4,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 14.54,
+     "avg_kmh": 14.48,
      "min_gap_m": 1.9,
      "min_ttc_s": 1.5,
      "hard_brakes": 0,
-     "rms_jerk": 1.58,
+     "rms_jerk": 1.57,
      "max_lat_accel": 1.9,
      "lane_rms_m": 0.11,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 8492,
+     "decisions": 8523,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -7557,18 +7557,18 @@
       "id": "s1-3",
       "pass": true,
       "arrived": true,
-      "time_s": 137,
+      "time_s": 144.2,
       "collisions": 0,
       "at_fault": 0,
       "off_road_s": 0,
       "deadlocks": 0,
       "safety_brakes": 0,
-      "avg_kmh": 13.6,
+      "avg_kmh": 12.9,
       "lane_changes": 0,
       "failures": [],
       "events": [
        {
-        "t": 137,
+        "t": 144.2,
         "type": "arrived"
        }
       ]
