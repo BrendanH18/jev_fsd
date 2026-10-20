@@ -38,9 +38,15 @@ if (map.routingBbox.some((v, i) => Math.abs(v - wanted[i]) > 1e-6)) fail(`The se
 const brains = agentDefinitions().map((d) => d.id);
 if (!brains.includes(String(args.brain || "rules"))) fail(`Unknown brain "${args.brain}": use one of ${brains.join(", ")}.`);
 if (!Object.hasOwn(WEATHER, String(args.weather || "dry"))) fail(`Unknown weather "${args.weather}": use one of ${Object.keys(WEATHER).join(", ")}.`);
-const config = { brain: String(args.brain || "rules"), count: Number(args.count || 12), seed: Number(args.seed || 1), npcs: Number(args.npcs || 40),
+const integer = (name, fallback, min) => {
+  const v = args[name] === undefined ? fallback : args[name] === true ? NaN : Number(args[name]);
+  if (!Number.isSafeInteger(v) || v < min) fail(`--${name} must be a whole number of at least ${min}, not "${args[name]}".`);
+  return v;
+};
+const config = { brain: String(args.brain || "rules"), count: integer("count", 12, 1), seed: integer("seed", 1, 0), npcs: integer("npcs", 40, 0),
   mode: "lockstep", weather: String(args.weather || "dry"), map: preset, bbox: map.routingBbox, pack: map.pack.pack_version, engine: `node ${process.version}` };
 const suite = await buildSuite(map, { count: config.count, seed: config.seed });
+if (!suite.length) fail(`No routable scenarios on "${preset}".`);
 const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
 if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);

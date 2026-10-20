@@ -78,10 +78,14 @@ changes when the car reaches each junction and which traffic it meets there.
 
 ## Repeat
 
-As below for WebKit. For V8, start a server and run the same suites from Node:
+As below for WebKit. For V8, start a server in one terminal and run the same suites from Node in
+another:
 
 ```sh
-PORT=8331 uv run server.py
+PORT=8331 uv run server.py   # keeps running
+```
+
+```sh
 node --experimental-default-type=module scripts/bench_node.mjs --map halifax --count 2
 ```
 
