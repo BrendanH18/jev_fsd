@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Traffic no longer pulls out of a parking spot into the driven car. A car parked close behind
+  another could not move off when its gap check passed: the car in front held it still while its
+  merge ran out the clock, and it pulled out over three seconds later, with the driven car about
+  10 m behind. A car pulling out now checks for a gap on every tick until it is actually moving,
+  and with someone coming it goes back to waiting at the curb, indicator on; it stays a pull-out,
+  signalling, until it moves, however long the car in front holds it. The driven car also counts
+  as arrived when it has stopped on its route, in the route's lane, within 10 m of its destination,
+  and every manoeuvre along that lane that would get it closer hits a parked car or static
+  scenery; the arrival event names it (`blocked_by`). Traffic in the way, a red light, a parked car
+  in another lane or a car off its route does not count. In the seeded WebKit benchmark Kitsilano passes 47 of 48 routes across four
+  weathers (46 before) and the city smoke suites 22 of 22 (20 before): Kitsilano rain `s1-2` and
+  `s1-5` and Calgary and Halifax `s1-1` pass, and Kitsilano fog `s1-4` newly fails, a left turn
+  on a green into a car coming the other way, because Rules does not yield to oncoming traffic at
+  a signal. See [docs/rules-baseline.md](docs/rules-baseline.md). New checks in
+  `scripts/test_pull_out.mjs`.
+
 - The driven car no longer crashes into lamp, sign and signal posts standing in its lane. On
   two-way streets with more lanes one way than the other (378 directed segments in eleven of the
   twelve maps, among them Belleville Street in Victoria, Bloor Street West, Gladstone Avenue and

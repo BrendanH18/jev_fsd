@@ -216,6 +216,12 @@ export class NpcFleet {
         n.v = 0;
         continue;
       }
+      // Still at the curb (a parked car close in front, or the driver slow to move off): look again
+      // until the car is actually moving, and go back to waiting if someone is coming now.
+      if (n.pull && !n.pull.moving) {
+        if (n.v > 0.3) n.pull.moving = true;
+        else if (!this.pullClear(n)) { n.pull.t = 0; n.pull.wait = 0.5; n.v = 0; continue; }
+      }
       if (n.parking) { this.parkStep(n, dt); continue; }
       if (n.backoff) { this.backOff(n, dt); continue; }
       if (n.holdFor > 0) { n.holdFor -= dt; n.step(dt, { steer: n.delta, accel: -3 }); if (n.v < 0) n.v = 0; continue; }
@@ -246,10 +252,13 @@ export class NpcFleet {
       // a cyclist rides the right-hand side of the lane, clear of the car doors
       const keepRight = n.kind === "bike" ? Math.max(0, this.map.edges.get(edge.id).lane_width / 2 - 0.75) : 0;
       let offset = keepRight + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0);
+      // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
+      // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
+      // and checking for a gap.
       if (n.pull) {
         n.pull.t += dt;
         offset += n.pull.lat * (1 - smooth(n.pull.t / n.pull.T));
-        if (n.pull.t >= n.pull.T) n.pull = null;
+        if (n.pull.t >= n.pull.T && n.pull.moving) n.pull = null;
       }
 
       // Leader: nearest vehicle ahead on our path within LOOK_M (parked cars only when they

@@ -5,6 +5,9 @@
 import { obbOverlap } from "../sim/collision.js";
 import { CAR } from "../sim/vehicle.js";
 
+// Within this many metres of the destination a stop is not a deadlock, and a car that cannot get
+// any closer because something is parked in the way has arrived.
+export const DESTINATION_ZONE_M = 10;
 
 export function safetyBrake(world, snap, executing) {
   const ego = world.ego;
@@ -53,7 +56,7 @@ export class DeadlockDetector {
       (snap.intersection.control === "yield" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8)))
       || (snap && snap.following && snap.following.gap_m < 8)
       || (snap && snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12)
-      || (snap && snap.nav && snap.nav.remaining_m < 10)
+      || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)
       || !world.route;
     const crawling = Math.abs(ego.v) < 1.0 && (!snap || !snap.target || snap.target.v > 2.0);
     if (crawling && !legit) this.stoppedFor += dt;
