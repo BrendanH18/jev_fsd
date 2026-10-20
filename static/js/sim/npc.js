@@ -216,6 +216,12 @@ export class NpcFleet {
         n.v = 0;
         continue;
       }
+      // Still at the curb (a parked car close in front, or the driver slow to move off): look again
+      // until the car is actually moving, and go back to waiting if someone is coming now.
+      if (n.pull && !n.pull.moving) {
+        if (n.v > 0.3) n.pull.moving = true;
+        else if (!this.pullClear(n)) { n.pull.t = 0; n.pull.wait = 0.5; n.v = 0; continue; }
+      }
       if (n.parking) { this.parkStep(n, dt); continue; }
       if (n.backoff) { this.backOff(n, dt); continue; }
       if (n.holdFor > 0) { n.holdFor -= dt; n.step(dt, { steer: n.delta, accel: -3 }); if (n.v < 0) n.v = 0; continue; }

@@ -236,6 +236,7 @@ node scripts/test_drive_score.mjs               # coaching score
 node scripts/test_decision_agent.mjs            # decision-model drivers (registry, answers, fallback)
 node scripts/test_llm_agent.mjs                 # LLM endpoint drivers (prompt, parsing, fallback)
 node scripts/test_lane_change.mjs               # lane changes (gaps, lane ends, a pass, turn lanes)
+node scripts/test_pull_out.mjs                  # pull-outs and a destination blocked by a parked car
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

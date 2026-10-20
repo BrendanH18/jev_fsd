@@ -251,7 +251,7 @@ acceleration, actuator lag, drag and stability assistance. The same physical mod
 cars and candidate predictions. Rain and snow reduce grip.
 
 Traffic follows lanes, obeys signals, yields at junctions and crossings, changes lanes, reserves
-curb parking, pulls in and waits for gaps before pulling out. Parked cars can open a street-side
+curb parking, pulls in and waits for gaps before pulling out, looking again until it is moving. Parked cars can open a street-side
 door for six seconds; the animated door has matching sensing, prediction and collision geometry.
 Cyclists ride bike routes, and pedestrians cross at signals or sometimes mid-block and carry
 umbrellas in rain.
@@ -326,16 +326,19 @@ latency affects the drive. Runs save under `data/runs/`, support side-by-side co
 open as 3D replays on their recorded map.
 
 A benchmark drive passes only if it arrives with no collision, red light, rolled stop or failed
-yield, and less than one second off-road. It also reports comfort, lane keeping (measured from
+yield, and less than one second off-road. A car arrives within 3.5 m of its destination, or
+within 10 m when every manoeuvre along the route's lane that would get it closer hits a parked car
+or static scenery. It also reports comfort, lane keeping (measured from
 the centre of the lane the car is in or moving into), lane changes, fault, safety
 brakes, gaps, tokens, cost and latency. This pass criterion is separate from the live coach's
 weighted score.
 
 Recorded validation includes a 500 m Rules drive through Victoria in rain with no audited
 collision, red-light, stop or yield violations and a score of 97. The
-[2026-10-14 Rules baseline](rules-baseline.md) is the current seeded record. In WebKit, the
-12-route Kitsilano suite passed 11/12 dry, 10/12 fog, 11/12 rain and 10/12 snow, and every route
-arrived. Five of seven two-route city smoke suites failed one route on street-furniture contact.
+[2026-10-20 Rules baseline](rules-baseline.md) is the current seeded record. In WebKit, the
+12-route Kitsilano suite passed 12/12 dry, 11/12 fog, 12/12 rain and 12/12 snow, and every route
+arrived; all eleven two-route city smoke suites passed. In V8 every Kitsilano route passed and
+Edmonton's smoke suite failed one route.
 Results vary between JavaScript engines, so compare runs from the same browser. These are
 individual recorded checks, not guarantees for every city or seed. Live Jev behaviour with the revised prompt has
 not been validated; offline fixtures establish request consistency, not model judgment.
@@ -411,6 +414,7 @@ node --experimental-default-type=module scripts/test_vehicle_models.mjs
 node --experimental-default-type=module scripts/test_llm_agent.mjs
 node --experimental-default-type=module scripts/test_decision_agent.mjs
 node --experimental-default-type=module scripts/test_lane_change.mjs
+node --experimental-default-type=module scripts/test_pull_out.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```
