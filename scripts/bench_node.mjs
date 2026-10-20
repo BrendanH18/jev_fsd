@@ -9,6 +9,14 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((out, a, i, all) =>
   if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
   return out;
 }, []));
+const fail = (message) => { console.error(message); process.exit(1); };
+// Every option takes a value; one without (parsed as `true`) or a misspelled one would otherwise
+// run the defaults.
+const OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "port", "only", "json"];
+for (const [name, value] of Object.entries(args)) {
+  if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
+  if (value === true) fail(`--${name} needs a value.`);
+}
 const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
 const page = await (await fetch(`${base}/bench`)).text();
 const token = page.match(/name="jev-csrf" content="([^"]+)"/)?.[1] || "";
@@ -24,7 +32,6 @@ const { aggregate } = await import("../static/js/bench/metrics.js");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { agentDefinitions } = await import("../static/js/brain/registry.js");
 
-const fail = (message) => { console.error(message); process.exit(1); };
 // The server falls back to its default map for a name or box it does not recognise, so check
 // that the map it returned is the one asked for.
 const preset = String(args.map || "kitsilano");
@@ -39,7 +46,7 @@ const brains = agentDefinitions().map((d) => d.id);
 if (!brains.includes(String(args.brain || "rules"))) fail(`Unknown brain "${args.brain}": use one of ${brains.join(", ")}.`);
 if (!Object.hasOwn(WEATHER, String(args.weather || "dry"))) fail(`Unknown weather "${args.weather}": use one of ${Object.keys(WEATHER).join(", ")}.`);
 const integer = (name, fallback, min) => {
-  const v = args[name] === undefined ? fallback : args[name] === true ? NaN : Number(args[name]);
+  const v = args[name] === undefined ? fallback : Number(args[name]);
   if (!Number.isSafeInteger(v) || v < min) fail(`--${name} must be a whole number of at least ${min}, not "${args[name]}".`);
   return v;
 };
