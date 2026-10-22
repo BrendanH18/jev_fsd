@@ -94,11 +94,12 @@ export function secondsToGreen(intersection, group, t) {
 }
 
 // Stop-sign progress for one vehicle: approaching -> stopped -> completed. Reset when the vehicle
-// moves on to another control.
+// moves on to another control. A signal's line is tracked the same way: a right turn on red needs
+// a full stop at it first.
 export class StopMemory {
   constructor() { this.controlId = null; this.state = "approaching"; this.stoppedFor = 0; this.stops = 0; }
   update(control, bumperToLine, v, dt) {
-    if (!control || control.type !== "stop") { this.reset(); return this.state; }
+    if (!control || (control.type !== "stop" && control.type !== "signal")) { this.reset(); return this.state; }
     if (control.id !== this.controlId) { this.reset(); this.controlId = control.id; }
     if (this.state === "completed") return this.state;
     if (Math.abs(v) < 0.2 && bumperToLine < STOP_ZONE_M && bumperToLine > -6) {

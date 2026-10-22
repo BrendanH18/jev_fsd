@@ -3,6 +3,7 @@
 import { current as weather } from "./weather.js";
 
 const CELL = 25;
+export const DAYLIGHT_RANGE_M = 80;   // the farthest the car sees anything, in clear daylight
 const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
 
 function inside(p, pts) {
@@ -48,14 +49,14 @@ export class Visibility {
   // Low beams preserve a forward sight line after dark, while unlit peripheral
   // hazards are visible over a shorter distance. Weather remains the upper bound.
   setNight(value) { this.night = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0; }
-  get range() { return Math.min(weather.visibility, 80 - 35 * this.night); }
+  get range() { return Math.min(weather.visibility, DAYLIGHT_RANGE_M - 35 * this.night); }
 
   rangeAt(observer, x, y) {
     if (!this.night || !Number.isFinite(observer.psi)) return this.range;
     const bearing = Math.atan2(y - observer.y, x - observer.x) - observer.psi;
     const angle = Math.abs(Math.atan2(Math.sin(bearing), Math.cos(bearing)));
     const beam = Math.max(0, Math.min(1, (Math.PI / 3 - angle) / (Math.PI / 6)));
-    return Math.min(weather.visibility, 80 - this.night * (58 - 23 * beam));
+    return Math.min(weather.visibility, DAYLIGHT_RANGE_M - this.night * (58 - 23 * beam));
   }
 
   canSee(observer, x, y) {
