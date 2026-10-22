@@ -6,7 +6,7 @@
 // node --experimental-default-type=module scripts/test_left_turn.mjs
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
-const { MapData, joinLanes, cumulative, pointAt } = await import("../static/js/map/mapdata.js");
+const { MapData, joinLanes, cumulative, pointAt, headingAt, wrapAngle } = await import("../static/js/map/mapdata.js");
 const { Route } = await import("../static/js/map/route.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
@@ -19,6 +19,9 @@ const { toJevState, buildQuestions, situationClauses } = await import("../static
 const { buildLlmPrompt } = await import("../static/js/brain/llm-prompt.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
+const { NpcPath } = await import("../static/js/sim/npc.js");
+const { rng } = await import("../static/js/common.js");
+const fs = await import("node:fs");
 
 // Two-way streets crossing at the origin, one lane each way 3.2 m wide; stop lines 8 m before the
 // centre. The car comes from the west (travel +x, its lane at y = -1.6) and turns left to go north
@@ -29,23 +32,27 @@ const ARM = 150, LINE = ARM - 8, HALF = 1.6;
 const right = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy); return [dy / d, -dx / d]; };
 const names = { w: "West Street", e: "West Street", n: "North Street", s: "North Street" };
 const groups = { w: "A", e: "A", n: "B", s: "B" };
-function junction({ count = 1, arms = { w: 180, e: 0, n: 90, s: -90 } } = {}) {
-  const ends = { c: [0, 0] }, edges = [], lanes = [];
+function junction({ count = 1, arms = { w: 180, e: 0, n: 90, s: -90 }, nodes = {}, streets = [] } = {}) {
+  const ends = { c: [0, 0], ...nodes }, edges = [], lanes = [];
   for (const [arm, deg] of Object.entries(arms)) ends[arm] = [ARM * Math.cos(deg * Math.PI / 180), ARM * Math.sin(deg * Math.PI / 180)].map((v) => Math.round(v * 1e6) / 1e6);
   const offsets = Array.from({ length: count }, (_, i) => HALF + i * 3.2);
-  for (const arm of Object.keys(arms)) {
-    for (const [id, from, to, control] of [[`${arm}_in`, arm, "c", true], [`${arm}_out`, "c", arm, false]]) {
+  // each arm in and out of the junction, then any other streets (`streets`: [id, from, to])
+  // (a street marked `approach` also comes into the signal)
+  const all = Object.keys(arms).flatMap((arm) => [[`${arm}_in`, arm, "c", true, arm], [`${arm}_out`, "c", arm, false, arm]]).concat(streets.map(([id, from, to, approach]) => [id, from, to, !!approach, null]));
+  {
+    for (const [id, from, to, control, arm] of all) {
       const pts = [ends[from], ends[to]];
       const [rx, ry] = right(...pts);
-      edges.push({ id, from, to, pts, length: ARM, lanes: count, lane_width: 3.2, lane_offsets: offsets, asphalt: [-3.2 * count, 3.2 * count], parking: [0, 0],
+      edges.push({ id, from, to, pts, length: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]), lanes: count, lane_width: 3.2, lane_offsets: offsets, asphalt: [-3.2 * count, 3.2 * count], parking: [0, 0],
         cls: "secondary", limit: 13.9, oneway: false, name: names[arm] || "Bent Street",
-        ...(control ? { control: { type: "signal", id: "sig", s_line: LINE, group: groups[arm] || "A" } } : {}) });
+        ...(control ? { control: { type: "signal", id: "sig", s_line: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]) - 8, group: groups[arm] || "A" } } : {}) });
       offsets.forEach((o, idx) => lanes.push({ edge: id, idx, pts: pts.map(([x, y]) => [x + rx * o, y + ry * o]) }));
     }
   }
   const map = new MapData({ bbox: [0, 0, 1, 1], extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20], edges, lanes,
     nodes: Object.entries(ends).map(([id, [x, y]]) => ({ id, x, y })),
-    intersections: [{ id: "sig", x: 0, y: 0, offset_s: 0, vertices: ["c"], approaches: Object.keys(arms).map((a) => ({ edge: `${a}_in`, group: groups[a] || "A", s_line: LINE })) }],
+    intersections: [{ id: "sig", x: 0, y: 0, offset_s: 0, vertices: ["c"], approaches: Object.keys(arms).map((a) => ({ edge: `${a}_in`, group: groups[a] || "A", s_line: LINE }))
+      .concat(streets.filter((st) => st[3]).map(([id, from]) => ({ edge: id, group: "A", s_line: Math.hypot(ends[from][0], ends[from][1]) - 8 }))) }],
     stops: [], buildings: [] });
   // the route turns from the west arm's inner lane into `exit`'s inner lane
   const routeData = (exit, dir) => {
@@ -86,6 +93,28 @@ function decide(world, executing = null) {
   const snap = buildSnapshot(world, executing);
   const candidates = sampleCandidates(snap, world);
   return { snap, candidates, ...simulateAll(candidates, snap, world) };
+}
+// Move the car along `path` at a steady speed, as a driver who ignores everyone else would, with
+// traffic going straight on at its own speed, and audit every tick. Returns the failures to yield,
+// with `armed` set when the car crossed a signal's line (so the audit actually ran).
+function driveThrough(world, path, { speed = 6, seconds = 3 } = {}) {
+  const dt = 1 / 30;
+  let s = path.project(world.ego.x, world.ego.y).s, events = [], armed = false;
+  for (let i = 0; i < seconds / dt; i++) {
+    s += speed * dt;
+    const [x, y] = path.pointAt(s);
+    Object.assign(world.ego, { x, y, psi: path.headingAt(s), v: speed });
+    for (const n of world.npcs) {
+      // along its planned lanes when it has them, else straight on
+      if (n.path) { n.path.s += n.v * dt; n.path.extend(); const [px, py] = n.path.pointAt(n.path.s); Object.assign(n, { x: px, y: py, psi: n.path.headingAt(n.path.s) }); }
+      else { n.x += Math.cos(n.psi) * n.v * dt; n.y += Math.sin(n.psi) * n.v * dt; }
+    }
+    world.t += dt;
+    world.audit(dt, world.roadInfo());
+    armed ||= !!world.lastSignal;
+    events = events.concat(world.events.filter((e) => e.type === "failed_to_yield"));
+  }
+  return Object.assign(events, { armed });
 }
 
 {
@@ -155,8 +184,12 @@ function decide(world, executing = null) {
   // gaps that are long enough, and vehicles that do not count
   const far = decide(setup({ x: -12, v: 0, npcs: [oncoming(88)] })).snap.intersection.oncoming;
   assert.equal(far, null, "an oncoming car 7.5 s away leaves time to turn from the line");
-  const turning = decide(setup({ x: -30, npcs: [oncoming(45, 11, { signal: "left" })] })).snap.intersection.oncoming;
+  const turning = decide(setup({ x: -30, npcs: [oncoming(30, 11, { signal: "left" })] })).snap.intersection.oncoming;
   assert.equal(turning, null, "an oncoming car signalling its own left turn passes in front");
+  // but a left indicator from the outer lane of two is a lane change: that car may come straight on
+  const two = junction({ count: 2 });
+  const changing = decide(setup({ x: -30, route: two.routeData("n_out", "left"), on: two.map, npcs: [Object.assign(car("changing", 30, HALF + 3.2, Math.PI, 11), { signal: "left" })] })).snap.intersection.oncoming;
+  assert.equal(changing?.id, "changing", "a car changing lanes with its left indicator on is still waited for");
   const braking = decide(setup({ x: -30, npcs: [oncoming(45, 8, { a: -3 })] })).snap.intersection.oncoming;
   assert.equal(braking, null, "an oncoming car braking to stop short of the junction");
   const passed = decide(setup({ x: -30, npcs: [car("gone", -20, HALF, Math.PI, 11)] })).snap.intersection.oncoming;
@@ -243,10 +276,15 @@ function decide(world, executing = null) {
   const lane = bent.map.lane("b_in", 0), p = pointAt(lane.pts, lane.cum, ARM - 45);
   const world = setup({ x: -30, route, on: bent.map, npcs: [car("bend", p[0], p[1], 220 * Math.PI / 180, 11)] });
   assert.equal(decide(world).snap.intersection.oncoming, null);
-  // nor does the audit count it, 12 m from the centre with the car's front just past the line
-  const close = pointAt(lane.pts, lane.cum, ARM - 12), audited = setup({ x: -6, route, on: bent.map, npcs: [car("bend", close[0], close[1], 220 * Math.PI / 180, 11)] });
-  audited.audit(1 / 30, audited.roadInfo());
-  assert.equal(audited.violations.failed_to_yield, 0);
+  // nor does the audit count it as the car follows the bend past it, on its route or on a free
+  // drive, while the other car follows the bend in its own lane
+  for (const free of [false, true]) for (const from of [27, 30, 33, 36]) {
+    const p0 = pointAt(lane.pts, lane.cum, ARM - from), other = car("bend", p0[0], p0[1], 220 * Math.PI / 180, 11);
+    other.path = new NpcPath(bent.map, rng(1)); other.path.start("b_in", 0, ARM - from, [["w_out", 0]]);
+    const audited = setup({ x: -14, route, on: bent.map, npcs: [other] }), path = audited.route;
+    if (free) audited.route = audited.destination = null;
+    assert.deepEqual([...driveThrough(audited, path)], [], `${free ? "free drive" : "route"}, other car ${from} m out`);
+  }
   console.log("✓ on a street that bends at the junction, its own oncoming lane is not waited for or counted");
 }
 
@@ -271,7 +309,7 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
   let waited = 0, minX = Infinity, waitX = null, turnedAt = null;
   drive(world, { watch: (w, ap) => {
     if (w.ego.v < 0.2 && ap.snap?.intersection?.oncoming) { waited += 1 / 30; waitX = w.ego.x; }
-    if (turnedAt === null && w.ego.y > HALF + 2) turnedAt = Math.min(...w.npcs.map((n) => n.x));
+    if (turnedAt === null && w.ego.y > HALF + 2) turnedAt = Math.max(...w.npcs.map((n) => n.x));
     minX = Math.min(minX, w.ego.x);
   } });
   assert.equal(world.violations.collisions, 0, "no collision");
@@ -310,23 +348,180 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
 }
 
 {
-  // the audit: a car taken through the turn in front of an oncoming car fails to yield (the car is
-  // moved along its route at 6 m/s, as a driver who ignores the oncoming car would take it)
-  const world = setup({ x: -6, v: 6, npcs: [oncoming(14)] });
-  const dt = 1 / 30;
-  let s = world.route.project(world.ego.x, world.ego.y).s, events = [];
-  for (let i = 0; i < 3 / dt; i++) {
-    s += 6 * dt;
-    const [x, y] = world.route.pointAt(s);
-    Object.assign(world.ego, { x, y, psi: world.route.headingAt(s), v: 6 });
-    for (const n of world.npcs) n.x += Math.cos(n.psi) * n.v * dt;
-    world.t += dt;
-    world.audit(dt, world.roadInfo());
-    events = events.concat(world.events.filter((e) => e.type === "failed_to_yield"));
-  }
+  // the audit: a car taken through the turn in front of an oncoming car fails to yield, on its
+  // route or on a free drive with no route at all; going straight on past it does not
+  const world = setup({ x: -14, npcs: [oncoming(29)] });
+  assert.deepEqual(driveThrough(world, world.route).map((e) => [e.to, e.with]), [["oncoming traffic", "oncoming"]]);
   assert.equal(world.violations.failed_to_yield, 1, JSON.stringify(world.violations));
-  assert.deepEqual(events.map((e) => [e.to, e.with]), [["oncoming traffic", "oncoming"]]);
-  console.log("✓ turning left in front of an oncoming car counts as a failure to yield");
+  const free = setup({ x: -14, npcs: [oncoming(29)] }), path = free.route;
+  free.route = null; free.destination = null;
+  assert.equal(driveThrough(free, path).length, 1, "a free drive is audited too");
+  const ahead = setup({ x: -14, route: STRAIGHT, npcs: [oncoming(29)] });
+  assert.deepEqual([...driveThrough(ahead, ahead.route)], []);
+  console.log("✓ turning left in front of an oncoming car counts as a failure to yield, with or without a route; going straight does not");
+}
+
+{
+  // an oncoming car already turning right inside the junction, more than 60 deg off straight at the
+  // car, still counts: the car's front enters its path 7 m ahead of it
+  const world = setup({ x: -14 });
+  driveThrough(world, world.route, { seconds: 1.4 });
+  const FRONT = world.ego.spec.length - world.ego.spec.rearOverhang, psi = 115 * Math.PI / 180;
+  const fx = world.ego.x + Math.cos(world.ego.psi) * FRONT, fy = world.ego.y + Math.sin(world.ego.psi) * FRONT;
+  world.npcs = [car("turning", fx - Math.cos(psi) * 7, fy - Math.sin(psi) * 7, psi, 4)];
+  assert.ok(Math.hypot(world.npcs[0].x, world.npcs[0].y) < 12, "inside the junction");
+  world.audit(1 / 30, world.roadInfo());
+  assert.equal(world.violations.collisions, 0);
+  assert.equal(world.violations.failed_to_yield, 1, JSON.stringify(world.violations));
+  console.log("✓ entering the path of an oncoming car already turning inside the junction counts too");
+}
+
+{
+  // an oncoming car that goes straight through the signal and turns left at the next junction,
+  // 10 m on, still has the right of way here: turning in front of it is a failure to yield
+  // (also where the street back from that junction is a short approach of this signal, so that
+  // junction's node counts as one of this junction's)
+  for (const back of [false, true]) {
+    const next = junction({ nodes: { x: [-10, 0], q: [-10, -ARM] }, streets: [["c_x", "c", "x"], ["x_q", "x", "q"], ...(back ? [["x_c", "x", "c", true]] : [])] });
+    const other = car("then_left", 29, HALF, Math.PI, 11);
+    other.path = new NpcPath(next.map, rng(1)); other.path.start("e_in", 0, ARM - 29, [["c_x", 0], ["x_q", 0]]);
+    const world = setup({ x: -14, route: next.routeData("n_out", "left"), on: next.map, npcs: [other] });
+    assert.deepEqual(driveThrough(world, world.route).map((e) => e.with), ["then_left"], back ? "with a short approach back from it" : "");
+  }
+  console.log("✓ an oncoming car turning left at the next junction, not this one, still counts");
+}
+
+{
+  // nor does a left turn it made onto a short approach just before this junction: it now comes
+  // straight through, and has the right of way
+  const short = junction({ arms: { w: 180, n: 90, s: -90 }, nodes: { k: [30, 0], p: [30, -40] }, streets: [["p_k", "p", "k"], ["k_in", "k", "c", true]] });
+  const other = car("turned_onto", 30, HALF, Math.PI, 11);
+  other.path = new NpcPath(short.map, rng(1)); other.path.start("p_k", 0, 40, [["k_in", 0], ["w_out", 0]]);
+  Object.assign(other, { x: other.path.pointAt(41)[0], y: other.path.pointAt(41)[1] }); other.path.s = 41;
+  const world = setup({ x: -14, route: short.routeData("n_out", "left"), on: short.map, npcs: [other] });
+  assert.deepEqual(driveThrough(world, world.route).map((e) => e.with), ["turned_onto"]);
+  console.log("✓ a left turn an oncoming car made before this junction does not excuse cutting in front of it");
+}
+
+{
+  // once the car is down the street it turned into, an oncoming car turning right into that street
+  // behind it is following it, not being cut off (Kitsilano, snow, s1-5)
+  const world = setup({ x: -14 });
+  driveThrough(world, world.route, { seconds: 5.5 });
+  assert.ok(world.lastSignal && world.ego.y > 15, `the car is ${world.ego.y.toFixed(1)} m up North Street`);
+  const turning = car("turning_in", 10, HALF, Math.PI, 3.3);
+  turning.path = new NpcPath(map, rng(1)); turning.path.start("e_in", 0, ARM - 10, [["n_out", 0]]);
+  world.npcs = [Object.assign(turning, { signal: "right" })];
+  world.audit(1 / 30, world.roadInfo());
+  assert.equal(world.violations.failed_to_yield, 0);
+  console.log("✓ a car turning in behind the car, down the street it turned into, is not a failure to yield");
+}
+
+{
+  // a large junction (Kitsilano sig15): turning left across the far oncoming lane about 21 m from the
+  // centre, in front of a car going straight through on it, still counts
+  const real = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v6.pack.json", import.meta.url))));
+  const chain = ["e495", "e368", "e361"].map((id) => real.lane(id, 0));
+  const route = new Route({ id: "sig15", polyline: resample(chain.slice(1).reduce((pts, l) => joinLanes(pts, l.pts), chain[0].pts)), edges: ["e495", "e368", "e361"], turns: [], start_s: 0, goal_s: chain[2].length - 2 }, real);
+  const start = route.controls[0].sRoute - 12;
+  let counted = 0, armed = 0;
+  for (let s0 = 0; s0 <= 50; s0 += 2) {
+    const world = new World(real, { parked: 0, pedestrians: 0 });
+    const [x, y] = route.pointAt(start);
+    Object.assign(world.ego, { x, y, psi: route.headingAt(start), v: 8 });
+    world.route = route; world.resetContactHistory();
+    // in the far lane, coming down Macdonald Street from the block before
+    const lane = real.lane("e365", 1), [ox, oy] = pointAt(lane.pts, lane.cum, s0);
+    const other = car("straight_on", ox, oy, headingAt(lane.pts, lane.cum, s0), 13.9);
+    other.path = new NpcPath(real, rng(1)); other.path.start("e365", 1, s0, [["e490", 1], ["e369", 0], ["e496", 1]]);
+    world.npcs = [other];
+    const events = driveThrough(world, route, { speed: 8, seconds: 6 });
+    counted += events.length; armed += events.armed ? 1 : 0;
+  }
+  assert.equal(armed, 26);
+  assert.ok(counted > 0, "some of these timings cut across the far lane in front of it");
+  console.log(`✓ at a large junction, turning across the far oncoming lane 21 m from the centre still counts (${counted} of 26 timings)`);
+}
+
+{
+  // a car that overshot a stop sign's line holds, completes its stop there, and goes on
+  const stops = junction();
+  for (const e of stops.map.edges.values()) if (e.control) e.control = { type: "stop", id: `stop_${e.id}`, s_line: LINE, all_way: true };
+  const FRONT = new Vehicle(0, 0, 0, 0).spec.length - new Vehicle(0, 0, 0, 0).spec.rearOverhang;
+  for (const over of [0.3, 2.8]) {
+    const world = setup({ x: -8 + over - FRONT, v: 0, route: stops.routeData("e_out", null), on: stops.map });
+    drive(world, { seconds: 20 });
+    assert.equal(world.route, null, `arrived after overshooting by ${over} m`);
+    assert.equal(world.violations.deadlock_overrides, 0);
+  }
+  console.log("✓ a car that overshot a stop sign's line completes its stop there and goes on");
+}
+
+{
+  // a junction mapped as several nodes: the turn is found across every short link that goes straight
+  const pts = { a: [-100, 0], b: [0, 0], c: [10, 0], d: [20, 0], e: [20, 100] };
+  const edge = (id, from, to, control) => ({ id, from, to, pts: [pts[from], pts[to]], length: Math.hypot(pts[to][0] - pts[from][0], pts[to][1] - pts[from][1]),
+    lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: [-3.2, 3.2], parking: [0, 0], cls: "secondary", limit: 13.9, oneway: false, name: id,
+    ...(control ? { control: { type: "signal", id: "sig", s_line: 92, group: "A" } } : {}) });
+  const linked = (vertices) => new MapData({ bbox: [0, 0, 1, 1], extent: [-120, -20, 40, 120], edges: [edge("ab", "a", "b", true), edge("bc", "b", "c"), edge("cd", "c", "d"), edge("de", "d", "e")],
+    lanes: [], nodes: Object.entries(pts).map(([id, [x, y]]) => ({ id, x, y })), stops: [], buildings: [],
+    intersections: [{ id: "sig", x: 10, y: 0, offset_s: 0, vertices, approaches: [{ edge: "ab", group: "A", s_line: 92 }] }] });
+  const polyline = resample([[-100, 0], [20, 0], [20, 100]]);
+  const turnAt = (vertices) => new Route({ id: "links", polyline, edges: ["ab", "bc", "cd", "de"], turns: [], start_s: 0, goal_s: 90 }, linked(vertices)).controls[0].turn;
+  assert.equal(turnAt(["b", "c", "d"]), "left");
+  // where the links run on past the junction's own nodes, the turn is made at the next junction
+  assert.equal(turnAt(["b"]), "straight");
+  // a junction drawn as two nodes that lists one: the other is where another of its approaches starts
+  pts.n = [10, 100];
+  const two = new MapData({ bbox: [0, 0, 1, 1], extent: [-120, -20, 40, 120], stops: [], buildings: [], lanes: [],
+    edges: [edge("ab", "a", "b", true), edge("bc", "b", "c"), { ...edge("cb", "c", "b", true), control: { type: "signal", id: "sig", s_line: 5, group: "A" } }, edge("cn", "c", "n")],
+    nodes: Object.entries(pts).map(([id, [x, y]]) => ({ id, x, y })),
+    intersections: [{ id: "sig", x: 5, y: 0, offset_s: 0, vertices: ["b"], approaches: [{ edge: "ab", group: "A", s_line: 92 }, { edge: "cb", group: "A", s_line: 5 }] }] });
+  const twoRoute = new Route({ id: "two", polyline: resample([[-100, 0], [10, 0], [10, 100]]), edges: ["ab", "bc", "cn"], turns: [], start_s: 0, goal_s: 90 }, two);
+  assert.equal(twoRoute.controls.find((c) => c.edge === "ab").turn, "left");
+  console.log("✓ across short links inside a junction, a left turn is still a left turn; a turn at the next junction is not");
+}
+
+{
+  // Real junctions: on Kitsilano and Victoria, going straight on or turning right through every
+  // signalled approach while an oncoming car goes straight on along its own lanes is never a
+  // failure to yield, on a route or on a free drive (streets there jog and bend at junctions)
+  const packs = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7" };
+  let drives = 0, skipped = 0;
+  for (const [name, hash] of Object.entries(packs)) {
+    const real = new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${hash}.v6.pack.json`, import.meta.url))));
+    for (const inter of real.intersections.values()) for (const { edge: a } of inter.approaches) {
+      const approach = real.edges.get(a), mine = real.lane(a, approach.lanes - 1);
+      const opposite = inter.approaches.map((x) => x.edge).find((o) => o !== a && Math.abs(Math.abs(wrapAngle(real.headingIn(o) - real.headingIn(a))) - Math.PI) < 0.35);
+      const exits = (e) => (dir) => real.successors(e).find((y) => real.classifyTurn(real.turnAngle(e, y)) === dir);
+      const through = opposite && exits(opposite)("straight");
+      if (!mine || mine.length < 45 || !through || real.edges.get(opposite).length < 30) continue;
+      for (const exit of real.successors(a).filter((x) => ["straight", "right"].includes(real.classifyTurn(real.turnAngle(a, x))))) {
+        // the oncoming car goes straight on; with the car going straight, it may also turn either way
+        const going = real.classifyTurn(real.turnAngle(a, exit)) === "straight" ? [through, exits(opposite)("left"), exits(opposite)("right")].filter(Boolean) : [through];
+        const out = real.lane(exit, real.edges.get(exit).lanes - 1);
+        if (!out || out.length < 20) continue;
+        const polyline = resample(joinLanes(mine.pts, out.pts)), route = { id: "r", polyline, edges: [a, exit], turns: [], start_s: mine.length - 40, goal_s: out.length - 2 };
+        for (const then of going) for (const free of [false, true]) for (const back of [10, 25, 40]) {
+          const world = new World(real, { parked: 0, pedestrians: 0 });
+          const path = new Route(route, real), [x, y] = path.pointAt(mine.length - 40);
+          Object.assign(world.ego, { x, y, psi: path.headingAt(mine.length - 40), v: 8 });
+          world.route = free ? null : path;
+          const lane = real.lane(opposite, 0), s0 = Math.max(0, lane.length - back), [ox, oy] = pointAt(lane.pts, lane.cum, s0);
+          const other = car("oncoming", ox, oy, headingAt(lane.pts, lane.cum, s0), 11);
+          other.path = new NpcPath(real, rng(1)); other.path.start(opposite, 0, s0, [[then, 0]]);
+          world.npcs = [other];
+          world.resetContactHistory();
+          const events = driveThrough(world, path, { speed: 8, seconds: 6 });
+          assert.deepEqual([...events], [], `${name} ${inter.id}: ${a} -> ${exit} (${free ? "free drive" : "route"}), oncoming ${back} m out to ${then}`);
+          if (events.armed) drives++; else skipped++;
+        }
+      }
+    }
+  }
+  // (a few kerb lanes run into street furniture before the line, so the audit never starts there)
+  assert.ok(drives > 1500 && skipped < drives / 20, `${drives} audited drives, ${skipped} that never crossed a line`);
+  console.log(`✓ going straight on or turning right past oncoming traffic at real junctions, which goes straight or turns either way, is never a failure to yield (${drives} drives)`);
 }
 
 console.log("All left-turn checks passed.");

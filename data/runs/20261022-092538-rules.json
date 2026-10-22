@@ -1,6 +1,6 @@
 {
- "name": "20261021-210939-rules",
- "saved_at": "2026-10-21T21:09:39",
+ "name": "20261022-092538-rules",
+ "saved_at": "2026-10-22T09:25:38",
  "config": {
   "brain": "rules",
   "count": 12,
@@ -17,7 +17,7 @@
    49.27
   ],
   "pack": "6",
-  "started_at": "2026-10-22T03:57:51.855Z",
+  "started_at": "2026-10-22T16:23:09.892Z",
   "completed": 12
  },
  "summary": {
@@ -101,7 +101,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 4227
+   "wall_ms": 3490
   },
   {
    "id": "s1-2",
@@ -172,7 +172,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 4129
+   "wall_ms": 3137
   },
   {
    "id": "s1-3",
@@ -225,7 +225,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 3980
+   "wall_ms": 3032
   },
   {
    "id": "s1-4",
@@ -278,7 +278,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 7143
+   "wall_ms": 5461
   },
   {
    "id": "s1-5",
@@ -340,7 +340,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 5407
+   "wall_ms": 4260
   },
   {
    "id": "s1-6",
@@ -393,7 +393,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 128057
+   "wall_ms": 8111
   },
   {
    "id": "s1-7",
@@ -460,7 +460,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 186541
+   "wall_ms": 28571
   },
   {
    "id": "s1-8",
@@ -522,7 +522,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 124938
+   "wall_ms": 23141
   },
   {
    "id": "s1-9",
@@ -582,7 +582,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 37056
+   "wall_ms": 17463
   },
   {
    "id": "s1-10",
@@ -642,7 +642,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 98102
+   "wall_ms": 18402
   },
   {
    "id": "s1-11",
@@ -695,7 +695,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 86521
+   "wall_ms": 10586
   },
   {
    "id": "s1-12",
@@ -748,7 +748,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 20195
+   "wall_ms": 22343
   }
  ]
 }

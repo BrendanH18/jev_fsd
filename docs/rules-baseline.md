@@ -1,12 +1,12 @@
-# Rules benchmark baseline — 2026-10-21
+# Rules benchmark baseline — 2026-10-22
 
 This rerun covers left turns at a signal: the driven car now yields to oncoming traffic, waiting at
 the line or inside the junction until the gap is long enough. The audit gains a failure to yield
 for oncoming traffic: the car's front entering the path of an oncoming vehicle due at the
-junction within 2 s, seen or not. "Before" is `b456c70` with only that audit added
-(`static/js/sim/world.js`, and the route fields it reads in `static/js/map/route.js`), so both
-columns are judged by the same audit and the difference between them is the driving change
-alone. Both ran on the same day in the same harness, in WebKit and in V8.
+junction within 2 s, seen or not, judged against the lanes that vehicle is following. "Before" is
+`b456c70` with only that audit added (`static/js/sim/world.js`, and the route and map helpers it
+reads in `static/js/map/route.js` and `static/js/map/mapdata.js`), so both columns are judged by
+the same audit and the difference between them is the driving change alone. Both ran on the same day in the same harness, in WebKit and in V8.
 
 ## Method
 
@@ -14,8 +14,8 @@ As on 2026-10-20: production `/bench`, Rules, suite seed 1, 40 traffic cars, loc
 through `scripts/shot.swift` on macOS 27.0.1. Kitsilano ran 12 routes in dry, fog, rain and snow;
 the other eleven maps ran two-route dry smoke suites. The same suites also ran in V8 (Node 22.23.4)
 through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run is
-[`20261021-210939-rules.json`](../data/runs/20261021-210939-rules.json). The
-[machine-readable record](validation/rebaseline-2026-10-21-rules.json) has every summary and
+[`20261022-092538-rules.json`](../data/runs/20261022-092538-rules.json). The
+[machine-readable record](validation/rebaseline-2026-10-22-rules.json) has every summary and
 per-route result, before and after, in both engines. Night was not run; `/bench` still has no
 time-of-day option.
 
@@ -47,7 +47,7 @@ smoke suites 22 of 22, as before. In V8, Kitsilano passes 48 of 48 and the city 
 22, before and after; Edmonton `s1-2` fails in both. Seven suite summaries changed in each engine,
 the four Kitsilano suites and the Victoria, Calgary and Québec City smoke suites. Apart from the
 fog route that now passes and the snow deadlocks, the changes are small: mean speed by at most
-0.12 km/h, a safety brake more or fewer, and a few more decisions where the car checks a left
+0.15 km/h, a safety brake more or fewer, and a few more decisions where the car checks a left
 turn; the rest are identical. In V8 Kitsilano rain, the closest gap to another vehicle grew from
 0.7 m to 2.1 m.
 
@@ -61,7 +61,7 @@ overrides are gone in both engines.
 Remaining failure:
 
 - **Edmonton `s1-2` (V8 only):** a shared-fault contact with `car_30` at 100.8 s, before and
-  after, now also counted as a failure to yield. The car turns left on a green with nothing coming
+  after; the audit does not count it as a failure to yield. The car turns left on a green with nothing coming
   in view and is moving through the junction at 5 to 6 m/s when `car_30`, an oncoming car turning
   right into the same street, comes into view. By then the car is 3 m from where it would wait, too
   late to stop short of the oncoming lane, so it carries on and both brake. Slowing for an oncoming

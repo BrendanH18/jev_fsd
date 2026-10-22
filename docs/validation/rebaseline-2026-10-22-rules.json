@@ -1,8 +1,8 @@
 {
- "date": "2026-10-21",
+ "date": "2026-10-22",
  "base_commit": "b456c70",
  "change": "left turns at a signal yield to oncoming traffic; failed_to_yield audit for oncoming traffic",
- "before": "b456c70 with only the new audit (static/js/sim/world.js) and the route fields it reads (static/js/map/route.js), so both columns are judged by the same audit",
+ "before": "b456c70 with only the new audit (static/js/sim/world.js) and the route and map helpers it reads (static/js/map/route.js, static/js/map/mapdata.js), so both columns are judged by the same audit",
  "method": {
   "brain": "rules",
   "seed": 1,
@@ -13,7 +13,7 @@
   "webkit": "scripts/shot.swift on macOS 27.0.1",
   "v8": "scripts/bench_node.mjs, Node v22.23.4"
  },
- "baseline_run": "data/runs/20261021-210939-rules.json",
+ "baseline_run": "data/runs/20261022-092538-rules.json",
  "webkit": {
   "kitsilano-dry": {
    "before": {
@@ -3226,16 +3226,16 @@
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 19.38,
+     "avg_kmh": 19.35,
      "min_gap_m": 2.1,
      "min_ttc_s": 1.2,
      "hard_brakes": 0,
-     "rms_jerk": 2.48,
-     "max_lat_accel": 3.26,
+     "rms_jerk": 2.47,
+     "max_lat_accel": 3.25,
      "lane_rms_m": 0.14,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 6361,
+     "decisions": 6365,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -3279,7 +3279,7 @@
       "collisions": 0,
       "failed_to_yield": 0,
       "deadlocks": 0,
-      "time_s": 139.3
+      "time_s": 141.6
      },
      {
       "id": "s1-5",
@@ -4655,12 +4655,12 @@
      "at_fault": 0,
      "red_lights": 0,
      "stop_signs": 0,
-     "failed_to_yield": 1,
+     "failed_to_yield": 0,
      "off_road_s": 0,
      "safety_brakes": 2,
      "deadlocks": 0,
      "fallbacks": 0,
-     "violations_per_km": 1.07,
+     "violations_per_km": 0.53,
      "avg_kmh": 30.4,
      "min_gap_m": 10.8,
      "min_ttc_s": 2.7,
@@ -4691,11 +4691,10 @@
       "pass": false,
       "arrived": true,
       "failures": [
-       "collision",
-       "failed to yield"
+       "collision"
       ],
       "collisions": 1,
-      "failed_to_yield": 1,
+      "failed_to_yield": 0,
       "deadlocks": 0,
       "time_s": 140.7
      }
@@ -4711,12 +4710,12 @@
      "at_fault": 0,
      "red_lights": 0,
      "stop_signs": 0,
-     "failed_to_yield": 1,
+     "failed_to_yield": 0,
      "off_road_s": 0,
      "safety_brakes": 2,
      "deadlocks": 0,
      "fallbacks": 0,
-     "violations_per_km": 1.07,
+     "violations_per_km": 0.53,
      "avg_kmh": 30.4,
      "min_gap_m": 10.8,
      "min_ttc_s": 2.7,
@@ -4747,11 +4746,10 @@
       "pass": false,
       "arrived": true,
       "failures": [
-       "collision",
-       "failed to yield"
+       "collision"
       ],
       "collisions": 1,
-      "failed_to_yield": 1,
+      "failed_to_yield": 0,
       "deadlocks": 0,
       "time_s": 140.7
      }

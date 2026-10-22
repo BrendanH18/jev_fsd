@@ -9,14 +9,15 @@
   innermost oncoming lane: at the line, or inside the junction if it is already in it. It goes
   once the gap is long enough or oncoming traffic stops for the light. It carries on through if
   it can no longer stop short of that lane. Only vehicles it can see count. An oncoming car
-  signalling its own left turn, braking to stop short of the junction, or travelling the other
-  way along the street the car turns into does not count. Decision models and LLMs get
+  signalling its own left turn from its leftmost lane near the junction, braking to stop short of
+  the junction, or travelling the other way along the street the car turns into does not count. Decision models and LLMs get
   `intersection.turn` and `intersection.oncoming`, a situation line and a `stop_for_oncoming`
   candidate; manoeuvres that would cross that lane are rejected (`fails_to_yield_to_oncoming`).
-  The audit counts a failure to yield when the car's front enters the path of an oncoming
-  vehicle due at the junction within 2 s, seen or not. It applies to manual drives too, so the
-  coaching score now penalises it. A car more than 3 m past the line when the light changes
-  clears the junction. Before, every manoeuvre was rejected as running the red, so it braked to a
+  The audit counts a failure to yield when, past a signal's line, the car's front enters the path
+  of an oncoming vehicle due at the junction within 2 s, seen or not. The path is the lanes that
+  vehicle is following, so going straight on or turning right never counts. It applies to every
+  drive, manual and free drives included, so the coaching score now penalises it. A car more than
+  3 m past the line when the light changes clears the junction. Before, every manoeuvre was rejected as running the red, so it braked to a
   stop where it was. Nearer the line it still holds for the red. New challenge, **The unprotected
   left** (Ottawa, Centretown): a left turn on a green as two oncoming cars 20 m apart reach the
   junction. In the seeded WebKit benchmark Kitsilano passes 48 of 48 routes across four weathers

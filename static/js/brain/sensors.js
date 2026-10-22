@@ -32,7 +32,8 @@ export const LANE_CLEAR_M = 2.2;   // a car this far across has left its old lan
 // 1.5 m short of that path: at the line, or inside the junction if it is already in it. A vehicle
 // counts while it heads within 60 deg of straight at the car's approach and comes toward the
 // junction, and while it is in the junction (12 m of its centre) turning, unless it signals a left
-// turn of its own (opposing left turns pass in front of each other), is braking to stop short, or
+// turn of its own from its leftmost lane within 40 m (opposing left turns pass in front of each
+// other), is braking to stop short, or
 // is better aligned with coming down the street the car turns into (on a street that bends at the
 // junction, that is the oncoming lane of the car's own street and never crosses its path).
 const ONCOMING_LOOK_M = 90;
@@ -45,6 +46,7 @@ const GAP_MARGIN_S = 1.5;
 const GAP_KEEP_S = 0.75;
 export const ONCOMING_STOP_M = 1.5;
 const NEXT_CONTROL_M = 30;
+const LEFT_SIGNAL_M = 40;
 // A car this far past a stop line is inside the junction and clears it: a light that changes or a
 // stop it overshot no longer holds it. Just past the line (an overshoot) it still does.
 export const CLEARING_M = 3;
@@ -238,9 +240,13 @@ function oncomingYield(world, c, frontS) {
   const facing = route.headingAt(c.sRoute) + Math.PI, down = route.headingAt(Math.min(route.length, c.sJunction + 15)) + Math.PI;
   let best = null;
   for (const n of world.npcs) {
-    if (n.v < 1 || n.signal === "left") continue;
+    if (n.v < 1) continue;
     const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
     if (d > ONCOMING_LOOK_M) continue;
+    // A left indicator means a left turn only from the leftmost lane near the junction: further
+    // out, or from another lane, it is a lane change and the vehicle may well come straight on.
+    const lane = world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane;
+    if (n.signal === "left" && d < LEFT_SIGNAL_M && lane && lane.idx === 0) continue;
     const rel = Math.abs(wrap(n.psi - facing));
     const closing = (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6);
     const inBox = d < JUNCTION_BOX_M;
@@ -254,7 +260,6 @@ function oncomingYield(world, c, frontS) {
     const reach = (ego.spec.width + spec.width) / 2 + 0.5;
     const ux = Math.cos(n.psi), uy = Math.sin(n.psi);
     // its lane's offset from the innermost lane of its street (lane 0 is leftmost), to its left
-    const lane = world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane;
     const inner = lane ? Math.max(0, lane.offset - lane.edgeRef.lane_offsets[0]) : 0;
     const ox = n.x - uy * inner, oy = n.y + ux * inner;
     let hit = null;
