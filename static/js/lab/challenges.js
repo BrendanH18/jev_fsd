@@ -1,9 +1,9 @@
 import { routeFromLanes } from "../demo/routing.js";
-import { pointAt, headingAt } from "../map/mapdata.js";
+import { pointAt, headingAt, wrapAngle } from "../map/mapdata.js";
 import { Vehicle, BIKE } from "../sim/vehicle.js";
 import { NpcPath } from "../sim/npc.js";
 import { Pedestrian } from "../sim/pedestrians.js";
-import { StopMemory } from "../sim/signals.js";
+import { StopMemory, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
 import { Visibility } from "../sim/visibility.js";
 
@@ -21,6 +21,8 @@ export const CHALLENGES = [
     description: "A parked car signals and joins your lane. Notice the indicator and leave a gap.", lesson: "Ease off for a merging car rather than closing the gap." },
   { id: "blind-crossing", title: "Around the corner", map: "kitsilano", weather: "dry", time: "afternoon", seed: 6042, icon: "◧", difficulty: "Sight lines", hazard: "occluded-pedestrian",
     description: "A person emerges from behind a mapped building. Your view opens as you approach.", lesson: "Leave stopping room when a building blocks your view of the sidewalk." },
+  { id: "unprotected-left", title: "The unprotected left", map: "ottawa", weather: "dry", time: "afternoon", seed: 7042, icon: "↰", difficulty: "Judgement", hazard: "oncoming",
+    description: "A left turn on a green in Centretown, with two oncoming cars close together. Wait for a gap you can use.", lesson: "Oncoming traffic has the right of way. Pull into the junction, wait, and turn once the gap is long enough." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -46,6 +48,35 @@ function occludedCrossings(map, lanes) {
   blindSites.set(map, sites); return sites;
 }
 
+// Unprotected left turns: a signalled approach at least 90 m long whose route turns left onto a
+// street at least 60 m long, opposite an approach of the same signal (heading within 20 deg of
+// straight at it, its line at least 70 m along) that continues straight through. The approach's
+// light is green from 3 s to 26 s, so the car arrives on a green with time to wait for the gap.
+const LEFT_GREEN_S = [3, 26];
+const leftSites = new WeakMap();
+function oncomingSites(map) {
+  if (leftSites.has(map)) return leftSites.get(map);
+  const sites = [];
+  for (const edge of map.edges.values()) {
+    const control = edge.control;
+    if (control?.type !== "signal" || edge.length < 90 || control.s_line < 75) continue;
+    const left = map.successors(edge.id).find(id => map.classifyTurn(map.turnAngle(edge.id, id)) === "left" && map.edges.get(id).length > 60);
+    const opposite = (map.inn.get(edge.to) || []).find(id => {
+      const other = map.edges.get(id);
+      return id !== edge.id && other.control?.type === "signal" && other.control.id === control.id && other.control.s_line > 70
+        && Math.abs(Math.abs(wrapAngle(map.headingIn(id) - map.headingIn(edge.id))) - Math.PI) < 0.35;
+    });
+    const straight = opposite && map.successors(opposite).find(id => map.classifyTurn(map.turnAngle(opposite, id)) === "straight");
+    const inter = map.intersections.get(control.id);
+    if (!left || !straight || !inter || !oncomingStarts(map, opposite).every(Boolean)) continue;
+    let green = true;
+    for (let t = LEFT_GREEN_S[0]; t <= LEFT_GREEN_S[1] && green; t += 0.5) green = phaseOf(inter, t)[control.group] === "green";
+    if (green) sites.push({ lane: map.lane(edge.id, 0), left, opposite, straight });
+  }
+  sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+  leftSites.set(map, sites); return sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -59,10 +90,15 @@ export function challengeScenario(map, challenge) {
   const sites = challenge.hazard === "occluded-pedestrian" ? occludedCrossings(map, lanes) : null;
   if (sites && !sites.length) throw new Error("This map has no clear crossing with a building-obstructed approach.");
   const site = sites ? sites[Math.floor(random() * sites.length)] : null;
-  const start = site?.lane || lanes[Math.floor(random() * lanes.length)];
-  const startS = site ? site.hazardS - 65 : Math.max(8, Math.min(20, start.length * 0.15));
+  const lefts = challenge.hazard === "oncoming" ? oncomingSites(map) : null;
+  if (lefts && !lefts.length) throw new Error("This map has no signalled left turn with oncoming traffic.");
+  const left = lefts ? lefts[Math.floor(random() * lefts.length)] : null;
+  const start = site?.lane || left?.lane || lanes[Math.floor(random() * lanes.length)];
+  // a left turn starts 70 m before the stop line
+  const startS = site ? site.hazardS - 65 : left ? start.edgeRef.control.s_line - 70 : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
+  if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   for (let i = 0; i < 12 && length < 260; i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
@@ -77,16 +113,18 @@ export function challengeScenario(map, challenge) {
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
     route, goal: route.polyline.at(-1), traffic_seed: challenge.seed,
     ...(site ? { crossing: { hazardS: site.hazardS, from: site.from, to: site.to } } : {}),
+    ...(left ? { oncoming: { edge: left.opposite, then: left.straight } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
 }
 
 export function installChallenge(world, fleet, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
-  const hazardS = scenario.crossing?.hazardS ?? Math.min(lane.length - 15, scenario.start.s + 65);
+  // an oncoming hazard is placed at the stop line
+  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming ? lane.edgeRef.control.s_line : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
-  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null };
+  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}) };
   if (["door", "pull"].includes(challenge.hazard)) {
     const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);
     const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);
@@ -119,8 +157,9 @@ export function stepChallenge(world, fleet) {
   const state = world.challenge;
   if (!state) return;
   const local = world.ego.toLocal(...state.at);
-  if (!state.triggered && local.ahead < (state.hazard === "pull" ? 65 : 43) && local.ahead > 0) {
+  if (!state.triggered && local.ahead < (state.hazard === "pull" ? 65 : state.hazard === "oncoming" ? ONCOMING_TRIGGER_M : 43) && local.ahead > 0) {
     state.triggered = true;
+    if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
     if (state.carId) {
       const car = world.parked.list.find(c => c.id === state.carId);
       if (state.hazard === "pull") { const merging = fleet.startPullOut(car); state.mergingId = merging?.id || null; }
@@ -133,6 +172,33 @@ export function stepChallenge(world, fleet) {
   }
   const ped = state.pedestrianId && world.crowd.list.find(p => p.id === state.pedestrianId);
   if (ped && !ped.path.length) { ped.frozen = 1e6; ped.v = 0; }
+}
+
+// With the car 45 m from its stop line, two cars 20 m apart (1.8 s at 11 m/s, too short a gap to
+// turn in) set off on the opposite approach, the first 60 m before its own line, both going straight
+// through. They start out of sight, beyond the 80 m a driver can see in clear daylight.
+const ONCOMING_TRIGGER_M = 45;
+// Where each oncoming car starts: [edge, s, edges before the approach's own], or null when there is
+// no room. A start before the approach begins is on the street leading straight into it.
+function oncomingStarts(map, edge) {
+  const approach = map.edges.get(edge), line = approach.control.s_line;
+  return [line - 60, line - 80].map(s => {
+    if (s >= 2) return [edge, s, []];
+    const before = (map.inn.get(approach.from) || []).find(p => map.classifyTurn(map.turnAngle(p, edge)) === "straight" && map.edges.get(p).length + s > 2);
+    return before ? [before, s + map.edges.get(before).length, [[edge, 0]]] : null;
+  });
+}
+function releaseOncoming(world, fleet, { edge, then }) {
+  const map = world.map, v = Math.min(11, map.edges.get(edge).limit || 11);
+  return oncomingStarts(map, edge).map(([id, s, through], i) => {
+    const plan = [...through, [then, 0]];
+    const lane = map.lane(id, 0), p = pointAt(lane.pts, lane.cum, s);
+    const car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
+    Object.assign(car, { id: `challenge_oncoming_${i + 1}`, color: i ? 0x2b3a55 : 0x9b1e1e, v0: v, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+    car.path.start(id, 0, s, plan); fleet.vehicles.push(car);
+    return car.id;
+  });
 }
 
 export function challengeConfig(challenge) {

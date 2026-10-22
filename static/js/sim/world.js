@@ -1,6 +1,7 @@
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
 import { Vehicle, CAR } from "./vehicle.js";
+import { headingAt } from "../map/mapdata.js";
 import { phaseOf, StopMemory } from "./signals.js";
 import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
@@ -12,6 +13,19 @@ import { StaticObstacles, poseOf } from "./static-obstacles.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
+// Past a signal's line, the car fails to yield when its front bumper enters the path of an
+// oncoming vehicle (seen or not) due at the junction's centre within this many seconds. The path
+// is the one the vehicle is actually following, so only a left turn or a U-turn takes the car into
+// it and the check needs no route: a free drive is audited too. It runs until the front is this
+// far from the junction's centre.
+const AUDIT_ONCOMING_S = 2.0;
+const AUDIT_JUNCTION_M = 30;
+const AUDIT_PATH_M = 50;
+const AUDIT_CORNER_M = 8;   // a turn's rounded corner starts about this far before the node it turns at   // how far along an oncoming vehicle's path the car's front is looked for
+// As in sensing (brain/sensors.js): an oncoming vehicle heads within 60 deg of straight at the car's
+// approach and comes toward the junction, or is within 12 m of its centre turning (up to 105 deg),
+// in which case it is already there.
+const AUDIT_BOX_M = 12;
 
 export class World {
   constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR } = {}) {
@@ -33,6 +47,7 @@ export class World {
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
+    this.lastSignal = null;
     this.spawnEgo();
     this.crowd = new Crowd(this, { seed, count: pedestrians });
   }
@@ -89,6 +104,7 @@ export class World {
     this.staticContacts.clear();
     this._lastFront = null;
     this.lastRoad = null;
+    this.lastSignal = null;
   }
 
   auditStatic(dt) {
@@ -209,6 +225,13 @@ export class World {
         if (control.type === "signal") {
           const state = this.phase(control.id)[control.group];
           if (state === "red") { this.violations.red_lights_run++; this.events.push({ type: "red_light" }); }
+          // the approach's heading and, on a route, the street it turns into (without one, the
+          // street the car is heading into is the way it faces)
+          const inter = this.map.intersections.get(control.id);
+          if (inter) {
+            const exit = rc && rc.sJunction !== null ? this.route.headingAt(Math.min(this.route.length, rc.sJunction + 15)) : null;
+            this.lastSignal = { centre: [inter.x, inter.y], nodes: this.map.junctionNodes(inter), approaches: new Set(inter.approaches.map((a) => a.edge)), facing: (rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id)) + Math.PI, exit, counted: false };
+          }
         } else if (control.type === "stop" && !this.egoStop.completed) {
           this.violations.stop_signs_run++;
           this.events.push({ type: "stop_sign" });
@@ -224,7 +247,60 @@ export class World {
       this.lastRoad = edge ? { edgeId: edge.id, crossed: false } : null;
       this.egoStop.update(null, 0, 0, dt);
     }
+    this.auditOncoming();
   }
+
+  auditOncoming() {
+    const j = this.lastSignal;
+    if (!j) return;
+    const FRONT = this.ego.spec.length - this.ego.spec.rearOverhang;
+    const fx = this.ego.x + Math.cos(this.ego.psi) * FRONT, fy = this.ego.y + Math.sin(this.ego.psi) * FRONT;
+    const [jx, jy] = j.centre;
+    if (Math.hypot(fx - jx, fy - jy) > AUDIT_JUNCTION_M) { this.lastSignal = null; return; }
+    if (j.counted) return;
+    // as in sensing: traffic better aligned with coming down the street the car turns into is in
+    // that street's other lane
+    const facing = j.facing, down = (j.exit ?? this.ego.psi) + Math.PI;
+    const due = this.npcs.find((n) => {
+      const rel = Math.abs(wrap(n.psi - facing)), path = n.path?.pts ? n.path : null;
+      if (n.v < 1 || Math.abs(wrap(n.psi - down)) < rel) return false;
+      // without a route, a vehicle signalling a left turn is taken to be turning (see below)
+      if (!path && n.signal === "left") return false;
+      const ux = Math.cos(n.psi), uy = Math.sin(n.psi), dx = jx - n.x, dy = jy - n.y, d = Math.hypot(dx, dy);
+      const closing = (dx * ux + dy * uy) / Math.max(d, 1e-6), inBox = d < AUDIT_BOX_M;
+      if (!(rel < Math.PI / 3 && closing > 0) && !(inBox && rel < Math.PI * 7 / 12 && closing > -0.5)) return false;
+      if (!inBox && d / n.v >= AUDIT_ONCOMING_S) return false;
+      // braking to stop short of the junction (for its own light, say)
+      if (!inBox && n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - 6) return false;
+      // the car's front is in its path, ahead of it: along the lanes it is following (a street
+      // that jogs or bends keeps it in its own lane), else straight on along its heading
+      const reach = (this.ego.spec.width + (n.spec || CAR).width) / 2;
+      // (measured from where it actually is beside them: changing lanes, pulling out, a cyclist
+      // keeping right)
+      if (path) {
+        const own = nearestOnPath(path, n.x, n.y, path.s - 2, path.s + 2), p = nearestOnPath(path, fx, fy, path.s, path.s + AUDIT_PATH_M);
+        const beside = own ? own.lateral : 0;
+        if (!p || !(p.s > path.s) || Math.abs(p.lateral - beside) >= reach || p.distance >= reach + Math.abs(beside)) return false;
+        // Heading the same way along its path (down the street both turned into, say), the car is
+        // ahead of it: that is a cut-off only if it would reach the car within the same 2 s.
+        const along = Math.abs(wrap(this.ego.psi - headingAt(path.pts, path.cum, p.s))) < Math.PI / 6;
+        if (along && (p.s - path.s) / n.v >= AUDIT_ONCOMING_S) return false;
+        // A vehicle turning its own left at this junction must itself yield, where the car meets it
+        // on its turn (known from its route: its indicator goes off mid-turn, and shows a lane change
+        // too). Met before it turns, on the way through, it has the right of way.
+        const left = leftTurnAt(this.map, path, j);
+        return left === null || p.s < left - AUDIT_CORNER_M;
+      }
+      const ax = fx - n.x, ay = fy - n.y;
+      return ax * ux + ay * uy > 0 && Math.abs(ax * uy - ay * ux) < reach;
+    });
+    if (due) {
+      j.counted = true;
+      this.violations.failed_to_yield++;
+      this.events.push({ type: "failed_to_yield", to: "oncoming traffic", with: due.id });
+    }
+  }
+
 }
 
 // The ego's front bumper swept across a crosswalk this tick while a pedestrian on it was within a
@@ -275,4 +351,32 @@ function lanePoint(lane, s) {
     pointAt: [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t],
     headingAt: Math.atan2(pts[i + 1][1] - pts[i][1], pts[i + 1][0] - pts[i][0]),
   };
+}
+
+// The closest point to (x, y) on the stretch of a path between arc lengths s0 and s1 (searching
+// only there, so a path that loops back past the same spot later is not mistaken for it): its arc
+// length, distance and signed lateral offset (right of travel positive).
+function nearestOnPath(path, x, y, s0, s1) {
+  const { pts, cum } = path;
+  let best = null;
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (cum[i + 1] < s0 || cum[i] > s1) continue;
+    const [ax, ay] = pts[i], dx = pts[i + 1][0] - ax, dy = pts[i + 1][1] - ay, len = Math.hypot(dx, dy);
+    if (len < 1e-9) continue;
+    const t = Math.max((s0 - cum[i]) / len, 0, Math.min(1, (s1 - cum[i]) / len, ((x - ax) * dx + (y - ay) * dy) / (len * len)));
+    const qx = ax + dx * t, qy = ay + dy * t, d = Math.hypot(x - qx, y - qy);
+    if (!best || d < best.distance) best = { s: cum[i] + t * len, distance: d, lateral: ((x - qx) * dy - (y - qy) * dx) / len };
+  }
+  return best;
+}
+
+// Where an NPC's planned path turns left (or around) at a signal's junction, as arc length along
+// it (the start of the edge it turns onto), or null when it does not. Read from the edge of its path
+// that is one of the junction's approaches (it may already be past it, turning; not a street that
+// led onto the approach), across the junction's short links, never on to the next junction.
+function leftTurnAt(map, path, { approaches, nodes }) {
+  const k = path.edges.findIndex((e) => e.sEnd > path.s - 30 && approaches.has(e.id));
+  if (k < 0) return null;
+  const { turn, at } = map.turnThrough(path.edges.map((e) => e.id), k, nodes);
+  return turn === "left" || turn === "uturn" ? path.edges[at].sStart : null;
 }

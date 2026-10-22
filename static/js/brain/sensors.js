@@ -25,6 +25,31 @@ const LANE_GAP_M = 6;
 const GAP_AHEAD_S = 2.0;
 const GAP_BEHIND_S = 2.5;
 export const LANE_CLEAR_M = 2.2;   // a car this far across has left its old lane
+// Turning left at a signal: oncoming traffic has the right of way. The car turns in front of an
+// oncoming vehicle only if it would clear that vehicle's path (6 m past the junction's centre, plus
+// its own length, taking the turn at up to 6 m/s and pulling away at 2 m/s^2) 1.5 s before the
+// vehicle gets there, or 0.75 s once it is already moving through the turn. Otherwise it waits
+// 1.5 m short of that path: at the line, or inside the junction if it is already in it. A vehicle
+// counts while it heads within 60 deg of straight at the car's approach and comes toward the
+// junction, and while it is in the junction (12 m of its centre) turning, unless it signals a left
+// turn of its own from its leftmost lane within 40 m (opposing left turns pass in front of each
+// other), is braking to stop short, or
+// is better aligned with coming down the street the car turns into (on a street that bends at the
+// junction, that is the oncoming lane of the car's own street and never crosses its path).
+const ONCOMING_LOOK_M = 90;
+const ONCOMING_CONE = Math.PI / 3;
+const JUNCTION_BOX_M = 12;
+const TURN_MPS = 6;
+const TURN_ACCEL = 2.0;
+const CLEAR_PAST_M = 6;
+const GAP_MARGIN_S = 1.5;
+const GAP_KEEP_S = 0.75;
+export const ONCOMING_STOP_M = 1.5;
+const NEXT_CONTROL_M = 30;
+const LEFT_SIGNAL_M = 40;
+// A car this far past a stop line is inside the junction and clears it: a light that changes or a
+// stop it overshot no longer holds it. Just past the line (an overshoot) it still does.
+export const CLEARING_M = 3;
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -66,11 +91,14 @@ export function buildSnapshot(world, executing = null) {
       arrived: remaining < 3.5,
     };
     const frontS = p.s + FRONT;
-    for (const c of route.controls) {
-      if (c.sRoute + 12 < frontS) continue;          // already through this one
+    for (let k = 0; k < route.controls.length; k++) {
+      const c = route.controls[k], control = c.control, next = route.controls[k + 1];
+      const leftTurn = control.type === "signal" && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
+      // already through this one (a left turn stays in view until the car is past oncoming traffic,
+      // unless the next control is coming up)
+      if (c.sRoute + 12 < frontS && !(leftTurn && frontS < c.sJunction + JUNCTION_BOX_M && !(next && next.sRoute - frontS < NEXT_CONTROL_M))) continue;
       if (c.sRoute - frontS > LOOK_AHEAD_CONTROL_M) break;
       const bumperToLine = c.sRoute - frontS;
-      const control = c.control;
       const inter = control.type === "signal" ? map.intersections.get(control.id) : null;
       const junction = inter ? [inter.x, inter.y] : c.junction;
       const signal = control.type === "signal" ? (junction && world.visibility.canSee(ego, ...junction) ? signalFor(map, control, world.t) : "unknown") : null;
@@ -91,10 +119,12 @@ export function buildSnapshot(world, executing = null) {
         }
       }
       const stopMem = world.egoStop;
+      const entered = bumperToLine < 0;
       snap.intersection = {
         id: control.id, control: control.type, signal, group: control.group || null,
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
-        entered: bumperToLine < 0,
+        entered, turn: c.turn || "straight",
+        oncoming: leftTurn && (entered || signal === "green" || signal === "yellow") ? oncomingYield(world, c, frontS) : null,
         stop_completed: control.type === "stop" ? (stopMem.controlId === control.id && stopMem.completed) : null,
         all_way: control.type === "stop" ? !!control.all_way : null,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
@@ -191,6 +221,62 @@ function laneState(route, p, law) {
   };
 }
 
+// Turning left at a signal: the oncoming vehicle the car must wait for, or null when there is none
+// or the car can no longer stop short of oncoming traffic's path (it has committed and clears the
+// junction). Past the wait point but short of the path it still waits. `yield_s_route` is where
+// the front bumper stops, ONCOMING_STOP_M before the first point where the car's path comes within
+// half the two widths plus 0.5 m of the line of the innermost oncoming lane, measured from a
+// conflicting vehicle's line of travel (so a car in a far lane is waited for short of the near
+// lane too). Only vehicles the car can see count.
+function oncomingYield(world, c, frontS) {
+  const { ego, route } = world;
+  const centre = route.pointAt(c.sJunction);
+  const toClear = c.sJunction + CLEAR_PAST_M + ego.spec.length - frontS;
+  if (toClear <= 0) return null;
+  const v0 = Math.min(Math.max(0, ego.v), TURN_MPS);
+  const t1 = (TURN_MPS - v0) / TURN_ACCEL, d1 = (v0 + TURN_MPS) / 2 * t1;
+  const clearIn = d1 >= toClear ? (Math.sqrt(v0 * v0 + 2 * TURN_ACCEL * toClear) - v0) / TURN_ACCEL : t1 + (toClear - d1) / TURN_MPS;
+  const need = clearIn + (ego.v > 1.5 && frontS > c.sRoute ? GAP_KEEP_S : GAP_MARGIN_S);
+  const facing = route.headingAt(c.sRoute) + Math.PI, down = route.headingAt(Math.min(route.length, c.sJunction + 15)) + Math.PI;
+  let best = null;
+  for (const n of world.npcs) {
+    if (n.v < 1) continue;
+    const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
+    if (d > ONCOMING_LOOK_M) continue;
+    // A left indicator means a left turn only from the leftmost lane near the junction: further
+    // out, or from another lane, it is a lane change and the vehicle may well come straight on.
+    const lane = world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane;
+    if (n.signal === "left" && d < LEFT_SIGNAL_M && lane && lane.idx === 0) continue;
+    const rel = Math.abs(wrap(n.psi - facing));
+    const closing = (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6);
+    const inBox = d < JUNCTION_BOX_M;
+    if (!(rel < ONCOMING_CONE && (closing > 0.3 || inBox)) && !(inBox && rel < Math.PI * 7 / 12 && closing > -0.5)) continue;
+    if (Math.abs(wrap(n.psi - down)) < rel) continue;
+    // brake lights: a vehicle that will stop well short of the junction is not coming through
+    if (!inBox && n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
+    const eta = inBox ? 0 : (d - JUNCTION_BOX_M / 2) / n.v;
+    if (eta >= need || !world.visibility.sees(ego, n)) continue;
+    const spec = n.spec || CAR;
+    const reach = (ego.spec.width + spec.width) / 2 + 0.5;
+    const ux = Math.cos(n.psi), uy = Math.sin(n.psi);
+    // its lane's offset from the innermost lane of its street (lane 0 is leftmost), to its left
+    const inner = lane ? Math.max(0, lane.offset - lane.edgeRef.lane_offsets[0]) : 0;
+    const ox = n.x - uy * inner, oy = n.y + ux * inner;
+    let hit = null;
+    for (let s = Math.max(c.sRoute, frontS) - 2; s <= c.sJunction + JUNCTION_BOX_M; s += 0.5) {
+      const [px, py] = route.pointAt(s);
+      const ax = px - ox, ay = py - oy;
+      if (ax * ux + ay * uy > -spec.length && Math.abs(ax * uy - ay * ux) < reach) { hit = s; break; }
+    }
+    if (hit === null) continue;
+    const at = hit - ONCOMING_STOP_M;
+    if (!best || at < best.yield_s_route) best = { id: n.id, eta_s: eta, need_s: need, yield_s_route: at, bumper_to_yield_m: at - frontS };
+  }
+  // too late to stop short of its path (not just of the wait point): carry on through
+  if (!best || best.bumper_to_yield_m + ONCOMING_STOP_M < ego.v * ego.v / (2 * Math.min(4, comfort().hardDecel)) + 0.3) return null;
+  return best;
+}
+
 // Route arc length at which a lane change has moved the car LANE_CLEAR_M away from the lane it left.
 function laneClearS(shift, fromCenter, toCenter) {
   const need = LANE_CLEAR_M / Math.max(LANE_CLEAR_M, Math.abs(toCenter - fromCenter));
@@ -277,7 +363,8 @@ export function desiredSpeed(snap) {
     if (vf < v) { v = vf; reasons.push("car ahead"); }
   }
   const i = snap.intersection;
-  if (i && !i.entered && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown")) || (i.control === "stop" && !i.stop_completed))) {
+  // (a car just past a signal's line, short of CLEARING_M, still stops for it)
+  if (i && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown")) || (i.control === "stop" && !i.stop_completed))) {
     // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line
     const vs = i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
     if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
@@ -289,6 +376,11 @@ export function desiredSpeed(snap) {
     const vy = i.cross_traffic_moving ? (i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel))
       : Math.sqrt(entry * entry + 2 * decel * Math.max(0, i.bumper_to_line_m));
     if (vy < v) { v = vy; reasons.push(i.cross_traffic_moving ? "yield to roundabout traffic" : "roundabout"); }
+  }
+  if (i && i.oncoming) {
+    const room = i.oncoming.bumper_to_yield_m;
+    const vo = room < 1.5 ? 0 : stopSpeedFor(room - 1.0, decel);
+    if (vo < v) { v = vo; reasons.push("oncoming traffic"); }
   }
   if (snap.pedestrian) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
@@ -315,6 +407,7 @@ function stopSpeedFor(distance, decel) { return distance <= 0 ? 0 : Math.sqrt(2 
 export function hazardFlags(snap) {
   const f = [];
   if (snap.intersection && snap.intersection.bumper_to_line_m < 60) f.push("intersection");
+  if (snap.intersection?.oncoming) f.push("oncoming");
   if (snap.nav && snap.nav.next_turn !== "none" && snap.nav.turn_in_m < 50) f.push("turn");
   if (snap.following && snap.following.gap_m < 15) f.push("following");
   if (snap.roadside?.some((o) => o.kind !== "parked car")) f.push("roadside activity");

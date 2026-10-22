@@ -1,0 +1,4868 @@
+{
+ "date": "2026-10-22",
+ "base_commit": "b456c70",
+ "change": "left turns at a signal yield to oncoming traffic; failed_to_yield audit for oncoming traffic",
+ "before": "b456c70 with only the new audit (static/js/sim/world.js) and the route and map helpers it reads (static/js/map/route.js, static/js/map/mapdata.js), so both columns are judged by the same audit",
+ "method": {
+  "brain": "rules",
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "kitsilano": "12 routes in dry, fog, rain and snow",
+  "other_maps": "2-route dry smoke suites",
+  "webkit": "scripts/shot.swift on macOS 27.0.1",
+  "v8": "scripts/bench_node.mjs, Node v22.23.4"
+ },
+ "baseline_run": "data/runs/20261022-092538-rules.json",
+ "webkit": {
+  "kitsilano-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 9,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 23.66,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.97,
+     "max_lat_accel": 5.1,
+     "lane_rms_m": 0.18,
+     "lane_changes": 5,
+     "speeding_s": 0,
+     "decisions": 5194,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 83.9
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 77.9
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 132
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 107.1
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 182.6
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 212.6
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 171.3
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 139.2
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 148.9
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 111
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 157.2
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 8,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 23.64,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.02,
+     "max_lat_accel": 5.09,
+     "lane_rms_m": 0.18,
+     "lane_changes": 5,
+     "speeding_s": 0,
+     "decisions": 5203,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 83.9
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 77.9
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 132
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 107.1
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 182.7
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 212.6
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 171.3
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 139.2
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 150.5
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 111.3
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 157.2
+     }
+    ]
+   }
+  },
+  "kitsilano-fog": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 0.917,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 1,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 1,
+     "off_road_s": 0.4,
+     "safety_brakes": 8,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0.19,
+     "avg_kmh": 17.25,
+     "min_gap_m": 1.2,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.52,
+     "max_lat_accel": 4.76,
+     "lane_rms_m": 0.14,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 6942,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.6
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 144.8
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 106.4
+     },
+     {
+      "id": "s1-4",
+      "pass": false,
+      "arrived": true,
+      "failures": [
+       "collision",
+       "failed to yield"
+      ],
+      "collisions": 1,
+      "failed_to_yield": 1,
+      "deadlocks": 0,
+      "time_s": 201.5
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 154.8
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 226.8
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 265.3
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 220.1
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 234.5
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.1
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 128.1
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 186.7
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.4,
+     "safety_brakes": 9,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 17.2,
+     "min_gap_m": 1.2,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.76,
+     "max_lat_accel": 4.63,
+     "lane_rms_m": 0.14,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 6969,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 144.8
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 106.4
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 203.6
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 154.8
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 226.8
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 265.3
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 219
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 234.5
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.1
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 130.4
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 187.9
+     }
+    ]
+   }
+  },
+  "kitsilano-rain": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.23,
+     "min_gap_m": 1.8,
+     "min_ttc_s": 1.5,
+     "hard_brakes": 0,
+     "rms_jerk": 2.43,
+     "max_lat_accel": 3.36,
+     "lane_rms_m": 0.13,
+     "lane_changes": 6,
+     "speeding_s": 0,
+     "decisions": 6571,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 108
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 146.4
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 100.3
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 135.2
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 151
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 221.4
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 234.3
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 223.2
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 173.5
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 201.7
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 131.6
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 159.9
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.23,
+     "min_gap_m": 1.9,
+     "min_ttc_s": 1.5,
+     "hard_brakes": 0,
+     "rms_jerk": 2.42,
+     "max_lat_accel": 3.32,
+     "lane_rms_m": 0.14,
+     "lane_changes": 6,
+     "speeding_s": 0,
+     "decisions": 6567,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 108
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 146.4
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 100.3
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 135.6
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 151
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 221.4
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 234.3
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 223.2
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 173.6
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 201.7
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 131.3
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 159.9
+     }
+    ]
+   }
+  },
+  "kitsilano-snow": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.54,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.3,
+     "safety_brakes": 1,
+     "deadlocks": 4,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 14.51,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.7,
+     "hard_brakes": 0,
+     "rms_jerk": 1.59,
+     "max_lat_accel": 1.92,
+     "lane_rms_m": 0.11,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 8494,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 4,
+      "time_s": 155.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 155.3
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 137.3
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 202
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 220.7
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 302.2
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 314.1
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 244
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 237.6
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 225.5
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 159.6
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 253.7
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.54,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.4,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 14.5,
+     "min_gap_m": 2.2,
+     "min_ttc_s": 1.7,
+     "hard_brakes": 0,
+     "rms_jerk": 1.57,
+     "max_lat_accel": 1.88,
+     "lane_rms_m": 0.11,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 8493,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 155.8
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 155.3
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 137.3
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 202
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 220.5
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 302.2
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 314.1
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 244
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 237.7
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 225.5
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 159.5
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 253.7
+     }
+    ]
+   }
+  },
+  "mount_pleasant-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.34,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.25,
+     "min_gap_m": 7.2,
+     "min_ttc_s": 2.9,
+     "hard_brakes": 0,
+     "rms_jerk": 3.05,
+     "max_lat_accel": 5.36,
+     "lane_rms_m": 0.42,
+     "lane_changes": 0,
+     "speeding_s": 1,
+     "decisions": 809,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 125.6
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 124.9
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.34,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.25,
+     "min_gap_m": 7.2,
+     "min_ttc_s": 2.9,
+     "hard_brakes": 0,
+     "rms_jerk": 3.05,
+     "max_lat_accel": 5.36,
+     "lane_rms_m": 0.42,
+     "lane_changes": 0,
+     "speeding_s": 1,
+     "decisions": 809,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 125.6
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 124.9
+     }
+    ]
+   }
+  },
+  "victoria-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.07,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 17.65,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.2,
+     "hard_brakes": 0,
+     "rms_jerk": 2.66,
+     "max_lat_accel": 6.45,
+     "lane_rms_m": 0.25,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 1407,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 184.2
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 238.7
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.07,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 17.65,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 1.2,
+     "hard_brakes": 0,
+     "rms_jerk": 2.6,
+     "max_lat_accel": 6.45,
+     "lane_rms_m": 0.25,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 1407,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 184.2
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 238.7
+     }
+    ]
+   }
+  },
+  "toronto-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.99,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 4,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.25,
+     "min_gap_m": 3.8,
+     "min_ttc_s": 1.3,
+     "hard_brakes": 0,
+     "rms_jerk": 2.92,
+     "max_lat_accel": 5.68,
+     "lane_rms_m": 0.29,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1248,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.1
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 4,
+      "time_s": 181.2
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.99,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 4,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.25,
+     "min_gap_m": 3.8,
+     "min_ttc_s": 1.3,
+     "hard_brakes": 0,
+     "rms_jerk": 2.92,
+     "max_lat_accel": 5.68,
+     "lane_rms_m": 0.29,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1248,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.1
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 4,
+      "time_s": 181.2
+     }
+    ]
+   }
+  },
+  "montreal-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 0.92,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 25.6,
+     "min_gap_m": 25.8,
+     "min_ttc_s": 24.8,
+     "hard_brakes": 0,
+     "rms_jerk": 2.02,
+     "max_lat_accel": 5.14,
+     "lane_rms_m": 0.19,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 361,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 73
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 57.5
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 0.92,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 25.6,
+     "min_gap_m": 25.8,
+     "min_ttc_s": 24.8,
+     "hard_brakes": 0,
+     "rms_jerk": 2.02,
+     "max_lat_accel": 5.14,
+     "lane_rms_m": 0.19,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 361,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 73
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 57.5
+     }
+    ]
+   }
+  },
+  "calgary-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.17,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.5,
+     "min_gap_m": 2.8,
+     "min_ttc_s": 2.9,
+     "hard_brakes": 0,
+     "rms_jerk": 2.9,
+     "max_lat_accel": 5.96,
+     "lane_rms_m": 0.26,
+     "lane_changes": 3,
+     "speeding_s": 0,
+     "decisions": 740,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.7
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.5
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.17,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.5,
+     "min_gap_m": 2.8,
+     "min_ttc_s": 2.9,
+     "hard_brakes": 0,
+     "rms_jerk": 2.9,
+     "max_lat_accel": 5.96,
+     "lane_rms_m": 0.26,
+     "lane_changes": 3,
+     "speeding_s": 0,
+     "decisions": 743,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.7
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.5
+     }
+    ]
+   }
+  },
+  "ottawa-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.41,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 3,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.4,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.17,
+     "max_lat_accel": 5.37,
+     "lane_rms_m": 0.44,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 861,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 3,
+      "time_s": 175.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.9
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.41,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 3,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.4,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.17,
+     "max_lat_accel": 5.37,
+     "lane_rms_m": 0.44,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 861,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 3,
+      "time_s": 175.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.9
+     }
+    ]
+   }
+  },
+  "quebec_city-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.45,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 28.25,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.49,
+     "max_lat_accel": 5.3,
+     "lane_rms_m": 0.19,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 555,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 125.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 66.8
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.45,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 28.25,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.5,
+     "max_lat_accel": 5.27,
+     "lane_rms_m": 0.19,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 558,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 125.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 66.8
+     }
+    ]
+   }
+  },
+  "halifax-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.82,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 20.95,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.28,
+     "max_lat_accel": 5.31,
+     "lane_rms_m": 0.18,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1016,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 173.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 139.1
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.82,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 20.95,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.28,
+     "max_lat_accel": 5.31,
+     "lane_rms_m": 0.18,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1016,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 173.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 139.1
+     }
+    ]
+   }
+  },
+  "winnipeg-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.02,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 36.55,
+     "min_gap_m": 2.9,
+     "min_ttc_s": 4.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.32,
+     "max_lat_accel": 5.27,
+     "lane_rms_m": 0.23,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 463,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.7
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 105.2
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.02,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 36.55,
+     "min_gap_m": 2.9,
+     "min_ttc_s": 4.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.32,
+     "max_lat_accel": 5.27,
+     "lane_rms_m": 0.23,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 463,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.7
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 105.2
+     }
+    ]
+   }
+  },
+  "edmonton-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.88,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 30.85,
+     "min_gap_m": 2.5,
+     "min_ttc_s": 1.8,
+     "hard_brakes": 0,
+     "rms_jerk": 2.33,
+     "max_lat_accel": 5.16,
+     "lane_rms_m": 0.14,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 570,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 84.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 136.6
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.88,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 30.85,
+     "min_gap_m": 2.5,
+     "min_ttc_s": 1.8,
+     "hard_brakes": 0,
+     "rms_jerk": 2.33,
+     "max_lat_accel": 5.16,
+     "lane_rms_m": 0.14,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 570,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 84.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 136.6
+     }
+    ]
+   }
+  },
+  "saskatoon-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.48,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 29.85,
+     "min_gap_m": 40.1,
+     "min_ttc_s": 12,
+     "hard_brakes": 0,
+     "rms_jerk": 2.18,
+     "max_lat_accel": 5.03,
+     "lane_rms_m": 0.17,
+     "lane_changes": 0,
+     "speeding_s": 2.8,
+     "decisions": 511,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 78
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 104.4
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.48,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 29.85,
+     "min_gap_m": 40.1,
+     "min_ttc_s": 12,
+     "hard_brakes": 0,
+     "rms_jerk": 2.18,
+     "max_lat_accel": 5.03,
+     "lane_rms_m": 0.17,
+     "lane_changes": 0,
+     "speeding_s": 2.8,
+     "decisions": 511,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 78
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 104.4
+     }
+    ]
+   }
+  }
+ },
+ "v8": {
+  "kitsilano-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 10,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 23.08,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.03,
+     "max_lat_accel": 5.08,
+     "lane_rms_m": 0.17,
+     "lane_changes": 5,
+     "speeding_s": 0,
+     "decisions": 5486,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 83.9
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 77.9
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 133.4
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 107.3
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 188.5
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 212.7
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 220.8
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 139.1
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 147.9
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 121.1
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 157.1
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 11,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 22.99,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.2,
+     "max_lat_accel": 5.05,
+     "lane_rms_m": 0.17,
+     "lane_changes": 5,
+     "speeding_s": 0,
+     "decisions": 5462,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 83.9
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 77.9
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 136.3
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 107.3
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 188.2
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 212.7
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 218.7
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 139.1
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 152.3
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 121.3
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 157.1
+     }
+    ]
+   }
+  },
+  "kitsilano-fog": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.4,
+     "safety_brakes": 7,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 17.32,
+     "min_gap_m": 1.2,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.68,
+     "max_lat_accel": 4.78,
+     "lane_rms_m": 0.13,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 6884,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.6
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 145
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 106.1
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 194.4
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 154.9
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 230.5
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 259.3
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 216.5
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 234.5
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.3
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 128.1
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 187.4
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.4,
+     "safety_brakes": 7,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 17.28,
+     "min_gap_m": 1.2,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.71,
+     "max_lat_accel": 4.68,
+     "lane_rms_m": 0.14,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 6917,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 145
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 106.1
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 194.3
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 154.9
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 230.5
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 259.3
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 216.4
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 234.5
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.3
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 130.4
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 188
+     }
+    ]
+   }
+  },
+  "kitsilano-rain": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.5,
+     "min_gap_m": 0.7,
+     "min_ttc_s": 1.2,
+     "hard_brakes": 0,
+     "rms_jerk": 2.44,
+     "max_lat_accel": 3.29,
+     "lane_rms_m": 0.14,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 6344,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 108
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 146.1
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.6
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 134.9
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 151.2
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 215.2
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 236.4
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 183.1
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 173.5
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 217.8
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 121.7
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 166
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.53,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.2,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.35,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.2,
+     "hard_brakes": 0,
+     "rms_jerk": 2.47,
+     "max_lat_accel": 3.25,
+     "lane_rms_m": 0.14,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 6365,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 108
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 146.1
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.6
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 141.6
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 151.2
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 215.2
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 236.4
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 187.7
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 173.6
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 217.8
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 121.8
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 166
+     }
+    ]
+   }
+  },
+  "kitsilano-snow": {
+   "before": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.54,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.3,
+     "safety_brakes": 3,
+     "deadlocks": 4,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 14.48,
+     "min_gap_m": 1.9,
+     "min_ttc_s": 1.5,
+     "hard_brakes": 0,
+     "rms_jerk": 1.57,
+     "max_lat_accel": 1.9,
+     "lane_rms_m": 0.11,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 8523,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 4,
+      "time_s": 155.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 155.3
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 144.2
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 202.3
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 220.6
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 302
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 351.5
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 241.9
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 237.8
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 214.5
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 149
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 253.7
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 12,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 10.54,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0.4,
+     "safety_brakes": 3,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 14.48,
+     "min_gap_m": 1.9,
+     "min_ttc_s": 1.5,
+     "hard_brakes": 0,
+     "rms_jerk": 1.54,
+     "max_lat_accel": 1.85,
+     "lane_rms_m": 0.11,
+     "lane_changes": 4,
+     "speeding_s": 0,
+     "decisions": 8534,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 155.8
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 155.3
+     },
+     {
+      "id": "s1-3",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 144.2
+     },
+     {
+      "id": "s1-4",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 202
+     },
+     {
+      "id": "s1-5",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 220.5
+     },
+     {
+      "id": "s1-6",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 302.1
+     },
+     {
+      "id": "s1-7",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 351.5
+     },
+     {
+      "id": "s1-8",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 241.9
+     },
+     {
+      "id": "s1-9",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 237.7
+     },
+     {
+      "id": "s1-10",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 214.5
+     },
+     {
+      "id": "s1-11",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 148.9
+     },
+     {
+      "id": "s1-12",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 253.7
+     }
+    ]
+   }
+  },
+  "mount_pleasant-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.34,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.25,
+     "min_gap_m": 7.2,
+     "min_ttc_s": 3.2,
+     "hard_brakes": 0,
+     "rms_jerk": 3,
+     "max_lat_accel": 5.45,
+     "lane_rms_m": 0.42,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 804,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 126.2
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 124.2
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.34,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.25,
+     "min_gap_m": 7.2,
+     "min_ttc_s": 3.2,
+     "hard_brakes": 0,
+     "rms_jerk": 3,
+     "max_lat_accel": 5.45,
+     "lane_rms_m": 0.42,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 804,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 126.2
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 124.2
+     }
+    ]
+   }
+  },
+  "victoria-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.07,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.25,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.2,
+     "hard_brakes": 0,
+     "rms_jerk": 2.78,
+     "max_lat_accel": 6.45,
+     "lane_rms_m": 0.25,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 1366,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 172.6
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 238.7
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.07,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.25,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 1.2,
+     "hard_brakes": 0,
+     "rms_jerk": 2.72,
+     "max_lat_accel": 6.45,
+     "lane_rms_m": 0.25,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 1366,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 172.6
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 238.7
+     }
+    ]
+   }
+  },
+  "toronto-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.99,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 4,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.55,
+     "min_gap_m": 3.8,
+     "min_ttc_s": 1.3,
+     "hard_brakes": 0,
+     "rms_jerk": 2.91,
+     "max_lat_accel": 5.5,
+     "lane_rms_m": 0.29,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1240,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 4,
+      "time_s": 174.1
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.99,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 4,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.55,
+     "min_gap_m": 3.8,
+     "min_ttc_s": 1.3,
+     "hard_brakes": 0,
+     "rms_jerk": 2.91,
+     "max_lat_accel": 5.5,
+     "lane_rms_m": 0.29,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1240,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 207.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 4,
+      "time_s": 174.1
+     }
+    ]
+   }
+  },
+  "montreal-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 0.92,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 25.6,
+     "min_gap_m": 25.8,
+     "min_ttc_s": 24.8,
+     "hard_brakes": 0,
+     "rms_jerk": 2.02,
+     "max_lat_accel": 5.14,
+     "lane_rms_m": 0.19,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 361,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 73
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 57.5
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 0.92,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 25.6,
+     "min_gap_m": 25.8,
+     "min_ttc_s": 24.8,
+     "hard_brakes": 0,
+     "rms_jerk": 2.02,
+     "max_lat_accel": 5.14,
+     "lane_rms_m": 0.19,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 361,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 73
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 57.5
+     }
+    ]
+   }
+  },
+  "calgary-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.17,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.5,
+     "min_gap_m": 2.8,
+     "min_ttc_s": 2.9,
+     "hard_brakes": 0,
+     "rms_jerk": 2.9,
+     "max_lat_accel": 5.96,
+     "lane_rms_m": 0.26,
+     "lane_changes": 3,
+     "speeding_s": 0,
+     "decisions": 739,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.7
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.5
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.17,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 19.5,
+     "min_gap_m": 2.8,
+     "min_ttc_s": 2.9,
+     "hard_brakes": 0,
+     "rms_jerk": 2.9,
+     "max_lat_accel": 5.96,
+     "lane_rms_m": 0.26,
+     "lane_changes": 3,
+     "speeding_s": 0,
+     "decisions": 742,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 123.7
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.5
+     }
+    ]
+   }
+  },
+  "ottawa-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.41,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 3,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.4,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.17,
+     "max_lat_accel": 5.37,
+     "lane_rms_m": 0.44,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 861,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 3,
+      "time_s": 175.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.9
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.41,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 3,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 18.4,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.17,
+     "max_lat_accel": 5.37,
+     "lane_rms_m": 0.44,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 861,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 3,
+      "time_s": 175.3
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 99.9
+     }
+    ]
+   }
+  },
+  "quebec_city-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.45,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 28.25,
+     "min_gap_m": 29.6,
+     "min_ttc_s": 12.4,
+     "hard_brakes": 0,
+     "rms_jerk": 2.49,
+     "max_lat_accel": 5.3,
+     "lane_rms_m": 0.19,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 555,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 125.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 66.8
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.45,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 28.25,
+     "min_gap_m": 29.6,
+     "min_ttc_s": 12.4,
+     "hard_brakes": 0,
+     "rms_jerk": 2.5,
+     "max_lat_accel": 5.27,
+     "lane_rms_m": 0.19,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 558,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 125.4
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 66.8
+     }
+    ]
+   }
+  },
+  "halifax-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.82,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 21.25,
+     "min_gap_m": 1.6,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.26,
+     "max_lat_accel": 5.31,
+     "lane_rms_m": 0.18,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1000,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 174.1
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 135
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.82,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 21.25,
+     "min_gap_m": 1.6,
+     "min_ttc_s": 1.1,
+     "hard_brakes": 0,
+     "rms_jerk": 3.26,
+     "max_lat_accel": 5.31,
+     "lane_rms_m": 0.18,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "decisions": 1000,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 174.1
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 135
+     }
+    ]
+   }
+  },
+  "winnipeg-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.02,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 36.65,
+     "min_gap_m": 2.9,
+     "min_ttc_s": 4.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.11,
+     "max_lat_accel": 5.24,
+     "lane_rms_m": 0.23,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 456,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.2
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 105.2
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 2.02,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 36.65,
+     "min_gap_m": 2.9,
+     "min_ttc_s": 4.1,
+     "hard_brakes": 0,
+     "rms_jerk": 2.11,
+     "max_lat_accel": 5.24,
+     "lane_rms_m": 0.23,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "decisions": 456,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 92.2
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 105.2
+     }
+    ]
+   }
+  },
+  "edmonton-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 0.5,
+     "arrived_rate": 1,
+     "km": 1.88,
+     "collisions": 1,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0.53,
+     "avg_kmh": 30.4,
+     "min_gap_m": 10.8,
+     "min_ttc_s": 2.7,
+     "hard_brakes": 0,
+     "rms_jerk": 4.26,
+     "max_lat_accel": 5.15,
+     "lane_rms_m": 0.14,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 614,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 84.3
+     },
+     {
+      "id": "s1-2",
+      "pass": false,
+      "arrived": true,
+      "failures": [
+       "collision"
+      ],
+      "collisions": 1,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 140.7
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 0.5,
+     "arrived_rate": 1,
+     "km": 1.88,
+     "collisions": 1,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0.53,
+     "avg_kmh": 30.4,
+     "min_gap_m": 10.8,
+     "min_ttc_s": 2.7,
+     "hard_brakes": 0,
+     "rms_jerk": 4.26,
+     "max_lat_accel": 5.15,
+     "lane_rms_m": 0.14,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "decisions": 614,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 84.3
+     },
+     {
+      "id": "s1-2",
+      "pass": false,
+      "arrived": true,
+      "failures": [
+       "collision"
+      ],
+      "collisions": 1,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 140.7
+     }
+    ]
+   }
+  },
+  "saskatoon-dry": {
+   "before": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.48,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 29.85,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.17,
+     "max_lat_accel": 5.03,
+     "lane_rms_m": 0.17,
+     "lane_changes": 0,
+     "speeding_s": 3.3,
+     "decisions": 509,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 78
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 104.2
+     }
+    ]
+   },
+   "after": {
+    "summary": {
+     "scenarios": 2,
+     "pass_rate": 1,
+     "arrived_rate": 1,
+     "km": 1.48,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "violations_per_km": 0,
+     "avg_kmh": 29.85,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "hard_brakes": 0,
+     "rms_jerk": 2.17,
+     "max_lat_accel": 5.03,
+     "lane_rms_m": 0.17,
+     "lane_changes": 0,
+     "speeding_s": 3.3,
+     "decisions": 509,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0
+    },
+    "results": [
+     {
+      "id": "s1-1",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 78
+     },
+     {
+      "id": "s1-2",
+      "pass": true,
+      "arrived": true,
+      "failures": [],
+      "collisions": 0,
+      "failed_to_yield": 0,
+      "deadlocks": 0,
+      "time_s": 104.2
+     }
+    ]
+   }
+  }
+ }
+}

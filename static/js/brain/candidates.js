@@ -6,7 +6,7 @@ import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
-import { CROSSWALK_STOP_M, LANE_CLEAR_M } from "./sensors.js";
+import { CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, CLEARING_M } from "./sensors.js";
 import { poseOf } from "../sim/static-obstacles.js";
 
 export const HORIZON_S = 3.0;
@@ -94,6 +94,12 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "approach and stop at the line" });
     }
+    // Turning left with oncoming traffic coming: wait short of its path, at the line or in the junction.
+    const oncoming = snap.intersection?.oncoming;
+    if (oncoming && oncoming.bumper_to_yield_m > 0.3) {
+      out.push({ id: "stop_for_oncoming", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(oncoming.yield_s_route - FRONT - 0.5) }),
+        steer: "hold lane", speed: "stop and wait for oncoming traffic before turning" });
+    }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -132,18 +138,20 @@ export function simulateAll(candidates, snap, world) {
   const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
-  const mustStop = control && (
+  // A car well past the line is clearing the junction: a light that changes now does not stop it.
+  const mustStop = control && control.bumper_to_line_m > -CLEARING_M && (
     (control.control === "signal" && (control.signal === "red" || control.signal === "unknown" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
     (control.control === "stop" && !control.stop_completed) ||
     (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;
   const ped = snap.pedestrian;
+  const oncoming = control?.oncoming || null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let lateLeaving = false, pedCross = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let lateLeaving = false, pedCross = false, cutsOff = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -171,6 +179,9 @@ export function simulateAll(candidates, snap, world) {
         const leave = c.change?.leave;
         if (leave && s + FRONT > leave.by && Math.abs(lateral + route.frameMove(startS, s) - leave.center) < LANE_CLEAR_M) lateLeaving = true;
         if (ped && !pedCross && s + FRONT > ped.s_route - 0.8) pedCross = true;
+        // the wait point is ONCOMING_STOP_M short of oncoming traffic's path; stopping up to a metre
+        // past it (a short, slow stop overshoots) still keeps the car out of that path
+        if (oncoming && s + FRONT > oncoming.yield_s_route + ONCOMING_STOP_M - 0.5) cutsOff = true;
       }
       if (k % 3 === 0 || k === steps) {
         const rd = map.roadDistance(car.x, car.y);
@@ -217,6 +228,7 @@ export function simulateAll(candidates, snap, world) {
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
     else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" ? "fails_to_yield" : "runs_stop";
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
+    else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     c.reject = reject;
     c.eligible = !reject;
   }

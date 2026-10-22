@@ -5,6 +5,7 @@
 import { timingPlan } from "../sim/signals.js";
 
 const CELL = 50;
+const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
 
 export function dist(a, b) { return Math.hypot(b[0] - a[0], b[1] - a[1]); }
 export function wrapAngle(a) {
@@ -154,6 +155,20 @@ export class MapData {
   headingIn(edgeId) { const p = this.edges.get(edgeId).pts; return headingOf(p[p.length - 2], p[p.length - 1]); }
   headingOut(edgeId) { const p = this.edges.get(edgeId).pts; return headingOf(p[0], p[1]); }
   turnAngle(a, b) { return wrapAngle(this.headingOut(b) - this.headingIn(a)); }
+  // A signal's junction: its vertices, and where its approaches start (a junction drawn as two
+  // nodes may list only one).
+  junctionNodes(inter) { return new Set([...(inter?.vertices || []), ...(inter?.approaches || []).map((a) => this.edges.get(a.edge)?.from)]); }
+  // The turn from edge ids[k] at the junction it leads into, carried on across short links that go
+  // straight inside that junction (`nodes`), never on to the next junction: { turn, at }, where
+  // ids[at] is the edge it turns onto.
+  turnThrough(ids, k, nodes) {
+    let j = k + 1, turn = j < ids.length ? this.classifyTurn(this.turnAngle(ids[k], ids[j])) : "straight";
+    while (turn === "straight" && j + 1 < ids.length && this.edges.get(ids[j]).length < JUNCTION_LINK_M && nodes.has(this.edges.get(ids[j]).to)) {
+      j++;
+      turn = this.classifyTurn(this.turnAngle(ids[k], ids[j]));
+    }
+    return { turn, at: j };
+  }
   classifyTurn(angle) {
     const deg = Math.abs(angle) * 180 / Math.PI;
     if (deg < 25) return "straight";

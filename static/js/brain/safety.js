@@ -4,6 +4,7 @@
 
 import { obbOverlap } from "../sim/collision.js";
 import { CAR } from "../sim/vehicle.js";
+import { CLEARING_M } from "./sensors.js";
 
 // Within this many metres of the destination a stop is not a deadlock, and a car that cannot get
 // any closer because something is parked in the way has arrived.
@@ -50,10 +51,11 @@ export class DeadlockDetector {
   update(world, snap, dt) {
     const ego = world.ego;
     const legit = (snap && snap.intersection && (
-      (snap.intersection.control === "signal" && snap.intersection.signal !== "green" && snap.intersection.bumper_to_line_m < 12 && snap.intersection.bumper_to_line_m > -2) ||
+      (snap.intersection.control === "signal" && snap.intersection.signal !== "green" && snap.intersection.bumper_to_line_m < 12 && snap.intersection.bumper_to_line_m > -CLEARING_M) ||
       (snap.intersection.control === "stop" && !snap.intersection.stop_completed && snap.intersection.bumper_to_line_m < 12) ||
       (snap.intersection.control === "stop" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8) ||
-      (snap.intersection.control === "yield" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8)))
+      (snap.intersection.control === "yield" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8) ||
+      (snap.intersection.oncoming && snap.intersection.oncoming.bumper_to_yield_m < 8)))
       || (snap && snap.following && snap.following.gap_m < 8)
       || (snap && snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12)
       || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)

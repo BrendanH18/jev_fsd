@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Six authored challenges
+## Seven authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -15,8 +15,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Winter composure | Toronto, The Annex | A stop-controlled block with reduced snow grip |
 | Joining the flow | Vancouver, Kitsilano | A parked car indicates, accepts a gap and merges using the normal NPC controller |
 | Around the corner | Vancouver, Kitsilano | A scripted pedestrian crossing with a sight line obstructed by a mapped building |
+| The unprotected left | Ottawa, Centretown | A left turn on a green; two oncoming cars 20 m apart, going straight through, reach the junction as the car does |
 
-Suite version 2 adds the merge and obstructed crossing. Each challenge separately versions
+Suite version 2 adds the merge and obstructed crossing; the unprotected left joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
 and snow challenges remain version 1; the rainy crossing is version 2 because its person
 now correctly waits for the approach trigger rather than starting during setup.

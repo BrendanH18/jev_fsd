@@ -17,6 +17,7 @@ export class RulesBrain {
       if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) stop = true;
       if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) stop = true;
       if (i.control === "yield" && i.cross_traffic_moving && !i.entered && i.bumper_to_line_m < 1.5) stop = true;
+      if (i.oncoming && i.oncoming.bumper_to_yield_m < 2) stop = true;
     }
     if (snap.following && snap.following.gap_m < 3 && snap.following.speed < 0.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
@@ -42,6 +43,7 @@ export class RulesBrain {
       if (c.id === "stop_at_line" && i && !i.entered && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || (i.control === "yield" && i.cross_traffic_moving))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
+      if (c.id === "stop_for_oncoming") cost -= 6;
       if (c.law.kind === "hard_brake") cost += 3;
       if (c.law.kind === "reverse") cost += 2;
       if (!s.stays_in_lane) cost += 2;
