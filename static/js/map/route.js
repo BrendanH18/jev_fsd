@@ -11,6 +11,7 @@ import { CAR } from "../sim/vehicle.js";
 // lane, so the car changes into it as a lane change instead of sliding across with the polyline.
 export const PREPARE_LANE_M = 150;
 const RAMP_M = 40;   // the polyline's own move between lanes is measured up to this far either side of the join
+const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
 
 export class Route {
   constructor(data, map, vehicleSpec = CAR) {
@@ -55,8 +56,17 @@ export class Route {
       }
       const junctionNode = map.nodes.get(e.to);
       const inter = e.control.type === "signal" ? map.intersections.get(e.control.id) : null;
+      // The turn the route makes at this junction, from the streets either side of it (across a short
+      // link that goes straight, for a junction mapped as several nodes), and where the junction's
+      // centre is along the route, searched forward from the line.
+      const next = this.edges[i + 1], link = next && this.edges[i + 2] && map.edges.get(next).length < JUNCTION_LINK_M;
+      let turn = next ? map.classifyTurn(map.turnAngle(e.id, next)) : "straight";
+      if (turn === "straight" && link) turn = map.classifyTurn(map.turnAngle(e.id, this.edges[i + 2]));
+      const centre = inter ? [inter.x, inter.y] : junctionNode ? [junctionNode.x, junctionNode.y] : null;
+      const cp = centre ? projectPoint(this.pts, this.cum, centre, p.index) : null;
       this.controls.push({
         edge: e.id, control: e.control, sRoute, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
+        turn, sJunction: cp && cp.distance < 15 && cp.s >= sRoute - 1 ? cp.s : null,
         secondsToGreen: inter ? (t) => secondsToGreenFor(inter, e.control.group, t) : null,
       });
     }

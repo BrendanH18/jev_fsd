@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- The driven car yields to oncoming traffic when it turns left (or makes a U-turn) at a signal.
+  Before, it turned on a green whatever was coming the other way. It turns in front of an
+  oncoming vehicle only if it would clear that vehicle's path 1.5 s before the vehicle gets
+  there (0.75 s once it is moving through the turn). Otherwise it waits 1.5 m short of the
+  innermost oncoming lane: at the line, or inside the junction if it is already in it. It goes
+  once the gap is long enough or oncoming traffic stops for the light. It carries on through if
+  it can no longer stop short of that lane. Only vehicles it can see count. An oncoming car
+  signalling its own left turn, braking to stop short of the junction, or travelling the other
+  way along the street the car turns into does not count. Decision models and LLMs get
+  `intersection.turn` and `intersection.oncoming`, a situation line and a `stop_for_oncoming`
+  candidate; manoeuvres that would cross that lane are rejected (`fails_to_yield_to_oncoming`).
+  The audit counts a failure to yield when the car's front enters the path of an oncoming
+  vehicle due at the junction within 2 s, seen or not. It applies to manual drives too, so the
+  coaching score now penalises it. A car more than 3 m past the line when the light changes
+  clears the junction. Before, every manoeuvre was rejected as running the red, so it braked to a
+  stop where it was. Nearer the line it still holds for the red. New challenge, **The unprotected
+  left** (Ottawa, Centretown): a left turn on a green as two oncoming cars 20 m apart reach the
+  junction. In the seeded WebKit benchmark Kitsilano passes 48 of 48 routes across four weathers
+  (47 before; fog `s1-4`, a left turn on a green into an oncoming car, now passes) and the city
+  smoke suites 22 of 22, and the four deadlock overrides in Kitsilano snow are gone. See
+  [docs/rules-baseline.md](docs/rules-baseline.md). New checks in `scripts/test_left_turn.mjs`.
+
 - Traffic no longer pulls out of a parking spot into the driven car. A car parked close behind
   another could not move off when its gap check passed: the car in front held it still while its
   merge ran out the clock, and it pulled out over three seconds later, with the driven car about

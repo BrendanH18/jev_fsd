@@ -5,6 +5,7 @@ import { r1 } from "../common.js";
 import { speedVsTarget } from "./candidates.js";
 import { STOP_ZONE_M } from "../sim/signals.js";
 import { current as weather } from "../sim/weather.js";
+import { CLEARING_M } from "./sensors.js";
 
 export const DEFAULT_STYLE = "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly";
 const PREAMBLE = "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`.";
@@ -68,6 +69,8 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(i.control === "stop" ? { stop_completed: i.stop_completed, all_way: i.all_way } : {}),
       ...(i.control === "yield" ? { roundabout: true, ring_traffic: i.cross_traffic_moving } : { cross_traffic_moving: i.cross_traffic_moving }),
     };
+    if (i.control === "signal" && (i.turn === "left" || i.turn === "uturn")) state.intersection.turn = i.turn;
+    if (i.oncoming) state.intersection.oncoming = { id: i.oncoming.id, arrives_in_s: r1(i.oncoming.eta_s), needed_s: r1(i.oncoming.need_s), wait_in_m: r1(Math.max(0, i.oncoming.bumper_to_yield_m)), yield: true };
   }
   if (snap.following) {
     const f = snap.following;
@@ -98,6 +101,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
 function outcomeLabel(c, snap) {
   if (c.id === "stop_at_line" && snap.intersection) return `clear, stops ${Math.max(0, r1(snap.intersection.bumper_to_line_m - c.sim.progress_m))} m before the line`;
   if (c.id === "stop_at_destination") return "clear, reaches the destination";
+  if (c.id === "stop_for_oncoming" && snap.intersection?.oncoming) return `clear, waits ${Math.max(0, r1(snap.intersection.oncoming.bumper_to_yield_m - c.sim.progress_m))} m short of oncoming traffic's path`;
   if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
   if (!c.sim.stays_on_road) return c.sim.off_road_fraction > 0.5 ? "leaves the road" : "touches the road edge";
   if (c.change) return `clear, ${c.change.offer === "pass" || c.change.prepare ? "moves into" : "moves back into"} the ${c.change.dir} lane${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
@@ -112,10 +116,15 @@ export function situationClauses(snap) {
   const m = i ? Math.max(0, Math.round(i.bumper_to_line_m)) : 0;
   const atLine = i && i.bumper_to_line_m < STOP_ZONE_M;
   if (i && i.control === "signal") {
-    if (i.signal === "unknown") out.push(`The signal phase ${m} m ahead is not visible: approach cautiously and stop at the line unless a permitted phase becomes visible.`);
+    if (i.bumper_to_line_m < -CLEARING_M && i.signal !== "green") out.push(`The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`);
+    else if (i.signal === "unknown") out.push(`The signal phase ${m} m ahead is not visible: approach cautiously and stop at the line unless a permitted phase becomes visible.`);
     else if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
+    if (i.oncoming) {
+      const o = i.oncoming, w = Math.max(0, Math.round(o.bumper_to_yield_m));
+      out.push(`The car turns ${i.turn === "uturn" ? "around" : "left"} here and oncoming traffic has the right of way: \`${o.id}\` reaches the junction in ${r1(o.eta_s)} s, too soon for the car to turn in front of it (it needs ${r1(o.need_s)} s). ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_oncoming\`).`}`);
+    }
   } else if (i && i.control === "stop") {
     if (!i.stop_completed) out.push(atLine ? "The car is at the stop line and the stop is not completed yet: hold still until it is." : `A stop sign is ${m} m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear.`);
     else out.push(i.cross_traffic_moving ? "The stop is completed but cross traffic is moving through the junction: hold until it is clear." : "The stop is completed and no crossing traffic is visible: check sight lines before proceeding.");
@@ -156,7 +165,7 @@ export function situationClauses(snap) {
 }
 
 export function needsMotionQuestion(snap) {
-  return !!((snap.intersection && snap.intersection.bumper_to_line_m < 30) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30)
+  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30)
     || snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) || snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) || snap.stuck || (snap.nav && snap.nav.remaining_m < 30));
 }
 
@@ -167,12 +176,15 @@ export function buildQuestions(snap, eligible, meta = {}) {
   const questions = {};
   const local = {};
   if (needsMotionQuestion(snap)) {
+    // Waiting to turn left across oncoming traffic is a reason to hold still only while it applies,
+    // so the criteria for every other situation read exactly as before.
+    const waitLeft = snap.intersection?.oncoming ? ", when the car is turning left and has reached the point where it waits for oncoming traffic (`intersection.oncoming.wait_in_m` under 2)" : "";
     questions.motion = {
       type: "choice",
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
-        stop: "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when the path directly ahead is blocked, or when the car has reached the destination.",
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}, when the path directly ahead is blocked, or when the car has reached the destination.`,
       },
     };
   } else {

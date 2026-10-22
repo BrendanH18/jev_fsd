@@ -14,7 +14,7 @@ const { rng } = await import("../static/js/common.js");
 const { validAgentChoice, registerAgent } = await import("../static/js/brain/registry.js");
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
-const names = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2" };
+const names = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2" };
 const load = id => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url))));
 let assertions = 0;
 function test(name, fn) { fn(); assertions++; console.log(`✓ ${name}`); }
@@ -46,6 +46,10 @@ for (const challenge of CHALLENGES) {
     const control = map.edges.get(a.start.edge).control;
     if (challenge.hazard === "signal") assert.equal(control.type, "signal");
     if (challenge.hazard === "stop") assert.equal(control.type, "stop");
+    if (challenge.hazard === "oncoming") {
+      assert.equal(control.type, "signal"); assert.equal(a.route.turns[0].dir, "left");
+      assert.equal(map.edges.get(a.oncoming.edge).control.id, control.id);
+    }
   });
   for (const brain of ["rules", "cautious"]) {
     const result = await evaluateChallenge(map, challenge, { brain });
@@ -85,6 +89,22 @@ for (const challenge of CHALLENGES.filter(c => ["pedestrian", "occluded-pedestri
       assert.ok(car); assert.equal(world.parked.list.length, 0); assert.ok(car.path.s > 86); assert.equal(car.door, undefined);
     });
   }
+}
+
+{
+  const challenge = CHALLENGES.find(c => c.hazard === "oncoming"), ctx = setupChallenge(load(challenge.map), challenge), { world, fleet } = ctx;
+  let yielded = new Set();
+  while (world.t < 30 && ctx.autopilot.enabled) {
+    stepWorld(ctx, 1 / 60, world.t * 1000); if (ctx.autopilot.firing) await ctx.autopilot.firing;
+    if (ctx.autopilot.snap?.intersection?.oncoming) yielded.add(ctx.autopilot.snap.intersection.oncoming.id);
+  }
+  test("unprotected left: two oncoming cars set off at the trigger, and the car waits for each in turn", () => {
+    assert.equal(world.challenge.triggered, true);
+    assert.deepEqual(world.challenge.oncomingIds, ["challenge_oncoming_1", "challenge_oncoming_2"]);
+    assert.deepEqual([...yielded], world.challenge.oncomingIds);
+    assert.equal(world.violations.failed_to_yield, 0); assert.equal(world.violations.collisions, 0);
+    assert.equal(fleet.vehicles.length, 2);
+  });
 }
 
 const timedOut = await evaluateChallenge(load("kitsilano"), CHALLENGES[0], { limit: 0.5 });

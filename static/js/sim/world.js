@@ -12,6 +12,9 @@ import { StaticObstacles, poseOf } from "./static-obstacles.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
+// Turning left at a signal, the car fails to yield when its front bumper enters the path of an
+// oncoming vehicle (seen or not) due at the junction's centre within this many seconds.
+const AUDIT_ONCOMING_S = 2.0;
 
 export class World {
   constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR } = {}) {
@@ -33,6 +36,7 @@ export class World {
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
+    this.lastLeft = null;
     this.spawnEgo();
     this.crowd = new Crowd(this, { seed, count: pedestrians });
   }
@@ -89,6 +93,7 @@ export class World {
     this.staticContacts.clear();
     this._lastFront = null;
     this.lastRoad = null;
+    this.lastLeft = null;
   }
 
   auditStatic(dt) {
@@ -224,7 +229,39 @@ export class World {
       this.lastRoad = edge ? { edgeId: edge.id, crossed: false } : null;
       this.egoStop.update(null, 0, 0, dt);
     }
+    this.auditLeftTurn(followsRoute ? frontS : null);
   }
+
+  auditLeftTurn(frontS) {
+    const c = frontS === null ? null : this.route.controls.find((k) => k.control.type === "signal" && (k.turn === "left" || k.turn === "uturn")
+      && k.sJunction !== null && frontS > k.sRoute && frontS < k.sJunction + 12);
+    const key = c ? `${c.edge}:${c.control.id}:${c.sRoute}` : null;
+    if (!c || this.lastLeft?.key !== key) this.lastLeft = c ? { key, counted: false } : null;
+    if (!c || this.lastLeft.counted) return;
+    const facing = this.route.headingAt(c.sRoute) + Math.PI, [jx, jy] = this.route.pointAt(c.sJunction);
+    // as in sensing: traffic better aligned with coming down the street the car turns into is in
+    // that street's other lane
+    const down = this.route.headingAt(Math.min(this.route.length, c.sJunction + 15)) + Math.PI;
+    const FRONT = this.ego.spec.length - this.ego.spec.rearOverhang;
+    const fx = this.ego.x + Math.cos(this.ego.psi) * FRONT, fy = this.ego.y + Math.sin(this.ego.psi) * FRONT;
+    const due = this.npcs.find((n) => {
+      const rel = Math.abs(wrap(n.psi - facing));
+      if (n.v < 1 || n.signal === "left" || rel > Math.PI / 3 || Math.abs(wrap(n.psi - down)) < rel) return false;
+      const ux = Math.cos(n.psi), uy = Math.sin(n.psi), dx = jx - n.x, dy = jy - n.y, d = Math.hypot(dx, dy);
+      if (dx * ux + dy * uy <= 0 || d / n.v >= AUDIT_ONCOMING_S) return false;
+      // braking to stop short of the junction (for its own light, say)
+      if (n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - 6) return false;
+      // the car's front is in its path, ahead of it
+      const ax = fx - n.x, ay = fy - n.y;
+      return ax * ux + ay * uy > 0 && Math.abs(ax * uy - ay * ux) < (this.ego.spec.width + (n.spec || CAR).width) / 2;
+    });
+    if (due) {
+      this.lastLeft.counted = true;
+      this.violations.failed_to_yield++;
+      this.events.push({ type: "failed_to_yield", to: "oncoming traffic", with: due.id });
+    }
+  }
+
 }
 
 // The ego's front bumper swept across a crosswalk this tick while a pedestrian on it was within a

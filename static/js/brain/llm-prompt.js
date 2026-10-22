@@ -31,6 +31,7 @@ The input is JSON:
 How to choose \`candidate\`:
 - Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal it can stop for comfortably, a stop sign whose stop is not completed, or a roundabout yield line with ring traffic.
 - Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car.
+- Choose \`stop_for_oncoming\` when \`situation\` says the car is turning left and oncoming traffic has the right of way.
 - Choose \`stop_at_destination\` when \`situation\` says the destination is within reach.
 - Choose a \`change_left_*\` or \`change_right_*\` candidate (a full lane change) only when \`situation\` says it passes a slower vehicle ahead, returns the car to its route's lane or moves it into the lane its route takes for a turn. A candidate whose \`steer\` begins "continue into" finishes a lane change already under way; choose one whose \`steer\` begins "move back" only when no "continue into" candidate is offered.
 - Otherwise choose the candidate whose \`vs_target\` is "at target" and whose \`lane\` is "centered". When none is at target, choose the one whose \`end_speed\` is closest to target_speed without being above it.

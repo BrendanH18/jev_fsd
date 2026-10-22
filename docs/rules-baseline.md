@@ -1,4 +1,91 @@
-# Rules benchmark baseline — 2026-10-20
+# Rules benchmark baseline — 2026-10-21
+
+This rerun covers left turns at a signal: the driven car now yields to oncoming traffic, waiting at
+the line or inside the junction until the gap is long enough. The audit gains a failure to yield
+for oncoming traffic: the car's front entering the path of an oncoming vehicle due at the
+junction within 2 s, seen or not. "Before" is `b456c70` with only that audit added
+(`static/js/sim/world.js`, and the route fields it reads in `static/js/map/route.js`), so both
+columns are judged by the same audit and the difference between them is the driving change
+alone. Both ran on the same day in the same harness, in WebKit and in V8.
+
+## Method
+
+As on 2026-10-20: production `/bench`, Rules, suite seed 1, 40 traffic cars, lockstep, in WebKit
+through `scripts/shot.swift` on macOS 27.0.1. Kitsilano ran 12 routes in dry, fog, rain and snow;
+the other eleven maps ran two-route dry smoke suites. The same suites also ran in V8 (Node 22.23.4)
+through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run is
+[`20261021-210939-rules.json`](../data/runs/20261021-210939-rules.json). The
+[machine-readable record](validation/rebaseline-2026-10-21-rules.json) has every summary and
+per-route result, before and after, in both engines. Night was not run; `/bench` still has no
+time-of-day option.
+
+## Results
+
+WebKit. Passed / routes; collisions are total / at fault. No suite, before or after, ran a red
+light or a stop sign.
+
+| Map and conditions | Before | After | Arrived (after) | Collisions (before → after) | Failures to yield (before → after) | Deadlock overrides | Mean km/h |
+|---|---:|---:|---:|---|---|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 12/12 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 23.66 → 23.64 |
+| Kitsilano, fog | 11/12 | 12/12 | 12/12 | 1/0 → 0/0 | 1 → 0 | 0 → 0 | 17.25 → 17.2 |
+| Kitsilano, rain | 12/12 | 12/12 | 12/12 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 19.23 → 19.23 |
+| Kitsilano, snow | 12/12 | 12/12 | 12/12 | 0/0 → 0/0 | 0 → 0 | 4 → 0 | 14.51 → 14.5 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 19.25 → 19.25 |
+| Victoria, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 17.65 → 17.65 |
+| Toronto, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 4 → 4 | 18.25 → 18.25 |
+| Montréal, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 25.6 → 25.6 |
+| Calgary, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 19.5 → 19.5 |
+| Ottawa, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 3 → 3 | 18.4 → 18.4 |
+| Québec City, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 28.25 → 28.25 |
+| Halifax, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 20.95 → 20.95 |
+| Winnipeg, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 36.55 → 36.55 |
+| Edmonton, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 30.85 → 30.85 |
+| Saskatoon, dry | 2/2 | 2/2 | 2/2 | 0/0 → 0/0 | 0 → 0 | 0 → 0 | 29.85 → 29.85 |
+
+In WebKit, Kitsilano passes 48 of 48 routes across the four weathers (before: 47) and the city
+smoke suites 22 of 22, as before. In V8, Kitsilano passes 48 of 48 and the city smoke suites 21 of
+22, before and after; Edmonton `s1-2` fails in both. Seven suite summaries changed in each engine,
+the four Kitsilano suites and the Victoria, Calgary and Québec City smoke suites. Apart from the
+fog route that now passes and the snow deadlocks, the changes are small: mean speed by at most
+0.12 km/h, a safety brake more or fewer, and a few more decisions where the car checks a left
+turn; the rest are identical. In V8 Kitsilano rain, the closest gap to another vehicle grew from
+0.7 m to 2.1 m.
+
+## Failures
+
+Before, Kitsilano fog `s1-4` (WebKit only) turned left on a green while `car_34`, coming the
+other way, turned right into the same street: a shared-fault contact at 174.3 s, which the new
+audit also counts as a failure to yield. It now passes. In Kitsilano snow, the four deadlock
+overrides are gone in both engines.
+
+Remaining failure:
+
+- **Edmonton `s1-2` (V8 only):** a shared-fault contact with `car_30` at 100.8 s, before and
+  after, now also counted as a failure to yield. The car turns left on a green with nothing coming
+  in view and is moving through the junction at 5 to 6 m/s when `car_30`, an oncoming car turning
+  right into the same street, comes into view. By then the car is 3 m from where it would wait, too
+  late to stop short of the oncoming lane, so it carries on and both brake. Slowing for an oncoming
+  approach the car cannot see would avoid it; it does not do that yet. WebKit passes this route.
+
+## Repeat
+
+As below for WebKit. For V8, start a server in one terminal and run the same suites from Node in
+another:
+
+```sh
+PORT=8331 uv run server.py   # keeps running
+```
+
+```sh
+node --experimental-default-type=module scripts/bench_node.mjs --map halifax --count 2
+```
+
+Add `--weather rain` (or `fog`, `snow`) to change the weather, `--only s1-1` to run only the listed
+scenarios (comma-separated), and `--json out.json` to write the run's settings and full results.
+
+Compare V8 runs only with V8 runs.
+
+## Earlier record: 2026-10-20
 
 This rerun covers two fixes for the failures the 2026-10-19 record left. A traffic car pulling out
 of a parking spot now checks for a gap again on every tick until it is actually moving, instead of
@@ -9,7 +96,7 @@ parked car or static scenery.
 on the same day in the same harness, in WebKit and in V8, so the difference between them is this
 change alone.
 
-## Method
+### Method
 
 As on 2026-10-19: production `/bench`, Rules, suite seed 1, 40 traffic cars, lockstep, in WebKit
 through `scripts/shot.swift` on macOS 27.0.1. Kitsilano ran 12 routes in dry, fog, rain and snow;
@@ -23,7 +110,7 @@ time-of-day option.
 The WebKit "before" column reproduces the 2026-10-19 "after" column exactly: the same passes,
 collisions and mean speeds in every suite.
 
-## Results
+### Results
 
 WebKit. Passed / routes; collisions are total / at fault. No suite, before or after, ran a red
 light or a stop sign or failed to yield.
@@ -52,7 +139,7 @@ smoke suites pass 22 of 22 (before: 20). In V8, Kitsilano passes 48 of 48 (befor
 failing; Edmonton `s1-2` fails in both). Seven suite summaries changed in WebKit and six in V8, all
 of them Kitsilano, Calgary, Halifax or (WebKit only) Mount Pleasant; the rest are identical.
 
-## Failures
+### Failures
 
 Before, three routes collided with a car pulling out of a parking spot: Kitsilano rain `s1-2`
 (`car_p1`, ego at fault, 19.3 s), Kitsilano rain `s1-5` (`car_p2`, other fault, 131.5 s) and
@@ -82,24 +169,6 @@ Remaining failures after the change:
   when it reaches this junction. Not fixed here.
 - **Edmonton `s1-2` (V8 only):** a shared-fault contact with `car_30` at 100.8 s, before and after.
   WebKit passes this route. Not traced.
-
-## Repeat
-
-As below for WebKit. For V8, start a server in one terminal and run the same suites from Node in
-another:
-
-```sh
-PORT=8331 uv run server.py   # keeps running
-```
-
-```sh
-node --experimental-default-type=module scripts/bench_node.mjs --map halifax --count 2
-```
-
-Add `--weather rain` (or `fog`, `snow`) to change the weather, `--only s1-1` to run only the listed
-scenarios (comma-separated), and `--json out.json` to write the run's settings and full results.
-
-Compare V8 runs only with V8 runs.
 
 ## Earlier record: 2026-10-19
 

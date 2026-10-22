@@ -53,7 +53,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Six hand-built scenarios test the situations real drivers get wrong:
+Seven hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -63,6 +63,7 @@ Six hand-built scenarios test the situations real drivers get wrong:
 | **Winter composure** | Toronto, snow | A full stop on slippery roads |
 | **Joining the flow** | Kitsilano | A car pulling out of a parking spot |
 | **Around the corner** | Kitsilano | Someone stepping out from behind a building |
+| **The unprotected left** | Ottawa, afternoon | A left turn on a green with oncoming cars close together |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign
@@ -237,6 +238,7 @@ node scripts/test_decision_agent.mjs            # decision-model drivers (regist
 node scripts/test_llm_agent.mjs                 # LLM endpoint drivers (prompt, parsing, fallback)
 node scripts/test_lane_change.mjs               # lane changes (gaps, lane ends, a pass, turn lanes)
 node scripts/test_pull_out.mjs                  # pull-outs and a destination blocked by a parked car
+node scripts/test_left_turn.mjs                 # left turns at a signal yield to oncoming traffic
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 
