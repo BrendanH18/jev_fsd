@@ -39,6 +39,8 @@
   vehicle that would arrive before it could clear, including one pulling away from its own stop.
   The audit counts turning in front of such a vehicle as a failure to yield. Decision models and
   LLMs get `intersection.turn` and `intersection.oncoming` at stop signs too.
+  Straight and right departures do not trigger the stop-sign oncoming audit; manual left turns
+  and U-turns are audited from the actual turn, including missing or misleading indicators.
 
 - New challenge, **Four-way stop** (Toronto, The Annex): straight on through an all-way stop as a
   hesitant driver from the right stops first, a second car queues behind it and reaches the line

@@ -37,6 +37,14 @@ cloud after results, apart from Toronto dry `s1-2`. Victoria's first safety even
 differences in its unrounded gap and closing speed; wall times differ. The WebKit rerun is
 stored under `webkit_rebaseline.suites` in the same file. Night was not run.
 
+The review follow-up at `ed19adb` restricts the stop-sign oncoming audit to left turns and
+U-turns, clears stale context at other routed stop crossings, and judges manual turns from
+actual heading rather than the indicator. It changes no driving or physics code. Toronto and
+Ottawa dry (two routes each) were rerun in both engines: all four suite summaries and all route
+metrics/events reproduce this full rebaseline within 1e-12, excluding wall time. Those results
+are recorded under `audit_scope_validation`; the regression checks also cover straight/right
+departures and both routed and manual left turns/U-turns with missing or misleading indicators.
+
 ## Results
 
 Kitsilano passes 48 of 48 routes; the city smoke suites pass 22 of 22. No route before or after

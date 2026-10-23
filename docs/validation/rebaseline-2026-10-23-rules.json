@@ -23363,5 +23363,750 @@
     }
    }
   }
+ },
+ "audit_scope_validation": {
+  "date": "2026-10-23",
+  "code_commit": "ed19adbcddd8b80ae7b26dcbf47ffc82f77da0bf",
+  "change": "Stop-sign oncoming audit applies only to left turns and U-turns; other routed stop crossings clear stale context. Unrouted manoeuvres use actual heading instead of the indicator.",
+  "method": {
+   "brain": "rules",
+   "seed": 1,
+   "npcs": 40,
+   "mode": "lockstep",
+   "weather": "dry",
+   "count_per_city": 2,
+   "cities": [
+    "toronto",
+    "ottawa"
+   ],
+   "v8": "Node v24.19.0 / V8 13.6.233.17-node.51; scripts/bench_node.mjs with a 1 GB heap cap",
+   "webkit": "native WebKit 22625.1.29.11.28; unmodified scripts/shot.swift compiled with swiftc, fresh process per suite",
+   "platform": "macOS 27.0.1 (26A434), arm64",
+   "comparison": "All four suite summaries match the full post-fix rebaseline; every route value and event matches within 1e-12, excluding wall_ms. No driving/physics code changed."
+  },
+  "checks": [
+   "test_all_way_stop.mjs",
+   "test_left_turn.mjs",
+   "test_right_on_red.mjs",
+   "test_route_controls.mjs",
+   "test_drive_score.mjs",
+   "test_drive_lab.mjs",
+   "test_replay.mjs"
+  ],
+  "results": {
+   "v8": {
+    "toronto-dry": {
+     "config": {
+      "brain": "rules",
+      "count": 2,
+      "seed": 1,
+      "npcs": 40,
+      "mode": "lockstep",
+      "weather": "dry",
+      "map": "toronto",
+      "bbox": [
+       -79.412,
+       43.66,
+       -79.394,
+       43.671
+      ],
+      "pack": "6",
+      "engine": "node v24.19.0"
+     },
+     "summary": {
+      "scenarios": 2,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 1.99,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0,
+      "safety_brakes": 2,
+      "deadlocks": 4,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 18.45,
+      "min_gap_m": 1.6,
+      "min_ttc_s": 1.3,
+      "hard_brakes": 0,
+      "rms_jerk": 3.12,
+      "max_lat_accel": 5.53,
+      "lane_rms_m": 0.28,
+      "lane_changes": 0,
+      "speeding_s": 0,
+      "decisions": 1248,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+     },
+     "results": [
+      {
+       "id": "s1-1",
+       "tags": {
+        "length_m": 1220,
+        "signals": 4,
+        "stops": 3,
+        "lefts": 1,
+        "rights": 3
+       },
+       "arrived": true,
+       "time_s": 207.5,
+       "distance_m": 1215,
+       "progress": 0.999,
+       "avg_kmh": 21.1,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 0,
+       "deadlocks": 0,
+       "fallbacks": 0,
+       "min_gap_m": 7.8,
+       "min_ttc_s": 2.6,
+       "min_headway_s": 2.59,
+       "max_accel": 2.67,
+       "max_decel": -6.64,
+       "hard_brakes": 0,
+       "rms_jerk": 2.91,
+       "max_jerk": 35.4,
+       "max_lat_accel": 5.44,
+       "lane_rms_m": 0.16,
+       "lane_max_m": 0.84,
+       "lane_changes": 0,
+       "speeding_s": 0,
+       "stopped_s": 11.3,
+       "decisions": 646,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 207.5,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 6809
+      },
+      {
+       "id": "s1-2",
+       "tags": {
+        "length_m": 776,
+        "signals": 1,
+        "stops": 4,
+        "lefts": 2,
+        "rights": 1
+       },
+       "arrived": true,
+       "time_s": 176.6,
+       "distance_m": 776,
+       "progress": 0.998,
+       "avg_kmh": 15.8,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 2,
+       "deadlocks": 4,
+       "fallbacks": 0,
+       "min_gap_m": 1.6,
+       "min_ttc_s": 1.3,
+       "min_headway_s": 0.97,
+       "max_accel": 2.58,
+       "max_decel": -6.12,
+       "hard_brakes": 0,
+       "rms_jerk": 3.32,
+       "max_jerk": 41.2,
+       "max_lat_accel": 5.61,
+       "lane_rms_m": 0.4,
+       "lane_max_m": 4.19,
+       "lane_changes": 0,
+       "speeding_s": 0,
+       "stopped_s": 21.4,
+       "decisions": 602,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 46.3,
+         "type": "deadlock"
+        },
+        {
+         "t": 46.4,
+         "type": "deadlock"
+        },
+        {
+         "t": 46.7,
+         "type": "deadlock"
+        },
+        {
+         "t": 47,
+         "type": "deadlock"
+        },
+        {
+         "t": 51.1,
+         "type": "safety",
+         "brake": {
+          "reason": "ahead",
+          "gap": 5.689233705403593,
+          "closing": 5.812820269934569
+         }
+        },
+        {
+         "t": 173.4,
+         "type": "safety",
+         "brake": {
+          "reason": "following",
+          "ttc": 2.872094300243872,
+          "gap": 1.9668866618435459
+         }
+        },
+        {
+         "t": 176.5,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 5783
+      }
+     ]
+    },
+    "ottawa-dry": {
+     "config": {
+      "brain": "rules",
+      "count": 2,
+      "seed": 1,
+      "npcs": 40,
+      "mode": "lockstep",
+      "weather": "dry",
+      "map": "ottawa",
+      "bbox": [
+       -75.708,
+       45.407,
+       -75.687,
+       45.421
+      ],
+      "pack": "6",
+      "engine": "node v24.19.0"
+     },
+     "summary": {
+      "scenarios": 2,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 1.41,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0,
+      "safety_brakes": 0,
+      "deadlocks": 3,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 18.4,
+      "min_gap_m": null,
+      "min_ttc_s": null,
+      "hard_brakes": 0,
+      "rms_jerk": 2.17,
+      "max_lat_accel": 5.37,
+      "lane_rms_m": 0.44,
+      "lane_changes": 2,
+      "speeding_s": 0,
+      "decisions": 861,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+     },
+     "results": [
+      {
+       "id": "s1-1",
+       "tags": {
+        "length_m": 895,
+        "signals": 3,
+        "stops": 1,
+        "lefts": 1,
+        "rights": 2
+       },
+       "arrived": true,
+       "time_s": 175.3,
+       "distance_m": 895,
+       "progress": 0.998,
+       "avg_kmh": 18.4,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 0,
+       "deadlocks": 3,
+       "fallbacks": 0,
+       "min_gap_m": null,
+       "min_ttc_s": null,
+       "min_headway_s": null,
+       "max_accel": 2.73,
+       "max_decel": -6.57,
+       "hard_brakes": 0,
+       "rms_jerk": 2.76,
+       "max_jerk": 30,
+       "max_lat_accel": 5.95,
+       "lane_rms_m": 0.78,
+       "lane_max_m": 6.97,
+       "lane_changes": 2,
+       "speeding_s": 0,
+       "stopped_s": 36,
+       "decisions": 573,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 22.7,
+         "type": "deadlock"
+        },
+        {
+         "t": 22.9,
+         "type": "deadlock"
+        },
+        {
+         "t": 23.2,
+         "type": "deadlock"
+        },
+        {
+         "t": 175.3,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 4319
+      },
+      {
+       "id": "s1-2",
+       "tags": {
+        "length_m": 512,
+        "signals": 1,
+        "stops": 0,
+        "lefts": 0,
+        "rights": 1
+       },
+       "arrived": true,
+       "time_s": 99.9,
+       "distance_m": 510,
+       "progress": 0.997,
+       "avg_kmh": 18.4,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 0,
+       "deadlocks": 0,
+       "fallbacks": 0,
+       "min_gap_m": null,
+       "min_ttc_s": null,
+       "min_headway_s": null,
+       "max_accel": 2.5,
+       "max_decel": -6.3,
+       "hard_brakes": 0,
+       "rms_jerk": 1.57,
+       "max_jerk": 14.9,
+       "max_lat_accel": 4.78,
+       "lane_rms_m": 0.09,
+       "lane_max_m": 0.78,
+       "lane_changes": 0,
+       "speeding_s": 0,
+       "stopped_s": 33,
+       "decisions": 288,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 99.9,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 2060
+      }
+     ]
+    }
+   },
+   "webkit": {
+    "toronto-dry": {
+     "config": {
+      "brain": "rules",
+      "count": 2,
+      "npcs": 40,
+      "seed": 1,
+      "mode": "lockstep",
+      "weather": "dry",
+      "map": "4a96d42cb3f2",
+      "map_label": "The Annex, Toronto",
+      "bbox": [
+       -79.412,
+       43.66,
+       -79.394,
+       43.671
+      ],
+      "pack": "6",
+      "started_at": "2026-10-23T19:01:55.167Z"
+     },
+     "summary": {
+      "scenarios": 2,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 1.99,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0,
+      "safety_brakes": 1,
+      "deadlocks": 4,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 19.05,
+      "min_gap_m": 3.8,
+      "min_ttc_s": 1.3,
+      "hard_brakes": 0,
+      "rms_jerk": 3.13,
+      "max_lat_accel": 5.53,
+      "lane_rms_m": 0.29,
+      "lane_changes": 0,
+      "speeding_s": 0,
+      "decisions": 1194,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+     },
+     "results": [
+      {
+       "id": "s1-1",
+       "tags": {
+        "length_m": 1220,
+        "signals": 4,
+        "stops": 3,
+        "lefts": 1,
+        "rights": 3
+       },
+       "arrived": true,
+       "time_s": 207.1,
+       "distance_m": 1214,
+       "progress": 0.999,
+       "avg_kmh": 21.1,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 0,
+       "deadlocks": 0,
+       "fallbacks": 0,
+       "min_gap_m": 7.8,
+       "min_ttc_s": 2.6,
+       "min_headway_s": 2.59,
+       "max_accel": 2.67,
+       "max_decel": -6.64,
+       "hard_brakes": 0,
+       "rms_jerk": 2.83,
+       "max_jerk": 28.8,
+       "max_lat_accel": 5.44,
+       "lane_rms_m": 0.17,
+       "lane_max_m": 1.09,
+       "lane_changes": 0,
+       "speeding_s": 0,
+       "stopped_s": 8.6,
+       "decisions": 644,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 207.1,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 6789
+      },
+      {
+       "id": "s1-2",
+       "tags": {
+        "length_m": 776,
+        "signals": 1,
+        "stops": 4,
+        "lefts": 2,
+        "rights": 1
+       },
+       "arrived": true,
+       "time_s": 164.5,
+       "distance_m": 776,
+       "progress": 0.998,
+       "avg_kmh": 17,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 1,
+       "deadlocks": 4,
+       "fallbacks": 0,
+       "min_gap_m": 3.8,
+       "min_ttc_s": 1.3,
+       "min_headway_s": 1.26,
+       "max_accel": 2.61,
+       "max_decel": -6.21,
+       "hard_brakes": 0,
+       "rms_jerk": 3.43,
+       "max_jerk": 40.2,
+       "max_lat_accel": 5.61,
+       "lane_rms_m": 0.41,
+       "lane_max_m": 4.19,
+       "lane_changes": 0,
+       "speeding_s": 0,
+       "stopped_s": 22.7,
+       "decisions": 550,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 46.3,
+         "type": "deadlock"
+        },
+        {
+         "t": 46.4,
+         "type": "deadlock"
+        },
+        {
+         "t": 46.7,
+         "type": "deadlock"
+        },
+        {
+         "t": 47,
+         "type": "deadlock"
+        },
+        {
+         "t": 51.1,
+         "type": "safety",
+         "brake": {
+          "reason": "ahead",
+          "gap": 5.689233705403593,
+          "closing": 5.812820269934569
+         }
+        },
+        {
+         "t": 164.4,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 5213
+      }
+     ]
+    },
+    "ottawa-dry": {
+     "config": {
+      "brain": "rules",
+      "count": 2,
+      "npcs": 40,
+      "seed": 1,
+      "mode": "lockstep",
+      "weather": "dry",
+      "map": "d25b07def0d2",
+      "map_label": "Centretown, Ottawa",
+      "bbox": [
+       -75.708,
+       45.407,
+       -75.687,
+       45.421
+      ],
+      "pack": "6",
+      "started_at": "2026-10-23T19:02:08.587Z"
+     },
+     "summary": {
+      "scenarios": 2,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 1.41,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0,
+      "safety_brakes": 0,
+      "deadlocks": 3,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 18.4,
+      "min_gap_m": null,
+      "min_ttc_s": null,
+      "hard_brakes": 0,
+      "rms_jerk": 2.17,
+      "max_lat_accel": 5.37,
+      "lane_rms_m": 0.44,
+      "lane_changes": 2,
+      "speeding_s": 0,
+      "decisions": 861,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+     },
+     "results": [
+      {
+       "id": "s1-1",
+       "tags": {
+        "length_m": 895,
+        "signals": 3,
+        "stops": 1,
+        "lefts": 1,
+        "rights": 2
+       },
+       "arrived": true,
+       "time_s": 175.3,
+       "distance_m": 895,
+       "progress": 0.998,
+       "avg_kmh": 18.4,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 0,
+       "deadlocks": 3,
+       "fallbacks": 0,
+       "min_gap_m": null,
+       "min_ttc_s": null,
+       "min_headway_s": null,
+       "max_accel": 2.73,
+       "max_decel": -6.57,
+       "hard_brakes": 0,
+       "rms_jerk": 2.76,
+       "max_jerk": 30,
+       "max_lat_accel": 5.95,
+       "lane_rms_m": 0.78,
+       "lane_max_m": 6.97,
+       "lane_changes": 2,
+       "speeding_s": 0,
+       "stopped_s": 36,
+       "decisions": 573,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 22.7,
+         "type": "deadlock"
+        },
+        {
+         "t": 22.9,
+         "type": "deadlock"
+        },
+        {
+         "t": 23.2,
+         "type": "deadlock"
+        },
+        {
+         "t": 175.3,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 4353
+      },
+      {
+       "id": "s1-2",
+       "tags": {
+        "length_m": 512,
+        "signals": 1,
+        "stops": 0,
+        "lefts": 0,
+        "rights": 1
+       },
+       "arrived": true,
+       "time_s": 99.9,
+       "distance_m": 510,
+       "progress": 0.997,
+       "avg_kmh": 18.4,
+       "collisions": 0,
+       "at_fault": 0,
+       "red_lights": 0,
+       "stop_signs": 0,
+       "failed_to_yield": 0,
+       "off_road_s": 0,
+       "safety_brakes": 0,
+       "deadlocks": 0,
+       "fallbacks": 0,
+       "min_gap_m": null,
+       "min_ttc_s": null,
+       "min_headway_s": null,
+       "max_accel": 2.5,
+       "max_decel": -6.3,
+       "hard_brakes": 0,
+       "rms_jerk": 1.57,
+       "max_jerk": 14.9,
+       "max_lat_accel": 4.78,
+       "lane_rms_m": 0.09,
+       "lane_max_m": 0.78,
+       "lane_changes": 0,
+       "speeding_s": 0,
+       "stopped_s": 33,
+       "decisions": 288,
+       "calls": 0,
+       "tokens": 0,
+       "cost_usd": 0,
+       "latency_p50_ms": null,
+       "latency_p95_ms": null,
+       "failures": [],
+       "pass": true,
+       "events": [
+        {
+         "t": 99.9,
+         "type": "arrived"
+        }
+       ],
+       "wall_ms": 1977
+      }
+     ]
+    }
+   }
+  }
  }
 }

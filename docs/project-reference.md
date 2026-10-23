@@ -321,7 +321,9 @@ for someone (four cars stopping together), the first to stop goes. The driven ca
 vehicles it can see, so it may go before a hidden one; the audit counts going out of turn as a
 failure to yield whether or not the car could see who stopped first. Decision models and LLMs get
 `intersection.priority` and a situation line. Turning left at a stop sign, once its stop is made and
-it is its turn, the car yields to oncoming traffic as at a signal.
+it is its turn, the car yields to oncoming traffic as at a signal. The stop-sign oncoming audit
+applies to left turns and U-turns; a straight or right departure is not an oncoming yield
+violation. Without a route, the audit judges the actual turn rather than the indicator.
 
 The decision inspector exposes requests, answers, confidence, timing and spend; decisions can
 be saved or copied as `curl` commands. The emergency brake responds to imminent observed
