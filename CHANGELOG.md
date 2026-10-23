@@ -22,15 +22,17 @@
   Decision models and LLMs get `intersection.priority` (whether the car has stopped at the line,
   whether it is its turn, whom it waits for and who goes first) and a situation line, the motion
   criteria allow holding still while it is not the car's turn, and manoeuvres that cross the line
-  then are rejected (`fails_to_yield`). In the seeded V8 benchmark Rules passes all 70 routes
-  (70 before): Kitsilano passes 48 of 48 across four weathers, and the city smoke suites 22 of 22.
+  then are rejected (`fails_to_yield`). In both seeded V8 and WebKit benchmarks Rules passes
+  all 70 routes (70 before in each engine): Kitsilano passes 48 of 48 across four weathers,
+  and the city smoke suites 22 of 22.
   The initial implementation timed out on Toronto dry `s1-2` because a retained stop line behind
   the car suppressed deadlock recovery. An incomplete stop now holds the deadlock timer only
-  until 3 m past its line; oncoming-traffic waits still hold it. The route arrives at 176.6 s
+  until 3 m past its line; oncoming-traffic waits still hold it. In V8, the route arrives at 176.6 s
   (165.5 s before), with its four deadlock overrides restored; Ottawa's three are unchanged.
-  No suite has a collision, red-light violation, stop-sign violation or failure to yield.
-  This benchmark record is V8 only (Node v24.19.0); WebKit was not run. See
-  [docs/rules-baseline.md](docs/rules-baseline.md).
+  WebKit also retains Toronto's four and Ottawa's three overrides; Toronto `s1-2` arrives at
+  164.5 s (176.4 s before). No suite in either engine has a collision, red-light violation,
+  stop-sign violation or failure to yield. The reruns use Node v24.19.0 / V8 and native WebKit
+  on macOS 27.0.1. See [docs/rules-baseline.md](docs/rules-baseline.md).
 
 - Turning left (or making a U-turn) at a stop sign, the driven car yields to oncoming traffic as at
   a signal, once its stop is made and it is its turn: it waits short of the oncoming lane for a

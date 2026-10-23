@@ -1,16 +1,18 @@
 # Rules benchmark baseline — 2026-10-23b (all-way stop fixes)
 
-Rules passes **70 of 70 routes**, with no collisions, red-light violations, stop-sign violations
-or failures to yield. "Before" is main at `4119e87` from the cloud record below; "after" is PR #27
-at `29ec036`, fixing the Toronto timeout and manual turn indicators at all-way stops.
+Rules passes **70 of 70 routes in both V8 and WebKit**, with no collisions, red-light
+violations, stop-sign violations or failures to yield. "Before" is main at `4119e87`; "after"
+is PR #27's fixed simulation code at `29ec036`, fixing the Toronto timeout and manual turn
+indicators at all-way stops.
 
 ## Method
 
-All 15 seeded suites were rerun through the production `scripts/bench_node.mjs`: Rules, suite
-seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain and snow;
-the other eleven maps have two dry routes each. One benchmark suite ran at a time.
+Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
+Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
+and snow; the other eleven maps have two dry routes each. One benchmark suite ran at a time.
 
-The post-fix run used macOS 27.0.1 (26A434), arm64, with Node `v24.19.0` and V8
+The V8 post-fix run used `scripts/bench_node.mjs` on macOS 27.0.1 (26A434), arm64,
+with Node `v24.19.0` and V8
 `13.6.233.17-node.51`, matching the engine versions of the initial Linux cloud runs. The local
 server ran `PORT=8331 uv run --locked server.py`; HTTP readiness was checked. For example:
 
@@ -18,18 +20,30 @@ server ran `PORT=8331 uv run --locked server.py`; HTTP readiness was checked. Fo
 npx --yes --package=node@24.19.0 node scripts/bench_node.mjs --port 8331 --map toronto --count 2 --weather dry --json toronto-dry.json
 ```
 
+WebKit also reran all 15 suites before and after, on the same Mac, using WebKit framework
+`22625.1.29.11.28`. The unmodified `scripts/shot.swift` was compiled with `swiftc`, and each suite
+used a fresh WKWebView process. A temporary `git archive 4119e87` checkout served the before
+code on port 8332; the PR at `a994c50` (the same simulation code as `29ec036`) served after on
+8331. Both servers used the current checkout's `.venv/bin/python3`. Each page waited for its
+map to load, then called `window.__bench.run` with Rules, seed 1, 40 traffic cars, lockstep,
+the requested count/weather, and `save: false`; its returned config, summary and route results
+were captured directly. Every before summary exactly reproduces the previous WebKit main
+baseline in `rebaseline-2026-10-22b-rules.json`.
+
 The [machine-readable record](validation/rebaseline-2026-10-23-rules.json) retains the original
 cloud `v8` before/after results unchanged and adds the rerun under `post_fix.v8`, with the exact
-code commit and method. All rounded route metrics and event types/times match the initial cloud
-after results, apart from Toronto dry `s1-2`. Victoria's first safety event has sub-1e-12
-differences in its unrounded gap and closing speed; wall times differ. This benchmark record
-is V8 only; WebKit and night were not run.
+code commit and method. In V8, all rounded route metrics and event types/times match the initial
+cloud after results, apart from Toronto dry `s1-2`. Victoria's first safety event has sub-1e-12
+differences in its unrounded gap and closing speed; wall times differ. The WebKit rerun is
+stored under `webkit_rebaseline.suites` in the same file. Night was not run.
 
 ## Results
 
 Kitsilano passes 48 of 48 routes; the city smoke suites pass 22 of 22. No route before or after
 has a collision or traffic-rule violation. Passed / routes; deadlock overrides and mean speeds
 are main → fixed PR.
+
+### V8
 
 | Map and conditions | Before | After | Deadlock overrides | Mean km/h |
 |---|---:|---:|---|---|
@@ -49,9 +63,31 @@ are main → fixed PR.
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 31.15 → 31.15 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 29.85 → 29.85 |
 
+### WebKit
+
+| Map and conditions | Before | After | Deadlock overrides | Mean km/h |
+|---|---:|---:|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 23.54 → 23.65 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 17.39 → 17.39 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 19.53 → 19.47 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 15.06 → 15.06 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 18.9 → 19.25 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 17.7 → 17.65 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 4 | 17.55 → 19.05 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 25.6 → 25.6 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 19.5 → 19.5 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 18.4 → 18.4 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 28.25 → 28.25 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 21.35 → 21.35 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 36.65 → 36.6 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 31.15 → 31.15 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 29.85 → 29.85 |
+
 ## Failures
 
-**No route failures remain.** Toronto dry `s1-2`, which timed out at 310.4 s in the initial
+### V8
+
+**No V8 route failures remain.** Toronto dry `s1-2`, which timed out at 310.4 s in the initial
 implementation, now arrives at 176.6 s (main: 165.5 s). Its four deadlock overrides return at
 46.3, 46.4, 46.7 and 47.0 s, matching main. The stop line retained for left-turn sensing no
 longer suppresses deadlock recovery once it is 3 m behind the car. Genuine oncoming conflicts
@@ -71,6 +107,24 @@ The manual-turn fix is covered separately by `scripts/test_all_way_stop.mjs`: a 
 indicator holds an opposing vehicle that arrived later, yields on a tie, and updates priority
 when changed at the line. With a route, its planned turn takes precedence. Both new regression
 checks failed without their corresponding fixes.
+
+### WebKit
+
+**No route failures occur before or after.** Toronto dry `s1-1` takes 226.3 → 207.1 s, and
+`s1-2` takes 176.4 → 164.5 s. The latter retains four deadlock overrides at 46.3, 46.4, 46.7
+and 47.0 s, and one safety brake at 51.1 s, before and after. Ottawa's three overrides remain
+at 22.7, 22.9 and 23.2 s on `s1-1`, which arrives at 175.3 s on both sides. These deadlock
+events do not record vehicle IDs. Every other suite has zero overrides, and all suites have
+zero collisions, red-light violations, stop-sign violations and failures to yield.
+
+Other timing changes of at least 5 s, and all changes in safety-brake counts:
+
+- Kitsilano dry `s1-7` takes 226.6 → 212.3 s. The route passes without contact or violation.
+- Kitsilano rain `s1-3` takes 99.6 → 103.7 s; safety brakes change 0 → 2, both for an open door,
+  at 94.5 and 95.1 s. Closest gap is 4.5 → 1.9 m. The route passes without contact or violation.
+- Mount Pleasant dry `s1-1` takes 130.2 → 125.8 s; safety brakes change 1 → 0, removing the
+  following brake at 117.1 s. Closest gap is 2.3 → 3.3 m. The route passes without contact
+  or violation.
 
 ## Earlier record: 2026-10-23 (initial all-way stops)
 
