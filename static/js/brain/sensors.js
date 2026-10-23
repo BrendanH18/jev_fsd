@@ -344,10 +344,10 @@ function rightOnRed(world, c, inter, frontS, visible) {
   for (const n of visibleNpcs) {
     const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
     if (d < JUNCTION_BOX_M) {
-      // moving across the junction; heading the car's way out of it, only short of the centre (a
-      // car that turned the same way just ahead of it is a leader)
+      // moving across the junction (or pulling away); heading the car's way out of it, only short
+      // of the centre (a car that turned the same way just ahead of it is a leader)
       const along = Math.abs(wrap(n.psi - exit)) <= Math.PI / 6, beforeCentre = dx * Math.cos(exit) + dy * Math.sin(exit) > 0;
-      if (Math.abs(n.v) > 0.5 && Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 6 && (!along || beforeCentre)) { out.wait_for = { kind: "junction", id: n.id }; return out; }
+      if ((Math.abs(n.v) > 0.5 || (n.v > 0.05 && n.a > 0.3)) && Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 6 && (!along || beforeCentre)) { out.wait_for = { kind: "junction", id: n.id }; return out; }
       continue;
     }
     if (d > RTOR_LOOK_M || (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) || !fromLeft(n.psi)) continue;

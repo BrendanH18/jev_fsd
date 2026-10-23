@@ -274,20 +274,20 @@ export class World {
       // crossed on red after a full stop: legal if it has turned right, else it ran the red, judged
       // from the street the car is on. In a lane of a street the way the car faces, one leaving the
       // junction to the right starts a right turn (`via`), which carries on along the streets it
-      // leads to; any other street ends it. Going on past the centre other than by a right turn runs
+      // leads to; any other street ends it (so does a right turn further on, off a street the car
+      // went straight on into). Going on past the centre other than by that right turn runs
       // the red there and then; a right turn (which stays short of the centre) holds only once the
       // car leaves the junction on it, as do a sharp left and a U-turn (which head back behind the
       // centre), so a swerve toward a shallow right-hand exit and back does not count.
       const out = Math.hypot(fx - jx, fy - jy);
       const past = (fx - jx) * Math.cos(rtor.approach) + (fy - jy) * Math.sin(rtor.approach);
       const at = this.map.nearestLane(fx, fy, this.ego.psi, 8), on = at?.lane.edgeRef;
-      const right = (e) => e && e.id !== rtor.edge && this.map.classifyTurn(this.map.turnAngle(rtor.edge, e.id)) === "right";
       if (on && on.id !== rtor.edge && on.id !== rtor.via?.id && Math.abs(wrap(at.heading - this.ego.psi)) <= Math.PI / 3) {
-        if (right(on) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) rtor.via = on;
+        if (this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right" && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) rtor.via = on;
         else rtor.via = rtor.via && on.from === rtor.via.to ? on : null;
       }
       if ((out > AUDIT_RTOR_OUT_M && past > 0) || out > AUDIT_JUNCTION_M) {
-        if (right(on) || (on && on.id === rtor.via?.id)) { if (out > AUDIT_JUNCTION_M) rtor.turned = true; }
+        if (on && on.id === rtor.via?.id) { if (out > AUDIT_JUNCTION_M) rtor.turned = true; }
         else {
           this.violations.red_lights_run++;
           this.events.push({ type: "red_light" });
@@ -306,12 +306,18 @@ export class World {
       if (n.v < 1 || (down !== null && Math.abs(wrap(n.psi - down)) < rel)) return false;
       // without a route, a vehicle signalling a left turn is taken to be turning (see below)
       if (!path && n.signal === "left" && !j.rightOnRed) return false;
+      // turning right on red, one that came the same way as the car is following it, not crossing
+      if (j.rightOnRed && path?.edges.some((e) => e.id === j.rightOnRed.edge)) return false;
       const ux = Math.cos(n.psi), uy = Math.sin(n.psi), dx = jx - n.x, dy = jy - n.y, d = Math.hypot(dx, dy);
       const closing = (dx * ux + dy * uy) / Math.max(d, 1e-6), inBox = d < AUDIT_BOX_M;
-      if (!(rel < Math.PI / 3 && closing > 0) && !(inBox && rel < Math.PI * 7 / 12 && closing > -0.5)) return false;
-      if (!inBox && d / n.v >= AUDIT_ONCOMING_S) return false;
+      // turning right on red, traffic from the left already through the junction, still within
+      // 15 m of its centre down the street the car turns into, can still be cut off (the check
+      // along its path below)
+      const through = j.rightOnRed && path && rel < Math.PI / 6 && closing <= 0 && d < AUDIT_RTOR_OUT_M;
+      if (!through && !(rel < Math.PI / 3 && closing > 0) && !(inBox && rel < Math.PI * 7 / 12 && closing > -0.5)) return false;
+      if (!inBox && !through && d / n.v >= AUDIT_ONCOMING_S) return false;
       // braking to stop short of the junction (for its own light, say)
-      if (!inBox && n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - 6) return false;
+      if (!inBox && !through && n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - 6) return false;
       // the car's front is in its path, ahead of it: along the lanes it is following (a street
       // that jogs or bends keeps it in its own lane), else straight on along its heading
       const reach = (this.ego.spec.width + (n.spec || CAR).width) / 2;
@@ -324,7 +330,7 @@ export class World {
         // Heading the same way along its path (down the street both turned into, say), the car is
         // ahead of it: that is a cut-off only if it would reach the car within the same 2 s.
         const along = Math.abs(wrap(this.ego.psi - headingAt(path.pts, path.cum, p.s))) < Math.PI / 6;
-        if (along && (p.s - path.s) / n.v >= AUDIT_ONCOMING_S) return false;
+        if ((along || through) && (p.s - path.s) / n.v >= AUDIT_ONCOMING_S) return false;
         // A vehicle turning its own left at this junction must itself yield, where the car meets it
         // on its turn (known from its route: its indicator goes off mid-turn, and shows a lane change
         // too). Met before it turns, on the way through, it has the right of way.
