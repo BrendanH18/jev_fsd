@@ -6,7 +6,7 @@ import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
-import { CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, CLEARING_M } from "./sensors.js";
+import { CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, CLEARING_M, waitsItsTurn } from "./sensors.js";
 import { poseOf } from "../sim/static-obstacles.js";
 
 export const HORIZON_S = 3.0;
@@ -141,7 +141,7 @@ export function simulateAll(candidates, snap, world) {
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
   const mustStop = control && control.bumper_to_line_m > -CLEARING_M && (
     (control.control === "signal" && ((control.signal === "red" && !control.right_on_red?.go) || control.signal === "unknown" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
-    (control.control === "stop" && !control.stop_completed) ||
+    (control.control === "stop" && !control.stop_completed) || waitsItsTurn(control) ||
     (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;
   const ped = snap.pedestrian;
@@ -226,7 +226,7 @@ export function simulateAll(candidates, snap, world) {
     else if (snap.visibility && car.v > snap.visibility.safe_speed_mps + 0.5 && car.v >= snap.ego.v - 0.5 && c.law.kind !== "hard_brake") reject = "visibility_stopping_distance";
     else if (closePass && c.law.kind !== "hard_brake") reject = "passes_cyclist_too_close";
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
-    else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" ? "fails_to_yield" : "runs_stop";
+    else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" || control.stop_completed ? "fails_to_yield" : "runs_stop";
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     c.reject = reject;

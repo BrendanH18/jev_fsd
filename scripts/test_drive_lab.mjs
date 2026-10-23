@@ -50,6 +50,10 @@ for (const challenge of CHALLENGES) {
       assert.equal(control.type, "signal"); assert.equal(a.route.turns[0].dir, "left");
       assert.equal(map.edges.get(a.oncoming.edge).control.id, control.id);
     }
+    if (challenge.hazard === "all-way") {
+      assert.equal(control.type, "stop"); assert.ok(control.all_way); assert.equal(a.route.turns.length ? a.route.turns[0].dir : "straight", "straight");
+      assert.deepEqual(a.allWay.map(c => map.stops.get(map.edges.get(c.edge).control.id).junction), a.allWay.map(() => map.stops.get(control.id).junction));
+    }
     if (challenge.hazard === "cross") {
       assert.equal(control.type, "signal"); assert.equal(a.route.turns[0].dir, "right"); assert.ok(map.rightOnRed);
       assert.equal(map.edges.get(a.oncoming.edge).control.id, control.id); assert.equal(a.oncoming.then, a.route.edges[1]);
@@ -135,6 +139,26 @@ for (const challenge of CHALLENGES.filter(c => ["pedestrian", "occluded-pedestri
   });
 }
 
+{
+  const challenge = CHALLENGES.find(c => c.hazard === "all-way"), ctx = setupChallenge(load(challenge.map), challenge), { world, fleet } = ctx;
+  const node = world.map.nodes.get(world.map.stops.get(world.map.edges.get(ctx.scenario.start.edge).control.id).junction);
+  const waitedFor = new Set(), entered = [];
+  // (arriving is checked by the clean-drive test above; this one stops once all four are through)
+  while (world.t < 70 && ctx.autopilot.enabled && world.route && entered.length < 4) {
+    stepWorld(ctx, 1 / 60, world.t * 1000); if (ctx.autopilot.firing) await ctx.autopilot.firing;
+    const p = ctx.autopilot.snap?.intersection?.priority;
+    if (p?.wait_for) waitedFor.add(p.wait_for);
+    for (const n of [world.ego, ...fleet.vehicles]) if (Math.hypot(n.front[0] - node.x, n.front[1] - node.y) < 5 && !entered.includes(n.id ?? "ego")) entered.push(n.id ?? "ego");
+  }
+  test("four-way stop: the car waits for the car from its right that stopped first, then goes before the two that stopped after it", () => {
+    assert.deepEqual(world.challenge.allWayIds, ["challenge_right_1", "challenge_right_2", "challenge_oncoming_left"]);
+    assert.deepEqual([...waitedFor], ["challenge_right_1"]);
+    assert.deepEqual(entered.slice(0, 2), ["challenge_right_1", "ego"]);
+    assert.equal(world.violations.failed_to_yield, 0); assert.equal(world.violations.stop_signs_run, 0); assert.equal(world.violations.collisions, 0);
+    assert.equal(entered.length, 4, entered.join(" "));
+  });
+}
+
 const timedOut = await evaluateChallenge(load("kitsilano"), CHALLENGES[0], { limit: 0.5 });
 test("failed arrivals retain a timeout and the preceding decision", () => {
   assert.equal(timedOut.pass, false); assert.equal(timedOut.report.status, "timeout");
@@ -157,7 +181,7 @@ const first = { x: ctx.world.ego.x, y: ctx.world.ego.y, v: ctx.world.ego.v, scor
 recorder.restore(index, target); ctx.world.paused = false; await advance(120);
 test("restoring and continuing yields identical traffic, physics and scoring", () => {
   assert.deepEqual({ x: ctx.world.ego.x, y: ctx.world.ego.y, v: ctx.world.ego.v, score: activeDrive.snapshot(), random: ctx.fleet.random.getState() }, first);
-  assert.equal(ctx.fleet.world, ctx.world); assert.equal(ctx.world.crowd.world, ctx.world); assert.equal(ctx.world.npcs, ctx.fleet.vehicles);
+  assert.ok(ctx.fleet.world === ctx.world); assert.ok(ctx.world.crowd.world === ctx.world); assert.ok(ctx.world.npcs === ctx.fleet.vehicles);
 });
 recorder.branch(index);
 test("branching discards future checkpoints and labels the alternate drive", () => { assert.equal(recorder.frames.length, index + 1); assert.ok(recorder.branched); });

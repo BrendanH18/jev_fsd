@@ -25,6 +25,8 @@ export const CHALLENGES = [
     description: "A left turn on a green in Centretown, with two oncoming cars close together. Wait for a gap you can use.", lesson: "Oncoming traffic has the right of way. Pull into the junction, wait, and turn once the gap is long enough." },
   { id: "right-on-red", title: "Right on red", map: "calgary", weather: "dry", time: "afternoon", seed: 8042, icon: "↱", difficulty: "Judgement", hazard: "cross",
     description: "A red light in the Beltline and a right turn. Two cars are coming from the left on their green. Stop, look, and pick your moment.", lesson: "A right turn on red needs a full stop first, then a gap in traffic from the left and a clear crosswalk. Waiting for the green is always allowed, and on the island of Montréal it is the only option." },
+  { id: "four-way-stop", title: "Four-way stop", map: "toronto", weather: "dry", time: "afternoon", seed: 9042, icon: "✣", difficulty: "Judgement", hazard: "all-way",
+    description: "An all-way stop in The Annex. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left. Who goes when?", lesson: "At an all-way stop, whoever stops first goes first. Stop together and the car on the right goes first. A car that pulls up after you waits for you, even if it was queued before you arrived." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -117,6 +119,27 @@ function crossSites(map) {
   rightSites.set(map, sites); return sites;
 }
 
+// All-way stops: an approach at least 90 m long, its line at least 75 m along, going straight on
+// into a street at least 60 m long, at a junction where the approach from the right (heading within
+// 20 deg of a quarter turn left of it, its line at least 40 m along) goes straight on and the
+// opposite approach (its line at least 60 m along) can turn left, both with all-way stops too.
+const allWaySiteCache = new WeakMap();
+function allWaySites(map) {
+  if (allWaySiteCache.has(map)) return allWaySiteCache.get(map);
+  const sites = [], allWay = (id) => map.edges.get(id).control?.type === "stop" && map.edges.get(id).control.all_way;
+  const exit = (id, dir, min = 0) => map.successors(id).find(o => map.classifyTurn(map.turnAngle(id, o)) === dir && map.edges.get(o).length > min);
+  for (const edge of map.edges.values()) {
+    if (!allWay(edge.id) || edge.length < 90 || edge.control.s_line < 75) continue;
+    const straight = exit(edge.id, "straight", 60), others = (map.inn.get(edge.to) || []).filter(id => id !== edge.id && allWay(id));
+    const at = (turn, min) => others.find(id => Math.abs(wrapAngle(map.headingIn(id) - map.headingIn(edge.id) - turn)) < 0.35 && map.edges.get(id).control.s_line >= min);
+    const fromRight = at(Math.PI / 2, 40), opposite = at(Math.PI, 60);
+    const across = fromRight && exit(fromRight, "straight"), left = opposite && exit(opposite, "left");
+    if (straight && across && left) sites.push({ lane: map.lane(edge.id, edge.lanes - 1), straight, fromRight, across, opposite, left });
+  }
+  sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+  allWaySiteCache.set(map, sites); return sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -136,13 +159,17 @@ export function challengeScenario(map, challenge) {
   const rights = challenge.hazard === "cross" ? crossSites(map) : null;
   if (rights && !rights.length) throw new Error(map.rightOnRed ? "This map has no signalled right turn with traffic from the left." : "Right turns on red are not allowed on this map.");
   const right = rights ? rights[Math.floor(random() * rights.length)] : null;
-  const start = site?.lane || left?.lane || right?.lane || lanes[Math.floor(random() * lanes.length)];
-  // a left or right turn starts 70 m before the stop line
-  const startS = site ? site.hazardS - 65 : left || right ? start.edgeRef.control.s_line - 70 : Math.max(8, Math.min(20, start.length * 0.15));
+  const stops = challenge.hazard === "all-way" ? allWaySites(map) : null;
+  if (stops && !stops.length) throw new Error("This map has no all-way stop with traffic from the right and ahead.");
+  const stop = stops ? stops[Math.floor(random() * stops.length)] : null;
+  const start = site?.lane || left?.lane || right?.lane || stop?.lane || lanes[Math.floor(random() * lanes.length)];
+  // a left or right turn, or an all-way stop, starts 70 m before the stop line
+  const startS = site ? site.hazardS - 65 : left || right || stop ? start.edgeRef.control.s_line - 70 : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   if (right) { const e = map.edges.get(right.right), turn = map.lane(right.right, e.lanes - 1); chain.push(turn); seen.add(right.right); length += turn.length; }
+  if (stop) { const ahead = map.lane(stop.straight, Math.min(start.idx, map.edges.get(stop.straight).lanes - 1)); chain.push(ahead); seen.add(stop.straight); length += ahead.length; }
   for (let i = 0; i < 12 && length < 260; i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
@@ -159,6 +186,7 @@ export function challengeScenario(map, challenge) {
     ...(site ? { crossing: { hazardS: site.hazardS, from: site.from, to: site.to } } : {}),
     ...(left ? { oncoming: { edge: left.opposite, then: left.straight } } : {}),
     ...(right ? { oncoming: { edge: right.fromLeft, then: right.right, lane: "curb" } } : {}),
+    ...(stop ? { allWay: allWayCars(map, stop) } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
 }
@@ -166,10 +194,10 @@ export function challengeScenario(map, challenge) {
 export function installChallenge(world, fleet, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
   // an oncoming hazard is placed at the stop line
-  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming ? lane.edgeRef.control.s_line : Math.min(lane.length - 15, scenario.start.s + 65));
+  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming || scenario.allWay ? lane.edgeRef.control.s_line : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
-  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}) };
+  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}) };
   if (["door", "pull"].includes(challenge.hazard)) {
     const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);
     const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);
@@ -202,9 +230,10 @@ export function stepChallenge(world, fleet) {
   const state = world.challenge;
   if (!state) return;
   const local = world.ego.toLocal(...state.at);
-  if (!state.triggered && local.ahead < (state.hazard === "pull" ? 65 : state.hazard === "oncoming" || state.hazard === "cross" ? ONCOMING_TRIGGER_M : 43) && local.ahead > 0) {
+  if (!state.triggered && local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43) && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
+    if (state.allWay) state.allWayIds = releaseAllWay(world, fleet, state.allWay);
     if (state.carId) {
       const car = world.parked.list.find(c => c.id === state.carId);
       if (state.hazard === "pull") { const merging = fleet.startPullOut(car); state.mergingId = merging?.id || null; }
@@ -244,6 +273,30 @@ function releaseOncoming(world, fleet, { edge, then, lane: which }) {
     Object.assign(car, { id: `challenge_${which === "curb" ? "cross" : "oncoming"}_${i + 1}`, color: i ? 0x2b3a55 : 0x9b1e1e, v0: v, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
       stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
     car.path.start(id, laneOf(id), s, plan); fleet.vehicles.push(car);
+    return car.id;
+  });
+}
+
+// At an all-way stop, with the car 45 m from its line: from the right, a hesitant driver 22 m from
+// its line (it waits 3 s once it may go, so it is still there when the car stops) and a second car
+// 10 m behind it, which reaches the line only after the first has gone, and so after the car; and
+// an oncoming car 55 m out that turns left, also arriving after the car. They come at 7 to 9 m/s.
+function allWayCars(map, site) {
+  return [
+    { id: "challenge_right_1", edge: site.fromRight, back: 22, then: site.across, v: 7, react: 3 },
+    { id: "challenge_right_2", edge: site.fromRight, back: 32, then: site.across, v: 7, react: 0.6 },
+    { id: "challenge_oncoming_left", edge: site.opposite, back: 55, then: site.left, v: 9, react: 0.6 },
+  ].filter(c => map.edges.get(c.edge).control.s_line - c.back >= 2);
+}
+function releaseAllWay(world, fleet, cars) {
+  const map = world.map;
+  return cars.map(({ id, edge, back, then, v, react }, i) => {
+    const e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), s = e.control.s_line - back;
+    const turn = map.classifyTurn(map.turnAngle(edge, then)), next = map.edges.get(then);
+    const p = pointAt(lane.pts, lane.cum, s), car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
+    Object.assign(car, { id, color: [0x9b1e1e, 0x2b3a55, 0xeeeeea][i % 3], v0: Math.min(11, e.limit || 11), driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+    car.path.start(edge, lane.idx, s, [[then, turn === "left" ? 0 : Math.min(lane.idx, next.lanes - 1)]]); fleet.vehicles.push(car);
     return car.id;
   });
 }

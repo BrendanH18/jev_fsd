@@ -293,7 +293,7 @@ function decide(world, executing = null) {
   assert.ok(signalled, "signalled left while changing lanes");
   assert.ok(passedAt > 0.5, `passed the stalled car in the left lane (y=${passedAt})`);
   assert.ok(Math.abs(world.ego.y - RIGHT) < 0.6, `back in the right lane at the end (y=${world.ego.y.toFixed(2)})`);
-  assert.equal(world.route, null, "arrived");
+  assert.ok(world.route === null, "arrived");
   assert.ok(metrics.laneChanges >= 2, `${metrics.laneChanges} lane changes`);
   assert.ok(metrics.maxLat < 1.5, `lane tracking error stays small (${metrics.maxLat.toFixed(2)} m)`);
   assert.ok(metrics.maxLatAccel < 2.5, `lateral acceleration ${metrics.maxLatAccel.toFixed(2)} m/s^2`);
@@ -427,7 +427,7 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
   }
   assert.equal(world.violations.collisions, 0);
   assert.equal(world.violations.safety_brakes, 0);
-  assert.equal(world.route, null, "arrived");
+  assert.ok(world.route === null, "arrived");
   assert.ok(signalledAt !== null && signalledAt < 150, `signalled left at x=${signalledAt}`);
   assert.ok(acrossAt !== null && acrossAt < 250 - 80, `in the left lane by x=${acrossAt?.toFixed(1)}`);
   assert.ok(drift < 0.3, `holds the left lane through the junction (drift ${drift.toFixed(2)} m)`);

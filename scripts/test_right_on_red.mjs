@@ -453,7 +453,7 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
   assert.ok(stoppedFor > 0.7, `stopped at the line for ${stoppedFor.toFixed(1)} s`);
   assert.equal(turnedAt?.light, "red", "turned on the red");
   assert.ok(turnedAt.last < -10, `after both cars from the left had gone by (the second was at y=${turnedAt?.last.toFixed(1)})`);
-  assert.equal(world.route, null, "arrived");
+  assert.ok(world.route === null, "arrived");
   console.log(`✓ Rules stops for the red, waits for two cars from the left, and turns right on red ${(turnedAt.t - (LATE_RED - 6)).toFixed(1)} s after setting off`);
 }
 

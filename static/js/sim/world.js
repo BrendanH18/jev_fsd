@@ -10,6 +10,7 @@ import { Crowd, PEDESTRIANS } from "./pedestrians.js";
 import { Visibility } from "./visibility.js";
 import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
+import { AllWayStops } from "./all-way.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -53,6 +54,8 @@ export class World {
     this.destination = null;
     this.paused = false;
     this.egoStop = new StopMemory();
+    this.allWay = new AllWayStops(map);
+    this.allWayCounted = null;   // the all-way stop it went out of turn at (counted once a visit)
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
@@ -93,6 +96,7 @@ export class World {
     const { pointAt, headingAt } = lanePoint(lane, s);
     this.ego.x = pointAt[0]; this.ego.y = pointAt[1]; this.ego.psi = headingAt; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
     this.egoStop.reset();
+    this.allWay.forget(this.ego);
     this.resetContactHistory();
   }
 
@@ -114,6 +118,7 @@ export class World {
     this._lastFront = null;
     this.lastRoad = null;
     this.lastSignal = null;
+    this.allWayCounted = null;
   }
 
   auditStatic(dt) {
@@ -252,12 +257,33 @@ export class World {
           this.violations.failed_to_yield++;
           this.events.push({ type: "failed_to_yield", to: "roundabout traffic" });
         }
+        // A left turn at a stop sign yields to oncoming traffic as at a signal, and is checked the same way.
+        const turn = rc?.turn;
+        const node = control.type === "stop" && (!turn || turn === "left" || turn === "uturn") ? this.map.nodes.get(edge.to) : null;
+        if (control.type === "stop") this.lastSignal = null;
+        if (node) {
+          const exit = Number.isFinite(rc?.sJunction) ? this.route.headingAt(Math.min(this.route.length, rc.sJunction + 15)) : null;
+          const approach = rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id);
+          this.lastSignal = { centre: [node.x, node.y], nodes: new Set([edge.to]), approaches: new Set(this.map.inn.get(edge.to) || []), facing: approach + Math.PI, exit, counted: false, manualStop: !turn };
+        }
       }
+      // (keyed on the stop itself: with or without a route, it is the same line)
+      if (this.allWayCounted !== control.id) this.allWayCounted = null;
       this.lastRoad = { edgeId: key, crossed };
       const bumperToLine = -past;
       this.egoStop.update(control, bumperToLine, this.ego.v, dt);
+      // Crossing an all-way stop's line, or leaving its queue past the line, without its turn is going
+      // out of turn (whether or not the car could see who stopped first), wherever along the line it
+      // made its stop; counted once per visit to the line.
+      const missed = control.type === "stop" && control.all_way ? this.allWay.note(this.ego, control, edge.id, rc?.turn || this.ego.signal || "straight", bumperToLine, this.ego.v, this) : null;
+      if (missed && !this.allWayCounted) {
+        this.allWayCounted = control.id;
+        this.violations.failed_to_yield++;
+        this.events.push({ type: "failed_to_yield", to: "all-way stop", with: missed.id });
+      }
     } else {
       this.lastRoad = edge ? { edgeId: edge.id, crossed: false } : null;
+      this.allWayCounted = null;
       this.egoStop.update(null, 0, 0, dt);
     }
     this.auditOncoming();
@@ -297,6 +323,12 @@ export class World {
     }
     if (Math.hypot(fx - jx, fy - jy) > AUDIT_JUNCTION_M) { this.lastSignal = null; return; }
     if (j.counted) return;
+    // Without a planned turn, audit the manoeuvre the car actually makes, independently of its
+    // indicator. Through traffic at a two-way stop is not oncoming left-turn traffic.
+    if (j.manualStop) {
+      const turn = this.map.classifyTurn(wrap(this.ego.psi - j.facing + Math.PI));
+      if (turn !== "left" && turn !== "uturn") return;
+    }
     // as in sensing: traffic better aligned with coming down the street the car turns into is in
     // that street's other lane. Turning right on red, the traffic that counts comes from the left,
     // heading the way the car turns.

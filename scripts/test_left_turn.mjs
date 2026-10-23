@@ -334,7 +334,7 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
   assert.ok(waited > 1, `waited ${waited.toFixed(1)} s`);
   assert.ok(waitX > -8 && waitX < 0, `waited inside the junction (x=${waitX?.toFixed(2)})`);
   assert.ok(turnedAt < -5, `turned only after the last oncoming car had gone by (it was at x=${turnedAt?.toFixed(1)})`);
-  assert.equal(world.route, null, "arrived");
+  assert.ok(world.route === null, "arrived");
   assert.ok(world.ego.y > 100, `on North Street (y=${world.ego.y.toFixed(1)})`);
   console.log(`✓ Rules waits ${waited.toFixed(1)} s in the junction for three oncoming cars, then turns left and arrives`);
 }
@@ -347,7 +347,7 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
   drive(world);
   assert.equal(world.violations.collisions, 0, "no collision");
   assert.equal(world.violations.failed_to_yield, 0, "no failure to yield");
-  assert.equal(world.route, null, "arrived");
+  assert.ok(world.route === null, "arrived");
   console.log("✓ Rules waits short of both oncoming lanes for a far-lane stream and a near-lane car, then turns");
 }
 
@@ -359,7 +359,7 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
   assert.equal(world.violations.collisions, 0);
   assert.equal(world.violations.failed_to_yield, 0);
   assert.ok(minV > 2, `kept moving through the turn (min ${minV.toFixed(1)} m/s)`);
-  assert.equal(world.route, null, "arrived");
+  assert.ok(world.route === null, "arrived");
   console.log(`✓ with a long gap Rules turns without stopping (min ${minV.toFixed(1)} m/s)`);
 }
 
@@ -467,7 +467,7 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
   for (const over of [0.3, 2.8]) {
     const world = setup({ x: -8 + over - FRONT, v: 0, route: stops.routeData("e_out", null), on: stops.map });
     drive(world, { seconds: 20 });
-    assert.equal(world.route, null, `arrived after overshooting by ${over} m`);
+    assert.ok(world.route === null, `arrived after overshooting by ${over} m`);
     assert.equal(world.violations.deadlock_overrides, 0);
   }
   console.log("✓ a car that overshot a stop sign's line completes its stop there and goes on");
