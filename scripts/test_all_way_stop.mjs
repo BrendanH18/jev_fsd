@@ -19,6 +19,7 @@ const { toJevState, buildQuestions, situationClauses } = await import("../static
 const { buildLlmPrompt } = await import("../static/js/brain/llm-prompt.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
+const { DeadlockDetector } = await import("../static/js/brain/safety.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
 const { rng } = await import("../static/js/common.js");
 const fs = await import("node:fs");
@@ -329,6 +330,65 @@ function refresh(world) {
   }
   assert.deepEqual(replaced, ["first"]);
   console.log("✓ going out of turn at an all-way stop counts as a failure to yield once, also after a stop made past the line; on the car's turn it does not");
+}
+
+{
+  // Without a route the driver's indicator supplies the turn. A left turn that stopped first
+  // holds an opposing straight-going car; on a tie the left turn waits instead.
+  for (const [signal, delay, egoGoes, otherGoes] of [["left", 2, true, false], ["left", 0.5, false, true], [null, 2, true, true], ["right", 2, true, true]]) {
+    const world = setup({ x: egoX(0.8), v: 0 });
+    world.route = null;
+    world.ego.signal = signal;
+    stopAtLine(world);
+    const other = npc(world, "opposite", "e", 0.8);
+    arrive(world, other, "e_in", world.allWay.status(world.ego, world).arrived + delay);
+    assert.deepEqual([world.allWay.status(world.ego, world).go, world.allWay.status(other, world).go], [egoGoes, otherGoes], `manual ${signal}, arrival gap ${delay}`);
+    // Changing the indicator at the line updates the queue too.
+    world.ego.signal = signal === "left" ? null : "left";
+    world.audit(1 / 30, world.roadInfo());
+    assert.equal(world.allWay.status(other, world).go, signal === "left" || delay < TIE_S);
+  }
+  const routed = setup({ x: egoX(0.8), v: 0, route: LEFT });
+  routed.ego.signal = "right";
+  stopAtLine(routed);
+  const other = npc(routed, "opposite", "e", 0.8);
+  arrive(routed, other, "e_in", routed.allWay.status(routed.ego, routed).arrived + 2);
+  assert.equal(routed.allWay.status(other, routed).go, false, "the route's left turn takes precedence over an indicator");
+  console.log("✓ manual left turns use the indicator for all-way priority, while routed turns use the route");
+}
+
+{
+  // Sensing retains a left-turn stop after the audit has cleared its stop memory, to check for
+  // oncoming traffic. An old line behind the car must not hide a stall (Toronto s1-2).
+  const two = junction({ allWay: false });
+  const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData("n_out") });
+  stopAtLine(world);
+  const s = world.route.controls[0].sRoute + 16 - FRONT;
+  const [x, y] = world.route.pointAt(s);
+  Object.assign(world.ego, { x, y, psi: world.route.headingAt(s), v: 0 });
+  world._road = world.roadInfo();
+  world.audit(1 / 30, world._road);
+  const snap = buildSnapshot(world);
+  assert.equal(snap.intersection?.control, "stop", "left-turn stop remains in sensing");
+  assert.ok(snap.intersection.bumper_to_line_m < -12);
+  assert.equal(snap.intersection.stop_completed, false, "audit has cleared the old stop memory");
+  assert.equal(snap.intersection.oncoming, null);
+  assert.ok(snap.target.v > 2, "the road ahead permits progress");
+  const detector = new DeadlockDetector();
+  detector.update(world, snap, 13);
+  assert.ok(world.stuckFor > 12, "a stall past the old line permits deadlock recovery");
+  // A real oncoming conflict still resets the timer, even after clearing the stop line.
+  snap.intersection.oncoming = { bumper_to_yield_m: 1 };
+  detector.update(world, snap, 1);
+  assert.equal(world.stuckFor, 0, "yielding to oncoming traffic remains a legitimate wait");
+  // An incomplete stop at the line or a small overshoot also remains a legitimate wait.
+  snap.intersection.oncoming = null;
+  for (const bumper of [1, -2.5]) {
+    snap.intersection.bumper_to_line_m = bumper;
+    detector.update(world, snap, 13);
+    assert.equal(world.stuckFor, 0, `still stopping at line distance ${bumper}`);
+  }
+  console.log("✓ a retained stop behind the car permits stall recovery, while stops and oncoming waits still hold");
 }
 
 // closed loop with real traffic drivers

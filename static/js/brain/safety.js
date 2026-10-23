@@ -52,7 +52,9 @@ export class DeadlockDetector {
     const ego = world.ego;
     const legit = (snap && snap.intersection && (
       (snap.intersection.control === "signal" && snap.intersection.signal !== "green" && snap.intersection.bumper_to_line_m < 12 && snap.intersection.bumper_to_line_m > -CLEARING_M) ||
-      (snap.intersection.control === "stop" && !snap.intersection.stop_completed && snap.intersection.bumper_to_line_m < 12) ||
+      // A left-turn stop can stay in sensing after its stop memory is cleared. Once well past
+      // its line it is no longer a reason to hold; an actual oncoming conflict still is below.
+      (snap.intersection.control === "stop" && !snap.intersection.stop_completed && snap.intersection.bumper_to_line_m < 12 && snap.intersection.bumper_to_line_m > -CLEARING_M) ||
       (snap.intersection.control === "stop" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8) ||
       (waitsItsTurn(snap.intersection) && snap.intersection.bumper_to_line_m < 8) ||
       (snap.intersection.control === "yield" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8) ||

@@ -273,7 +273,7 @@ export class World {
       // Crossing an all-way stop's line, or leaving its queue past the line, without its turn is going
       // out of turn (whether or not the car could see who stopped first), wherever along the line it
       // made its stop; counted once per visit to the line.
-      const missed = control.type === "stop" && control.all_way ? this.allWay.note(this.ego, control, edge.id, rc ? rc.turn : "straight", bumperToLine, this.ego.v, this) : null;
+      const missed = control.type === "stop" && control.all_way ? this.allWay.note(this.ego, control, edge.id, rc?.turn || this.ego.signal || "straight", bumperToLine, this.ego.v, this) : null;
       if (missed && !this.allWayCounted) {
         this.allWayCounted = control.id;
         this.violations.failed_to_yield++;
