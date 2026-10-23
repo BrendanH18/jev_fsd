@@ -497,6 +497,63 @@ function junctionLog(world) {
   console.log("✓ turning left at a stop sign, the car waits for an oncoming car pulling away, once its own stop is made");
 }
 
+function auditDrive(world, path, seconds = 3) {
+  const events = [];
+  let s = path.project(world.ego.x, world.ego.y).s;
+  for (let k = 0; k < seconds * 30; k++) {
+    s += 6 / 30;
+    const [x, y] = path.pointAt(s);
+    Object.assign(world.ego, { x, y, psi: path.headingAt(s), v: 6 });
+    world.tick++; world.t += 1 / 30;
+    world.audit(1 / 30, world.roadInfo());
+    events.push(...world.events.filter((e) => e.type === "failed_to_yield"));
+  }
+  return events;
+}
+
+{
+  // Through-road traffic at a two-way stop is not an oncoming-left-turn violation. Its path
+  // intersects the straight/right departure inside the junction, where the wider oncoming cone
+  // would otherwise misclassify it. A stale left-turn context must not survive the new crossing.
+  const two = junction({ allWay: false });
+  for (const exit of ["e_out", "s_out"]) for (const manual of [false, true]) {
+    const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData(exit) });
+    stopAtLine(world);
+    const path = world.route;
+    if (manual) world.route = null;
+    world.ego.signal = "left"; // an indicator does not determine the audited manoeuvre
+    world.lastSignal = { centre: [0, 0], nodes: new Set(["c"]), approaches: new Set(["w_in"]), facing: Math.PI, exit: Math.PI / 2, counted: false };
+    // Freeze a moving through-road vehicle just south of the point the ego's front will cross.
+    // The vehicle stays ahead of its approach; only the ego is swept through the conflict.
+    const targetS = path.controls[0].sJunction - (exit === "e_out" ? 0 : 3);
+    const [fx, fy] = path.pointAt(targetS);
+    const other = new Vehicle(fx, fy - 7, Math.PI / 2, 8);
+    other.id = "through_road";
+    world.npcs = [other];
+    const events = auditDrive(world, path);
+    assert.deepEqual(events.map((e) => [e.to, e.with]), [], `${manual ? "manual" : "routed"} ${exit} is not a left-turn oncoming violation`);
+    assert.equal(world.lastSignal?.exit ?? null, null, "the old left-turn audit context was cleared");
+  }
+  console.log("✓ straight and right stop departures do not mislabel through traffic, including manual drives with a misleading indicator");
+}
+
+{
+  const two = junction({ allWay: false });
+  for (const [exit, turn] of [["n_out", "left"], ["w_out", "uturn"]]) for (const manual of [false, true]) for (const signal of [null, "right"]) {
+    const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData(exit) });
+    stopAtLine(world);
+    const path = world.route;
+    assert.equal(path.controls[0].turn, turn);
+    if (manual) world.route = null;
+    world.ego.signal = signal;
+    const other = new Vehicle(14, HALF, Math.PI, 8);
+    other.id = "oncoming";
+    world.npcs = [other];
+    assert.deepEqual(auditDrive(world, path).map((e) => [e.to, e.with]), [["oncoming traffic", "oncoming"]], `${manual ? "manual" : "routed"} ${turn} with signal ${signal}`);
+  }
+  console.log("✓ routed and manual left turns and U-turns at stop signs are audited with no indicator or a misleading right indicator");
+}
+
 {
   // the audit: turning left at a stop sign in front of an oncoming car fails to yield
   const two = junction({ allWay: false });

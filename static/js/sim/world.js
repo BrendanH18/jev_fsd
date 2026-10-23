@@ -258,11 +258,13 @@ export class World {
           this.events.push({ type: "failed_to_yield", to: "roundabout traffic" });
         }
         // A left turn at a stop sign yields to oncoming traffic as at a signal, and is checked the same way.
-        const node = control.type === "stop" ? this.map.nodes.get(edge.to) : null;
+        const turn = rc?.turn;
+        const node = control.type === "stop" && (!turn || turn === "left" || turn === "uturn") ? this.map.nodes.get(edge.to) : null;
+        if (control.type === "stop") this.lastSignal = null;
         if (node) {
           const exit = Number.isFinite(rc?.sJunction) ? this.route.headingAt(Math.min(this.route.length, rc.sJunction + 15)) : null;
           const approach = rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id);
-          this.lastSignal = { centre: [node.x, node.y], nodes: new Set([edge.to]), approaches: new Set(this.map.inn.get(edge.to) || []), facing: approach + Math.PI, exit, counted: false };
+          this.lastSignal = { centre: [node.x, node.y], nodes: new Set([edge.to]), approaches: new Set(this.map.inn.get(edge.to) || []), facing: approach + Math.PI, exit, counted: false, manualStop: !turn };
         }
       }
       // (keyed on the stop itself: with or without a route, it is the same line)
@@ -321,6 +323,12 @@ export class World {
     }
     if (Math.hypot(fx - jx, fy - jy) > AUDIT_JUNCTION_M) { this.lastSignal = null; return; }
     if (j.counted) return;
+    // Without a planned turn, audit the manoeuvre the car actually makes, independently of its
+    // indicator. Through traffic at a two-way stop is not oncoming left-turn traffic.
+    if (j.manualStop) {
+      const turn = this.map.classifyTurn(wrap(this.ego.psi - j.facing + Math.PI));
+      if (turn !== "left" && turn !== "uturn") return;
+    }
     // as in sensing: traffic better aligned with coming down the street the car turns into is in
     // that street's other lane. Turning right on red, the traffic that counts comes from the left,
     // heading the way the car turns.
