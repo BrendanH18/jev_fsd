@@ -1,11 +1,85 @@
-# Rules benchmark baseline — 2026-10-23 (all-way stops)
+# Rules benchmark baseline — 2026-10-23b (all-way stop fixes)
+
+Rules passes **70 of 70 routes**, with no collisions, red-light violations, stop-sign violations
+or failures to yield. "Before" is main at `4119e87` from the cloud record below; "after" is PR #27
+at `29ec036`, fixing the Toronto timeout and manual turn indicators at all-way stops.
+
+## Method
+
+All 15 seeded suites were rerun through the production `scripts/bench_node.mjs`: Rules, suite
+seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain and snow;
+the other eleven maps have two dry routes each. One benchmark suite ran at a time.
+
+The post-fix run used macOS 27.0.1 (26A434), arm64, with Node `v24.19.0` and V8
+`13.6.233.17-node.51`, matching the engine versions of the initial Linux cloud runs. The local
+server ran `PORT=8331 uv run --locked server.py`; HTTP readiness was checked. For example:
+
+```sh
+npx --yes --package=node@24.19.0 node scripts/bench_node.mjs --port 8331 --map toronto --count 2 --weather dry --json toronto-dry.json
+```
+
+The [machine-readable record](validation/rebaseline-2026-10-23-rules.json) retains the original
+cloud `v8` before/after results unchanged and adds the rerun under `post_fix.v8`, with the exact
+code commit and method. All rounded route metrics and event types/times match the initial cloud
+after results, apart from Toronto dry `s1-2`. Victoria's first safety event has sub-1e-12
+differences in its unrounded gap and closing speed; wall times differ. This benchmark record
+is V8 only; WebKit and night were not run.
+
+## Results
+
+Kitsilano passes 48 of 48 routes; the city smoke suites pass 22 of 22. No route before or after
+has a collision or traffic-rule violation. Passed / routes; deadlock overrides and mean speeds
+are main → fixed PR.
+
+| Map and conditions | Before | After | Deadlock overrides | Mean km/h |
+|---|---:|---:|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 23.18 → 23.19 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 17.09 → 17.09 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 19.56 → 19.5 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 14.89 → 14.89 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 19.25 → 19.25 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 15.35 → 15.25 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 4 | 19 → 18.45 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 25.6 → 25.6 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 19.5 → 19.5 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 18.4 → 18.4 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 28.25 → 28.2 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 20.95 → 20.95 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 36.65 → 36.65 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 31.15 → 31.15 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 29.85 → 29.85 |
+
+## Failures
+
+**No route failures remain.** Toronto dry `s1-2`, which timed out at 310.4 s in the initial
+implementation, now arrives at 176.6 s (main: 165.5 s). Its four deadlock overrides return at
+46.3, 46.4, 46.7 and 47.0 s, matching main. The stop line retained for left-turn sensing no
+longer suppresses deadlock recovery once it is 3 m behind the car. Genuine oncoming conflicts
+still hold the deadlock timer, as do incomplete stops at the line and small overshoots.
+
+The recovered route records two safety brakes, at 51.1 s (a vehicle ahead) and 173.4 s (following
+gap 1.97 m), with no contact or violation; its closest gap is 1.6 m. The first brake also occurred
+on main. Stopped time falls from 277.1 s in the timeout to 21.4 s. All other routes reproduce the
+initial cloud after rounded metrics and event types/times.
+
+Toronto's overrides are 4 → 4 versus main; Ottawa's remain 3 → 3, at 22.7, 22.9 and 23.2 s on
+`s1-1`, which arrives at 175.3 s. No other suite has a deadlock override. Relative to main,
+Kitsilano rain `s1-3` still takes 99.6 → 103.7 s and adds two safety brakes; Victoria `s1-2`
+takes 237.6 → 240.6 s and adds two, with closest gap 17.3 → 2.4 m. Both pass without contact.
+
+The manual-turn fix is covered separately by `scripts/test_all_way_stop.mjs`: a manual left
+indicator holds an opposing vehicle that arrived later, yields on a tie, and updates priority
+when changed at the line. With a route, its planned turn takes precedence. Both new regression
+checks failed without their corresponding fixes.
+
+## Earlier record: 2026-10-23 (initial all-way stops)
 
 This record covers turn order at all-way stops and yielding to oncoming traffic on left turns at
 stop signs. "Before" is main at `4119e87`; "after" is PR #27 at `c88f98f`. V8 passes 70 of 70
 routes before and 69 of 70 after: Toronto dry `s1-2` now times out. The regression is recorded
 below; no simulation code was changed for this baseline.
 
-## Method
+### Method
 
 Production suite builder, runner and metrics through each checkout's own `scripts/bench_node.mjs`:
 Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano ran 12 routes in each of dry, fog, rain
@@ -29,7 +103,7 @@ macOS-only and this environment is Linux. Night was not run. Compare these resul
 The [machine-readable record](validation/rebaseline-2026-10-23-rules.json) preserves every suite's
 summary and per-route results directly from its `--json` output, before and after.
 
-## Results
+### Results
 
 V8. Passed / routes; collisions are total / at fault. Deadlock overrides and mean speeds are
 before → after.
@@ -62,7 +136,7 @@ Outside Toronto, mean speed changes by at most 0.10 km/h. Kitsilano rain `s1-3` 
 99.6 → 103.7 s and adds two safety brakes (0 → 2); Victoria `s1-2` takes 237.6 → 240.6 s and
 also adds two (0 → 2), with closest gap 17.3 → 2.4 m. Both routes still pass without contact.
 
-## Failures
+### Failures
 
 **Toronto dry `s1-2` regresses from a pass at 165.5 s to a timeout at 310.4 s.** After the change,
 the car travels 146 m, reaches 18.8% of the route and records 277.1 s stopped. Its event list is empty: there is
@@ -83,7 +157,7 @@ check oncoming traffic. At this point stop memory no longer marks the stop compl
 deadlock detector treats an incomplete stop with `bumper_to_line_m < 12` as a legitimate wait,
 with no lower bound to exclude a line already behind the car. It therefore keeps `stuckFor`
 at zero even with the line 24.65 m behind, and never triggers the earlier recovery. **Toronto's
-override count changes 4 → 0 alongside this timeout.** The regression remains unfixed.
+override count changes 4 → 0 alongside this timeout.** The regression was unfixed at this initial benchmark commit; see the post-fix record above.
 
 **Ottawa's three overrides are unchanged (3 → 3).** They all occur on `s1-1`, at **22.7, 22.9
 and 23.2 s**, before and after, and that route arrives at 175.3 s on both sides. These events do
