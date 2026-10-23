@@ -283,6 +283,27 @@ export function crosswalkConflict(pts, cum, sFrom, sTo, crowd, laneHalf = 1.8) {
   return best;
 }
 
+// A pedestrian (among `peds`) at the curb, or about to reach it, who will step onto a signalled
+// crosswalk the path crosses between sFrom and sTo: their walk signal is on now or comes on within
+// `within` seconds. People start across on the walk signal whatever is coming, so a car turning
+// across that crosswalk now would meet them in it.
+const KERB_M = 6;
+export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
+  if (!crowd || !crowd.legsAt) return null;
+  for (const ped of peds) {
+    if (ped.crossing || ped.frozen > 0) continue;
+    const wp = ped.path.slice(0, 2).find((w) => w.cross);
+    const c = wp?.cross;
+    if (!c || c.jaywalk || dist([ped.x, ped.y], c.from) > KERB_M) continue;
+    const info = crowd.legsAt.get(c.node);
+    if (!info?.inter || !c.leg?.group) continue;
+    const group = c.leg.group === "A" ? "B" : "A";
+    if (pedPhase(info.inter, group, t) !== "walk" && pedPhase(info.inter, group, t + within) !== "walk") continue;
+    if (segmentCrossing(pts, cum, sFrom, sTo, c.from, c.to)) return ped;
+  }
+  return null;
+}
+
 // First intersection of the path (between sFrom and sTo) with segment a-b: { s, u } where u is the
 // fraction along a-b.
 function segmentCrossing(pts, cum, sFrom, sTo, a, b) {

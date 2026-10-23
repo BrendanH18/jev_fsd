@@ -2,7 +2,8 @@
 // of two-way streets, the car turning left waits for an oncoming car that would arrive before it
 // could clear, at the line or inside the junction, and goes once the gap is long enough. Also what
 // models are told, the commit point, what does not count (an oncoming car signalling its own left
-// turn, braking to stop, hidden by fog), the audit, and a car caught in the junction by a red light.
+// turn, braking to stop, hidden by fog), one pulling away from its line, the audit, and a car caught
+// in the junction by a red light.
 // node --experimental-default-type=module scripts/test_left_turn.mjs
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
@@ -190,6 +191,8 @@ function driveThrough(world, path, { speed = 6, seconds = 3 } = {}) {
   const two = junction({ count: 2 });
   const changing = decide(setup({ x: -30, route: two.routeData("n_out", "left"), on: two.map, npcs: [Object.assign(car("changing", 30, HALF + 3.2, Math.PI, 11), { signal: "left" })] })).snap.intersection.oncoming;
   assert.equal(changing?.id, "changing", "a car changing lanes with its left indicator on is still waited for");
+  const pullingOut = decide(setup({ x: -30, npcs: [oncoming(30, 4, { signal: "left", pull: { lat: 2, t: 1, T: 3.5, wait: 0, moving: true } })] })).snap.intersection.oncoming;
+  assert.equal(pullingOut?.id, "oncoming", "a car pulling out of a parking spot signals the pull-out, not a left turn");
   const braking = decide(setup({ x: -30, npcs: [oncoming(45, 8, { a: -3 })] })).snap.intersection.oncoming;
   assert.equal(braking, null, "an oncoming car braking to stop short of the junction");
   const passed = decide(setup({ x: -30, npcs: [car("gone", -20, HALF, Math.PI, 11)] })).snap.intersection.oncoming;
@@ -205,7 +208,20 @@ function driveThrough(world, path, { speed = 6, seconds = 3 } = {}) {
   const foggy = decide(setup({ x: -10, v: 4, npcs: [oncoming(20, 8.8)], weather: "fog" })).snap.intersection.oncoming;
   assert.ok(foggy, "it is once it comes into view");
   setWeather("dry");
-  console.log("✓ no wait for a long gap, an oncoming left turn, a braking car, a car already through, a straight route, a red, or a car hidden by fog");
+  console.log("✓ no wait for a long gap, an oncoming left turn (but a car pulling out from the curb is waited for), a braking car, a car already through, a straight route, a red, or a car hidden by fog");
+}
+
+{
+  // an oncoming car pulling away from its own line on the green, signalling a right turn into the
+  // street the car turns into: it is due sooner than its speed says
+  const pulling = decide(setup({ x: -12, v: 0, npcs: [oncoming(12, 0.3, { a: 1.5, signal: "right" })] })).snap.intersection.oncoming;
+  assert.equal(pulling?.id, "oncoming", "a car speeding up from its line is waited for");
+  assert.ok(pulling.eta_s < 3, `due in ${pulling.eta_s.toFixed(1)} s`);
+  assert.equal(decide(setup({ x: -12, v: 0, npcs: [oncoming(12, 0.3)] })).snap.intersection.oncoming, null, "one creeping at its line is not");
+  const steady = decide(setup({ x: -30, npcs: [oncoming(45, 6)] })).snap.intersection.oncoming;
+  const faster = decide(setup({ x: -30, npcs: [oncoming(45, 6, { a: 2 })] })).snap.intersection.oncoming;
+  assert.ok(steady && faster && faster.eta_s < steady.eta_s - 1, "and speeding up makes a car due sooner");
+  console.log("✓ an oncoming car pulling away from its line on the green is waited for, allowing for it speeding up");
 }
 
 {

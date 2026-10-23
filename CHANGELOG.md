@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+- The driven car turns right on red. It is legal across Canada after a full stop, except on the
+  island of Montréal, so it is allowed on every bundled map but Le Plateau (a map counts as on the
+  island when its centre lies inside a coarse outline of it; `MapData.rightOnRed`). At a red light
+  where its route turns right, from the curb lane, the car stops fully at the line (0.7 s within
+  6 m of it, as at a stop sign), then turns once nothing it must yield to is in the way: traffic
+  from the left that would reach the junction before the car's rear has passed its centre plus
+  2 s (about 6 s from a stop), anything moving across the junction, a pedestrian on a crosswalk
+  ahead or waiting at one whose walk signal comes on within 4 s, and a view along the street to
+  its left that falls short of where that traffic would come from, up to the 80 m it can see in
+  clear daylight (it looks for that traffic that far, not only within the 60 m other traffic is
+  listed for). So fog, rain, snow, darkness and a building on the corner (about a third of
+  signalled right turns across the maps) leave it waiting for the green: it does not creep forward
+  to look. Once moving past the line it carries on. Traffic cars do the same after a full stop from
+  the curb lane, accepting a gap 1.5 s longer than at a stop sign. The audit counts crossing a red
+  light's line as legal only after a full stop, on a map that allows it, and if the car turns right,
+  judged from the street it is on as routes judge their turns: going on past the junction's centre
+  (15 m out) other than by a right turn runs the red at once, and a right turn holds once the car
+  leaves the junction (30 m out) on the street it turned into or one that street leads on to, so a
+  swerve or lane change on the way straight through does not count, nor does a sharp left or a
+  U-turn. Otherwise it ran the red, with or without a route. Cutting off a vehicle from the left during the turn fails to
+  yield (due at the junction within 2 s, or catching the car within 2 s down the street both are
+  in). Decision models and LLMs get `intersection.turn` ("right") and `intersection.right_on_red`
+  (`stop_completed`, `clear` and what it waits for), a situation line, and the motion criteria
+  allow moving at a red only when both are true; the LLM system prompt says either turning or
+  waiting is allowed. New challenge, **Right on red** (Calgary, Beltline): a red light where two
+  cars come from the left 20 m apart on their green, going straight on into the street the car
+  turns into. In the seeded V8 benchmark Rules reached a red light where its route turns right 20
+  times and turned on red 3 times; 9 of the other 17 times it waited because it could not see far
+  enough to its left. New checks in `scripts/test_right_on_red.mjs`.
+
+- Turning left at a signal, the driven car now waits for an oncoming car pulling away from its own
+  line on the green, and allows for an oncoming vehicle speeding up. Before, a vehicle under 1 m/s
+  did not count and every arrival time assumed a steady speed, so in Edmonton `s1-2` (V8) the car
+  turned as `car_30`, in view and signalling a right turn into the same street, set off from its
+  line, and they collided in the street both turned into. A vehicle accelerating at more than
+  0.3 m/s² now counts from 0.05 m/s, and is assumed to keep accelerating (at most 2.5 m/s²) up to
+  its street's limit. It also no longer takes the left indicator of a car pulling out of a parking
+  spot ahead, facing the junction, for an oncoming left turn. Without this, the changes above
+  shifted Kitsilano dry `s1-8` (V8) so that the car turned left in front of `car_p6`, pulling out
+  on the far side of the junction, and they collided in the street both turned into. With both
+  changes, the seeded WebKit benchmark passes 70 of 70 routes, as before, and V8 70 of 70 (69
+  before: Edmonton `s1-2` now passes); no suite has a collision, red light or failure to yield.
+  Victoria `s1-1` is 76 s slower in V8, from an existing stall where a building outline reaches
+  into the lane. See [docs/rules-baseline.md](docs/rules-baseline.md). Checks in
+  `scripts/test_left_turn.mjs`.
+
 - The driven car yields to oncoming traffic when it turns left (or makes a U-turn) at a signal.
   Before, it turned on a green whatever was coming the other way. It turns in front of an
   oncoming vehicle only if it would clear that vehicle's path 1.5 s before the vehicle gets

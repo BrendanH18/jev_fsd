@@ -6,6 +6,23 @@ import { timingPlan } from "../sim/signals.js";
 
 const CELL = 50;
 const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
+// A right turn on a red light, after a full stop, is legal across Canada except on the island of
+// Montréal. A coarse outline of the island (lon, lat), good to a few hundred metres at the shore.
+const MONTREAL_ISLAND = [[-73.985, 45.43], [-73.95, 45.40], [-73.86, 45.42], [-73.74, 45.43], [-73.68, 45.43], [-73.62, 45.42],
+  [-73.56, 45.45], [-73.555, 45.50], [-73.535, 45.53], [-73.525, 45.56], [-73.50, 45.60], [-73.48, 45.65], [-73.47, 45.70],
+  [-73.53, 45.69], [-73.65, 45.59], [-73.76, 45.52], [-73.88, 45.50], [-73.97, 45.47]];
+
+// Whether a map whose bounding box is [W, S, E, N] permits right turns on red (judged at its centre).
+export function rightOnRedAllowed(bbox) {
+  if (!Array.isArray(bbox) || bbox.length !== 4) return true;
+  const x = (bbox[0] + bbox[2]) / 2, y = (bbox[1] + bbox[3]) / 2;
+  let inside = false;
+  for (let i = 0, j = MONTREAL_ISLAND.length - 1; i < MONTREAL_ISLAND.length; j = i++) {
+    const [ax, ay] = MONTREAL_ISLAND[i], [bx, by] = MONTREAL_ISLAND[j];
+    if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+  }
+  return !inside;
+}
 
 export function dist(a, b) { return Math.hypot(b[0] - a[0], b[1] - a[1]); }
 export function wrapAngle(a) {
@@ -115,6 +132,7 @@ export class MapData {
     this.pack = pack;
     this.bbox = pack.bbox;
     this.routingBbox = pack.routing_bbox || pack.bbox;
+    this.rightOnRed = rightOnRedAllowed(this.routingBbox);
     this.extent = pack.extent;
     this.edges = new Map(pack.edges.map((e) => [e.id, { ...e, cum: cumulative(e.pts) }]));
     this.lanes = new Map();

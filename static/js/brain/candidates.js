@@ -140,7 +140,7 @@ export function simulateAll(candidates, snap, world) {
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
   const mustStop = control && control.bumper_to_line_m > -CLEARING_M && (
-    (control.control === "signal" && (control.signal === "red" || control.signal === "unknown" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
+    (control.control === "signal" && ((control.signal === "red" && !control.right_on_red?.go) || control.signal === "unknown" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
     (control.control === "stop" && !control.stop_completed) ||
     (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;

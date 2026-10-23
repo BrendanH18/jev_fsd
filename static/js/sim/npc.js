@@ -10,7 +10,7 @@ import { rng } from "../common.js";
 import { wrap } from "./world.js";
 import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
-import { crosswalkConflict } from "./pedestrians.js";
+import { crosswalkConflict, kerbConflict } from "./pedestrians.js";
 import { current as weather } from "./weather.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -37,6 +37,11 @@ const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c,
 const SHARP_TURN = 130 * Math.PI / 180;   // mirrors SHARP_TURN_DEG in jev/routing.py
 const BOX_M = 9;
 const LEADER_MARGIN_M = 0.3;    // beyond two half-widths: anything closer to the path is in the way
+// Turning right on red (where the map allows it), from the curb lane after a full stop: the gap a
+// driver accepts is this much longer than at a stop sign, since the car pulls away from rest into
+// traffic that has a green; nobody may be about to step onto a crosswalk it crosses within 4 s.
+const RTOR_EXTRA_GAP_S = 1.5;
+const RTOR_WALK_S = 4;
 
 export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
@@ -289,7 +294,8 @@ export class NpcFleet {
         if (e.control.type === "signal") {
           const st = phaseOf(this.map.intersections.get(e.control.id), world.t)[e.control.group];
           const canStop = bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
-          if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
+          if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
+          else if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
         } else if (e.control.type === "yield") {
           // roundabout entry: wait at the line while someone in the ring would arrive first
           if (bumperToLine < 12 && ringBusy(this.map.roundabouts.get(e.control.roundabout), this.map.nodes.get(e.to), all, n)) stopAt = bumperToLine;
@@ -548,6 +554,20 @@ export class NpcFleet {
     n.lc = { dir, to, edge: edge.id, width: Math.abs(e.lane_offsets[to] - e.lane_offsets[edge.lane]), t: 0, T: 3.5 };
   }
 
+  // At a red light: whether this driver may turn right on red now. It turns right here from the
+  // curb lane, has stopped fully at the line, the junction is clear and nothing is coming that it
+  // must yield to.
+  rightOnRed(n, e, bumperToLine, front, dt) {
+    if (!this.map.rightOnRed) return false;
+    const path = n.path, i = path.edges.indexOf(e), next = path.edges[i + 1];
+    const edge = this.map.edges.get(e.id);
+    if (!next || e.lane !== edge.lanes - 1 || this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right") return false;
+    if (n.stopMem.update(e.control, bumperToLine, n.v, dt) !== "completed") return false;
+    if (this.boxBusy(n, e) || this.crossComing(n, e.to, RTOR_EXTRA_GAP_S)) return false;
+    const crowd = this.world.crowd;
+    return !kerbConflict(path.pts, path.cum, front - 2, front + 30, crowd, crowd.list, this.world.t, RTOR_WALK_S);
+  }
+
   // Someone coming the other way who will reach this node within 6 s (a slow left turn needs
   // about that long to clear the oncoming lane).
   oncoming(n, nodeId) {
@@ -565,10 +585,10 @@ export class NpcFleet {
 
   // Anyone moving who will reach this node before we could get across: within the driver's accepted
   // gap (4.5 to 6.5 s; the bolder the driver, the shorter).
-  crossComing(n, nodeId) {
+  crossComing(n, nodeId, extra = 0) {
     const node = this.map.nodes.get(nodeId);
     if (!node) return false;
-    const gapS = n.driver ? 3.2 + n.driver.T * 1.7 : 5;
+    const gapS = (n.driver ? 3.2 + n.driver.T * 1.7 : 5) + extra;
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n || o.v < 1) continue;
       if (Math.abs(wrap(o.psi - n.psi)) < Math.PI / 6) continue;   // going our way

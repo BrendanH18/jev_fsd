@@ -6,7 +6,7 @@ probabilities) and **LLM** (any OpenAI-compatible chat model). Keys 1, 2 and 3 s
 Rules and LLM.
 
 Open `/arena` to evaluate Rules, Jev (when configured), the free cautious starter, your own
-decision models and LLM endpoints, or your own agent on seven fixed challenges. The public demo uses `arena.html` and supports browser agents.
+decision models and LLM endpoints, or your own agent on eight fixed challenges. The public demo uses `arena.html` and supports browser agents.
 Select **Realtime** when comparing model latency or manual attempts; **Lockstep** waits for a
 decision and measures the resulting choices. Changing clocks changes the experiment.
 
@@ -253,7 +253,7 @@ it and reload the page. The system message explains the input and says *when* ea
 manoeuvre is correct. The user message is the same decision state Jev receives, as compact JSON:
 the driving style, the plain-language situation rules, observed speeds, gaps, signals, traffic
 and pedestrians, the lanes on multi-lane streets (which lane the car and its route are in, the gaps
-beside it, and how far it has to return or get into the lane for a turn), on a left turn at a signal the oncoming vehicle it must wait for (`intersection.oncoming`), the eligible candidates with their 3-second predictions
+beside it, and how far it has to return or get into the lane for a turn), on a left turn at a signal the oncoming vehicle it must wait for (`intersection.oncoming`), on a right turn at a red light whether it may turn on red (`intersection.right_on_red`: the full stop made, the way clear, and what it waits for), the eligible candidates with their 3-second predictions
 (`end_speed`, `vs_target`, `progress_m`, comfort, clearance, `outcome`), the definitions of `drive` and `stop`
 when that question is asked, and the ids it may answer with. Computed targets such as
 `car.target_speed` and each candidate's `vs_target` are handed over, so the model never needs

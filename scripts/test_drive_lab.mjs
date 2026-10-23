@@ -14,7 +14,7 @@ const { rng } = await import("../static/js/common.js");
 const { validAgentChoice, registerAgent } = await import("../static/js/brain/registry.js");
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
-const names = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2" };
+const names = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438" };
 const load = id => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url))));
 let assertions = 0;
 function test(name, fn) { fn(); assertions++; console.log(`✓ ${name}`); }
@@ -49,6 +49,10 @@ for (const challenge of CHALLENGES) {
     if (challenge.hazard === "oncoming") {
       assert.equal(control.type, "signal"); assert.equal(a.route.turns[0].dir, "left");
       assert.equal(map.edges.get(a.oncoming.edge).control.id, control.id);
+    }
+    if (challenge.hazard === "cross") {
+      assert.equal(control.type, "signal"); assert.equal(a.route.turns[0].dir, "right"); assert.ok(map.rightOnRed);
+      assert.equal(map.edges.get(a.oncoming.edge).control.id, control.id); assert.equal(a.oncoming.then, a.route.edges[1]);
     }
   });
   for (const brain of ["rules", "cautious"]) {
@@ -104,6 +108,30 @@ for (const challenge of CHALLENGES.filter(c => ["pedestrian", "occluded-pedestri
     assert.deepEqual([...yielded], world.challenge.oncomingIds);
     assert.equal(world.violations.failed_to_yield, 0); assert.equal(world.violations.collisions, 0);
     assert.equal(fleet.vehicles.length, 2);
+  });
+}
+
+{
+  const challenge = CHALLENGES.find(c => c.hazard === "cross"), ctx = setupChallenge(load(challenge.map), challenge), { world, fleet } = ctx;
+  const waited = new Set();
+  let turned = null;
+  while (world.t < 40 && ctx.autopilot.enabled) {
+    stepWorld(ctx, 1 / 60, world.t * 1000); if (ctx.autopilot.firing) await ctx.autopilot.firing;
+    const i = ctx.autopilot.snap?.intersection;
+    if (i?.right_on_red?.wait_for?.id) waited.add(i.right_on_red.wait_for.id);
+    if (!turned && i?.right_on_red?.go && world.ego.v > 1) turned = { signal: i.signal, stopped: i.right_on_red.stop_completed };
+  }
+  test("right on red: two cars set off from the left at the trigger; the car stops, waits for both, then turns on the red", () => {
+    assert.deepEqual(world.challenge.oncomingIds, ["challenge_cross_1", "challenge_cross_2"]);
+    assert.deepEqual([...waited].filter(id => id.startsWith("challenge")), world.challenge.oncomingIds);
+    assert.deepEqual(turned, { signal: "red", stopped: true });
+    assert.equal(world.violations.red_lights_run, 0); assert.equal(world.violations.failed_to_yield, 0); assert.equal(world.violations.collisions, 0);
+    assert.equal(fleet.vehicles.length, 2);
+  });
+  test("right on red: the challenge is not offered where the map bans it", () => {
+    const montreal = load("montreal");
+    assert.equal(montreal.rightOnRed, false);
+    assert.throws(() => challengeScenario(montreal, challenge), /not allowed/);
   });
 }
 

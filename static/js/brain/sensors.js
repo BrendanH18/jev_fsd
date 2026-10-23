@@ -7,9 +7,11 @@ import { signalFor, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
-import { crosswalkConflict } from "../sim/pedestrians.js";
+import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
+import { pointAt } from "../map/mapdata.js";
 import { current as weather } from "../sim/weather.js";
+import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
@@ -50,6 +52,23 @@ const LEFT_SIGNAL_M = 40;
 // A car this far past a stop line is inside the junction and clears it: a light that changes or a
 // stop it overshot no longer holds it. Just past the line (an overshoot) it still does.
 export const CLEARING_M = 3;
+// An oncoming vehicle pulling away from its line (or any vehicle speeding up) is assumed to keep
+// accelerating, at no more than this, up to its street's limit.
+const ETA_ACCEL_MAX = 2.5;
+// Turning right on a red light, where the map allows it: after a full stop at the line, the car
+// turns only when nothing it must yield to is in the way. Traffic from the left (heading within
+// 45 deg of the street the car turns into, coming toward the junction) must not be due at the
+// junction before the car's rear has passed its centre (pulling away as for a left turn) plus 2 s,
+// about 6 s from a stop; nothing may be moving across the junction itself (12 m of its centre); no
+// pedestrian may be crossing ahead of it in the junction or waiting at a crosswalk it crosses whose
+// walk signal comes on within 4 s; and the car must see along the street to its left as far as
+// traffic at that street's limit covers in that time, or as far as it ever sees (80 m in clear
+// daylight), so fog, rain, snow and darkness rule it out. Once moving past the line it carries on.
+const RTOR_MARGIN_S = 2;
+const RTOR_CONE = Math.PI / 4;
+const RTOR_LOOK_M = 150;
+const RTOR_WALK_S = 4;
+const RTOR_PAST_M = 20;
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -125,6 +144,8 @@ export function buildSnapshot(world, executing = null) {
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
         entered, turn: c.turn || "straight",
         oncoming: leftTurn && (entered || signal === "green" || signal === "yellow") ? oncomingYield(world, c, frontS) : null,
+        right_on_red: control.type === "signal" && map.rightOnRed && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
+          ? rightOnRed(world, c, inter, frontS, visible) : null,
         stop_completed: control.type === "stop" ? (stopMem.controlId === control.id && stopMem.completed) : null,
         all_way: control.type === "stop" ? !!control.all_way : null,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
@@ -137,6 +158,12 @@ export function buildSnapshot(world, executing = null) {
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
     const vehicles = visible.filter((o) => o.kind !== "pedestrian");
     const lane = snap.lane = laneState(route, p, executing && executing.law);
+    // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
+    // Once moving past the line the car has committed and carries on.
+    const rtor = snap.intersection?.right_on_red;
+    if (rtor && !rtor.wait_for && (lane.index !== lane.lanes - 1 || lane.shift)) rtor.wait_for = { kind: "lane" };
+    if (rtor && snap.pedestrian && !rtor.wait_for && snap.pedestrian.s_route < snap.intersection.s_line_route + RTOR_PAST_M) rtor.wait_for = { kind: "pedestrian", id: snap.pedestrian.id };
+    if (rtor) { rtor.clear = !rtor.wait_for; rtor.go = rtor.stop_completed && (rtor.clear || (rtor.entered && ego.v > 1.5)); }
     // Ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed.
     // Oncoming traffic that is passing is not a follow target; a stopped car facing us still is.
     // During a lane change the lane being left still counts while the car overlaps it, for vehicles
@@ -233,20 +260,19 @@ function oncomingYield(world, c, frontS) {
   const centre = route.pointAt(c.sJunction);
   const toClear = c.sJunction + CLEAR_PAST_M + ego.spec.length - frontS;
   if (toClear <= 0) return null;
-  const v0 = Math.min(Math.max(0, ego.v), TURN_MPS);
-  const t1 = (TURN_MPS - v0) / TURN_ACCEL, d1 = (v0 + TURN_MPS) / 2 * t1;
-  const clearIn = d1 >= toClear ? (Math.sqrt(v0 * v0 + 2 * TURN_ACCEL * toClear) - v0) / TURN_ACCEL : t1 + (toClear - d1) / TURN_MPS;
-  const need = clearIn + (ego.v > 1.5 && frontS > c.sRoute ? GAP_KEEP_S : GAP_MARGIN_S);
+  const need = clearTime(ego.v, toClear) + (ego.v > 1.5 && frontS > c.sRoute ? GAP_KEEP_S : GAP_MARGIN_S);
   const facing = route.headingAt(c.sRoute) + Math.PI, down = route.headingAt(Math.min(route.length, c.sJunction + 15)) + Math.PI;
   let best = null;
   for (const n of world.npcs) {
-    if (n.v < 1) continue;
+    // (moving, or pulling away from its own line on the green)
+    if (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) continue;
     const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
     if (d > ONCOMING_LOOK_M) continue;
     // A left indicator means a left turn only from the leftmost lane near the junction: further
-    // out, or from another lane, it is a lane change and the vehicle may well come straight on.
+    // out, or from another lane, it is a lane change and the vehicle may well come straight on. A
+    // car pulling out from the curb signals the pull-out, not a turn.
     const lane = world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane;
-    if (n.signal === "left" && d < LEFT_SIGNAL_M && lane && lane.idx === 0) continue;
+    if (n.signal === "left" && !n.pull && d < LEFT_SIGNAL_M && lane && lane.idx === 0) continue;
     const rel = Math.abs(wrap(n.psi - facing));
     const closing = (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6);
     const inBox = d < JUNCTION_BOX_M;
@@ -254,7 +280,7 @@ function oncomingYield(world, c, frontS) {
     if (Math.abs(wrap(n.psi - down)) < rel) continue;
     // brake lights: a vehicle that will stop well short of the junction is not coming through
     if (!inBox && n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
-    const eta = inBox ? 0 : (d - JUNCTION_BOX_M / 2) / n.v;
+    const eta = inBox ? 0 : etaOf(world, n, d - JUNCTION_BOX_M / 2);
     if (eta >= need || !world.visibility.sees(ego, n)) continue;
     const spec = n.spec || CAR;
     const reach = (ego.spec.width + spec.width) / 2 + 0.5;
@@ -275,6 +301,92 @@ function oncomingYield(world, c, frontS) {
   // too late to stop short of its path (not just of the wait point): carry on through
   if (!best || best.bumper_to_yield_m + ONCOMING_STOP_M < ego.v * ego.v / (2 * Math.min(4, comfort().hardDecel)) + 0.3) return null;
   return best;
+}
+
+// Seconds for the car to cover `distance` taking a turn: speeding up from `v` at TURN_ACCEL to at
+// most TURN_MPS (holding its speed if already faster).
+function clearTime(v, distance) {
+  const v0 = Math.min(Math.max(0, v), TURN_MPS);
+  const t1 = (TURN_MPS - v0) / TURN_ACCEL, d1 = (v0 + TURN_MPS) / 2 * t1;
+  return d1 >= distance ? (Math.sqrt(v0 * v0 + 2 * TURN_ACCEL * distance) - v0) / TURN_ACCEL : t1 + (distance - d1) / TURN_MPS;
+}
+
+// Seconds until a vehicle covers `distance`: at its speed, or, while it speeds up, accelerating as it
+// is now (at most ETA_ACCEL_MAX) until it reaches its street's limit.
+function etaOf(world, n, distance) {
+  if (distance <= 0) return 0;
+  const v = Math.max(0, n.v), a = Math.min(ETA_ACCEL_MAX, Math.max(0, n.a || 0));
+  if (a < 0.05) return v > 0.05 ? distance / v : Infinity;
+  const vMax = Math.max(v, world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane.edgeRef.limit || 13.9);
+  const tTop = (vMax - v) / a, dTop = (v + vMax) / 2 * tTop;
+  return dTop >= distance ? (Math.sqrt(v * v + 2 * a * distance) - v) / a : tTop + (distance - dTop) / vMax;
+}
+
+// Turning right on a red light (see RTOR_MARGIN_S): whether the car has made its full stop at the
+// line, and the first thing it must wait for, if any (`wait_for`: a vehicle crossing the junction or
+// due from the left, a pedestrian about to cross, or the view to the left). The caller adds the
+// curb lane and a pedestrian already crossing, and sets `clear` and `go`. Traffic from the left
+// moves across the car's nose to its right: heading a right turn's worth (as classifyTurn reads
+// it) off the way the car came in, or close to the street it turns into (at a skewed junction the
+// street from the left need not run straight on into it).
+function rightOnRed(world, c, inter, frontS, visible) {
+  const { ego, route, map } = world;
+  // traffic from the left is looked for as far as the car can see, beyond TRAFFIC_RADIUS_M
+  const visibleNpcs = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M).filter((o) => world.npcs.includes(o));
+  const entered = frontS > c.sRoute;
+  const out = { stop_completed: world.egoStop.controlId === c.control.id && world.egoStop.completed, entered, need_s: null, wait_for: null, clear: false, go: false };
+  const centre = [inter.x, inter.y];
+  const sCentre = c.sJunction ?? c.sRoute + 8;
+  const exit = route.headingAt(Math.min(route.length, sCentre + 15)), inward = route.headingAt(c.sRoute);
+  const fromLeft = (h) => Math.abs(wrap(h - exit)) <= RTOR_CONE || map.classifyTurn(wrap(h - inward)) === "right";
+  const need = clearTime(ego.v, Math.max(0, sCentre - frontS) + ego.spec.length) + RTOR_MARGIN_S;
+  out.need_s = need;
+  for (const n of visibleNpcs) {
+    const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
+    if (d < JUNCTION_BOX_M) {
+      // moving across the junction (or pulling away); heading the car's way out of it, only short
+      // of the centre (a car that turned the same way just ahead of it is a leader)
+      const along = Math.abs(wrap(n.psi - exit)) <= Math.PI / 6, beforeCentre = dx * Math.cos(exit) + dy * Math.sin(exit) > 0;
+      if ((Math.abs(n.v) > 0.5 || (n.v > 0.05 && n.a > 0.3)) && Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 6 && (!along || beforeCentre)) { out.wait_for = { kind: "junction", id: n.id }; return out; }
+      continue;
+    }
+    if (d > RTOR_LOOK_M || (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) || !fromLeft(n.psi)) continue;
+    if ((dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6) < 0.3) continue;
+    // stopping short of the junction (for its own light, say)
+    if (n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
+    const eta = etaOf(world, n, d - JUNCTION_BOX_M / 2);
+    if (eta < need) { out.wait_for = { kind: "vehicle", id: n.id, eta_s: eta }; return out; }
+  }
+  const peds = world.crowd.list.filter((q) => visible.includes(q));
+  const ped = kerbConflict(route.pts, route.cum, frontS - 3, sCentre + RTOR_PAST_M, world.crowd, peds, world.t, RTOR_WALK_S);
+  if (ped) { out.wait_for = { kind: "pedestrian", id: ped.id }; return out; }
+  // the view along each street coming in from the left, as far as traffic on it covers in `need`
+  // (back along the approach, then straight on past its start)
+  if (!entered) {
+    for (const a of inter.approaches) {
+      const e = map.edges.get(a.edge);
+      if (!e || e.id === c.edge || !fromLeft(map.headingIn(e.id))) continue;
+      const far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * need, L = e.cum[e.cum.length - 1], h = map.headingOut(e.id);
+      const at = (back) => {
+        const [x, y] = pointAt(e.pts, e.cum, Math.max(0, L - back)), beyond = Math.max(0, back - L);
+        return [x - Math.cos(h) * beyond, y - Math.sin(h) * beyond];
+      };
+      const reach = DAYLIGHT_RANGE_M - 1;
+      for (let k = 1, last = 0; k <= 4; k++) {
+        let back = far * k / 4, p = at(back);
+        // past what the car can ever see: check as far as it can, then stop
+        if (Math.hypot(p[0] - ego.x, p[1] - ego.y) > reach) {
+          let lo = last, hi = back;
+          for (let i = 0; i < 20; i++) { const mid = (lo + hi) / 2, q = at(mid); if (Math.hypot(q[0] - ego.x, q[1] - ego.y) > reach) hi = mid; else lo = mid; }
+          back = lo; p = at(back);
+        }
+        if (!world.visibility.canSee(ego, ...p)) { out.wait_for = { kind: "view", sight_m: Math.round(last) }; return out; }
+        if (back < far * k / 4) break;
+        last = back;
+      }
+    }
+  }
+  return out;
 }
 
 // Route arc length at which a lane change has moved the car LANE_CLEAR_M away from the lane it left.
@@ -363,8 +475,9 @@ export function desiredSpeed(snap) {
     if (vf < v) { v = vf; reasons.push("car ahead"); }
   }
   const i = snap.intersection;
-  // (a car just past a signal's line, short of CLEARING_M, still stops for it)
-  if (i && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown")) || (i.control === "stop" && !i.stop_completed))) {
+  // (a car just past a signal's line, short of CLEARING_M, still stops for it, unless it is turning
+  // right on red)
+  if (i && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown") && !i.right_on_red?.go) || (i.control === "stop" && !i.stop_completed))) {
     // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line
     const vs = i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
     if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
