@@ -16,10 +16,12 @@
   signalled right turns across the maps) leave it waiting for the green: it does not creep forward
   to look. Once moving past the line it carries on. Traffic cars do the same after a full stop from
   the curb lane, accepting a gap 1.5 s longer than at a stop sign. The audit counts crossing a red
-  light's line as legal only after a full stop, on a map that allows it, and if the car turns right:
-  judged once its front is 15 m past the junction's centre, from the street it is then on, as
-  routes judge their turns, so a swerve or lane change on the way straight through does not count.
-  Otherwise it ran the red, with or without a route. Cutting off a vehicle from the left during the turn fails to
+  light's line as legal only after a full stop, on a map that allows it, and if the car turns right,
+  judged from the street it is on as routes judge their turns: going on past the junction's centre
+  (15 m out) other than by a right turn runs the red at once, and a right turn holds once the car
+  leaves the junction (30 m out) on the street it turned into or one that street leads on to, so a
+  swerve or lane change on the way straight through does not count, nor does a sharp left or a
+  U-turn. Otherwise it ran the red, with or without a route. Cutting off a vehicle from the left during the turn fails to
   yield (due at the junction within 2 s, or catching the car within 2 s down the street both are
   in). Decision models and LLMs get `intersection.turn` ("right") and `intersection.right_on_red`
   (`stop_completed`, `clear` and what it waits for), a situation line, and the motion criteria

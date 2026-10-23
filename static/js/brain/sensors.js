@@ -325,7 +325,10 @@ function etaOf(world, n, distance) {
 // Turning right on a red light (see RTOR_MARGIN_S): whether the car has made its full stop at the
 // line, and the first thing it must wait for, if any (`wait_for`: a vehicle crossing the junction or
 // due from the left, a pedestrian about to cross, or the view to the left). The caller adds the
-// curb lane and a pedestrian already crossing, and sets `clear` and `go`.
+// curb lane and a pedestrian already crossing, and sets `clear` and `go`. Traffic from the left
+// moves across the car's nose to its right: heading a right turn's worth (as classifyTurn reads
+// it) off the way the car came in, or close to the street it turns into (at a skewed junction the
+// street from the left need not run straight on into it).
 function rightOnRed(world, c, inter, frontS, visible) {
   const { ego, route, map } = world;
   // traffic from the left is looked for as far as the car can see, beyond TRAFFIC_RADIUS_M
@@ -334,7 +337,8 @@ function rightOnRed(world, c, inter, frontS, visible) {
   const out = { stop_completed: world.egoStop.controlId === c.control.id && world.egoStop.completed, entered, need_s: null, wait_for: null, clear: false, go: false };
   const centre = [inter.x, inter.y];
   const sCentre = c.sJunction ?? c.sRoute + 8;
-  const exit = route.headingAt(Math.min(route.length, sCentre + 15));
+  const exit = route.headingAt(Math.min(route.length, sCentre + 15)), inward = route.headingAt(c.sRoute);
+  const fromLeft = (h) => Math.abs(wrap(h - exit)) <= RTOR_CONE || map.classifyTurn(wrap(h - inward)) === "right";
   const need = clearTime(ego.v, Math.max(0, sCentre - frontS) + ego.spec.length) + RTOR_MARGIN_S;
   out.need_s = need;
   for (const n of visibleNpcs) {
@@ -346,7 +350,7 @@ function rightOnRed(world, c, inter, frontS, visible) {
       if (Math.abs(n.v) > 0.5 && Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 6 && (!along || beforeCentre)) { out.wait_for = { kind: "junction", id: n.id }; return out; }
       continue;
     }
-    if (d > RTOR_LOOK_M || (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) || Math.abs(wrap(n.psi - exit)) > RTOR_CONE) continue;
+    if (d > RTOR_LOOK_M || (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) || !fromLeft(n.psi)) continue;
     if ((dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6) < 0.3) continue;
     // stopping short of the junction (for its own light, say)
     if (n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
@@ -361,7 +365,7 @@ function rightOnRed(world, c, inter, frontS, visible) {
   if (!entered) {
     for (const a of inter.approaches) {
       const e = map.edges.get(a.edge);
-      if (!e || Math.abs(wrap(map.headingIn(e.id) - exit)) > RTOR_CONE) continue;
+      if (!e || e.id === c.edge || !fromLeft(map.headingIn(e.id))) continue;
       const far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * need, L = e.cum[e.cum.length - 1], h = map.headingOut(e.id);
       const at = (back) => {
         const [x, y] = pointAt(e.pts, e.cum, Math.max(0, L - back)), beyond = Math.max(0, back - L);

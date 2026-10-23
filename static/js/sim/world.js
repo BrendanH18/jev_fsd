@@ -27,9 +27,10 @@ const AUDIT_CORNER_M = 8;   // a turn's rounded corner starts about this far bef
 // in which case it is already there.
 const AUDIT_BOX_M = 12;
 // Crossing a red light's line after a full stop on a map that allows right turns on red is legal
-// if the car turns right: judged once its front is this far past the junction's centre, from the
-// street it is then on, as routes judge their turns (MapData.classifyTurn from the approach). A
-// lane change or a swerve on the way straight through does not count. A right turn on
+// if the car turns right, judged from the street it is on, as routes judge their turns
+// (MapData.classifyTurn from the approach): once its front is this far past the junction's centre
+// on another street, or on leaving the junction. A lane change or a swerve on the way straight
+// through does not count. A right turn on
 // red fails to yield, as above, when the car's front enters the path of a vehicle coming from its
 // left (heading within 60 deg of the way the car turns) due at the junction within 2 s, or that
 // would reach the car within 2 s along the street both are in.
@@ -270,12 +271,23 @@ export class World {
     const [jx, jy] = j.centre;
     const rtor = j.rightOnRed;
     if (rtor && !rtor.turned) {
-      // crossed on red after a full stop: legal once it has turned right, else it ran the red
+      // crossed on red after a full stop: legal if it has turned right, else it ran the red, judged
+      // from the street the car is on. In a lane of a street the way the car faces, one leaving the
+      // junction to the right starts a right turn (`via`), which carries on along the streets it
+      // leads to; any other street ends it. Going on past the centre other than by a right turn runs
+      // the red there and then; a right turn (which stays short of the centre) holds only once the
+      // car leaves the junction on it, as do a sharp left and a U-turn (which head back behind the
+      // centre), so a swerve toward a shallow right-hand exit and back does not count.
       const out = Math.hypot(fx - jx, fy - jy);
       const past = (fx - jx) * Math.cos(rtor.approach) + (fy - jy) * Math.sin(rtor.approach);
-      if (out > AUDIT_RTOR_OUT_M && past > 0) {
-        const on = this.map.nearestLane(fx, fy, this.ego.psi, 8)?.lane.edgeRef;
-        if (on && on.id !== rtor.edge && this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right") rtor.turned = true;
+      const at = this.map.nearestLane(fx, fy, this.ego.psi, 8), on = at?.lane.edgeRef;
+      const right = (e) => e && e.id !== rtor.edge && this.map.classifyTurn(this.map.turnAngle(rtor.edge, e.id)) === "right";
+      if (on && on.id !== rtor.edge && on.id !== rtor.via?.id && Math.abs(wrap(at.heading - this.ego.psi)) <= Math.PI / 3) {
+        if (right(on) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) rtor.via = on;
+        else rtor.via = rtor.via && on.from === rtor.via.to ? on : null;
+      }
+      if ((out > AUDIT_RTOR_OUT_M && past > 0) || out > AUDIT_JUNCTION_M) {
+        if (right(on) || (on && on.id === rtor.via?.id)) { if (out > AUDIT_JUNCTION_M) rtor.turned = true; }
         else {
           this.violations.red_lights_run++;
           this.events.push({ type: "red_light" });
