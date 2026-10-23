@@ -301,10 +301,12 @@ export class NpcFleet {
           if (bumperToLine < 12 && ringBusy(this.map.roundabouts.get(e.control.roundabout), this.map.nodes.get(e.to), all, n)) stopAt = bumperToLine;
         } else {
           const state = n.stopMem.update(e.control, bumperToLine, n.v, dt);
+          const next = path.edges[path.edges.indexOf(e) + 1];
+          if (e.control.all_way) world.allWay.note(n, e.control, e.id, next ? this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) : "straight", bumperToLine, n.v, world);
           if (state !== "completed") stopAt = bumperToLine;
           // stopped: go when the junction is clear and, at a two-way stop, when nothing on the
-          // through road would get there first
-          else if (this.boxBusy(n, e) || (!e.control.all_way && this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
+          // through road would get there first; at an all-way stop, when it is its turn
+          else if (this.boxBusy(n, e) || (e.control.all_way ? world.allWay.status(n, world)?.go === false : this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
         }
         break;
       }

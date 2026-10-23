@@ -17,8 +17,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Around the corner | Vancouver, Kitsilano | A scripted pedestrian crossing with a sight line obstructed by a mapped building |
 | The unprotected left | Ottawa, Centretown | A left turn on a green; two oncoming cars 20 m apart, going straight through, reach the junction as the car does |
 | Right on red | Calgary, Beltline | A right turn at a red light; two cars 20 m apart come from the left on their green and go straight on into the street the car turns into |
+| Four-way stop | Toronto, The Annex | Straight on through an all-way stop; a hesitant driver from the right stops first, a second car queues behind it, and an oncoming car turns left |
 
-Suite version 2 adds the merge and obstructed crossing; the unprotected left and right on red joined it later, at version 1. Each challenge separately versions
+Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red and four-way stop joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
 and snow challenges remain version 1; the rainy crossing is version 2 because its person
 now correctly waits for the approach trigger rather than starting during setup.

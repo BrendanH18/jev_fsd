@@ -311,6 +311,18 @@ gains nothing. This applies where the block before the turn continues the street
 the same lanes; where the lane count or layout changes at that junction, the route line still
 slides across inside it.
 
+At an all-way stop, vehicles go in the order they stopped at their lines (`static/js/sim/all-way.js`),
+for traffic and the driven car alike. A vehicle joins the order when it stops within 6 m of its
+line. Two that stop within a second of each other go right before left: the one on the right goes
+first, and from opposite sides a left turn waits for the other. From opposite sides, two vehicles
+that are not turning left go together, and so do two opposing left turns. A vehicle that has set
+off on its turn keeps the right of way until it is 6 m past the junction's centre. If everyone waits
+for someone (four cars stopping together), the first to stop goes. The driven car senses only the
+vehicles it can see, so it may go before a hidden one; the audit counts going out of turn as a
+failure to yield whether or not the car could see who stopped first. Decision models and LLMs get
+`intersection.priority` and a situation line. Turning left at a stop sign, once its stop is made and
+it is its turn, the car yields to oncoming traffic as at a signal.
+
 The decision inspector exposes requests, answers, confidence, timing and spend; decisions can
 be saved or copied as `curl` commands. The emergency brake responds to imminent observed
 collisions, not traffic-rule violations, so driving mistakes remain visible.
@@ -392,7 +404,7 @@ visual body pitch and roll do not add a physical suspension model. Buildings, we
 determine sensing; trees and vehicles do not occlude it, and individual street lamps do not extend
 detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car changes lanes only to pass and
 then returns, and to get into the lane for a turn. Where a street's lanes change at the junction
-before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Turning left or making a U-turn at a signal, the car yields to the oncoming traffic it can see, waiting at the line or inside the junction, but not on left turns at stop signs or junctions without a sign or signal, and it takes an oncoming car's left indicator at its word when that car is in its leftmost lane within 40 m of the junction (anywhere else, it may be a lane change; a car pulling out from the curb is waited for whatever it signals). It turns right on red after a full stop (except on the island of Montréal, judged from the map's centre against a coarse outline of the island), but only where it can see along the street to its left from the line: it does not creep forward to look, so at a corner a building hides it waits for the green, as it does in fog, rain, snow and after dark. Signs banning a right on red at a particular junction are not read from the map, and left turns on red from one one-way street onto another are not made. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
+before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Turning left or making a U-turn at a signal or a stop sign, the car yields to the oncoming traffic it can see, waiting at the line or inside the junction, but not at junctions without a sign or signal, and it takes an oncoming car's left indicator at its word when that car is in its leftmost lane within 40 m of the junction (anywhere else, it may be a lane change; a car pulling out from the curb is waited for whatever it signals). It turns right on red after a full stop (except on the island of Montréal, judged from the map's centre against a coarse outline of the island), but only where it can see along the street to its left from the line: it does not creep forward to look, so at a corner a building hides it waits for the green, as it does in fog, rain, snow and after dark. Signs banning a right on red at a particular junction are not read from the map, and left turns on red from one one-way street onto another are not made. At a two-way stop the car waits for traffic on the through road that it can see, but the audit does not count pulling out in front of it as a failure to yield. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
 against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information. No post or trunk stands in a lane or on the asphalt: where map topology would put one there (a slip road leaving a main road at a shallow angle, or a street continuing wider past a junction), it moves outward, a signal pole to the stop line's curb if the far side has no room, and otherwise is left out (across the twelve maps: 4 of 1,127 signal poles, 27 of 13,358 lamp posts, 11 street-sign and 2 stop-sign posts, and 4 trees).
 Low curbs remain traversable, and scenery beyond the playable map is decorative with simplified geography.
 
@@ -417,6 +429,7 @@ node --experimental-default-type=module scripts/test_lane_change.mjs
 node --experimental-default-type=module scripts/test_pull_out.mjs
 node --experimental-default-type=module scripts/test_left_turn.mjs
 node --experimental-default-type=module scripts/test_right_on_red.mjs
+node --experimental-default-type=module scripts/test_all_way_stop.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```

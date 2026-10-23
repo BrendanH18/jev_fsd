@@ -17,7 +17,7 @@ function fixture(type = 'stop') {
     intersections: [], stops: [], buildings: [] });
   const world = new World(map, { parked: 0, pedestrians: 0 });
   world.placeOnLane(map.lane('before', 0), 47.4);
-  world.route = { project(x) { return { s: x + 50, distance: 0, heading: 0 }; }, controls: [{ edge: 'controlled', control, sRoute: 52 }] };
+  world.route = { project(x) { return { s: x + 50, distance: 0, heading: 0 }; }, headingAt() { return 0; }, controls: [{ edge: 'controlled', control, sRoute: 52 }] };
   return world;
 }
 function tick(world, dt = 1 / 60) {

@@ -112,7 +112,7 @@ export function buildSnapshot(world, executing = null) {
     const frontS = p.s + FRONT;
     for (let k = 0; k < route.controls.length; k++) {
       const c = route.controls[k], control = c.control, next = route.controls[k + 1];
-      const leftTurn = control.type === "signal" && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
+      const leftTurn = (control.type === "signal" || control.type === "stop") && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
       // already through this one (a left turn stays in view until the car is past oncoming traffic,
       // unless the next control is coming up)
       if (c.sRoute + 12 < frontS && !(leftTurn && frontS < c.sJunction + JUNCTION_BOX_M && !(next && next.sRoute - frontS < NEXT_CONTROL_M))) continue;
@@ -139,15 +139,20 @@ export function buildSnapshot(world, executing = null) {
       }
       const stopMem = world.egoStop;
       const entered = bumperToLine < 0;
+      const stopCompleted = control.type === "stop" ? (stopMem.controlId === control.id && stopMem.completed) : null;
+      const priority = control.type === "stop" && control.all_way ? allWayPriority(world, control, visible) : null;
+      // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn
+      const turnNow = control.type === "stop" ? entered || (stopCompleted && !(priority?.arrived && !priority.go)) : entered || signal === "green" || signal === "yellow";
       snap.intersection = {
         id: control.id, control: control.type, signal, group: control.group || null,
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
         entered, turn: c.turn || "straight",
-        oncoming: leftTurn && (entered || signal === "green" || signal === "yellow") ? oncomingYield(world, c, frontS) : null,
+        oncoming: leftTurn && turnNow ? oncomingYield(world, c, frontS) : null,
         right_on_red: control.type === "signal" && map.rightOnRed && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
           ? rightOnRed(world, c, inter, frontS, visible) : null,
-        stop_completed: control.type === "stop" ? (stopMem.controlId === control.id && stopMem.completed) : null,
+        stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
+        priority,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
         cross_traffic_moving: crossTraffic,
         seconds_to_green: c.secondsToGreen ? c.secondsToGreen(world.t) : null,
@@ -301,6 +306,20 @@ function oncomingYield(world, c, frontS) {
   // too late to stop short of its path (not just of the wait point): carry on through
   if (!best || best.bumper_to_yield_m + ONCOMING_STOP_M < ego.v * ego.v / (2 * Math.min(4, comfort().hardDecel)) + 0.3) return null;
   return best;
+}
+
+// At an all-way stop (sim/all-way.js), the car's place in the queue as far as it can see: whether it
+// has stopped at the line and joined it (`arrived`), whether it is its turn (`go`), the vehicle it
+// waits for, and the vehicles already waiting there (`waiting`, before it arrives: they go first).
+// Only vehicles it can see take part, so it may go before a hidden one that stopped first.
+function allWayPriority(world, control, visible) {
+  const st = world.allWay.status(world.ego, world, (v) => visible.includes(v));
+  if (!st) {
+    const junction = world.map.stops.get(control.id)?.junction;
+    const queue = world.allWay.at(junction, world).filter((e) => e.vehicle !== world.ego && visible.includes(e.vehicle)).sort((a, b) => a.arrived - b.arrived);
+    return { arrived: false, go: false, wait_for: null, waiting: queue.map((e) => e.vehicle.id) };
+  }
+  return { arrived: true, go: st.go, wait_for: st.wait_for ? st.wait_for.id : null, waiting: st.before.map((v) => v.id) };
 }
 
 // Seconds for the car to cover `distance` taking a turn: speeding up from `v` at TURN_ACCEL to at
@@ -483,6 +502,7 @@ export function desiredSpeed(snap) {
     if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
   }
   if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) { v = 0; reasons.push("cross traffic"); }
+  if (waitsItsTurn(i)) { v = 0; reasons.push("waiting its turn"); }
   if (i && i.control === "yield" && !i.entered) {
     const entry = YIELD_ENTRY_MPS * Math.sqrt(decel / 2.5);
     // roundabout: stop at the line for traffic in the ring, otherwise enter at a walking-plus pace
@@ -505,6 +525,12 @@ export function desiredSpeed(snap) {
     if (vd < v) { v = vd; reasons.push("destination"); }
   }
   return { v: Math.max(0, v), reasons };
+}
+
+// Stopped at an all-way stop, waiting for a vehicle that goes first (a car that overshot the line
+// still waits there; one well into the junction is clearing it).
+export function waitsItsTurn(i) {
+  return !!(i && i.control === "stop" && i.stop_completed && i.priority?.arrived && !i.priority.go && i.bumper_to_line_m > -CLEARING_M);
 }
 
 // Include one second of sensing, decision and actuator delay in the stopping envelope.

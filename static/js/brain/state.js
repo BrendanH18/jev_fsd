@@ -5,7 +5,7 @@ import { r1 } from "../common.js";
 import { speedVsTarget } from "./candidates.js";
 import { STOP_ZONE_M } from "../sim/signals.js";
 import { current as weather } from "../sim/weather.js";
-import { CLEARING_M } from "./sensors.js";
+import { CLEARING_M, waitsItsTurn } from "./sensors.js";
 
 export const DEFAULT_STYLE = "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly";
 const PREAMBLE = "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`.";
@@ -69,7 +69,12 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(i.control === "stop" ? { stop_completed: i.stop_completed, all_way: i.all_way } : {}),
       ...(i.control === "yield" ? { roundabout: true, ring_traffic: i.cross_traffic_moving } : { cross_traffic_moving: i.cross_traffic_moving }),
     };
-    if (i.control === "signal" && (i.turn === "left" || i.turn === "uturn" || i.right_on_red)) state.intersection.turn = i.turn;
+    if ((i.control === "signal" || i.control === "stop") && (i.turn === "left" || i.turn === "uturn" || i.right_on_red)) state.intersection.turn = i.turn;
+    if (i.priority) {
+      const p = i.priority;
+      state.intersection.priority = p.arrived ? { stopped_at_line: true, your_turn: p.go, ...(p.wait_for ? { wait_for: p.wait_for } : {}), ...(p.waiting.length ? { goes_first: p.waiting } : {}) }
+        : { stopped_at_line: false, ...(p.waiting.length ? { waiting_at_junction: p.waiting } : {}) };
+    }
     if (i.right_on_red) {
       const r = i.right_on_red, w = r.wait_for;
       state.intersection.right_on_red = { allowed: true, stop_completed: r.stop_completed, clear: r.clear, ...(w ? { wait_for: w.id || w.kind } : {}) };
@@ -126,13 +131,19 @@ export function situationClauses(snap) {
     else if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
-    if (i.oncoming) {
-      const o = i.oncoming, w = Math.max(0, Math.round(o.bumper_to_yield_m));
-      out.push(`The car turns ${i.turn === "uturn" ? "around" : "left"} here and oncoming traffic has the right of way: \`${o.id}\` reaches the junction in ${r1(o.eta_s)} s, too soon for the car to turn in front of it (it needs ${r1(o.need_s)} s). ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_oncoming\`).`}`);
-    }
+    if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
-    if (!i.stop_completed) out.push(atLine ? "The car is at the stop line and the stop is not completed yet: hold still until it is." : `A stop sign is ${m} m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear.`);
-    else out.push(i.cross_traffic_moving ? "The stop is completed but cross traffic is moving through the junction: hold until it is clear." : "The stop is completed and no crossing traffic is visible: check sight lines before proceeding.");
+    const p = i.priority;
+    if (!i.stop_completed) {
+      if (!p) out.push(atLine ? "The car is at the stop line and the stop is not completed yet: hold still until it is." : `A stop sign is ${m} m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear.`);
+      else {
+        const first = p.waiting.length ? ` ${p.waiting.map((id) => `\`${id}\``).join(", ")} stopped at ${p.waiting.length > 1 ? "their lines" : "its line"} before the car and ${p.waiting.length > 1 ? "go" : "goes"} first.` : "";
+        out.push(atLine ? `The car is at the line of an all-way stop and the stop is not completed yet: hold still until it is. Vehicles go in the order they stopped at their lines.${first}` : `An all-way stop is ${m} m ahead: keep rolling toward it and come to a full stop at the line. Vehicles go in the order they stopped at their lines, and one that stops at the same time on the car's right goes first.${first}`);
+      }
+    } else if (waitsItsTurn(i)) out.push(`The car has stopped at an all-way stop and it is not its turn: \`${p.wait_for}\` goes first, because it stopped first or stopped at the same time on the car's right (or ahead, when the car turns left). Hold still until it has gone.`);
+    else if (i.cross_traffic_moving) out.push("The stop is completed but cross traffic is moving through the junction: hold until it is clear.");
+    else out.push(p ? "The car has stopped at an all-way stop and it is its turn: go when the junction is clear." : "The stop is completed and no crossing traffic is visible: check sight lines before proceeding.");
+    if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "yield") {
     const exit = snap.nav && snap.nav.exit ? ` and take exit ${snap.nav.exit}` : "";
     if (i.entered) out.push(`The car is in a roundabout: keep circulating counter-clockwise${exit}.`);
@@ -169,6 +180,12 @@ export function situationClauses(snap) {
   return out;
 }
 
+// Turning left (or around) with oncoming traffic coming, at a signal or a stop sign.
+function oncomingClause(i) {
+  const o = i.oncoming, w = Math.max(0, Math.round(o.bumper_to_yield_m));
+  return `The car turns ${i.turn === "uturn" ? "around" : "left"} here and oncoming traffic has the right of way: \`${o.id}\` reaches the junction in ${r1(o.eta_s)} s, too soon for the car to turn in front of it (it needs ${r1(o.need_s)} s). ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_oncoming\`).`}`;
+}
+
 // A red light where the car turns right and a right turn on red is allowed after a full stop.
 function rightOnRedClause(i, m, atLine) {
   const r = i.right_on_red, w = r.wait_for;
@@ -195,12 +212,14 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const waitLeft = snap.intersection?.oncoming ? ", when the car is turning left and has reached the point where it waits for oncoming traffic (`intersection.oncoming.wait_in_m` under 2)" : "";
     // A red light the car may turn right on is a reason to hold still only while the turn is not clear.
     const redOk = snap.intersection?.right_on_red?.go ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)" : "";
+    // Likewise waiting its turn at an all-way stop.
+    const turnWait = waitsItsTurn(snap.intersection) ? ", when the car has stopped at an all-way stop and it is not its turn (`intersection.priority.your_turn` is false)" : "";
     questions.motion = {
       type: "choice",
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}, when the path directly ahead is blocked, or when the car has reached the destination.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}, when the path directly ahead is blocked, or when the car has reached the destination.`,
       },
     };
   } else {

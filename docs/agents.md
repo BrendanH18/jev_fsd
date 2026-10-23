@@ -253,7 +253,7 @@ it and reload the page. The system message explains the input and says *when* ea
 manoeuvre is correct. The user message is the same decision state Jev receives, as compact JSON:
 the driving style, the plain-language situation rules, observed speeds, gaps, signals, traffic
 and pedestrians, the lanes on multi-lane streets (which lane the car and its route are in, the gaps
-beside it, and how far it has to return or get into the lane for a turn), on a left turn at a signal the oncoming vehicle it must wait for (`intersection.oncoming`), on a right turn at a red light whether it may turn on red (`intersection.right_on_red`: the full stop made, the way clear, and what it waits for), the eligible candidates with their 3-second predictions
+beside it, and how far it has to return or get into the lane for a turn), on a left turn at a signal or a stop sign the oncoming vehicle it must wait for (`intersection.oncoming`), at an all-way stop its place in the order (`intersection.priority`: whether it has stopped at the line, whether it is its turn, and who goes first), on a right turn at a red light whether it may turn on red (`intersection.right_on_red`: the full stop made, the way clear, and what it waits for), the eligible candidates with their 3-second predictions
 (`end_speed`, `vs_target`, `progress_m`, comfort, clearance, `outcome`), the definitions of `drive` and `stop`
 when that question is asked, and the ids it may answer with. Computed targets such as
 `car.target_speed` and each candidate's `vs_target` are handed over, so the model never needs
