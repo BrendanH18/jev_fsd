@@ -20,7 +20,15 @@
   Decision models and LLMs get `intersection.priority` (whether the car has stopped at the line,
   whether it is its turn, whom it waits for and who goes first) and a situation line, the motion
   criteria allow holding still while it is not the car's turn, and manoeuvres that cross the line
-  then are rejected (`fails_to_yield`).
+  then are rejected (`fails_to_yield`). In the seeded V8 benchmark Rules passes 69 of 70 routes
+  (70 before): Kitsilano still passes 48 of 48 across four weathers, and the city smoke suites
+  21 of 22 (22 before). Toronto dry `s1-2` now times out at 310.4 s after 146 m, where it arrived
+  at 165.5 s before: sensing retains a left-turn stop already behind the car, and the deadlock
+  detector treats it as a legitimate wait, suppressing the recovery that previously let it
+  continue. Toronto's four deadlock overrides become zero alongside the timeout; Ottawa's three
+  are unchanged. No suite has a collision, red-light violation, stop-sign violation or failure
+  to yield. This record is V8 only (Node v24.19.0); WebKit was not run. See
+  [docs/rules-baseline.md](docs/rules-baseline.md).
 
 - Turning left (or making a U-turn) at a stop sign, the driven car yields to oncoming traffic as at
   a signal, once its stop is made and it is its turn: it waits short of the oncoming lane for a
