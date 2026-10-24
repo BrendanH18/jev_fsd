@@ -12,6 +12,7 @@ import { PREPARE_LANE_M } from "../map/route.js";
 import { pointAt } from "../map/mapdata.js";
 import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
+import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
@@ -69,6 +70,24 @@ const RTOR_CONE = Math.PI / 4;
 const RTOR_LOOK_M = 150;
 const RTOR_WALK_S = 4;
 const RTOR_PAST_M = 20;
+// Giving way at a two-way stop, once the stop is made, and at a junction without a sign or signal
+// (sim/priority.js). The car waits for a vehicle with the right of way over it that would reach the
+// junction (within 6 m of its centre) before the car has crossed it (its rear past the far side of
+// the widest crossing road, pulling away at 2 m/s^2 up to its street's limit, or at most 6 m/s
+// turning) plus 1.5 s, or 2 s from a stop; for anything moving across the junction; and for any
+// vehicle crossing its path due there within 2 s, whoever has the right of way. Within 40 m of the
+// line it also looks along each street with the right of way over it, as far as that traffic
+// covers in the same time (at its street's limit, slowed for the weather), within what it can see
+// at all (so fog and darkness shorten the look rather than rule the junction out). Where a building
+// hides that view, it slows so it can stop, then creeps forward at 1.5 m/s to look, no further than
+// 0.3 m short of the crossing road's asphalt. Stopped there (within 1 m of it), it goes once nothing
+// it can see is coming. Past that point it has committed and carries on.
+const GIVE_WAY_MARGIN_S = 1.5;
+const GIVE_WAY_REST_S = 2.0;
+const IMMEDIATE_S = 2.0;
+const VIEW_CHECK_M = 40;
+const VIEW_STEP_M = 5;
+export const PEEK_MPS = 1.5;
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -112,7 +131,7 @@ export function buildSnapshot(world, executing = null) {
     const frontS = p.s + FRONT;
     for (let k = 0; k < route.controls.length; k++) {
       const c = route.controls[k], control = c.control, next = route.controls[k + 1];
-      const leftTurn = (control.type === "signal" || control.type === "stop") && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
+      const leftTurn = (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
       // already through this one (a left turn stays in view until the car is past oncoming traffic,
       // unless the next control is coming up)
       if (c.sRoute + 12 < frontS && !(leftTurn && frontS < c.sJunction + JUNCTION_BOX_M && !(next && next.sRoute - frontS < NEXT_CONTROL_M))) continue;
@@ -141,8 +160,12 @@ export function buildSnapshot(world, executing = null) {
       const entered = bumperToLine < 0;
       const stopCompleted = control.type === "stop" ? (stopMem.controlId === control.id && stopMem.completed) : null;
       const priority = control.type === "stop" && control.all_way ? allWayPriority(world, control, visible) : null;
-      // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn
-      const turnNow = control.type === "stop" ? entered || (stopCompleted && !(priority?.arrived && !priority.go)) : entered || signal === "green" || signal === "yellow";
+      // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn;
+      // without a sign or signal, always
+      const turnNow = control.type === "stop" ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
+        : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow";
+      const giveWay = (control.type === "uncontrolled" && control.rule !== "major") || (control.type === "stop" && !control.all_way && stopCompleted)
+        ? giveWayAt(world, c, frontS) : null;
       snap.intersection = {
         id: control.id, control: control.type, signal, group: control.group || null,
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
@@ -152,7 +175,9 @@ export function buildSnapshot(world, executing = null) {
           ? rightOnRed(world, c, inter, frontS, visible) : null,
         stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
+        rule: control.type === "uncontrolled" ? control.rule : null,
         priority,
+        give_way: giveWay,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
         cross_traffic_moving: crossTraffic,
         seconds_to_green: c.secondsToGreen ? c.secondsToGreen(world.t) : null,
@@ -323,11 +348,11 @@ function allWayPriority(world, control, visible) {
 }
 
 // Seconds for the car to cover `distance` taking a turn: speeding up from `v` at TURN_ACCEL to at
-// most TURN_MPS (holding its speed if already faster).
-function clearTime(v, distance) {
-  const v0 = Math.min(Math.max(0, v), TURN_MPS);
-  const t1 = (TURN_MPS - v0) / TURN_ACCEL, d1 = (v0 + TURN_MPS) / 2 * t1;
-  return d1 >= distance ? (Math.sqrt(v0 * v0 + 2 * TURN_ACCEL * distance) - v0) / TURN_ACCEL : t1 + (distance - d1) / TURN_MPS;
+// most `vMax` (holding its speed if already faster).
+function clearTime(v, distance, vMax = TURN_MPS) {
+  const v0 = Math.min(Math.max(0, v), vMax);
+  const t1 = (vMax - v0) / TURN_ACCEL, d1 = (v0 + vMax) / 2 * t1;
+  return d1 >= distance ? (Math.sqrt(v0 * v0 + 2 * TURN_ACCEL * distance) - v0) / TURN_ACCEL : t1 + (distance - d1) / vMax;
 }
 
 // Seconds until a vehicle covers `distance`: at its speed, or, while it speeds up, accelerating as it
@@ -385,11 +410,8 @@ function rightOnRed(world, c, inter, frontS, visible) {
     for (const a of inter.approaches) {
       const e = map.edges.get(a.edge);
       if (!e || e.id === c.edge || !fromLeft(map.headingIn(e.id))) continue;
-      const far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * need, L = e.cum[e.cum.length - 1], h = map.headingOut(e.id);
-      const at = (back) => {
-        const [x, y] = pointAt(e.pts, e.cum, Math.max(0, L - back)), beyond = Math.max(0, back - L);
-        return [x - Math.cos(h) * beyond, y - Math.sin(h) * beyond];
-      };
+      const far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * need;
+      const at = (back) => alongApproach(map, e, back);
       const reach = DAYLIGHT_RANGE_M - 1;
       for (let k = 1, last = 0; k <= 4; k++) {
         let back = far * k / 4, p = at(back);
@@ -405,6 +427,86 @@ function rightOnRed(world, c, inter, frontS, visible) {
       }
     }
   }
+  return out;
+}
+
+// The point `back` metres before the end of street `e`, back along it and then straight on past its
+// start.
+function alongApproach(map, e, back) {
+  const L = e.cum[e.cum.length - 1], h = map.headingOut(e.id);
+  const [x, y] = pointAt(e.pts, e.cum, Math.max(0, L - back)), beyond = Math.max(0, back - L);
+  return [x - Math.cos(h) * beyond, y - Math.sin(h) * beyond];
+}
+
+// Giving way at a two-way stop or a junction without a sign or signal (see GIVE_WAY_MARGIN_S). The
+// rule the car's street follows there ("stop", "minor" or "equal"), the first vehicle it must wait
+// for (`wait_for`: one with the right of way, one due within 2 s, or one moving across the
+// junction), whether it can see far enough along the streets with the right of way over it
+// (`view_clear`, null further out than 40 m) and how far it can see along them (`sight_m`), where it
+// would stop to look (`peek_s_route`), whether it has stopped there (`peeked`), and where its front
+// bumper must stop now (`hold_s_route`, with `bumper_to_hold_m`), null when it may go (`go`).
+// Only vehicles it can see count, and only where they are: not where they plan to go.
+function giveWayAt(world, c, frontS) {
+  const { ego, route, map } = world;
+  const edge = map.edges.get(c.edge), node = edge.to, centre = c.junction;
+  const rule = c.control.type === "stop" ? "stop" : c.control.rule;
+  const sCentre = c.sJunction ?? c.sRoute + 8;
+  const half = map.crossingHalfWidth(c.edge);
+  const peekS = c.sPeek;
+  const out = { rule, wait_for: null, need_s: null, view_clear: null, sight_m: null, peek_s_route: peekS, peeked: false, hold_s_route: null, bumper_to_hold_m: null, go: true };
+  if (!centre || frontS > peekS + 0.5) return out;
+  const turning = c.turn === "left" || c.turn === "right" || c.turn === "uturn";
+  const vMax = turning ? TURN_MPS : Math.max(TURN_MPS, (edge.limit || 11.2) * weather.speed);
+  const need = clearTime(ego.v, Math.max(0, sCentre + half - frontS) + ego.spec.length, vMax) + (ego.v > 1.5 ? GIVE_WAY_MARGIN_S : GIVE_WAY_REST_S);
+  out.need_s = need;
+  const inward = route.headingAt(c.sRoute), exit = route.headingAt(Math.min(route.length, sCentre + 15));
+  for (const n of world.npcs) {
+    if (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) continue;
+    const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
+    if (d > ONCOMING_LOOK_M || !world.visibility.sees(ego, n)) continue;
+    const rel = wrap(n.psi - inward);
+    if (d < JUNCTION_BOX_M) {
+      // moving across the junction (not coming straight on toward the car, and heading the car's way
+      // out of it only short of the centre: one just ahead of it, gone the same way, is a leader)
+      const along = Math.abs(wrap(n.psi - exit)) <= Math.PI / 6, beforeCentre = dx * Math.cos(exit) + dy * Math.sin(exit) > 0;
+      if (Math.abs(rel) > Math.PI / 6 && Math.abs(rel) < Math.PI * 5 / 6 && (!along || beforeCentre)) { out.wait_for = { kind: "junction", id: n.id }; break; }
+      continue;
+    }
+    if (Math.abs(rel) < Math.PI / 6 || Math.abs(rel) > Math.PI * 5 / 6) continue;
+    if ((dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6) < 0.3) continue;
+    // brake lights: stopping short of the junction (giving way to the car, say)
+    if (n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
+    const eta = etaOf(world, n, d - JUNCTION_BOX_M / 2);
+    // the street it is on (from the lane it is in, not where it plans to go); a vehicle between
+    // streets has the right of way over a stop sign or a smaller road, and from the right
+    const a = approachTo(map, n, node, false);
+    const first = a ? outranks(map, a.edge, c.edge) : rule !== "equal" || rel > 0;
+    if ((first && eta < need) || eta < IMMEDIATE_S) { out.wait_for = { kind: "vehicle", id: n.id, eta_s: eta }; break; }
+  }
+  // stopped where it looks from, now or since it last stopped there
+  const atPeek = (frontS >= peekS - PEEK_AT_M && Math.abs(ego.v) < 0.2) || world.egoPeek === c.control.id;
+  if (!out.wait_for && c.sRoute - frontS < VIEW_CHECK_M) {
+    out.view_clear = true;
+    for (const id of map.inn.get(node) || []) {
+      if (!outranks(map, id, c.edge)) continue;
+      const e = map.edges.get(id), far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * weather.speed * need;
+      let last = 0, blocked = false;
+      for (let back = JUNCTION_BOX_M / 2; ; back += VIEW_STEP_M) {
+        const b = Math.min(back, far), p = alongApproach(map, e, b);
+        // as far as the car can see at all, in this weather and light
+        if (Math.hypot(p[0] - ego.x, p[1] - ego.y) > world.visibility.rangeAt(ego, ...p)) break;
+        if (world.visibility.occluded([ego.x, ego.y], p)) { blocked = true; break; }
+        last = b;
+        if (b >= far) break;
+      }
+      // (how far it sees along the street it cannot see far enough along)
+      if (blocked) { out.view_clear = false; out.sight_m = out.sight_m === null ? last : Math.min(out.sight_m, last); }
+    }
+    out.peeked = !out.view_clear && atPeek;
+  }
+  out.hold_s_route = out.wait_for ? (frontS < c.sRoute - 0.3 ? c.sRoute : peekS) : out.view_clear === false && !out.peeked ? peekS : null;
+  if (out.hold_s_route !== null) out.bumper_to_hold_m = out.hold_s_route - frontS;
+  out.go = out.hold_s_route === null;
   return out;
 }
 
@@ -503,6 +605,16 @@ export function desiredSpeed(snap) {
   }
   if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) { v = 0; reasons.push("cross traffic"); }
   if (waitsItsTurn(i)) { v = 0; reasons.push("waiting its turn"); }
+  // giving way at a two-way stop or a junction without a sign: stop where it must; to look along a
+  // street it cannot see, slow so it can stop, then, from the stop zone before the line, creep up to
+  // the point it looks from
+  const g = i?.give_way;
+  if (g && g.bumper_to_hold_m !== null) {
+    const room = g.bumper_to_hold_m;
+    const vg = g.wait_for ? (room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel))
+      : room < PEEK_AT_M ? 0 : i.bumper_to_line_m < STOP_ZONE_M ? PEEK_MPS : Math.max(PEEK_MPS, stopSpeedFor(room - 0.3, decel));
+    if (vg < v) { v = vg; reasons.push(g.wait_for ? "giving way" : "looking for traffic"); }
+  }
   if (i && i.control === "yield" && !i.entered) {
     const entry = YIELD_ENTRY_MPS * Math.sqrt(decel / 2.5);
     // roundabout: stop at the line for traffic in the ring, otherwise enter at a walking-plus pace

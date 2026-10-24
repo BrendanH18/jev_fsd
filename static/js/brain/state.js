@@ -15,6 +15,7 @@ const laneLabel = (d) => Math.abs(d) < 0.3 ? "centered" : Math.abs(d) < 0.8 ? `s
 const distLabel = (m) => m < STOP_ZONE_M ? "at" : m < 25 ? "close" : m < 60 ? "approaching" : "far";
 const speedVsLimit = (v, limit) => v > limit + 0.5 ? "over" : v > limit - 1 ? "at" : "under";
 const laneName = (index, count) => count === 2 ? (index === 0 ? "left" : "right") : index === 0 ? "left" : index === count - 1 ? "right" : count === 3 ? "middle" : `lane ${index + 1} from the left`;
+const RIGHT_OF_WAY = { equal: "no sign: give way to traffic from the right", minor: "no sign: give way to the larger road", major: "no sign: the car's road has the right of way" };
 const passing = (snap) => snap.lane && Object.values(snap.lane.sides).find((side) => side.offer === "pass" && side.gap_ok);
 
 export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
@@ -69,7 +70,14 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(i.control === "stop" ? { stop_completed: i.stop_completed, all_way: i.all_way } : {}),
       ...(i.control === "yield" ? { roundabout: true, ring_traffic: i.cross_traffic_moving } : { cross_traffic_moving: i.cross_traffic_moving }),
     };
-    if ((i.control === "signal" || i.control === "stop") && (i.turn === "left" || i.turn === "uturn" || i.right_on_red)) state.intersection.turn = i.turn;
+    if (i.control === "uncontrolled") state.intersection.right_of_way = RIGHT_OF_WAY[i.rule];
+    if ((i.control === "signal" || i.control === "stop" || i.control === "uncontrolled") && (i.turn === "left" || i.turn === "uturn" || i.right_on_red)) state.intersection.turn = i.turn;
+    if (i.give_way) {
+      const g = i.give_way;
+      state.intersection.give_way = { clear: g.go, ...(g.wait_for ? { wait_for: g.wait_for.id || g.wait_for.kind } : {}),
+        ...(g.view_clear === false ? { view: g.peeked ? "hidden, looked from as far forward as it can go" : "hidden by buildings", sees_m: r1(g.sight_m) } : {}),
+        ...(g.bumper_to_hold_m !== null ? { stop_in_m: r1(Math.max(0, g.bumper_to_hold_m)) } : {}) };
+    }
     if (i.priority) {
       const p = i.priority;
       state.intersection.priority = p.arrived ? { stopped_at_line: true, your_turn: p.go, ...(p.wait_for ? { wait_for: p.wait_for } : {}), ...(p.waiting.length ? { goes_first: p.waiting } : {}) }
@@ -142,7 +150,15 @@ export function situationClauses(snap) {
       }
     } else if (waitsItsTurn(i)) out.push(`The car has stopped at an all-way stop and it is not its turn: \`${p.wait_for}\` goes first, because it stopped first or stopped at the same time on the car's right (or ahead, when the car turns left). Hold still until it has gone.`);
     else if (i.cross_traffic_moving) out.push("The stop is completed but cross traffic is moving through the junction: hold until it is clear.");
-    else out.push(p ? "The car has stopped at an all-way stop and it is its turn: go when the junction is clear." : "The stop is completed and no crossing traffic is visible: check sight lines before proceeding.");
+    else if (p) out.push("The car has stopped at an all-way stop and it is its turn: go when the junction is clear.");
+    else out.push(giveWayClause(i, "The stop is completed", "the through road"));
+    if (i.oncoming) out.push(oncomingClause(i));
+  } else if (i && i.control === "uncontrolled") {
+    if (i.rule === "major") out.push(`The junction ${m} m ahead has no sign or signal, and the car's road has the right of way there.`);
+    else {
+      const who = i.rule === "equal" ? "traffic coming from the right" : "traffic on the larger road";
+      out.push(giveWayClause(i, `The junction ${m} m ahead has no sign or signal, so the car gives way to ${who} and to anything already in the junction`, who));
+    }
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "yield") {
     const exit = snap.nav && snap.nav.exit ? ` and take exit ${snap.nav.exit}` : "";
@@ -180,6 +196,18 @@ export function situationClauses(snap) {
   return out;
 }
 
+// Giving way at a two-way stop once the stop is made, or at a junction without a sign or signal.
+function giveWayClause(i, lead, who) {
+  const g = i.give_way;
+  if (!g || g.go) return `${lead}${g?.peeked ? "; the car has crept forward as far as it can to look, and nothing it can see is coming" : g && g.view_clear === false ? "" : ", and nothing it can see would reach the junction before the car can cross it"}: go when the junction is clear.`;
+  const at = g.bumper_to_hold_m < 2;
+  if (g.wait_for) {
+    const what = g.wait_for.kind === "junction" ? `\`${g.wait_for.id}\` is crossing the junction` : `\`${g.wait_for.id}\` has the right of way, or is too close to stop, and would reach the junction before the car could cross it`;
+    return `${lead}, but ${what}: ${at ? "hold still until it has passed" : `slow down and stop ${Math.round(g.bumper_to_hold_m)} m ahead until it has passed${g.hold_s_route > i.s_line_route ? " (`wait_to_give_way`)" : ""}`}.`;
+  }
+  return `${lead}, but buildings hide ${who} beyond ${Math.round(g.sight_m)} m: slow down so the car can stop, and creep forward to look (\`creep_to_look\`), stopping ${Math.round(Math.max(0, g.bumper_to_hold_m))} m ahead if it still cannot see.`;
+}
+
 // Turning left (or around) with oncoming traffic coming, at a signal or a stop sign.
 function oncomingClause(i) {
   const o = i.oncoming, w = Math.max(0, Math.round(o.bumper_to_yield_m));
@@ -214,12 +242,14 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const redOk = snap.intersection?.right_on_red?.go ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)" : "";
     // Likewise waiting its turn at an all-way stop.
     const turnWait = waitsItsTurn(snap.intersection) ? ", when the car has stopped at an all-way stop and it is not its turn (`intersection.priority.your_turn` is false)" : "";
+    // And giving way at a junction, once the car has reached the point where it waits.
+    const giveWait = snap.intersection?.give_way?.wait_for ? ", when the car gives way at a junction and has reached the point where it waits (`intersection.give_way.stop_in_m` under 2)" : "";
     questions.motion = {
       type: "choice",
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}, when the path directly ahead is blocked, or when the car has reached the destination.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}, when the path directly ahead is blocked, or when the car has reached the destination.`,
       },
     };
   } else {

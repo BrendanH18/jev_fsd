@@ -6,6 +6,14 @@ import { timingPlan } from "../sim/signals.js";
 
 const CELL = 50;
 const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
+// As where jev/osm/controls.py puts a stop sign's line: just short of the widest crossing road's
+// curb, leaving room for a crosswalk, and at least 4 m before the junction.
+const STOP_LINE_SETBACK_M = 4.0;
+const CURB_CLEARANCE_M = 3.4;
+// Road classes by importance, for junctions without a sign or signal: a road of a lower class gives
+// way to one of a higher class (primary and secondary roads, then tertiary, then everything else).
+const CLASS_RANK = { primary: 3, primary_link: 3, secondary: 3, secondary_link: 3, tertiary: 2, tertiary_link: 2 };
+export const roadRank = (e) => CLASS_RANK[e.cls] || 1;
 // A right turn on a red light, after a full stop, is legal across Canada except on the island of
 // Montréal. A coarse outline of the island (lon, lat), good to a few hundred metres at the shore.
 const MONTREAL_ISLAND = [[-73.985, 45.43], [-73.95, 45.40], [-73.86, 45.42], [-73.74, 45.43], [-73.68, 45.43], [-73.62, 45.42],
@@ -238,6 +246,60 @@ export class MapData {
   }
 
   controlOf(edgeId) { return this.edges.get(edgeId).control || null; }
+
+  // Half the asphalt width of the widest other road meeting this edge's end (as in
+  // jev/osm/controls.py).
+  crossingHalfWidth(edgeId) {
+    const e = this.edges.get(edgeId);
+    let widest = 0;
+    for (const id of [...(this.inn.get(e.to) || []), ...(this.out.get(e.to) || [])]) {
+      const o = this.edges.get(id);
+      if ((o.from === e.from && o.to === e.to) || (o.from === e.to && o.to === e.from)) continue;
+      widest = Math.max(widest, Math.abs(o.asphalt[0]), Math.abs(o.asphalt[1]));
+    }
+    return widest;
+  }
+
+  // Right of way where an edge without a sign or signal meets a junction (three or more streets,
+  // not a signal's junction or a roundabout), or null. `rule` is "minor" when it gives way to a
+  // street of a higher class without a sign; "equal" when a street of the same class without a sign
+  // crosses it, or every street there is of the same class and nobody has a sign, so traffic gives
+  // way to the right; otherwise "major": it has the right of way over the junction's other streets,
+  // which have stop signs (a two-way stop's through road) or are of a lower class. `s_line` is where a stop line would be. An edge too short for one is a link inside a
+  // junction mapped as several nodes, and has none.
+  priorityOf(edgeId) {
+    if (!this._priority) this._priority = new Map();
+    if (!this._priority.has(edgeId)) this._priority.set(edgeId, this.priorityRule(edgeId));
+    return this._priority.get(edgeId);
+  }
+
+  priorityRule(edgeId) {
+    const e = this.edges.get(edgeId);
+    if (!e || e.control || e.ring) return null;
+    const node = e.to;
+    if (!this._junctionSkip) {
+      this._junctionSkip = new Set();
+      // a signal's own vertices, not where its approaches start (which may be another junction)
+      for (const inter of this.intersections.values()) {
+        for (const v of inter.vertices || []) this._junctionSkip.add(v);
+        for (const a of inter.approaches || []) { const to = this.edges.get(a.edge)?.to; if (to) this._junctionSkip.add(to); }
+      }
+      for (const rb of this.roundabouts.values()) for (const v of rb.vertices || []) this._junctionSkip.add(v);
+    }
+    if (this._junctionSkip.has(node)) return null;
+    const inn = (this.inn.get(node) || []).map((id) => this.edges.get(id));
+    const neighbours = new Set([...inn.map((o) => o.from), ...(this.out.get(node) || []).map((id) => this.edges.get(id).to)]);
+    if (neighbours.size < 3 || inn.some((o) => o.ring)) return null;
+    const setback = Math.max(STOP_LINE_SETBACK_M, this.crossingHalfWidth(edgeId) + CURB_CLEARANCE_M);
+    if (e.length < setback + 2) return null;
+    // (streets with a stop sign give way whatever their class; one of the same class without a sign
+    // crossing this one makes them give way to each other from the right)
+    const rank = roadRank(e), others = inn.filter((o) => o !== e), free = others.filter((o) => !o.control);
+    const crossing = (o) => { const d = Math.abs(wrapAngle(this.headingIn(o.id) - this.headingIn(edgeId))); return d >= Math.PI / 6 && d <= Math.PI * 5 / 6; };
+    const rule = free.some((o) => roadRank(o) > rank) ? "minor"
+      : free.some((o) => roadRank(o) === rank && crossing(o)) || (free.length === others.length && !free.some((o) => roadRank(o) < rank)) ? "equal" : "major";
+    return { type: "uncontrolled", id: `junction:${node}`, s_line: Math.round((e.length - setback) * 100) / 100, rule, junction: node };
+  }
 }
 
 function cellsOf(pts) {

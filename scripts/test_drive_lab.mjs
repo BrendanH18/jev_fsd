@@ -14,7 +14,7 @@ const { rng } = await import("../static/js/common.js");
 const { validAgentChoice, registerAgent } = await import("../static/js/brain/registry.js");
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
-const names = { kitsilano: "623b012bc8b5", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438" };
+const names = { kitsilano: "623b012bc8b5", mount_pleasant: "7165f1c807a8", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438" };
 const load = id => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url))));
 let assertions = 0;
 function test(name, fn) { fn(); assertions++; console.log(`✓ ${name}`); }
@@ -53,6 +53,11 @@ for (const challenge of CHALLENGES) {
     if (challenge.hazard === "all-way") {
       assert.equal(control.type, "stop"); assert.ok(control.all_way); assert.equal(a.route.turns.length ? a.route.turns[0].dir : "straight", "straight");
       assert.deepEqual(a.allWay.map(c => map.stops.get(map.edges.get(c.edge).control.id).junction), a.allWay.map(() => map.stops.get(control.id).junction));
+    }
+    if (challenge.hazard === "two-way") {
+      assert.equal(control.type, "stop"); assert.ok(!control.all_way); assert.equal(a.route.turns.length ? a.route.turns[0].dir : "straight", "straight");
+      assert.deepEqual(a.twoWay.map(c => map.edges.get(c.edge).to), a.twoWay.map(() => map.edges.get(a.start.edge).to));
+      assert.deepEqual(a.twoWay.map(c => map.priorityOf(c.edge).rule), ["major", "major"]);
     }
     if (challenge.hazard === "cross") {
       assert.equal(control.type, "signal"); assert.equal(a.route.turns[0].dir, "right"); assert.ok(map.rightOnRed);
@@ -156,6 +161,28 @@ for (const challenge of CHALLENGES.filter(c => ["pedestrian", "occluded-pedestri
     assert.deepEqual(entered.slice(0, 2), ["challenge_right_1", "ego"]);
     assert.equal(world.violations.failed_to_yield, 0); assert.equal(world.violations.stop_signs_run, 0); assert.equal(world.violations.collisions, 0);
     assert.equal(entered.length, 4, entered.join(" "));
+  });
+}
+
+{
+  const challenge = CHALLENGES.find(c => c.hazard === "two-way"), ctx = setupChallenge(load(challenge.map), challenge), { world, fleet } = ctx;
+  const node = world.map.nodes.get(world.map.edges.get(ctx.scenario.start.edge).to);
+  const waitedFor = new Set(), entered = [];
+  let crept = false, hidden = false;
+  while (world.t < 60 && ctx.autopilot.enabled && world.route && entered.length < 3) {
+    stepWorld(ctx, 1 / 60, world.t * 1000); if (ctx.autopilot.firing) await ctx.autopilot.firing;
+    const g = ctx.autopilot.snap?.intersection?.give_way;
+    if (g?.wait_for?.id) waitedFor.add(g.wait_for.id);
+    if (g?.view_clear === false) hidden = true;
+    if (ctx.autopilot.executing?.candidate?.id === "creep_to_look") crept = true;
+    for (const n of [world.ego, ...fleet.vehicles]) if (Math.hypot(n.front[0] - node.x, n.front[1] - node.y) < 5 && !entered.includes(n.id ?? "ego")) entered.push(n.id ?? "ego");
+  }
+  test("blind corner: the car stops, creeps forward to see past the building, and waits for through traffic from both sides", () => {
+    assert.deepEqual(world.challenge.twoWayIds, ["challenge_through_right", "challenge_through_left"]);
+    assert.ok(hidden && crept);
+    assert.deepEqual([...waitedFor].filter(id => id.startsWith("challenge")), world.challenge.twoWayIds);
+    assert.deepEqual(entered, ["challenge_through_right", "challenge_through_left", "ego"]);
+    assert.equal(world.violations.failed_to_yield, 0); assert.equal(world.violations.stop_signs_run, 0); assert.equal(world.violations.collisions, 0);
   });
 }
 

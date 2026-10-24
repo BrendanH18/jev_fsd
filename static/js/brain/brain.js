@@ -7,7 +7,7 @@
 // simulation clock in ms, so decision cadence follows sim time (pausing stops decisions and a
 // benchmark replays the same schedule).
 
-import { applyLaw, lateralAt } from "../sim/controller.js";
+import { applyLaw, lateralAt, lookahead, purePursuit } from "../sim/controller.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
@@ -103,7 +103,12 @@ export class Autopilot {
       world.ego.step(dt, { steer: world.ego.delta, accel: -3 });
       this.safetyActive = false;
     } else if (brake) {
-      world.ego.step(dt, { steer: world.ego.delta, accel: -8 });
+      // Brake hard, still steering along the manoeuvre's path, as `hard_brake` does: holding the
+      // wheel where it is would carry the car on round a bend, or a lane's jog, toward what it is
+      // braking for.
+      const law = this.executing?.law;
+      const steer = law && law.kind === "lane" && snap.onRoute ? purePursuit(world.ego, world.route, s, lateralAt(law, s + lookahead(world.ego.v), world.route)) : world.ego.delta;
+      world.ego.step(dt, { steer, accel: -8 });
       if (!this.safetyActive) { world.violations.safety_brakes++; this.onEvent({ type: "safety", brake }); }
       this.safetyActive = true;
     } else {

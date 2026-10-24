@@ -58,12 +58,15 @@ export class DeadlockDetector {
       (snap.intersection.control === "stop" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8) ||
       (waitsItsTurn(snap.intersection) && snap.intersection.bumper_to_line_m < 8) ||
       (snap.intersection.control === "yield" && snap.intersection.cross_traffic_moving && snap.intersection.bumper_to_line_m < 8) ||
-      (snap.intersection.oncoming && snap.intersection.oncoming.bumper_to_yield_m < 8)))
+      (snap.intersection.oncoming && snap.intersection.oncoming.bumper_to_yield_m < 8) ||
+      (snap.intersection.give_way?.wait_for && snap.intersection.give_way.bumper_to_hold_m < 8)))
       || (snap && snap.following && snap.following.gap_m < 8)
       || (snap && snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12)
       || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)
       || !world.route;
-    const crawling = Math.abs(ego.v) < 1.0 && (!snap || !snap.target || snap.target.v > 2.0);
+    // (creeping forward to look past a building is slow on purpose, unless it is not moving at all)
+    const g = snap?.intersection?.give_way, looking = g && !g.wait_for && g.hold_s_route !== null;
+    const crawling = Math.abs(ego.v) < 1.0 && (!snap || !snap.target || snap.target.v > 2.0 || (looking && snap.target.v > 0 && Math.abs(ego.v) < 0.3));
     if (crawling && !legit) this.stoppedFor += dt;
     else this.stoppedFor = 0;
     world.stuckFor = this.stoppedFor;

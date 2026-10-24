@@ -19,6 +19,7 @@ export class RulesBrain {
       if (waitsItsTurn(i) && i.bumper_to_line_m < 1.5) stop = true;
       if (i.control === "yield" && i.cross_traffic_moving && !i.entered && i.bumper_to_line_m < 1.5) stop = true;
       if (i.oncoming && i.oncoming.bumper_to_yield_m < 2) stop = true;
+      if (i.give_way?.wait_for && i.give_way.bumper_to_hold_m < 1.5) stop = true;
     }
     if (snap.following && snap.following.gap_m < 3 && snap.following.speed < 0.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
@@ -41,10 +42,11 @@ export class RulesBrain {
       let cost = -1.0 * s.progress_m + 2.0 * Math.abs(s.lane_err_end) + 0.05 * Math.abs(s.heading_err_deg) + 0.8 * Math.abs(s.end_speed - vWant);
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
-      if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !i.right_on_red?.go) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving))) cost -= 6;
+      if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !i.right_on_red?.go) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_oncoming") cost -= 6;
+      if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       if (c.law.kind === "hard_brake") cost += 3;
       if (c.law.kind === "reverse") cost += 2;
       if (!s.stays_in_lane) cost += 2;
