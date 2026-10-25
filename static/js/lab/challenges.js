@@ -27,6 +27,8 @@ export const CHALLENGES = [
     description: "A red light in the Beltline and a right turn. Two cars are coming from the left on their green. Stop, look, and pick your moment.", lesson: "A right turn on red needs a full stop first, then a gap in traffic from the left and a clear crosswalk. Waiting for the green is always allowed, and on the island of Montréal it is the only option." },
   { id: "four-way-stop", title: "Four-way stop", map: "toronto", weather: "dry", time: "afternoon", seed: 9042, icon: "✣", difficulty: "Judgement", hazard: "all-way",
     description: "An all-way stop in The Annex. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left. Who goes when?", lesson: "At an all-way stop, whoever stops first goes first. Stop together and the car on the right goes first. A car that pulls up after you waits for you, even if it was queued before you arrived." },
+  { id: "blind-corner", title: "The blind corner", map: "mount_pleasant", weather: "dry", time: "afternoon", seed: 10042, icon: "◩", difficulty: "Sight lines", hazard: "two-way",
+    description: "A two-way stop in Mount Pleasant with a building on the corner. The cross street doesn't stop, and you can't see along it from the line.", lesson: "Stop at the line, then creep forward until you can see. Traffic on the through road has the right of way from both sides, so wait until neither side is close." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -140,6 +142,36 @@ function allWaySites(map) {
   allWaySiteCache.set(map, sites); return sites;
 }
 
+// Blind two-way stops: an approach with a stop sign at least 90 m long, its line at least 75 m
+// along, going straight on into a street at least 60 m long, where the streets from the right and the
+// left (heading within 20 deg of a quarter turn either way, at least 70 m long) are the through road
+// and go straight on. From the stop line a building hides the street to the right 45 to 60 m from the
+// junction (where the car from the right starts); from 0.3 m short of the crossing road's asphalt,
+// where the car stops to look, nothing hides the first 60 m.
+const twoWaySiteCache = new WeakMap();
+function twoWaySites(map) {
+  if (twoWaySiteCache.has(map)) return twoWaySiteCache.get(map);
+  const sites = [], visibility = new Visibility(map);
+  const exit = (id) => map.successors(id).find(o => map.classifyTurn(map.turnAngle(id, o)) === "straight" && map.edges.get(o).length > 60);
+  for (const edge of map.edges.values()) {
+    const control = edge.control;
+    if (control?.type !== "stop" || control.all_way || edge.length < 90 || control.s_line < 75) continue;
+    const at = (turn) => (map.inn.get(edge.to) || []).find(id => Math.abs(wrapAngle(map.headingIn(id) - map.headingIn(edge.id) - turn)) < 0.35
+      && map.priorityOf(id)?.rule === "major" && map.edges.get(id).length > 70 && exit(id));
+    const straight = exit(edge.id), fromRight = at(Math.PI / 2), fromLeft = at(-Math.PI / 2);
+    if (!straight || !fromRight || !fromLeft) continue;
+    const lane = map.lane(edge.id, edge.lanes - 1), e = map.edges.get(fromRight), L = e.cum.at(-1);
+    // where the car's rear axle is with its front bumper at route arc length s along the lane
+    const eye = (frontS) => pointAt(lane.pts, lane.cum, frontS - 3.6);
+    const back = (m) => pointAt(e.pts, e.cum, L - m), peekS = lane.length - map.crossingHalfWidth(edge.id) - 0.3;
+    const hidden = [45, 50, 55, 60].find(m => visibility.occluded(eye(control.s_line), back(m)));
+    if (hidden && [10, 20, 30, 40, 50, 60].every(m => !visibility.occluded(eye(peekS), back(m))) && map.edges.get(fromLeft).length > 75)
+      sites.push({ lane, straight, fromRight, fromLeft, across: [exit(fromRight), exit(fromLeft)], hidden });
+  }
+  sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+  twoWaySiteCache.set(map, sites); return sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -162,14 +194,18 @@ export function challengeScenario(map, challenge) {
   const stops = challenge.hazard === "all-way" ? allWaySites(map) : null;
   if (stops && !stops.length) throw new Error("This map has no all-way stop with traffic from the right and ahead.");
   const stop = stops ? stops[Math.floor(random() * stops.length)] : null;
-  const start = site?.lane || left?.lane || right?.lane || stop?.lane || lanes[Math.floor(random() * lanes.length)];
-  // a left or right turn, or an all-way stop, starts 70 m before the stop line
-  const startS = site ? site.hazardS - 65 : left || right || stop ? start.edgeRef.control.s_line - 70 : Math.max(8, Math.min(20, start.length * 0.15));
+  const blinds = challenge.hazard === "two-way" ? twoWaySites(map) : null;
+  if (blinds && !blinds.length) throw new Error("This map has no two-way stop with a building hiding the through road.");
+  const blind = blinds ? blinds[Math.floor(random() * blinds.length)] : null;
+  const start = site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || lanes[Math.floor(random() * lanes.length)];
+  // a left or right turn, or a stop sign, starts 70 m before the stop line
+  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   if (right) { const e = map.edges.get(right.right), turn = map.lane(right.right, e.lanes - 1); chain.push(turn); seen.add(right.right); length += turn.length; }
-  if (stop) { const ahead = map.lane(stop.straight, Math.min(start.idx, map.edges.get(stop.straight).lanes - 1)); chain.push(ahead); seen.add(stop.straight); length += ahead.length; }
+  const straight = stop?.straight || blind?.straight;
+  if (straight) { const ahead = map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   for (let i = 0; i < 12 && length < 260; i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
@@ -187,6 +223,7 @@ export function challengeScenario(map, challenge) {
     ...(left ? { oncoming: { edge: left.opposite, then: left.straight } } : {}),
     ...(right ? { oncoming: { edge: right.fromLeft, then: right.right, lane: "curb" } } : {}),
     ...(stop ? { allWay: allWayCars(map, stop) } : {}),
+    ...(blind ? { twoWay: twoWayCars(map, blind) } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
 }
@@ -194,10 +231,10 @@ export function challengeScenario(map, challenge) {
 export function installChallenge(world, fleet, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
   // an oncoming hazard is placed at the stop line
-  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming || scenario.allWay ? lane.edgeRef.control.s_line : Math.min(lane.length - 15, scenario.start.s + 65));
+  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
-  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}) };
+  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}) };
   if (["door", "pull"].includes(challenge.hazard)) {
     const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);
     const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);
@@ -230,10 +267,14 @@ export function stepChallenge(world, fleet) {
   const state = world.challenge;
   if (!state) return;
   const local = world.ego.toLocal(...state.at);
-  if (!state.triggered && local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43) && local.ahead > 0) {
+  // (at a two-way stop, once the car has stopped at the line, or its front is past it)
+  const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+  if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
     if (state.allWay) state.allWayIds = releaseAllWay(world, fleet, state.allWay);
+    if (state.twoWay) state.twoWayIds = releaseThrough(world, fleet, state.twoWay);
     if (state.carId) {
       const car = world.parked.list.find(c => c.id === state.carId);
       if (state.hazard === "pull") { const merging = fleet.startPullOut(car); state.mergingId = merging?.id || null; }
@@ -297,6 +338,29 @@ function releaseAllWay(world, fleet, cars) {
     Object.assign(car, { id, color: [0x9b1e1e, 0x2b3a55, 0xeeeeea][i % 3], v0: Math.min(11, e.limit || 11), driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react, lcRate: 0 },
       stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
     car.path.start(edge, lane.idx, s, [[then, turn === "left" ? 0 : Math.min(lane.idx, next.lanes - 1)]]); fleet.vehicles.push(car);
+    return car.id;
+  });
+}
+
+// At a blind two-way stop, once the car has made its stop at the line (or crossed it without): a car
+// on the through road from the right, where the building hides it from the line, and one from the
+// left 75 m out, both at up to 10 m/s going straight on. The first reaches the junction about when
+// the car has crept forward to look; the second close enough after it that the car waits for it too.
+function twoWayCars(map, site) {
+  return [
+    { id: "challenge_through_right", edge: site.fromRight, back: site.hidden, then: site.across[0] },
+    { id: "challenge_through_left", edge: site.fromLeft, back: 75, then: site.across[1] },
+  ].map(c => ({ ...c, start: [c.edge, map.edges.get(c.edge).length - c.back, []] }));
+}
+function releaseThrough(world, fleet, cars) {
+  const map = world.map;
+  return cars.map(({ id, start: [edge, s, through], then }, i) => {
+    const e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), v = Math.min(10, e.limit || 10);
+    const plan = [...through, then].map(id => [id, map.edges.get(id).lanes - 1]);
+    const p = pointAt(lane.pts, lane.cum, s), car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
+    Object.assign(car, { id, color: [0x9b1e1e, 0x2b3a55][i % 2], v0: v, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.6, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+    car.path.start(edge, lane.idx, s, plan); fleet.vehicles.push(car);
     return car.id;
   });
 }

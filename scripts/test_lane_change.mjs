@@ -519,3 +519,22 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
   assert.ok(Math.abs(Math.atan2(p3[1] - p0[1], p3[0] - p0[0])) < 0.15, `starts along the street (${curved.start_s})`);
   console.log("✓ the browser router takes the turn lane on the block before a left turn");
 }
+
+{
+  // A traffic car that changes lanes re-plans its lane on the streets ahead from the new one:
+  // carrying on straight in the lane planned before would swing it back across, in the junction.
+  const { NpcPath } = await import("../static/js/sim/npc.js");
+  const { rng } = await import("../static/js/common.js");
+  const leg = (id, from, to, x0, x1) => ({ id, from, to, pts: [[x0, 0], [x1, 0]], length: x1 - x0, lanes: 2, lane_width: 3.5,
+    lane_offsets: [-1.75, 1.75], asphalt: [-3.5, 3.5], parking: [0, 0], cls: "secondary", limit: 13.9, oneway: true, name: "Test Street" });
+  const legs = [leg("ab", "a", "b", 0, 200), leg("bc", "b", "c", 200, 400)];
+  const two = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -60, 420, 60], edges: legs,
+    lanes: legs.flatMap((e) => [{ edge: e.id, idx: 0, pts: e.pts.map(([x]) => [x, LEFT]) }, { edge: e.id, idx: 1, pts: e.pts.map(([x]) => [x, RIGHT]) }]),
+    nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 200, y: 0 }, { id: "c", x: 400, y: 0 }], intersections: [], stops: [], buildings: [] });
+  const path = new NpcPath(two, rng(1));
+  path.start("ab", 0, 20, [["bc", 0]]);
+  path.switchLane(1, 120);
+  assert.deepEqual(path.edges.map((e) => [e.id, e.lane]), [["ab", 1], ["bc", 1]]);
+  for (let s = 150; s < 250; s += 5) assert.ok(Math.abs(path.pointAt(s)[1] - RIGHT) < 1e-6, `stays in the right lane at ${s}`);
+  console.log("✓ a traffic car that changes lanes keeps its new lane on the streets ahead");
+}

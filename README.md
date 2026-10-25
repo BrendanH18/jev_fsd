@@ -53,7 +53,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Nine hand-built scenarios test the situations real drivers get wrong:
+Ten hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -66,6 +66,7 @@ Nine hand-built scenarios test the situations real drivers get wrong:
 | **The unprotected left** | Ottawa, afternoon | A left turn on a green with oncoming cars close together |
 | **Right on red** | Calgary, afternoon | A right turn at a red light, with cars coming from the left on their green |
 | **Four-way stop** | Toronto, afternoon | Taking your turn at an all-way stop, with cars arriving just before and after you |
+| **The blind corner** | Vancouver, afternoon | A two-way stop where a building hides the through road: stop, creep forward to look, and wait for both sides |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign
@@ -243,6 +244,7 @@ node scripts/test_pull_out.mjs                  # pull-outs and a destination bl
 node scripts/test_left_turn.mjs                 # left turns at a signal yield to oncoming traffic
 node scripts/test_right_on_red.mjs              # right turns on red after a full stop, except in Montréal
 node scripts/test_all_way_stop.mjs              # turn order at all-way stops, left turns at stop signs
+node scripts/test_give_way.mjs                  # two-way stops, junctions without a sign, creeping forward to look
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

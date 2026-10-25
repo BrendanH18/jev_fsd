@@ -2,6 +2,77 @@
 
 ## Unreleased
 
+- Junctions without a signal have a right of way, for traffic and the driven car alike
+  (`static/js/sim/priority.js`). At a two-way stop, once its stop is made, the car gives way to
+  traffic on the through road from both sides. Where streets meet with no sign at all, a smaller
+  road gives way to a larger one (OpenStreetMap's primary and secondary roads, then tertiary, then
+  the rest), and between streets of the same class traffic gives way to the right, as the law has
+  it across Canada. The car waits for
+  a vehicle with the right of way that would reach the junction before it has crossed it plus
+  1.5 s (2 s from a stop), for anything moving across the junction, and for any vehicle due within
+  2 s, whoever has the right of way. Before, the car gave way only at stop signs, to crossing
+  traffic due within 4.5 s, and drove straight through junctions without a sign; traffic only
+  waited for anyone already in such a junction. Across the twelve maps, 1,586 approaches to
+  junctions without a sign give way to the right and 395 to a larger road; 970 more have the right
+  of way over a smaller road or a stop sign, and 595 approaches at 430 junctions are two-way
+  stops. A node where a signal's approach shorter than 20 m starts is part of that signal's
+  junction (a junction drawn as several nodes), not a junction of its own. Turning left from the road with the right of way, the car yields to oncoming traffic as
+  at a signal or a stop sign.
+
+- Where a building hides a street it gives way to, the car slows so it can stop, then creeps
+  forward at 1.5 m/s to look, as far as 0.3 m short of the crossing road's asphalt. It looks along
+  each such street as far as traffic at that street's limit, slowed for the weather, covers in the
+  time the car needs, within what it can see at all, so fog and darkness shorten the look rather
+  than stall the car. Stopped where it looks from, it goes once nothing it can see is coming, even
+  if a building still hides part of the street; the car remembers that stop until the next
+  junction, so it does not inch forward in fits and starts. A creep that stands still for 12 s
+  counts as a stall, and deadlock recovery takes over.
+
+- The audit counts pulling out in front of a vehicle with the right of way, due at the junction
+  within 2 s or already in it, as a failure to yield (`through traffic` or `traffic from the
+  right`), seen or not, if it was on its way when the car crossed its line (a car that pulls out
+  from the curb after that must give way itself). Before, a two-way stop was audited only for left turns across oncoming
+  traffic, and a junction without a sign not at all. Decision models and LLMs get
+  `intersection.give_way` (whether the way is clear, whom the car waits for, whether buildings hide
+  the street and how far it sees, where it stops) and `intersection.right_of_way`, a situation
+  line, two new candidates (`creep_to_look` and `wait_to_give_way`) and a motion criterion that
+  allows holding still while giving way. Manoeuvres that would pass the point where the car must
+  stop are rejected (`fails_to_yield`, or `enters_unseen_junction`, labelled in AI eyes).
+
+- A junction without a sign that asks nothing of the car (it has the right of way, or nothing it
+  gives way to is coming and it can see) no longer hides the control after it, in sensing or the
+  audit: a signal or stop sign just beyond is the one the car slows for, and crossing it is
+  audited. Traffic giving way at such a junction counts any vehicle moving faster than 0.2 m/s,
+  not only above 1 m/s.
+
+- New challenge, **The blind corner** (Vancouver, Mount Pleasant): a two-way stop where a corner
+  building hides the through road from the line. Once the car has made its stop, a car comes from
+  the right, out of sight, and another from the left. New checks in `scripts/test_give_way.mjs`.
+
+- The shared emergency brake keeps steering along the manoeuvre the car was following (a lane
+  manoeuvre or `hard_brake`), as the `hard_brake` manoeuvre itself does. Before, it held the steering wheel where it was, so braking partway
+  round a bend, or through the jog where a route moves to another lane inside a junction, carried
+  the car on round it toward what it was braking for. In WebKit, the changes above put a car
+  waiting to turn left in Toronto (The Annex) beside such a jog as the car went through it
+  (`s1-1`, 115.5 s): the brake fired for it with the car heading 25° off its lane, and the held
+  wheel steered the car into it.
+
+- A traffic car that changes lanes keeps its new lane on the streets ahead. Before, the lanes it
+  had already planned for them stayed as they were, so a car that had moved to the right lane
+  went back to the left one where its street joined the next, swinging 19° across the junction
+  into whoever was beside it. In WebKit Kitsilano dry `s1-6`, leaving the signal at West Broadway
+  and Larch Street side by side with the driven car, `car_10` did so into it.
+
+- In the seeded V8 and WebKit benchmarks Rules passes all 70 routes in each engine, as before,
+  with no collision, red-light or stop-sign violation or failure to yield, and the same seven
+  deadlock overrides (Toronto 4, Ottawa 3). Drives slow where junctions without a sign are
+  common, from looking at blind ones and giving way: Montréal 25.6 → 17.55 km/h (both engines),
+  Winnipeg 36.65 → 33.65, Edmonton 31.15 → 28.5, Saskatoon 29.85 → 26.15 and Québec City
+  28.2 → 26.55 (V8); Kitsilano moves
+  by at most 0.5 km/h. Traffic giving way shifts other drives both ways: Kitsilano dry `s1-8` and
+  fog `s1-4` arrive 36 s and 41 s sooner. The reruns use Node v24.19.0 / V8 and native WebKit on
+  macOS 27.0.1. See [docs/rules-baseline.md](docs/rules-baseline.md).
+
 - All-way stops have a turn order, for traffic and the driven car alike. Vehicles go in the order
   they stopped at their lines: a vehicle joins the order when it stops within 6 m of its line (or
   up to 6 m past it, after an overshoot). Two that stop within 1 s of each other go right before

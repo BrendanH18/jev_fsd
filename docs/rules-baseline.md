@@ -1,11 +1,165 @@
-# Rules benchmark baseline — 2026-10-23b (all-way stop fixes)
+# Rules benchmark baseline — 2026-10-24 (giving way without a signal)
+
+Rules passes **70 of 70 routes in both V8 and WebKit**, before and after, with no collisions,
+red-light violations, stop-sign violations or failures to yield, and the same seven deadlock
+overrides (Toronto 4, Ottawa 3). "Before" is main at `9163c27`; "after" adds right of way at
+two-way stops and junctions without a sign or signal, creeping forward to look past buildings,
+the give-way audit, an emergency brake that keeps steering along the car's path, traffic that
+keeps its new lane after a lane change, and unsigned junctions that do not hide a control just
+beyond them.
+
+## Method
+
+Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
+Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
+and snow; the other eleven maps have two dry routes each. One benchmark suite ran at a time, on
+macOS 27.0.1 (26A434), Apple M5.
+
+V8 used `scripts/bench_node.mjs` with Node `v24.19.0` (V8 `13.6.233.17-node.51`) against
+`PORT=8331 uv run --locked server.py`. "Before" ran the script from a `git archive 9163c27`
+tree, "after" from the working tree; the server only supplies maps and routes, which this change
+does not touch. For example:
+
+```sh
+npx --yes --package=node@24.19.0 node scripts/bench_node.mjs --port 8331 --map toronto --count 2 --weather dry --json toronto-dry.json
+```
+
+WebKit used the unmodified `scripts/shot.swift`, compiled with `swiftc`, with a fresh WKWebView
+process per suite. Each page waited for its map to load, then called `window.__bench.run` with
+Rules, seed 1, 40 traffic cars, lockstep, the requested count and weather, and `save: false`.
+"Before" was served from the `9163c27` tree on port 8332, "after" from the working tree on 8331;
+both servers used the working tree's `.venv/bin/python3`.
+
+Every before suite reproduces the previous baseline below: the V8 summaries match its post-fix
+V8 record and the WebKit summaries its WebKit after column. The
+[machine-readable record](validation/rebaseline-2026-10-24-rules.json) holds both engines'
+summaries and per-route metrics and safety, collision and yield events. Night was not run.
+
+## Results
+
+Passed / routes; deadlock overrides, safety brakes and mean speeds are before → after.
+
+### V8
+
+| Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
+|---|---:|---:|---|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 13 → 10 | 23.19 → 23.24 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 5 → 5 | 17.09 → 16.72 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 3 → 2 | 19.5 → 19.04 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 3 → 3 | 14.89 → 14.76 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 1 → 2 | 19.25 → 18.5 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 2 → 0 | 15.25 → 15.1 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 4 | 2 → 1 | 18.45 → 18.25 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 25.6 → 17.55 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 19.5 → 19.5 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 0 → 0 | 18.4 → 18.4 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 28.2 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 2 | 20.95 → 21.25 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 36.65 → 33.65 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 31.15 → 28.5 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 26.15 |
+
+### WebKit
+
+| Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
+|---|---:|---:|---|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 10 → 8 | 23.65 → 23.47 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 7 → 5 | 17.39 → 17.55 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 4 → 3 | 19.47 → 19.13 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 1 → 1 | 15.06 → 15.05 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 1 → 3 | 19.25 → 18.35 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 17.65 → 17.4 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 4 | 1 → 1 | 19.05 → 19 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 25.6 → 17.55 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 19.5 → 19.5 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 0 → 0 | 18.4 → 18.4 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 28.25 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 21.35 → 21.3 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 36.6 → 33.8 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 31.15 → 29.2 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 27.35 |
+
+## Why the numbers moved
+
+The car now spends time looking at blind junctions, and waiting there for traffic with the
+right of way; traffic giving way changes where traffic is and when the car reaches each signal,
+which shifts other drives both ways. Junctions without a sign meet most often in Montréal,
+Winnipeg, Edmonton, Saskatoon and Québec City. V8 routes whose time moved by at least 5 s, with the time
+spent waiting and slowing to look where the car gives way:
+
+- **Montréal `s1-1`: 73.0 → 95.0 s** and **`s1-2`: 57.5 → 93.3 s** (the same in WebKit). `s1-1`
+  looks for 9.5, 7.1 and 7.6 s at three junctions without a sign and gives way to `car_39` and
+  `car_19` for 7.6 s on a smaller street meeting a larger one; `s1-2` looks for 9.1 s at one,
+  which brings it to a signal just as it turns red: it waits 28 s there (Montréal has no right
+  on red).
+- **Winnipeg `s1-1`: 92.2 → 112.1 s** (WebKit 92.7 → 110.9 s): six junctions without a sign,
+  18.5 s looking, and 4.9, 2.2 and 0.5 s giving way to `car_p1` and `car_32`, `car_31` and
+  `car_39`.
+- **Edmonton `s1-1`: 84.3 → 92.8 s** and **`s1-2`: 133.5 → 145.2 s**: 6.0 s and 5.3 s looking,
+  then 6.1 s giving way to `car_p2` (`s1-1`), and 2.4 and 0.6 s to `car_p1` and `car_20` (`s1-2`).
+- **Saskatoon `s1-1`: 78.0 → 94.7 s**: 6.7, 2.8 and 1.8 s looking at three junctions without a
+  sign and 7.0 s giving way to `car_5`; **`s1-2`: 104.2 → 110.2 s** (both engines): 4.6, 3.0 and
+  1.8 s looking, and 2.5 s giving way to `car_40`.
+- **Québec City `s1-2`: 66.8 → 74.9 s** (both engines): 7.5 and 1.7 s looking at two junctions
+  without a sign in Saint-Roch.
+- **Kitsilano fog `s1-12`: 187.7 → 225.1 s.** After its stop at a two-way stop, the car moved off
+  and then saw `bike_7` on the through road through the fog; it stopped 1 m past the line and
+  waited 7.8 s while the cyclist crossed. Before, it carried on in front of it.
+- **Kitsilano rain `s1-12`: 166.0 → 220.0 s** and **snow `s1-12`: 253.7 → 285.0 s**: 3.8 s
+  looking at a junction without a sign, then 7.4 and 6.3 s giving way at two two-way stops to
+  `car_30` and `car_p6` (rain); 0.7 s looking and 5.5 s giving way to `car_p5` (snow). The rest
+  is traffic and the signals that follow.
+- **Victoria `s1-1`: 248.5 → 259.9 s**: 7.1 s looking and 5.8 s giving way to `car_36` at a
+  two-way stop. **Mount Pleasant `s1-1`: 126.2 → 135.7 s**: 4.1 and 3.2 s looking at two.
+- **Kitsilano fog `s1-5`: 154.9 → 214.7 s**: 3.1 s giving way to `car_p3`; the rest is traffic
+  ahead of it, with no stop longer than 3 s.
+- **Kitsilano dry `s1-2`** (83.9 → 89.8 s) and **`s1-6`** (210.3 → 215.3 s), and **rain `s1-6`**
+  (229.7 → 218.3 s): traffic differences.
+- **Kitsilano dry `s1-8`: 214.3 → 177.9 s and fog `s1-4`: 194.3 → 153.2 s** (WebKit fog
+  197.5 → 153.2 s): sooner, because traffic that now gives way is elsewhere when the car comes
+  by; `s1-8` gives way for 9.5 s at two two-way stops, to `car_p2`, `car_p4` and `car_12`, and
+  spends 8.1 s looking, and still arrives 36 s sooner.
+
+### Traffic changing lanes, then swinging back (WebKit Kitsilano dry `s1-6`)
+
+An earlier WebKit after run failed Kitsilano dry `s1-6` with a collision at 139.5 s. The car and
+`car_10` moved off side by side from the signal at West Broadway and Larch Street, the car in the
+left lane and `car_10` in the right. Past the junction `car_10` swung left into the car's lane,
+19° off the street at 7.8 m/s, and the car hit it at 4.4 m/s (counted at fault: `car_10` was
+ahead of it and heading within 20° of it). `car_10` had changed into the right lane on the block
+before, but the lane it had already planned for the next block was still the left one, so its
+path crossed back where the two blocks joined. A traffic car that changes lanes now re-plans the
+lanes ahead from its new one (`NpcPath.switchLane`), and the final runs above include that
+change: WebKit `s1-6` arrives at 203.3 s (212.6 s before) without contact.
+
+### The emergency brake and a lane's jog (WebKit Toronto `s1-1`)
+
+The first WebKit after run, before the emergency-brake change, failed Toronto dry `s1-1` with a
+collision at 115.5 s. Going straight through the signal at Bloor Street West and Huron Street,
+the route moves from the curb lane to the inner lane inside the junction, so the polyline swings
+to 40° off the street for about 8 m. `car_1`, waiting in the opposite inner lane to turn left,
+stood 1.7 m to the left of the car's path. With the car's nose swung toward it, the emergency
+brake fired, and it held the steering wheel where it was, so the car kept turning into
+`car_1` (2.5 m/s at contact, at fault). V8 drove the same path at the same time without
+`car_1` there. Placing `car_1` there in V8 reproduces the contact at 115.5 s with the brake as it
+was. With the brake steering along the car's path, as the `hard_brake` manoeuvre does, it does
+not occur at any of five placements between 113.3 and 114.0 s. The final runs above include
+that change; Toronto passes 2 of 2 in both engines.
+
+## Repeat
+
+Start `PORT=8331 uv run --locked server.py`, then run each suite with `bench_node.mjs` as above
+(`--map kitsilano --count 12 --weather dry|fog|rain|snow`, and `--count 2 --weather dry` for the
+eleven other maps), one at a time.
+
+## Earlier record: 2026-10-23b (all-way stop fixes)
 
 Rules passes **70 of 70 routes in both V8 and WebKit**, with no collisions, red-light
 violations, stop-sign violations or failures to yield. "Before" is main at `4119e87`; "after"
 is PR #27's fixed simulation code at `29ec036`, fixing the Toronto timeout and manual turn
 indicators at all-way stops.
 
-## Method
+### Method
 
 Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
 Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
@@ -45,13 +199,13 @@ metrics/events reproduce this full rebaseline within 1e-12, excluding wall time.
 are recorded under `audit_scope_validation`; the regression checks also cover straight/right
 departures and both routed and manual left turns/U-turns with missing or misleading indicators.
 
-## Results
+### Results
 
 Kitsilano passes 48 of 48 routes; the city smoke suites pass 22 of 22. No route before or after
 has a collision or traffic-rule violation. Passed / routes; deadlock overrides and mean speeds
 are main → fixed PR.
 
-### V8
+#### V8
 
 | Map and conditions | Before | After | Deadlock overrides | Mean km/h |
 |---|---:|---:|---|---|
@@ -71,7 +225,7 @@ are main → fixed PR.
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 31.15 → 31.15 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 29.85 → 29.85 |
 
-### WebKit
+#### WebKit
 
 | Map and conditions | Before | After | Deadlock overrides | Mean km/h |
 |---|---:|---:|---|---|
@@ -91,9 +245,9 @@ are main → fixed PR.
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 31.15 → 31.15 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 29.85 → 29.85 |
 
-## Failures
+### Failures
 
-### V8
+#### V8
 
 **No V8 route failures remain.** Toronto dry `s1-2`, which timed out at 310.4 s in the initial
 implementation, now arrives at 176.6 s (main: 165.5 s). Its four deadlock overrides return at
@@ -116,7 +270,7 @@ indicator holds an opposing vehicle that arrived later, yields on a tie, and upd
 when changed at the line. With a route, its planned turn takes precedence. Both new regression
 checks failed without their corresponding fixes.
 
-### WebKit
+#### WebKit
 
 **No route failures occur before or after.** Toronto dry `s1-1` takes 226.3 → 207.1 s, and
 `s1-2` takes 176.4 → 164.5 s. The latter retains four deadlock overrides at 46.3, 46.4, 46.7

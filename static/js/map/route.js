@@ -5,6 +5,7 @@
 import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js";
 import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
 import { CAR } from "../sim/vehicle.js";
+import { PEEK_SHORT_M } from "../sim/priority.js";
 
 // Within this distance of where the route moves to another lane of the same street (the router
 // takes the left lane on the block before a left turn), that lane already counts as the route's
@@ -34,17 +35,20 @@ export class Route {
     }
     this.edgeStarts.push(s);
     this.hint = 0;
-    // traffic controls along the route: stop-line position expressed as route arc length
+    // traffic controls along the route: stop-line position expressed as route arc length. A
+    // junction without a sign or signal counts too (MapData.priorityOf), where the car gives way
+    // there or, on the road with the right of way, where it turns left across oncoming traffic.
     this.controls = [];
     for (let i = 0; i < this.edges.length; i++) {
       const e = map.edges.get(this.edges[i]);
-      if (!e || !e.control) continue;
-      const lineOnEdge = pointAt(e.pts, e.cum, e.control.s_line);
+      const control = e && (e.control || (map.priorityOf ? map.priorityOf(e.id) : null));
+      if (!control) continue;
+      const lineOnEdge = pointAt(e.pts, e.cum, control.s_line);
       const p = projectPoint(this.pts, this.cum, lineOnEdge);
       if (!p || p.distance > 12) continue;
-      if (i === 0 && e.control.s_line < (data.start_s || 0) - 1) continue;  // already behind the start
+      if (i === 0 && control.s_line < (data.start_s || 0) - 1) continue;  // already behind the start
       // Include controls the selected car's front bumper reaches beyond its destination.
-      if (i === this.edges.length - 1 && data.goal_s !== undefined && e.control.s_line > data.goal_s + vehicleSpec.length - vehicleSpec.rearOverhang + 0.3) continue;
+      if (i === this.edges.length - 1 && data.goal_s !== undefined && control.s_line > data.goal_s + vehicleSpec.length - vehicleSpec.rearOverhang + 0.3) continue;
       // A longer car can reach a line beyond the truncated route. Projection clamps to the
       // endpoint, so retain its forward distance rather than moving the line to the destination.
       let sRoute = p.s;
@@ -54,17 +58,21 @@ export class Route {
         if (beyond > 0) sRoute += beyond;
       }
       const junctionNode = map.nodes.get(e.to);
-      const inter = e.control.type === "signal" ? map.intersections.get(e.control.id) : null;
+      const inter = control.type === "signal" ? map.intersections.get(control.id) : null;
       // The turn the route makes at this junction, from the streets either side of it (across short
       // links that go straight inside it), and where the junction's centre is along the route,
       // searched forward from the line.
       const { turn } = map.turnThrough(this.edges, i, map.junctionNodes(inter));
+      if (control.rule === "major" && turn !== "left" && turn !== "uturn") continue;
       const centre = inter ? [inter.x, inter.y] : junctionNode ? [junctionNode.x, junctionNode.y] : null;
       const cp = centre ? projectPoint(this.pts, this.cum, centre, p.index) : null;
+      const sJunction = cp && cp.distance < 15 && cp.s >= sRoute - 1 ? cp.s : null;
       this.controls.push({
-        edge: e.id, control: e.control, sRoute, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
-        turn, sJunction: cp && cp.distance < 15 && cp.s >= sRoute - 1 ? cp.s : null,
-        secondsToGreen: inter ? (t) => secondsToGreenFor(inter, e.control.group, t) : null,
+        edge: e.id, control, sRoute, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
+        turn, sJunction,
+        // where the front bumper stops to look, giving way (sim/priority.js)
+        sPeek: Math.max(sRoute, (sJunction ?? sRoute + 8) - map.crossingHalfWidth(e.id) - PEEK_SHORT_M),
+        secondsToGreen: inter ? (t) => secondsToGreenFor(inter, control.group, t) : null,
       });
     }
     this.controls.sort((a, b) => a.sRoute - b.sRoute);

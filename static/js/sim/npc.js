@@ -12,6 +12,7 @@ import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { crosswalkConflict, kerbConflict } from "./pedestrians.js";
 import { current as weather } from "./weather.js";
+import { approachTo, outranks } from "./priority.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
 
@@ -42,6 +43,11 @@ const LEADER_MARGIN_M = 0.3;    // beyond two half-widths: anything closer to th
 // traffic that has a green; nobody may be about to step onto a crosswalk it crosses within 4 s.
 const RTOR_EXTRA_GAP_S = 1.5;
 const RTOR_WALK_S = 4;
+// Giving way at a junction without a sign or signal: from this far before its node, a driver gives
+// way to traffic with the right of way due there before it, or up to 2 s after it, within 8 s.
+const GIVE_WAY_LOOK_M = 40;
+const GIVE_WAY_AFTER_S = 2;
+const GIVE_WAY_HORIZON_S = 8;
 
 export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
@@ -54,11 +60,22 @@ export class NpcPath {
     this.s = s;
     this.extend();
   }
-  // Move onto another lane of the current edge, keeping the edges already planned after it.
+  // Move onto another lane of the current edge, keeping the edges already planned after it. Their
+  // lanes follow from the new one, as when they were planned: carrying on straight in the lane it
+  // had planned would take the car back across, in the junction.
   switchLane(laneIdx, s) {
     const i = this.edges.indexOf(this.currentEdge());
     const cur = this.edges[i];
-    this.start(cur.id, laneIdx, s, this.edges.slice(i + 1).map((e) => [e.id, e.lane]));
+    let prev = { id: cur.id, lane: laneIdx };
+    const planned = this.edges.slice(i + 1).map((e) => (prev = { id: e.id, lane: this.laneInto(prev.id, prev.lane, e.id) }));
+    this.start(cur.id, laneIdx, s, planned.map((e) => [e.id, e.lane]));
+  }
+  // The lane taken onto edge `next` from lane `lane` of edge `from`: turns into the nearest lane (left
+  // turns into the leftmost, right into the rightmost), going straight keeps the same lane, and a
+  // cyclist rides the curb lane.
+  laneInto(from, lane, next) {
+    const edge = this.map.edges.get(next), turn = this.map.classifyTurn(this.map.turnAngle(from, next));
+    return this.bike ? edge.lanes - 1 : turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);
   }
   append(edgeId, laneIdx) {
     const lane = this.map.lane(edgeId, laneIdx) || this.map.lane(edgeId, 0);
@@ -84,12 +101,7 @@ export class NpcPath {
         if (routes.length && this.random() < 0.85) pool = routes;
       }
       const next = pool[Math.floor(this.random() * pool.length)];
-      const edge = this.map.edges.get(next);
-      // turn into the nearest lane (left turns into the leftmost, right into the rightmost), and
-      // keep the same lane going straight; a cyclist rides the curb lane
-      const turn = this.map.classifyTurn(this.map.turnAngle(last.id, next));
-      const lane = this.bike ? edge.lanes - 1 : turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(last.lane, edge.lanes - 1);
-      this.append(next, lane);
+      this.append(next, this.laneInto(last.id, last.lane, next));
     }
     return true;
   }
@@ -322,12 +334,18 @@ export class NpcFleet {
       if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
         gap = Math.min(gap, Math.max(0.05, toNode - 5)); leadV = 0;
       }
-      // junction with no sign or signal ahead: yield to anyone already crossing it
+      // junction with no sign or signal ahead: yield to anyone already crossing it, and give way
+      // at the line to traffic with the right of way (sim/priority.js) that would get there first
       if (stopAt === null) {
         const next = path.edges.find((e) => e.sEnd > front);
         const toNode = next ? next.sEnd - front : Infinity;
         if (next && !next.control && toNode > 5 && toNode < 25 && this.isJunction(next.to) && this.boxBusy(n, next)) {
           gap = Math.min(gap, Math.max(0.05, toNode - 6)); leadV = 0;
+        }
+        const rule = next && !next.control ? this.map.priorityOf(next.id) : null;
+        if (rule && rule.rule !== "major" && toNode < GIVE_WAY_LOOK_M) {
+          const toLine = next.sStart + (rule.s_line / Math.max(1, this.map.edges.get(next.id).length)) * (next.sEnd - next.sStart) - front;
+          if (toLine > -1 && this.givesWay(n, next.id, toNode)) { gap = Math.min(gap, Math.max(0.05, toLine)); leadV = 0; }
         }
       }
       // intersection box rule for signals too: don't enter while a crossing car is inside
@@ -598,6 +616,26 @@ export class NpcFleet {
       if (d > 90 || d < 1) continue;
       const closing = (dx * Math.cos(o.psi) + dy * Math.sin(o.psi)) / d;
       if (closing > 0.7 && d / o.v < gapS) return true;
+    }
+    return false;
+  }
+
+  // At a junction without a sign or signal, whether someone with the right of way over this driver's
+  // street (`edgeId`), coming in on another, would get there before it, or within 2 s after it
+  // (in which case it could not clear the junction in time).
+  givesWay(n, edgeId, toNode) {
+    const node = this.map.nodes.get(this.map.edges.get(edgeId).to);
+    if (!node) return false;
+    const mine = toNode / Math.max(1, n.v);
+    for (const o of [this.world.ego, ...this.vehicles]) {
+      // (anything moving counts, however slowly: the ETA below decides whether it matters)
+      if (o === n || o.v < 0.2) continue;
+      const dx = node.x - o.x, dy = node.y - o.y, d = Math.hypot(dx, dy);
+      if (d > 90 || d < 1 || (dx * Math.cos(o.psi) + dy * Math.sin(o.psi)) / d < 0.7) continue;
+      const a = approachTo(this.map, o, node.id);
+      if (!a || !outranks(this.map, a.edge, edgeId)) continue;
+      const eta = Math.max(0, a.to_node_m) / o.v;
+      if (eta < Math.min(GIVE_WAY_HORIZON_S, mine + GIVE_WAY_AFTER_S)) return true;
     }
     return false;
   }
