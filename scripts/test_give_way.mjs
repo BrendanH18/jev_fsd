@@ -10,7 +10,7 @@ const { Route } = await import("../static/js/map/route.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
-const { StopMemory } = await import("../static/js/sim/signals.js");
+const { StopMemory, phaseOf } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { outranks, levelOf, approachTo } = await import("../static/js/sim/priority.js");
 const { buildSnapshot, PEEK_MPS } = await import("../static/js/brain/sensors.js");
@@ -344,6 +344,44 @@ const MINOR = junction({ cls: { n: "secondary", s: "secondary" } });
   assert.equal(world.violations.safety_brakes, 1, "the emergency brake fires");
   assert.ok(world.ego.delta > 0.02, `and steers on round the turn (${world.ego.delta})`);
   console.log("✓ the emergency brake keeps steering along the path instead of holding the wheel");
+}
+
+{
+  // A junction without a sign that asks nothing of the car does not hide a signal just beyond it,
+  // in sensing or in the audit: here a crossroads without a sign, then a 30 m street to a signal.
+  const pt = (x, y) => [x, y], N = { a: pt(-150, 0), c: pt(0, 0), d: pt(30, 0), e: pt(180, 0), n: pt(0, 150), s: pt(0, -150), dn: pt(30, 150), ds: pt(30, -150) };
+  const signal = { type: "signal", id: "sig", s_line: 22, group: "A" };
+  const legs = [["a_c", "a", "c"], ["c_d", "d", "d"], ["d_e", "d", "e"], ["n_c", "n", "c"], ["s_c", "s", "c"], ["c_n", "c", "n"], ["c_s", "c", "s"],
+    ["dn_d", "dn", "d"], ["ds_d", "ds", "d"], ["d_dn", "d", "dn"], ["d_ds", "d", "ds"]].map(([id, from, to]) => [id, id === "c_d" ? "c" : from, to]);
+  const edges = [], lanes = [];
+  for (const [id, from, to] of legs) {
+    const pts = [N[from], N[to]], [rx, ry] = right(...pts), length = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
+    const control = id === "c_d" ? signal : id === "dn_d" || id === "ds_d" ? { type: "signal", id: "sig", s_line: length - 8, group: "B" } : null;
+    edges.push({ id, from, to, pts, length, lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: [-3.2, 3.2], parking: [0, 0], cls: "residential", limit: 11.1, oneway: false, name: id, ...(control ? { control } : {}) });
+    lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
+  }
+  const inter = { id: "sig", x: 30, y: 0, vertices: ["d"], approaches: [{ edge: "c_d", group: "A", s_line: 22 }, { edge: "dn_d", group: "B", s_line: 142 }, { edge: "ds_d", group: "B", s_line: 142 }], offset_s: 0 };
+  const m = new MapData({ bbox: [0, 0, 1, 1], extent: [-170, -170, 200, 170], edges, lanes, nodes: Object.entries(N).map(([id, [x, y]]) => ({ id, x, y })), intersections: [inter], stops: [], buildings: [] });
+  assert.equal(m.priorityOf("a_c")?.rule, "equal", "a 30 m street is not a link inside the signal's junction");
+  const pts = resample(joinLanes(joinLanes(m.lane("a_c", 0).pts, m.lane("c_d", 0).pts), m.lane("d_e", 0).pts));
+  const j = { map: m, routeData: () => ({ id: "through", polyline: pts, edges: ["a_c", "c_d", "d_e"], turns: [], start_s: 0, goal_s: 120 }) };
+  const world = setup(j, { front: -2, v: 6 });
+  assert.deepEqual(world.route.controls.map((c) => c.control.type), ["uncontrolled", "signal"]);
+  let t = 0; while (phaseOf(m.intersections.get("sig"), t).A !== "red") t += 0.5;
+  world.t = t;
+  const i = decide(world).snap.intersection;
+  assert.equal(i.control, "signal", "past the junction without a sign, the signal 24 m on is the one that counts");
+  assert.equal(i.signal, "red");
+  // lane changes still keep clear of the junction the car is in
+  const near = decide(world).snap.control_line_m;
+  assert.ok(Math.abs(near - (world.route.controls[0].sRoute - (world.route.project(world.ego.x, world.ego.y).s + FRONT))) < 1e-6 && near < 0, `nearest line ${near}`);
+  // and the audit sees the car run it
+  for (let k = 0; k < 150 && world.violations.red_lights_run === 0; k++) {
+    world.ego.v = 8; world.ego.x += 8 / 30; world.tick++; world.t = t + k / 300;
+    world.audit(1 / 30, world.roadInfo());
+  }
+  assert.equal(world.violations.red_lights_run, 1);
+  console.log("✓ a junction without a sign does not hide a red light just beyond it");
 }
 
 // closed loop with real traffic drivers

@@ -98,7 +98,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, following: null, pedestrian: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -136,6 +136,8 @@ export function buildSnapshot(world, executing = null) {
       // unless the next control is coming up)
       if (c.sRoute + 12 < frontS && !(leftTurn && frontS < c.sJunction + JUNCTION_BOX_M && !(next && next.sRoute - frontS < NEXT_CONTROL_M))) continue;
       if (c.sRoute - frontS > LOOK_AHEAD_CONTROL_M) break;
+      // (the nearest junction, for lane changes, even when a control beyond it is the one reported)
+      if (snap.control_line_m === null) snap.control_line_m = c.sRoute - frontS;
       const bumperToLine = c.sRoute - frontS;
       const inter = control.type === "signal" ? map.intersections.get(control.id) : null;
       const junction = inter ? [inter.x, inter.y] : c.junction;
@@ -166,11 +168,16 @@ export function buildSnapshot(world, executing = null) {
         : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow";
       const giveWay = (control.type === "uncontrolled" && control.rule !== "major") || (control.type === "stop" && !control.all_way && stopCompleted)
         ? giveWayAt(world, c, frontS) : null;
+      const oncoming = leftTurn && turnNow ? oncomingYield(world, c, frontS) : null;
+      // A junction without a sign that asks nothing of the car right now (it has the right of way,
+      // or nothing it gives way to is coming and it can see) does not hide a control further on:
+      // a signal just beyond it, say.
+      if (control.type === "uncontrolled" && (!giveWay || giveWay.go) && !oncoming && next && next.sRoute - frontS <= LOOK_AHEAD_CONTROL_M) continue;
       snap.intersection = {
         id: control.id, control: control.type, signal, group: control.group || null,
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
         entered, turn: c.turn || "straight",
-        oncoming: leftTurn && turnNow ? oncomingYield(world, c, frontS) : null,
+        oncoming,
         right_on_red: control.type === "signal" && map.rightOnRed && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
           ? rightOnRed(world, c, inter, frontS, visible) : null,
         stop_completed: stopCompleted,
@@ -528,7 +535,7 @@ function laneOptions(snap, world) {
   const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian");
   const free = desiredSpeed({ ...snap, following: null }).v;
   const i = snap.intersection;
-  const line = i ? i.bumper_to_line_m : Infinity;
+  const line = snap.control_line_m ?? (i ? i.bumper_to_line_m : Infinity);
   const inJunction = (limit) => line < limit && line > -12;
   const f = snap.following;
   // A car waiting at the junction is a queue, not something to pass, and so is a slow or stopped car

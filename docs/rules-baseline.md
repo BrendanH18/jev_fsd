@@ -4,8 +4,9 @@ Rules passes **70 of 70 routes in both V8 and WebKit**, before and after, with n
 red-light violations, stop-sign violations or failures to yield, and the same seven deadlock
 overrides (Toronto 4, Ottawa 3). "Before" is main at `9163c27`; "after" adds right of way at
 two-way stops and junctions without a sign or signal, creeping forward to look past buildings,
-the give-way audit, an emergency brake that keeps steering along the car's path, and traffic
-that keeps its new lane after a lane change.
+the give-way audit, an emergency brake that keeps steering along the car's path, traffic that
+keeps its new lane after a lane change, and unsigned junctions that do not hide a control just
+beyond them.
 
 ## Method
 
@@ -42,28 +43,28 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
-| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 13 → 11 | 23.19 → 23.27 |
-| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 5 → 4 | 17.09 → 16.74 |
-| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 3 → 2 | 19.5 → 19 |
-| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 3 → 3 | 14.89 → 14.75 |
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 13 → 10 | 23.19 → 23.24 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 5 → 5 | 17.09 → 16.72 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 3 → 2 | 19.5 → 19.04 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 3 → 3 | 14.89 → 14.76 |
 | Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 1 → 2 | 19.25 → 18.5 |
-| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 2 → 1 | 15.25 → 15 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 2 → 0 | 15.25 → 15.1 |
 | Toronto, dry | 2/2 | 2/2 | 4 → 4 | 2 → 1 | 18.45 → 18.25 |
 | Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 25.6 → 17.55 |
 | Calgary, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 19.5 → 19.5 |
 | Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 0 → 0 | 18.4 → 18.4 |
-| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 28.2 → 27.75 |
-| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 2 | 20.95 → 21.35 |
-| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 36.65 → 33.75 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 28.2 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 2 | 20.95 → 21.25 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 36.65 → 33.65 |
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 31.15 → 28.5 |
-| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 25.7 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 26.15 |
 
 ### WebKit
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
-| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 10 → 10 | 23.65 → 23.47 |
-| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 7 → 5 | 17.39 → 17.54 |
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 10 → 8 | 23.65 → 23.47 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 7 → 5 | 17.39 → 17.55 |
 | Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 4 → 3 | 19.47 → 19.13 |
 | Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 1 → 1 | 15.06 → 15.05 |
 | Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 1 → 3 | 19.25 → 18.35 |
@@ -72,35 +73,38 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 | Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 25.6 → 17.55 |
 | Calgary, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 19.5 → 19.5 |
 | Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 0 → 0 | 18.4 → 18.4 |
-| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 28.25 → 28.1 |
-| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 2 | 21.35 → 21.3 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 28.25 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 21.35 → 21.3 |
 | Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 36.6 → 33.8 |
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 31.15 → 29.2 |
-| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 27.75 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 27.35 |
 
 ## Why the numbers moved
 
 The car now spends time looking at blind junctions, and waiting there for traffic with the
 right of way; traffic giving way changes where traffic is and when the car reaches each signal,
 which shifts other drives both ways. Junctions without a sign meet most often in Montréal,
-Winnipeg, Edmonton and Saskatoon. V8 routes whose time moved by at least 5 s, with the time
+Winnipeg, Edmonton, Saskatoon and Québec City. V8 routes whose time moved by at least 5 s, with the time
 spent waiting and slowing to look where the car gives way:
 
-- **Montréal `s1-1`: 73.0 → 95.2 s** and **`s1-2`: 57.5 → 93.3 s** (the same in WebKit). `s1-1`
-  looks for 9.5, 7.0 and 7.6 s at three junctions without a sign and gives way to `car_39` and
+- **Montréal `s1-1`: 73.0 → 95.0 s** and **`s1-2`: 57.5 → 93.3 s** (the same in WebKit). `s1-1`
+  looks for 9.5, 7.1 and 7.6 s at three junctions without a sign and gives way to `car_39` and
   `car_19` for 7.6 s on a smaller street meeting a larger one; `s1-2` looks for 9.1 s at one,
   which brings it to a signal just as it turns red: it waits 28 s there (Montréal has no right
   on red).
-- **Winnipeg `s1-1`: 92.2 → 111.8 s**: five junctions without a sign, 18.3 s looking, and 4.0
-  and 2.2 s giving way to `car_32` and `car_p1`, then `car_31`.
+- **Winnipeg `s1-1`: 92.2 → 112.1 s** (WebKit 92.7 → 110.9 s): six junctions without a sign,
+  18.5 s looking, and 4.9, 2.2 and 0.5 s giving way to `car_p1` and `car_32`, `car_31` and
+  `car_39`.
 - **Edmonton `s1-1`: 84.3 → 92.8 s** and **`s1-2`: 133.5 → 145.2 s**: 6.0 s and 5.3 s looking,
   then 6.1 s giving way to `car_p2` (`s1-1`), and 2.4 and 0.6 s to `car_p1` and `car_20` (`s1-2`).
 - **Saskatoon `s1-1`: 78.0 → 94.7 s**: 6.7, 2.8 and 1.8 s looking at three junctions without a
-  sign and 7.0 s giving way to `car_5`; **`s1-2`: 104.2 → 114.5 s**: 3.9 and 3.1 s looking, and
-  2.6 and 6.8 s giving way to `car_40` and `car_28`.
-- **Kitsilano fog `s1-12`: 187.7 → 223.8 s.** After its stop at a two-way stop, the car moved off
+  sign and 7.0 s giving way to `car_5`; **`s1-2`: 104.2 → 110.2 s** (both engines): 4.6, 3.0 and
+  1.8 s looking, and 2.5 s giving way to `car_40`.
+- **Québec City `s1-2`: 66.8 → 74.9 s** (both engines): 7.5 and 1.7 s looking at two junctions
+  without a sign in Saint-Roch.
+- **Kitsilano fog `s1-12`: 187.7 → 225.1 s.** After its stop at a two-way stop, the car moved off
   and then saw `bike_7` on the through road through the fog; it stopped 1 m past the line and
-  waited 7.9 s while the cyclist crossed. Before, it carried on in front of it.
+  waited 7.8 s while the cyclist crossed. Before, it carried on in front of it.
 - **Kitsilano rain `s1-12`: 166.0 → 220.0 s** and **snow `s1-12`: 253.7 → 285.0 s**: 3.8 s
   looking at a junction without a sign, then 7.4 and 6.3 s giving way at two two-way stops to
   `car_30` and `car_p6` (rain); 0.7 s looking and 5.5 s giving way to `car_p5` (snow). The rest
@@ -109,10 +113,10 @@ spent waiting and slowing to look where the car gives way:
   two-way stop. **Mount Pleasant `s1-1`: 126.2 → 135.7 s**: 4.1 and 3.2 s looking at two.
 - **Kitsilano fog `s1-5`: 154.9 → 214.7 s**: 3.1 s giving way to `car_p3`; the rest is traffic
   ahead of it, with no stop longer than 3 s.
-- **Kitsilano dry `s1-2`** (83.9 → 89.5 s) and **`s1-6`** (210.3 → 215.3 s), and **rain `s1-6`**
+- **Kitsilano dry `s1-2`** (83.9 → 89.8 s) and **`s1-6`** (210.3 → 215.3 s), and **rain `s1-6`**
   (229.7 → 218.3 s): traffic differences.
-- **Kitsilano dry `s1-8`: 214.3 → 177.9 s and fog `s1-4`: 194.3 → 155.6 s** (WebKit fog
-  197.5 → 155.5 s): sooner, because traffic that now gives way is elsewhere when the car comes
+- **Kitsilano dry `s1-8`: 214.3 → 177.9 s and fog `s1-4`: 194.3 → 153.2 s** (WebKit fog
+  197.5 → 153.2 s): sooner, because traffic that now gives way is elsewhere when the car comes
   by; `s1-8` gives way for 9.5 s at two two-way stops, to `car_p2`, `car_p4` and `car_12`, and
   spends 8.1 s looking, and still arrives 36 s sooner.
 

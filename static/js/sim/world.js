@@ -37,6 +37,9 @@ const AUDIT_BOX_M = 12;
 // left (heading within 60 deg of the way the car turns) due at the junction within 2 s, or that
 // would reach the car within 2 s along the street both are in.
 const AUDIT_RTOR_OUT_M = 15;
+// A junction without a sign stops being the control the audit follows this far past its line
+// (after the tick that sees the car cross it).
+const PASSED_M = 1;
 // Giving way at a two-way stop or a junction without a sign or signal (sim/priority.js): past its
 // line, the car fails to yield when its front bumper enters the path of a vehicle with the right of
 // way over its street (seen or not) that is due at the junction's centre within 2 s or already in
@@ -237,10 +240,15 @@ export class World {
     const followsRoute = routeProjection && routeProjection.distance < AUDIT_ROUTE_CORRIDOR_M
       && Math.abs(wrap(this.ego.psi - routeProjection.heading)) < AUDIT_ROUTE_HEADING_RAD;
     const frontS = routeProjection ? routeProjection.s + FRONT : null;
-    const rc = followsRoute ? this.route.controls.find((c) => c.sRoute + 12 >= frontS && c.sRoute - frontS <= 80) : null;
-    // stopped where it looks from to give way (see brain/sensors.js), remembered until the next junction
-    if (rc && Number.isFinite(rc.sPeek) && Math.abs(this.ego.v) < 0.2 && frontS >= rc.sPeek - PEEK_AT_M && frontS <= rc.sPeek + 1) this.egoPeek = rc.control.id;
-    else if (!rc || rc.control.id !== this.egoPeek) this.egoPeek = null;
+    // (a junction without a sign has nothing more to check once the car has crossed its line, so
+    // it does not hide a signal or a stop just beyond it)
+    const rc = followsRoute ? this.route.controls.find((c) => c.sRoute + 12 >= frontS && c.sRoute - frontS <= 80
+      && !(c.control.type === "uncontrolled" && frontS > c.sRoute + PASSED_M)) : null;
+    // stopped where it looks from to give way (see brain/sensors.js), remembered until the car is
+    // well past that junction
+    const looked = followsRoute && Math.abs(this.ego.v) < 0.2 ? this.route.controls.find((c) => Number.isFinite(c.sPeek) && frontS >= c.sPeek - PEEK_AT_M && frontS <= c.sPeek + 1) : null;
+    if (looked) this.egoPeek = looked.control.id;
+    else if (!followsRoute || !this.route.controls.some((c) => c.control.id === this.egoPeek && frontS <= c.sPeek + 12)) this.egoPeek = null;
     const edge = rc ? this.map.edges.get(rc.edge) : road.edge;
     const control = rc ? rc.control : edge?.control || (edge ? this.map.priorityOf(edge.id) : null);
     if (control && (rc || road.lane)) {

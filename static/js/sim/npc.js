@@ -628,7 +628,8 @@ export class NpcFleet {
     if (!node) return false;
     const mine = toNode / Math.max(1, n.v);
     for (const o of [this.world.ego, ...this.vehicles]) {
-      if (o === n || o.v < 1) continue;
+      // (anything moving counts, however slowly: the ETA below decides whether it matters)
+      if (o === n || o.v < 0.2) continue;
       const dx = node.x - o.x, dy = node.y - o.y, d = Math.hypot(dx, dy);
       if (d > 90 || d < 1 || (dx * Math.cos(o.psi) + dy * Math.sin(o.psi)) / d < 0.7) continue;
       const a = approachTo(this.map, o, node.id);

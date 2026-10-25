@@ -279,10 +279,16 @@ export class MapData {
     const node = e.to;
     if (!this._junctionSkip) {
       this._junctionSkip = new Set();
-      // a signal's own vertices, not where its approaches start (which may be another junction)
+      // a signal's own vertices, and where an approach short enough to be a link inside its
+      // junction starts (a junction drawn as several nodes), but not where a longer approach
+      // starts: that is another junction
       for (const inter of this.intersections.values()) {
         for (const v of inter.vertices || []) this._junctionSkip.add(v);
-        for (const a of inter.approaches || []) { const to = this.edges.get(a.edge)?.to; if (to) this._junctionSkip.add(to); }
+        for (const a of inter.approaches || []) {
+          const e = this.edges.get(a.edge);
+          if (e?.to) this._junctionSkip.add(e.to);
+          if (e && e.length < JUNCTION_LINK_M) this._junctionSkip.add(e.from);
+        }
       }
       for (const rb of this.roundabouts.values()) for (const v of rb.vertices || []) this._junctionSkip.add(v);
     }

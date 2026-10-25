@@ -107,7 +107,7 @@ export class Autopilot {
       // wheel where it is would carry the car on round a bend, or a lane's jog, toward what it is
       // braking for.
       const law = this.executing?.law;
-      const steer = law && law.kind === "lane" && snap.onRoute ? purePursuit(world.ego, world.route, s, lateralAt(law, s + lookahead(world.ego.v), world.route)) : world.ego.delta;
+      const steer = law && (law.kind === "lane" || law.kind === "hard_brake") && snap.onRoute ? purePursuit(world.ego, world.route, s, lateralAt(law, s + lookahead(world.ego.v), world.route)) : world.ego.delta;
       world.ego.step(dt, { steer, accel: -8 });
       if (!this.safetyActive) { world.violations.safety_brakes++; this.onEvent({ type: "safety", brake }); }
       this.safetyActive = true;
