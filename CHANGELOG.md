@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+- Cyclists keep right. Where a street has a parking lane at least 1.5 m wide and nothing is
+  parked in it to the end of the block (parking stops short of every corner), a cyclist rides in
+  it, 2.6 m right of the traffic lane's centre, past cars queued or slowing at the corner, and
+  carries on across the junction. It moves back into the traffic lane 20 m plus 2 s before the
+  next parked car (once it is crossing the junction, for one on the next block), before a junction
+  where it turns left or the next street has no parking lane, and only when no car in the lane is
+  beside it or closing from behind; until then it waits in the parking lane, 6 m behind the parked
+  car. It also takes an empty parking lane mid-block when it runs on for 60 m. Before, cyclists
+  rode single file in the traffic lane, so a car never had one on its right. A cyclist now stops
+  for any part of a body across its way, parked cars and open doors included, along the way it
+  will actually ride (it lags the line it steers for), not only for one whose middle is in its
+  path, so it no longer rides into the side of a car turning across it. A bicycle moves sideways
+  only as it rolls forward; stopped within 6 m of something, the rider puts a foot down and
+  shuffles it across, and round toward its way, into free space. In three simulated minutes of
+  traffic on each of the twelve maps with three seeds, cyclists spend up to 16 % of their time in
+  a parking lane (4.5 % on average), cars and cyclists touched 6 times against 7 before, and
+  cyclists stand still 15 % longer, mostly waiting for a gap to move back into the lane.
+
+- Turning right, the driven car yields to a cyclist on its right (a right hook): one clear of its
+  lane line, going its way, that would reach the corner before the car could turn across its line
+  of travel plus 1.5 s (0.75 s once the car is moving into the turn). It waits 1 m short of that
+  line, or carries on once it can no longer stop short of it. A cyclist following the car in its
+  lane is not waited for, nor one standing still beside it until it moves off. Traffic cars do the
+  same from 50 m out, for a cyclist within 6 m to their right, judging their own time to the corner
+  at no more than the 6 m/s they slow to for the turn.
+  The audit counts turning across the line of a cyclist that rode on the car's right in the last
+  3 s, due there within 2 s, as a failure to yield (`cyclist`), seen or not. Decision models and
+  LLMs get `cyclist_on_right` (when the cyclist reaches the corner, how long the car needs, where it
+  waits), a situation line, a `stop_for_cyclist` candidate and a motion criterion; manoeuvres past
+  the wait point are rejected (`fails_to_yield_to_cyclist`, labelled in AI eyes).
+
+- A traffic car gets into the lane for its next turn when that turn comes just past a short link
+  going straight on inside the junction (a street under 20 m long). Before, it looked only at the
+  end of the street it was on, so in Kitsilano, where West Broadway meets Yew Street through an
+  8.6 m link, a car in the right lane turned left across the driven car turning beside it from the
+  left lane (V8 Kitsilano fog `s1-4`, 133 s, once the cyclists above changed the traffic's timing).
+  Kitsilano has 14 turns like it from streets with more than one lane.
+
+- New challenge, **The right hook** (Vancouver, Kitsilano): a right turn off a bikeway from a
+  street with the right of way, with a cyclist 15 m ahead in the empty parking lane at 5.5 m/s,
+  going straight on past the corner. The car catches it up, and Rules waits about 6 s for it at
+  the corner before turning behind it. New checks in `scripts/test_right_hook.mjs`.
+
 - Junctions without a signal have a right of way, for traffic and the driven car alike
   (`static/js/sim/priority.js`). At a two-way stop, once its stop is made, the car gives way to
   traffic on the through road from both sides. Where streets meet with no sign at all, a smaller

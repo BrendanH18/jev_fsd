@@ -62,6 +62,7 @@ export class DeadlockDetector {
       (snap.intersection.give_way?.wait_for && snap.intersection.give_way.bumper_to_hold_m < 8)))
       || (snap && snap.following && snap.following.gap_m < 8)
       || (snap && snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12)
+      || (snap && snap.right_hook && snap.right_hook.bumper_to_yield_m < 8)
       || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)
       || !world.route;
     // (creeping forward to look past a building is slow on purpose, unless it is not moving at all)

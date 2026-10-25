@@ -47,6 +47,13 @@ const PASSED_M = 1;
 // crossed the line. As above, a vehicle heading the same way along
 // its path counts only if it would reach the car within those 2 s. It runs until the front is 30 m
 // from the junction's centre.
+// Turning across a cyclist on the car's right (a right hook) fails to yield too: the car's front
+// bumper enters the path of a cyclist (seen or not) due there within 2 s, heading at least 20 deg to
+// the right of it there, where within the last 3 s the cyclist rode the car's way on its right,
+// clear of its line (beside it, or up to 30 m behind). A cyclist counts again only after 10 s.
+const AUDIT_HOOK_MEMORY_S = 3;
+const AUDIT_HOOK_TURN = Math.PI / 9;
+const AUDIT_HOOK_AGAIN_S = 10;
 
 export class World {
   constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR } = {}) {
@@ -69,6 +76,8 @@ export class World {
     this.allWayCounted = null;   // the all-way stop it went out of turn at (counted once a visit)
     this.giveWay = null;         // the junction it last crossed a line into, giving way there
     this.egoPeek = null;         // the control it has stopped at to look past a building, giving way
+    this.besideRight = new Map(); // cyclist id -> when it last rode on the car's right, going its way
+    this.hookCounted = new Map(); // cyclist id -> when cutting across it was last counted
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
@@ -134,6 +143,7 @@ export class World {
     this.giveWay = null;
     this.egoPeek = null;
     this.allWayCounted = null;
+    this.besideRight.clear();
   }
 
   auditStatic(dt) {
@@ -320,6 +330,27 @@ export class World {
     }
     this.auditOncoming();
     this.auditGiveWay();
+    this.auditCyclists();
+  }
+
+  auditCyclists() {
+    const ego = this.ego, FRONT = ego.spec.length - ego.spec.rearOverhang;
+    const fx = ego.x + Math.cos(ego.psi) * FRONT, fy = ego.y + Math.sin(ego.psi) * FRONT;
+    for (const n of this.npcs) {
+      if (n.kind !== "bike" || !n.path?.pts || Math.abs(n.x - ego.x) > 40 || Math.abs(n.y - ego.y) > 40) continue;
+      const local = ego.toLocal(n.x, n.y), spec = n.spec || CAR;
+      if (Math.abs(wrap(n.psi - ego.psi)) < Math.PI / 6 && local.right > (ego.spec.width + spec.width) / 2 + 0.1
+        && local.ahead > -30 && local.ahead < ego.spec.length + 5) this.besideRight.set(n.id, this.t);
+      const seen = this.besideRight.get(n.id), counted = this.hookCounted.get(n.id);
+      if (seen === undefined || this.t - seen > AUDIT_HOOK_MEMORY_S || n.v < 1 || ego.v < 0.5) continue;
+      if (counted !== undefined && this.t - counted < AUDIT_HOOK_AGAIN_S) continue;
+      const p = frontOnPath(ego, n, fx, fy);
+      if (!p || p.along || p.ahead_m / n.v >= AUDIT_ONCOMING_S) continue;
+      if (wrap(ego.psi - headingAt(n.path.pts, n.path.cum, p.s)) > -AUDIT_HOOK_TURN) continue;
+      this.hookCounted.set(n.id, this.t);
+      this.violations.failed_to_yield++;
+      this.events.push({ type: "failed_to_yield", to: "cyclist", with: n.id });
+    }
   }
 
   auditGiveWay() {

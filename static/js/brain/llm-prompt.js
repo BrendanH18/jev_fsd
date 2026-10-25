@@ -32,6 +32,7 @@ How to choose \`candidate\`:
 - Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal it can stop for comfortably, a stop sign whose stop is not completed, an all-way stop where it is not the car's turn, or a roundabout yield line with ring traffic.
 - Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car.
 - Choose \`stop_for_oncoming\` when \`situation\` says the car is turning left and oncoming traffic has the right of way.
+- Choose \`stop_for_cyclist\` when \`situation\` says the car is turning right and a cyclist on its right has the right of way.
 - At an all-way stop, vehicles go in the order they stopped at their lines; \`intersection.priority.your_turn\` says whether it is the car's turn.
 - At a two-way stop, or a junction without a sign or signal, \`intersection.give_way\` says whether the way is clear. Choose \`stop_at_line\` or \`wait_to_give_way\` when \`situation\` says the car must give way, and \`creep_to_look\` when it says to creep forward to look.
 - At a red light where \`situation\` says the car may turn right on red now, the candidate at target turns; \`stop_at_line\` waits for the green instead. Both are allowed.

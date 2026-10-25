@@ -538,3 +538,25 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
   for (let s = 150; s < 250; s += 5) assert.ok(Math.abs(path.pointAt(s)[1] - RIGHT) < 1e-6, `stays in the right lane at ${s}`);
   console.log("✓ a traffic car that changes lanes keeps its new lane on the streets ahead");
 }
+
+{
+  // A traffic car in the right lane gets into the left lane for a left turn that comes just after a
+  // short link going straight on inside the junction (a 10 m street here), not only for one at the
+  // end of the street it is on.
+  const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
+  const { StopMemory } = await import("../static/js/sim/signals.js");
+  const m = buildTurnMap([0, 300]);
+  assert.ok(m.edges.get("e2").length < 20 && m.classifyTurn(m.turnAngle("e2", "north")) === "left");
+  const world = new World(m, { parked: 0, pedestrians: 0 });
+  Object.assign(world.ego, { x: 10, y: LEFT, psi: 0, v: 0 });
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 3 });
+  const lane = m.lane("e1", 1), p = pointAt(lane.pts, lane.cum, 150);
+  const n = new Vehicle(p[0], p[1], 0, 10);
+  Object.assign(n, { id: "turner", v0: 10, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
+  n.path = new NpcPath(m, fleet.random);
+  n.path.start("e1", 1, 150, [["e2", 1], ["north", 0]]);
+  fleet.vehicles.push(n);
+  fleet.maybeChangeLane(n, n.path.currentEdge(), 150 + 3.6);
+  assert.ok(n.lc && n.lc.dir === -1 && n.lc.to === 0, "it moves into the left lane");
+  console.log("✓ a traffic car gets into the lane for a turn just past a short link inside the junction");
+}
