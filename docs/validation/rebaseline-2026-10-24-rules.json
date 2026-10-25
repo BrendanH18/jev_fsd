@@ -2540,7 +2540,7 @@
      "stop_signs": 0,
      "failed_to_yield": 0,
      "off_road_s": 0.2,
-     "safety_brakes": 12,
+     "safety_brakes": 11,
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
@@ -2553,7 +2553,7 @@
      "lane_rms_m": 0.17,
      "lane_changes": 3,
      "speeding_s": 0,
-     "decisions": 5452,
+     "decisions": 5448,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -2751,7 +2751,7 @@
       "pass": true,
       "arrived": true,
       "failures": [],
-      "time_s": 178.3,
+      "time_s": 177.9,
       "avg_kmh": 19,
       "collisions": 0,
       "at_fault": 0,
@@ -2759,10 +2759,10 @@
       "stop_signs": 0,
       "failed_to_yield": 0,
       "off_road_s": 0,
-      "safety_brakes": 2,
+      "safety_brakes": 1,
       "deadlocks": 0,
       "min_gap_m": 2.3,
-      "decisions": 617,
+      "decisions": 613,
       "events": [
        {
         "t": 114.9,
@@ -2771,15 +2771,6 @@
          "reason": "following",
          "ttc": 1.1884018251685344,
          "gap": 3.5210318882064944
-        }
-       },
-       {
-        "t": 138.5,
-        "type": "safety",
-        "brake": {
-         "reason": "ahead",
-         "gap": 9.976087956056421,
-         "closing": 10.125988659768488
         }
        }
       ]
@@ -2941,7 +2932,7 @@
      "lane_rms_m": 0.14,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 7350,
+     "decisions": 7353,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -2982,7 +2973,7 @@
       "safety_brakes": 1,
       "deadlocks": 0,
       "min_gap_m": null,
-      "decisions": 482,
+      "decisions": 485,
       "events": [
        {
         "t": 137,
@@ -3537,7 +3528,7 @@
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 14.74,
+     "avg_kmh": 14.75,
      "min_gap_m": 1.9,
      "min_ttc_s": 1.5,
      "hard_brakes": 0,
@@ -3546,7 +3537,7 @@
      "lane_rms_m": 0.11,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 8460,
+     "decisions": 8471,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -3688,8 +3679,8 @@
       "pass": true,
       "arrived": true,
       "failures": [],
-      "time_s": 353.6,
-      "avg_kmh": 12.6,
+      "time_s": 351.3,
+      "avg_kmh": 12.7,
       "collisions": 0,
       "at_fault": 0,
       "red_lights": 0,
@@ -3699,7 +3690,7 @@
       "safety_brakes": 1,
       "deadlocks": 0,
       "min_gap_m": 1.9,
-      "decisions": 1246,
+      "decisions": 1257,
       "events": [
        {
         "t": 196.3,
@@ -3946,20 +3937,20 @@
      "stop_signs": 0,
      "failed_to_yield": 0,
      "off_road_s": 0,
-     "safety_brakes": 2,
+     "safety_brakes": 1,
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 14.8,
-     "min_gap_m": 2.5,
-     "min_ttc_s": 0.8,
+     "avg_kmh": 15,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 1.2,
      "hard_brakes": 0,
-     "rms_jerk": 2.43,
+     "rms_jerk": 2.57,
      "max_lat_accel": 6.44,
-     "lane_rms_m": 0.26,
+     "lane_rms_m": 0.25,
      "lane_changes": 1,
      "speeding_s": 0,
-     "decisions": 1737,
+     "decisions": 1719,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -3970,8 +3961,8 @@
       "pass": true,
       "arrived": true,
       "failures": [],
-      "time_s": 265,
-      "avg_kmh": 12.7,
+      "time_s": 259.9,
+      "avg_kmh": 13,
       "collisions": 0,
       "at_fault": 0,
       "red_lights": 0,
@@ -3981,7 +3972,7 @@
       "safety_brakes": 0,
       "deadlocks": 0,
       "min_gap_m": null,
-      "decisions": 929,
+      "decisions": 917,
       "events": []
      },
      {
@@ -3989,35 +3980,24 @@
       "pass": true,
       "arrived": true,
       "failures": [],
-      "time_s": 240.6,
-      "avg_kmh": 16.9,
+      "time_s": 238.8,
+      "avg_kmh": 17,
       "collisions": 0,
       "at_fault": 0,
       "red_lights": 0,
       "stop_signs": 0,
       "failed_to_yield": 0,
       "off_road_s": 0,
-      "safety_brakes": 2,
+      "safety_brakes": 1,
       "deadlocks": 0,
-      "min_gap_m": 2.5,
-      "decisions": 808,
+      "min_gap_m": 2.3,
+      "decisions": 802,
       "events": [
        {
-        "t": 221.7,
+        "t": 230.7,
         "type": "safety",
         "brake": {
-         "reason": "ahead",
-         "gap": 3.4916058038088686,
-         "closing": 3.5461428777354334
-        }
-       },
-       {
-        "t": 228.9,
-        "type": "safety",
-        "brake": {
-         "reason": "following",
-         "ttc": 1.1104389078581294,
-         "gap": 9.21785935068383
+         "reason": "open door"
         }
        }
       ]
@@ -4289,7 +4269,7 @@
       "pass": true,
       "arrived": true,
       "failures": [],
-      "time_s": 123.7,
+      "time_s": 124,
       "avg_kmh": 19.2,
       "collisions": 0,
       "at_fault": 0,
@@ -4464,7 +4444,7 @@
      "hard_brakes": 0,
      "rms_jerk": 2.9,
      "max_lat_accel": 5.28,
-     "lane_rms_m": 0.19,
+     "lane_rms_m": 0.2,
      "lane_changes": 1,
      "speeding_s": 0,
      "decisions": 628,
@@ -4653,16 +4633,16 @@
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 34.25,
+     "avg_kmh": 33.75,
      "min_gap_m": 2.9,
      "min_ttc_s": 4.1,
      "hard_brakes": 0,
-     "rms_jerk": 2.42,
-     "max_lat_accel": 5.22,
+     "rms_jerk": 2.58,
+     "max_lat_accel": 5.24,
      "lane_rms_m": 0.21,
      "lane_changes": 2,
      "speeding_s": 0,
-     "decisions": 643,
+     "decisions": 657,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -4673,8 +4653,8 @@
       "pass": true,
       "arrived": true,
       "failures": [],
-      "time_s": 108,
-      "avg_kmh": 29.6,
+      "time_s": 111.8,
+      "avg_kmh": 28.6,
       "collisions": 0,
       "at_fault": 0,
       "red_lights": 0,
@@ -4684,7 +4664,7 @@
       "safety_brakes": 1,
       "deadlocks": 0,
       "min_gap_m": 2.9,
-      "decisions": 343,
+      "decisions": 357,
       "events": [
        {
         "t": 22,
@@ -4843,11 +4823,11 @@
      "min_gap_m": 8.1,
      "min_ttc_s": 3.5,
      "hard_brakes": 0,
-     "rms_jerk": 2.93,
-     "max_lat_accel": 4.96,
+     "rms_jerk": 2.95,
+     "max_lat_accel": 5.03,
      "lane_rms_m": 0.16,
      "lane_changes": 0,
-     "speeding_s": 2.7,
+     "speeding_s": 2.4,
      "decisions": 661,
      "calls": 0,
      "tokens": 0,
@@ -6238,11 +6218,11 @@
    "kitsilano-dry": {
     "summary": {
      "scenarios": 12,
-     "pass_rate": 0.917,
+     "pass_rate": 1,
      "arrived_rate": 1,
      "km": 10.53,
-     "collisions": 1,
-     "at_fault": 1,
+     "collisions": 0,
+     "at_fault": 0,
      "red_lights": 0,
      "stop_signs": 0,
      "failed_to_yield": 0,
@@ -6250,17 +6230,17 @@
      "safety_brakes": 10,
      "deadlocks": 0,
      "fallbacks": 0,
-     "violations_per_km": 0.09,
-     "avg_kmh": 23.28,
+     "violations_per_km": 0,
+     "avg_kmh": 23.47,
      "min_gap_m": 1,
      "min_ttc_s": 0.9,
      "hard_brakes": 0,
-     "rms_jerk": 4,
-     "max_lat_accel": 5.2,
+     "rms_jerk": 3.07,
+     "max_lat_accel": 5.18,
      "lane_rms_m": 0.18,
      "lane_changes": 3,
      "speeding_s": 0,
-     "decisions": 5452,
+     "decisions": 5360,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -6328,31 +6308,15 @@
      },
      {
       "id": "s1-6",
-      "pass": false,
+      "pass": true,
       "arrived": true,
-      "failures": [
-       "collision"
-      ],
-      "collisions": 1,
+      "failures": [],
+      "collisions": 0,
       "failed_to_yield": 0,
       "deadlocks": 0,
       "safety_brakes": 0,
-      "time_s": 228,
-      "events": [
-       {
-        "type": "collision",
-        "with": "car_10",
-        "kind": "car",
-        "fault": "ego",
-        "at_fault": true,
-        "t": 139.5,
-        "ego_v": 4.4,
-        "other_v": 8,
-        "other_ahead": 3.4,
-        "other_right": 1.5,
-        "relative_heading_deg": 20
-       }
-      ]
+      "time_s": 203.3,
+      "events": []
      },
      {
       "id": "s1-7",
@@ -6444,7 +6408,7 @@
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 17.56,
+     "avg_kmh": 17.54,
      "min_gap_m": 2.1,
      "min_ttc_s": 1.2,
      "hard_brakes": 0,
@@ -6453,7 +6417,7 @@
      "lane_rms_m": 0.14,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 6981,
+     "decisions": 7002,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -6528,7 +6492,7 @@
       "failed_to_yield": 0,
       "deadlocks": 0,
       "safety_brakes": 1,
-      "time_s": 230.8,
+      "time_s": 233.5,
       "events": []
      },
      {
@@ -6807,7 +6771,7 @@
      "lane_rms_m": 0.11,
      "lane_changes": 4,
      "speeding_s": 0,
-     "decisions": 8107,
+     "decisions": 8109,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -6834,7 +6798,7 @@
       "failed_to_yield": 0,
       "deadlocks": 0,
       "safety_brakes": 0,
-      "time_s": 155.5,
+      "time_s": 156,
       "events": []
      },
      {
@@ -7028,20 +6992,20 @@
      "stop_signs": 0,
      "failed_to_yield": 0,
      "off_road_s": 0,
-     "safety_brakes": 0,
+     "safety_brakes": 1,
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
      "avg_kmh": 17.4,
-     "min_gap_m": 2.6,
-     "min_ttc_s": 1.5,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 1.2,
      "hard_brakes": 0,
-     "rms_jerk": 2.66,
+     "rms_jerk": 2.69,
      "max_lat_accel": 6.44,
      "lane_rms_m": 0.25,
      "lane_changes": 3,
      "speeding_s": 0,
-     "decisions": 1466,
+     "decisions": 1467,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -7067,8 +7031,8 @@
       "collisions": 0,
       "failed_to_yield": 0,
       "deadlocks": 0,
-      "safety_brakes": 0,
-      "time_s": 239.7,
+      "safety_brakes": 1,
+      "time_s": 238.7,
       "events": []
      }
     ]
@@ -7321,9 +7285,9 @@
      "min_gap_m": null,
      "min_ttc_s": null,
      "hard_brakes": 0,
-     "rms_jerk": 2.72,
+     "rms_jerk": 2.73,
      "max_lat_accel": 5.28,
-     "lane_rms_m": 0.19,
+     "lane_rms_m": 0.2,
      "lane_changes": 1,
      "speeding_s": 0,
      "decisions": 623,
@@ -7431,16 +7395,16 @@
      "deadlocks": 0,
      "fallbacks": 0,
      "violations_per_km": 0,
-     "avg_kmh": 32.95,
+     "avg_kmh": 33.8,
      "min_gap_m": 2.9,
      "min_ttc_s": 4.1,
      "hard_brakes": 0,
-     "rms_jerk": 2.75,
-     "max_lat_accel": 5.25,
-     "lane_rms_m": 0.2,
+     "rms_jerk": 2.47,
+     "max_lat_accel": 5.24,
+     "lane_rms_m": 0.21,
      "lane_changes": 2,
      "speeding_s": 0,
-     "decisions": 680,
+     "decisions": 657,
      "calls": 0,
      "tokens": 0,
      "cost_usd": 0
@@ -7455,7 +7419,7 @@
       "failed_to_yield": 0,
       "deadlocks": 0,
       "safety_brakes": 1,
-      "time_s": 118.5,
+      "time_s": 111.4,
       "events": []
      },
      {
@@ -7549,11 +7513,11 @@
      "min_gap_m": 8.1,
      "min_ttc_s": 3.7,
      "hard_brakes": 0,
-     "rms_jerk": 2.79,
+     "rms_jerk": 2.78,
      "max_lat_accel": 5.03,
      "lane_rms_m": 0.17,
      "lane_changes": 0,
-     "speeding_s": 2.4,
+     "speeding_s": 2.6,
      "decisions": 611,
      "calls": 0,
      "tokens": 0,
@@ -7581,7 +7545,7 @@
       "failed_to_yield": 0,
       "deadlocks": 0,
       "safety_brakes": 0,
-      "time_s": 106.8,
+      "time_s": 106.7,
       "events": []
      }
     ]

@@ -60,11 +60,22 @@ export class NpcPath {
     this.s = s;
     this.extend();
   }
-  // Move onto another lane of the current edge, keeping the edges already planned after it.
+  // Move onto another lane of the current edge, keeping the edges already planned after it. Their
+  // lanes follow from the new one, as when they were planned: carrying on straight in the lane it
+  // had planned would take the car back across, in the junction.
   switchLane(laneIdx, s) {
     const i = this.edges.indexOf(this.currentEdge());
     const cur = this.edges[i];
-    this.start(cur.id, laneIdx, s, this.edges.slice(i + 1).map((e) => [e.id, e.lane]));
+    let prev = { id: cur.id, lane: laneIdx };
+    const planned = this.edges.slice(i + 1).map((e) => (prev = { id: e.id, lane: this.laneInto(prev.id, prev.lane, e.id) }));
+    this.start(cur.id, laneIdx, s, planned.map((e) => [e.id, e.lane]));
+  }
+  // The lane taken onto edge `next` from lane `lane` of edge `from`: turns into the nearest lane (left
+  // turns into the leftmost, right into the rightmost), going straight keeps the same lane, and a
+  // cyclist rides the curb lane.
+  laneInto(from, lane, next) {
+    const edge = this.map.edges.get(next), turn = this.map.classifyTurn(this.map.turnAngle(from, next));
+    return this.bike ? edge.lanes - 1 : turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);
   }
   append(edgeId, laneIdx) {
     const lane = this.map.lane(edgeId, laneIdx) || this.map.lane(edgeId, 0);
@@ -90,12 +101,7 @@ export class NpcPath {
         if (routes.length && this.random() < 0.85) pool = routes;
       }
       const next = pool[Math.floor(this.random() * pool.length)];
-      const edge = this.map.edges.get(next);
-      // turn into the nearest lane (left turns into the leftmost, right into the rightmost), and
-      // keep the same lane going straight; a cyclist rides the curb lane
-      const turn = this.map.classifyTurn(this.map.turnAngle(last.id, next));
-      const lane = this.bike ? edge.lanes - 1 : turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(last.lane, edge.lanes - 1);
-      this.append(next, lane);
+      this.append(next, this.laneInto(last.id, last.lane, next));
     }
     return true;
   }

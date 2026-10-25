@@ -50,18 +50,20 @@
   (`s1-1`, 115.5 s): the brake fired for it with the car heading 25° off its lane, and the held
   wheel steered the car into it.
 
-- In the seeded V8 benchmark Rules passes all 70 routes, as before, with no collision, red-light
-  or stop-sign violation or failure to yield; WebKit passes 69 of 70 (70 before). Both keep the
-  same seven deadlock overrides (Toronto 4, Ottawa 3). The WebKit failure is Kitsilano dry
-  `s1-6`: leaving a signal on West Broadway side by side with the car, a traffic car whose lane
-  path moves into the car's lane beyond the junction drives across its nose, since traffic does
-  not check for a vehicle alongside there; the new timing puts the two together. Drives slow
-  where junctions without a sign are common, from looking at blind ones and giving way: Montréal
-  25.6 → 17.55 km/h (both engines), and in V8 Winnipeg 36.65 → 34.25, Edmonton 31.15 → 28.5 and
-  Saskatoon 29.85 → 25.7; Kitsilano moves by at most 0.5 km/h. Traffic giving way shifts other
-  drives both ways: Kitsilano dry `s1-8` and fog `s1-4` arrive 36 s and 39 s sooner. The reruns
-  use Node v24.19.0 / V8 and native WebKit on macOS 27.0.1. See
-  [docs/rules-baseline.md](docs/rules-baseline.md).
+- A traffic car that changes lanes keeps its new lane on the streets ahead. Before, the lanes it
+  had already planned for them stayed as they were, so a car that had moved to the right lane
+  went back to the left one where its street joined the next, swinging 19° across the junction
+  into whoever was beside it. In WebKit Kitsilano dry `s1-6`, leaving the signal at West Broadway
+  and Larch Street side by side with the driven car, `car_10` did so into it.
+
+- In the seeded V8 and WebKit benchmarks Rules passes all 70 routes in each engine, as before,
+  with no collision, red-light or stop-sign violation or failure to yield, and the same seven
+  deadlock overrides (Toronto 4, Ottawa 3). Drives slow where junctions without a sign are
+  common, from looking at blind ones and giving way: Montréal 25.6 → 17.55 km/h (both engines),
+  Winnipeg 36.65 → 33.75, Edmonton 31.15 → 28.5 and Saskatoon 29.85 → 25.7 (V8); Kitsilano moves
+  by at most 0.5 km/h. Traffic giving way shifts other drives both ways: Kitsilano dry `s1-8` and
+  fog `s1-4` arrive 36 s and 39 s sooner. The reruns use Node v24.19.0 / V8 and native WebKit on
+  macOS 27.0.1. See [docs/rules-baseline.md](docs/rules-baseline.md).
 
 - All-way stops have a turn order, for traffic and the driven car alike. Vehicles go in the order
   they stopped at their lines: a vehicle joins the order when it stops within 6 m of its line (or
