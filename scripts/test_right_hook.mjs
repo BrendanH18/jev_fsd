@@ -191,6 +191,12 @@ const J = junction();
   assert.deepEqual(run({ riderFront: -8 }), [], "the cyclist was past the corner first");
   assert.deepEqual(run({ riderFront: -70 }), [], "far enough back");
   assert.deepEqual(run({ riderFront: -34, side: 0.85 }), [], "following the car in its lane");
+  // resetting the car (to its lane, say) forgets which cyclists it has been counted for
+  const reset = setup(J);
+  reset.hookCounted.set("rider", reset.t);
+  reset.besideRight.set("rider", reset.t);
+  reset.resetContactHistory();
+  assert.ok(reset.hookCounted.size === 0 && reset.besideRight.size === 0, "cleared on reset");
   console.log("✓ turning right across a cyclist on the car's right counts as a failure to yield, seen or not");
 }
 

@@ -144,6 +144,7 @@ export class World {
     this.egoPeek = null;
     this.allWayCounted = null;
     this.besideRight.clear();
+    this.hookCounted.clear();
   }
 
   auditStatic(dt) {
