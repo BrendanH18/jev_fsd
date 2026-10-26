@@ -1,7 +1,7 @@
 import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle } from "../map/mapdata.js";
 import { Vehicle, BIKE } from "../sim/vehicle.js";
-import { NpcPath } from "../sim/npc.js";
+import { NpcPath, stripOffset } from "../sim/npc.js";
 import { Pedestrian } from "../sim/pedestrians.js";
 import { StopMemory, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
@@ -29,6 +29,8 @@ export const CHALLENGES = [
     description: "An all-way stop in The Annex. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left. Who goes when?", lesson: "At an all-way stop, whoever stops first goes first. Stop together and the car on the right goes first. A car that pulls up after you waits for you, even if it was queued before you arrived." },
   { id: "blind-corner", title: "The blind corner", map: "mount_pleasant", weather: "dry", time: "afternoon", seed: 10042, icon: "◩", difficulty: "Sight lines", hazard: "two-way",
     description: "A two-way stop in Mount Pleasant with a building on the corner. The cross street doesn't stop, and you can't see along it from the line.", lesson: "Stop at the line, then creep forward until you can see. Traffic on the through road has the right of way from both sides, so wait until neither side is close." },
+  { id: "right-hook", title: "The right hook", map: "kitsilano", weather: "dry", time: "afternoon", seed: 11042, icon: "↳", difficulty: "Anticipation", hazard: "right-hook",
+    description: "A right turn off a Kitsilano bikeway, with a cyclist riding the empty parking lane. Catch them up, and they're on your right at the corner.", lesson: "Before a right turn, check your mirror and over your shoulder. A cyclist going straight on your right has the right of way: slow down, let them by, then turn behind them." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -172,6 +174,27 @@ function twoWaySites(map) {
   twoWaySiteCache.set(map, sites); return sites;
 }
 
+// Right hooks: an approach at least 110 m long with an empty parking lane, the right of way at its
+// far end (no sign or signal, on the larger road or with nobody to give way to), whose route turns
+// right onto a street at least 60 m long, and which goes straight on into a street at least 40 m
+// long with a parking lane too, so a cyclist riding in it carries straight on past the corner. Bike
+// routes come first.
+const hookSiteCache = new WeakMap();
+function hookSites(map) {
+  if (hookSiteCache.has(map)) return hookSiteCache.get(map);
+  let sites = [];
+  const exit = (id, dir, min) => map.successors(id).find(o => map.classifyTurn(map.turnAngle(id, o)) === dir && map.edges.get(o).length > min
+    && (dir !== "straight" || stripOffset(map.edges.get(o), map.edges.get(o).lanes - 1) !== null));
+  for (const edge of map.edges.values()) {
+    if (edge.control || edge.length < 110 || stripOffset(edge, edge.lanes - 1) === null || map.priorityOf(edge.id)?.rule !== "major") continue;
+    const right = exit(edge.id, "right", 60), straight = exit(edge.id, "straight", 40);
+    if (right && straight) sites.push({ lane: map.lane(edge.id, edge.lanes - 1), right, straight, bike: !!edge.bike });
+  }
+  if (sites.some(s => s.bike)) sites = sites.filter(s => s.bike);
+  sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+  hookSiteCache.set(map, sites); return sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -197,13 +220,18 @@ export function challengeScenario(map, challenge) {
   const blinds = challenge.hazard === "two-way" ? twoWaySites(map) : null;
   if (blinds && !blinds.length) throw new Error("This map has no two-way stop with a building hiding the through road.");
   const blind = blinds ? blinds[Math.floor(random() * blinds.length)] : null;
-  const start = site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || lanes[Math.floor(random() * lanes.length)];
-  // a left or right turn, or a stop sign, starts 70 m before the stop line
-  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : Math.max(8, Math.min(20, start.length * 0.15));
+  const hooks = challenge.hazard === "right-hook" ? hookSites(map) : null;
+  if (hooks && !hooks.length) throw new Error("This map has no right turn with a parking lane a cyclist rides straight on past.");
+  const hook = hooks ? hooks[Math.floor(random() * hooks.length)] : null;
+  const start = site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || lanes[Math.floor(random() * lanes.length)];
+  // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
+  // before the corner
+  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
-  if (right) { const e = map.edges.get(right.right), turn = map.lane(right.right, e.lanes - 1); chain.push(turn); seen.add(right.right); length += turn.length; }
+  const turnRight = right?.right || hook?.right;
+  if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
   const straight = stop?.straight || blind?.straight;
   if (straight) { const ahead = map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   for (let i = 0; i < 12 && length < 260; i++) {
@@ -224,6 +252,7 @@ export function challengeScenario(map, challenge) {
     ...(right ? { oncoming: { edge: right.fromLeft, then: right.right, lane: "curb" } } : {}),
     ...(stop ? { allWay: allWayCars(map, stop) } : {}),
     ...(blind ? { twoWay: twoWayCars(map, blind) } : {}),
+    ...(hook ? { cyclist: { edge: hook.lane.edge, s: startS + HOOK_LEAD_M, then: hook.straight } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
 }
@@ -231,7 +260,7 @@ export function challengeScenario(map, challenge) {
 export function installChallenge(world, fleet, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
   // an oncoming hazard is placed at the stop line
-  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : Math.min(lane.length - 15, scenario.start.s + 65));
+  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}) };
@@ -250,6 +279,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
       stopMem: new StopMemory(), path: new NpcPath(world.map, fleet.random, { bike: true }), frozen: 0, waiting: 0 });
     bike.path.start(lane.edge, lane.idx, scenario.start.s + 30); fleet.vehicles.push(bike);
   }
+  if (scenario.cyclist) world.challenge.cyclistId = placeCyclist(world, fleet, scenario.cyclist);
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -269,7 +299,7 @@ export function stepChallenge(world, fleet) {
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
-    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
@@ -363,6 +393,20 @@ function releaseThrough(world, fleet, cars) {
     car.path.start(edge, lane.idx, s, plan); fleet.vehicles.push(car);
     return car.id;
   });
+}
+
+// A right hook: the car starts 95 m before the corner, and a cyclist 15 m ahead of it rides the
+// empty parking lane at 5.5 m/s, straight on past the corner. The car catches it up on the way, so
+// it is beside or just behind the car as the car slows for the turn.
+const HOOK_START_M = 95, HOOK_LEAD_M = 15;
+function placeCyclist(world, fleet, { edge, s, then }) {
+  const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);
+  const p = pointAt(lane.pts, lane.cum, s), psi = headingAt(lane.pts, lane.cum, s);
+  const bike = new Vehicle(p[0] + Math.sin(psi) * side, p[1] - Math.cos(psi) * side, psi, 5.5, BIKE);
+  Object.assign(bike, { id: "challenge_cyclist", kind: "bike", color: 0x2f855a, v0: 5.5, side, strip: true, driver: { aMax: 0.9, b: 2, s0: 2, T: 1.5, react: 0.6, lcRate: 0 },
+    stopMem: new StopMemory(), path: new NpcPath(map, fleet.random, { bike: true }), frozen: 0, waiting: 0 });
+  bike.path.start(edge, lane.idx, s, [[then, map.edges.get(then).lanes - 1]]); fleet.vehicles.push(bike);
+  return bike.id;
 }
 
 export function challengeConfig(challenge) {

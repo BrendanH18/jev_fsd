@@ -36,6 +36,7 @@ const LOOK_M = 60;
 export const BIKES = 12;
 const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xdd6b20];
 const SHARP_TURN = 130 * Math.PI / 180;   // mirrors SHARP_TURN_DEG in jev/routing.py
+const LINK_M = 20;   // a street this short going straight on is a link inside a junction
 const BOX_M = 9;
 const LEADER_MARGIN_M = 0.3;    // beyond two half-widths: anything closer to the path is in the way
 // Turning right on red (where the map allows it), from the curb lane after a full stop: the gap a
@@ -48,6 +49,69 @@ const RTOR_WALK_S = 4;
 const GIVE_WAY_LOOK_M = 40;
 const GIVE_WAY_AFTER_S = 2;
 const GIVE_WAY_HORIZON_S = 8;
+// Cyclists keep right. A street's parking lane at least 1.5 m wide is ridden where nothing is parked
+// in it: the rider's centre 0.75 m into it, and at least 2.6 m right of the traffic lane's centre (a
+// metre and a quarter clear of a 2 m wide car in the middle of the lane). Parking stops short of
+// every corner, so riders come up beside cars waiting or turning there. A rider takes the parking
+// lane when it is empty to the end of the block and carries on past the junction, or for at least
+// 60 m mid-block; it moves back into the traffic lane 20 m plus 2 s before the next parked car (on
+// the next block, once it is crossing the junction), or before a junction where it turns left or the next
+// street has no parking lane. It moves across at up to 0.8 m/s, and 0.3 m/s for every 1 m/s it
+// rides plus 0.1 m/s (a bicycle moves sideways only as it rolls forward), and back into the lane
+// only with no car beside it in the lane or closing from behind (4 m plus 2.5 s of closing speed);
+// until then it waits 6 m behind the parked car, room to pull out round it from rest. Stopped within 6 m
+// of something, a rider shuffles the bicycle sideways at 0.3 m/s, and round toward its way at 0.5 rad/s,
+// into free space.
+const STRIP_MIN_M = 1.5;
+const STRIP_INSET_M = 0.75;
+const STRIP_SIDE_M = 2.6;
+const STRIP_ENTER_M = 60;
+const STRIP_LEAVE_M = 20;
+const STRIP_LEAVE_S = 2;
+const SIDE_MPS = 0.8;
+const SIDE_PER_MPS = 0.3;
+const STRIP_HOLD_M = 6;
+const SHUFFLE_GAP_M = 6;
+const SHUFFLE_MPS = 0.3;
+const SHUFFLE_TURN = 0.5;
+const MERGE_GAP_M = 4;
+const MERGE_GAP_S = 2.5;
+// Turning right, from 50 m before the junction, a driver waits short of the corner for a cyclist on
+// its right (clear of its line, so not one following it, and within 6 m of it, on its street) going
+// its way that would reach the corner before the car is round it
+// (its front at the junction's centre plus the car's length, at its speed but no faster than the 6 m/s
+// it slows to for the turn, and no slower than 2.5 m/s) plus 1.5 s.
+const HOOK_LOOK_M = 50;
+const HOOK_SIDE_M = 6;
+const HOOK_MARGIN_S = 1.5;
+const HOOK_TURN_MPS = 6;
+const BODY_LOOK_M = 8;
+const BODY_AHEAD_M = 2;
+
+// How far ahead of a cyclist's front wheel any part of another vehicle's body is in its way, or
+// null: within its own body (and 0.05 m) moving straight on as it is heading for the next 2 m, or
+// within half its width plus 0.1 m of the next 8 m of its path, where it is `from` metres right of
+// its path now and heads for `side` metres right of it over those 8 m.
+function bodyOnPath(n, o, front, from, side) {
+  const b = o.obb(), c = Math.cos(b.heading), s = Math.sin(b.heading), m = n.spec.width / 2 + 0.1;
+  const own = n.obb(), ux = Math.cos(n.psi), uy = Math.sin(n.psi);
+  for (let d = 0; d <= BODY_AHEAD_M; d += 0.25) if (obbOverlap({ ...own, center: [own.center[0] + ux * d, own.center[1] + uy * d] }, b, 0.05)) return d;
+  for (let d = 0; d <= BODY_LOOK_M; d += 0.5) {
+    const [x, y] = n.path.offsetPointAt(Math.min(n.path.length, front + d), from + (side - from) * d / BODY_LOOK_M);
+    const dx = x - b.center[0], dy = y - b.center[1];
+    if (Math.abs(dx * c + dy * s) <= b.halfLength + m && Math.abs(dy * c - dx * s) <= b.halfWidth + m) return d;
+  }
+  return null;
+}
+
+// How far right of a lane's centre a cyclist rides in the street's parking lane, or null when the
+// lane is not beside the right curb or has no parking lane wide enough.
+export function stripOffset(e, laneIdx) {
+  if (!e || e.ring || !e.parking || laneIdx !== e.lanes - 1) return null;
+  const edge = e.lane_offsets[laneIdx] + e.lane_width / 2, room = e.asphalt[1] - edge;
+  if (room < STRIP_MIN_M) return null;
+  return Math.min(e.lane_width / 2 + room - BIKE.width / 2 - 0.3, Math.max(e.lane_width / 2 + STRIP_INSET_M, STRIP_SIDE_M));
+}
 
 export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
@@ -266,9 +330,10 @@ export class NpcFleet {
         n.lcCooldown = Math.max(0, (n.lcCooldown || 0) - dt);
         this.maybeChangeLane(n, edge, front);
       }
-      // a cyclist rides the right-hand side of the lane, clear of the car doors
-      const keepRight = n.kind === "bike" ? Math.max(0, this.map.edges.get(edge.id).lane_width / 2 - 0.75) : 0;
-      let offset = keepRight + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0);
+      // a cyclist rides the right-hand side of the lane, clear of the car doors, or the empty parking
+      // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
+      const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
+      let offset = (n.kind === "bike" ? n.side : keepRight) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0);
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -294,6 +359,16 @@ export class NpcFleet {
         // rear axle to rear axle, less our axle-to-front-bumper and its rear overhang
         const g = p.s - path.s - (spec.length - spec.rearOverhang) - (o.spec || CAR).rearOverhang;
         if (g < gap) { gap = g; leadV = o.v; leader = o; }
+      }
+      // a cyclist also stops for any part of a body across its way just ahead (a car turning across
+      // it, say), not only for one whose middle is in its path, along the way it will actually ride:
+      // moving across, it lags the line it steers for
+      if (n.kind === "bike") {
+        for (const o of all.concat(world.parked.near(n.x, n.y, BODY_LOOK_M + 6), world.parked.doorsNear(n.x, n.y, BODY_LOOK_M + 6))) {
+          if (o === n || Math.abs(o.x - n.x) > BODY_LOOK_M + 6 || Math.abs(o.y - n.y) > BODY_LOOK_M + 6) continue;
+          const g = bodyOnPath(n, o, front, proj.lateral, offset);
+          if (g !== null && g < gap) { gap = g; leadV = Math.max(0, o.v * Math.cos(o.psi - n.psi)); leader = o; }
+        }
       }
       n.lead = gap < Infinity ? { gap, v: leadV } : null;
       let stopAt = null;
@@ -322,8 +397,10 @@ export class NpcFleet {
         }
         break;
       }
-      const cw = crosswalkConflict(path.pts, path.cum, front - 2, front + 35, world.crowd, spec.width / 2 + 0.9);
+      const cw = crosswalkConflict(path.pts, path.cum, front - 2, front + 35, world.crowd, spec.width / 2 + 0.9 + (n.kind === "bike" ? Math.abs(n.side) : 0));
       if (cw) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
+      // a cyclist that cannot move back into the lane yet waits where the parking lane ends
+      if (n.kind === "bike" && n.stripHold != null) stopAt = stopAt === null ? n.stripHold - front : Math.min(stopAt, n.stripHold - front);
       if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
       const ji = path.edges.findIndex((e) => e.sEnd > front);
       const cur = path.edges[ji], after = path.edges[ji + 1];
@@ -333,6 +410,12 @@ export class NpcFleet {
       // turning left: yield to oncoming traffic before crossing its lane
       if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
         gap = Math.min(gap, Math.max(0.05, toNode - 5)); leadV = 0;
+      }
+      // turning right: wait short of the corner for a cyclist coming up on the right, unless the car
+      // can no longer stop before it
+      if (n.kind !== "bike" && turn === "right" && toNode < HOOK_LOOK_M) {
+        const half = this.map.crossingHalfWidth(cur.id), hold = toNode - half - 1;
+        if (hold > n.v * n.v / (2 * comfort().decel) - 0.5 && this.cyclistOnRight(n, cur.to, toNode, half)) { gap = Math.min(gap, Math.max(0.05, hold)); leadV = 0; }
       }
       // junction with no sign or signal ahead: yield to anyone already crossing it, and give way
       // at the line to traffic with the right of way (sim/priority.js) that would get there first
@@ -385,6 +468,12 @@ export class NpcFleet {
       if (n.v < 0.05 && a < 0) a = -1;   // stopped: hold the brakes rather than creep
       // wedged at an angle to its lane (a turn taken wide, then blocked): rebase its path
       if (n.waiting > 10 && Math.abs(wrap(n.psi - path.headingAt(path.s))) > 0.35) { this.recoverPath(n); continue; }
+      // stopped close behind something it is moving out round, a cyclist puts a foot down and
+      // shuffles the bicycle across rather than rolling forward into it
+      if (n.kind === "bike" && n.v < 0.3 && gap < SHUFFLE_GAP_M) {
+        const turn = wrap(path.headingAt(path.s) - n.psi);
+        if (Math.abs(offset - proj.lateral) > 0.05 || Math.abs(turn) > 0.02) this.shuffle(n, offset - proj.lateral, turn, dt);
+      }
       const steer = purePursuit(n, path, path.s, offset);
       n.step(dt, { steer, accel: a });
       if (n.v < 0) n.v = 0;
@@ -535,7 +624,128 @@ export class NpcFleet {
     return true;
   }
 
-  // Start a lane change when the lane is wrong for the next turn, or, now and then, to get past a
+  // Where a cyclist rides across its lane (see STRIP_MIN_M): it takes the parking lane or moves back
+  // into the traffic lane, eases `n.side` toward it and returns it. `n.stripHold` is where it must
+  // stop, in the parking lane, while it waits to move back.
+  curbside(n, pe, front, dt) {
+    const e = this.map.edges.get(pe.id);
+    const inLane = Math.max(0, e.lane_width / 2 - 0.75), strip = stripOffset(e, pe.lane);
+    if (n.side === undefined) n.side = inLane;
+    const end = strip === null ? front : this.stripEnd(n.path, pe, front);
+    n.stripHold = null;
+    // (a parked car on the next street is passed only once the rider is crossing the junction, its
+    // front at the crossing street, but where the street just carries on, as round a bend, it is
+    // passed like one on this street)
+    const across = end > pe.sEnd && this.isJunction(pe.to) && front < pe.sEnd - this.map.crossingHalfWidth(pe.id);
+    const leave = strip === null || (end - front < STRIP_LEAVE_M + STRIP_LEAVE_S * n.v && !across);
+    if (n.strip) {
+      if (leave) {
+        if (this.laneClear(n, e)) n.strip = false;
+        else if (strip !== null) n.stripHold = end - STRIP_HOLD_M;
+      }
+    } else if (!leave && (across || end - front > STRIP_ENTER_M)) n.strip = true;
+    const target = n.strip ? strip : inLane;
+    // (a bicycle moves across only as it rolls forward)
+    const rate = Math.min(SIDE_MPS, SIDE_PER_MPS * Math.max(0, n.v) + SHUFFLE_MPS) * dt;
+    n.side += Math.max(-rate, Math.min(rate, target - n.side));
+    return target;
+  }
+
+  // Where the parking lane a cyclist rides in ends ahead of it, as arc length along its path: at the
+  // first car parked in it (or a bay a car is about to park in), or before a junction where it turns
+  // left or the next street has no parking lane. Looked for along this street and the next two.
+  stripEnd(path, pe, front) {
+    const k = path.edges.indexOf(pe);
+    for (let i = k; i < path.edges.length && i <= k + 2; i++) {
+      const pi = path.edges[i], e = this.map.edges.get(pi.id), prev = path.edges[i - 1];
+      if (i > k && stripOffset(e, pi.lane) === null) return prev.sEnd - this.map.crossingHalfWidth(prev.id);
+      const scale = (pi.sEnd - pi.sStart) / Math.max(1, e.length);
+      for (const [s0, s1] of this.parkedAlong(e)) if (pi.sStart + s1 * scale > front) return Math.max(front, pi.sStart + s0 * scale);
+      const next = path.edges[i + 1];
+      if (next) {
+        const turn = this.map.classifyTurn(this.map.turnAngle(pi.id, next.id));
+        if (turn === "left" || turn === "uturn") return pi.sEnd - this.map.crossingHalfWidth(pi.id);
+      }
+    }
+    return Infinity;
+  }
+
+  // The stretches of a street's right-hand parking lane taken by parked cars, or bays reserved by a
+  // car about to park, as [start, end] along the street, in order.
+  parkedAlong(e) {
+    const parked = this.world.parked;
+    if (!this.bays) {
+      this.bays = new Map();
+      for (const slot of parked.slots) {
+        if (slot.curb !== "right") continue;
+        const edge = this.map.edges.get(slot.edge), s = projectPoint(edge.pts, edge.cum, [slot.x, slot.y], null).s - CAR.rearOverhang;
+        if (!this.bays.has(slot.edge)) this.bays.set(slot.edge, []);
+        this.bays.get(slot.edge).push({ slot, s });
+      }
+      for (const list of this.bays.values()) list.sort((a, b) => a.s - b.s);
+    }
+    const out = (this.bays.get(e.id) || []).filter((b) => b.slot.occupant || b.slot.reserved).map((b) => [b.s, b.s + CAR.length]);
+    // (a car parked outside a bay: placed by a challenge)
+    const key = `${this.world.tick}:${parked.list.length}`;
+    if (this.looseKey !== key) { this.looseKey = key; this.loose = parked.list.filter((c) => !c.slot); }
+    for (const c of this.loose) {
+      if (c.edge !== e.id || c.curb !== "right") continue;
+      const s = projectPoint(e.pts, e.cum, [c.x, c.y], null).s - c.spec.rearOverhang;
+      out.push([s, s + c.spec.length]);
+    }
+    return out.sort((a, b) => a[0] - b[0]);
+  }
+
+  // Nothing in the traffic lane beside a cyclist, or coming up behind it, that it would move in front
+  // of (see MERGE_GAP_M). Anything ahead of it is a leader once it is in the lane.
+  laneClear(n, e) {
+    const path = n.path, ns = n.spec;
+    for (const o of [this.world.ego, ...this.vehicles]) {
+      if (o === n || Math.abs(o.x - n.x) > 60 || Math.abs(o.y - n.y) > 60) continue;
+      const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
+      if (!p || Math.abs(p.lateral) > e.lane_width / 2 + 0.3) continue;
+      const os = o.spec || CAR, ds = p.s - path.s;
+      if (ds - os.rearOverhang > ns.length - ns.rearOverhang + 0.5) continue;
+      const behind = -ds - (os.length - os.rearOverhang) - ns.rearOverhang;
+      if (behind < MERGE_GAP_M + Math.max(0, o.v - n.v) * MERGE_GAP_S) return false;
+    }
+    return true;
+  }
+
+  // Move a stopped cyclist up to `by` metres to its right (negative: left), at SHUFFLE_MPS, and turn it
+  // up to `turn` radians toward its path at SHUFFLE_TURN, if nothing is in the way there.
+  shuffle(n, by, turn, dt) {
+    const d = Math.sign(by) * Math.min(SHUFFLE_MPS * dt, Math.abs(by)), x = n.x + Math.sin(n.psi) * d, y = n.y - Math.cos(n.psi) * d;
+    const psi = n.psi + Math.sign(turn) * Math.min(SHUFFLE_TURN * dt, Math.abs(turn)), f = n.spec.length / 2 - n.spec.rearOverhang;
+    const box = { ...n.obb(), heading: psi, center: [x + Math.cos(psi) * f, y + Math.sin(psi) * f] };
+    // (to within 0.1 m of nothing new, and away from anything already that close)
+    const near = this.world.obstaclesNear(x, y, 8).concat(this.world.ego), now = n.obb();
+    const closer = (o) => Math.hypot(box.center[0] - o.center[0], box.center[1] - o.center[1]) < Math.hypot(now.center[0] - o.center[0], now.center[1] - o.center[1]);
+    if (near.some((o) => o !== n && o.obb && obbOverlap(box, o.obb(), 0.1) && (!obbOverlap(now, o.obb(), 0.1) || closer(o)))) return;
+    n.x = x; n.y = y; n.psi = psi;
+  }
+
+  // Turning right at node `nodeId`, `toNode` metres ahead: a cyclist on the right (clear of the car's
+  // line, so not one following it) going the car's way would reach the corner (the near side of the
+  // crossing street, `half` metres short of the junction's centre) before the car is round it.
+  cyclistOnRight(n, nodeId, toNode, half) {
+    const node = this.map.nodes.get(nodeId);
+    if (!node) return false;
+    const mine = (toNode + n.spec.length) / Math.max(2.5, Math.min(HOOK_TURN_MPS, n.v)) + HOOK_MARGIN_S;
+    for (const o of this.vehicles) {
+      if (o.kind !== "bike" || (o.v < 0.5 && !(o.v > 0.05 && o.a > 0.3))) continue;
+      if (Math.abs(wrap(o.psi - n.psi)) > Math.PI / 6) continue;
+      const local = n.toLocal(o.x, o.y);
+      if (local.right < (n.spec.width + o.spec.width) / 2 + 0.1 || local.right > HOOK_SIDE_M || local.ahead < -HOOK_LOOK_M) continue;
+      const along = (node.x - o.x) * Math.cos(o.psi) + (node.y - o.y) * Math.sin(o.psi);
+      if (along < -1) continue;   // past the corner
+      if (Math.max(0, along - half - (o.spec.length - o.spec.rearOverhang)) / Math.max(0.5, o.v) < mine) return true;
+    }
+    return false;
+  }
+
+  // Start a lane change when the lane is wrong for the next turn (looking through a short link inside
+  // the junction), or, now and then, to get past a
   // slow car. Only mid-block on multi-lane edges, and only into a gap that is free well behind and
   // ahead in the target lane.
   maybeChangeLane(n, edge, front) {
@@ -548,8 +758,13 @@ export class NpcFleet {
       if (lineS - front < 30 && lineS - front > -5) return;
     }
     const path = n.path;
-    const i = path.edges.indexOf(edge), after = path.edges[i + 1];
-    const turn = after ? this.map.classifyTurn(this.map.turnAngle(edge.id, after.id)) : "straight";
+    // the turn at the next junction, looking through a short link that goes straight on inside it
+    let k = path.edges.indexOf(edge), turn = "straight";
+    for (; k + 1 < path.edges.length; k++) {
+      const a = path.edges[k], b = path.edges[k + 1];
+      turn = this.map.classifyTurn(this.map.turnAngle(a.id, b.id));
+      if (turn !== "straight" || this.map.edges.get(b.id).length >= LINK_M || k + 2 >= path.edges.length) break;
+    }
     let dir = 0;
     if (turn === "left" && edge.lane > 0) dir = -1;
     else if (turn === "right" && edge.lane < e.lanes - 1) dir = 1;

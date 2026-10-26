@@ -6,7 +6,7 @@ import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
-import { CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, CLEARING_M, PEEK_MPS, waitsItsTurn } from "./sensors.js";
+import { CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, HOOK_STOP_M, CLEARING_M, PEEK_MPS, waitsItsTurn } from "./sensors.js";
 import { poseOf } from "../sim/static-obstacles.js";
 import { STOP_ZONE_M } from "../sim/signals.js";
 import { PEEK_AT_M } from "../sim/priority.js";
@@ -111,6 +111,12 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_for_oncoming", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(oncoming.yield_s_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "stop and wait for oncoming traffic before turning" });
     }
+    // Turning right with a cyclist coming up on the right: wait short of its line of travel.
+    const hook = snap.right_hook;
+    if (hook && hook.bumper_to_yield_m > 0.3) {
+      out.push({ id: "stop_for_cyclist", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(hook.yield_s_route - FRONT - 0.5) }),
+        steer: "hold lane", speed: "stop and let the cyclist on the right go by before turning" });
+    }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -157,6 +163,7 @@ export function simulateAll(candidates, snap, world) {
   const currentlyOffRoad = !snap.road.on_road;
   const ped = snap.pedestrian;
   const oncoming = control?.oncoming || null;
+  const hook = snap.right_hook || null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   for (const c of candidates) {
@@ -164,7 +171,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let lateLeaving = false, pedCross = false, cutsOff = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -195,6 +202,8 @@ export function simulateAll(candidates, snap, world) {
         // the wait point is ONCOMING_STOP_M short of oncoming traffic's path; stopping up to a metre
         // past it (a short, slow stop overshoots) still keeps the car out of that path
         if (oncoming && s + FRONT > oncoming.yield_s_route + ONCOMING_STOP_M - 0.5) cutsOff = true;
+        // likewise turning right across a cyclist's line of travel
+        if (hook && s + FRONT > hook.yield_s_route + HOOK_STOP_M - 0.5) hooks = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -247,6 +256,7 @@ export function simulateAll(candidates, snap, world) {
     else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" || control.stop_completed ? "fails_to_yield" : "runs_stop";
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
+    else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";
     else if (passesHold && c.law.kind !== "hard_brake") reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     c.reject = reject;
     c.eligible = !reject;

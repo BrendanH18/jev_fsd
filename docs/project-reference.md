@@ -253,8 +253,11 @@ cars and candidate predictions. Rain and snow reduce grip.
 Traffic follows lanes, obeys signals, yields at junctions and crossings, changes lanes, reserves
 curb parking, pulls in and waits for gaps before pulling out, looking again until it is moving. Parked cars can open a street-side
 door for six seconds; the animated door has matching sensing, prediction and collision geometry.
-Cyclists ride bike routes, and pedestrians cross at signals or sometimes mid-block and carry
-umbrellas in rain.
+Cyclists ride bike routes, keeping right: where a street's parking lane is empty to the end of the
+block they ride in it, past cars queued at the corner, and move back into the traffic lane before
+the next parked car once nothing is beside them. A car turning right, the driven car included,
+waits for a cyclist coming up on its right (a right hook). Pedestrians cross at signals or
+sometimes mid-block and carry umbrellas in rain.
 
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery
@@ -434,6 +437,7 @@ node --experimental-default-type=module scripts/test_left_turn.mjs
 node --experimental-default-type=module scripts/test_right_on_red.mjs
 node --experimental-default-type=module scripts/test_all_way_stop.mjs
 node --experimental-default-type=module scripts/test_give_way.mjs
+node --experimental-default-type=module scripts/test_right_hook.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```

@@ -88,6 +88,19 @@ const IMMEDIATE_S = 2.0;
 const VIEW_CHECK_M = 40;
 const VIEW_STEP_M = 5;
 export const PEEK_MPS = 1.5;
+// Turning right, the car yields to a cyclist on its right going its way (a right hook): one clear
+// of the car's lane line, so passing it on the right rather than following it, heading within 30
+// deg of the street the car turns from, and coming toward the corner. The car turns in front of it
+// only if it would clear the cyclist's line of travel (the car's front at the first point of its
+// path within half the two widths plus 0.5 m of that line, then twice that and its own length,
+// taking the turn as for a left one) 1.5 s before the cyclist gets there, or 0.75 s once moving
+// into the turn. Otherwise it waits 1 m short of that point. It looks for the turn within 45 m and
+// for cyclists up to 30 m behind its rear; only cyclists it can see count.
+const HOOK_TURN_M = 45;
+const HOOK_BEHIND_M = 30;
+const HOOK_CONE = Math.PI / 6;
+export const HOOK_STOP_M = 1.0;
+const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -98,7 +111,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -195,6 +208,7 @@ export function buildSnapshot(world, executing = null) {
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
     const vehicles = visible.filter((o) => o.kind !== "pedestrian");
     const lane = snap.lane = laneState(route, p, executing && executing.law);
+    snap.right_hook = rightHook(world, p, frontS, lane);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -340,6 +354,44 @@ function oncomingYield(world, c, frontS) {
   return best;
 }
 
+// Turning right (see HOOK_TURN_M): the cyclist the car must wait for, or null when there is none or
+// the car can no longer stop short of the cyclist's line of travel (it has committed and carries
+// on). `yield_s_route` is where its front bumper stops.
+function rightHook(world, p, frontS, lane) {
+  const { ego, route } = world;
+  const turn = route.turns.find((t) => t.at_m > frontS - JUNCTION_BOX_M);
+  if (!turn || turn.dir !== "right" || turn.at_m - frontS > HOOK_TURN_M) return null;
+  const inward = route.headingAt(Math.max(0, turn.at_m - 15));
+  const toClear = (hit) => hit - frontS + ego.spec.length;
+  let best = null;
+  for (const n of world.npcs) {
+    if (n.kind !== "bike" || (n.v < 0.5 && !(n.v > 0.05 && n.a > 0.3))) continue;
+    if (Math.abs(wrap(n.psi - inward)) > HOOK_CONE || Math.hypot(n.x - ego.x, n.y - ego.y) > HOOK_BEHIND_M + 20) continue;
+    const q = route.project(n.x, n.y, p.index), spec = n.spec || CAR;
+    if (!q || q.s < p.s - ego.spec.rearOverhang - HOOK_BEHIND_M || q.s > turn.at_m) continue;
+    // clear of the car's lane line on its right: beside it, not behind it
+    const reach = (ego.spec.width + spec.width) / 2 + 0.5;
+    const side = q.lateral + route.frameMove(p.s, q.s) - lane.center;
+    if (side < reach - 0.4 || side > HOOK_SIDE_M || !world.visibility.sees(ego, n)) continue;
+    const ux = Math.cos(n.psi), uy = Math.sin(n.psi);
+    let hit = null;
+    for (let s = Math.max(p.s, frontS - 2); s <= turn.at_m + JUNCTION_BOX_M; s += 0.5) {
+      const [px, py] = route.pointAt(s), ax = px - n.x, ay = py - n.y;
+      if (ax * ux + ay * uy > -spec.rearOverhang && Math.abs(ax * uy - ay * ux) < reach) { hit = s; break; }
+    }
+    if (hit === null) continue;
+    const [hx, hy] = route.pointAt(hit);
+    const eta = etaOf(world, n, (hx - n.x) * ux + (hy - n.y) * uy - (spec.length - spec.rearOverhang));
+    const need = clearTime(ego.v, Math.max(0, toClear(hit) + 2 * reach)) + (ego.v > 1.5 && frontS > hit - 3 ? GAP_KEEP_S : GAP_MARGIN_S);
+    if (eta >= need) continue;
+    const at = hit - HOOK_STOP_M;
+    if (!best || at < best.yield_s_route) best = { id: n.id, eta_s: eta, need_s: need, yield_s_route: at, bumper_to_yield_m: at - frontS };
+  }
+  // too late to stop short of its line: carry on through
+  if (!best || best.bumper_to_yield_m + HOOK_STOP_M < ego.v * ego.v / (2 * Math.min(4, comfort().hardDecel)) + 0.3) return null;
+  return best;
+}
+
 // At an all-way stop (sim/all-way.js), the car's place in the queue as far as it can see: whether it
 // has stopped at the line and joined it (`arrived`), whether it is its turn (`go`), the vehicle it
 // waits for, and the vehicles already waiting there (`waiting`, before it arrives: they go first).
@@ -368,7 +420,7 @@ function etaOf(world, n, distance) {
   if (distance <= 0) return 0;
   const v = Math.max(0, n.v), a = Math.min(ETA_ACCEL_MAX, Math.max(0, n.a || 0));
   if (a < 0.05) return v > 0.05 ? distance / v : Infinity;
-  const vMax = Math.max(v, world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane.edgeRef.limit || 13.9);
+  const vMax = Math.max(v, Math.min(n.spec?.maxSpeed ?? Infinity, world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane.edgeRef.limit || 13.9));
   const tTop = (vMax - v) / a, dTop = (v + vMax) / 2 * tTop;
   return dTop >= distance ? (Math.sqrt(v * v + 2 * a * distance) - v) / a : tTop + (distance - dTop) / vMax;
 }
@@ -634,6 +686,11 @@ export function desiredSpeed(snap) {
     const vo = room < 1.5 ? 0 : stopSpeedFor(room - 1.0, decel);
     if (vo < v) { v = vo; reasons.push("oncoming traffic"); }
   }
+  if (snap.right_hook) {
+    const room = snap.right_hook.bumper_to_yield_m;
+    const vh = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vh < v) { v = vh; reasons.push("cyclist on the right"); }
+  }
   if (snap.pedestrian) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
@@ -670,6 +727,7 @@ export function hazardFlags(snap) {
   if (snap.following && snap.following.gap_m < 15) f.push("following");
   if (snap.roadside?.some((o) => o.kind !== "parked car")) f.push("roadside activity");
   if (snap.pedestrian) f.push("pedestrian");
+  if (snap.right_hook) f.push("cyclist");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");

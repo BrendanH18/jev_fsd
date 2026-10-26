@@ -23,6 +23,7 @@ export class RulesBrain {
     }
     if (snap.following && snap.following.gap_m < 3 && snap.following.speed < 0.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
+    if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
     if (snap.nav && snap.nav.arrived) stop = true;
     const motion = stop ? "stop" : "drive";
 
@@ -45,7 +46,7 @@ export class RulesBrain {
       if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !i.right_on_red?.go) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
-      if (c.id === "stop_for_oncoming") cost -= 6;
+      if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist") cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       if (c.law.kind === "hard_brake") cost += 3;
       if (c.law.kind === "reverse") cost += 2;
