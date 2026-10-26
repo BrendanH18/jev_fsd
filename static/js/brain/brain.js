@@ -71,7 +71,8 @@ export class Autopilot {
     // during one), and taken up again on the same route: it still ends once the car is well away.
     if (!on) {
       this.world.stuckFor = 0;
-      this.pausedTurnaround = this.world.turnaround;
+      // (switched off twice, the one set aside is kept)
+      if (this.world.turnaround) this.pausedTurnaround = this.world.turnaround;
       this.world.turnaround = null;
     } else if (this.pausedTurnaround && this.world.route === this.turnaroundRoute) this.world.turnaround = this.pausedTurnaround;
     if (on) this.pausedTurnaround = null;

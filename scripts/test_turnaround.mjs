@@ -295,7 +295,7 @@ function parkedCar(id, x, y, psi = 0) {
 }
 
 {
-  // switched off and on again partway round, with the destination just beyond the U-turn: the
+  // switched off (twice, as the driver menu can) and on again partway round, with the destination just beyond the U-turn: the
   // turnaround is taken up again, so the drive still ends only once the car is in the lane out
   const goalX = 50;
   const world = setup({ x: 20, v: 5 });
@@ -310,6 +310,7 @@ function parkedCar(id, x, y, psi = 0) {
   for (let i = 0; i < 90 / dt && world.route; i++) {
     stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
     if (!toggled && world.turnaround?.phase === "out") {
+      autopilot.setEnabled(false);
       autopilot.setEnabled(false);
       autopilot.setEnabled(true);
       toggled = true;
