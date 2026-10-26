@@ -560,3 +560,75 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
   assert.ok(n.lc && n.lc.dir === -1 && n.lc.to === 0, "it moves into the left lane");
   console.log("✓ a traffic car gets into the lane for a turn just past a short link inside the junction");
 }
+
+{
+  // A lane change that has stopped just short of its end, across in all but a few centimetres, is
+  // over: the lane beyond is on offer again (here the route's lane, as a return rather than going
+  // back), instead of the car waiting for a change that never ends because it is standing still.
+  const world = setup({ npcs: [car("stalled", 70, RIGHT)] });
+  const change = decide(world).eligible.find((c) => c.id.startsWith("change_left_"));
+  const law = { ...change.law, s0: 20, shift: { ...change.law.shift, start: 20, len: 20 } };
+  const u = 0.93;
+  Object.assign(world.ego, { x: 20 + u * 20, y: RIGHT + (LEFT - RIGHT) * u * u * (3 - 2 * u), v: 0 });
+  const { snap } = decide(world, { law });
+  assert.equal(snap.lane.delta, -1);
+  assert.ok(snap.lane.shift === null, "the change is over");
+  assert.equal(snap.lane.sides.right.offer, "return");
+  console.log("✓ a lane change that stopped just short of its end is over, and the next lane is on offer");
+}
+
+// A one-way street with three lanes: the route keeps to the right one and ends 90 m on, and the
+// car starts two lanes left of it, as Ottawa's suite route `s1-1` starts on Wellington Street.
+const WIDE = 90, LANES3 = [3.5, 0, -3.5];
+const map3 = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -60, WIDE + 20, 60],
+  edges: [{ id: "three", from: "a", to: "b", pts: [[0, 0], [WIDE, 0]], length: WIDE, lanes: 3, lane_width: 3.5, lane_offsets: [-3.5, 0, 3.5], asphalt: [-5.25, 5.25], parking: [0, 0], cls: "secondary", limit: 13.9, oneway: true, name: "Three Lanes" }],
+  lanes: LANES3.map((y, idx) => ({ edge: "three", idx, pts: [[0, y], [WIDE, y]] })),
+  nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: WIDE, y: 0 }], intersections: [], stops: [], buildings: [] });
+const route3 = { id: "r3", polyline: Array.from({ length: WIDE + 1 }, (_, i) => [i, LANES3[2]]), edges: ["three"], turns: [], start_s: 0, goal_s: WIDE };
+function setup3({ x, y = LANES3[0], v }) {
+  const world = new World(map3, { parked: 0, pedestrians: 0 });
+  Object.assign(world.ego, { x, y, psi: 0, v });
+  world.route = new Route(route3, map3);
+  world.destination = [WIDE, LANES3[2]];
+  world.npcs = [];
+  world._road = world.roadInfo();
+  return world;
+}
+
+{
+  // two lanes from the route's: staying needs room for two lane changes before the lane ends, and a
+  // change toward the route's lane is always allowed
+  const world = setup3({ x: 30, v: 6 });
+  const executing = { law: { kind: "lane", offset: -7, center: -7, lane: -2, vTarget: 6 } };
+  const { snap, candidates, eligible } = decide(world, executing);
+  assert.equal(snap.lane.delta, -2);
+  const hold = candidates.find((c) => c.id === "keep_lane_hold");
+  assert.ok(hold && hold.reject === "must_return_to_route_lane", `${hold?.id}: ${hold?.reject}`);
+  const room = 30 + hold.sim.progress_m + world.ego.spec.length - world.ego.spec.rearOverhang + 3.5 * hold.sim.end_speed + 8;
+  assert.ok(room < WIDE, "one lane change would still fit, two do not");
+  assert.ok(eligible.some((c) => c.id.startsWith("change_right_") && c.change.offer === "return"));
+  console.log("✓ two lanes from the route's lane, the car keeps room for two lane changes");
+}
+
+{
+  // closed loop: from a standstill two lanes over, Rules crosses both lanes and arrives, with no
+  // deadlock override (before, it moved one lane over, ran out of room for the second change,
+  // went back and stood still until the override crept it across)
+  const world = setup3({ x: 5, v: 0 });
+  const autopilot = new Autopilot(world);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  const metrics = new DriveMetrics(world.route.length);
+  const fleet = { step() {} };
+  const dt = 1 / 30;
+  for (let i = 0; i < 60 / dt && world.route; i++) {
+    const road = stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+    if (autopilot.snap) metrics.record(world, autopilot.snap, road, dt);
+  }
+  assert.ok(world.route === null, `arrived (car at ${world.ego.x.toFixed(1)}, ${world.ego.y.toFixed(2)})`);
+  assert.equal(world.violations.deadlock_overrides, 0);
+  assert.equal(world.violations.collisions, 0);
+  assert.ok(Math.abs(world.ego.y - LANES3[2]) < 0.6, `in the route's lane at the end (y=${world.ego.y.toFixed(2)})`);
+  assert.ok(metrics.laneChanges >= 2, `${metrics.laneChanges} lane changes`);
+  console.log(`✓ from two lanes over, Rules crosses both and arrives in ${world.t.toFixed(1)} s`);
+}

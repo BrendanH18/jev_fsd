@@ -8,6 +8,7 @@
 // benchmark replays the same schedule).
 
 import { applyLaw, lateralAt, lookahead, purePursuit } from "../sim/controller.js";
+import { endLeg, linedUp } from "../sim/turnaround.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
@@ -20,6 +21,7 @@ const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
 const TIMEOUT_MS = 1500;
 const GOAL_LATERAL_M = 1.5;   // a blocked destination counts only this close to the route lane's centre
+const TURN_ROUND_AWAY_M = 25;
 const SPEND_KEYS = ["model", "endpoint", "latency_ms", "input_tokens", "output_tokens", "cost_usd", "cost_known", "live_call"];
 
 export class Autopilot {
@@ -45,6 +47,8 @@ export class Autopilot {
     this.rerouting = false;
     this.pendingRoutes = null;
     this.goalBlockedBy = null;
+    this.turnaroundRoute = null;   // the route world.turnaround was planned on
+    this.pausedTurnaround = null;  // one set aside while autopilot is off
   }
 
   get brain() { return this.brains[this.brainName]; }
@@ -63,7 +67,15 @@ export class Autopilot {
     this.bumpEpoch();
     this.executing = null;
     this.lastStart = -Infinity;
-    if (!on) this.world.stuckFor = 0;
+    // A turnaround is set aside while the driver drives (the oncoming-traffic audit skips the car
+    // during one), and taken up again on the same route: it still ends once the car is well away.
+    if (!on) {
+      this.world.stuckFor = 0;
+      // (switched off twice, the one set aside is kept)
+      if (this.world.turnaround) this.pausedTurnaround = this.world.turnaround;
+      this.world.turnaround = null;
+    } else if (this.pausedTurnaround && this.world.route === this.turnaroundRoute) this.world.turnaround = this.pausedTurnaround;
+    if (on) this.pausedTurnaround = null;
   }
 
   // Called every physics step, before world.audit.
@@ -71,9 +83,30 @@ export class Autopilot {
     const world = this.world;
     if (!this.enabled || !world.route) return;
     const road = world._road = world.roadInfo();
+    // A turnaround hands back once the car faces the way out and the route's projection finds it
+    // beyond the U-turn, in the lane there and facing along it (which runs right beside the lane it came in
+    // on, so the projection looks only from the U-turn on); the next decision comes at once, so
+    // the junction ahead is planned for as usual. It also ends when the route changes, or once
+    // the car is well away from the U-turn (driven off by hand, say).
+    const turn = world.turnaround;
+    // (a destination just beyond the U-turn: the drive ends there, once the car is in the lane)
+    let arrivedOut = false;
+    if (turn?.phase === "out" && world.route === this.turnaroundRoute) {
+      if (!turn.rehinted) { world.route.hint = turn.outLo; turn.rehinted = true; }
+      const p = linedUp(world.ego, world.route, turn);
+      if (p?.atEnd) arrivedOut = true;
+      else if (p) { turn.done = true; world.route.hint = p.index; }
+    }
+    const at = turn ? world.route.pointAt(turn.sTurn) : null;
+    const away = at && Math.hypot(at[0] - world.ego.x, at[1] - world.ego.y) > TURN_ROUND_AWAY_M;
+    if (turn && (turn.done || away || world.route !== this.turnaroundRoute)) {
+      world.turnaround = null;
+      this.lastStart = -Infinity;
+    }
     const snap = this.snap = buildSnapshot(world, this.executing);
     const nav = snap.nav;
-    world.ego.signal = nav && nav.turn_in_m < 40 && (nav.next_turn === "left" || nav.next_turn === "right") ? nav.next_turn : null;
+    // (a U-turn signals left, the way it turns, and so does turning round)
+    world.ego.signal = snap.turnaround ? "left" : nav && nav.turn_in_m < 40 && (nav.next_turn === "left" || nav.next_turn === "right" || nav.next_turn === "uturn") ? (nav.next_turn === "uturn" ? "left" : nav.next_turn) : null;
     // A lane change signals toward the new lane until the car is across.
     const shift = snap.lane && snap.lane.shift && this.executing?.law;
     if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s, world.route) > lateralAt({ ...shift, shift: null }, snap.routeProj.s, world.route) ? "left" : "right";
@@ -86,21 +119,32 @@ export class Autopilot {
       simulateAll(candidates, snap, world);
       blockedBy = this.goalBlockedBy = goalBlocker(candidates, world);
     }
-    if (snap.nav && (snap.nav.arrived || blockedBy) && world.ego.v < 0.3) {
+    // (not partway through turning round, standing between legs in the lane coming in)
+    if (snap.nav && ((snap.nav.arrived && !world.turnaround) || arrivedOut || blockedBy) && world.ego.v < 0.3) {
       this.setEnabled(false);
       world.route = null;
       world.destination = null;
       this.onEvent(blockedBy ? { type: "arrived", blocked_by: blockedBy } : { type: "arrived" });
       return;
     }
-    // off route for a while: ask the server for fresh routes from here
-    if (!snap.onRoute) this.offRouteFor += dt; else this.offRouteFor = 0;
+    // off route for a while: ask the server for fresh routes from here (turning round, the car
+    // faces away from its route for a while on purpose)
+    if (!snap.onRoute && !snap.turnaround) this.offRouteFor += dt; else this.offRouteFor = 0;
     if (this.offRouteFor > 3 && !this.rerouting) this.reroute();
 
     const s = snap.routeProj ? snap.routeProj.s : 0;
     const brake = safetyBrake(world, snap, this.executing);
+    // (braking while reversing pushes forward)
+    const brakeSign = world.ego.v < 0 ? -1 : 1;
+    // Stopped by the safety brake partway along a turnaround's leg: that leg is over. One held
+    // before its leg has moved is waiting, and counts as standing still.
+    const turning = brake && world.turnaround && this.executing?.law === world.turnaround ? world.turnaround : null;
+    if (turning && Math.abs(world.ego.v) < 0.05) {
+      if (turning.travelled >= 0.2) endLeg(turning);
+      else turning.idle = (turning.idle || 0) + dt;
+    }
     if (brake && brake.hold) {
-      world.ego.step(dt, { steer: world.ego.delta, accel: -3 });
+      world.ego.step(dt, { steer: world.ego.delta, accel: -3 * brakeSign });
       this.safetyActive = false;
     } else if (brake) {
       // Brake hard, still steering along the manoeuvre's path, as `hard_brake` does: holding the
@@ -108,15 +152,15 @@ export class Autopilot {
       // braking for.
       const law = this.executing?.law;
       const steer = law && (law.kind === "lane" || law.kind === "hard_brake") && snap.onRoute ? purePursuit(world.ego, world.route, s, lateralAt(law, s + lookahead(world.ego.v), world.route)) : world.ego.delta;
-      world.ego.step(dt, { steer, accel: -8 });
+      world.ego.step(dt, { steer, accel: -8 * brakeSign });
       if (!this.safetyActive) { world.violations.safety_brakes++; this.onEvent({ type: "safety", brake }); }
       this.safetyActive = true;
     } else {
       this.safetyActive = false;
       if (this.executing && snap.onRoute) {
-        applyLaw(world.ego, this.executing.law, world.route, s, dt);
+        applyLaw(world.ego, this.executing.law, world.route, s, dt, world);
       } else if (this.executing && this.executing.law.kind !== "lane") {
-        applyLaw(world.ego, this.executing.law, world.route, s, dt);
+        applyLaw(world.ego, this.executing.law, world.route, s, dt, world);
       } else {
         world.ego.step(dt, { steer: 0, accel: world.ego.v > 0 ? -3 : 0 });
       }
@@ -134,7 +178,7 @@ export class Autopilot {
         this.creepCheckedAt = now;
         this.executing = { candidate: creep, law: { ...law, s0: s }, s0: s, override: true };
         world.violations.deadlock_overrides++;
-        this.onEvent({ type: "deadlock" });
+        this.onEvent({ type: "deadlock", ...stallContext(snap, this.lastDecision, world.stuckFor) });
       }
     }
     if (this.executing?.override && now - this.creepCheckedAt >= 1000) {
@@ -233,7 +277,10 @@ export class Autopilot {
     }
     if (chosen) {
       const s0 = snap.routeProj ? snap.routeProj.s : 0;
-      const law = { ...chosen.law, s0 };
+      // A turnaround under way carries on as it is (its leg moves on while a model answers).
+      const going = chosen.law.kind === "turnaround" && world.turnaround?.id === chosen.law.id;
+      const law = going ? world.turnaround : { ...chosen.law, s0 };
+      if (law.kind === "turnaround") { world.turnaround = law; this.turnaroundRoute = world.route; }
       if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - s0;
       this.executing = { candidate: chosen, law, s0, decidedAt: performance.now(), hazard: null };
     }
@@ -311,4 +358,20 @@ export function goalBlocker(candidates, world) {
     by ||= hit.id;
   }
   return by;
+}
+
+// What a stalled car was waiting on, for its deadlock event: the manoeuvre it last chose, why the
+// others were rejected, the vehicle ahead, the control it was at, its lane and its next turn.
+function stallContext(snap, decision, stuckFor) {
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const rejected = {};
+  for (const c of decision?.candidates || []) if (c.reject) rejected[c.reject] = (rejected[c.reject] || 0) + 1;
+  const i = snap.intersection, f = snap.following, nav = snap.nav;
+  return {
+    stuck_s: r1(stuckFor), holding: decision?.chosenId ?? null, rejected,
+    ...(f ? { ahead: f.id, gap_m: r1(f.gap_m) } : {}),
+    ...(i ? { control: i.id ? `${i.control} ${i.id}` : i.control, line_m: r1(i.bumper_to_line_m) } : {}),
+    ...(snap.lane && snap.lane.delta ? { lanes_from_route: snap.lane.delta } : {}),
+    ...(nav && nav.next_turn !== "none" ? { next_turn: nav.next_turn, turn_in_m: r1(nav.turn_in_m) } : {}),
+  };
 }

@@ -13,6 +13,7 @@ import { pointAt } from "../map/mapdata.js";
 import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
+import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
@@ -28,6 +29,7 @@ const LANE_GAP_M = 6;
 const GAP_AHEAD_S = 2.0;
 const GAP_BEHIND_S = 2.5;
 export const LANE_CLEAR_M = 2.2;   // a car this far across has left its old lane
+const SHIFT_DONE_M = 0.15;         // a lane change this close to the new lane's centre is over
 // Turning left at a signal: oncoming traffic has the right of way. The car turns in front of an
 // oncoming vehicle only if it would clear that vehicle's path (6 m past the junction's centre, plus
 // its own length, taking the turn at up to 6 m/s and pulling away at 2 m/s^2) 1.5 s before the
@@ -141,6 +143,9 @@ export function buildSnapshot(world, executing = null) {
       destination: { right: dest.right, ahead: dest.ahead },
       arrived: remaining < 3.5,
     };
+    // a U-turn next (at a dead end), still ahead: how far ahead the car stops to turn round, until
+    // it starts
+    if (turns.length && turns[0].dir === "uturn" && turns[0].at_m > p.s && !world.turnaround) snap.nav.turn_round_in_m = turnaroundStopS(route, turns[0]) - p.s;
     const frontS = p.s + FRONT;
     for (let k = 0; k < route.controls.length; k++) {
       const c = route.controls[k], control = c.control, next = route.controls[k + 1];
@@ -259,9 +264,20 @@ export function buildSnapshot(world, executing = null) {
   snap.traffic.sort((a, b) => a.dist - b.dist);
   snap.traffic = snap.traffic.slice(0, 8);
   if (executing && executing.hazard) snap.current_path_hazard = executing.hazard;
+  snap.turnaround = turnaroundState(world, snap, executing);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
   return snap;
+}
+
+// A three-point turn where the route makes a U-turn (sim/turnaround.js): the one under way, or one
+// on offer once the U-turn is just ahead and the car is slow. One that gave up is not offered again.
+function turnaroundState(world, snap, executing) {
+  const t = world.turnaround;
+  if (t) return t.phase === "stuck" ? null : { phase: t.phase, legs: t.legs, executing: executing?.law === t, idle_s: t.idle || 0 };
+  const nav = snap.nav;
+  if (!nav || nav.next_turn !== "uturn" || nav.turn_in_m > TURN_ROUND_START_M || nav.turn_in_m < 0.5 || Math.abs(world.ego.v) > TURN_ROUND_OFFER_MPS) return null;
+  return { phase: "start", legs: 0, executing: false };
 }
 
 // The car's lane relative to the route's lane. `delta` counts lanes right of it (negative: left),
@@ -287,7 +303,10 @@ function laneState(route, p, law) {
     }
   }
   const span = spanOf(delta);
-  const shifting = delta === planned && law.shift && p.s < law.shift.start + law.shift.len - 0.5;
+  // (a change ends once the car is across, even short of its end: one that stopped there would
+  // otherwise never end, and never offer the next lane over)
+  const shifting = delta === planned && law.shift && p.s < law.shift.start + law.shift.len - 0.5
+    && Math.abs(laneCenterAt(law, p.s, route) - span.offset) > SHIFT_DONE_M;
   const fromDelta = shifting ? toDelta(law.fromIdx, law.fromLane) : null;
   const from = fromDelta !== null ? spanOf(fromDelta) : null;
   const centerNow = shifting ? laneCenterAt(law, p.s, route) : span.offset;
@@ -695,6 +714,10 @@ export function desiredSpeed(snap) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
     if (vp < v) { v = vp; reasons.push("pedestrian crossing"); }
+  }
+  if (snap.nav && snap.nav.turn_round_in_m !== undefined) {
+    const vr = stopSpeedFor(Math.max(0, snap.nav.turn_round_in_m), decel);
+    if (vr < v) { v = vr; reasons.push("turning round ahead"); }
   }
   if (snap.nav) {
     const vd = stopSpeedFor(Math.max(0, snap.nav.remaining_m - 1), decel * 0.8);

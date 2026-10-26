@@ -42,6 +42,7 @@ How to choose \`candidate\`:
 - Choose a candidate that shifts left or right only when it gives clearly more \`min_clearance_m\` from a parked car, an open door, a cyclist or a person, and its \`outcome\` is "clear".
 - Choose \`hard_brake\` only when something is blocking the path right in front of the car and no stop_* candidate is offered.
 - When the car is off the road or off its route (candidates named creep_* or reverse), choose the one that heads back toward the lane.
+- Where the route makes a U-turn, choose \`turn_around\` (a three-point turn) when it is offered, and keep choosing it until the car is round.
 
 How to choose \`motion\` (only when \`answer\` asks for it): \`motion_options\` explains when each value is correct. "drive" includes slowing down and rolling up to a line, pedestrian or destination that is still ahead. "stop" means holding completely still right now.
 
