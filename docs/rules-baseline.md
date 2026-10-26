@@ -1,4 +1,126 @@
-# Rules benchmark baseline — 2026-10-24 (giving way without a signal)
+# Rules benchmark baseline — 2026-10-25 (cyclists keep right, right hooks)
+
+Rules passes **70 of 70 routes in both V8 and WebKit**, before and after, with no collisions,
+red-light violations, stop-sign violations or failures to yield, and the same seven deadlock
+overrides (Toronto 4, Ottawa 3). "Before" is main at `de3f4ad`; "after" is `f5d810f`, where
+cyclists ride an empty parking lane, cars turning right yield to a cyclist on their right, the
+audit counts a right hook as a failure to yield, and traffic cars get into the lane for a turn
+just past a short link inside a junction.
+
+## Method
+
+Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
+Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
+and snow; the other eleven maps have two dry routes each. One benchmark suite ran at a time, on
+macOS 27.0.1 (26A434), Apple M5.
+
+V8 used `scripts/bench_node.mjs` with Node `v24.19.0` (V8 `13.6.233.17-node.51`) against
+`PORT=8331 uv run --locked server.py`. "Before" ran the script from a `git archive de3f4ad`
+tree, "after" from the working tree at `f5d810f`; the server only supplies maps and routes,
+which this change does not touch. For example:
+
+```sh
+npx --yes --package=node@24.19.0 node scripts/bench_node.mjs --port 8331 --map toronto --count 2 --weather dry --json toronto-dry.json
+```
+
+WebKit used the unmodified `scripts/shot.swift`, compiled with `swiftc`, with a fresh WKWebView
+process per suite. Each page waited for its map to load, then called `window.__bench.run` with
+Rules, seed 1, 40 traffic cars, lockstep, the requested count and weather, and `save: false`.
+"Before" was served from the `de3f4ad` tree on port 8332, "after" from the working tree on 8331;
+both servers used the working tree's `.venv/bin/python3`.
+
+Every before suite reproduces the previous baseline below: the V8 and WebKit summaries match
+its after columns. The [machine-readable record](validation/rebaseline-2026-10-25-rules.json)
+holds both engines' summaries and per-route metrics and safety, collision, yield and deadlock
+events. Night was not run.
+
+## Results
+
+Passed / routes; deadlock overrides, safety brakes and mean speeds are before → after.
+
+### V8
+
+| Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
+|---|---:|---:|---|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 10 → 7 | 23.24 → 23.47 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 5 → 2 | 16.72 → 17.65 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 2 → 1 | 19.04 → 19.02 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 3 → 4 | 14.76 → 14.93 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 2 → 2 | 18.5 → 18.5 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 0 → 4 | 15.1 → 14.85 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 4 | 1 → 1 | 18.25 → 18 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 17.55 → 17.55 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 19.5 → 19.5 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 0 → 0 | 18.4 → 18.4 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 26.55 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 2 → 1 | 21.25 → 21.2 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 33.65 → 32.15 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 0 → 1 | 28.5 → 28.5 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 26.15 → 27.35 |
+
+### WebKit
+
+| Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
+|---|---:|---:|---|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 8 → 7 | 23.47 → 23.77 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 5 → 5 | 17.55 → 17.22 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 3 → 6 | 19.13 → 19.3 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 1 → 5 | 15.05 → 14.98 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 3 → 2 | 18.35 → 18.5 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 1 → 3 | 17.4 → 17.35 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 4 | 1 → 1 | 19 → 18.3 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 17.55 → 17.55 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 19.5 → 19.5 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 3 | 0 → 0 | 18.4 → 18.4 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 26.55 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 2 | 21.3 → 20.95 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 33.8 → 34.15 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 0 → 2 | 29.2 → 24.65 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 27.35 → 27.35 |
+
+## Why the numbers moved
+
+Cyclists now ride an empty parking lane instead of the traffic lane, so the car follows them
+less and can drive past them; and traffic parks, pulls out and opens doors in different places,
+which shifts drives both ways.
+
+- **Right hooks.** On Kitsilano `s1-7` in dry, fog and rain, `bike_6` comes up on the car's right
+  at a right turn. The car reports it for 10.5, 9.0 and 9.6 s (V8), stops for 1.3 and 0.7 s in
+  dry and fog, and turns behind it: 214.5 → 216.2 s, 254.5 → 256.6 s and 235.4 → 232.9 s. No
+  other V8 route meets a cyclist on its right at a right turn.
+- **Following cyclists.** Across the 70 V8 routes the car spent 339.1 s within 20 m behind a
+  cyclist before, and 179.2 s after. **Kitsilano snow `s1-7`: 351.3 → 281.8 s** (WebKit
+  313.9 → 281.6 s): before, it followed a cyclist at walking pace for 164 s in the snow; after,
+  for 15.7 s, until the cyclist took the parking lane and the car went by.
+- **Traffic.** None of the other routes that moved by 5 s or more meets a cyclist where it
+  matters; parked cars, pull-outs, doors and signal phases decide them. In WebKit,
+  **Edmonton `s1-2`: 138.1 → 200.2 s**: both drives match to the second for the first 500 m, then
+  a street-side door opens ahead of the car (13 s), a car that pulled out leads it, and it reaches
+  a signal as it turns red (30 s). **Kitsilano fog `s1-4`: 153.2 → 194.6 s**: 6 s behind a car
+  pulling out, then 20.5 s at a red. **Kitsilano snow `s1-12`: 253.8 → 291.7 s**: following
+  `car_p5`, which pulled out ahead of it, across two stop signs, then 13.9 s at a red. In V8,
+  **Kitsilano dry `s1-6`: 215.3 → 174.2 s**, **fog `s1-5`: 214.7 → 155.0 s** and **fog `s1-12`:
+  225.1 → 184.5 s** stop 28, 47 and 25 s less; **rain `s1-8`: 190.2 → 217.6 s** stops 18 s more.
+- **Safety brakes.** The added ones checked are traffic: V8 Victoria `s1-2`'s four are for
+  `car_p2`, a car that pulled out ahead of it (three), and an open door.
+
+### Traffic turning left from the wrong lane (V8 Kitsilano fog `s1-4`)
+
+The first V8 after run failed Kitsilano fog `s1-4` with a collision at 133.4 s. Turning left from
+West Broadway onto Yew Street from the left lane, the car was hit from its right by `car_23`,
+which made the same turn from the right lane. The turn comes just past an 8.6 m link that goes
+straight on inside the junction, and a traffic car looked only at the turn at the end of the
+street it was on, so it never moved into the left lane. Traffic cars now look through a straight
+link shorter than 20 m to the turn at the next junction (`NpcFleet.maybeChangeLane`); Kitsilano
+has 14 turns like it from streets with more than one lane. The runs above include that change.
+
+## Repeat
+
+Start `PORT=8331 uv run --locked server.py`, then run each suite with `bench_node.mjs` as above
+(`--map kitsilano --count 12 --weather dry|fog|rain|snow`, and `--count 2 --weather dry` for the
+eleven other maps), one at a time.
+
+## Earlier record: 2026-10-24 (giving way without a signal)
 
 Rules passes **70 of 70 routes in both V8 and WebKit**, before and after, with no collisions,
 red-light violations, stop-sign violations or failures to yield, and the same seven deadlock
@@ -8,7 +130,7 @@ the give-way audit, an emergency brake that keeps steering along the car's path,
 keeps its new lane after a lane change, and unsigned junctions that do not hide a control just
 beyond them.
 
-## Method
+### Method
 
 Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
 Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
@@ -35,11 +157,11 @@ V8 record and the WebKit summaries its WebKit after column. The
 [machine-readable record](validation/rebaseline-2026-10-24-rules.json) holds both engines'
 summaries and per-route metrics and safety, collision and yield events. Night was not run.
 
-## Results
+### Results
 
 Passed / routes; deadlock overrides, safety brakes and mean speeds are before → after.
 
-### V8
+#### V8
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
@@ -59,7 +181,7 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 31.15 → 28.5 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 26.15 |
 
-### WebKit
+#### WebKit
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
@@ -79,7 +201,7 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 0 | 31.15 → 29.2 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 29.85 → 27.35 |
 
-## Why the numbers moved
+### Why the numbers moved
 
 The car now spends time looking at blind junctions, and waiting there for traffic with the
 right of way; traffic giving way changes where traffic is and when the car reaches each signal,
@@ -120,7 +242,7 @@ spent waiting and slowing to look where the car gives way:
   by; `s1-8` gives way for 9.5 s at two two-way stops, to `car_p2`, `car_p4` and `car_12`, and
   spends 8.1 s looking, and still arrives 36 s sooner.
 
-### Traffic changing lanes, then swinging back (WebKit Kitsilano dry `s1-6`)
+#### Traffic changing lanes, then swinging back (WebKit Kitsilano dry `s1-6`)
 
 An earlier WebKit after run failed Kitsilano dry `s1-6` with a collision at 139.5 s. The car and
 `car_10` moved off side by side from the signal at West Broadway and Larch Street, the car in the
@@ -132,7 +254,7 @@ path crossed back where the two blocks joined. A traffic car that changes lanes 
 lanes ahead from its new one (`NpcPath.switchLane`), and the final runs above include that
 change: WebKit `s1-6` arrives at 203.3 s (212.6 s before) without contact.
 
-### The emergency brake and a lane's jog (WebKit Toronto `s1-1`)
+#### The emergency brake and a lane's jog (WebKit Toronto `s1-1`)
 
 The first WebKit after run, before the emergency-brake change, failed Toronto dry `s1-1` with a
 collision at 115.5 s. Going straight through the signal at Bloor Street West and Huron Street,
@@ -145,12 +267,6 @@ brake fired, and it held the steering wheel where it was, so the car kept turnin
 was. With the brake steering along the car's path, as the `hard_brake` manoeuvre does, it does
 not occur at any of five placements between 113.3 and 114.0 s. The final runs above include
 that change; Toronto passes 2 of 2 in both engines.
-
-## Repeat
-
-Start `PORT=8331 uv run --locked server.py`, then run each suite with `bench_node.mjs` as above
-(`--map kitsilano --count 12 --weather dry|fog|rain|snow`, and `--count 2 --weather dry` for the
-eleven other maps), one at a time.
 
 ## Earlier record: 2026-10-23b (all-way stop fixes)
 

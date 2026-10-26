@@ -40,6 +40,15 @@
   left lane (V8 Kitsilano fog `s1-4`, 133 s, once the cyclists above changed the traffic's timing).
   Kitsilano has 14 turns like it from streets with more than one lane.
 
+- In the seeded V8 and WebKit benchmarks Rules passes all 70 routes in each engine, as before,
+  with no collision, red-light or stop-sign violation or failure to yield, and the same seven
+  deadlock overrides (Toronto 4, Ottawa 3). On Kitsilano `s1-7` in dry, fog and rain the car lets
+  a cyclist on its right go by before turning. Across the 70 V8 routes it spends 179 s within
+  20 m behind a cyclist, against 339 s before: Kitsilano snow `s1-7` arrives 70 s sooner, no
+  longer following a cyclist at walking pace for 164 s. Other drives move both ways as traffic
+  parks, pulls out and opens doors in different places; WebKit Edmonton `s1-2` reaches a signal as
+  it turns red and arrives 62 s later. See [docs/rules-baseline.md](docs/rules-baseline.md).
+
 - New challenge, **The right hook** (Vancouver, Kitsilano): a right turn off a bikeway from a
   street with the right of way, with a cyclist 15 m ahead in the empty parking lane at 5.5 m/s,
   going straight on past the corner. The car catches it up, and Rules waits about 6 s for it at
