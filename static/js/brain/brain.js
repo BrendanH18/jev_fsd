@@ -8,21 +8,19 @@
 // benchmark replays the same schedule).
 
 import { applyLaw, lateralAt, lookahead, purePursuit } from "../sim/controller.js";
-import { endLeg } from "../sim/turnaround.js";
+import { endLeg, linedUp } from "../sim/turnaround.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
 import { safetyBrake, DeadlockDetector, DESTINATION_ZONE_M } from "./safety.js";
 import { api } from "../common.js";
 import { Route } from "../map/route.js";
-import { wrap } from "../sim/world.js";
 import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
 
 const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
 const TIMEOUT_MS = 1500;
 const GOAL_LATERAL_M = 1.5;   // a blocked destination counts only this close to the route lane's centre
-const HANDBACK_RAD = 30 * Math.PI / 180;
 const TURN_ROUND_AWAY_M = 25;
 const SPEND_KEYS = ["model", "endpoint", "latency_ms", "input_tokens", "output_tokens", "cost_usd", "cost_known", "live_call"];
 
@@ -50,6 +48,7 @@ export class Autopilot {
     this.pendingRoutes = null;
     this.goalBlockedBy = null;
     this.turnaroundRoute = null;   // the route world.turnaround was planned on
+    this.pausedTurnaround = null;  // one set aside while autopilot is off
   }
 
   get brain() { return this.brains[this.brainName]; }
@@ -68,7 +67,14 @@ export class Autopilot {
     this.bumpEpoch();
     this.executing = null;
     this.lastStart = -Infinity;
-    if (!on) this.world.stuckFor = 0;
+    // A turnaround is set aside while the driver drives (the oncoming-traffic audit skips the car
+    // during one), and taken up again on the same route: it still ends once the car is well away.
+    if (!on) {
+      this.world.stuckFor = 0;
+      this.pausedTurnaround = this.world.turnaround;
+      this.world.turnaround = null;
+    } else if (this.pausedTurnaround && this.world.route === this.turnaroundRoute) this.world.turnaround = this.pausedTurnaround;
+    if (on) this.pausedTurnaround = null;
   }
 
   // Called every physics step, before world.audit.
@@ -77,15 +83,18 @@ export class Autopilot {
     if (!this.enabled || !world.route) return;
     const road = world._road = world.roadInfo();
     // A turnaround hands back once the car faces the way out and the route's projection finds it
-    // beyond the U-turn, lined up with the lane there (which runs right beside the lane it came in
+    // beyond the U-turn, in the lane there and facing along it (which runs right beside the lane it came in
     // on, so the projection looks only from the U-turn on); the next decision comes at once, so
     // the junction ahead is planned for as usual. It also ends when the route changes, or once
     // the car is well away from the U-turn (driven off by hand, say).
     const turn = world.turnaround;
+    // (a destination just beyond the U-turn: the drive ends there, once the car is in the lane)
+    let arrivedOut = false;
     if (turn?.phase === "out" && world.route === this.turnaroundRoute) {
       if (!turn.rehinted) { world.route.hint = turn.outLo; turn.rehinted = true; }
-      const p = world.route.project(world.ego.x, world.ego.y);
-      if (p && p.s >= turn.sTurn && Math.abs(wrap(world.ego.psi - p.heading)) < HANDBACK_RAD) turn.done = true;
+      const p = linedUp(world.ego, world.route, turn);
+      if (p?.atEnd) arrivedOut = true;
+      else if (p) { turn.done = true; world.route.hint = p.index; }
     }
     const at = turn ? world.route.pointAt(turn.sTurn) : null;
     const away = at && Math.hypot(at[0] - world.ego.x, at[1] - world.ego.y) > TURN_ROUND_AWAY_M;
@@ -109,7 +118,8 @@ export class Autopilot {
       simulateAll(candidates, snap, world);
       blockedBy = this.goalBlockedBy = goalBlocker(candidates, world);
     }
-    if (snap.nav && (snap.nav.arrived || blockedBy) && world.ego.v < 0.3) {
+    // (not partway through turning round, standing between legs in the lane coming in)
+    if (snap.nav && ((snap.nav.arrived && !world.turnaround) || arrivedOut || blockedBy) && world.ego.v < 0.3) {
       this.setEnabled(false);
       world.route = null;
       world.destination = null;

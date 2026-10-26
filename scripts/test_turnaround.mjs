@@ -248,3 +248,76 @@ function parkedCar(id, x, y, psi = 0) {
   assert.equal(world.violations.deadlock_overrides, 0);
   console.log("✓ held before its first leg moves, the turnaround waits and then turns round");
 }
+
+{
+  // a destination just beyond the U-turn, in the lane out: the drive ends only once the car is in
+  // that lane, facing along it (not standing between legs in the lane coming in, where the route's
+  // end is just as near)
+  for (const goalX of [50, 56]) {
+    const world = setup({ x: 20, v: 5 });
+    world.route = new Route({ ...routeData, polyline: polyline.filter(([px, py]) => py < 0 || px >= goalX) }, map);
+    world.destination = [goalX, LANE];
+    const autopilot = new Autopilot(world);
+    autopilot.brainName = "rules";
+    autopilot.setEnabled(true);
+    const fleet = { step() {} };
+    const dt = 1 / 30;
+    let overKerb = 0;
+    for (let i = 0; i < 90 / dt && world.route; i++) {
+      stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+      for (const [px, py] of world.ego.corners()) overKerb = Math.max(overKerb, map.roadDistance(px, py).distance);
+    }
+    const y = world.ego.y, heading = Math.abs(world.ego.psi) * 180 / Math.PI;
+    assert.ok(world.route === null, `goal ${goalX}: arrived (car at ${world.ego.x.toFixed(1)}, ${y.toFixed(1)})`);
+    assert.ok(Math.abs(y - LANE) < 1, `goal ${goalX}: in the lane out at the end (y=${y.toFixed(2)})`);
+    assert.ok(heading > 150, `goal ${goalX}: facing the way out (${heading.toFixed(0)} degrees)`);
+    assert.equal(world.violations.collisions, 0);
+    assert.equal(world.violations.deadlock_overrides, 0);
+    assert.ok(overKerb <= 0.25, `goal ${goalX}: bumpers stay within reach of the kerb (${overKerb.toFixed(2)} m)`);
+  }
+  console.log("✓ a destination just beyond the U-turn: the drive ends once the car is in the lane out");
+}
+
+{
+  // autopilot switched off partway round: the turnaround is dropped, so it does not outlive the
+  // drive (the oncoming-traffic audit skips the car while one is under way)
+  const world = setup({ x: 50, v: 0 });
+  const autopilot = new Autopilot(world);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  const fleet = { step() {} };
+  const dt = 1 / 30;
+  for (let i = 0; i < 3 / dt && !world.turnaround; i++) stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+  assert.ok(world.turnaround, "the turnaround was chosen");
+  autopilot.setEnabled(false);
+  assert.equal(world.turnaround, null);
+  console.log("✓ switching autopilot off sets a turnaround under way aside");
+}
+
+{
+  // switched off and on again partway round, with the destination just beyond the U-turn: the
+  // turnaround is taken up again, so the drive still ends only once the car is in the lane out
+  const goalX = 50;
+  const world = setup({ x: 20, v: 5 });
+  world.route = new Route({ ...routeData, polyline: polyline.filter(([px, py]) => py < 0 || px >= goalX) }, map);
+  world.destination = [goalX, LANE];
+  const autopilot = new Autopilot(world);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  const fleet = { step() {} };
+  const dt = 1 / 30;
+  let toggled = false;
+  for (let i = 0; i < 90 / dt && world.route; i++) {
+    stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+    if (!toggled && world.turnaround?.phase === "out") {
+      autopilot.setEnabled(false);
+      autopilot.setEnabled(true);
+      toggled = true;
+      assert.ok(world.turnaround?.phase === "out", "taken up again");
+    }
+  }
+  assert.ok(toggled, "switched off and on in the out phase");
+  assert.ok(world.route === null, `arrived (car at ${world.ego.x.toFixed(1)}, ${world.ego.y.toFixed(1)})`);
+  assert.ok(Math.abs(world.ego.y - LANE) < 1, `in the lane out at the end (y=${world.ego.y.toFixed(2)})`);
+  console.log("✓ switched off and on partway round, the car finishes turning round before it arrives");
+}

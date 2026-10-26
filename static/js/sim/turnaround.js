@@ -30,6 +30,9 @@ const LEG_MAX_M = 6;
 const MAX_LEGS = 15;
 const STEER_READY_RAD = 5 * Math.PI / 180;   // a leg starts once the wheel is this close to lock
 const OUT_BEYOND_M = 25;      // how far past the U-turn the lane beyond it is looked for
+const LINED_UP_RAD = 30 * Math.PI / 180;   // in the lane out: facing along it to within this,
+const LINED_UP_M = 1;                      // and its centre this close to the lane's
+const ARRIVED_M = 3.5;        // the route's end this close (as in buildSnapshot)
 
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -103,10 +106,35 @@ export function legRoom(vehicle, world, steer, d) {
 }
 
 // The lane beyond the U-turn, as the route's arc length and offset from it (searched only there,
-// since the lane coming in runs right beside it).
+// since the lane coming in runs right beside it), and the route's point index. Past the route's end
+// (a destination just beyond the U-turn) the arc length carries on along its last heading.
 function outProjection(vehicle, route, law) {
   const pts = route.pts.slice(law.outLo, law.outHi + 1), cum = route.cum.slice(law.outLo, law.outHi + 1);
-  return pts.length > 1 ? projectPoint(pts, cum, [vehicle.x, vehicle.y]) : null;
+  if (pts.length < 2) return null;
+  const p = projectPoint(pts, cum, [vehicle.x, vehicle.y]);
+  const end = route.pts.at(-1);
+  const beyond = p.s >= route.length - 1e-6 ? (vehicle.x - end[0]) * Math.cos(p.heading) + (vehicle.y - end[1]) * Math.sin(p.heading) : 0;
+  return { ...p, s: p.s + Math.max(0, beyond), index: law.outLo + p.index };
+}
+
+// The lane out's projection once the car is in that lane, facing along it (else null), and whether
+// the car is at the route's end there.
+export function linedUp(vehicle, route, law) {
+  const p = outProjection(vehicle, route, law);
+  if (!p || p.s < law.sTurn || Math.abs(wrap(vehicle.psi - p.heading)) >= LINED_UP_RAD || Math.abs(p.lateral) >= LINED_UP_M) return null;
+  return { ...p, atEnd: p.s > route.length - ARRIVED_M };
+}
+
+// The route's line, carried on straight past its end: a destination just beyond the U-turn can come
+// before the car is in the lane out, and it follows the lane on until it is.
+function lineOn(route) {
+  return {
+    length: Infinity,
+    offsetPointAt(s) {
+      const end = Math.min(s, route.length), h = route.headingAt(end), [x, y] = route.pointAt(end);
+      return [x + Math.cos(h) * (s - end), y + Math.sin(h) * (s - end)];
+    },
+  };
 }
 
 // The car has stopped at the end of a leg: the next goes the other way (a leg that could not move
@@ -129,9 +157,10 @@ export function stepTurnaround(vehicle, law, route, world, dt, purePursuit, spee
   if (law.phase === "out") {
     const p = outProjection(vehicle, route, law);
     if (!p) { law.done = true; return false; }
-    const steer = purePursuit(vehicle, route, p.s, 0);
+    const steer = purePursuit(vehicle, lineOn(route), p.s, 0);
     const room = legRoom(vehicle, world, steer, LOOK_M + v * v / 3);
-    vehicle.step(dt, { steer, accel: speedControl(vehicle.v, room ? OUT_MPS : 0, { maxBrake: 3 }) });
+    // (stopping once in the lane, at a destination just beyond the U-turn)
+    vehicle.step(dt, { steer, accel: speedControl(vehicle.v, room && !linedUp(vehicle, route, law)?.atEnd ? OUT_MPS : 0, { maxBrake: 3 }) });
     // no room to drive out from here: back up for another leg
     if (!room && Math.abs(vehicle.v) < 0.05) {
       law.legs++;
