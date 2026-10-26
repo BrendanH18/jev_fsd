@@ -1,4 +1,113 @@
-# Rules benchmark baseline — 2026-10-25 (cyclists keep right, right hooks)
+# Rules benchmark baseline — 2026-10-25b (no deadlock overrides)
+
+Rules passes **70 of 70 routes in both V8 and WebKit**, before and after, with no collisions,
+red-light or stop-sign violations or failures to yield, and the seven deadlock overrides
+(Toronto 4, Ottawa 3) are gone: **0 in either engine**. "Before" is main at `01da9ac`; "after" is
+the working tree on top of it, where a car two or more lanes from its route's lane keeps room for
+a lane change per lane, a lane change ends once the car is across, and the car turns round with a
+three-point turn where its route makes a U-turn at a dead end.
+
+## Method
+
+Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
+Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
+and snow; the other eleven maps have two dry routes each. One benchmark suite ran at a time, on
+macOS 27.0.1 (26A434), Apple M5.
+
+V8 used `scripts/bench_node.mjs` with Node `v24.19.0` (V8 `13.6.233.17-node.51`), from the working
+tree against `PORT=8333 uv run --locked server.py`. WebKit used the unmodified `scripts/shot.swift`,
+compiled with `swiftc -O`, with a fresh WKWebView process per suite calling `window.__bench.run`
+with Rules, seed 1, 40 traffic cars, lockstep, the requested count and weather, and `save: false`,
+served from the working tree on 8333. The first Kitsilano rain page had not finished loading when
+the run was called 8 s in; it was rerun with 15 s.
+
+Main at `01da9ac` differs from `f5d810f`, the previous record's after side, only by one line in
+`World.resetToLane`, which the benchmark never calls, so the before columns are that record's
+after columns. Kitsilano dry, Toronto and Ottawa were rerun in both engines from a `git archive
+01da9ac` tree (checked against a fresh extract; WebKit served it on 8332 with the working tree's
+`.venv/bin/python3`) and reproduce them route for route. The [machine-readable
+record](validation/rebaseline-2026-10-25b-rules.json) holds both engines' summaries and per-route
+metrics and safety, collision, yield and deadlock events. Night was not run.
+
+## Results
+
+Passed / routes; deadlock overrides, safety brakes and mean speeds are before → after.
+
+### V8
+
+| Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
+|---|---:|---:|---|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 7 → 7 | 23.47 → 23.55 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 2 → 2 | 17.65 → 17.65 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 1 → 1 | 19.02 → 19.02 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 4 → 4 | 14.93 → 14.93 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 2 → 2 | 18.5 → 18.5 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 4 → 4 | 14.85 → 14.85 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 0 | 1 → 3 | 18 → 15.7 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 17.55 → 17.55 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 19.5 → 19.45 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 0 | 0 → 0 | 18.4 → 18.35 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 26.55 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 21.2 → 21.2 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 32.15 → 34.2 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 28.5 → 28.5 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 27.35 → 27.35 |
+
+### WebKit
+
+| Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
+|---|---:|---:|---|---|---|
+| Kitsilano, dry | 12/12 | 12/12 | 0 → 0 | 7 → 7 | 23.77 → 23.77 |
+| Kitsilano, fog | 12/12 | 12/12 | 0 → 0 | 5 → 5 | 17.22 → 17.22 |
+| Kitsilano, rain | 12/12 | 12/12 | 0 → 0 | 6 → 6 | 19.3 → 19.3 |
+| Kitsilano, snow | 12/12 | 12/12 | 0 → 0 | 5 → 5 | 14.98 → 14.98 |
+| Mount Pleasant, dry | 2/2 | 2/2 | 0 → 0 | 2 → 2 | 18.5 → 18.5 |
+| Victoria, dry | 2/2 | 2/2 | 0 → 0 | 3 → 3 | 17.35 → 17.35 |
+| Toronto, dry | 2/2 | 2/2 | 4 → 0 | 1 → 2 | 18.3 → 18.4 |
+| Montréal, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 17.55 → 17.55 |
+| Calgary, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 19.5 → 19.45 |
+| Ottawa, dry | 2/2 | 2/2 | 3 → 0 | 0 → 0 | 18.4 → 18.35 |
+| Québec City, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 26.55 → 26.55 |
+| Halifax, dry | 2/2 | 2/2 | 0 → 0 | 2 → 2 | 20.95 → 20.95 |
+| Winnipeg, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 34.15 → 34.1 |
+| Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 2 → 1 | 24.65 → 28.35 |
+| Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 27.35 → 27.35 |
+
+## Why the numbers moved
+
+- **Ottawa `s1-1`: 3 deadlock overrides → 0, 175.3 → 175.4 s** in both engines. The route starts
+  on Wellington Street two lanes left of its route's lane, 71 m before a right turn. Before, the
+  lane-end rule kept room for one lane change only: the car sped up, moved one lane over, found no
+  room left for the second change, went back, and stood still until deadlock recovery crept it
+  across at 22.7 s. Now it keeps room for both changes and crosses them in turn.
+- **Toronto `s1-2`: 4 deadlock overrides → 0.** The suite starts the car facing away from its
+  destination, and the router turns it round in Willcocks Common, a 10 m dead end off Huron
+  Street. Before, the car tried to follow the U-turn's line in one sweep, stood still at 34 s, and
+  deadlock recovery crept it round from 46.3 s. Now it starts turning round at 33 s, makes one leg
+  forward (6.5 m) and one back (5.9 m), drives out and hands back at 54 s. From there the drive
+  meets traffic at different times: in V8 it follows `car_p2`, which pulled out ahead of it, waits
+  at a red light and takes 175.1 → 250.5 s, with two more safety brakes for following too close
+  (209.1 and 244.0 s; the open door at 73.7 s is braked for before and after). In WebKit it takes
+  180.1 → 180.9 s with one more following brake (175.4 s).
+- **Lane changes that end once across.** A change now counts as over within 0.15 m of the new
+  lane's centre rather than 0.5 m before its planned end, so the next manoeuvre is offered a
+  little sooner. **V8 Kitsilano dry `s1-4`: 137.1 → 131.7 s**, **V8 Winnipeg `s1-1`: 125.0 →
+  107.8 s** and **WebKit Edmonton `s1-2`: 200.2 → 147.0 s** (one safety brake fewer) all make lane
+  changes; with that rule switched off, `s1-4` and Winnipeg `s1-1` go back to 137.1 and 125.0 s
+  exactly. Calgary's mean speed moves 19.5 → 19.45 km/h in both engines. No other route moved by
+  5 s or more.
+
+## Repeat
+
+Start `PORT=8331 uv run --locked server.py`, then run each suite with `bench_node.mjs`
+(`--map kitsilano --count 12 --weather dry|fog|rain|snow`, and `--count 2 --weather dry` for the
+eleven other maps), one at a time, for example:
+
+```sh
+npx --yes --package=node@24.19.0 node scripts/bench_node.mjs --port 8331 --map toronto --count 2 --weather dry --json toronto-dry.json
+```
+
+## Earlier record: 2026-10-25 (cyclists keep right, right hooks)
 
 Rules passes **70 of 70 routes in both V8 and WebKit**, before and after, with no collisions,
 red-light violations, stop-sign violations or failures to yield, and the same seven deadlock
@@ -7,7 +116,7 @@ cyclists ride an empty parking lane, cars turning right yield to a cyclist on th
 audit counts a right hook as a failure to yield, and traffic cars get into the lane for a turn
 just past a short link inside a junction.
 
-## Method
+### Method
 
 Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
 Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
@@ -34,11 +143,11 @@ its after columns. The [machine-readable record](validation/rebaseline-2026-10-2
 holds both engines' summaries and per-route metrics and safety, collision, yield and deadlock
 events. Night was not run.
 
-## Results
+### Results
 
 Passed / routes; deadlock overrides, safety brakes and mean speeds are before → after.
 
-### V8
+#### V8
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
@@ -58,7 +167,7 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 0 → 1 | 28.5 → 28.5 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 26.15 → 27.35 |
 
-### WebKit
+#### WebKit
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
@@ -78,7 +187,7 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 0 → 2 | 29.2 → 24.65 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 27.35 → 27.35 |
 
-## Why the numbers moved
+### Why the numbers moved
 
 Cyclists now ride an empty parking lane instead of the traffic lane, so the car follows them
 less and can drive past them; and traffic parks, pulls out and opens doors in different places,
@@ -104,7 +213,7 @@ which shifts drives both ways.
 - **Safety brakes.** The added ones checked are traffic: V8 Victoria `s1-2`'s four are for
   `car_p2`, a car that pulled out ahead of it (three), and an open door.
 
-### Traffic turning left from the wrong lane (V8 Kitsilano fog `s1-4`)
+#### Traffic turning left from the wrong lane (V8 Kitsilano fog `s1-4`)
 
 The first V8 after run failed Kitsilano fog `s1-4` with a collision at 133.4 s. Turning left from
 West Broadway onto Yew Street from the left lane, the car was hit from its right by `car_23`,
@@ -114,7 +223,7 @@ street it was on, so it never moved into the left lane. Traffic cars now look th
 link shorter than 20 m to the turn at the next junction (`NpcFleet.maybeChangeLane`); Kitsilano
 has 14 turns like it from streets with more than one lane. The runs above include that change.
 
-## Repeat
+### Repeat
 
 Start `PORT=8331 uv run --locked server.py`, then run each suite with `bench_node.mjs` as above
 (`--map kitsilano --count 12 --weather dry|fog|rain|snow`, and `--count 2 --weather dry` for the

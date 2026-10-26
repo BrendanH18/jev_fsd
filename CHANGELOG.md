@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+- The car turns round where its route makes a U-turn at a dead end (`static/js/sim/turnaround.js`).
+  It slows and stops where it will turn, 9 m short of the U-turn or 3 m into a shorter street,
+  then makes a three-point turn: legs at walking pace on full lock, forward turning left and back
+  turning right, each ending short of the kerb (a bumper may reach 0.2 m over it), the end of the
+  street, scenery and anything standing still, with more legs where it is tight. Once it faces
+  back down the street it drives out, and hands back to the usual planner as soon as the route
+  finds it in the lane beyond the U-turn, so the junction it comes out at is given way at as
+  usual. It signals left throughout. Before, the car tried to follow the U-turn's line in one
+  sweep, which no car can do on a street a few metres wide, stood still, and waited for deadlock
+  recovery to creep it round: Toronto `s1-2` routes into Willcocks Common, a 10 m dead end, to
+  turn back. Held up by traffic it waits with the turn intact; a turn that cannot move after 15
+  legs, or stands still mid-leg for 5 s, is left to deadlock recovery.
+  Decision models and LLMs get `nav.turn_round_in_m`, `turnaround` (whether it is under way, the
+  leg and legs done), a situation line, two candidates (`stop_to_turn_round` and `turn_around`) and
+  a line in the `drive` criterion (its legs back count as driving). Lane manoeuvres that would
+  carry the car more than a metre past where it stops to turn round are rejected
+  (`passes_turn_round_point`, labelled in AI eyes). New checks in `scripts/test_turnaround.mjs`:
+  a 6.4 m dead end, the same facing each compass direction, and one between cars parked along
+  both kerbs.
+
+- Reversing is handled as reversing. The shared emergency brake looks behind the car while it
+  backs up (and not ahead, which would hold up a leg back with a car just in front), braking in
+  reverse pushes forward instead of speeding the car up backwards, and the audit puts backing
+  into something down to the car. Turning round in a dead end off a junction ends the audit of
+  the left turn the car made there for oncoming traffic: it comes back out as a new approach.
+
+- A car two or more lanes from its route's lane keeps room for one lane change per lane before
+  that lane ends, and a change toward the route's lane is always allowed. Before, it kept room for
+  one change only, so starting two lanes over it could speed up, move one lane across, find no
+  room left for the second, go back and stand still until deadlock recovery crept it over: Ottawa
+  `s1-1` starts on Wellington Street two lanes left of its route's lane, 71 m before a right turn.
+  A lane change also counts as over once the car is within 0.15 m of the new lane's centre, even
+  short of the change's end, so one that stops there offers the next lane over.
+
+- A deadlock event now says what the car was waiting on: how long it had stood still, the
+  manoeuvre it last chose, how many candidates each rejection removed, the vehicle ahead, the
+  control it was at, how many lanes it was from its route's lane and its next turn.
+
+- In the seeded V8 and WebKit benchmarks Rules passes all 70 routes in each engine, as before,
+  with no collision, red-light or stop-sign violation or failure to yield, and now **no deadlock
+  override** (before: Toronto 4, Ottawa 3). Ottawa `s1-1` crosses its two lanes and arrives at
+  175.4 s (175.3 s with the override). Toronto `s1-2` turns round in two legs and an exit by 54 s,
+  then meets traffic at different times: 175.1 → 250.5 s in V8, behind a car that pulled out and
+  at a red light, and 180.1 → 180.9 s in WebKit. Lane changes that end once across move three
+  other routes by 5 s or more, all sooner (V8 Kitsilano dry `s1-4` and Winnipeg `s1-1`, WebKit
+  Edmonton `s1-2`). See [docs/rules-baseline.md](docs/rules-baseline.md).
+
 - Cyclists keep right. Where a street has a parking lane at least 1.5 m wide and nothing is
   parked in it to the end of the block (parking stops short of every corner), a cyclist rides in
   it, 2.6 m right of the traffic lane's centre, past cars queued or slowing at the corner, and

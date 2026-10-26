@@ -167,7 +167,7 @@ export class Autopilot {
         this.creepCheckedAt = now;
         this.executing = { candidate: creep, law: { ...law, s0: s }, s0: s, override: true };
         world.violations.deadlock_overrides++;
-        this.onEvent({ type: "deadlock" });
+        this.onEvent({ type: "deadlock", ...stallContext(snap, this.lastDecision, world.stuckFor) });
       }
     }
     if (this.executing?.override && now - this.creepCheckedAt >= 1000) {
@@ -347,4 +347,20 @@ export function goalBlocker(candidates, world) {
     by ||= hit.id;
   }
   return by;
+}
+
+// What a stalled car was waiting on, for its deadlock event: the manoeuvre it last chose, why the
+// others were rejected, the vehicle ahead, the control it was at, its lane and its next turn.
+function stallContext(snap, decision, stuckFor) {
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const rejected = {};
+  for (const c of decision?.candidates || []) if (c.reject) rejected[c.reject] = (rejected[c.reject] || 0) + 1;
+  const i = snap.intersection, f = snap.following, nav = snap.nav;
+  return {
+    stuck_s: r1(stuckFor), holding: decision?.chosenId ?? null, rejected,
+    ...(f ? { ahead: f.id, gap_m: r1(f.gap_m) } : {}),
+    ...(i ? { control: i.id ? `${i.control} ${i.id}` : i.control, line_m: r1(i.bumper_to_line_m) } : {}),
+    ...(snap.lane && snap.lane.delta ? { lanes_from_route: snap.lane.delta } : {}),
+    ...(nav && nav.next_turn !== "none" ? { next_turn: nav.next_turn, turn_in_m: r1(nav.turn_in_m) } : {}),
+  };
 }
