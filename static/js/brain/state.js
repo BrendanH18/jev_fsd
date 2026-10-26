@@ -39,6 +39,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     };
     if (snap.nav.turn_street) state.nav.turn_street = snap.nav.turn_street;
     if (snap.nav.exit) state.nav.roundabout_exit = snap.nav.exit;
+    if (snap.nav.turn_round_in_m !== undefined) state.nav.turn_round_in_m = r1(Math.max(0, snap.nav.turn_round_in_m));
   }
   const laneLateral = snap.lane ? snap.lane.lateral : snap.routeProj ? snap.routeProj.lateral : snap.road.lateral;
   state.road = {
@@ -101,6 +102,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     const h = snap.right_hook;
     state.cyclist_on_right = { id: h.id, arrives_in_s: r1(h.eta_s), needed_s: r1(h.need_s), wait_in_m: r1(Math.max(0, h.bumper_to_yield_m)), yield: true };
   }
+  if (snap.turnaround) state.turnaround = { under_way: snap.turnaround.phase !== "start", ...(snap.turnaround.phase !== "start" ? { leg: snap.turnaround.phase, legs_done: snap.turnaround.legs } : {}) };
   if (snap.rear_follower && snap.rear_follower.gap_m < 12) state.rear_follower = { id: snap.rear_follower.id, gap_m: r1(snap.rear_follower.gap_m) };
   if (snap.traffic.length) {
     state.traffic = snap.traffic.map((t) => ({ id: t.id, ...(t.kind !== "car" ? { kind: t.kind } : {}), right: r1(t.right), ahead: r1(t.ahead), speed: r1(t.speed), heading: t.heading, moving: t.moving }));
@@ -122,6 +124,8 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
 function outcomeLabel(c, snap) {
   if (c.id === "stop_at_line" && snap.intersection) return `clear, stops ${Math.max(0, r1(snap.intersection.bumper_to_line_m - c.sim.progress_m))} m before the line`;
   if (c.id === "stop_at_destination") return "clear, reaches the destination";
+  if (c.law.kind === "turnaround") return "clear, turns the car round";
+  if (c.id === "stop_to_turn_round") return "clear, stops where the car turns round";
   if (c.id === "stop_for_oncoming" && snap.intersection?.oncoming) return `clear, waits ${Math.max(0, r1(snap.intersection.oncoming.bumper_to_yield_m - c.sim.progress_m))} m short of oncoming traffic's path`;
   if (c.id === "stop_for_cyclist" && snap.right_hook) return `clear, waits ${Math.max(0, r1(snap.right_hook.bumper_to_yield_m - c.sim.progress_m))} m short of the cyclist's path`;
   if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
@@ -182,7 +186,11 @@ export function situationClauses(snap) {
     if (snap.following.kind === "cyclist" && snap.following.gap_m < 30) out.push("A cyclist is riding ahead in the lane: stay behind it at a safe gap; passing needs at least 1 m of space, and the candidates that would pass too close have already been removed.");
     else if (label === "dangerous" || label === "short") out.push(`The ${snap.following.kind === "parked car" ? "parked car" : "car"} ahead is close; keep a safe gap.`);
   }
-  if (snap.nav && snap.nav.next_turn !== "none" && snap.nav.next_turn !== "roundabout" && snap.nav.turn_in_m < 40) out.push(`A ${snap.nav.next_turn === "uturn" ? "U-turn" : snap.nav.next_turn + " turn"} is coming in ${Math.round(snap.nav.turn_in_m)} m; \`car.target_speed\` already accounts for it.`);
+  if (!snap.turnaround && snap.nav?.turn_round_in_m !== undefined && snap.nav.turn_in_m < 40) out.push(`The route makes a U-turn ${Math.round(snap.nav.turn_in_m)} m ahead, at a dead end: slow down and stop ${Math.max(0, Math.round(snap.nav.turn_round_in_m))} m ahead, where the car will turn round (\`stop_to_turn_round\`), then turn round with a three-point turn.`);
+  else if (snap.turnaround) out.push(snap.turnaround.phase === "start"
+    ? "The route makes a U-turn here, where the street is too narrow to come round in one sweep: turn round with a three-point turn (`turn_around`), forward and back on full lock at walking pace."
+    : "The car is turning round with a three-point turn: carry on with `turn_around` while it is offered, and hold still only to let something go by.");
+  else if (snap.nav && snap.nav.next_turn !== "none" && snap.nav.next_turn !== "roundabout" && snap.nav.turn_in_m < 40) out.push(`A ${snap.nav.next_turn === "uturn" ? "U-turn" : snap.nav.next_turn + " turn"} is coming in ${Math.round(snap.nav.turn_in_m)} m; \`car.target_speed\` already accounts for it.`);
   if (weather.name !== "dry") out.push(`Conditions: ${weather.description}. Grip is reduced, so \`car.target_speed\` sits below the limit and braking needs more room.`);
   if (snap.visibility) out.push(`Objects beyond ${snap.visibility.range_m} m or behind buildings are unseen; an empty traffic list does not prove the road is clear.`);
   const pass = passing(snap);
@@ -262,7 +270,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       type: "choice",
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
-        drive: "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
+        drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}`,
         stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}, when the path directly ahead is blocked, or when the car has reached the destination.`,
       },
     };

@@ -25,7 +25,6 @@ export class RulesBrain {
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
     if (snap.nav && snap.nav.arrived) stop = true;
-    const motion = stop ? "stop" : "drive";
 
     const vDesired = snap.target ? snap.target.v : desiredSpeed(snap).v;
     // A manoeuvre that leaves the car outside the lane its route takes for a turn ahead gains
@@ -46,8 +45,11 @@ export class RulesBrain {
       if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !i.right_on_red?.go) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
-      if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist") cost -= 6;
+      if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist" || c.id === "stop_to_turn_round") cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
+      // Turning round where the route makes a U-turn is the only way on, and once begun it carries
+      // on whenever its prediction is clear.
+      if (c.law.kind === "turnaround") cost -= 50;
       if (c.law.kind === "hard_brake") cost += 3;
       if (c.law.kind === "reverse") cost += 2;
       if (!s.stays_in_lane) cost += 2;
@@ -59,6 +61,8 @@ export class RulesBrain {
       if (s.min_gap_m < 3) cost += (3 - s.min_gap_m) * 3;
       if (best === null || cost < best.cost) best = { c, cost };
     }
+    // (the reasons to stop above are for driving ahead; a turnaround that is clear goes on)
+    const motion = stop && best?.c.law.kind !== "turnaround" ? "stop" : "drive";
     return { motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
   }
 

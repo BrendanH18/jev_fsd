@@ -10,6 +10,7 @@ import { CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, HOOK_STOP_M, CLEARING_
 import { poseOf } from "../sim/static-obstacles.js";
 import { STOP_ZONE_M } from "../sim/signals.js";
 import { PEEK_AT_M } from "../sim/priority.js";
+import { planTurnaround } from "../sim/turnaround.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -121,6 +122,12 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
     }
+    // A U-turn ahead (at a dead end): stop where the car will turn round.
+    const turnIn = snap.nav?.turn_round_in_m;
+    if (turnIn !== undefined && turnIn > 0.3 && snap.nav.turn_in_m < 40) {
+      out.push({ id: "stop_to_turn_round", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(s + turnIn) }),
+        steer: "hold lane", speed: "stop where the car turns round" });
+    }
     if (snap.nav && snap.nav.remaining_m < 40) {
       out.push({ id: "stop_at_destination", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.route.length - 1.0) }),
         steer: "hold lane", speed: "slow and stop at the destination" });
@@ -135,9 +142,18 @@ export function sampleCandidates(snap, world) {
     }
     out.push({ id: "reverse", law: { kind: "reverse", target }, steer: "reverse toward the road", speed: "reverse 2.0" });
   }
+  // Turning round where the route makes a U-turn: on offer once the car is close and slow, and then
+  // carried on until it is round, on or off the route, whatever it has stopped for meanwhile.
+  if (snap.turnaround && world.route) {
+    const turn = world.turnaround ? null : world.route.turnsAfter(s).find((t) => t.dir === "uturn");
+    if (world.turnaround || turn) {
+      out.push({ id: "turn_around", law: world.turnaround ? { ...world.turnaround } : planTurnaround(world.route, turn),
+        steer: "turn round: a three-point turn, forward and back on full lock", speed: "walking pace" });
+    }
+  }
   // Keep required stopping options when a busy street supplies many lateral alternatives, and lane
   // changes ahead of small nudges.
-  const priority = (c) => c.law.stopAtRoute !== undefined ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
+  const priority = (c) => c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
   const list = dedupe(out).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
   list.push({ id: "hard_brake", law: inLane({ kind: "hard_brake" }), steer: "hold lane", speed: "brake hard" });
   return list;
@@ -166,12 +182,14 @@ export function simulateAll(candidates, snap, world) {
   const hook = snap.right_hook || null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
+  // where the car stops to turn round, still ahead (route arc length of the rear axle)
+  const turnAt = snap.nav?.turn_round_in_m > 0.3 ? startS + snap.nav.turn_round_in_m : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -179,7 +197,7 @@ export function simulateAll(candidates, snap, world) {
     for (let k = 1; k <= steps; k++) {
       const t = k * SIM_DT;
       const previousPose = poseOf(car);
-      applyLaw(car, law, route, s, SIM_DT);
+      applyLaw(car, law, route, s, SIM_DT, world);
       // Static map geometry is known even when fog or a corner hides moving traffic. Use the
       // same footprint sweep as execution, including reverse and sideways body motion.
       // Keep sweeping after a predicted vehicle contact, so a later static hit is still known.
@@ -207,6 +225,8 @@ export function simulateAll(candidates, snap, world) {
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
+        // (a metre past it, as a short, slow stop overshoots)
+        if (turnAt !== null && s > turnAt + 1 && car.v > 0.5) pastTurnPoint = true;
       }
       if (k % 3 === 0 || k === steps) {
         const rd = map.roadDistance(car.x, car.y);
@@ -242,9 +262,11 @@ export function simulateAll(candidates, snap, world) {
       end: [car.x, car.y],
     };
     // A lane beside the route's lane must leave room to change back before it ends (a turn, a
-    // junction where the lanes change, or the destination). Braking is always allowed.
-    const laneEnds = Number.isFinite(c.laneUntil) && (route && snap.onRoute) && c.law.kind !== "hard_brake"
-      && s + FRONT + laneChangeLength(car.v) + LANE_RETURN_MARGIN_M > c.laneUntil;
+    // junction where the lanes change, or the destination): one lane change for each lane between
+    // it and the route's. Braking is always allowed, and so is a change toward the route's lane,
+    // which only leaves the car fewer lanes to cross.
+    const laneEnds = Number.isFinite(c.laneUntil) && (route && snap.onRoute) && c.law.kind !== "hard_brake" && c.change?.offer !== "return"
+      && s + FRONT + Math.max(1, Math.abs(c.law.lane || 0)) * laneChangeLength(car.v) + LANE_RETURN_MARGIN_M > c.laneUntil;
     let reject = null;
     if (collision) reject = "collision";
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
@@ -258,6 +280,7 @@ export function simulateAll(candidates, snap, world) {
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";
     else if (passesHold && c.law.kind !== "hard_brake") reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
+    else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";
     c.reject = reject;
     c.eligible = !reject;
   }

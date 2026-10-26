@@ -3,6 +3,7 @@
 
 import { CAR, comfort } from "./vehicle.js";
 import { clamp } from "../common.js";
+import { stepTurnaround } from "./turnaround.js";
 
 export function lookahead(v) { return clamp(0.8 * Math.abs(v), 4, 15); }
 
@@ -82,18 +83,23 @@ export function curveProfileSpeed(route, s) {
 // The "law" a candidate or the autopilot executes between decisions. A lane law's vTarget is a
 // ceiling: the curve profile lowers it through turns, the way a real speed controller would.
 //   kind: "lane" (follow route with offset, target speed) | "hard_brake" | "reverse" | "steer" (fixed angle)
+//         | "turnaround" (a three-point turn at a U-turn, sim/turnaround.js; it needs `world`)
 // Lane and hard-brake laws aim at the lateral target where the pursuit point lies, so a lane change
 // steers smoothly along its eased path.
-export function applyLaw(vehicle, law, route, s, dt) {
+export function applyLaw(vehicle, law, route, s, dt, world = null) {
   switch (law.kind) {
     case "hard_brake":
-      return vehicle.step(dt, { steer: route ? purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)) : vehicle.delta, accel: -comfort().hardDecel });
+      // (reversing, the brakes push forward)
+      return vehicle.step(dt, { steer: route ? purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)) : vehicle.delta, accel: (vehicle.v < 0 ? 1 : -1) * comfort().hardDecel });
     case "reverse": {
       const steer = law.target ? -steerToward(vehicle, law.target) : 0;
       return vehicle.step(dt, { steer, accel: speedControl(vehicle.v, -2, { maxAccel: 2, maxBrake: 4 }), reverse: true });
     }
     case "steer":
       return vehicle.step(dt, { steer: law.steer, accel: speedControl(vehicle.v, law.vTarget) });
+    case "turnaround":
+      if (world && route && stepTurnaround(vehicle, law, route, world, dt, purePursuit, speedControl)) return;
+      // falls through: once round, it follows the lane like any lane law
     case "lane":
     default: {
       const stopAt = law.stopAt;

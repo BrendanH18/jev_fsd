@@ -76,6 +76,7 @@ export class World {
     this.allWayCounted = null;   // the all-way stop it went out of turn at (counted once a visit)
     this.giveWay = null;         // the junction it last crossed a line into, giving way there
     this.egoPeek = null;         // the control it has stopped at to look past a building, giving way
+    this.turnaround = null;      // the three-point turn the car is making (sim/turnaround.js)
     this.besideRight = new Map(); // cyclist id -> when it last rode on the car's right, going its way
     this.hookCounted = new Map(); // cyclist id -> when cutting across it was last counted
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
@@ -142,6 +143,7 @@ export class World {
     this.lastSignal = null;
     this.giveWay = null;
     this.egoPeek = null;
+    this.turnaround = null;
     this.allWayCounted = null;
     this.besideRight.clear();
     this.hookCounted.clear();
@@ -209,7 +211,7 @@ export class World {
   // Called every physics tick after the ego (and NPCs) moved. Collisions and violations.
   // A collision counts once per contact: the pair must separate for a second before the next
   // one counts. Fault: "ego" when the moving ego ran into a car ahead going its way or standing
-  // still; "other" when the ego was stopped or hit from behind; "shared" for crossing and oncoming
+  // still, or backed into something; "other" when the ego was stopped or hit from behind; "shared" for crossing and oncoming
   // contacts, where right of way decides and the sim does not judge it.
   audit(dt, road) {
     this.events.length = 0;
@@ -222,7 +224,9 @@ export class World {
         const rel = this.ego.toLocal(cx, cy);
         const egoCenterAhead = rel.ahead - (this.ego.spec.length / 2 - this.ego.spec.rearOverhang);
         const relHeading = Math.abs(wrap(n.psi - this.ego.psi));
-        const fault = n.kind === "pedestrian" ? (this.ego.v < 0.5 ? "other" : "ego")
+        // (reversing, the car is at fault for what it backs into)
+        const backedInto = this.ego.v < -0.3 && egoCenterAhead < 0;
+        const fault = backedInto ? "ego" : n.kind === "pedestrian" ? (this.ego.v < 0.5 ? "other" : "ego")
           : this.ego.v < 0.5 || egoCenterAhead < -1 ? "other"
           : egoCenterAhead > 0 && (relHeading < Math.PI / 4 || n.v < 0.5) ? "ego" : "shared";
         const atFault = fault === "ego";
@@ -383,6 +387,9 @@ export class World {
   auditOncoming() {
     const j = this.lastSignal;
     if (!j) return;
+    // Turning round in a dead end off this junction, the car has finished its turn here: it comes
+    // back out as a new approach.
+    if (this.turnaround && this.turnaround.phase !== "stuck") { this.lastSignal = null; return; }
     const FRONT = this.ego.spec.length - this.ego.spec.rearOverhang;
     const fx = this.ego.x + Math.cos(this.ego.psi) * FRONT, fy = this.ego.y + Math.sin(this.ego.psi) * FRONT;
     const [jx, jy] = j.centre;
