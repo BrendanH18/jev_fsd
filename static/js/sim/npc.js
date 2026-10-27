@@ -315,7 +315,8 @@ export class NpcFleet {
     if (this.nextPark <= 0) { this.nextPark = 15 + this.parkingEvents() * 20; this.maybePark(); }
     if (this.emergency) {
       this.nextEmergency -= dt;
-      if (this.nextEmergency <= 0 && !this.vehicles.some(isEmergency)) {
+      // (one at a time, stood down or not)
+      if (this.nextEmergency <= 0 && !this.vehicles.some(isEmergencyVehicle)) {
         this.nextEmergency = EV_EVERY_S[0] + this.sirens() * (EV_EVERY_S[1] - EV_EVERY_S[0]);
         this.dispatchEmergency();
       }

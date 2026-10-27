@@ -109,7 +109,7 @@ function busy(value) {
 function persist(run) {
   try {
     const previousBaseline = baselineRun();
-    saved = saveEvaluation(run); $("#history-status").textContent = "Saved on this browser. Up to 10 recent evaluations are retained within the storage limit; export a permanent copy.";
+    saved = saveEvaluation(run, undefined, previousBaseline); $("#history-status").textContent = "Saved on this browser. Up to 10 recent evaluations are retained within the storage limit; export a permanent copy.";
     historyControls();
     const baselineIndex = previousBaseline ? saved.findIndex(r => JSON.stringify(r) === JSON.stringify(previousBaseline)) : -1;
     $("#arena-baseline").value = baselineIndex >= 0 ? String(baselineIndex) : ""; baselineAgents();

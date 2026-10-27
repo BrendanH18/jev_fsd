@@ -34,6 +34,14 @@ test("a shared browser quota trims older evaluations before giving up", () => {
   } };
   assert.equal(saveEvaluation(run, quota).length, 1);
 });
+test("trimming history keeps the chosen baseline, dropping other older evaluations first", () => {
+  const at = (m) => ({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, m)).toISOString() });
+  const quota = { getItem: () => JSON.stringify([at(3), at(2), at(1)]), setItem(k, json) {
+    if (JSON.parse(json).length > 2) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+  } };
+  assert.deepEqual(saveEvaluation(at(4), quota, at(1)).map((r) => r.created_at), [at(4).created_at, at(1).created_at]);
+  assert.deepEqual(saveEvaluation(at(4), quota).map((r) => r.created_at), [at(4).created_at, at(3).created_at]);
+});
 test("untrusted pass labels cannot bypass the audited pass criteria", () => {
   assert.equal(validateEvaluation({ ...run, results: [{ ...result, collisions: 1 }] }).results[0].pass, false);
   assert.equal(validateEvaluation({ ...run, results: [{ ...result, stopped: true, report: { ...result.report, status: "stopped" } }] }).results[0].pass, false);

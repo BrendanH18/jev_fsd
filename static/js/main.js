@@ -568,7 +568,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -645,8 +645,9 @@ export async function boot() {
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
     const evs = fleet.vehicles.filter(isEmergency);
     const call = evs.length ? nearestCall(world.ego, evs) : null;
-    if (call && call.ev.id !== announcedEv) {
-      announcedEv = call.ev.id;
+    // (kept up for as long as it calls on the car)
+    if (call && (call.ev.id !== announcedEv || world.t - announcedAt > 1)) {
+      announcedEv = call.ev.id; announcedAt = world.t;
       hud.badge(`${EMERGENCY_NAMES[call.ev.kind].toUpperCase()} ${call.relation === "behind" ? "BEHIND" : call.relation === "ahead" ? "AHEAD" : `FROM THE ${call.relation.toUpperCase()}`} · PULL OVER AND STOP`, "safety", 2500);
     }
     const nearestEv = evs.reduce((best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)), Infinity);

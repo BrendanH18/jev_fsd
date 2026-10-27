@@ -128,6 +128,10 @@ const rules = new RulesBrain();
   const later = buildSnapshot(world);
   assert.ok(Math.abs(later.emergency.bumper_to_stop_m - (e.bumper_to_stop_m - 5)) < 0.01);
   assert.ok(later.target.reasons.includes("pulling over for the ambulance"), later.target.reasons.join());
+  // stopped well past it (an overshoot), the car stops where it is rather than rolling on to a new stop
+  world.evYield.stop -= later.emergency.bumper_to_stop_m + 3; world.ego.v = 0;
+  const over = buildSnapshot(world).emergency;
+  assert.ok(Math.abs(over.bumper_to_stop_m) < 0.01, `stops where it is: ${over.bumper_to_stop_m}`);
   console.log("✓ coming up behind, the car plans to pull over and stop, and Rules does");
 }
 

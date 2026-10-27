@@ -448,7 +448,8 @@ function emergencyYield(world, p, frontS, lane, visible) {
   const v = Math.max(0, ego.v);
   // (and again if the car could no longer stop there, or within the 1.5 m a short stop overshoots,
   // even braking hard, having been slow to start)
-  if (!plan || plan.id !== ev.id || plan.route !== route || (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v) {
+  // (well past it is handled below)
+  if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + 1.5 && (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v)) {
     let stop = frontS + Math.max(4, v * v / (2 * EV_STOP_DECEL)), clearing = false;
     // junctions along the route from here to there: stop short of the first, or clear it
     // (from the street before this one: the car may still be in the junction it has just come through)
