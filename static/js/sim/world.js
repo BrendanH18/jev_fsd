@@ -12,6 +12,7 @@ import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
 import { AllWayStops } from "./all-way.js";
 import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
+import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency } from "./emergency.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -54,6 +55,25 @@ const PASSED_M = 1;
 const AUDIT_HOOK_MEMORY_S = 3;
 const AUDIT_HOOK_TURN = Math.PI / 9;
 const AUDIT_HOOK_AGAIN_S = 10;
+// Giving way to an emergency vehicle (sim/emergency.js), seen or not, once it calls on the car: the
+// car fails to yield if, from 2 s after the call came, it is faster than 3 m/s and has not slowed by
+// at least 1 m/s^2 since then (unless, pulled over, it was told to drive on ahead of a vehicle stuck
+// behind it);
+// if its front enters a junction (8 m of its centre) that a vehicle coming from the side is due
+// across, 3 s or more after the call came; if, 4 s or more after the call came, the vehicle draws
+// level with it along its street (within 8 m to the side) while it is not pulled over and not in a
+// junction; or if the vehicle has been stuck behind it for 6 s while
+// it is not pulled over (at least 0.2 m right of its lane's centre) and has not been told to drive on
+// ahead of it. Counted once a vehicle.
+const AUDIT_EV_MOVING_MPS = 3;
+const AUDIT_EV_DECEL = 1;
+const AUDIT_EV_REACT_S = 2;
+const AUDIT_EV_JUNCTION_S = 3;
+const AUDIT_EV_BOX_M = 8;
+const AUDIT_EV_BLOCK_S = 6;
+const AUDIT_EV_PULLED_M = 0.2;
+const AUDIT_EV_PULL_S = 4;
+const AUDIT_EV_SIDE_M = 8;
 
 export class World {
   constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR } = {}) {
@@ -79,6 +99,9 @@ export class World {
     this.turnaround = null;      // the three-point turn the car is making (sim/turnaround.js)
     this.besideRight = new Map(); // cyclist id -> when it last rode on the car's right, going its way
     this.hookCounted = new Map(); // cyclist id -> when cutting across it was last counted
+    this.evCalls = new Map();     // emergency vehicle id -> { since, v0, lead }: since it called on the car
+    this.evCounted = new Set();   // emergency vehicles a failure to yield was counted for
+    this.evJunction = null;       // the junction the car's front is in, while one is about
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
@@ -147,6 +170,8 @@ export class World {
     this.allWayCounted = null;
     this.besideRight.clear();
     this.hookCounted.clear();
+    this.evCalls.clear();
+    this.evJunction = null;
   }
 
   auditStatic(dt) {
@@ -336,6 +361,43 @@ export class World {
     this.auditOncoming();
     this.auditGiveWay();
     this.auditCyclists();
+    this.auditEmergency(road);
+  }
+
+  auditEmergency(road) {
+    const ego = this.ego, evs = this.npcs.filter(isEmergency);
+    if (!evs.length) { this.evCalls.clear(); this.evJunction = null; return; }
+    const FRONT = ego.spec.length - ego.spec.rearOverhang;
+    const fx = ego.x + Math.cos(ego.psi) * FRONT, fy = ego.y + Math.sin(ego.psi) * FRONT;
+    let junction = null;
+    for (const n of this.map.nodes.values()) {
+      if (Math.abs(n.x - fx) < AUDIT_EV_BOX_M && Math.abs(n.y - fy) < AUDIT_EV_BOX_M && Math.hypot(n.x - fx, n.y - fy) < AUDIT_EV_BOX_M && isJunction(this.map, n.id)) { junction = n.id; break; }
+    }
+    const entered = junction !== null && junction !== this.evJunction && ego.v > 1;
+    this.evJunction = junction;
+    const pulled = road.lane && road.lateral >= AUDIT_EV_PULLED_M;
+    for (const ev of evs) {
+      const call = emergencyCall(ego, ev);
+      let rec = this.evCalls.get(ev.id);
+      if (!call) { if (rec) this.evCalls.delete(ev.id); continue; }
+      if (!rec) this.evCalls.set(ev.id, rec = { since: this.t, v0: Math.max(0, ego.v), lead: false, ahead: null });
+      // (where its middle is along the car, from the car's middle)
+      const [cx, cy] = ev.center, local = ego.toLocal(cx, cy), ahead = local.ahead - (ego.spec.length / 2 - ego.spec.rearOverhang), before = rec.ahead;
+      rec.ahead = ahead;
+      // (told to drive on ahead of it, having pulled over as far as it could)
+      rec.lead ||= pulled && leadsEmergency(ev, ego);
+      if (this.evCounted.has(ev.id)) continue;
+      const after = this.t - rec.since;
+      const late = !rec.lead && after > AUDIT_EV_REACT_S && ego.v > Math.max(AUDIT_EV_MOVING_MPS, rec.v0 - AUDIT_EV_DECEL * (after - AUDIT_EV_REACT_S));
+      const crossing = call.relation === "left" || call.relation === "right";
+      const level = !crossing && before !== null && Math.sign(before) !== Math.sign(ahead) && Math.abs(local.right) < AUDIT_EV_SIDE_M;
+      const unmoved = level && after >= AUDIT_EV_PULL_S && !pulled && !rec.lead && junction === null;
+      if (late || unmoved || (entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !rec.lead)) {
+        this.evCounted.add(ev.id);
+        this.violations.failed_to_yield++;
+        this.events.push({ type: "failed_to_yield", to: "emergency vehicle", with: ev.id });
+      }
+    }
   }
 
   auditCyclists() {

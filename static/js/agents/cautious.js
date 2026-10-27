@@ -7,8 +7,10 @@ export class CautiousAgent {
       Math.abs(candidate.sim.end_speed - target) * 2 + Math.abs(candidate.sim.lane_err_end) * 3
       + Math.max(0, 5 - candidate.sim.min_gap_m) * 6 - candidate.sim.progress_m * 0.3 }));
     ranked.sort((a, b) => a.cost - b.cost);
-    const candidate = ranked[0]?.candidate;
-    return { motion: candidate?.sim.end_speed < 0.3 ? "stop" : "drive", candidateId: candidate?.id ?? null,
+    // an emergency vehicle is coming: pull over and stop, whatever it costs in lane position
+    const candidate = eligible.find(c => c.id === "pull_over") || ranked[0]?.candidate;
+    // (pulling over stops on its own, at the side of the road: braking now would stop in the lane)
+    return { motion: candidate?.sim.end_speed < 0.3 && candidate.id !== "pull_over" ? "stop" : "drive", candidateId: candidate?.id ?? null,
       meta: { source: this.name, model: this.name, latency_ms: 0, input_tokens: 0, cost_usd: 0 } };
   }
   async decide(snap, eligible) { return this.decideSync(snap, eligible); }

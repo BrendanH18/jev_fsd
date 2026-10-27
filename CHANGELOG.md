@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- Emergency vehicles answer calls (`static/js/sim/emergency.js`). In a free drive an ambulance or a
+  fire truck (each at its real size, weight and power) is sent past the car 60 to 120 s in and then
+  every 2.5 to 5 minutes: up behind it along its street, toward it down the street, or across the
+  junction ahead, lights flashing and siren wailing (heard with **Sound** on; `?emergency=0` turns
+  them off). It drives at up to 35% over the limit (60 km/h at most) along the middle of the road,
+  moving across it to the nearest gap that clears everything by 0.15 m (4 m/s when that close, a
+  1.5 m berth from anything moving that is not going its way), slows to 5 m/s through a junction
+  where it has a red light or a sign and to 8 m/s through any other, and waits at the line for
+  anything crossing. Stuck for 20 s it is stood down and turns its siren off.
+  Everyone it calls on gives way, as BC's Motor Vehicle Act (s. 177) requires: its siren is heard
+  within 100 m, seen or not, and it calls on whatever is in its way over the next 120 m, ahead of
+  it either way along its street or on a street it crosses. Traffic and the driven car pull over to
+  the right (into an empty parking lane beside the curb lane, up to 1.5 m; else to 0.35 m short of
+  their lane's edge, clear of cars parked beyond it) and stop where they chose to when the call came:
+  their stopping distance at 1.5 m/s^2 (3.5 m/s^2 for traffic it comes toward or across), short of the next
+  junction if they can stop there braking at up to 3.5 m/s^2, else past it, and clear of a
+  junction they are in. They wait until it has gone by. One going its way that holds it up for
+  3 s, unable to let it past, drives on ahead of it instead. Once it has gone by, the driven car
+  drops back to 150 m behind it (Alberta's rule for any emergency vehicle).
+  The audit counts a failure to yield (`emergency vehicle`), seen or not, once a vehicle: still
+  faster than 3 m/s and not slowing by at least 1 m/s^2 from 2 s after the call; entering a
+  junction it is due across from the side, 3 s or more after the call; or holding it up for 6 s
+  without having pulled over. Decision models and LLMs get `emergency_vehicle` (where it comes
+  from, how far, when it arrives, whether it is seen, where to pull over and stop, or to drive on
+  ahead) and `emergency_vehicle_ahead`, a situation line, a `pull_over` candidate (braking only as
+  hard as the stop was planned for) and a motion criterion; manoeuvres past the stop are rejected
+  (`fails_to_yield_to_emergency`). AI eyes outlines emergency vehicles in magenta, heard or seen,
+  and says where it comes from and where the car stops; the HUD names it ("AMBULANCE BEHIND · PULL
+  OVER AND STOP"). The seeded benchmark sends none, so its traffic is as it was.
+  A new challenge, **Lights and sirens** (Edmonton), sends an ambulance up behind the car 45 m
+  before a junction without a sign: pull over and stop short of it. New checks in
+  `scripts/test_emergency.mjs`. In the seeded V8 and WebKit benchmarks Rules passes all 70 routes in
+  each engine, every route exactly as before; see [docs/rules-baseline.md](docs/rules-baseline.md).
+
 - The car turns round where its route makes a U-turn at a dead end (`static/js/sim/turnaround.js`).
   It slows and stops where it will turn, 9 m short of the U-turn or 3 m into a shorter street,
   then makes a three-point turn: legs at walking pace on full lock, forward turning left and back

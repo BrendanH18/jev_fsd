@@ -20,8 +20,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Four-way stop | Toronto, The Annex | Straight on through an all-way stop; a hesitant driver from the right stops first, a second car queues behind it, and an oncoming car turns left |
 | The blind corner | Vancouver, Mount Pleasant | Straight on through a two-way stop where a corner building hides the through road from the line; once the car has stopped, a car on the through road comes from the right, out of sight, and another from the left |
 | The right hook | Vancouver, Kitsilano | A right turn off a bikeway, from a street with the right of way; a cyclist 15 m ahead rides the empty parking lane at 5.5 m/s, straight on past the corner, so it is on the car's right as the car slows to turn |
+| Lights and sirens | Edmonton, Old Strathcona | Straight on along a two-way street with a parking lane, toward a junction without a sign; once the car is 45 m from it, an ambulance sets off 75 m behind it with its siren on, so the car must pull over and stop short of the junction |
 
-Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner and right hook joined it later, at version 1. Each challenge separately versions
+Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook and lights and sirens joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
 and snow challenges remain version 1; the rainy crossing is version 2 because its person
 now correctly waits for the approach trigger rather than starting during setup.

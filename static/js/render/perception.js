@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { buildSnapshot } from "../brain/sensors.js";
+import { isEmergency } from "../sim/emergency.js";
 
 // A debug view of geometric sensing, not a claim about a camera or learned perception model.
 export class PerceptionView {
@@ -34,7 +35,9 @@ export class PerceptionView {
       const visible = world.visibility.sees(ego, object); visible ? seen++ : hidden++;
       const b = object.obb(), c = Math.cos(b.heading), s = Math.sin(b.heading);
       const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => [b.center[0] + c * x * b.halfLength - s * y * b.halfWidth, b.center[1] + s * x * b.halfLength + c * y * b.halfWidth]);
-      for (let i = 0; i < 4; i++) add(boxes, boxColors, corners[i], corners[(i + 1) % 4], visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42]);
+      // (an emergency vehicle with its siren on is heard whether or not it is seen: magenta)
+      const color = isEmergency(object) ? [1, 0.3, 0.9] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
+      for (let i = 0; i < 4; i++) add(boxes, boxColors, corners[i], corners[(i + 1) % 4], color);
     }
     for (const [mesh, vertices, colors] of [[this.lines, rays, rayColors], [this.bounds, boxes, boxColors]]) {
       mesh.geometry.dispose(); mesh.geometry = new THREE.BufferGeometry();
@@ -43,9 +46,11 @@ export class PerceptionView {
     }
     const reasons = { collision: "Predicted collision", visibility_stopping_distance: "Beyond stopping sight", passes_cyclist_too_close: "Too close to cyclist",
       off_road: "Leaves the road", runs_red: "Red light", fails_to_yield: "Must yield", runs_stop: "Missed stop", fails_to_yield_to_pedestrian: "Person crossing",
-      fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", enters_unseen_junction: "Cannot see yet",
+      fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", enters_unseen_junction: "Cannot see yet",
       passes_turn_round_point: "Turns round here" };
-    return { seen, hidden, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    const e = snap.emergency;
+    const emergency = e ? `${e.kind[0].toUpperCase()}${e.kind.slice(1)} ${e.from === "behind" ? "behind" : e.from === "ahead" ? "ahead" : `from the ${e.from}`}, ${Math.round(e.distance_m)} m${e.seen ? "" : ", heard not seen"}: ${e.lead ? "stuck behind the car, driving on ahead" : `pull over ${e.offset_m.toFixed(1)} m, stop in ${Math.max(0, Math.round(e.bumper_to_stop_m))} m${e.clearing ? " past the junction" : ""}`}` : null;
+    return { seen, hidden, emergency, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

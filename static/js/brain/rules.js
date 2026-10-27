@@ -47,6 +47,9 @@ export class RulesBrain {
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist" || c.id === "stop_to_turn_round") cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
+      // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
+      // (outweighing the cost of ending up out of the lane's centre)
+      if (c.id === "pull_over") cost -= 15;
       // Turning round where the route makes a U-turn is the only way on, and once begun it carries
       // on whenever its prediction is clear.
       if (c.law.kind === "turnaround") cost -= 50;

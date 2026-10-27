@@ -53,6 +53,19 @@ export const BIKE = {
   jerkMax: 8.0,
 };
 
+// Emergency vehicles answering a call (sim/emergency.js): a box ambulance on a van chassis and a
+// pumper fire truck, with their size, weight and power. Body width excludes mirrors.
+export const AMBULANCE = {
+  ...CAR, kind: "ambulance", wheelbase: 3.9, length: 6.7, width: 2.15, rearOverhang: 1.6, maxSteer: 38 * Math.PI / 180,
+  maxAccel: 2.6, maxSpeed: 30, mass: 4500, yawInertia: 9500, cgToFront: 1.7, cgHeight: 1.0, track: 1.75,
+  power: 160000, cdA: 3.2, crr: 0.011,
+};
+export const FIRE_TRUCK = {
+  ...CAR, kind: "fire_truck", wheelbase: 5.0, length: 9.8, width: 2.45, rearOverhang: 2.7, maxSteer: 42 * Math.PI / 180,
+  maxAccel: 1.8, maxSpeed: 27, mass: 18000, yawInertia: 125000, cgToFront: 2.4, cgHeight: 1.3, track: 2.05,
+  power: 330000, cdA: 6.8, crr: 0.009, brakeFront: 0.6, driveFront: 0, accelLag: 0.4,
+};
+
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
 export const ROAD = { mu: 0.9 };
 export const G = 9.81;

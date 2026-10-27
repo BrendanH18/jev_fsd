@@ -8,6 +8,8 @@ import { SceneView } from "./render/scene.js";
 import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
+import { createEmergencyMesh, syncEmergency } from "./render/emergency.js";
+import { isEmergency, isEmergencyVehicle, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
 import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar, restoreParkedCar, createDoorMesh, syncDoor } from "./render/cars.js";
 import { createPersonMesh, syncPerson } from "./render/people.js";
 import { Minimap } from "./render/minimap.js";
@@ -123,7 +125,8 @@ export async function boot() {
     // fewer people out on foot late in the evening and at night
     const pedestrians = hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined;
     world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec });
-    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6 });
+    // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
+    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0" });
     autopilot = new Autopilot(world, callbacks);
   }
   view.addScenery(buildParkedCars(world.parked.list));
@@ -140,7 +143,7 @@ export async function boot() {
     for (const n of fleet.vehicles) {
       ids.add(n.id);
       if (npcMeshes.has(n.id)) continue;
-      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : createCarMesh(n.color, n.id, n.style ?? null);
+      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : createCarMesh(n.color, n.id, n.style ?? null);
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
@@ -565,7 +568,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false;
+  let indicatorLit = false, announcedEv = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -637,8 +640,17 @@ export async function boot() {
     syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id);
-      (n.kind === "bike" ? syncBike : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
+      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
     }
+    // an emergency vehicle calling on the car to give way: say so once, and sound its siren
+    const evs = fleet.vehicles.filter(isEmergency);
+    const call = evs.length ? nearestCall(world.ego, evs) : null;
+    if (call && call.ev.id !== announcedEv) {
+      announcedEv = call.ev.id;
+      hud.badge(`${EMERGENCY_NAMES[call.ev.kind].toUpperCase()} ${call.relation === "behind" ? "BEHIND" : call.relation === "ahead" ? "AHEAD" : `FROM THE ${call.relation.toUpperCase()}`} · PULL OVER AND STOP`, "safety", 2500);
+    }
+    const nearestEv = evs.reduce((best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)), Infinity);
+    audio.siren(nearestEv, world.t, world.paused || document.hidden);
     world.crowd.list.forEach((p, i) => {
       const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
       syncPerson(pedMeshes[i], next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople[i], alpha), view.camera, world.weather === "rain");
