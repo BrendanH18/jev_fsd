@@ -56,19 +56,26 @@ export function readEvaluations(storage) {
   } catch { return []; }
 }
 
-export function saveEvaluation(run, storage) {
+// Saves `run` first in the history, dropping the oldest runs to fit; `keep` (a saved run, such as the
+// chosen baseline) is dropped only when nothing else is left to drop.
+export function saveEvaluation(run, storage, keep = null) {
   const validated = validateEvaluation(run);
   storage ||= globalThis.localStorage;
   const runs = [validated, ...readEvaluations(storage)].slice(0, 10);
+  const kept = keep ? JSON.stringify(keep) : null;
+  const drop = () => {
+    const i = runs.findLastIndex((r, k) => k > 0 && JSON.stringify(r) !== kept);
+    runs.splice(i > 0 ? i : runs.length - 1, 1);
+  };
   let json = JSON.stringify(runs);
   const bytes = () => Math.max(json.length * 2, new Blob([json]).size); // localStorage can account for UTF-16 strings.
-  while (runs.length > 1 && bytes() > MAX_HISTORY_BYTES) { runs.pop(); json = JSON.stringify(runs); }
+  while (runs.length > 1 && bytes() > MAX_HISTORY_BYTES) { drop(); json = JSON.stringify(runs); }
   if (bytes() > MAX_HISTORY_BYTES) throw new Error("This evaluation is too large for browser history. Export it to keep a copy.");
   for (;;) {
     try { storage.setItem(EVALUATION_HISTORY_KEY, json); break; }
     catch (error) {
       if (error.name !== "QuotaExceededError" || runs.length === 1) throw error;
-      runs.pop(); json = JSON.stringify(runs);
+      drop(); json = JSON.stringify(runs);
     }
   }
   return runs;

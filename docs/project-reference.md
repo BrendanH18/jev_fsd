@@ -257,7 +257,10 @@ Cyclists ride bike routes, keeping right: where a street's parking lane is empty
 block they ride in it, past cars queued at the corner, and move back into the traffic lane before
 the next parked car once nothing is beside them. A car turning right, the driven car included,
 waits for a cyclist coming up on its right (a right hook). Pedestrians cross at signals or
-sometimes mid-block and carry umbrellas in rain.
+sometimes mid-block and carry umbrellas in rain. In a free drive an ambulance or a fire truck
+answers a call now and then, lights flashing and siren wailing (with **Sound** on), coming up
+behind the car, toward it or across the junction ahead; everyone pulls over to the right, clear of
+any junction, and stops until it has gone by (`?emergency=0` turns them off).
 
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery

@@ -2,6 +2,7 @@ import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle } from "../map/mapdata.js";
 import { Vehicle, BIKE } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
+import { isJunction } from "../sim/emergency.js";
 import { Pedestrian } from "../sim/pedestrians.js";
 import { StopMemory, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
@@ -31,6 +32,8 @@ export const CHALLENGES = [
     description: "A two-way stop in Mount Pleasant with a building on the corner. The cross street doesn't stop, and you can't see along it from the line.", lesson: "Stop at the line, then creep forward until you can see. Traffic on the through road has the right of way from both sides, so wait until neither side is close." },
   { id: "right-hook", title: "The right hook", map: "kitsilano", weather: "dry", time: "afternoon", seed: 11042, icon: "↳", difficulty: "Anticipation", hazard: "right-hook",
     description: "A right turn off a Kitsilano bikeway, with a cyclist riding the empty parking lane. Catch them up, and they're on your right at the corner.", lesson: "Before a right turn, check your mirror and over your shoulder. A cyclist going straight on your right has the right of way: slow down, let them by, then turn behind them." },
+  { id: "lights-and-sirens", title: "Lights and sirens", map: "edmonton", weather: "dry", time: "afternoon", seed: 12042, icon: "✚", difficulty: "Awareness", hazard: "emergency",
+    description: "An ambulance comes up behind you with its siren on, just before a junction. Get out of its way, but not into the junction.", lesson: "When you hear a siren, pull over as close to the right-hand edge of the road as you can, clear of any junction, and stop until it has gone by. Then let it get well ahead before you follow." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -195,6 +198,24 @@ function hookSites(map) {
   hookSiteCache.set(map, sites); return sites;
 }
 
+// An emergency vehicle from behind: a long two-way street with a parking lane on the right, ending
+// at a junction without a sign or signal where the car goes straight on, the car in its curb lane.
+// The vehicle is sent once the car is 45 m from the junction (see installChallenge). Streets the
+// car has the right of way along come first.
+const sirenSiteCache = new WeakMap();
+function sirenSites(map) {
+  if (sirenSiteCache.has(map)) return sirenSiteCache.get(map);
+  let sites = [];
+  for (const edge of map.edges.values()) {
+    if (edge.control || edge.oneway || edge.ring || edge.length < SIREN_EDGE_M || !(edge.parking?.[1] > 1.5) || !isJunction(map, edge.to)) continue;
+    const straight = map.successors(edge.id).find(o => map.classifyTurn(map.turnAngle(edge.id, o)) === "straight" && map.edges.get(o).length > 60 && !map.edges.get(o).ring);
+    if (straight) sites.push({ lane: map.lane(edge.id, edge.lanes - 1), straight, major: map.priorityOf(edge.id)?.rule === "major" });
+  }
+  if (sites.some(s => s.major)) sites = sites.filter(s => s.major);
+  sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+  sirenSiteCache.set(map, sites); return sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -223,16 +244,19 @@ export function challengeScenario(map, challenge) {
   const hooks = challenge.hazard === "right-hook" ? hookSites(map) : null;
   if (hooks && !hooks.length) throw new Error("This map has no right turn with a parking lane a cyclist rides straight on past.");
   const hook = hooks ? hooks[Math.floor(random() * hooks.length)] : null;
-  const start = site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || lanes[Math.floor(random() * lanes.length)];
+  const sirens = challenge.hazard === "emergency" ? sirenSites(map) : null;
+  if (sirens && !sirens.length) throw new Error("This map has no long two-way street with a parking lane ending at a junction without a sign.");
+  const siren = sirens ? sirens[Math.floor(random() * sirens.length)] : null;
+  const start = site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
-  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : Math.max(8, Math.min(20, start.length * 0.15));
+  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = stop?.straight || blind?.straight;
+  const straight = stop?.straight || blind?.straight || siren?.straight;
   if (straight) { const ahead = map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   for (let i = 0; i < 12 && length < 260; i++) {
     const previous = chain.at(-1);
@@ -253,6 +277,7 @@ export function challengeScenario(map, challenge) {
     ...(stop ? { allWay: allWayCars(map, stop) } : {}),
     ...(blind ? { twoWay: twoWayCars(map, blind) } : {}),
     ...(hook ? { cyclist: { edge: hook.lane.edge, s: startS + HOOK_LEAD_M, then: hook.straight } } : {}),
+    ...(siren ? { emergency: { kind: "ambulance", relation: "behind", distance: SIREN_BACK_M } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
 }
@@ -260,10 +285,10 @@ export function challengeScenario(map, challenge) {
 export function installChallenge(world, fleet, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
   // an oncoming hazard is placed at the stop line
-  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
+  const hazardS = scenario.crossing?.hazardS ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
-  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}) };
+  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
   if (["door", "pull"].includes(challenge.hazard)) {
     const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);
     const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);
@@ -299,12 +324,13 @@ export function stepChallenge(world, fleet) {
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
-    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
     if (state.allWay) state.allWayIds = releaseAllWay(world, fleet, state.allWay);
     if (state.twoWay) state.twoWayIds = releaseThrough(world, fleet, state.twoWay);
+    if (state.emergency) state.emergencyId = fleet.dispatchEmergency(state.emergency)?.id || null;
     if (state.carId) {
       const car = world.parked.list.find(c => c.id === state.carId);
       if (state.hazard === "pull") { const merging = fleet.startPullOut(car); state.mergingId = merging?.id || null; }
@@ -399,6 +425,10 @@ function releaseThrough(world, fleet, cars) {
 // empty parking lane at 5.5 m/s, straight on past the corner. The car catches it up on the way, so
 // it is beside or just behind the car as the car slows for the turn.
 const HOOK_START_M = 95, HOOK_LEAD_M = 15;
+
+// Lights and sirens: the car starts 110 m before the junction, and once it is 45 m from it an
+// ambulance sets off 75 m behind it, on its street, siren on.
+const SIREN_EDGE_M = 135, SIREN_START_M = 110, SIREN_BACK_M = 75;
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);
   const p = pointAt(lane.pts, lane.cum, s), psi = headingAt(lane.pts, lane.cum, s);

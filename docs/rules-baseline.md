@@ -1,4 +1,27 @@
-# Rules benchmark baseline — 2026-10-25b (no deadlock overrides)
+# Rules benchmark baseline — 2026-10-26 (emergency vehicles, unchanged)
+
+Rules passes **70 of 70 routes in both V8 and WebKit**, exactly as in the 2026-10-25b record below:
+every suite matches its after columns route for route (arrival time, pass and safety brakes) and in
+its summary, with no collisions, red-light or stop-sign violations, failures to yield or deadlock
+overrides. "After" is the working tree on top of main at `c073ca4`, which adds emergency vehicles:
+an ambulance or a fire truck now and then in a free drive, everyone pulling over for it, and the
+"Lights and sirens" challenge. The seeded benchmark sends none, and with none about the traffic,
+the car and the audit behave as before; these runs confirm it.
+
+## Method
+
+As for 2026-10-25b: all 15 seeded suites (Kitsilano 12 routes in each of dry, fog, rain and snow,
+the eleven other maps two dry routes each), Rules, suite seed 1, 40 traffic cars, lockstep, on
+macOS 27.0.1 (26A434), Apple M5. V8 used `scripts/bench_node.mjs` with Node `v24.19.0` (V8
+`13.6.233.17-node.51`); WebKit used `scripts/shot.swift` compiled with
+`swiftc -O`, a fresh WKWebView per suite calling `window.__bench.run` with `save: false` after a
+15 s settle; both against `PORT=8331 uv run --locked server.py` serving the working tree. The
+[machine-readable record](validation/rebaseline-2026-10-26-rules.json) holds both engines'
+summaries and per-route results; the before columns are the 2026-10-25b record's after columns.
+Each engine ran one suite at a time, the two engines side by side (lockstep runs do not depend on
+timing). Night was not run.
+
+## Earlier record: 2026-10-25b (no deadlock overrides)
 
 Rules passes **70 of 70 routes in both V8 and WebKit**, before and after, with no collisions,
 red-light or stop-sign violations or failures to yield, and the seven deadlock overrides
@@ -7,7 +30,7 @@ the working tree on top of it, where a car two or more lanes from its route's la
 a lane change per lane, a lane change ends once the car is across, and the car turns round with a
 three-point turn where its route makes a U-turn at a dead end.
 
-## Method
+### Method
 
 Both engines ran all 15 seeded suites through the production suite builder, runner and metrics:
 Rules, suite seed 1, 40 traffic cars, lockstep. Kitsilano has 12 routes in each of dry, fog, rain
@@ -29,11 +52,11 @@ after columns. Kitsilano dry, Toronto and Ottawa were rerun in both engines from
 record](validation/rebaseline-2026-10-25b-rules.json) holds both engines' summaries and per-route
 metrics and safety, collision, yield and deadlock events. Night was not run.
 
-## Results
+### Results
 
 Passed / routes; deadlock overrides, safety brakes and mean speeds are before → after.
 
-### V8
+#### V8
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
@@ -53,7 +76,7 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 1 → 1 | 28.5 → 28.5 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 27.35 → 27.35 |
 
-### WebKit
+#### WebKit
 
 | Map and conditions | Before | After | Deadlock overrides | Safety brakes | Mean km/h |
 |---|---:|---:|---|---|---|
@@ -73,7 +96,7 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
 | Edmonton, dry | 2/2 | 2/2 | 0 → 0 | 2 → 1 | 24.65 → 28.35 |
 | Saskatoon, dry | 2/2 | 2/2 | 0 → 0 | 0 → 0 | 27.35 → 27.35 |
 
-## Why the numbers moved
+### Why the numbers moved
 
 - **Ottawa `s1-1`: 3 deadlock overrides → 0, 175.3 → 175.4 s** in both engines. The route starts
   on Wellington Street two lanes left of its route's lane, 71 m before a right turn. Before, the
@@ -97,7 +120,7 @@ Passed / routes; deadlock overrides, safety brakes and mean speeds are before �
   exactly. Calgary's mean speed moves 19.5 → 19.45 km/h in both engines. No other route moved by
   5 s or more.
 
-## Repeat
+### Repeat
 
 Start `PORT=8331 uv run --locked server.py`, then run each suite with `bench_node.mjs`
 (`--map kitsilano --count 12 --weather dry|fog|rain|snow`, and `--count 2 --weather dry` for the

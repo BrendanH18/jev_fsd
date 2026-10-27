@@ -25,6 +25,11 @@ export class DriveAudio {
     };
     this.road = filtered("lowpass", 700); this.rain = filtered("highpass", 1800); this.tires = filtered("bandpass", 1600);
     noise.start();
+    // an emergency vehicle's siren: a square wave through a band-pass filter, swept up and down
+    const siren = c.createOscillator(), band = c.createBiquadFilter(), level = c.createGain();
+    siren.type = "square"; siren.frequency.value = 700; band.type = "bandpass"; band.frequency.value = 1100; band.Q.value = 0.7; level.gain.value = 0;
+    siren.connect(band); band.connect(level); level.connect(master); siren.start();
+    this.sirenTone = { oscillator: siren, level };
   }
 
   async toggle() {
@@ -52,6 +57,18 @@ export class DriveAudio {
     set(this.road.filter.frequency, 350 + speed * 35);
     set(this.rain.level.gain, wet * (hood ? 0.11 : 0.07));
     set(this.tires.level.gain, Math.min(0.16, Math.max(0, Math.abs(ego.latAccel || 0) - 4) * 0.02));
+  }
+
+  // The siren of the nearest emergency vehicle `distance` m away (Infinity: none): a wail rising
+  // from 650 to 1,350 Hz and back every 4 s, a fast yelp within 60 m, louder as it nears.
+  siren(distance, t, paused) {
+    if (!this.context || !this.enabled) return;
+    const now = this.context.currentTime, near = Number.isFinite(distance) && !paused;
+    const level = near ? 0.1 * Math.min(1, Math.max(0, 1 - distance / 260)) ** 2 : 0;
+    this.sirenTone.level.gain.setTargetAtTime(level, now, 0.1);
+    if (!near) return;
+    const period = distance < 60 ? 0.35 : 4, u = (t % period) / period, sweep = u < 0.5 ? u * 2 : 2 - u * 2;
+    this.sirenTone.oscillator.frequency.setTargetAtTime(650 + 700 * sweep, now, 0.02);
   }
 
   tick() { this.beep([850], 0.045, 0.025); }

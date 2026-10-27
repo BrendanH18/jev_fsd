@@ -80,6 +80,8 @@ export class DeadlockDetector {
       || (snap && snap.following && snap.following.gap_m < 8)
       || (snap && snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12)
       || (snap && snap.right_hook && snap.right_hook.bumper_to_yield_m < 8)
+      || (snap && snap.emergency && snap.emergency.bumper_to_stop_m !== null && snap.emergency.bumper_to_stop_m < 8)
+      || (snap && snap.emergency_ahead && snap.emergency_ahead.speed < 1)
       || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)
       || (snap && snap.turnaround?.executing && snap.turnaround.idle_s < TURN_ROUND_IDLE_S)
       || !world.route;

@@ -6,11 +6,12 @@ import { CAR, comfort } from "../sim/vehicle.js";
 import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
-import { CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, HOOK_STOP_M, CLEARING_M, PEEK_MPS, waitsItsTurn } from "./sensors.js";
+import { EV_STOP_DECEL, CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, HOOK_STOP_M, CLEARING_M, PEEK_MPS, waitsItsTurn } from "./sensors.js";
 import { poseOf } from "../sim/static-obstacles.js";
 import { STOP_ZONE_M } from "../sim/signals.js";
 import { PEEK_AT_M } from "../sim/priority.js";
 import { planTurnaround } from "../sim/turnaround.js";
+import { isEmergency } from "../sim/emergency.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -118,6 +119,13 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_for_cyclist", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(hook.yield_s_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "stop and let the cyclist on the right go by before turning" });
     }
+    // An emergency vehicle calling on the car to give way: pull over to the right and stop there,
+    // braking as gently as the stop was planned for.
+    const ev = snap.emergency;
+    if (ev && ev.stop_s_route !== null) {
+      out.push({ id: "pull_over", laneUntil, law: inLane({ kind: "lane", offset: ev.offset_m, vTarget: approach, stopAtRoute: stopAt(ev.stop_s_route - FRONT - 0.5), stopDecel: EV_STOP_DECEL }),
+        steer: `pull over ${ev.offset_m.toFixed(1)} m to the right`, speed: ev.bumper_to_stop_m > 0.3 ? `stop at the side of the road${ev.clearing ? ", past the junction" : ""}` : "hold still at the side of the road" });
+    }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -168,7 +176,10 @@ function dedupe(list) {
 export function simulateAll(candidates, snap, world) {
   const { route, map } = world;
   const FRONT = world.ego.spec.length - world.ego.spec.rearOverhang;
-  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
+  // (an emergency vehicle coming up behind stops for what it cannot get past: it is not predicted
+  // to run into the car)
+  const behindEv = (o) => isEmergency(o) && world.ego.toLocal(o.x, o.y).ahead < 0 && Math.abs(wrap(o.psi - world.ego.psi)) < Math.PI / 4;
+  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !behindEv(o)).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
@@ -180,6 +191,8 @@ export function simulateAll(candidates, snap, world) {
   const ped = snap.pedestrian;
   const oncoming = control?.oncoming || null;
   const hook = snap.right_hook || null;
+  // where the car stops for an emergency vehicle
+  const evStop = snap.emergency?.stop_s_route ?? null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
@@ -189,7 +202,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesEv = false, pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -222,6 +235,8 @@ export function simulateAll(candidates, snap, world) {
         if (oncoming && s + FRONT > oncoming.yield_s_route + ONCOMING_STOP_M - 0.5) cutsOff = true;
         // likewise turning right across a cyclist's line of travel
         if (hook && s + FRONT > hook.yield_s_route + HOOK_STOP_M - 0.5) hooks = true;
+        // (1.5 m past it, as a short stop overshoots)
+        if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -279,6 +294,7 @@ export function simulateAll(candidates, snap, world) {
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";
+    else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesHold && c.law.kind !== "hard_brake") reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";
     c.reject = reject;

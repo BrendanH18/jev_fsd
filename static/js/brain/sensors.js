@@ -14,6 +14,7 @@ import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
+import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, isEmergency, isJunction, leadsEmergency, nearestCall, pullOverOffset } from "../sim/emergency.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
@@ -103,6 +104,20 @@ const HOOK_BEHIND_M = 30;
 const HOOK_CONE = Math.PI / 6;
 export const HOOK_STOP_M = 1.0;
 const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
+// Giving way to an emergency vehicle (sim/emergency.js) calling on the car: it hears the siren
+// within 100 m whether or not it can see the vehicle. When the call comes it picks where to stop:
+// its stopping distance braking at 1.5 m/s^2 (at least 4 m on; chosen again from where it is if it
+// could no longer stop there even braking at 6 m/s^2), or short of the next junction (2.5 m short
+// of the crossing street, or of the stop line) if it can stop there braking at up to 3.5 m/s^2,
+// else past it with its rear 1 m clear (and likewise clear of a junction it is in). It pulls over
+// to the right as it stops (across into the curb lane where there are several, then into an empty
+// parking lane beside it, see pullOverOffset)
+// and waits there until the vehicle has gone by. If the vehicle is stuck behind the car for 3 s,
+// going its way, the car drives on ahead of it instead. Once one has gone by, the car stays 150 m behind it.
+export const EV_STOP_DECEL = 1.5;
+const EV_FIRM_DECEL = 3.5;
+const EV_SHORT_M = 2.5;
+const EV_HARD_DECEL = 6;
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -113,7 +128,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -214,6 +229,8 @@ export function buildSnapshot(world, executing = null) {
     const vehicles = visible.filter((o) => o.kind !== "pedestrian");
     const lane = snap.lane = laneState(route, p, executing && executing.law);
     snap.right_hook = rightHook(world, p, frontS, lane);
+    snap.emergency = emergencyYield(world, p, frontS, lane, visible);
+    snap.emergency_ahead = emergencyAhead(world, p, frontS);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -408,6 +425,83 @@ function rightHook(world, p, frontS, lane) {
   }
   // too late to stop short of its line: carry on through
   if (!best || best.bumper_to_yield_m + HOOK_STOP_M < ego.v * ego.v / (2 * Math.min(4, comfort().hardDecel)) + 0.3) return null;
+  return best;
+}
+
+// An emergency vehicle calling on the car to give way (see EV_STOP_DECEL), or null: which one
+// (`kind`), where it comes from relative to the car, how far away it is and when it gets to the
+// car, whether the car can see it, and where the car stops (`stop_s_route`, front bumper) and how
+// far right of its lane's centre it pulls over (`offset_m`); `clearing` when that is past a
+// junction, and `lead` (no stop) when the vehicle is stuck behind the car. The stop is chosen once
+// per call and remembered in `world.evYield`.
+function emergencyYield(world, p, frontS, lane, visible) {
+  const { ego, route, map } = world;
+  const evs = world.npcs.filter(isEmergency);
+  // where the car is and will be over the next 20 m, along its route
+  const mid = ego.spec.length / 2 - ego.spec.rearOverhang;
+  const pts = [0, 10, 20].map((d) => route.offsetPointAt(Math.min(route.length, p.s + mid + d), lane.center));
+  pts[0] = [ego.x + Math.cos(ego.psi) * mid, ego.y + Math.sin(ego.psi) * mid];
+  const call = evs.length ? nearestCall(ego, evs, pts) : null;
+  if (!call) { world.evYield = null; return null; }
+  const ev = call.ev;
+  let plan = world.evYield;
+  const v = Math.max(0, ego.v);
+  // (and again if the car could no longer stop there, or within the 1.5 m a short stop overshoots,
+  // even braking hard, having been slow to start)
+  // (well past it is handled below)
+  if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + 1.5 && (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v)) {
+    let stop = frontS + Math.max(4, v * v / (2 * EV_STOP_DECEL)), clearing = false;
+    // junctions along the route from here to there: stop short of the first, or clear it
+    // (from the street before this one: the car may still be in the junction it has just come through)
+    for (let i = Math.max(0, route.edgeIndexAt(p.s) - 1); i < route.edges.length - 1; i++) {
+      const e = map.edges.get(route.edges[i]), sNode = route.edgeStarts[i + 1];
+      if (sNode - frontS > stop - frontS + 40) break;
+      if (!isJunction(map, e.to)) continue;
+      const half = map.crossingHalfWidth(e.id), line = route.controls.find((c) => c.edge === e.id);
+      const short = Math.min(sNode - half - EV_SHORT_M, line ? line.sRoute - 0.5 : Infinity);
+      const clear = sNode + half + ego.spec.length + 1;
+      if (frontS > short && frontS < clear) { stop = Math.max(stop, clear); clearing = true; continue; }
+      if (short >= stop || short < frontS) continue;
+      if (short - frontS >= v * v / (2 * EV_FIRM_DECEL)) stop = Math.max(frontS + 0.3, short);
+      else { stop = Math.max(stop, clear); clearing = true; }
+      break;
+    }
+    plan = world.evYield = { id: ev.id, route, stop: Math.min(stop, route.length - 1), clearing, lead: plan?.id === ev.id && plan.lead };
+  }
+  // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
+  // braking firmly
+  if (frontS > plan.stop + 1.5) plan.stop = Math.min(route.length - 1, frontS + (v > 0.3 ? v * v / (2 * EV_FIRM_DECEL) : 0));
+  // stuck behind the car: from then on it drives on ahead of it
+  plan.lead ||= leadsEmergency(ev, ego);
+  const lead = plan.lead;
+  // pulled over: into the parking lane where nothing is parked from 10 m behind the stop to 5 m on
+  const i = route.edgeIndexAt(plan.stop - ego.spec.length / 2), e = map.edges.get(route.edges[i]);
+  const at = route.pointAt(plan.stop), h = route.headingAt(plan.stop);
+  const free = !world.parked.near(at[0], at[1], 20).some((c) => {
+    const ahead = (c.x - at[0]) * Math.cos(h) + (c.y - at[1]) * Math.sin(h), right = (c.x - at[0]) * Math.sin(h) - (c.y - at[1]) * Math.cos(h);
+    return ahead > -10 - ego.spec.length && ahead < 5 && right - lane.center - (lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width) > 1;
+  });
+  // (from a lane further out, across into the curb lane and over in it)
+  const across = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width;
+  const offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
+  return { id: ev.id, kind: EMERGENCY_NAMES[ev.kind] || ev.kind, from: call.relation, distance_m: call.distance_m, eta_s: call.eta_s, seen: visible.includes(ev),
+    stop_s_route: lead ? null : plan.stop, bumper_to_stop_m: lead ? null : plan.stop - frontS, offset_m: lead ? 0 : offset, clearing: plan.clearing, lead };
+}
+
+// An emergency vehicle with its siren on ahead of the car, going its way along its route, within
+// FOLLOW_M (one it has let go by): the car drops back that far.
+function emergencyAhead(world, p, frontS) {
+  const { route } = world;
+  let best = null;
+  for (const ev of world.npcs) {
+    if (!isEmergency(ev) || Math.hypot(ev.x - world.ego.x, ev.y - world.ego.y) > FOLLOW_M + 20) continue;
+    const q = route.project(ev.x, ev.y, p.index);
+    // (anywhere across the street: it drives along its middle)
+    if (!q || q.distance > IN_WAY_M || Math.abs(wrap(ev.psi - q.heading)) > Math.PI / 4) continue;
+    const gap = q.s - ev.spec.rearOverhang - frontS;
+    if (gap < -1 || gap > FOLLOW_M) continue;
+    if (!best || gap < best.gap_m) best = { id: ev.id, kind: EMERGENCY_NAMES[ev.kind] || ev.kind, gap_m: Math.max(0, gap), speed: Math.max(0, ev.v) };
+  }
   return best;
 }
 
@@ -710,6 +804,19 @@ export function desiredSpeed(snap) {
     const vh = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
     if (vh < v) { v = vh; reasons.push("cyclist on the right"); }
   }
+  const ev = snap.emergency;
+  if (ev && ev.bumper_to_stop_m !== null) {
+    const room = ev.bumper_to_stop_m;
+    // (slowing from the start, as gently as it planned to)
+    const ve = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, Math.min(decel, EV_STOP_DECEL));
+    if (ve < v) { v = ve; reasons.push(`pulling over for the ${ev.kind}`); }
+  }
+  // an emergency vehicle it let go by: drop back to FOLLOW_M behind it (standing still within 30 m)
+  const ea = snap.emergency_ahead;
+  if (ea) {
+    const va = ea.speed * Math.max(0, Math.min(1, (ea.gap_m - 30) / (FOLLOW_M - 30)));
+    if (va < v) { v = va; reasons.push(`keeping ${FOLLOW_M} m behind the ${ea.kind}`); }
+  }
   if (snap.pedestrian) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
@@ -751,6 +858,7 @@ export function hazardFlags(snap) {
   if (snap.roadside?.some((o) => o.kind !== "parked car")) f.push("roadside activity");
   if (snap.pedestrian) f.push("pedestrian");
   if (snap.right_hook) f.push("cyclist");
+  if (snap.emergency) f.push("emergency vehicle");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");
