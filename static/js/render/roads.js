@@ -10,7 +10,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { GeoBuilder } from "./geo.js";
 import { LAYER, groundLayer, toThree } from "./scene.js";
-import { asphaltTexture, concreteTexture, crosswalkSignTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation, walkSignalTexture, handSignalTexture } from "./textures.js";
+import { asphaltTexture, concreteTexture, crosswalkSignTexture, zoneSignTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation, walkSignalTexture, handSignalTexture } from "./textures.js";
 import { snowable } from "./weather.js";
 import { buildStreetLights } from "./citylights.js";
 import { wetReflective } from "./reflection.js";
@@ -174,6 +174,7 @@ export function buildRoads(map) {
   buildStopSigns(map, group);
   buildYieldSigns(map, group);
   buildCrosswalkSigns(map, group);
+  buildZoneSigns(map, group);
   const streetLights = buildStreetLights(map, group, streets, (id) => trimAt(nodeR, legs, id));
   return { group, signals, streets, nodeR, legs, streetLights };
 }
@@ -402,6 +403,30 @@ function buildCrosswalkSigns(map, group) {
   const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
   mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
   mk(faces, new THREE.MeshStandardMaterial({ map: crosswalkSignTexture(), roughness: 0.45, emissive: 0x111111, emissiveIntensity: 0.3 }));
+  mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
+}
+
+// School and playground zone signs where each zone starts and ends (map/scenery.js places them): a
+// square face on a post at the curb, facing the traffic going into the zone, one mesh per sign face.
+function buildZoneSigns(map, group) {
+  const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.6, 8).translate(0, 1.3, 0);
+  const face = new THREE.PlaneGeometry(0.8, 0.8).rotateY(-Math.PI / 2).translate(-0.07, 2.3, 0);
+  const back = new THREE.PlaneGeometry(0.62, 0.62).rotateY(Math.PI / 2).translate(-0.06, 2.3, 0);
+  const poles = [], backs = [], faces = new Map();
+  for (const { x, y, heading: h, kind, end } of sceneryFor(map).zoneSigns) {
+    poles.push(placed(pole, x, y, 0, h));
+    backs.push(placed(back, x, y, 0, h));
+    const key = `${kind}:${end}`;
+    if (!faces.has(key)) faces.set(key, []);
+    faces.get(key).push(placed(face, x, y, 0, h));
+  }
+  if (!poles.length) return;
+  const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
+  mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
+  for (const [key, geos] of faces) {
+    const [kind, end] = key.split(":");
+    mk(geos, new THREE.MeshStandardMaterial({ map: zoneSignTexture(kind, end === "true"), transparent: true, alphaTest: 0.5, roughness: 0.45, emissive: 0x111111, emissiveIntensity: 0.3 }));
+  }
   mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
 }
 

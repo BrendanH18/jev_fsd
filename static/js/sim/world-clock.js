@@ -40,3 +40,14 @@ export function worldOptions(params, defaultTraffic = 40) {
 
 const normalizeHour = hour => Number.isFinite(hour) ? ((hour % 24) + 24) % 24 : 15.5;
 const validRate = rate => [0, 1, 60].includes(rate) ? rate : 0;
+
+// Parse "17:30", "17.5", or a named preset into hours.
+export const TIME_PRESETS = { dawn: 7.1, morning: 9.0, noon: 13.2, afternoon: 15.5, golden: 18.3, dusk: 19.2, night: 22.5 };
+export function parseHour(value, fallback = TIME_PRESETS.afternoon) {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (TIME_PRESETS[value] !== undefined) return TIME_PRESETS[value];
+  const m = String(value).match(/^(\d{1,2})(?::(\d{2}))?$/);
+  if (m) return (+m[1] % 24) + (m[2] ? +m[2] / 60 : 0);
+  const f = parseFloat(value);
+  return Number.isFinite(f) ? ((f % 24) + 24) % 24 : fallback;
+}

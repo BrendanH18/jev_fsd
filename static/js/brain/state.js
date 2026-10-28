@@ -7,6 +7,7 @@ import { STOP_ZONE_M } from "../sim/signals.js";
 import { current as weather } from "../sim/weather.js";
 import { CLEARING_M, waitsItsTurn } from "./sensors.js";
 import { FOLLOW_M } from "../sim/emergency.js";
+import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
 
 export const DEFAULT_STYLE = "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly";
 const PREAMBLE = "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`.";
@@ -51,6 +52,11 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     heading_error_deg: r1((snap.routeProj ? snap.routeProj.headingErr : snap.road.heading_error) * 180 / Math.PI),
   };
   if (!snap.road.on_road) state.road.distance_to_road_m = r1(snap.road.distance_to_road);
+  if (snap.speed_zone) {
+    const z = snap.speed_zone;
+    state.speed_zone = { kind: z.kind, ...(z.name ? { name: z.name } : {}), limit: r1(z.limit_mps), in_effect: ZONE_HOURS[z.kind],
+      ...(z.in_zone ? { in_zone: true } : { starts_in_m: r1(Math.max(0, z.starts_in_m)) }), ...(z.ends_in_m !== null ? { ends_in_m: r1(z.ends_in_m) } : {}) };
+  }
   if (snap.lane && snap.lane.lanes > 1) {
     const l = snap.lane;
     state.lanes = { count: l.lanes, car_lane: laneName(l.index, l.lanes), route_lane: laneName(l.route_index, l.lanes) };
@@ -202,6 +208,12 @@ export function situationClauses(snap) {
     const p = snap.pedestrian, m = Math.max(0, Math.round(p.bumper_to_crosswalk_m));
     const where = p.mid_block ? "mid-block, outside a crosswalk" : "in the crosswalk";
     out.push(p.bumper_to_crosswalk_m < STOP_ZONE_M ? `A pedestrian is crossing ${where} right in front of the car: hold still until they have cleared the car's path.` : `A pedestrian is crossing ${where} ${m} m ahead: slow down and stop short of them until they have cleared the car's path.`);
+  }
+  if (snap.speed_zone) {
+    const z = snap.speed_zone, kmh = Math.round(z.limit_mps * 3.6), where = z.name ? ` by ${z.name}` : "";
+    out.push(z.in_zone
+      ? `The car is in a ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}): the limit is ${kmh} km/h${z.ends_in_m !== null ? ` for the next ${Math.round(z.ends_in_m)} m` : ""}, and children may step out from between parked cars. Keep to it; \`car.target_speed\` already does.`
+      : `A ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}), starts ${Math.round(Math.max(0, z.starts_in_m))} m ahead: slow to ${kmh} km/h by its sign; \`car.target_speed\` already does.`);
   }
   if (snap.right_hook) out.push(rightHookClause(snap.right_hook));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));

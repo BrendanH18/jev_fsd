@@ -6,6 +6,7 @@ import { sceneryHash } from "./scenery-hash.js";
 import { buildingShapes, boxPolygon } from "./building-scenery.js";
 export { sceneryHash } from "./scenery-hash.js";
 
+const ZONE_SIGN_IN_M = 4;   // a zone sign stands at least this far past the corner of a junction
 const cache = new WeakMap();
 const BOULEVARD = {
   residential: 1.8,
@@ -179,6 +180,7 @@ export function sceneryFor(map) {
     stopSigns: [],
     yieldSigns: [],
     crosswalkSigns: [],
+    zoneSigns: [],
     signals: [],
     circles: [],
     polygons: [],
@@ -390,6 +392,37 @@ export function sceneryFor(map) {
       const item = { ...p, id: `crosswalk_post:${c.id}:${edge.id}` };
       result.crosswalkSigns.push(item);
       result.circles.push({ ...item, kind: "crosswalk_post", radius: 0.035 });
+    }
+  }
+  // a school or playground zone sign where each stretch of zone starts (sim/speed-zones.js), on the
+  // right of the traffic going into it, facing it, and an end-of-zone sign where one ends short of
+  // the end of its street; stretches of one kind that meet on a street are one
+  for (const [edgeId, spans] of map.zoneSpans || []) {
+    const e = map.edges.get(edgeId);
+    if (!e) continue;
+    const scale = e.cum.at(-1) / Math.max(1e-6, e.length), runs = [];
+    for (const kind of ["school", "playground"]) {
+      for (const span of spans.filter((x) => x.zone.kind === kind)) {
+        const last = runs.findLast((r) => r.kind === kind);
+        if (last && span.from <= last.to + 1) last.to = Math.max(last.to, span.to);
+        else runs.push({ kind, from: span.from, to: span.to });
+      }
+    }
+    for (const run of runs) {
+      // (a second kind's sign starting at the same place stands a little further on)
+      const twin = runs.some((r) => r !== run && r.kind === "school" && run.kind !== "school" && Math.abs(r.from - run.from) < 6);
+      // (clear of the junction at either end, past its corner)
+      const first = (trimAt(roads.nodeR, roads.legs, e.from) + ZONE_SIGN_IN_M) / scale, last = e.length - (trimAt(roads.nodeR, roads.legs, e.to) + ZONE_SIGN_IN_M) / scale;
+      const marks = [{ s: Math.max(run.from, first) + (twin ? 6 : 0), end: false }];
+      if (run.to < last) marks.push({ s: run.to, end: true });
+      if (marks[0].s > Math.min(run.to, last)) marks.shift();
+      for (const { s, end } of marks) {
+        const p = post(e, s * scale, e.asphalt[1] + GUTTER + CURB + 0.7, 0.035);
+        if (!p) continue;
+        const item = { ...p, id: `zone_post:${edgeId}:${run.kind}:${end ? "end" : "start"}:${Math.round(s)}`, kind: run.kind, end };
+        result.zoneSigns.push(item);
+        result.circles.push({ ...item, kind: "zone_post", radius: 0.035 });
+      }
     }
   }
   for (const inter of (map.intersections || new Map()).values())

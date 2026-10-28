@@ -255,7 +255,8 @@ export class Crowd {
       }
       const dx = wp.p[0] - ped.x, dy = wp.p[1] - ped.y, d = Math.hypot(dx, dy);
       let v = ped.crossing ? ped.speed * 1.15 : ped.speed;   // people hurry across
-      if (ped.crossing) {
+      // (a child darting out, `dart`, runs without looking: see the School zone challenge)
+      if (ped.crossing && !ped.dart) {
         const react = this.threat(ped, dx / (d || 1), dy / (d || 1));
         if (react === "wait") { ped.v = 0; continue; }
         if (react === "hurry") v = Math.max(v, 2.4);

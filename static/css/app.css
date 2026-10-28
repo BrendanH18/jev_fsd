@@ -198,6 +198,7 @@ select option { background: var(--panel-solid); color: var(--text); }
 .limit-sign small { font-size: 6.5px; font-weight: 700; letter-spacing: 0.04em; }
 .limit-sign b { font-size: 19px; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .limit-sign.none { opacity: 0.35; }
+.limit-sign.zone { background: #d4ec2c; box-shadow: 0 0 0 1.5px #d4ec2c; }
 .speed { display: flex; align-items: baseline; gap: 5px; min-width: 104px; justify-content: center; font-size: 46px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.03em; transition: color 0.2s; }
 .speed small { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; font-weight: 500; }
 .speed.speeding { color: var(--warn); }

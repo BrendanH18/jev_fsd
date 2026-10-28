@@ -13,7 +13,7 @@ export class Hud {
     const find = (selector) => $(selector, root);
     this.el = {
       cluster: find(".cluster"), speedDisplay: find(".speed"), mode: find("#drive-mode"), speedWarning: find("#speed-warning"),
-      root: find("#hud"), speed: find("#speed"), limit: find("#limit"), limitSign: find("#limit-sign"), street: find("#street"),
+      root: find("#hud"), speed: find("#speed"), limit: find("#limit"), limitSign: find("#limit-sign"), limitLabel: find("#limit-sign small"), street: find("#street"),
       nav: find("#nav"), navCard: find("#nav-card"), navArrow: find("#nav-arrow"), navDistance: find("#nav-distance"), navRemaining: find("#nav-remaining"),
       brainButtons: [...root.querySelectorAll("[data-brain]")], menus: { decision: find("#decision-menu-toggle"), llm: find("#llm-menu-toggle") },
       weather: find("#weather"), time: find("#time"), quality: find("#quality"), autopilot: find("#autopilot"),
@@ -127,6 +127,11 @@ export class Hud {
     setText(this.el.speed, Math.round(Math.abs(ego.v) * 3.6));
     setText(this.el.limit, road?.limit ? Math.round(road.limit * 3.6) : "–");
     this.el.limitSign.classList.toggle("none", !road?.limit);
+    // (in a school or playground zone in effect, the sign says which)
+    setText(this.el.limitLabel, road?.zone ? (road.zone.kind === "school" ? "SCHOOL" : "PLAYGROUND") : "MAXIMUM");
+    this.el.limitSign.classList.toggle("zone", !!road?.zone);
+    const title = road?.zone ? `${road.zone.kind === "school" ? "School" : "Playground"} zone${road.zone.name ? `: ${road.zone.name}` : ""}` : "Speed limit";
+    if (this.el.limitSign.title !== title) this.el.limitSign.title = title;
     setText(this.el.street, road?.name || (road?.on_road === false ? "off road" : "unnamed road"));
     this.updateNav(nav, paused, hasRoute);
     this.updateDecision(decision, autopilot);

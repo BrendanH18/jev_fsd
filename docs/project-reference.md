@@ -282,6 +282,19 @@ school bus with its reds flashing (BC Motor Vehicle Act s. 149), 5 m behind it o
 front, when they can stop there braking at up to 3.5 m/s^2, and wait until the reds go off; the bus
 keeps them on until its children are across. See `static/js/sim/school-bus.js`.
 
+School and playground zones (BC Motor Vehicle Act s. 147) come from each map's schools and
+playgrounds in OpenStreetMap ([maps.md](maps.md#school-and-playground-zones)). Where one is in
+effect the limit is 30 km/h, never more than the street's own: a school zone's from 8:00 to 17:00 (the
+sim has no calendar, so every day is a school day), a playground zone's from dawn to dusk (while the
+sun, as the sky draws it, is above -6 deg). The world's road info reports the zone's limit and the
+zone, so the HUD's limit sign turns yellow-green and says SCHOOL or PLAYGROUND, the coaching score
+counts speeding against it (and says so once a visit), and Rules keeps to it. Rules also slows on
+the way in, to be at the zone's limit as its front reaches the sign, and traffic keeps to it from
+15 m before. Signs stand where each stretch of zone starts and, short of the end of its street, where
+it ends. AI eyes outlines the zones in effect nearby in yellow-green. The seeded benchmark drives no
+zones (its world has no clock); a benchmark replayed in the app likewise. See
+`static/js/sim/speed-zones.js`.
+
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery
 placements. Swept checks stop the car before penetration and count contact once until it separates;
@@ -461,6 +474,7 @@ node --experimental-default-type=module scripts/test_right_on_red.mjs
 node --experimental-default-type=module scripts/test_all_way_stop.mjs
 node --experimental-default-type=module scripts/test_give_way.mjs
 node --experimental-default-type=module scripts/test_right_hook.mjs
+node --experimental-default-type=module scripts/test_speed_zones.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```

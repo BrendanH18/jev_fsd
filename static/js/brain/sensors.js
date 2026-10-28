@@ -18,6 +18,7 @@ import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, isEmergency, isJunction, leadsEmer
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
+import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -134,7 +135,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, speed_zone: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -290,10 +291,38 @@ export function buildSnapshot(world, executing = null) {
   snap.traffic.sort((a, b) => a.dist - b.dist);
   snap.traffic = snap.traffic.slice(0, 8);
   if (executing && executing.hazard) snap.current_path_hazard = executing.hazard;
+  snap.speed_zone = speedZone(world, snap, FRONT);
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
   return snap;
+}
+
+// The school or playground zone in effect that the car is in (the world's road info says so), or the
+// next one along its route whose start its front is within ZONE_LOOK_M of (sim/speed-zones.js):
+// where it starts (from the front) and ends (from the car), stretches in effect that meet counting
+// as one.
+const ZONE_LOOK_M = 80;
+function speedZone(world, snap, FRONT) {
+  const { road, route, routeProj: p } = snap;
+  const marks = route && p && route.zonesAhead ? route.zonesAhead(p.s, ZONE_LOOK_M + FRONT).filter((m) => inEffect(m.zone.kind, world.clock)) : [];
+  // (a school zone before a playground one starting at the same place, as where they overlap)
+  const rank = (m) => m.zone.kind === "school" ? 0 : 1;
+  marks.sort((a, b) => (Math.abs(a.from - b.from) < 1 ? rank(a) - rank(b) : a.from - b.from));
+  const endOf = (i) => {
+    let to = marks[i].to;
+    for (let k = i + 1; k < marks.length && marks[k].from <= to + 1; k++) to = Math.max(to, marks[k].to);
+    return to;
+  };
+  if (road.zone) {
+    const i = marks.findIndex((m) => m.from <= p.s + 1);
+    return { id: road.zone.id, kind: road.zone.kind, name: road.zone.name, limit_mps: road.limit, in_zone: true, starts_in_m: 0,
+      ends_in_m: i >= 0 ? Math.max(0, endOf(i) - p.s) : null };
+  }
+  const i = marks.findIndex((m) => m.from > p.s - 1);
+  if (i < 0) return null;
+  const m = marks[i], limit = Math.min(ZONE_LIMIT_MPS, road.limit);
+  return { id: m.zone.id, kind: m.zone.kind, name: m.zone.name, limit_mps: limit, in_zone: false, starts_in_m: m.from - (p.s + FRONT), ends_in_m: endOf(i) - p.s };
 }
 
 // A three-point turn where the route makes a U-turn (sim/turnaround.js): the one under way, or one
@@ -841,6 +870,14 @@ export function desiredSpeed(snap) {
       const vl = Math.sqrt(lim * lim + 2 * decel * 0.6 * Math.max(0, at - snap.routeProj.s - FRONT - 15));
       if (vl < v) { v = vl; reasons.push("lower limit ahead"); }
     }
+  }
+  // a school or playground zone: down to its limit by the time the front reaches its sign, gently
+  const z = snap.speed_zone;
+  if (z?.in_zone) reasons.push(ZONE_NAMES[z.kind]);
+  else if (z) {
+    const lim = z.limit_mps * (weather.speed < 1 ? weather.speed : 1);
+    const vz = Math.sqrt(lim * lim + 2 * decel * 0.6 * Math.max(0, z.starts_in_m - 2));
+    if (vz < v) { v = vz; reasons.push(`${ZONE_NAMES[z.kind]} ahead`); }
   }
   if (snap.following) {
     // close in on the leader gently, and never faster than lets the car stop comfortably behind it

@@ -37,6 +37,7 @@ How to choose \`candidate\`:
 - Choose \`yield_to_bus\` when \`situation\` says a bus ahead is pulling out from its stop and the car must let it out.
 - Choose \`stop_at_crosswalk\` when \`situation\` says a vehicle in the next lane is stopped at a crosswalk ahead: never pass it until the car has stopped and looked.
 - Choose \`stop_for_school_bus\` when \`situation\` says a school bus ahead, going either way, is stopped with its red lights flashing, and keep the car stopped until they go off.
+- In a school or playground zone (\`speed_zone\`), keep to its limit while it is in effect: prefer a candidate whose \`end_speed\` is at or below \`car.target_speed\`.
 - At an all-way stop, vehicles go in the order they stopped at their lines; \`intersection.priority.your_turn\` says whether it is the car's turn.
 - At a two-way stop, or a junction without a sign or signal, \`intersection.give_way\` says whether the way is clear. Choose \`stop_at_line\` or \`wait_to_give_way\` when \`situation\` says the car must give way, and \`creep_to_look\` when it says to creep forward to look.
 - At a red light where \`situation\` says the car may turn right on red now, the candidate at target turns; \`stop_at_line\` waits for the green instead. Both are allowed.
