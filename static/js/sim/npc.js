@@ -154,7 +154,7 @@ export function stripOffset(e, laneIdx) {
 
 export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
-  constructor(map, random, { bike = false, bus = false } = {}) { this.map = map; this.random = random; this.bike = bike; this.bus = bus; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
+  constructor(map, random, { bike = false } = {}) { this.map = map; this.random = random; this.bike = bike; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
   start(edgeId, laneIdx, s, planned = []) {
     this.edges = [];
     this.pts = []; this.cum = [0]; this.length = 0;
@@ -174,11 +174,11 @@ export class NpcPath {
     this.start(cur.id, laneIdx, s, planned.map((e) => [e.id, e.lane]));
   }
   // The lane taken onto edge `next` from lane `lane` of edge `from`: turns into the nearest lane (left
-  // turns into the leftmost, right into the rightmost), going straight keeps the same lane, a
-  // cyclist rides the curb lane, and a bus keeps to it but for a left turn.
+  // turns into the leftmost, right into the rightmost), going straight keeps the same lane, and a
+  // cyclist rides the curb lane.
   laneInto(from, lane, next) {
     const edge = this.map.edges.get(next), turn = this.map.classifyTurn(this.map.turnAngle(from, next));
-    return this.bike || (this.bus && turn !== "left") ? edge.lanes - 1 : turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);
+    return this.bike ? edge.lanes - 1 : turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);
   }
   append(edgeId, laneIdx) {
     const lane = this.map.lane(edgeId, laneIdx) || this.map.lane(edgeId, 0);
@@ -311,7 +311,7 @@ export class NpcFleet {
       const v = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), Math.min(8, e.limit * 0.6), BUS);
       Object.assign(v, { id: `bus_${++this.busCount}`, kind: "bus", color: BUS_COLORS[0], ref: route.ref, headsign: route.name,
         v0: 15, driver: { aMax: 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.9, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
-      v.path = new NpcPath(map, this.transit, { bus: true });
+      v.path = new NpcPath(map, this.transit);
       this.startRun(v, run.edges, k, lane.idx, s);
       // the route's stops still ahead, as where its front stops along each street (see busStopFront)
       const firstAt = run.edges.slice(0, k).reduce((a, id) => a + map.edges.get(id).length, 0) + s * e.length / Math.max(1, lane.length);
@@ -461,7 +461,8 @@ export class NpcFleet {
         if (n.lc.edge !== edge.id) n.lc = null;   // ran out of edge: the next junction's join takes over
       } else {
         n.lcCooldown = Math.max(0, (n.lcCooldown || 0) - dt);
-        // (a bus moves across to the curb lane for its next stop, and changes lanes only on its way)
+        // (a bus moves across to the curb lane for its next stop, and otherwise changes lanes only
+        // for a turn)
         if (n.transit && !n.yieldEv) { if (n.transit.phase === "drive") this.maybeChangeLane(n, edge, front, this.busStopSoon(n, front)); }
         else if (!n.yieldEv) this.maybeChangeLane(n, edge, front);
         else if (yielding && n.kind !== "bike") this.maybeChangeLane(n, edge, front, true);
@@ -843,10 +844,11 @@ export class NpcFleet {
     return pe.sStart + stop.front * (pe.sEnd - pe.sStart) / Math.max(1, this.map.edges.get(stop.edge).length);
   }
 
-  // Whether a bus's next stop is within 150 m, so it should be in the curb lane.
+  // Whether a bus's next stop is within 150 m along its path, so it should move across to the curb
+  // lane (by a lane change, gap permitting: it keeps its lane straight on through a junction).
   busStopSoon(n, front) {
     const stop = n.transit.stops[n.transit.next], at = stop ? this.stopOnPath(n, stop, front) : null;
-    return at !== null && at - front < 150 && n.path.currentEdge().id === stop.edge;
+    return at !== null && at - front < 150;
   }
 
   // One step of a bus's stops (see the top of sim/bus.js): it signals and pulls in to the next, stops

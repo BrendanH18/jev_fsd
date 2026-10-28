@@ -216,7 +216,7 @@ test("a bus never takes a parking bay, and gives way to oncoming traffic turning
     car.path.start("e_in", 0, ARM - 62, [["w_out", 0]]);
     fleet.vehicles.push(car);
     let entered = false, touched = false;
-    for (let k = 0; k < 60 * 8; k++) {
+    for (let k = 0; k < 60 * 20; k++) {
       step(world, fleet);
       const bf = bus.x + Math.cos(bus.psi) * (bus.spec.length - bus.spec.rearOverhang);
       // (into the oncoming lane before the car is through)
@@ -224,7 +224,7 @@ test("a bus never takes a parking bay, and gives way to oncoming traffic turning
       if (obbOverlap(bus.obb(), car.obb())) touched = true;
     }
     assert.ok(!entered && !touched, `waits for the oncoming car before turning (entered ${entered}, touched ${touched})`);
-    assert.ok(bus.transit.phase !== "drive" || bus.transit.next > 0 || bus.y > 5, "then turns and makes for its stop");
+    assert.ok(bus.y > 5 && Math.abs(bus.x - HALF) < 3, `then turns onto North Street (${bus.x.toFixed(1)}, ${bus.y.toFixed(1)}, ${bus.transit.phase}, v ${bus.v.toFixed(1)}, psi ${bus.psi.toFixed(2)}, car ${car.x.toFixed(0)},${car.v.toFixed(1)}, t ${world.t.toFixed(1)})`);
   }
 });
 
