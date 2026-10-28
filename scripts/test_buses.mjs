@@ -17,6 +17,7 @@ const { toJevState, buildQuestions, situationClauses } = await import("../static
 const { Autopilot } = await import("../static/js/brain/brain.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
 const { StopMemory } = await import("../static/js/sim/signals.js");
+const { obbOverlap } = await import("../static/js/sim/collision.js");
 const { busStopFront, busYield, busZones, curbShift, isBus } = await import("../static/js/sim/bus.js");
 
 // One street, West Street, crossing North Street at the origin: one lane each way 3.2 m wide with a
@@ -180,6 +181,43 @@ test("traffic coming up behind lets a bus pulling out go first, and the bus wait
     let outBefore = false;
     for (let k = 0; k < 60 * 3; k++) { step(world, fleet); outBefore ||= bus.transit.phase === "out"; }
     assert.ok(!outBefore, "the bus waits for the car");
+  }
+});
+
+test("a bus never takes a parking bay, and gives way to oncoming traffic turning left before a stop just past the junction", () => {
+  {
+    // free bays all along its street
+    setWeather("dry");
+    const world = new World(J.map, { pedestrians: 0, buses: true });
+    world.parked.list.slice().forEach((c) => world.parked.remove(c));
+    const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 3 });
+    const bus = fleet.spawnBus(0, fleet.busRuns()[0], 20);
+    let parks = 0;
+    for (let k = 0; k < 60 * 8; k++) { if (k % 30 === 0 && fleet.maybePark()) parks++; step(world, fleet); }
+    assert.ok(parks === 0 && !bus.parking && fleet.vehicles.includes(bus), "stays on its route");
+  }
+  {
+    // a run that turns left from West Street onto North Street, with a stop 20 m along it, and a car
+    // coming the other way along West Street, due at the junction as the bus gets there
+    const j = junction();
+    j.map.transit.routes[0].runs = [{ edges: ["w_in", "n_out"], length: 400, stops: [{ id: "s1", edge: "n_out", s: 20 }] }];
+    const { world, fleet, bus } = setup({ j, front: -190, busAt: 150 });
+    bus.v = 6;
+    const car = new Vehicle(62, HALF, Math.PI, 10);
+    Object.assign(car, { id: "car_on", v0: 10, driver: { aMax: 1.5, b: 2, T: 1.2, s0: 2, react: 0.5, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
+    car.path = new NpcPath(j.map, () => 0.5);
+    car.path.start("e_in", 0, ARM - 62, [["w_out", 0]]);
+    fleet.vehicles.push(car);
+    let entered = false, touched = false;
+    for (let k = 0; k < 60 * 8; k++) {
+      step(world, fleet);
+      const bf = bus.x + Math.cos(bus.psi) * (bus.spec.length - bus.spec.rearOverhang);
+      // (into the oncoming lane before the car is through)
+      if (car.x > -6 && bf > -1 && bus.y > -HALF - 1) entered = true;
+      if (obbOverlap(bus.obb(), car.obb())) touched = true;
+    }
+    assert.ok(!entered && !touched, `waits for the oncoming car before turning (entered ${entered}, touched ${touched})`);
+    assert.ok(bus.transit.phase !== "drive" || bus.transit.next > 0 || bus.y > 5, "then turns and makes for its stop");
   }
 });
 

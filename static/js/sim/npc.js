@@ -569,11 +569,6 @@ export class NpcFleet {
       if (n.kind === "bike" && n.stripHold != null) stopAt = stopAt === null ? n.stripHold - front : Math.min(stopAt, n.stripHold - front);
       // giving way to an emergency vehicle: stop where it chose to when the call came
       if (yielding) { const at = this.yieldStop(n, yielding, front); stopAt = stopAt === null ? at : Math.min(stopAt, at); }
-      // a bus at its stop, or pulling in to it; or, behind a bus signalling to pull out from its stop,
-      // letting it out (sim/bus.js)
-      if (stand && stand.stopAt !== null) stopAt = stopAt === null ? stand.stopAt : Math.min(stopAt, stand.stopAt);
-      const forBus = this.buses.length && n.kind !== "bike" && !n.transit && !isEmergencyVehicle(n) ? this.yieldToBus(n) : null;
-      if (forBus !== null) stopAt = stopAt === null ? forBus : Math.min(stopAt, forBus);
       if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
       // an emergency vehicle ahead going its way, within FOLLOW_M: hang back from it as from a car
       // FOLLOW_M nearer
@@ -624,6 +619,12 @@ export class NpcFleet {
       // After ~15 s stopped at a clear control with no vehicle blocking, abandon the virtual leader.
       if (n.v < 0.2 && gap < 3) n.waiting += dt; else n.waiting = 0;
       if (n.waiting > 15 && stopAt !== null && stopAt < 1 && leadV === 0 && !this.blockedByVehicle(n) && !(cur && this.crossComing(n, cur.to))) { gap = Infinity; leadV = n.v0; n.waiting = 0; }
+      // a bus at its stop, or pulling in to it; or, behind a bus signalling to pull out from its stop,
+      // letting it out (sim/bus.js): after the checks above, which still hold on the way there (a
+      // junction before the stop), and not a line the wait at which is ever given up
+      const forBus = this.buses.length && n.kind !== "bike" && !n.transit && !isEmergencyVehicle(n) ? this.yieldToBus(n) : null;
+      const busStop = Math.min(stand?.stopAt ?? Infinity, forBus ?? Infinity);
+      if (busStop < gap) { gap = Math.max(0.05, busStop); leadV = 0; }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -991,7 +992,7 @@ export class NpcFleet {
   // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
   maybePark() {
     for (const n of this.vehicles) {
-      if (n.kind === "bike" || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      if (n.kind === "bike" || n.transit || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
       const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
       const e = this.map.edges.get(edge.id);
       const choices = this.world.parked.slots.filter((slot) => {
