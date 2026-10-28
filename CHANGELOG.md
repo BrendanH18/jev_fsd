@@ -31,7 +31,9 @@
   from it, a child who has just got off walks forward past its front and crosses in front of it, into
   the car's lane. Rules and the cautious agent pass it.
 - People are drawn by id, so children can come and go; children are smaller, with backpacks.
-- New checks in `scripts/test_school_buses.mjs`. The seeded benchmark runs no school buses.
+- New checks in `scripts/test_school_buses.mjs`. The seeded benchmark runs no school buses: in V8,
+  Rules passes all 70 routes, every one exactly as on main (see
+  [docs/rules-baseline.md](docs/rules-baseline.md)).
 
 - Marked crosswalks between junctions. Each bundled map now has its marked crosswalks from
   OpenStreetMap beside its pack, in `data/maps/<key>.crossings.v1.json` (`jev/osm/crossings.py`):
