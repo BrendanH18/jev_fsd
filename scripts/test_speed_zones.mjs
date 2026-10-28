@@ -223,3 +223,4 @@ await testAsync("challenge: without the zone, the same Rules driver reaches the 
 });
 
 console.log(`\n${checks} speed-zone checks passed`);
+process.exit(0);   // the runner's MessageChannel would otherwise keep Node alive
