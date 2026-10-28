@@ -296,9 +296,9 @@ function threatSites(map, street) {
 // School zone: the car starts 4 m into a street that is a school zone (in effect at the challenge's
 // time) with a higher limit of its own and a parking lane on the right, and a child waits at the
 // curb 85 m on, between two parked cars, with at least 40 m of zone before them and no stop line
-// within 30 m after. Once the car's front is 18 m from them they run out across the street: at
+// within 30 m after. Once the car's front is 15 m from them they run out across the street: at
 // 30 km/h the car stops short of them, at the street's 50 it cannot.
-const ZONE_START_M = 4, CHILD_AT_M = 85, CHILD_ZONE_BEFORE_M = 40, CHILD_TRIGGER_M = 18, CHILD_MPS = 2.4;
+const ZONE_START_M = 4, CHILD_AT_M = 85, CHILD_ZONE_BEFORE_M = 40, CHILD_TRIGGER_M = 15, CHILD_MPS = 2.4;
 const zoneSiteCache = new WeakMap();
 function zoneSites(map, street) {
   if (!zoneSiteCache.has(map)) {
@@ -641,7 +641,8 @@ function placeSchoolBus(world, fleet, { edge, s }, seed) {
   return { schoolBusId: bus.id, childId: child.id, at: [bus.x + Math.cos(bus.psi) * front, bus.y + Math.sin(bus.psi) * front] };
 }
 // School zone: two cars parked 11 m apart (centre to centre) in the parking lane, and a child at the
-// curb between them, who will run straight across the street to the far curb.
+// curb between them, who will run straight across the street to the far curb without looking
+// (`dart`: unlike the crowd, they do not wait for a car that could not stop for them).
 function placeChild(world, lane, s, seed) {
   const e = lane.edgeRef, p = pointAt(lane.pts, lane.cum, s), psi = headingAt(lane.pts, lane.cum, s);
   const off = (q, right) => [q[0] + Math.sin(psi) * right, q[1] - Math.cos(psi) * right];
@@ -654,7 +655,7 @@ function placeChild(world, lane, s, seed) {
     world.parked.add(car);
   });
   const from = off(p, curb - 0.4), to = off(p, e.asphalt[0] - laneOffset + 0.4);
-  const ped = new Pedestrian({ id: "challenge_child", x: from[0], y: from[1], psi: psi + Math.PI / 2, v: 0, speed: CHILD_MPS, child: true,
+  const ped = new Pedestrian({ id: "challenge_child", x: from[0], y: from[1], psi: psi + Math.PI / 2, v: 0, speed: CHILD_MPS, child: true, dart: true,
     path: [{ p: to, cross: { node: null, from, to, jaywalk: true } }], crossing: null, waiting: 0, phase: 0, look: seed, at: null });
   ped.frozen = 1e6;
   world.crowd.list.push(ped);

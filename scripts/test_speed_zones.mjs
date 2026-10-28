@@ -211,15 +211,18 @@ await testAsync("challenge: Rules keeps to 30 in the zone and stops for the chil
 await testAsync("challenge: without the zone, the same Rules driver reaches the child too fast to stop", async () => {
   const ctx = setupChallenge(KITS, challenge), { world } = ctx;
   world.setClock(null);
-  let atTrigger = null;
-  while (world.t < 60 && ctx.autopilot.enabled) {
+  let atTrigger = null, hit = null;
+  while (world.t < 60 && ctx.autopilot.enabled && !hit) {
     stepWorld(ctx, 1 / 60, world.t * 1000);
     if (ctx.autopilot.firing) await ctx.autopilot.firing;
     if (atTrigger === null && world.challenge.triggered) atTrigger = world.ego.v;
-    if (world.violations.collisions) break;
+    hit = world.events.find((e) => e.type === "collision") || null;
   }
-  assert.ok(atTrigger > 40 / 3.6, `${kmh(atTrigger)} km/h when the child runs out`);
-  assert.ok(world.violations.collisions >= 1, "it hits the child");
+  assert.ok(atTrigger > 45 / 3.6, `${kmh(atTrigger)} km/h when the child runs out`);
+  // (the child runs out rather than waiting at the curb for the car to stop, and the car hits them
+  // still moving, its fault)
+  assert.equal(hit?.with, "challenge_child", "it hits the child");
+  assert.ok(hit.at_fault && hit.ego_v > 3, `at ${kmh(hit.ego_v)} km/h, ${hit.fault}'s fault`);
 });
 
 console.log(`\n${checks} speed-zone checks passed`);

@@ -25,9 +25,10 @@
   and ends), a situation line and a prompt line.
 - New challenge, "School zone" (Kitsilano, 9:00): West 11th Avenue past Lord Tennyson Elementary,
   a 50 km/h street whose block is a school zone. The car starts 4 m into it; 85 m on, a child waits
-  at the curb between two parked cars and runs straight across the street once the car's front is
-  18 m away. Rules and the cautious agent keep to 30 km/h and stop short of the child; the same Rules
-  driver with no zone in effect reaches the child at 50 km/h and hits them.
+  at the curb between two parked cars and runs straight across the street, without looking (unlike
+  the crowd, they do not wait for a car that could not stop), once the car's front is 15 m away. Rules
+  and the cautious agent keep to 30 km/h and stop short of the child; the same Rules driver with no
+  zone in effect comes up at 50 km/h and hits them, still moving.
 - New checks in `scripts/test_speed_zones.mjs` and `tests/test_zones.py`; the drive-lab checks now run
   every challenge with its map's zones, in effect at the challenge's time of day. Because that changes existing
   challenges where a zone is in effect, the evaluation engine version is now `drive-lab-3`, and the arena no
