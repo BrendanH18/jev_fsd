@@ -74,6 +74,15 @@ export const BUS = {
   power: 210000, cdA: 6.4, crr: 0.009, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
 };
 
+// A Type C ("conventional", engine under a short hood) school bus of about 70 seats, as most
+// Canadian school districts run (sim/school-bus.js): its size, weight with children aboard, and
+// power. Front-engined, driving its rear axle.
+export const SCHOOL_BUS = {
+  ...CAR, kind: "school_bus", wheelbase: 6.1, length: 11.4, width: 2.44, rearOverhang: 3.1, maxSteer: 42 * Math.PI / 180,
+  maxAccel: 1.2, maxSpeed: 25, mass: 12500, yawInertia: 120000, cgToFront: 3.2, cgHeight: 1.1, track: 2.0,
+  power: 190000, cdA: 6.6, crr: 0.009, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
+};
+
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
 export const ROAD = { mu: 0.9 };
 export const G = 9.81;

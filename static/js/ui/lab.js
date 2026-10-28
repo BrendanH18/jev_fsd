@@ -116,7 +116,7 @@ export class DriveLab {
   }
   showPerception(data) {
     if (!data) return;
-    this.sight.textContent = `${data.emergency ? `${data.emergency} · ` : ""}${data.bus ? `${data.bus} · ` : ""}${data.crosswalk ? `${data.crosswalk} · ` : ""}${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`;
+    this.sight.textContent = `${data.emergency ? `${data.emergency} · ` : ""}${data.bus ? `${data.bus} · ` : ""}${data.crosswalk ? `${data.crosswalk} · ` : ""}${data.school ? `${data.school} · ` : ""}${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`;
     this.rejections.replaceChildren(...data.rejected.slice(0, 4).map(c => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason))));
   }
   update(recorder, now) {

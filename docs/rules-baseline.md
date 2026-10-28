@@ -1,4 +1,23 @@
-# Rules benchmark baseline — 2026-10-27b (marked crosswalks)
+# Rules benchmark baseline — 2026-10-28 (school buses, unchanged)
+
+Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
+`9bbab56` route for route, in every result field but wall-clock time (arrival, distance, safety
+brakes, decisions, accelerations, jerk and the rest), with no collisions, red-light or stop-sign
+violations, failures to yield or deadlock overrides. "After" is the working tree on top of
+`9bbab56`, which adds school buses (in free drives only), traffic and the car stopping for a school
+bus with its reds flashing, the children it lets off, and the "Flashing reds" challenge. The seeded
+benchmark runs no school buses, and without them traffic, the crowd, the car and the audit behave
+as before.
+
+## Method
+
+All 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, V8 through
+`scripts/bench_node.mjs` with Node `v22.23.4` on a Raspberry Pi (Linux 6.18, arm64), one process
+per suite, main and the working tree each against its own `uv run --locked server.py`, compared
+field by field. Because the engine and machine differ from the records below, the comparison is
+main against the change on this machine, not against those numbers. WebKit and night were not run.
+
+## Earlier record: 2026-10-27b (marked crosswalks)
 
 Rules passes **70 of 70 routes in V8 and 69 of 70 in WebKit**, with no red-light or stop-sign
 violations, failures to yield or deadlock overrides in either engine. "After" is the working tree
@@ -23,7 +42,7 @@ along their way, so where a route passes one the traffic and the drive change.
   No pedestrian or crosswalk is involved. V8 passes the route as before. Traffic yielding where its
   lane ends is left as a follow-up.
 
-## Method
+### Method
 
 As for 2026-10-27: all 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, on macOS
 27.0.1 (26A434), Apple M5, V8 through `scripts/bench_node.mjs` with Node `v24.19.0` and WebKit through

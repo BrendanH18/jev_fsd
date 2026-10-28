@@ -1,7 +1,8 @@
 // Pedestrians. Each person is a shaped torso and head (one mesh, vertex-colored) with jointed arms
 // and legs: hips and knees, shoulders and elbows swing through a walk cycle driven by the distance
 // walked, so feet do not slide. Clothes, skin, hair, height, and build vary; some carry a backpack,
-// and in the rain most walk under an umbrella. People far from the camera are not drawn.
+// and in the rain most walk under an umbrella. Children (off a school bus) are smaller, and carry a
+// backpack. People far from the camera are not drawn.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -34,12 +35,12 @@ function tint(geo, hex) {
 const segment = (r0, r1, len) => new THREE.CylinderGeometry(r0, r1, len, 8).translate(0, -len / 2, 0);
 const ball = (r) => new THREE.SphereGeometry(r, 8, 6);
 
-export function createPersonMesh(look = 0) {
+export function createPersonMesh(look = 0, { child = false } = {}) {
   const k = (i) => hash01(String(look), i);
   const pick = (list, i) => list[Math.floor(k(i) * list.length)];
   const skin = pick(SKIN, 1), top = pick(TOPS, 2), bottom = pick(BOTTOMS, 3), hair = pick(HAIR, 4), shoes = pick(SHOES, 6);
-  const height = 0.9 + k(5) * 0.18, build = 0.9 + k(7) * 0.25;
-  const longHair = k(8) < 0.35, backpack = k(9) < 0.25, coat = k(10) < 0.4;
+  const height = child ? 0.62 + k(5) * 0.14 : 0.9 + k(5) * 0.18, build = 0.9 + k(7) * 0.25;
+  const longHair = k(8) < 0.35, backpack = child || k(9) < 0.25, coat = k(10) < 0.4;
 
   const g = new THREE.Group();
   const body = new THREE.Group();   // origin at the hips: bobs with each step, leans on a bike
