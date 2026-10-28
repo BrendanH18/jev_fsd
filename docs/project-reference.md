@@ -273,7 +273,14 @@ Where the limit is 60 km/h or less, traffic and the driven car coming up behind 
 that is signalling to pull out let it go first (BC Motor Vehicle Act s. 169.1) when they can stop
 2 m behind it braking at up to 3 m/s^2; nobody parks in a bus zone, and traffic eases left in its
 lane to get past a bus standing at its stop. See `static/js/sim/bus.js` and
-[maps.md](maps.md#bus-routes) for where the routes come from.
+[maps.md](maps.md#bus-routes) for where the routes come from. On the school run (7:00 to 17:00)
+two school buses drive the streets (`?schoolbuses=0` takes them off) and every 150 to 400 m stop in
+their lane, mid-block on a two-way street with one lane each way and a limit of 50 km/h or less, to
+let one to three children off: ambers flashing as they slow, then reds and the stop arm. Some of
+the children cross the street in front of the bus. Traffic both ways and the driven car stop for a
+school bus with its reds flashing (BC Motor Vehicle Act s. 149), 5 m behind it or 10 m short of its
+front, when they can stop there braking at up to 3.5 m/s^2, and wait until the reds go off; the bus
+keeps them on until its children are across. See `static/js/sim/school-bus.js`.
 
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery

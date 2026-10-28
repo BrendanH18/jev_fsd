@@ -48,7 +48,7 @@ function destination(text) {
   return material;
 }
 
-function wheel(r, width) {
+export function wheel(r, width) {
   const g = new THREE.Group();
   const tire = new THREE.Mesh(new THREE.CylinderGeometry(r, r, width, 20).rotateX(Math.PI / 2), shared.tire);
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, width + 0.02, 12).rotateX(Math.PI / 2), shared.rim);

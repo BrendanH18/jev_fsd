@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- School buses (`static/js/sim/school-bus.js`, `render/school-bus.js`). On the school run (7:00 to
+  17:00) a free drive has two Type C school buses (11.4 m, real size, weight and power; `?schoolbuses=0`
+  takes them off) driving the streets as traffic. Every 150 to 400 m one stops in its lane to let
+  children off, mid-block on a two-way street with one lane each way and a limit of 50 km/h or less,
+  its rear 15 m clear of the junction behind and its front 20 m clear of the one ahead, and 15 m clear
+  of any marked crosswalk. Its amber lights flash from 60 m before the stop; stopped, its red lights
+  flash and its stop arm swings out. One to three children get off: some walk to the sidewalk beside
+  it, the others walk forward past its front and cross the street 3 m in front of it, stepping off
+  only while its reds flash and nothing coming is too close to stop. The reds stay on for 8 to 14 s
+  and until every child it let off is across (one still at the curb after 45 s crosses on a gap
+  instead; never with one in the street), then it moves off 1.5 s later. The
+  children walk 20 to 40 m along the sidewalk and go home (off the map).
+- Stopping for a school bus (BC MVA s. 149): traffic both ways (cyclists and other school buses too) and the driven car
+  stop for a school bus with its reds flashing whose near end (its rear from behind, its front coming
+  toward it) is within 9 m of their path, 5 m behind its rear or 10 m short of its front, clear of the
+  children crossing there, if they could stop there braking at up to 3.5 m/s^2 when they first saw the
+  reds; they wait until the reds go off. Rules picks a new `stop_for_school_bus` candidate, and
+  manoeuvres that carry the front more than 1.5 m past that point are rejected
+  (`passes_stopped_school_bus`, labelled in AI eyes, which outlines the bus in amber). With its ambers
+  on, the car slows to a speed from which it could stop there comfortably (at least 4 m/s). Decision
+  models and LLMs get `school_bus`, a situation line, a motion criterion and a prompt line; the HUD
+  says "SCHOOL BUS · RED LIGHTS FLASHING · STOP". The audit counts a failure to yield (`school bus`)
+  once a stop when the car, owing it, draws level with the bus's near end at more than 1 m/s while
+  the reds are on.
+- New challenge, "Flashing reds" (Kitsilano): the car starts on West 2nd Avenue, 110 m short of the
+  front of a school bus coming the other way, stopped with its reds flashing. Once the car is 45 m
+  from it, a child who has just got off walks forward past its front and crosses in front of it, into
+  the car's lane. Rules and the cautious agent pass it.
+- People are drawn by id, so children can come and go; children are smaller, with backpacks.
+- New checks in `scripts/test_school_buses.mjs`. The seeded benchmark runs no school buses.
+
 - Marked crosswalks between junctions. Each bundled map now has its marked crosswalks from
   OpenStreetMap beside its pack, in `data/maps/<key>.crossings.v1.json` (`jev/osm/crossings.py`):
   crossing nodes on drivable streets tagged as marked and without a signal, placed on the pack's own

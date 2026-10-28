@@ -11,6 +11,8 @@ import { buildTrees } from "./render/trees.js";
 import { createEmergencyMesh, syncEmergency } from "./render/emergency.js";
 import { buildBusStops, createBusMesh, syncBus } from "./render/bus.js";
 import { busYield, isBus } from "./sim/bus.js";
+import { createSchoolBusMesh, syncSchoolBus } from "./render/school-bus.js";
+import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
 import { isEmergency, isEmergencyVehicle, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
 import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar, restoreParkedCar, createDoorMesh, syncDoor } from "./render/cars.js";
@@ -132,24 +134,32 @@ export async function boot() {
     const buses = params.get("buses") !== "0";
     world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
-    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses });
+    // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
+    const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
+    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, schoolBuses });
     autopilot = new Autopilot(world, callbacks);
   }
   view.addScenery(buildParkedCars(world.parked.list));
   const originalParked = world.parked.list.slice();
   world.parked.added.length = 0;
-  const pedMeshes = world.crowd.list.map((p) => { const m = createPersonMesh(p.look); view.scene.add(m); return m; });
+  // (a mesh per person, by id: children get off school buses and go home)
+  const pedMeshes = new Map();
+  const pedMesh = (p) => {
+    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child }); view.scene.add(m); pedMeshes.set(p.id, m); }
+    return pedMeshes.get(p.id);
+  };
+  world.crowd.list.forEach(pedMesh);
   const npcMeshes = new Map();
   const parkedMeshes = new Map();
   const doorMeshes = new Map();
-  const previousCars = new Map(), previousPeople = [], previousEgo = {};
+  const previousCars = new Map(), previousPeople = new Map(), previousEgo = {};
   // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
   const syncFleetMeshes = () => {
     const ids = new Set();
     for (const n of fleet.vehicles) {
       ids.add(n.id);
       if (npcMeshes.has(n.id)) continue;
-      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : createCarMesh(n.color, n.id, n.style ?? null);
+      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isSchoolBus(n) ? createSchoolBusMesh(n.id) : createCarMesh(n.color, n.id, n.style ?? null);
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
@@ -472,7 +482,7 @@ export async function boot() {
   const replayTarget = { world, fleet, autopilot, clock, setDrive: restored => { drive = restored; } };
   function restoreFrame(index) {
     recorder.restore(index, replayTarget); input.keys.clear(); arrivalPending = false;
-    previousCars.clear(); previousPeople.length = 0; capturePose(world.ego, previousEgo);
+    previousCars.clear(); previousPeople.clear(); capturePose(world.ego, previousEgo);
     for (const car of originalParked) hideParkedCar(car);
     for (const car of world.parked.list) restoreParkedCar(car);
     world.parked.added = world.parked.list.filter(c => !c.instances && !parkedMeshes.has(c.id));
@@ -574,7 +584,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -593,7 +603,7 @@ export async function boot() {
         }
         capturePose(world.ego, previousEgo);
         for (const car of fleet.vehicles) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
-        world.crowd.list.forEach((p, i) => { previousPeople[i] = capturePose(p, previousPeople[i]); });
+        for (const p of world.crowd.list) previousPeople.set(p.id, capturePose(p, previousPeople.get(p.id)));
         stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
         if (drive && !drive.finished && !autopilot.enabled && world.route && Math.abs(world.ego.v) < 0.5) {
           const projection = world.route.project(world.ego.x, world.ego.y);
@@ -646,7 +656,7 @@ export async function boot() {
     syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id);
-      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
+      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isSchoolBus(n) ? syncSchoolBus : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
     }
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
     const evs = fleet.vehicles.filter(isEmergency);
@@ -667,10 +677,17 @@ export async function boot() {
     const stopped = cw && stoppedAt(world, cw, world.ego).find((n) => world.visibility.sees(world.ego, n));
     const cwKey = stopped ? `${cw.id}:${stopped.id}` : null;
     if (stopped && cwKey !== announcedCrosswalk) { announcedCrosswalk = cwKey; hud.badge(`${isBus(stopped) ? "BUS" : "CAR"} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500); }
-    world.crowd.list.forEach((p, i) => {
+    // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
+    const school = fleet.schoolBuses?.find((b) => { const r = redsOn(b) && schoolBusRelation(world.ego, b); return r && r.ahead_m > 0 && r.ahead_m < 70 && Math.abs(r.right_m) < SCHOOL_SIDE_M && world.visibility.sees(world.ego, b); });
+    const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
+    if (school && schoolKey !== announcedSchool) { announcedSchool = schoolKey; hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500); }
+    const here = new Set();
+    for (const p of world.crowd.list) {
+      here.add(p.id);
       const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
-      syncPerson(pedMeshes[i], next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople[i], alpha), view.camera, world.weather === "rain");
-    });
+      syncPerson(pedMesh(p), next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha), view.camera, world.weather === "rain");
+    }
+    for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision));
     weatherView.update(dt);

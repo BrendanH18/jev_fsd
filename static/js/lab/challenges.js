@@ -1,10 +1,11 @@
 import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
-import { Vehicle, BIKE, BUS, CAR } from "../sim/vehicle.js";
+import { Vehicle, BIKE, BUS, CAR, SCHOOL_BUS } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
 import { isJunction } from "../sim/emergency.js";
 import { BUS_YIELD_LIMIT_MPS, busStopFront, curbShift } from "../sim/bus.js";
 import { HOLD_M } from "../sim/crosswalk.js";
+import { ONCOMING_M, firstStop, stopRange } from "../sim/school-bus.js";
 import { Pedestrian } from "../sim/pedestrians.js";
 import { StopMemory, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
@@ -40,6 +41,8 @@ export const CHALLENGES = [
     description: "A bus at its stop on West 4th Avenue signals to pull out just as you come up behind it in its lane.", lesson: "In BC, where the limit is 60 km/h or less, traffic behind a bus at a stop must let it pull out once it signals. Ease off early, stop behind it if you have to, and let it go first." },
   { id: "multiple-threat", title: "The multiple threat", map: "kitsilano", weather: "dry", time: "afternoon", seed: 14042, icon: "⋕", difficulty: "Sight lines", hazard: "crosswalk", street: "West Broadway",
     description: "A car in the curb lane has stopped at a marked crosswalk on West Broadway. The lane beside it is open. Why did it stop?", lesson: "Never pass a vehicle stopped at a crosswalk: it may be hiding the person it stopped for. In BC it is the law. Stop beside it, look, and go on only once nobody is crossing in your path." },
+  { id: "school-bus", title: "Flashing reds", map: "kitsilano", weather: "dry", time: "afternoon", seed: 15042, icon: "▣", difficulty: "Courtesy", hazard: "school-bus", street: "West 2nd Avenue",
+    description: "A school bus coming the other way on West 2nd Avenue has stopped with its red lights flashing. Your side of the road is clear.", lesson: "In BC, traffic going both ways must stop for a school bus stopped with its red lights flashing, and stay stopped until it moves off or the lights go off. Children getting off often cross the street in front of it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -280,6 +283,33 @@ function threatSites(map, street) {
   return on.length ? on : sites;
 }
 
+// Flashing reds: a school bus coming toward the car, stopped with its reds flashing where a school
+// bus may stop (sim/school-bus.js stopRange) on a two-way street with one lane each way, limited to
+// 50 km/h or less. The car starts in its lane on the same street, SCHOOL_START_M before where it
+// stops for the bus (ONCOMING_M short of its front), so the bus stops as near the end of its own
+// street as it may. Once the car is 45 m from the bus's front, a child who has just got off walks
+// forward past its front and crosses the street in front of it, into the car's lane. On the
+// challenge's `street` where it has one.
+const SCHOOL_START_M = 100;
+const schoolSiteCache = new WeakMap();
+function schoolSites(map, street) {
+  if (!schoolSiteCache.has(map)) {
+    const sites = [];
+    for (const e of map.edges.values()) {
+      const r = [...map.edges.values()].find(o => o.from === e.to && o.to === e.from && o.lanes === 1);
+      if (!r || e.lanes !== 1 || e.ring || !stopRange(map, r)) continue;
+      const L = e.cum[e.cum.length - 1], at = firstStop(stopRange(map, r), 0);
+      const start = L - at - ONCOMING_M - SCHOOL_START_M;
+      if (at === null || start < 3) continue;
+      sites.push({ lane: map.lane(e.id, 0), startS: start * map.lane(e.id, 0).length / Math.max(1, L), bus: { edge: r.id, s: at } });
+    }
+    sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    schoolSiteCache.set(map, sites);
+  }
+  const sites = schoolSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -317,11 +347,14 @@ export function challengeScenario(map, challenge) {
   const threats = challenge.hazard === "crosswalk" ? threatSites(map, challenge.street) : null;
   if (threats && !threats.length) throw new Error("This map has no marked crosswalk on a street with two lanes each way and a limit of 60 km/h or less.");
   const threat = threats ? threats[Math.floor(random() * threats.length)] : null;
-  const start = threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const schools = challenge.hazard === "school-bus" ? schoolSites(map, challenge.street) : null;
+  if (schools && !schools.length) throw new Error("This map has no two-way street with one lane each way and a limit of 50 km/h or less long enough for a school bus to stop on.");
+  const school = schools ? schools[Math.floor(random() * schools.length)] : null;
+  const start = school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -350,6 +383,7 @@ export function challengeScenario(map, challenge) {
     ...(hook ? { cyclist: { edge: hook.lane.edge, s: startS + HOOK_LEAD_M, then: hook.straight } } : {}),
     ...(siren ? { emergency: { kind: "ambulance", relation: "behind", distance: SIREN_BACK_M } } : {}),
     ...(bus ? { bus: bus.bus } : {}),
+    ...(school ? { schoolBus: school.bus } : {}),
     ...(threat ? { multiThreat: { crosswalk: threat.crosswalk, s: threat.s, curb: { edge: threat.curb.edge, lane: threat.curb.idx, s: threat.sCurb } } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
@@ -380,6 +414,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.cyclist) world.challenge.cyclistId = placeCyclist(world, fleet, scenario.cyclist);
   if (scenario.bus) Object.assign(world.challenge, placeBus(world, fleet, scenario.bus));
   if (scenario.multiThreat) Object.assign(world.challenge, placeThreat(world, fleet, scenario.multiThreat, challenge.seed));
+  if (scenario.schoolBus) Object.assign(world.challenge, placeSchoolBus(world, fleet, scenario.schoolBus, challenge.seed));
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -399,7 +434,7 @@ export function stepChallenge(world, fleet) {
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
-    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
@@ -421,6 +456,11 @@ export function stepChallenge(world, fleet) {
     // (the stopped car waits for them as any driver would)
     const stopper = state.stopperId && fleet.vehicles.find(v => v.id === state.stopperId);
     if (stopper) stopper.frozen = 0;
+    // (the school bus keeps its reds on until the child is across, and a few seconds more)
+    const school = state.schoolBusId && fleet.vehicles.find(v => v.id === state.schoolBusId);
+    if (school?.school.phase === "red") Object.assign(school.school, { held: false, t: 0, red: SCHOOL_RED_S });
+    const child = state.childId && world.crowd.list.find(p => p.id === state.childId);
+    if (child) child.held = false;
   }
   const ped = state.pedestrianId && world.crowd.list.find(p => p.id === state.pedestrianId);
   if (ped && !ped.path.length) { ped.frozen = 1e6; ped.v = 0; }
@@ -548,6 +588,22 @@ function placeThreat(world, fleet, { crosswalk, curb }, seed) {
   ped.frozen = 1e6;
   world.crowd.list.push(ped);
   return { stopperId: car.id, pedestrianId: ped.id };
+}
+// Flashing reds: the school bus standing at its stop, coming toward the car, its reds flashing and its
+// stop arm out, and a child just off it by its door, about to walk forward past its front and cross
+// in front of it to the far sidewalk. Both wait for the car to come up; the reds then stay on until
+// the child is across and for SCHOOL_RED_S from when the car came up.
+const SCHOOL_RED_S = 6;
+function placeSchoolBus(world, fleet, { edge, s }, seed) {
+  const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, 0), scale = lane.length / Math.max(1, e.cum[e.cum.length - 1]);
+  const bus = fleet.addSchoolBus(lane, s * scale - (SCHOOL_BUS.length - SCHOOL_BUS.rearOverhang), 0);
+  Object.assign(bus.school, { phase: "red", lights: "red", arm: true, doors: true, held: true, t: 0, red: Infinity, stops: 1, stop: { edge, s }, every: Infinity });
+  bus.doors = true;
+  const child = world.crowd.alight(bus, e, true, rng(seed));
+  child.id = "challenge_child";
+  child.held = true;
+  const front = SCHOOL_BUS.length - SCHOOL_BUS.rearOverhang;
+  return { schoolBusId: bus.id, childId: child.id, at: [bus.x + Math.cos(bus.psi) * front, bus.y + Math.sin(bus.psi) * front] };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

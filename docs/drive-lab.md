@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fourteen authored challenges
+## Fifteen authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -23,8 +23,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Lights and sirens | Edmonton, Old Strathcona | Straight on along a two-way street with a parking lane, toward a junction without a sign; once the car is 45 m from it, an ambulance sets off 75 m behind it with its siren on, so the car must pull over and stop short of the junction |
 | Pulling out | Vancouver, Kitsilano | Straight on along West 4th Avenue, in the curb lane, 100 m behind a bus standing at its stop with its doors open; once the car is 45 m from the bus, it shuts its doors and signals to pull out, and the car must let it go first (BC MVA s. 169.1) |
 | The multiple threat | Vancouver, Kitsilano | Straight on along West Broadway in the lane beside the curb lane, 110 m before a marked crosswalk; a car stands at the crosswalk in the curb lane, hiding a person on it in front of it. Once the car is 45 m from the crosswalk they walk on across, out into its lane. The car must not pass the stopped car (BC MVA s. 179(3)): it stops beside it, looks, and gives way |
+| Flashing reds | Vancouver, Kitsilano | Straight on along West 2nd Avenue, a two-way street with one lane each way; a school bus coming the other way stands 110 m ahead with its red lights flashing and its stop arm out. Once the car is 45 m from it, a child who has just got off walks forward past its front and crosses in front of it, into the car's lane. Traffic both ways must stop for it (BC MVA s. 149): the car stops 10 m short of the bus's front and waits until the child is across and the reds go off |
 
-Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out and the multiple threat joined it later, at version 1. Each challenge separately versions
+Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat and flashing reds joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
 and snow challenges remain version 1; the rainy crossing is version 2 because its person
 now correctly waits for the approach trigger rather than starting during setup.
