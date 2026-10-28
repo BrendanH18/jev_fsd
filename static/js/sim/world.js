@@ -14,6 +14,7 @@ import { AllWayStops } from "./all-way.js";
 import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
 import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency } from "./emergency.js";
 import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
+import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -82,6 +83,13 @@ const AUDIT_EV_SIDE_M = 8;
 // more than 1 m/s before the bus has pulled out. Counted once each time a bus pulls out.
 const AUDIT_BUS_DECEL = 3.5;
 const AUDIT_BUS_MOVING_MPS = 1;
+// Passing a vehicle stopped at a marked crosswalk (sim/crosswalk.js, BC MVA s. 179(3)): once the car,
+// behind it in another lane going its way, first sees it stopped there, it owes it if it could stop
+// with its front 3.5 m short of the crosswalk's centre braking at up to 3.5 m/s^2 then. It fails to
+// yield if, owing it, its front crosses the crosswalk's centre at more than 1 m/s while the vehicle is
+// still stopped there, without having stood still at the crosswalk for 2 s first. Counted once a
+// vehicle and crosswalk.
+const AUDIT_CROSSWALK_MOVING_MPS = 1;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
@@ -112,6 +120,8 @@ export class World {
     this.evCounted = new Set();   // emergency vehicles a failure to yield was counted for
     this.evJunction = null;       // the junction the car's front is in, while one is about
     this.busCalls = new Map();    // "<bus id>:<departure>" -> { owed, counted }: a bus pulling out ahead
+    this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it
+    this.crosswalkStop = null;    // the marked crosswalk the car has stood still at (sim/crosswalk.js)
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
@@ -128,7 +138,13 @@ export class World {
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
-    return this.obstaclesNear(x, y, r).filter((o) => this.visibility.sees(observer, o));
+    return this.obstaclesNear(x, y, r).filter((o) => this.sees(observer, o));
+  }
+
+  // Line of sight: buildings, weather and darkness hide anything, and a vehicle in traffic hides a
+  // pedestrian behind it (sim/crosswalk.js).
+  sees(observer, o) {
+    return this.visibility.sees(observer, o) && !(o.kind === "pedestrian" && hiddenByTraffic(observer, o, this.npcs));
   }
 
   // Middle of a long residential edge near the map center, facing along it.
@@ -183,6 +199,10 @@ export class World {
     this.evCalls.clear();
     this.evJunction = null;
     this.busCalls.clear();
+    this.crosswalkCalls.clear();
+    this.crosswalkYields?.clear();
+    this.crosswalkStop = null;
+    this._cwFront = null;
   }
 
   auditStatic(dt) {
@@ -282,6 +302,8 @@ export class World {
       else if (n.contact && (n.clearFor = (n.clearFor || 0) + dt) > 1) n.contact = false;
     }
     this.auditCrosswalks();
+    noteStop(this);
+    this.auditCrosswalkPass();
     if (!road.on_road) this.violations.off_road_s += dt;
     // The front bumper can reach a route's stop line while the rear axle is still on an
     // adjacent segment. Use the same upcoming route control as sensing instead of losing
@@ -374,6 +396,31 @@ export class World {
     this.auditCyclists();
     this.auditEmergency(road);
     this.auditBuses();
+  }
+
+  auditCrosswalkPass() {
+    const ego = this.ego, f = ego.front, prev = this._cwFront;
+    this._cwFront = f;
+    for (const cw of this.crowd.marked) {
+      if (Math.abs(cw.ends[1][0] - ego.x) > 70 || Math.abs(cw.ends[1][1] - ego.y) > 70) continue;
+      const d = frontTo(cw, ego);
+      if (d === null || d < -3 || d > 60) continue;
+      // (decided when the car first sees the vehicle stopped there, while it is still behind it)
+      for (const n of stoppedAt(this, cw, ego)) {
+        const key = `${cw.id}:${n.id}`;
+        if (!this.crosswalkCalls.has(key) && this.visibility.sees(ego, n)) this.crosswalkCalls.set(key, { owed: canStopShort(ego.v, d), counted: false });
+      }
+      if (!prev || d > 0 || ego.v <= AUDIT_CROSSWALK_MOVING_MPS || looked(this, cw) || !segIntersect(prev, f, cw.ends[1], cw.ends[-1])) continue;
+      // (the vehicle is beside the car now, so no longer ahead of it)
+      for (const n of stoppedAt(this, cw, ego, this.npcs, false)) {
+        const rec = this.crosswalkCalls.get(`${cw.id}:${n.id}`);
+        if (!rec || !rec.owed || rec.counted) continue;
+        rec.counted = true;
+        this.violations.failed_to_yield++;
+        this.events.push({ type: "failed_to_yield", to: "vehicle stopped at a crosswalk", with: n.id });
+      }
+    }
+    if (this.crosswalkCalls.size > 40) for (const key of [...this.crosswalkCalls.keys()].slice(0, 20)) this.crosswalkCalls.delete(key);
   }
 
   auditBuses() {

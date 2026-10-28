@@ -10,7 +10,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { GeoBuilder } from "./geo.js";
 import { LAYER, groundLayer, toThree } from "./scene.js";
-import { asphaltTexture, concreteTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation, walkSignalTexture, handSignalTexture } from "./textures.js";
+import { asphaltTexture, concreteTexture, crosswalkSignTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation, walkSignalTexture, handSignalTexture } from "./textures.js";
 import { snowable } from "./weather.js";
 import { buildStreetLights } from "./citylights.js";
 import { wetReflective } from "./reflection.js";
@@ -144,6 +144,13 @@ export function buildRoads(map) {
     stopBar(white, e, c.s_line, left, right, c.type === "signal" ? 0.6 : 0.5);
     if (c.type === "signal" && c.s_line + 4.2 < L) crosswalk(white, e, c.s_line + 1.0, c.s_line + 4.0);
   }
+  // marked crosswalks between junctions (jev/osm/crossings.py): bars along the traffic, or two lines
+  // across it, 3 m apart
+  for (const c of map.crosswalks || []) {
+    const e = map.edges.get(c.edge);
+    if (c.markings === "lines") for (const s of [c.s - 1.5, c.s + 1.5]) stopBar(white, e, s, e.asphalt[0], e.asphalt[1], 0.3);
+    else crosswalk(white, e, c.s - 1.5, c.s + 1.5);
+  }
 
   const asphaltMat = wetReflective(snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92, metalness: 0 }), 0.05, 0.22), "asphalt"), 1);
   add(group, asphalt, asphaltMat, LAYER.asphalt);
@@ -166,6 +173,7 @@ export function buildRoads(map) {
   const signals = buildSignals(map, group);
   buildStopSigns(map, group);
   buildYieldSigns(map, group);
+  buildCrosswalkSigns(map, group);
   const streetLights = buildStreetLights(map, group, streets, (id) => trimAt(nodeR, legs, id));
   return { group, signals, streets, nodeR, legs, streetLights };
 }
@@ -375,6 +383,25 @@ function buildStopSigns(map, group) {
   const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
   mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
   mk(faces, new THREE.MeshStandardMaterial({ map: stopSignTexture(), roughness: 0.45, emissive: 0x220000, emissiveIntensity: 0.3 }));
+  mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
+}
+
+// Crosswalk signs at marked crosswalks between junctions (map/scenery.js places them): a square
+// sign on a post at the curb, facing the traffic coming toward the crosswalk.
+function buildCrosswalkSigns(map, group) {
+  const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.5, 8).translate(0, 1.25, 0);
+  const face = new THREE.PlaneGeometry(0.6, 0.6).rotateY(-Math.PI / 2).translate(-0.07, 2.25, 0);
+  const back = new THREE.PlaneGeometry(0.6, 0.6).rotateY(Math.PI / 2).translate(-0.06, 2.25, 0);
+  const poles = [], faces = [], backs = [];
+  for (const { x, y, heading: h } of sceneryFor(map).crosswalkSigns) {
+    poles.push(placed(pole, x, y, 0, h));
+    faces.push(placed(face, x, y, 0, h));
+    backs.push(placed(back, x, y, 0, h));
+  }
+  if (!poles.length) return;
+  const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
+  mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
+  mk(faces, new THREE.MeshStandardMaterial({ map: crosswalkSignTexture(), roughness: 0.45, emissive: 0x111111, emissiveIntensity: 0.3 }));
   mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
 }
 

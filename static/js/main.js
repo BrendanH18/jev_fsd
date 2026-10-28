@@ -11,6 +11,7 @@ import { buildTrees } from "./render/trees.js";
 import { createEmergencyMesh, syncEmergency } from "./render/emergency.js";
 import { buildBusStops, createBusMesh, syncBus } from "./render/bus.js";
 import { busYield, isBus } from "./sim/bus.js";
+import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
 import { isEmergency, isEmergencyVehicle, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
 import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar, restoreParkedCar, createDoorMesh, syncDoor } from "./render/cars.js";
 import { createPersonMesh, syncPerson } from "./render/people.js";
@@ -573,7 +574,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -661,6 +662,11 @@ export async function boot() {
     const bus = fleet.buses?.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
     const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
     if (bus && busKey !== announcedBus) { announcedBus = busKey; hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500); }
+    // a vehicle stopped at a crosswalk ahead in the next lane, that the car must not pass: say so once
+    const cw = world.crowd.marked.find((c) => { const d = frontTo(c, world.ego); return d !== null && d > 0 && d < 50 && !looked(world, c); });
+    const stopped = cw && stoppedAt(world, cw, world.ego).find((n) => world.visibility.sees(world.ego, n));
+    const cwKey = stopped ? `${cw.id}:${stopped.id}` : null;
+    if (stopped && cwKey !== announcedCrosswalk) { announcedCrosswalk = cwKey; hud.badge(`${isBus(stopped) ? "BUS" : "CAR"} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500); }
     world.crowd.list.forEach((p, i) => {
       const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
       syncPerson(pedMeshes[i], next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople[i], alpha), view.camera, world.weather === "rain");

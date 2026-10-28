@@ -92,6 +92,22 @@ parking at each stop. To rebuild a map's routes from today's OSM without touchin
 `uv run scripts/fetch_map.py <preset> --transit`. A custom area gets its routes from the same
 download as its pack.
 
+### Crosswalks
+
+Each bundled map also has its marked crosswalks between junctions beside its pack, in
+`data/maps/<key>.crossings.v1.json` (`jev/osm/crossings.py`), built on 2026-10-27 from the same
+OpenStreetMap downloads as the bus routes. A crossing node on a drivable street tagged as marked and
+without a signal (`crossing=uncontrolled`, `marked` or `zebra`, or a `crossing:markings` value other
+than `no`) is placed on the pack street whose centreline passes within 3 m of it, as a point along an
+edge, with how it is painted (bars along the traffic for zebra and ladder markings, two lines across it
+for lines, dots and dashes) and whether it has a refuge island. Crossings within 16 m of a junction
+are left out, since people already cross at every junction's corners, and so are those within 12 m
+of a dead end or the edge of the map, unmarked ones (in BC a crosswalk away from a junction exists
+only where it is marked), signalled ones, and a second one within 8 m of another on the same street.
+That leaves 102 across the twelve maps (Mount Pleasant, Québec City and Edmonton have none). The
+packs are unchanged; the server and the browser demo add the file to the map as `crossings`, and
+`--transit` rebuilds it with the bus routes.
+
 To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
 data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep
 using `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.

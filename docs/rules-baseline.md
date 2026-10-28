@@ -1,4 +1,40 @@
-# Rules benchmark baseline — 2026-10-27 (buses, unchanged)
+# Rules benchmark baseline — 2026-10-27b (marked crosswalks)
+
+Rules passes **70 of 70 routes in V8 and 69 of 70 in WebKit**, with no red-light or stop-sign
+violations, failures to yield or deadlock overrides in either engine. "After" is the working tree
+on top of main at `b68a32b`, which adds the marked crosswalks between junctions from OpenStreetMap:
+people cross at them, every driver gives way to them there, a vehicle in traffic hides a person
+behind it, and the car does not pass a vehicle stopped at one (BC MVA s. 179(3)). Unlike buses and
+emergency vehicles, this reaches the seeded benchmark: its 60 people now cross at the crosswalks
+along their way, so where a route passes one the traffic and the drive change.
+
+- **Unchanged where no route meets a crosswalk:** V8 Mount Pleasant, Toronto, Montréal, Calgary,
+  Ottawa, Québec City, Halifax, Winnipeg, Edmonton and Saskatoon, and WebKit Mount Pleasant,
+  Montréal, Calgary, Ottawa, Québec City, Winnipeg, Edmonton and Saskatoon, match the 2026-10-27
+  record route for route (Mount Pleasant, Québec City and Edmonton have no crosswalks).
+- **Kitsilano, Victoria and WebKit Halifax:** every route still passes in both engines. Arrival times move by up to
+  15 s (V8 Kitsilano fog `s1-10`: 207.1 → 222.0 s) and safety brakes go from 27 to 24 in V8 and from
+  35 to 26 in WebKit, all suites together.
+- **WebKit Toronto `s1-1` fails on one collision, shared fault, not the car's** (`car_22` at
+  194.3 s). A traffic car in the left lane of a two-lane approach (`e305`) goes straight on into a
+  one-lane street (`e292`) and merges across the car, which is going straight on beside it from the
+  curb lane. Traffic has always merged like this where a lane ends past a junction, without
+  yielding to a car beside it; the crosswalks only changed the timing that put the two side by side.
+  No pedestrian or crosswalk is involved. V8 passes the route as before. Traffic yielding where its
+  lane ends is left as a follow-up.
+
+## Method
+
+As for 2026-10-27: all 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, on macOS
+27.0.1 (26A434), Apple M5, V8 through `scripts/bench_node.mjs` with Node `v24.19.0` and WebKit through
+`scripts/shot.swift` (`swiftc -O`, a fresh WKWebView per suite, `save: false`, 15 s settle), both
+against `PORT=8331 uv run --locked server.py` serving the working tree. The WebKit collision was
+reproduced by replaying Toronto `s1-1` alone in a WKWebView. The
+[machine-readable record](validation/rebaseline-2026-10-27b-rules.json) holds both engines' summaries
+and per-route results; the before columns are the 2026-10-27 record's after columns. Night was not
+run.
+
+## Earlier record: 2026-10-27 (buses, unchanged)
 
 Rules passes **70 of 70 routes in both V8 and WebKit**, exactly as in the 2026-10-26 record below:
 every suite matches its after columns route for route (arrival time, pass and safety brakes) and in
@@ -9,7 +45,7 @@ stop, bus zones, and the "Pulling out" challenge. The seeded benchmark runs no b
 them the traffic, parking, car and audit behave as before (the map now carries its `transit`
 routes, which nothing reads unless buses run); these runs confirm it.
 
-## Method
+### Method
 
 As for 2026-10-26: all 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, on macOS
 27.0.1 (26A434), Apple M5, V8 through `scripts/bench_node.mjs` with Node `v24.19.0` and WebKit through

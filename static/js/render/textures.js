@@ -352,6 +352,24 @@ export const handSignalTexture = () => once("handsig", () => {
   return toTexture(c, { repeat: false });
 });
 
+// A crosswalk sign (TAC RA-4): a black walking figure over crosswalk bars on a white square, on the
+// fluorescent yellow-green board BC puts behind them.
+export const crosswalkSignTexture = () => once("crosswalk", () => {
+  const size = 128, c = canvas(size), ctx = c.getContext("2d");
+  ctx.fillStyle = "#c8e62a"; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(14, 14, size - 28, size - 28);
+  ctx.strokeStyle = "#111"; ctx.lineWidth = 3; ctx.strokeRect(17, 17, size - 34, size - 34);
+  ctx.fillStyle = ctx.strokeStyle = "#111"; ctx.lineWidth = 7; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(68, 32, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(65, 43); ctx.lineTo(60, 66); ctx.lineTo(72, 86);     // body and front leg
+  ctx.moveTo(60, 66); ctx.lineTo(48, 84);                          // back leg
+  ctx.moveTo(64, 48); ctx.lineTo(76, 60); ctx.moveTo(64, 48); ctx.lineTo(51, 58);   // arms
+  ctx.stroke();
+  for (let x = 28; x < 100; x += 16) ctx.fillRect(x, 94, 9, 14);    // the crosswalk
+  return toTexture(c, { repeat: false });
+});
+
 export const stopSignTexture = () => once("stop", () => {
   const size = 256, c = canvas(size), ctx = c.getContext("2d");
   const oct = (r) => {

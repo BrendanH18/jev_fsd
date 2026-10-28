@@ -30,6 +30,7 @@ from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
 from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
+from jev.osm.crossings import build_crossings
 from jev.osm.transit import build_transit
 from jev.routing import Router
 from jev.maps import catalog, map_identity
@@ -72,6 +73,10 @@ def load_map(bbox_text: str = "") -> dict:
         transit = build_transit(bbox, MAPS_DIR, entry["pack"], log=log)
         if transit:
             entry["pack"] = {**entry["pack"], "transit": transit}
+        # marked crosswalks between junctions, kept beside the pack in the same way
+        crossings = build_crossings(bbox, MAPS_DIR, entry["pack"], log=log)
+        if crossings:
+            entry["pack"] = {**entry["pack"], "crossings": crossings}
     except fetch.FetchError as err:
         log("map: %s; using the synthetic grid" % err)
         entry["error"] = str(err)
