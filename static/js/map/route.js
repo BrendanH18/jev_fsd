@@ -84,6 +84,19 @@ export class Route {
       const p = projectPoint(this.pts, this.cum, e.pts[0]);
       if (p && p.distance < 12) this.limitMarks.push({ at: p.s, limit: e.limit });
     }
+    // the stretches of school and playground zone along it (sim/speed-zones.js), in route arc length,
+    // whether or not they are in effect: [{ from, to, zone }]
+    this.zoneMarks = [];
+    if (map.zoneSpans?.size) {
+      const starts = this.laneEdgeStarts();
+      for (let i = 0; i < this.edges.length; i++) {
+        const back = i === 0 ? data.start_s || 0 : 0;
+        for (const span of map.zoneSpans.get(this.edges[i]) || []) {
+          const from = Math.max(0, starts[i] + span.from - back), to = Math.min(this.length, starts[i] + span.to - back);
+          if (to > from) this.zoneMarks.push({ from, to, zone: span.zone });
+        }
+      }
+    }
   }
 
   // Without a hint this tracks the ego (and remembers where it is); with one it projects anything
@@ -104,6 +117,8 @@ export class Route {
 
   // Speed limits that start within `horizon` meters ahead of s: [{ at, limit }] in route arc length.
   limitsAhead(s, horizon = 80) { return this.limitMarks.filter((m) => m.at > s && m.at <= s + horizon); }
+  // School and playground zone stretches that end past s and start within `horizon` meters of it.
+  zonesAhead(s, horizon = 80) { return (this.zoneMarks || []).filter((m) => m.to > s && m.from <= s + horizon); }
   edgeIndexAt(s) {
     let i = 0;
     while (i + 1 < this.edgeStarts.length - 1 && this.edgeStarts[i + 1] <= s) i++;

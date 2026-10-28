@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { buildSnapshot } from "../brain/sensors.js";
 import { isEmergency } from "../sim/emergency.js";
 import { busSignalling } from "../sim/bus.js";
+import { ZONE_NAMES, ZONE_HOURS, inEffect } from "../sim/speed-zones.js";
+import { headingAt, pointAt } from "../map/mapdata.js";
 
 // A debug view of geometric sensing, not a claim about a camera or learned perception model.
 export class PerceptionView {
@@ -43,6 +45,19 @@ export class PerceptionView {
       const color = isEmergency(object) ? [1, 0.3, 0.9] : visible && (busSignalling(object) || object.id === snap.crosswalk_stop?.id || object.id === snap.school_bus?.id) ? [1, 0.7, 0.15] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
       for (let i = 0; i < 4; i++) add(boxes, boxColors, corners[i], corners[(i + 1) % 4], color);
     }
+    // school and playground zones in effect nearby: their side of the street outlined in yellow-green
+    for (const [edgeId, spans] of world.map.zoneSpans) {
+      const e = world.map.edges.get(edgeId), scale = e.cum.at(-1) / Math.max(1e-6, e.length);
+      for (const span of spans) {
+        if (!inEffect(span.zone.kind, world.clock)) continue;
+        const at = (s, d) => { const q = pointAt(e.pts, e.cum, s * scale), h = headingAt(e.pts, e.cum, s * scale); return [q[0] + Math.sin(h) * d, q[1] - Math.cos(h) * d]; };
+        const mid = at((span.from + span.to) / 2, 0);
+        if (Math.hypot(mid[0] - ego.x, mid[1] - ego.y) > 90 + (span.to - span.from) / 2) continue;
+        for (const d of [0.4, e.asphalt[1] - 0.4]) {
+          for (let s = span.from; s < span.to; s += 3) add(boxes, boxColors, at(s, d), at(Math.min(span.to, s + 3), d), [0.83, 0.93, 0.17]);
+        }
+      }
+    }
     for (const [mesh, vertices, colors] of [[this.lines, rays, rayColors], [this.bounds, boxes, boxColors]]) {
       mesh.geometry.dispose(); mesh.geometry = new THREE.BufferGeometry();
       mesh.geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
@@ -60,7 +75,9 @@ export class PerceptionView {
     const crosswalk = w ? `${w.kind[0].toUpperCase()}${w.kind.slice(1)} ${w.stopped ? "stopped" : "stopping"} at a crosswalk in the next lane, ${Math.round(Math.max(0, w.bumper_to_crosswalk_m))} m ahead: stop in ${Math.max(0, Math.round(w.bumper_to_stop_m))} m and look` : null;
     const k = snap.school_bus;
     const school = k ? `School bus ${k.relation === "behind" ? "ahead" : "coming the other way"}, ${Math.round(Math.max(0, k.gap_m))} m: ${k.lights === "red" ? `red lights flashing, stop in ${Math.max(0, Math.round(k.bumper_to_stop_m))} m` : "amber lights, about to stop"}` : null;
-    return { seen, hidden, emergency, bus, crosswalk, school, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    const z = snap.speed_zone;
+    const zone = z ? `${ZONE_NAMES[z.kind][0].toUpperCase()}${ZONE_NAMES[z.kind].slice(1)}${z.name ? ` (${z.name})` : ""}, ${ZONE_HOURS[z.kind]}: ${Math.round(z.limit_mps * 3.6)} km/h ${z.in_zone ? (z.ends_in_m !== null ? `for ${Math.round(z.ends_in_m)} m` : "here") : `from ${Math.round(Math.max(0, z.starts_in_m))} m ahead`}` : null;
+    return { seen, hidden, emergency, bus, crosswalk, school, zone, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

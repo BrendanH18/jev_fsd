@@ -108,6 +108,23 @@ That leaves 102 across the twelve maps (Mount Pleasant, Québec City and Edmonto
 packs are unchanged; the server and the browser demo add the file to the map as `crossings`, and
 `--transit` rebuilds it with the bus routes.
 
+### School and playground zones
+
+Each bundled map also has its school and playground zones beside its pack, in
+`data/maps/<key>.zones.v1.json` (`jev/osm/zones.py`), built on 2026-10-28 from OpenStreetMap
+downloaded that day (the main API; Ottawa through the `overpass-api.de` fallback, whose query now
+asks for schools and playgrounds too). A school is a way or multipolygon tagged `amenity=school`, or
+a point tagged so that gives its `grades` or `isced:level` (points tagged as schools are as often
+language, dance or driving schools), and not a post-secondary one; a playground is anything tagged
+`leisure=playground`. A zone is every stretch of a pack street, each way the traffic goes, whose
+centreline passes within 22 m of a school's outline, or 35 m of a playground's (one usually stands a
+little way into its park), or inside it. Stretches on one street closer together than 12 m are one,
+and those shorter than 15 m (a corner clipped) are left out. That gives 138 zones across the twelve
+maps: 58 schools and 80 playgrounds. The packs are unchanged; the server and the browser demo add
+the file to the map as `zones`, and the city's UTC offset as `utc_offset` (the sim needs it to know
+when the sun is up). `--transit` rebuilds it with the bus routes; `uv run scripts/fetch_map.py
+<preset> --zones` rebuilds only the zones, downloading the raw OSM if it is not cached.
+
 To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
 data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep
 using `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.

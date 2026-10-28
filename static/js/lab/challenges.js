@@ -10,6 +10,7 @@ import { Pedestrian } from "../sim/pedestrians.js";
 import { StopMemory, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
 import { Visibility } from "../sim/visibility.js";
+import { ZONE_LIMIT_MPS } from "../sim/speed-zones.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -43,6 +44,8 @@ export const CHALLENGES = [
     description: "A car in the curb lane has stopped at a marked crosswalk on West Broadway. The lane beside it is open. Why did it stop?", lesson: "Never pass a vehicle stopped at a crosswalk: it may be hiding the person it stopped for. In BC it is the law. Stop beside it, look, and go on only once nobody is crossing in your path." },
   { id: "school-bus", title: "Flashing reds", map: "kitsilano", weather: "dry", time: "afternoon", seed: 15042, icon: "▣", difficulty: "Courtesy", hazard: "school-bus", street: "West 2nd Avenue",
     description: "A school bus coming the other way on West 2nd Avenue has stopped with its red lights flashing. Your side of the road is clear.", lesson: "In BC, traffic going both ways must stop for a school bus stopped with its red lights flashing, and stay stopped until it moves off or the lights go off. Children getting off often cross the street in front of it." },
+  { id: "school-zone", title: "School zone", map: "kitsilano", weather: "dry", time: "morning", seed: 16042, icon: "◭", difficulty: "Anticipation", hazard: "school-zone", street: "West 11th Avenue",
+    description: "West 11th Avenue past Lord Tennyson Elementary, at 9 in the morning. The street's limit is 50 km/h, but this block is a school zone, and the cars parked along it hide the curb.", lesson: "In BC a school zone's 30 km/h holds from 8:00 to 17:00 on school days, and a playground zone's from dawn to dusk every day. At 30 km/h a car stops in about a third of the distance it needs at 50, so a child running out between parked cars can be missed." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -290,6 +293,31 @@ function threatSites(map, street) {
 // street as it may. Once the car is 45 m from the bus's front, a child who has just got off walks
 // forward past its front and crosses the street in front of it, into the car's lane. On the
 // challenge's `street` where it has one.
+// School zone: the car starts 4 m into a street that is a school zone (in effect at the challenge's
+// time) with a higher limit of its own and a parking lane on the right, and a child waits at the
+// curb 85 m on, between two parked cars, with at least 40 m of zone before them and no stop line
+// within 30 m after. Once the car's front is 24 m from them they run out across the street.
+const ZONE_START_M = 4, CHILD_AT_M = 85, CHILD_ZONE_BEFORE_M = 40, CHILD_TRIGGER_M = 24, CHILD_MPS = 2.4;
+const zoneSiteCache = new WeakMap();
+function zoneSites(map, street) {
+  if (!zoneSiteCache.has(map)) {
+    const sites = [];
+    for (const lane of map.laneList) {
+      const e = lane.edgeRef, hazard = ZONE_START_M + CHILD_AT_M;
+      if (e.ring || lane.idx !== e.lanes - 1 || !(e.parking?.[1] > 0) || e.limit <= ZONE_LIMIT_MPS + 1) continue;
+      if (e.control && e.control.s_line < hazard + 30) continue;
+      const span = (map.zoneSpans.get(e.id) || []).find((x) => x.zone.kind === "school" && x.from <= Math.min(ZONE_START_M, hazard - CHILD_ZONE_BEFORE_M) && x.to >= hazard + 10);
+      if (!span) continue;
+      const scale = lane.length / Math.max(1, e.length);
+      sites.push({ lane, startS: ZONE_START_M * scale, hazardS: hazard * scale, zone: span.zone.id });
+    }
+    sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    zoneSiteCache.set(map, sites);
+  }
+  const sites = zoneSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 const SCHOOL_START_M = 100;
 const schoolSiteCache = new WeakMap();
 function schoolSites(map, street) {
@@ -350,11 +378,14 @@ export function challengeScenario(map, challenge) {
   const schools = challenge.hazard === "school-bus" ? schoolSites(map, challenge.street) : null;
   if (schools && !schools.length) throw new Error("This map has no two-way street with one lane each way and a limit of 50 km/h or less long enough for a school bus to stop on.");
   const school = schools ? schools[Math.floor(random() * schools.length)] : null;
-  const start = school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const zones = challenge.hazard === "school-zone" ? zoneSites(map, challenge.street) : null;
+  if (zones && !zones.length) throw new Error("This map has no school zone on a street with a parking lane and a higher limit of its own.");
+  const zone = zones ? zones[Math.floor(random() * zones.length)] : null;
+  const start = zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -384,6 +415,7 @@ export function challengeScenario(map, challenge) {
     ...(siren ? { emergency: { kind: "ambulance", relation: "behind", distance: SIREN_BACK_M } } : {}),
     ...(bus ? { bus: bus.bus } : {}),
     ...(school ? { schoolBus: school.bus } : {}),
+    ...(zone ? { child: { s: zone.hazardS, zone: zone.zone } } : {}),
     ...(threat ? { multiThreat: { crosswalk: threat.crosswalk, s: threat.s, curb: { edge: threat.curb.edge, lane: threat.curb.idx, s: threat.sCurb } } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
@@ -392,7 +424,7 @@ export function challengeScenario(map, challenge) {
 export function installChallenge(world, fleet, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
   // an oncoming hazard is placed at the stop line
-  const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
+  const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? scenario.child?.s ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
@@ -415,6 +447,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.bus) Object.assign(world.challenge, placeBus(world, fleet, scenario.bus));
   if (scenario.multiThreat) Object.assign(world.challenge, placeThreat(world, fleet, scenario.multiThreat, challenge.seed));
   if (scenario.schoolBus) Object.assign(world.challenge, placeSchoolBus(world, fleet, scenario.schoolBus, challenge.seed));
+  if (scenario.child) Object.assign(world.challenge, placeChild(world, lane, scenario.child.s, challenge.seed));
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -434,6 +467,7 @@ export function stepChallenge(world, fleet) {
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
+    : state.hazard === "school-zone" ? local.ahead < CHILD_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
@@ -604,6 +638,26 @@ function placeSchoolBus(world, fleet, { edge, s }, seed) {
   child.held = true;
   const front = SCHOOL_BUS.length - SCHOOL_BUS.rearOverhang;
   return { schoolBusId: bus.id, childId: child.id, at: [bus.x + Math.cos(bus.psi) * front, bus.y + Math.sin(bus.psi) * front] };
+}
+// School zone: two cars parked 11 m apart (centre to centre) in the parking lane, and a child at the
+// curb between them, who will run straight across the street to the far curb.
+function placeChild(world, lane, s, seed) {
+  const e = lane.edgeRef, p = pointAt(lane.pts, lane.cum, s), psi = headingAt(lane.pts, lane.cum, s);
+  const off = (q, right) => [q[0] + Math.sin(psi) * right, q[1] - Math.cos(psi) * right];
+  const ep = pointAt(e.pts, e.cum, s * e.cum.at(-1) / Math.max(1, lane.length));
+  const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);
+  const curb = e.asphalt[1] - laneOffset, parked = curb - (e.parking[1] || 2.1) / 2;
+  [-5.5, 5.5].forEach((ds, i) => {
+    const q = off(pointAt(lane.pts, lane.cum, s + ds), parked), car = new Vehicle(q[0], q[1], psi, 0);
+    Object.assign(car, { id: `challenge_parked_${i + 1}`, color: i ? 0x6b7f8c : 0xc9c3b6, curb: "right", edge: lane.edge });
+    world.parked.add(car);
+  });
+  const from = off(p, curb - 0.4), to = off(p, e.asphalt[0] - laneOffset + 0.4);
+  const ped = new Pedestrian({ id: "challenge_child", x: from[0], y: from[1], psi: psi + Math.PI / 2, v: 0, speed: CHILD_MPS, child: true,
+    path: [{ p: to, cross: { node: null, from, to, jaywalk: true } }], crossing: null, waiting: 0, phase: 0, look: seed, at: null });
+  ped.frozen = 1e6;
+  world.crowd.list.push(ped);
+  return { pedestrianId: ped.id };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

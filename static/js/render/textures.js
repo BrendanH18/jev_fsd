@@ -370,6 +370,45 @@ export const crosswalkSignTexture = () => once("crosswalk", () => {
   return toTexture(c, { repeat: false });
 });
 
+// School and playground zone signs as BC posts them, in fluorescent yellow-green: a school pentagon
+// with two children walking, or a playground diamond with a child running after a ball, and under it
+// a white tab with the limit and when it holds; or, where the zone ends, an "END ZONE" tab. Square,
+// to go on a square face; outside the sign's shape the canvas is transparent.
+export const zoneSignTexture = (kind, end = false) => once(`zone:${kind}:${end}`, () => {
+  const size = 256, c = canvas(size), ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, size, size);
+  const tab = (y, h, lines) => {
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(40, y, 176, h);
+    ctx.strokeStyle = "#111"; ctx.lineWidth = 5; ctx.strokeRect(43, y + 3, 170, h - 6);
+    ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    lines.forEach(([text, px], i) => { ctx.font = `bold ${px}px Helvetica, Arial, sans-serif`; ctx.fillText(text, 128, y + h * (i + 0.5) / lines.length + 2); });
+  };
+  if (end) {
+    ctx.fillStyle = "#d4ec2c"; ctx.fillRect(30, 48, 196, 160);
+    tab(64, 128, [["END", 46], [kind === "school" ? "SCHOOL" : "PLAYGROUND", kind === "school" ? 34 : 27], ["ZONE", 34]]);
+    return toTexture(c, { repeat: false });
+  }
+  ctx.fillStyle = "#d4ec2c";
+  ctx.beginPath();
+  if (kind === "school") { ctx.moveTo(128, 6); ctx.lineTo(214, 62); ctx.lineTo(214, 150); ctx.lineTo(42, 150); ctx.lineTo(42, 62); }
+  else { ctx.moveTo(128, 4); ctx.lineTo(206, 80); ctx.lineTo(128, 156); ctx.lineTo(50, 80); }
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#111"; ctx.lineWidth = 5; ctx.stroke();
+  ctx.fillStyle = ctx.strokeStyle = "#111"; ctx.lineWidth = 8; ctx.lineCap = "round";
+  const child = (x, y, k) => {
+    ctx.beginPath(); ctx.arc(x, y, 8 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 1 * k, y + 12 * k); ctx.lineTo(x - 5 * k, y + 38 * k); ctx.lineTo(x + 8 * k, y + 60 * k);   // body and front leg
+    ctx.moveTo(x - 5 * k, y + 38 * k); ctx.lineTo(x - 18 * k, y + 58 * k);                                // back leg
+    ctx.moveTo(x - 2 * k, y + 18 * k); ctx.lineTo(x + 12 * k, y + 30 * k); ctx.moveTo(x - 2 * k, y + 18 * k); ctx.lineTo(x - 16 * k, y + 28 * k);   // arms
+    ctx.stroke();
+  };
+  if (kind === "school") { child(104, 58, 1); child(152, 72, 0.8); }
+  else { child(116, 44, 1); ctx.beginPath(); ctx.arc(156, 110, 10, 0, Math.PI * 2); ctx.fill(); }
+  tab(160, 92, [["30 km/h", 38], [kind === "school" ? "8AM-5PM SCHOOL DAYS" : "DAWN TO DUSK", kind === "school" ? 16 : 20]]);
+  return toTexture(c, { repeat: false });
+});
+
 export const stopSignTexture = () => once("stop", () => {
   const size = 256, c = canvas(size), ctx = c.getContext("2d");
   const oct = (r) => {

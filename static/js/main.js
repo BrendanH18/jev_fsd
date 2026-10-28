@@ -13,6 +13,7 @@ import { buildBusStops, createBusMesh, syncBus } from "./render/bus.js";
 import { busYield, isBus } from "./sim/bus.js";
 import { createSchoolBusMesh, syncSchoolBus } from "./render/school-bus.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
+import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
 import { isEmergency, isEmergencyVehicle, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
 import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar, restoreParkedCar, createDoorMesh, syncDoor } from "./render/cars.js";
@@ -191,8 +192,11 @@ export async function boot() {
   const weatherView = new WeatherView(view);
   const applySky = () => {
     const a = atmosphereFor(hour, world.weather, { latitude: pack.origin.lat, longitude: pack.origin.lon, utcOffset: status.map.utc_offset ?? -7 });
-    view.setAtmosphere(a); tintSurroundings(a); world.visibility.setNight(a.night);
+    view.setAtmosphere(a); tintSurroundings(a); world.visibility.setNight(a.night); syncClock();
   };
+  // school and playground zones go by the time of day (sim/speed-zones.js); a benchmark replay, as
+  // the benchmark itself, drives none
+  function syncClock() { if (!replay) world.setClock(mapClock(hour, map)); }
   clock.update(world.t);
   function rememberConditions() {
     const next = new URL(location.href);
@@ -584,7 +588,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -628,6 +632,7 @@ export async function boot() {
       }
     }
     hour = clock.update(world.t);
+    syncClock();
     if (world.t - skyAt >= 1) {
       if (clock.rate) applySky();
       skyAt = world.t;
@@ -681,6 +686,10 @@ export async function boot() {
     const school = fleet.schoolBuses?.find((b) => { const r = redsOn(b) && schoolBusRelation(world.ego, b); return r && r.ahead_m > 0 && r.ahead_m < 70 && Math.abs(r.right_m) < SCHOOL_SIDE_M && world.visibility.sees(world.ego, b); });
     const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
     if (school && schoolKey !== announcedSchool) { announcedSchool = schoolKey; hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500); }
+    // into a school or playground zone in effect: say so once
+    const zone = world._road?.zone;
+    if (zone && zone.id !== announcedZone) hud.badge(`${ZONE_NAMES[zone.kind].toUpperCase()} · ${Math.round(world._road.limit * 3.6)} KM/H`, "", 2500);
+    announcedZone = zone?.id ?? null;
     const here = new Set();
     for (const p of world.crowd.list) {
       here.add(p.id);

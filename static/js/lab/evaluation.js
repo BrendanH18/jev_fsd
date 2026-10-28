@@ -9,12 +9,16 @@ import { getVehicleModel } from "../sim/vehicle-models.js";
 import { challengeScenario, installChallenge } from "./challenges.js";
 import { yieldNow } from "../bench/runner.js";
 import { EvaluationTrace } from "./trace.js";
+import { mapClock } from "../sim/speed-zones.js";
+import { parseHour } from "../sim/world-clock.js";
 
 export const EVALUATION_ENGINE_VERSION = "drive-lab-2";
 
 export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
   const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec });
   world.visibility.setNight(challenge.time === "night" ? 1 : 0);
+  // (school and playground zones go by the challenge's time of day)
+  world.setClock(mapClock(parseHour(challenge.time), map));
   const scenario = challengeScenario(map, challenge);
   world.placeOnLane(map.lane(scenario.start.edge, scenario.start.lane), scenario.start.s);
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: challenge.seed });

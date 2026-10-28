@@ -78,6 +78,8 @@ def transit_from_osm(osm: OsmData, pack: dict) -> dict:
     routes, stops, seen = [], {}, set()
     for rel in sorted(osm.relations, key=lambda r: r["id"]):
         tags = rel["tags"]
+        if tags.get("type") != "route":
+            continue
         ref = tags.get("ref") or tags.get("name") or str(rel["id"])
         members = [(ref_id, role) for kind, ref_id, role in rel["members"] if kind == "way" and role in ("", "forward", "backward")]
         signs = []

@@ -16,6 +16,7 @@ import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency } from 
 import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { BEHIND_M, ONCOMING_M, SIDE_M, canStopFor as canStopForSchool, redsOn, schoolBusRelation } from "./school-bus.js";
+import { zoneLimit } from "./speed-zones.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -131,6 +132,9 @@ export class World {
     this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it
     this.crosswalkStop = null;    // the marked crosswalk the car has stood still at (sim/crosswalk.js)
     this.schoolCalls = new Map(); // "<school bus id>:<stop>" -> { owed, counted }: one with its reds on
+    // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
+    // null, when no zone is in effect (the seeded benchmark)
+    this.clock = null;
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
@@ -241,10 +245,14 @@ export class World {
     return !!hit;
   }
 
-  // Where the ego is relative to the road network (cached per tick).
+  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg } : null; }
+
+  // Where the ego is relative to the road network (cached per tick). `limit` is the street's, or a
+  // school or playground zone's while it is in effect there (`zone`).
   roadInfo() {
     const rd = this.map.roadDistance(this.ego.x, this.ego.y);
     const near = this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 40);
+    const span = near ? this.map.zoneOnLane(near.lane, near.s, this.clock) : null;
     return {
       on_road: rd.distance < 1.0,
       distance_to_road: rd.distance,
@@ -254,7 +262,8 @@ export class World {
       lateral: near ? near.lateral : 0,
       heading_error: near ? wrap(this.ego.psi - near.heading) : 0,
       name: (near ? near.lane.edgeRef : rd.edge)?.name || "",
-      limit: (near ? near.lane.edgeRef : rd.edge)?.limit || 11.2,
+      limit: zoneLimit((near ? near.lane.edgeRef : rd.edge)?.limit || 11.2, span),
+      zone: span ? { id: span.zone.id, kind: span.zone.kind, name: span.zone.name } : null,
     };
   }
 

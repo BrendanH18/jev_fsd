@@ -3,6 +3,7 @@
 // radians counter-clockwise from +x.
 
 import { timingPlan } from "../sim/signals.js";
+import { zoneAt, zoneSpans } from "../sim/speed-zones.js";
 
 const CELL = 50;
 const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
@@ -170,6 +171,11 @@ export class MapData {
     this.transit = pack.transit || null;
     // marked crosswalks between junctions (jev/osm/crossings.py), when the map has them
     this.crosswalks = (pack.crossings?.crossings || []).filter((c) => this.edges.has(c.edge));
+    // school and playground zones (jev/osm/zones.py), each edge's stretches of them in order
+    this.zones = pack.zones?.zones || [];
+    this.zoneSpans = zoneSpans(this.zones, this.edges);
+    // the city's offset from UTC in hours (daylight time), when the server knows it
+    this.utcOffset = Number.isFinite(pack.utc_offset) ? pack.utc_offset : null;
     this.grid = new Map();
     for (const lane of this.laneList) {
       for (const key of cellsOf(lane.pts)) {
@@ -181,6 +187,13 @@ export class MapData {
   }
 
   lane(edgeId, idx) { return this.lanes.get(`${edgeId}:${idx}`); }
+  // The school or playground zone in effect `s` metres along a lane (as the lane measures it), at a
+  // clock (sim/speed-zones.js), or null.
+  zoneOnLane(lane, s, clock) {
+    if (!clock || !lane || !this.zoneSpans.has(lane.edge)) return null;
+    const e = lane.edgeRef;
+    return zoneAt(this.zoneSpans, lane.edge, s * e.length / Math.max(1e-6, lane.length), clock);
+  }
   successors(edgeId) { return this.out.get(this.edges.get(edgeId).to) || []; }
   headingIn(edgeId) { const p = this.edges.get(edgeId).pts; return headingOf(p[p.length - 2], p[p.length - 1]); }
   headingOut(edgeId) { const p = this.edges.get(edgeId).pts; return headingOf(p[0], p[1]); }

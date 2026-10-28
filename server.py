@@ -32,6 +32,7 @@ from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.osm.crossings import build_crossings
 from jev.osm.transit import build_transit
+from jev.osm.zones import build_zones
 from jev.routing import Router
 from jev.maps import catalog, map_identity
 from jev.drives import suggested_drives
@@ -77,6 +78,14 @@ def load_map(bbox_text: str = "") -> dict:
         crossings = build_crossings(bbox, MAPS_DIR, entry["pack"], log=log)
         if crossings:
             entry["pack"] = {**entry["pack"], "crossings": crossings}
+        # school and playground zones, likewise
+        zones = build_zones(bbox, MAPS_DIR, entry["pack"], log=log)
+        if zones:
+            entry["pack"] = {**entry["pack"], "zones": zones}
+        # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
+        offset = map_identity(bbox).get("utc_offset")
+        if offset is not None:
+            entry["pack"] = {**entry["pack"], "utc_offset": offset}
     except fetch.FetchError as err:
         log("map: %s; using the synthetic grid" % err)
         entry["error"] = str(err)

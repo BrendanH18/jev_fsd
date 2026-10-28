@@ -2,10 +2,7 @@
 // to Vancouver (~49.27 N). Weather overlays cloud/fog; `lighting` holds shared shader uniforms.
 
 import * as THREE from "three";
-
-const LAT = 49.27 * Math.PI / 180;
-const DECLINATION = -1.5 * Math.PI / 180;    // late September
-const SOLAR_NOON_H = 13.17;                   // local daylight time
+import { sunAngles } from "../sim/speed-zones.js";
 
 export const lighting = {
   night: { value: 0 },      // 0 in daylight, 1 once it is dark enough that street lights are on
@@ -29,11 +26,7 @@ export function updateNightMaterials() {
 
 // Sun direction in Three.js coordinates (x east, y up, z south) and its elevation (rad).
 export function sunPosition(hour, location = null) {
-  const latitude = location ? location.latitude * Math.PI / 180 : LAT;
-  const solarNoon = location ? 12 + location.utcOffset - location.longitude / 15 : SOLAR_NOON_H;
-  const H = (hour - solarNoon) * 15 * Math.PI / 180;   // hour angle, + in the afternoon
-  const sinEl = Math.sin(latitude) * Math.sin(DECLINATION) + Math.cos(latitude) * Math.cos(DECLINATION) * Math.cos(H);
-  const el = Math.asin(sinEl);
+  const { elevation: el, H, latitude, declination: DECLINATION } = sunAngles(hour, location);
   // azimuth from north, clockwise
   const cosAz = (Math.sin(DECLINATION) - Math.sin(el) * Math.sin(latitude)) / (Math.cos(el) * Math.cos(latitude));
   let az = Math.acos(Math.max(-1, Math.min(1, cosAz)));
@@ -137,13 +130,5 @@ export function atmosphereFor(hour, weather = "dry", location = null) {
   };
 }
 
-// Parse "17:30", "17.5", or a named preset into hours.
-export const TIME_PRESETS = { dawn: 7.1, morning: 9.0, noon: 13.2, afternoon: 15.5, golden: 18.3, dusk: 19.2, night: 22.5 };
-export function parseHour(value, fallback = TIME_PRESETS.afternoon) {
-  if (value === null || value === undefined || value === "") return fallback;
-  if (TIME_PRESETS[value] !== undefined) return TIME_PRESETS[value];
-  const m = String(value).match(/^(\d{1,2})(?::(\d{2}))?$/);
-  if (m) return (+m[1] % 24) + (m[2] ? +m[2] / 60 : 0);
-  const f = parseFloat(value);
-  return Number.isFinite(f) ? ((f % 24) + 24) % 24 : fallback;
-}
+// (the time presets and their parser live with the world clock, for the headless sim)
+export { TIME_PRESETS, parseHour } from "../sim/world-clock.js";

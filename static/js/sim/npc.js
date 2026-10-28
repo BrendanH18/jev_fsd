@@ -18,6 +18,7 @@ import { approachTo, outranks } from "./priority.js";
 import { EMERGENCY_SPECS, EV_JUNCTION_MPS, EV_LIMIT_FACTOR, EV_MAX_MPS, EV_PASS_LOOK_M, EV_SQUEEZE_M, EV_SQUEEZE_MPS, EV_STAND_DOWN_S,
   FOLLOW_M, IN_WAY_M, closestOnPath, evOffset, isEmergency, isEmergencyVehicle, isJunction as junctionAt, leadsEmergency, nearestCall, planBehind, planCrossing, planOncoming, pullOverOffset, threadGap } from "./emergency.js";
 import { BUS_DWELL_S, BUS_SIGNAL_M, BUS_TAPER_M, busMayPullOut, busStopFront, busYield, canStopFor, curbShift, isBus } from "./bus.js";
+import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -39,6 +40,7 @@ function driverProfile(random, bike = false) {
 // Real-world paint mix: mostly white, grey, silver, and black, some blue and red.
 const PALETTE = [0xeeeeea, 0x8d9299, 0x1a1c20, 0xc4c8cc, 0x2b3a55, 0x9b1e1e, 0xf2f2ee, 0x4a4f57, 0x0f1114, 0x6b7f5e, 0xb9b3a5];
 const LOOK_M = 60;
+const ZONE_AHEAD_M = 15;
 export const BIKES = 12;
 const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xdd6b20];
 const SHARP_TURN = 130 * Math.PI / 180;   // mirrors SHARP_TURN_DEG in jev/routing.py
@@ -694,7 +696,8 @@ export class NpcFleet {
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
-      const v0 = Math.min(n.v0 * weather.speed, edge.limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
+      const limit = Math.min(edge.limit, this.zoneLimit(path, front));
+      const v0 = Math.min(n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
       const D = n.driver || IDM;
       let a;
       if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
@@ -1102,6 +1105,21 @@ export class NpcFleet {
   // A driver yielding to a bus pulling out from its stop (sim/bus.js): where it stops, as metres from
   // its front, or null. It yields once it sees the bus signal if it can stop 2 m behind it braking at
   // up to 3 m/s^2, and from then on until the bus has pulled out (or it is no longer behind it).
+  // The limit of a school or playground zone in effect at the front of a vehicle on `path`, or one
+  // that starts within ZONE_AHEAD_M of it, so that it slows on the way in (sim/speed-zones.js);
+  // Infinity when there is none.
+  zoneLimit(path, front) {
+    const clock = this.world.clock;
+    if (!clock || !this.map.zoneSpans.size) return Infinity;
+    for (const s of [front, front + ZONE_AHEAD_M]) {
+      const pe = path.edges.find((e) => s < e.sEnd);
+      const e = pe && this.map.edges.get(pe.id);
+      if (!e || !this.map.zoneSpans.has(pe.id)) continue;
+      if (zoneAt(this.map.zoneSpans, pe.id, Math.max(0, s - pe.sStart) * e.length / Math.max(1e-6, pe.sEnd - pe.sStart), clock)) return ZONE_LIMIT_MPS;
+    }
+    return Infinity;
+  }
+
   yieldToBus(n) {
     let best = null;
     for (const bus of this.buses) {
