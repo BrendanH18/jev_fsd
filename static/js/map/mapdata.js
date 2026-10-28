@@ -168,6 +168,8 @@ export class MapData {
     this.roundabouts = new Map((pack.roundabouts || []).map((r) => [r.id, r]));
     // bus routes and their stops (jev/osm/transit.py), when the map has them
     this.transit = pack.transit || null;
+    // marked crosswalks between junctions (jev/osm/crossings.py), when the map has them
+    this.crosswalks = (pack.crossings?.crossings || []).filter((c) => this.edges.has(c.edge));
     this.grid = new Map();
     for (const lane of this.laneList) {
       for (const key of cellsOf(lane.pts)) {

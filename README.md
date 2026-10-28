@@ -13,7 +13,7 @@ rewind and see why it made every choice.**
 
 Most self-driving demos ask you to trust a video. This one hands you the wheel.
 
-Jev Drive Lab builds real neighbourhoods from OpenStreetMap: the roads, lanes, stop signs, traffic
+Jev Drive Lab builds real neighbourhoods from OpenStreetMap: the roads, lanes, crosswalks, stop signs, traffic
 lights and buildings. It lines the kerbs with parked cars and fills the streets with traffic,
 cyclists and people on foot, runs buses along their real routes, stopping at their real stops, and
 now and then sends an ambulance or fire truck answering a call that everyone must pull over for. Then
@@ -54,7 +54,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Thirteen hand-built scenarios test the situations real drivers get wrong:
+Fourteen hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -71,6 +71,7 @@ Thirteen hand-built scenarios test the situations real drivers get wrong:
 | **The right hook** | Vancouver, afternoon | A right turn off a bikeway, with a cyclist coming up in the empty parking lane on your right |
 | **Lights and sirens** | Edmonton, afternoon | An ambulance coming up behind you just before a junction: pull over and stop, but not in the junction |
 | **Pulling out** | Kitsilano, afternoon | A bus at its stop on West 4th Avenue signals to pull out as you come up behind it: let it go first |
+| **The multiple threat** | Kitsilano, afternoon | A car has stopped at a marked crosswalk on West Broadway, in the lane beside yours: don't pass it, because it hides the person it stopped for |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

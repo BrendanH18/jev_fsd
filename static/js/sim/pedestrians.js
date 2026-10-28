@@ -1,8 +1,10 @@
 // Pedestrians walk sidewalks and cross at junctions; drivers yield to crossings in their path.
 // Signal crossings only during walk; unmarked corners when no vehicle arrives within a few seconds.
+// Marked crosswalks between junctions (jev/osm/crossings.py): people walking past one often cross
+// there, stepping off once nothing coming is too close to stop for them (BC MVA s. 179).
 // Quiet residential blocks may jaywalk after looking both ways (they yield; drivers still avoid them).
 
-import { pointAt, headingAt } from "../map/mapdata.js";
+import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
 import { pedPhase } from "./signals.js";
 import { rng } from "../common.js";
@@ -25,6 +27,12 @@ const JAYWALK_GAP_S = 8;           // a mid-block crossing waits for a longer ga
 const JAYWALK_P = 0.14;            // chance a walk along a quiet block ends up crossing mid-block
 const QUIET = new Set(["residential", "unclassified", "living_street"]);
 const YIELD_AHEAD_M = 3.0;         // a pedestrian still this far short of the car's path counts
+// At a marked crosswalk a pedestrian must not step off when a vehicle is so close that its driver
+// could not yield (BC MVA s. 179(2)): one that would need to brake harder than this, after this
+// long to react, waits for it to go by. Half of those walking past one cross there.
+const MARKED_DECEL = 2.5;
+const MARKED_REACT_S = 1.0;
+const MARKED_P = 0.5;
 
 export class Crowd {
   constructor(world, { count = PEDESTRIANS, seed = 1 } = {}) {
@@ -32,6 +40,7 @@ export class Crowd {
     this.map = world.map;
     this.random = rng(seed * 31337 + 11);
     this.habits = rng(seed * 4099 + 29);   // walking speeds and jaywalking, apart from the routes
+    this.marking = rng(seed * 7919 + 43);  // crossing at marked crosswalks, apart from both
     this.list = [];
     this.build();
     if (this.legsAt.size) this.spawn(count);
@@ -48,6 +57,17 @@ export class Crowd {
       if (!streets.has(key)) streets.set(key, { id: key, edge: e });
     }
     this.streets = [...streets.values()];
+    // marked crosswalks between junctions, on the street they cross (`s` along its base edge)
+    this.marked = [];
+    for (const c of map.crosswalks || []) {
+      const e0 = map.edges.get(c.edge);
+      const st = e0 && streets.get([e0.from, e0.to].sort().join("|") + "|" + Math.round(e0.length));
+      if (!st) continue;
+      const e = st.edge, s = projectPoint(e.pts, e.cum, [c.x, c.y]).s;
+      const cw = { id: c.id, st, s, markings: c.markings, ends: { 1: offsetPoint(e, s, sidewalkOffset(e, 1)), [-1]: offsetPoint(e, s, sidewalkOffset(e, -1)) } };
+      (st.crosswalks ||= []).push(cw);
+      this.marked.push(cw);
+    }
     const legs = new Map();
     for (const st of this.streets) {
       for (const [node, out] of [[st.edge.from, true], [st.edge.to, false]]) {
@@ -111,9 +131,13 @@ export class Crowd {
     const known = this.legsAt.has(node);
     const end = known ? this.leg(node, st).s : dir > 0 ? Math.max(s, L - 12) : Math.min(s, 12);
     const lat = sidewalkOffset(e, side);
-    // now and then, on a quiet block, cut across to the other sidewalk partway along
-    let cross = null;
-    if (QUIET.has(e.cls) && !e.ring && Math.abs(end - s) > 35 && this.habits() < JAYWALK_P) {
+    // walking past a marked crosswalk, often cross there; else now and then, on a quiet block, cut
+    // across to the other sidewalk partway along
+    const marked = (st.crosswalks || []).filter((c) => (c.s - s) * dir > 1 && (end - c.s) * dir > 1)
+      .sort((a, b) => (a.s - b.s) * dir)[0];
+    const atMarked = marked && this.marking() < MARKED_P ? marked : null;
+    let cross = atMarked ? atMarked.s : null;
+    if (!atMarked && QUIET.has(e.cls) && !e.ring && Math.abs(end - s) > 35 && this.habits() < JAYWALK_P) {
       cross = s + dir * (10 + this.habits() * (Math.abs(end - s) - 25));
     }
     const path = [];
@@ -123,7 +147,14 @@ export class Crowd {
       path.push({ p: offsetPoint(e, to, sideLat) });
     };
     if (cross === null) walk(s, end, lat);
-    else {
+    else if (atMarked) {
+      // straight across, kerb to kerb, then on along the other side
+      walk(s, cross, lat);
+      const from = atMarked.ends[side], to = atMarked.ends[-side];
+      path.push({ p: to, cross: { node: null, marked: atMarked.id, from, to } });
+      walk(cross, end, sidewalkOffset(e, -side));
+      side = -side;
+    } else {
       walk(s, cross, lat);
       const other = sidewalkOffset(e, -side);
       const from = offsetPoint(e, cross, lat), to = offsetPoint(e, cross + dir * 2.5, other);
@@ -233,12 +264,35 @@ export class Crowd {
 
   mayCross(cross, t) {
     if (cross.jaywalk) return this.clearFor(cross, JAYWALK_GAP_S, 70);
+    if (cross.marked) return this.canStopFor(cross);
     const info = this.legsAt.get(cross.node);
     if (info.inter && cross.leg.group) {
       // walk with the parallel traffic, and only step off on the walk signal
       return pedPhase(info.inter, cross.leg.group === "A" ? "B" : "A", t) === "walk";
     }
     return this.clearFor(cross, GAP_S, 45);
+  }
+
+  // Everything coming toward a marked crosswalk could still stop short of it: nothing is in it or at
+  // its edge, and nothing approaching is closer than it could stop braking at MARKED_DECEL after
+  // MARKED_REACT_S.
+  canStopFor(cross) {
+    const mid = [(cross.from[0] + cross.to[0]) / 2, (cross.from[1] + cross.to[1]) / 2];
+    const half = dist(cross.from, cross.to) / 2;
+    for (const o of [this.world.ego, ...this.world.npcs]) {
+      const dx = mid[0] - o.x, dy = mid[1] - o.y;
+      if (Math.abs(dx) > 80 || Math.abs(dy) > 80) continue;
+      const ahead = dx * Math.cos(o.psi) + dy * Math.sin(o.psi);
+      const side = Math.abs(dx * Math.sin(o.psi) - dy * Math.cos(o.psi));
+      if (side > half + 1) continue;
+      const front = o.spec ? o.spec.length - o.spec.rearOverhang : 3.6, rear = o.spec ? o.spec.rearOverhang : 1;
+      const room = ahead - front - 1.5;
+      if (ahead + rear + 1.5 < 0) continue;   // gone by
+      if (room < 0.5) return false;           // in the crosswalk, or at its edge
+      const v = Math.max(0, o.v);
+      if (v > 0.5 && room < v * MARKED_REACT_S + v * v / (2 * MARKED_DECEL)) return false;
+    }
+    return true;
   }
 
   // Nothing moving would reach the crossing within `gap` seconds (looking out to `range` meters).

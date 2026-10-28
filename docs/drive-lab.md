@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Ten authored challenges
+## Fourteen authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -22,8 +22,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | The right hook | Vancouver, Kitsilano | A right turn off a bikeway, from a street with the right of way; a cyclist 15 m ahead rides the empty parking lane at 5.5 m/s, straight on past the corner, so it is on the car's right as the car slows to turn |
 | Lights and sirens | Edmonton, Old Strathcona | Straight on along a two-way street with a parking lane, toward a junction without a sign; once the car is 45 m from it, an ambulance sets off 75 m behind it with its siren on, so the car must pull over and stop short of the junction |
 | Pulling out | Vancouver, Kitsilano | Straight on along West 4th Avenue, in the curb lane, 100 m behind a bus standing at its stop with its doors open; once the car is 45 m from the bus, it shuts its doors and signals to pull out, and the car must let it go first (BC MVA s. 169.1) |
+| The multiple threat | Vancouver, Kitsilano | Straight on along West Broadway in the lane beside the curb lane, 110 m before a marked crosswalk; a car stands at the crosswalk in the curb lane, hiding a person on it in front of it. Once the car is 45 m from the crosswalk they walk on across, out into its lane. The car must not pass the stopped car (BC MVA s. 179(3)): it stops beside it, looks, and gives way |
 
-Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens and pulling out joined it later, at version 1. Each challenge separately versions
+Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out and the multiple threat joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
 and snow challenges remain version 1; the rainy crossing is version 2 because its person
 now correctly waits for the approach trigger rather than starting during setup.

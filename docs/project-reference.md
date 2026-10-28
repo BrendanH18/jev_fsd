@@ -256,8 +256,14 @@ door for six seconds; the animated door has matching sensing, prediction and col
 Cyclists ride bike routes, keeping right: where a street's parking lane is empty to the end of the
 block they ride in it, past cars queued at the corner, and move back into the traffic lane before
 the next parked car once nothing is beside them. A car turning right, the driven car included,
-waits for a cyclist coming up on its right (a right hook). Pedestrians cross at signals or
-sometimes mid-block and carry umbrellas in rain. In a free drive an ambulance or a fire truck
+waits for a cyclist coming up on its right (a right hook). Pedestrians cross at signals, at the
+marked crosswalks between junctions (half of those walking past one cross there, stepping off once
+nothing coming is too close to stop for them, BC MVA s. 179) or sometimes mid-block, and carry
+umbrellas in rain. A vehicle in traffic hides a person behind it from the driver. Nobody may pass a
+vehicle stopped at a crosswalk (BC MVA s. 179(3)): the driven car coming up beside one in another
+lane stops 3.5 m short of the crosswalk's centre, if it could do that braking at up to 3.5 m/s^2
+when it first saw it, and goes on once it has stood still there for 2 s (see
+`static/js/sim/crosswalk.js` and [maps.md](maps.md#crosswalks)). In a free drive an ambulance or a fire truck
 answers a call now and then, lights flashing and siren wailing (with **Sound** on), coming up
 behind the car, toward it or across the junction ahead; everyone pulls over to the right, clear of
 any junction, and stops until it has gone by (`?emergency=0` turns them off). Buses run their

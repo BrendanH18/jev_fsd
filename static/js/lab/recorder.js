@@ -44,6 +44,8 @@ export class DriveRecorder {
       this.indexedMap = world.map;
     }
     for (const street of world.crowd.streets) shared.add(street);
+    shared.add(world.crowd.marked);
+    for (const cw of world.crowd.marked) shared.add(cw);
     for (const info of world.crowd.legsAt.values()) { shared.add(info); for (const leg of info.list) shared.add(leg); }
     for (const route of [world.route, autopilot.snap?.route]) if (route) {
       for (const key of ["pts", "cum", "edges", "turns", "controls", "edgeStarts", "limitMarks"]) shared.add(route[key]);

@@ -16,6 +16,7 @@ import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
 import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, isEmergency, isJunction, leadsEmergency, nearestCall, pullOverOffset } from "../sim/emergency.js";
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
+import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
@@ -129,7 +130,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -233,6 +234,7 @@ export function buildSnapshot(world, executing = null) {
     snap.emergency = emergencyYield(world, p, frontS, lane, visible);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
     snap.bus = busPullingOut(world, frontS, visible);
+    snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -512,6 +514,31 @@ function busPullingOut(world, frontS, visible) {
     if (!best || y.stop_m < best.bumper_to_stop_m) best = { id: bus.id, ref: bus.ref || "", gap_m: y.behind_m, stop_s_route: frontS + y.stop_m, bumper_to_stop_m: y.stop_m, moving_out: bus.transit.phase === "out" };
   }
   return best;
+}
+
+// A vehicle the car must not pass, stopped at a marked crosswalk ahead on its route, in another lane
+// going its way (sim/crosswalk.js, BC MVA s. 179(3)): the car stops with its front HOLD_M short of
+// the crosswalk's centre, and looks. Not when it could not have stopped there braking at OWED_DECEL
+// once it saw the vehicle stopped, nor once it has stood still there for LOOK_S. The nearest
+// crosswalk with one.
+function crosswalkHold(world, frontS, visibleNpcs) {
+  world.crosswalkYields ||= new Map();
+  for (const { cw, s } of crosswalksAlong(world.route, world.crowd)) {
+    if (s - frontS < -1) continue;
+    if (s - frontS > LOOK_AHEAD_CONTROL_M) break;
+    if (looked(world, cw)) continue;
+    for (const n of stoppedAt(world, cw, world.ego, visibleNpcs)) {
+      const key = `${cw.id}:${n.id}`;
+      if (!world.crosswalkYields.has(key)) {
+        if (world.crosswalkYields.size > 40) world.crosswalkYields.delete(world.crosswalkYields.keys().next().value);
+        world.crosswalkYields.set(key, canStopShort(world.ego.v, s - frontS));
+      }
+      if (!world.crosswalkYields.get(key)) continue;
+      return { id: n.id, kind: isBus(n) ? "bus" : isEmergency(n) ? (EMERGENCY_NAMES[n.kind] || n.kind) : "car", crosswalk: cw.id,
+        stop_s_route: s - HOLD_M, bumper_to_stop_m: s - HOLD_M - frontS, bumper_to_crosswalk_m: s - frontS, stopped: Math.abs(n.v) < 0.3 };
+    }
+  }
+  return null;
 }
 
 // An emergency vehicle with its siren on ahead of the car, going its way along its route, within
@@ -848,6 +875,11 @@ export function desiredSpeed(snap) {
     const va = ea.speed * Math.max(0, Math.min(1, (ea.gap_m - 30) / (FOLLOW_M - 30)));
     if (va < v) { v = va; reasons.push(`keeping ${FOLLOW_M} m behind the ${ea.kind}`); }
   }
+  if (snap.crosswalk_stop) {
+    const room = snap.crosswalk_stop.bumper_to_stop_m;
+    const vc = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vc < v) { v = vc; reasons.push("car stopped at a crosswalk"); }
+  }
   if (snap.pedestrian) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
@@ -891,6 +923,7 @@ export function hazardFlags(snap) {
   if (snap.right_hook) f.push("cyclist");
   if (snap.emergency) f.push("emergency vehicle");
   if (snap.bus) f.push("bus");
+  if (snap.crosswalk_stop) f.push("crosswalk");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");

@@ -15,11 +15,13 @@ const { validAgentChoice, registerAgent } = await import("../static/js/brain/reg
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
 const names = { kitsilano: "623b012bc8b5", mount_pleasant: "7165f1c807a8", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438", edmonton: "3e794edbefcb" };
-// (with its bus routes, as the server and the demo serve it)
+// (with its bus routes and crosswalks, as the server and the demo serve it)
 const load = id => {
   const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url)));
   const transit = new URL(`../data/maps/${names[id]}.transit.v1.json`, import.meta.url);
   if (fs.existsSync(transit)) pack.transit = JSON.parse(fs.readFileSync(transit));
+  const crossings = new URL(`../data/maps/${names[id]}.crossings.v1.json`, import.meta.url);
+  if (fs.existsSync(crossings)) pack.crossings = JSON.parse(fs.readFileSync(crossings));
   return new MapData(pack);
 };
 let assertions = 0;

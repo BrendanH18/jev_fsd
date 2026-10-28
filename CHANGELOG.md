@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+- Marked crosswalks between junctions. Each bundled map now has its marked crosswalks from
+  OpenStreetMap beside its pack, in `data/maps/<key>.crossings.v1.json` (`jev/osm/crossings.py`):
+  crossing nodes on drivable streets tagged as marked and without a signal, placed on the pack's own
+  streets, with how they are painted and whether they have a refuge island; those within 16 m of a
+  junction (people already cross at every corner), unmarked ones (in BC a crosswalk away from a
+  junction exists only where it is marked) and signalled ones are left out. 102 across the twelve
+  maps. The packs are unchanged; the server and the browser demo add the file to the map as
+  `crossings`, and `scripts/fetch_map.py <preset> --transit` rebuilds it with the bus routes. They are
+  painted (bars along the traffic, or two lines across it) with a crosswalk sign on the right of each
+  way the traffic goes, a post the car can hit like any other.
+  Half of the people walking along a block past one cross there, sidewalk to sidewalk, and walk on
+  along the other side. They step off once nothing coming is too close to stop for them (braking at
+  2.5 m/s^2 after a second's reaction, BC MVA s. 179(2)) and nothing stands in the crosswalk, and
+  every driver gives way to them there as at a junction's crosswalk.
+- A vehicle in traffic hides a person behind it. Sensing, the shared emergency brake and AI eyes no
+  longer see a pedestrian when every line of sight to them passes through the body of a car, bus or
+  emergency vehicle (moving or stopped in the road; cyclists and parked cars hide nobody yet).
+- Not passing a vehicle stopped at a crosswalk (BC MVA s. 179(3), the "multiple threat"): a vehicle in
+  traffic is stopped at a marked crosswalk when its front is within 8 m short of the crosswalk's
+  centre and it moves slower than 3 m/s. The driven car, coming up behind it in another lane going the
+  same way, stops with its front 3.5 m short of the crosswalk's centre if it could do that braking at
+  up to 3.5 m/s^2 when it first saw it stopped, and goes on once it has stood still there for 2 s
+  (it can see past it by then; anyone crossing in its path is given way to as usual) or the vehicle
+  moves off. Rules picks a new `stop_at_crosswalk` candidate, and manoeuvres that carry the front more
+  than 1.5 m past that point are rejected (`passes_car_stopped_at_crosswalk`, labelled in AI eyes,
+  which outlines the stopped car in amber). Decision models and LLMs get `stopped_at_crosswalk`, a
+  situation line, a motion criterion and a prompt line; the HUD says "CAR STOPPED AT CROSSWALK ·
+  DON'T PASS". The audit counts a failure to yield (`vehicle stopped at a crosswalk`) once a vehicle
+  and crosswalk, seen or not once first seen, when the car, owing it, crosses the crosswalk's centre at
+  more than 1 m/s while it is still stopped there without having stood still at the crosswalk for 2 s.
+- New challenge, "The multiple threat" (Kitsilano): the car starts on West Broadway in the lane beside
+  the curb lane, 110 m before a marked crosswalk. A car stands at the crosswalk in the curb lane, and
+  a person on the crosswalk in front of it, hidden by it; once the car is 45 m from the crosswalk they
+  walk on across the street into its lane. Rules and the cautious agent pass it; a driver who carries
+  on past at 47 km/h fails to yield twice (to the stopped car and to the person, who waits at the edge
+  of its lane).
+- New checks in `scripts/test_crosswalks.mjs` and `tests/test_crossings.py`.
+- In the seeded benchmark, which runs 60 people, routes passing a crosswalk now meet people crossing
+  there. Rules passes all 70 routes in V8 and 69 in WebKit, with no red-light or stop-sign violation,
+  failure to yield or deadlock override; suites whose routes meet no crosswalk are unchanged route for
+  route. WebKit Toronto `s1-1` fails on one collision, shared fault, not the car's: a traffic car from
+  the left lane of a two-lane approach merges across the car beside it into a one-lane street past
+  the junction, as traffic always has where a lane ends; the crosswalks only changed the timing. See
+  [docs/rules-baseline.md](docs/rules-baseline.md).
+
 - Buses run their real routes (`static/js/sim/bus.js`, `render/bus.js`). Each bundled map now has
   its bus and trolleybus routes and stops from OpenStreetMap beside its pack, in
   `data/maps/<key>.transit.v1.json` (`jev/osm/transit.py`): a route's ways joined end to end into

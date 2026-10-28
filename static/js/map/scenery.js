@@ -178,6 +178,7 @@ export function sceneryFor(map) {
     streetSigns: [],
     stopSigns: [],
     yieldSigns: [],
+    crosswalkSigns: [],
     signals: [],
     circles: [],
     polygons: [],
@@ -376,6 +377,20 @@ export function sceneryFor(map) {
     const item = { ...p, id: `yield_post:${e.id}` };
     result.yieldSigns.push(item);
     result.circles.push({ ...item, kind: "yield_post", radius: 0.035 });
+  }
+  // a crosswalk sign at each marked crosswalk between junctions, on the right of each way the
+  // traffic goes, facing it
+  for (const c of map.crosswalks || []) {
+    const e = map.edges.get(c.edge);
+    if (!e) continue;
+    const twin = e.oneway ? null : [...map.edges.values()].find((o) => o.from === e.to && o.to === e.from);
+    for (const [edge, s] of [[e, c.s], ...(twin ? [[twin, Math.max(0, twin.cum.at(-1) - c.s)]] : [])]) {
+      const p = post(edge, s, edge.asphalt[1] + GUTTER + CURB + 0.7, 0.035);
+      if (!p) continue;
+      const item = { ...p, id: `crosswalk_post:${c.id}:${edge.id}` };
+      result.crosswalkSigns.push(item);
+      result.circles.push({ ...item, kind: "crosswalk_post", radius: 0.035 });
+    }
   }
   for (const inter of (map.intersections || new Map()).values())
     for (const a of inter.approaches || []) {
