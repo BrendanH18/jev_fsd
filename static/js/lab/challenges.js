@@ -1,8 +1,9 @@
 import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle } from "../map/mapdata.js";
-import { Vehicle, BIKE } from "../sim/vehicle.js";
+import { Vehicle, BIKE, BUS } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
 import { isJunction } from "../sim/emergency.js";
+import { BUS_YIELD_LIMIT_MPS, busStopFront, curbShift } from "../sim/bus.js";
 import { Pedestrian } from "../sim/pedestrians.js";
 import { StopMemory, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
@@ -34,6 +35,8 @@ export const CHALLENGES = [
     description: "A right turn off a Kitsilano bikeway, with a cyclist riding the empty parking lane. Catch them up, and they're on your right at the corner.", lesson: "Before a right turn, check your mirror and over your shoulder. A cyclist going straight on your right has the right of way: slow down, let them by, then turn behind them." },
   { id: "lights-and-sirens", title: "Lights and sirens", map: "edmonton", weather: "dry", time: "afternoon", seed: 12042, icon: "✚", difficulty: "Awareness", hazard: "emergency",
     description: "An ambulance comes up behind you with its siren on, just before a junction. Get out of its way, but not into the junction.", lesson: "When you hear a siren, pull over as close to the right-hand edge of the road as you can, clear of any junction, and stop until it has gone by. Then let it get well ahead before you follow." },
+  { id: "bus-pulling-out", title: "Pulling out", map: "kitsilano", weather: "dry", time: "afternoon", seed: 13042, icon: "▤", difficulty: "Courtesy", hazard: "bus", street: "West 4th Avenue",
+    description: "A bus at its stop on West 4th Avenue signals to pull out just as you come up behind it in its lane.", lesson: "In BC, where the limit is 60 km/h or less, traffic behind a bus at a stop must let it pull out once it signals. Ease off early, stop behind it if you have to, and let it go first." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -216,6 +219,32 @@ function sirenSites(map) {
   sirenSiteCache.set(map, sites); return sites;
 }
 
+// A bus at its stop: a stop on a bus route, on a street limited to 60 km/h or less that the route
+// comes straight on into, with room on it and the street before for the car to start 100 m behind
+// the bus, in its lane (the curb lane). On the challenge's `street` where it has one.
+const busSiteCache = new WeakMap();
+function busSites(map, street) {
+  if (!busSiteCache.has(map)) {
+    const sites = [], seen = new Set();
+    (map.transit?.routes || []).forEach((route) => route.runs.forEach((run, runIndex) => {
+      for (const stop of run.stops) {
+        const k = run.edges.indexOf(stop.edge), e = map.edges.get(stop.edge), prev = map.edges.get(run.edges[k - 1]);
+        if (k < 1 || !e || !prev || seen.has(stop.id) || e.ring || prev.ring || e.limit > BUS_YIELD_LIMIT_MPS) continue;
+        const front = busStopFront(map, e.id, stop.s);
+        if (front === null || map.classifyTurn(map.turnAngle(prev.id, e.id)) !== "straight") continue;
+        const rear = front - BUS.length;
+        if (rear < 3 || prev.length + rear < BUS_START_M + 10) continue;
+        seen.add(stop.id);
+        sites.push({ prev: map.lane(prev.id, prev.lanes - 1), lane: map.lane(e.id, e.lanes - 1), rear, bus: { route: route.id, run: runIndex, stop: stop.id, edge: e.id, front } });
+      }
+    }));
+    sites.sort((a, b) => a.bus.stop.localeCompare(b.bus.stop));
+    busSiteCache.set(map, sites);
+  }
+  const sites = busSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -247,17 +276,21 @@ export function challengeScenario(map, challenge) {
   const sirens = challenge.hazard === "emergency" ? sirenSites(map) : null;
   if (sirens && !sirens.length) throw new Error("This map has no long two-way street with a parking lane ending at a junction without a sign.");
   const siren = sirens ? sirens[Math.floor(random() * sirens.length)] : null;
-  const start = site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || lanes[Math.floor(random() * lanes.length)];
+  const buses = challenge.hazard === "bus" ? busSites(map, challenge.street) : null;
+  if (buses && !buses.length) throw new Error("This map has no bus stop on a street with a limit of 60 km/h or less.");
+  const bus = buses ? buses[Math.floor(random() * buses.length)] : null;
+  const start = site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
-  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M : Math.max(8, Math.min(20, start.length * 0.15));
+  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = stop?.straight || blind?.straight || siren?.straight;
-  if (straight) { const ahead = map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
+  const straight = stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge;
+  if (straight) { const ahead = bus ? bus.lane : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   for (let i = 0; i < 12 && length < 260; i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
@@ -278,6 +311,7 @@ export function challengeScenario(map, challenge) {
     ...(blind ? { twoWay: twoWayCars(map, blind) } : {}),
     ...(hook ? { cyclist: { edge: hook.lane.edge, s: startS + HOOK_LEAD_M, then: hook.straight } } : {}),
     ...(siren ? { emergency: { kind: "ambulance", relation: "behind", distance: SIREN_BACK_M } } : {}),
+    ...(bus ? { bus: bus.bus } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
 }
@@ -305,6 +339,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
     bike.path.start(lane.edge, lane.idx, scenario.start.s + 30); fleet.vehicles.push(bike);
   }
   if (scenario.cyclist) world.challenge.cyclistId = placeCyclist(world, fleet, scenario.cyclist);
+  if (scenario.bus) Object.assign(world.challenge, placeBus(world, fleet, scenario.bus));
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -324,13 +359,16 @@ export function stepChallenge(world, fleet) {
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
-    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
     if (state.allWay) state.allWayIds = releaseAllWay(world, fleet, state.allWay);
     if (state.twoWay) state.twoWayIds = releaseThrough(world, fleet, state.twoWay);
     if (state.emergency) state.emergencyId = fleet.dispatchEmergency(state.emergency)?.id || null;
+    // (its doors close and it signals to pull out)
+    const bus = state.busId && fleet.vehicles.find(v => v.id === state.busId);
+    if (bus && bus.transit.phase === "dwell") bus.transit.dwell = bus.transit.t;
     if (state.carId) {
       const car = world.parked.list.find(c => c.id === state.carId);
       if (state.hazard === "pull") { const merging = fleet.startPullOut(car); state.mergingId = merging?.id || null; }
@@ -429,6 +467,22 @@ const HOOK_START_M = 95, HOOK_LEAD_M = 15;
 // Lights and sirens: the car starts 110 m before the junction, and once it is 45 m from it an
 // ambulance sets off 75 m behind it, on its street, siren on.
 const SIREN_EDGE_M = 135, SIREN_START_M = 110, SIREN_BACK_M = 75;
+
+// Pulling out: the car starts 100 m behind a bus standing at its stop, doors open. Once the car is
+// 45 m from the bus's rear the bus shuts its doors and signals to pull out.
+const BUS_START_M = 100;
+function placeBus(world, fleet, { route: routeId, run: runIndex, stop: stopId, edge, front }) {
+  const map = world.map, route = map.transit.routes.find(r => r.id === routeId), run = route.runs[runIndex];
+  const k = run.edges.indexOf(edge), before = run.edges.slice(0, k).reduce((a, id) => a + map.edges.get(id).length, 0);
+  const bus = fleet.spawnBus(0, { route, run }, before + front - (BUS.length - BUS.rearOverhang));
+  if (!bus) return { busId: null };
+  // standing at its stop, pulled in to the curb, doors open, until the car comes up behind it
+  const e = map.edges.get(edge), shift = curbShift(e, e.lanes - 1);
+  bus.x += Math.sin(bus.psi) * shift; bus.y -= Math.cos(bus.psi) * shift; bus.v = 0;
+  Object.assign(bus.transit, { phase: "dwell", stop: { id: stopId, edge, front }, curb: shift, shift, t: 0, dwell: Infinity, doors: true });
+  bus.doors = true;
+  return { busId: bus.id, at: [bus.x - Math.cos(bus.psi) * BUS.rearOverhang, bus.y - Math.sin(bus.psi) * BUS.rearOverhang] };
+}
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);
   const p = pointAt(lane.pts, lane.cum, s), psi = headingAt(lane.pts, lane.cum, s);

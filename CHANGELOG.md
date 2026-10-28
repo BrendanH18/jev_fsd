@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+- Buses run their real routes (`static/js/sim/bus.js`, `render/bus.js`). Each bundled map now has
+  its bus and trolleybus routes and stops from OpenStreetMap beside its pack, in
+  `data/maps/<key>.transit.v1.json` (`jev/osm/transit.py`): a route's ways joined end to end into
+  runs along the pack's own streets, and its stops on the right-hand side of each run. The packs
+  are unchanged; the server and the browser demo add the file to the map as `transit`, and
+  `scripts/fetch_map.py <preset> --transit` rebuilds it from today's OSM (a custom area gets its
+  routes from the same download as its pack). In a free drive up to four 12 m city buses (real
+  size, weight and power) drive their runs in the curb lane at up to 95% of the limit, with the
+  route number on a lit destination sign (`?buses=0` takes them off). At each stop a bus signals
+  right from 50 m out, eases over toward the curb over the last 30 m (across the parking lane, to
+  0.3 m from the curb) and stops with its front 1 m past the sign, clear of the junction behind it
+  and short of the one ahead; it waits 10 to 25 s with its doors open, then signals left and pulls
+  out once it has signalled for 2 s, nothing is beside it, nothing coming up behind would have to
+  brake harder than 3 m/s^2 to stop 2 m behind it, and anything within 25 m behind is slowing.
+  With buses running nobody parks in a bus zone (from 22 m before where the bus stops to 3 m after).
+  Where the limit is 60 km/h or less, traffic and the driven car coming up behind a bus at a stop
+  that signals to pull out let it go first (BC Motor Vehicle Act s. 169.1): one in the lane it
+  pulls out into that can stop 2 m behind it braking at up to 3 m/s^2 stops there until it has
+  pulled out; one that cannot, or is already beside it, carries on and the bus waits. Traffic
+  eases left in its lane (up to 0.1 m short of its edge, at 0.5 m/s) to get past a bus standing at
+  its stop, and waits behind it where there is not room. Traffic looks for a bus along its whole body, not
+  only at its rear axle, and a bus stops for any part of a body across its way in the next 6 m, as
+  an emergency vehicle does.
+  The audit counts a failure to yield (`bus`) once each time a bus pulls out, if the car, behind it
+  in its lane when it first saw it signal and able then to stop 2 m behind it braking at 3.5 m/s^2, draws
+  level with it at more than 1 m/s before it has pulled out. Decision models and LLMs get
+  `bus_pulling_out` (its route, how far ahead it is, where the car stops, whether it is already
+  moving out), a situation line, a `yield_to_bus` candidate and a line in the motion criterion;
+  manoeuvres past the stop are rejected (`fails_to_yield_to_bus`). AI eyes outlines a signalling
+  bus in amber and says where the car stops; the HUD shows "BUS 4 PULLING OUT · YIELD". Bus stops
+  have a pole and a blue flag. A new challenge, **Pulling out** (Kitsilano), starts the car on West
+  4th Avenue 100 m behind a bus at its stop, which signals once the car is 45 m from it. With a
+  thirteenth challenge, two evaluations of every challenge no longer fitted the arena's 4 MB browser
+  history, so saving a new one dropped the chosen baseline: the budget is now 6 MB (counted as two
+  bytes a character, about 3.1 million characters, well inside browsers' localStorage quotas). New checks
+  in `scripts/test_buses.mjs` and `tests/test_transit.py`. The seeded benchmark runs no buses, so
+  its traffic and parking are as they were: in the seeded V8 and WebKit benchmarks Rules passes all
+  70 routes in each engine, every route exactly as before; see
+  [docs/rules-baseline.md](docs/rules-baseline.md).
+
 - Emergency vehicles answer calls (`static/js/sim/emergency.js`). In a free drive an ambulance or a
   fire truck (each at its real size, weight and power) is sent past the car 60 to 120 s in and then
   every 2.5 to 5 minutes: up behind it along its street, toward it down the street, or across the

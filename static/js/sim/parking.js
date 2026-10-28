@@ -1,7 +1,8 @@
 // Parked cars along the curbs of streets with parking lanes. They are real obstacles: the ego, the
 // traffic, and every candidate forward-simulation can hit them. Cars open street-side doors,
 // pull out into traffic, and park in vacant bays (see NpcFleet). Placement is seeded, so a
-// scenario always has the same cars in the same spots.
+// scenario always has the same cars in the same spots. With buses running, nobody parks in a bus
+// zone (`zones`, see sim/bus.js busZones): its bays are left out.
 
 import { Vehicle, CAR } from "./vehicle.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
@@ -17,7 +18,7 @@ const PALETTE = [0xeeeeea, 0x8d9299, 0x1a1c20, 0xc4c8cc, 0x2b3a55, 0x9b1e1e, 0xf
 export const PARKED_DENSITY = 0.5;
 
 export class ParkedCars {
-  constructor(map, { seed = 1, density = PARKED_DENSITY } = {}) {
+  constructor(map, { seed = 1, density = PARKED_DENSITY, zones = null } = {}) {
     this.map = map;
     this.list = [];
     this.grid = new Map();
@@ -27,6 +28,7 @@ export class ParkedCars {
     this.activeDoors = [];
     this.random = rng(seed * 65537 + 23);
     this.nextDoor = 8 + this.random() * 10;
+    this.zones = zones;
     if (density > 0) this.spawn(seed, density);
     this.added.length = 0;
   }
@@ -61,7 +63,9 @@ export class ParkedCars {
       if (e.parking[1] > 0) sides.push(e.asphalt[1] - e.parking[1] / 2 - 0.05);
       if (e.oneway && e.parking[0] > 0) sides.push(e.asphalt[0] + e.parking[0] / 2 + 0.05);
       for (const lat of sides) {
+        const zones = lat > 0 ? this.zones?.get(e.id) : null;
         for (let s = from + SLOT_M / 2; s + SLOT_M / 2 <= to; s += SLOT_M) {
+          if (zones && zones.some(([a, b]) => s + SLOT_M / 2 > a && s - SLOT_M / 2 < b)) continue;
           const pSlot = pointAt(e.pts, e.cum, s), hSlot = headingAt(e.pts, e.cum, s);
           const backSlot = CAR.length / 2 - CAR.rearOverhang;
           const slot = { edge: e.id, curb: lat > 0 ? "right" : "left", occupant: null, reserved: null,

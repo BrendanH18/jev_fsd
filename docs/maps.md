@@ -79,6 +79,19 @@ some) and moved back the 202 signal and 2 stop lines set back from those streets
 build of Kitsilano from its cached OSM with the fixed code gives the same roads, lanes and controls
 as its migrated pack, except for one stop line 1 cm away (packs store lengths to the centimetre).
 
+### Bus routes
+
+Each bundled map has its bus and trolleybus routes and their stops beside its pack, in
+`data/maps/<key>.transit.v1.json` (`jev/osm/transit.py`). They were built on 2026-10-27 from
+OpenStreetMap downloaded that day (the main API; Ottawa through the `overpass-api.de` fallback),
+matched to the committed packs' streets by OSM node, so the packs themselves are unchanged. A
+route's ways are joined end to end into runs along the pack's directed edges; its platform and
+stop members on the right-hand side of a run become its stops there. The server and the browser
+demo add the file to the map as `transit`. With buses running, the sim keeps a bus zone clear of
+parking at each stop. To rebuild a map's routes from today's OSM without touching its pack, run
+`uv run scripts/fetch_map.py <preset> --transit`. A custom area gets its routes from the same
+download as its pack.
+
 To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
 data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep
 using `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.

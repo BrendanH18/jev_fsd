@@ -1,8 +1,9 @@
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
-// parked up ahead of the ego signals, waits for a gap, and pulls out into the lane.
+// parked up ahead of the ego signals, waits for a gap, and pulls out into the lane. Buses drive
+// their routes and stop at their stops (sim/bus.js).
 
-import { Vehicle, CAR, BIKE, comfort } from "./vehicle.js";
+import { Vehicle, CAR, BIKE, BUS, comfort } from "./vehicle.js";
 import { purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { phaseOf, StopMemory } from "./signals.js";
@@ -15,6 +16,7 @@ import { current as weather } from "./weather.js";
 import { approachTo, outranks } from "./priority.js";
 import { EMERGENCY_SPECS, EV_JUNCTION_MPS, EV_LIMIT_FACTOR, EV_MAX_MPS, EV_PASS_LOOK_M, EV_SQUEEZE_M, EV_SQUEEZE_MPS, EV_STAND_DOWN_S,
   FOLLOW_M, IN_WAY_M, closestOnPath, evOffset, isEmergency, isEmergencyVehicle, isJunction as junctionAt, leadsEmergency, nearestCall, planBehind, planCrossing, planOncoming, pullOverOffset, threadGap } from "./emergency.js";
+import { BUS_DWELL_S, BUS_SIGNAL_M, BUS_TAPER_M, busMayPullOut, busStopFront, busYield, canStopFor, curbShift, isBus } from "./bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
 
@@ -106,6 +108,24 @@ const EV_FIRST_S = [60, 120];
 const EV_EVERY_S = [150, 300];
 const EV_GONE_M = 220;
 const EV_MAX_AGE_S = 240;
+// Buses in free drives (sim/bus.js): up to 4 at a time on their routes, placed at least 60 m from
+// the car to begin with and then, once one has finished its run more than 150 m from the car, another
+// 15 to 45 s later at least 150 m away. A bus eases in to the curb and back out at up to 0.7 m/s,
+// and 0.25 m/s for every 1 m/s it drives plus 0.05 m/s.
+const MAX_BUSES = 4;
+const BUS_START_M = 60;
+const BUS_LATER_M = 150;
+const BUS_GONE_M = 150;
+const BUS_EVERY_S = [15, 45];
+const BUS_SHIFT_MPS = 0.7;
+const BUS_SHIFT_PER_MPS = 0.25;
+const BUS_COLORS = [0xf4f4f0];
+const BUS_BODY_LOOK_M = 6;
+// Passing a bus standing at its stop, pulled in toward the curb, a driver eases left in its lane at
+// 0.5 m/s, from 40 m before it, as far as it must to clear it by the usual margin (LEADER_MARGIN_M)
+// if its lane leaves room for that 0.1 m inside its left edge; else it waits behind.
+const NUDGE_MPS = 0.5;
+const NUDGE_LOOK_M = 40;
 
 // How far ahead of a cyclist's front wheel any part of another vehicle's body is in its way, or
 // null: within its own body (and 0.05 m) moving straight on as it is heading for the next 2 m, or
@@ -229,7 +249,7 @@ function curveSpeed(path, s) {
 }
 
 export class NpcFleet {
-  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false } = {}) {
+  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false } = {}) {
     this.world = world;
     this.map = world.map;
     this.random = rng(seed);
@@ -246,10 +266,77 @@ export class NpcFleet {
     this.nextEmergency = EV_FIRST_S[0] + this.sirens() * (EV_FIRST_S[1] - EV_FIRST_S[0]);
     this.dispatched = 0;
     this.evs = [];
+    // (buses have their own stream too)
+    this.transit = rng(seed * 15485863 + 11);
+    this.busCount = 0;
+    this.buses = [];
     this.vehicles = [];
     this.spawn(count);
     this.spawnBikes(bikes);
+    this.busTarget = buses ? Math.min(MAX_BUSES, this.busRuns().length) : 0;
+    for (let i = 0; i < this.busTarget; i++) this.spawnBus(BUS_START_M);
+    this.nextBus = world.t + BUS_EVERY_S[0];
+    this.buses = this.vehicles.filter(isBus);
     world.npcs = this.vehicles;
+  }
+
+  // Every run of every bus route on the map: [{ route, run }].
+  busRuns() {
+    if (!this._busRuns) this._busRuns = (this.map.transit?.routes || []).flatMap((route) => route.runs.filter((run) => run.edges.every((id) => this.map.edges.has(id))).map((run) => ({ route, run })));
+    return this._busRuns;
+  }
+
+  // Place a bus on a run of its route (`pick`, by default one at random, longer runs more often) at
+  // `sRun` metres along it (by default somewhere in its first 80%), at least `away` metres from the
+  // car and clear of other traffic. Returns the bus, or null.
+  spawnBus(away = BUS_LATER_M, pick = null, sRun = null) {
+    const runs = this.busRuns(), map = this.map, ego = this.world.ego;
+    if (!runs.length) return null;
+    const total = runs.reduce((a, r) => a + r.run.length, 0);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      let choice = pick;
+      if (!choice) {
+        let at = this.transit() * total;
+        choice = runs.find((r) => (at -= r.run.length) <= 0) || runs.at(-1);
+      }
+      const { route, run } = choice;
+      let along = sRun ?? this.transit() * run.length * 0.8, k = 0;
+      while (k < run.edges.length - 1 && along > map.edges.get(run.edges[k]).length) along -= map.edges.get(run.edges[k++]).length;
+      const e = map.edges.get(run.edges[k]), lane = map.lane(e.id, e.lanes - 1);
+      if (!lane) continue;
+      const s = Math.max(1, Math.min(lane.length - 1, along * lane.length / Math.max(1, e.length)));
+      const p = pointAt(lane.pts, lane.cum, s);
+      if (Math.hypot(p[0] - ego.x, p[1] - ego.y) < away) { if (pick) return null; continue; }
+      if (this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < BUS.length + 4)) { if (pick) return null; continue; }
+      const v = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), Math.min(8, e.limit * 0.6), BUS);
+      Object.assign(v, { id: `bus_${++this.busCount}`, kind: "bus", color: BUS_COLORS[0], ref: route.ref, headsign: route.name,
+        v0: 15, driver: { aMax: 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.9, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
+      v.path = new NpcPath(map, this.transit);
+      this.startRun(v, run.edges, k, lane.idx, s);
+      // the route's stops still ahead, as where its front stops along each street (see busStopFront)
+      const firstAt = run.edges.slice(0, k).reduce((a, id) => a + map.edges.get(id).length, 0) + s * e.length / Math.max(1, lane.length);
+      let at = 0;
+      const stops = [];
+      run.edges.forEach((id, i) => {
+        for (const st of run.stops.filter((x) => x.edge === id)) {
+          const front = busStopFront(map, id, st.s);
+          if (front !== null && at + front > firstAt + BUS.length + 20) stops.push({ id: st.id, edge: id, k: i, front });
+        }
+        at += map.edges.get(id).length;
+      });
+      v.transit = { route: route.id, ref: route.ref, edges: run.edges, k, stops, next: 0, phase: "drive", shift: 0, curb: 0, t: 0, dwell: 0, departures: 0, doors: false, done: false, limit: e.limit, laneWidth: e.lane_width };
+      this.vehicles.push(v);
+      this.buses = this.vehicles.filter(isBus);
+      return v;
+    }
+    return null;
+  }
+
+  // Start a bus's path on edge `edges[k]` (lane `lane`, `s` along it) with the rest of its run planned.
+  startRun(n, edges, k, lane, s) {
+    let prev = { id: edges[k], lane };
+    const planned = edges.slice(k + 1).map((id) => { prev = { id, lane: n.path.laneInto(prev.id, prev.lane, id) }; return [id, prev.lane]; });
+    n.path.start(edges[k], lane, s, planned);
   }
 
   // Cyclists start on bike routes, in the curb lane, riding its right-hand side.
@@ -323,6 +410,7 @@ export class NpcFleet {
     }
     this.retireEmergency();
     this.evs = this.vehicles.filter(isEmergency);
+    if (this.buses.length || this.busTarget) this.manageBuses();
     const all = [world.ego, ...this.vehicles];
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
@@ -373,16 +461,26 @@ export class NpcFleet {
         if (n.lc.edge !== edge.id) n.lc = null;   // ran out of edge: the next junction's join takes over
       } else {
         n.lcCooldown = Math.max(0, (n.lcCooldown || 0) - dt);
-        if (!n.yieldEv) this.maybeChangeLane(n, edge, front);
+        // (a bus moves across to the curb lane for its next stop, and otherwise changes lanes only
+        // for a turn)
+        if (n.transit && !n.yieldEv) { if (n.transit.phase === "drive") this.maybeChangeLane(n, edge, front, this.busStopSoon(n, front)); }
+        else if (!n.yieldEv) this.maybeChangeLane(n, edge, front);
         else if (yielding && n.kind !== "bike") this.maybeChangeLane(n, edge, front, true);
       }
+      // a bus pulling in to its stop, waiting there and pulling out again (sim/bus.js)
+      const stand = n.transit ? this.busPlan(n, edge, front, dt, proj.lateral) : null;
       // a cyclist rides the right-hand side of the lane, clear of the car doors, or the empty parking
       // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
       const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
       // pulling over for an emergency vehicle (a cyclist already keeps right)
       const pullTo = yielding && n.kind !== "bike" ? this.pullOverTo(n, edge, front) : 0;
       n.evShift = (n.evShift || 0) + Math.max(-EV_SHIFT_MPS * dt, Math.min(EV_SHIFT_MPS * dt, pullTo - (n.evShift || 0)));
-      let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0);
+      // easing left in its lane to pass a bus standing at its stop (see busNudge)
+      if (this.buses.length && n.kind !== "bike" && !n.transit) {
+        const to = this.busNudge(n, edge);
+        n.nudge = (n.nudge || 0) + Math.max(-NUDGE_MPS * dt, Math.min(NUDGE_MPS * dt, to - (n.nudge || 0)));
+      }
+      let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.transit ? n.transit.shift : 0) + (n.nudge || 0) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0);
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -398,16 +496,25 @@ export class NpcFleet {
       for (const o of all.concat(world.parked.near(n.x, n.y, LOOK_M), world.parked.doorsNear(n.x, n.y, LOOK_M))) {
         if (o === n) continue;
         if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
-        const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
-        if (!p || p.s <= path.s + 0.5 || p.s > path.s + LOOK_M) continue;
+        const os = o.spec || CAR, reach = (spec.width + os.width) / 2 + LEADER_MARGIN_M;
         // in the way on the current lane, or on the target lane of a lane change: closer to the
         // path than the two half-widths plus a margin
-        const lat = p.lateral;
-        const reach = (spec.width + (o.spec || CAR).width) / 2 + LEADER_MARGIN_M;
-        if (Math.abs(lat - offset) > reach && (!n.lc || Math.abs(lat - n.lc.dir * n.lc.width) > reach) && Math.abs(lat - keepRight) > reach) continue;
-        // rear axle to rear axle, less our axle-to-front-bumper and its rear overhang
-        const g = p.s - path.s - (spec.length - spec.rearOverhang) - (o.spec || CAR).rearOverhang;
-        if (g < gap) { gap = g; leadV = o.v; leader = o; }
+        // (easing past a bus at its stop, `nudge`, the line it keeps to moves over with it)
+        const inWay = (lat) => Math.abs(lat - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0)) <= reach;
+        const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
+        if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral)) {
+          // rear axle to rear axle, less our axle-to-front-bumper and its rear overhang
+          const g = p.s - path.s - (spec.length - spec.rearOverhang) - os.rearOverhang;
+          if (g < gap) { gap = g; leadV = o.v; leader = o; }
+        }
+        // a bus is in the way wherever along its body it crosses the path: its middle and front are
+        // looked for too
+        if (isBus(o)) for (const d of [os.length / 2 - os.rearOverhang, os.length - os.rearOverhang - 1]) {
+          const q = projectPoint(path.pts, path.cum, [o.x + Math.cos(o.psi) * d, o.y + Math.sin(o.psi) * d], null);
+          if (!q || q.s <= path.s + 0.5 || q.s > path.s + LOOK_M || !inWay(q.lateral)) continue;
+          const g = q.s - path.s - (spec.length - spec.rearOverhang) - os.width / 2;
+          if (g < gap) { gap = g; leadV = o.v * Math.cos(o.psi - n.psi); leader = o; }
+        }
       }
       // a cyclist also stops for any part of a body across its way just ahead (a car turning across
       // it, say), not only for one whose middle is in its path, along the way it will actually ride:
@@ -417,6 +524,17 @@ export class NpcFleet {
           if (o === n || Math.abs(o.x - n.x) > BODY_LOOK_M + 6 || Math.abs(o.y - n.y) > BODY_LOOK_M + 6) continue;
           const g = bodyOnPath(n, o, front, proj.lateral, offset);
           if (g !== null && g < gap) { gap = g; leadV = Math.max(0, o.v * Math.cos(o.psi - n.psi)); leader = o; }
+        }
+      }
+      // a bus, long and slow to stop, also stops for any part of a body in its way over the next few
+      // metres (a car turning or crossing in front of it), its own body laid along its path there
+      if (n.transit) {
+        const body = n.obb(), reach = spec.length + BUS_BODY_LOOK_M + 6;
+        const close = all.concat(world.parked.near(n.x, n.y, reach)).filter((o) => o !== n && Math.abs(o.x - n.x) < reach && Math.abs(o.y - n.y) < reach && !obbOverlap(body, o.obb(), 0.05));
+        for (let d = 0.5; close.length && d <= BUS_BODY_LOOK_M && d < gap; d += 0.5) {
+          const mid = Math.min(path.length, path.s + spec.length / 2 - spec.rearOverhang + d), [x, y] = path.offsetPointAt(mid, offset);
+          const hit = close.find((o) => obbOverlap({ ...body, center: [x, y], heading: path.headingAt(mid) }, o.obb(), 0.05));
+          if (hit) { gap = d - 0.5; leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi)); leader = hit; break; }
         }
       }
       n.lead = gap < Infinity ? { gap, v: leadV } : null;
@@ -462,6 +580,7 @@ export class NpcFleet {
       const toNode = cur ? cur.sEnd - front : Infinity;
       const turn = after ? this.map.classifyTurn(this.map.turnAngle(cur.id, after.id)) : "straight";
       n.signal = n.pull ? (n.pull.lat > 0 ? "left" : "right") : n.lc ? (n.lc.dir < 0 ? "left" : "right") : toNode < 35 && (turn === "left" || turn === "right") ? turn : null;
+      if (stand && stand.signal !== undefined) n.signal = stand.signal;
       // turning left: yield to oncoming traffic before crossing its lane
       if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
         gap = Math.min(gap, Math.max(0.05, toNode - 5)); leadV = 0;
@@ -501,10 +620,16 @@ export class NpcFleet {
       // After ~15 s stopped at a clear control with no vehicle blocking, abandon the virtual leader.
       if (n.v < 0.2 && gap < 3) n.waiting += dt; else n.waiting = 0;
       if (n.waiting > 15 && stopAt !== null && stopAt < 1 && leadV === 0 && !this.blockedByVehicle(n) && !(cur && this.crossComing(n, cur.to))) { gap = Infinity; leadV = n.v0; n.waiting = 0; }
+      // a bus at its stop, or pulling in to it; or, behind a bus signalling to pull out from its stop,
+      // letting it out (sim/bus.js): after the checks above, which still hold on the way there (a
+      // junction before the stop), and not a line the wait at which is ever given up
+      const forBus = this.buses.length && n.kind !== "bike" && !n.transit && !isEmergencyVehicle(n) ? this.yieldToBus(n) : null;
+      const busStop = Math.min(stand?.stopAt ?? Infinity, forBus ?? Infinity);
+      if (busStop < gap) { gap = Math.max(0.05, busStop); leadV = 0; }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
-      const v0 = Math.min(n.v0 * weather.speed, edge.limit * 1.05 * weather.speed, vCurve, n.pull ? 5 : Infinity);
+      const v0 = Math.min(n.v0 * weather.speed, edge.limit * (n.transit ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
       const D = n.driver || IDM;
       let a;
       if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
@@ -688,6 +813,136 @@ export class NpcFleet {
     return best;
   }
 
+  // Buses (sim/bus.js): note where each is along its run, take off those that have finished it
+  // well away from the car, and send another when there are too few.
+  manageBuses() {
+    const ego = this.world.ego;
+    for (const n of this.vehicles.filter(isBus)) {
+      const t = n.transit;
+      if (!t) continue;
+      // (along its run, or off it: then it has finished, and drives on as traffic)
+      const id = n.path.currentEdge().id, k = t.edges.indexOf(id, t.k);
+      if (k >= 0) t.k = k;
+      else if (!t.done && t.edges.indexOf(id) < 0) t.done = true;
+      if (t.k === t.edges.length - 1 && n.path.currentEdge().sEnd - n.path.s < 15) t.done = true;
+      if (t.done && t.phase === "drive" && Math.hypot(n.x - ego.x, n.y - ego.y) > BUS_GONE_M) {
+        this.vehicles.splice(this.vehicles.indexOf(n), 1);
+        this.nextBus = Math.max(this.nextBus, this.world.t + BUS_EVERY_S[0] + this.transit() * (BUS_EVERY_S[1] - BUS_EVERY_S[0]));
+      }
+    }
+    if (this.vehicles.filter(isBus).length < this.busTarget && this.world.t >= this.nextBus) {
+      if (!this.spawnBus(BUS_LATER_M)) this.nextBus = this.world.t + 5;
+      else this.nextBus = this.world.t + BUS_EVERY_S[0];
+    }
+    this.buses = this.vehicles.filter(isBus);
+  }
+
+  // Where along a bus's path its front stops for `stop`, or null when that street is behind it.
+  stopOnPath(n, stop, front) {
+    const pe = n.path.edges.find((e) => e.id === stop.edge && e.sEnd > front - BUS.length);
+    if (!pe) return null;
+    return pe.sStart + stop.front * (pe.sEnd - pe.sStart) / Math.max(1, this.map.edges.get(stop.edge).length);
+  }
+
+  // Whether a bus's next stop is within 150 m along its path, so it should move across to the curb
+  // lane (by a lane change, gap permitting: it keeps its lane straight on through a junction).
+  busStopSoon(n, front) {
+    const stop = n.transit.stops[n.transit.next], at = stop ? this.stopOnPath(n, stop, front) : null;
+    return at !== null && at - front < 150;
+  }
+
+  // One step of a bus's stops (see the top of sim/bus.js): it signals and pulls in to the next, stops
+  // there, opens its doors for 10 to 25 s, signals left and pulls out once it may, until its rear
+  // axle is back in its lane (`lateral`: how far right of it that is). Returns where it stops
+  // (`stopAt`, metres from its front, or null) and its signal (undefined: as any driver's).
+  busPlan(n, pe, front, dt, lateral) {
+    const t = n.transit, e = this.map.edges.get(pe.id);
+    t.limit = e.limit; t.laneWidth = e.lane_width;
+    let stopAt = null, signal, target = 0;
+    if (t.phase === "drive") {
+      let stop = t.stops[t.next], at = stop ? this.stopOnPath(n, stop, front) : null;
+      // (one it has passed, or whose street is behind it, is skipped)
+      while (stop && (at === null || at - front < -2)) { stop = t.stops[++t.next]; at = stop ? this.stopOnPath(n, stop, front) : null; }
+      if (stop && at - front < BUS_SIGNAL_M) {
+        // in to the curb where nothing is parked in the bus zone (a car parked there all the same: in
+        // its lane)
+        const se = this.map.edges.get(stop.edge), lane = n.path.edges.find((x) => x.id === stop.edge)?.lane ?? se.lanes - 1;
+        const free = this.parkedAlong(se).every(([a, b]) => b < stop.front - BUS.length - 2 || a > stop.front + 1);
+        Object.assign(t, { phase: "in", stop, curb: free ? curbShift(se, lane) : 0 });
+      }
+    }
+    if (t.phase === "in") {
+      const at = this.stopOnPath(n, t.stop, front), to = at === null ? -Infinity : at - front;
+      // (past it without stopping: back into its lane, with no right of way, as it has not stopped)
+      if (to < -3) Object.assign(t, { phase: "drive", next: t.next + 1, curb: 0 });
+      else {
+        signal = "right";
+        target = to < BUS_TAPER_M ? t.curb : 0;
+        // (the driver's standstill gap would leave it short of the stop: aim beyond by as much)
+        stopAt = to + (n.driver.s0 || 0) - 1;
+        if (n.v < 0.2 && to < 2.5) Object.assign(t, { phase: "dwell", t: 0, dwell: BUS_DWELL_S[0] + this.transit() * (BUS_DWELL_S[1] - BUS_DWELL_S[0]), doors: true, next: t.next + 1 });
+      }
+    }
+    if (t.phase === "dwell") {
+      target = t.curb; stopAt = 0; signal = null;
+      t.t += dt;
+      if (t.t >= t.dwell) Object.assign(t, { phase: "leaving", t: -dt, doors: false, departures: t.departures + 1 });
+    }
+    if (t.phase === "leaving") {
+      target = t.curb; stopAt = 0; signal = "left";
+      t.t += dt;
+      if (busMayPullOut(n, [this.world.ego, ...this.vehicles], (o) => o.busYield?.bus === n)) t.phase = "out";
+    }
+    if (t.phase === "out") {
+      signal = Math.abs(lateral) > 0.3 ? "left" : null;
+      if (Math.abs(t.shift) < 0.05 && Math.abs(lateral) < 0.3) t.phase = "drive";
+    }
+    // (a bus moves across only as it rolls forward)
+    const rate = Math.min(BUS_SHIFT_MPS, BUS_SHIFT_PER_MPS * Math.max(0, n.v) + 0.05) * dt;
+    t.shift += Math.max(-rate, Math.min(rate, target - t.shift));
+    n.doors = t.doors;
+    return { stopAt, signal };
+  }
+
+  // How far left of its lane's path (negative) a driver eases to pass a bus standing at its stop just
+  // ahead or beside it (see NUDGE_MPS), or 0.
+  busNudge(n, pe) {
+    const e = this.map.edges.get(pe.id), path = n.path, spec = n.spec;
+    const room = e.lane_width / 2 - spec.width / 2 - 0.1;
+    let nudge = 0;
+    for (const bus of this.buses) {
+      const t = bus.transit;
+      if (!(t.phase === "dwell" || t.phase === "leaving" || (t.phase === "in" && t.shift > 1)) || Math.abs(bus.x - n.x) > NUDGE_LOOK_M + 15 || Math.abs(bus.y - n.y) > NUDGE_LOOK_M + 15) continue;
+      const [cx, cy] = bus.center, p = projectPoint(path.pts, path.cum, [cx, cy], null);
+      // (until the car's rear is past the bus's front)
+      if (!p || p.s - path.s < -(bus.spec.length / 2 + spec.rearOverhang) || p.s - path.s > NUDGE_LOOK_M + bus.spec.length || p.lateral <= 0) continue;
+      // (clear of it all along its body, where the leader check looks for it: it may stand at an angle)
+      const bs = bus.spec, lateral = Math.min(...[0, bs.length / 2 - bs.rearOverhang, bs.length - bs.rearOverhang - 1].map((d) => {
+        const q = projectPoint(path.pts, path.cum, [bus.x + Math.cos(bus.psi) * d, bus.y + Math.sin(bus.psi) * d], null);
+        return q ? q.lateral : p.lateral;
+      }));
+      const need = (spec.width + bs.width) / 2 + LEADER_MARGIN_M + 0.01 - lateral;
+      if (need > 0 && need <= room) nudge = Math.min(nudge, -need);
+    }
+    return nudge;
+  }
+
+  // A driver yielding to a bus pulling out from its stop (sim/bus.js): where it stops, as metres from
+  // its front, or null. It yields once it sees the bus signal if it can stop 2 m behind it braking at
+  // up to 3 m/s^2, and from then on until the bus has pulled out (or it is no longer behind it).
+  yieldToBus(n) {
+    let best = null;
+    for (const bus of this.buses) {
+      const y = busYield(n, bus);
+      if (!y) { if (n.busYield?.bus === bus) n.busYield = null; continue; }
+      if (n.busYield?.bus !== bus && !canStopFor(n.v, y.stop_m)) continue;
+      if (!n.busYield) n.busYield = { bus };
+      if (best === null || y.stop_m < best) best = y.stop_m;
+    }
+    if (best === null) n.busYield = null;
+    return best;
+  }
+
   // How far right of its lane's centre a driver giving way to an emergency vehicle pulls over: into
   // the parking lane where nothing is parked from 10 m behind its front to 15 m ahead of it.
   pullOverTo(n, pe, front) {
@@ -740,7 +995,7 @@ export class NpcFleet {
   // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
   maybePark() {
     for (const n of this.vehicles) {
-      if (n.kind === "bike" || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      if (n.kind === "bike" || n.transit || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
       const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
       const e = this.map.edges.get(edge.id);
       const choices = this.world.parked.slots.filter((slot) => {
@@ -829,7 +1084,7 @@ export class NpcFleet {
     v.parked = false;
     v.pull = { lat: proj.lateral, t: 0, T: 3.5, wait: 1.5 + this.events() * 2.5 };
     this.vehicles.push(v);
-    const cars = this.vehicles.filter((k) => k.kind !== "bike");
+    const cars = this.vehicles.filter((k) => k.kind !== "bike" && !isBus(k));
     if (cars.length > this.target) {
       let far = null;
       for (const k of cars) {
@@ -1130,8 +1385,11 @@ export class NpcFleet {
   recoverPath(n) {
     const near = this.map.nearestLane(n.x, n.y, n.psi, 40);
     if (!near) return;
-    // Rebase the plan without teleporting the body or instantaneously stopping a moving car.
-    n.path.start(near.lane.edge, near.lane.idx, near.s);
+    // Rebase the plan without teleporting the body or instantaneously stopping a moving car. (A bus
+    // back on its run keeps to it.)
+    const k = n.transit && !n.transit.done ? n.transit.edges.indexOf(near.lane.edge, n.transit.k) : -1;
+    if (k >= 0) this.startRun(n, n.transit.edges, k, near.lane.idx, near.s);
+    else n.path.start(near.lane.edge, near.lane.idx, near.s);
     n.stopMem.reset();
     n.lc = null;
   }

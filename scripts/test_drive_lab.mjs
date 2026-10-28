@@ -15,7 +15,13 @@ const { validAgentChoice, registerAgent } = await import("../static/js/brain/reg
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
 const names = { kitsilano: "623b012bc8b5", mount_pleasant: "7165f1c807a8", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438", edmonton: "3e794edbefcb" };
-const load = id => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url))));
+// (with its bus routes, as the server and the demo serve it)
+const load = id => {
+  const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url)));
+  const transit = new URL(`../data/maps/${names[id]}.transit.v1.json`, import.meta.url);
+  if (fs.existsSync(transit)) pack.transit = JSON.parse(fs.readFileSync(transit));
+  return new MapData(pack);
+};
 let assertions = 0;
 function test(name, fn) { fn(); assertions++; console.log(`✓ ${name}`); }
 
@@ -59,6 +65,10 @@ for (const challenge of CHALLENGES) {
       assert.deepEqual(a.twoWay.map(c => map.edges.get(c.edge).to), a.twoWay.map(() => map.edges.get(a.start.edge).to));
       assert.deepEqual(a.twoWay.map(c => map.priorityOf(c.edge).rule), ["major", "major"]);
     }
+    if (challenge.hazard === "bus") {
+      assert.equal(map.edges.get(a.bus.edge).name, "West 4th Avenue"); assert.equal(a.route.edges[1], a.bus.edge);
+      assert.ok(map.edges.get(a.bus.edge).limit <= 60 / 3.6 + 0.05);
+    }
     if (challenge.hazard === "cross") {
       assert.equal(control.type, "signal"); assert.equal(a.route.turns[0].dir, "right"); assert.ok(map.rightOnRed);
       assert.equal(map.edges.get(a.oncoming.edge).control.id, control.id); assert.equal(a.oncoming.then, a.route.edges[1]);
@@ -74,6 +84,29 @@ for (const challenge of CHALLENGES) {
       validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] })));
     });
   }
+}
+
+{
+  // Pulling out: the bus stands at its stop with its doors open until the car comes up, then
+  // signals; Rules lets it out and follows it
+  const challenge = CHALLENGES.find(c => c.hazard === "bus"), ctx = setupChallenge(load(challenge.map), challenge), { world, fleet } = ctx;
+  const bus = fleet.vehicles.find(v => v.id === world.challenge.busId);
+  test("bus-pulling-out: the bus stands at its stop, doors open, until the car comes up", () => {
+    assert.ok(bus && bus.kind === "bus" && bus.transit.phase === "dwell" && bus.doors === true);
+  });
+  let signalledAt = null, outAt = null, carAtSignal = null, level = false;
+  for (let k = 0; k < 60 * 60 && ctx.autopilot.enabled; k++) {
+    stepWorld(ctx, 1 / 60, world.t * 1000);
+    const gap = world.ego.toLocal(bus.x - Math.cos(bus.psi) * bus.spec.rearOverhang, bus.y - Math.sin(bus.psi) * bus.spec.rearOverhang).ahead - (world.ego.spec.length - world.ego.spec.rearOverhang);
+    if (bus.transit.phase === "leaving" && signalledAt === null) { signalledAt = world.t; carAtSignal = gap; }
+    if (bus.transit.phase === "leaving" && gap < 0) level = true;
+    if (bus.transit.phase === "out" && outAt === null) outAt = world.t;
+  }
+  test("bus-pulling-out: it signals once the car is within 45 m, and Rules lets it pull out first", () => {
+    assert.ok(signalledAt !== null && carAtSignal > 20 && carAtSignal < 45, `signalled with the car ${carAtSignal?.toFixed(1)} m behind`);
+    assert.ok(outAt !== null && !level, "pulled out ahead of the car");
+    assert.equal(world.violations.failed_to_yield, 0); assert.equal(world.violations.collisions, 0);
+  });
 }
 
 for (const challenge of CHALLENGES.filter(c => ["pedestrian", "occluded-pedestrian", "pull"].includes(c.hazard))) {

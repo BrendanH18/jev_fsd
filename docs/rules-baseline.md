@@ -1,4 +1,27 @@
-# Rules benchmark baseline — 2026-10-26 (emergency vehicles, unchanged)
+# Rules benchmark baseline — 2026-10-27 (buses, unchanged)
+
+Rules passes **70 of 70 routes in both V8 and WebKit**, exactly as in the 2026-10-26 record below:
+every suite matches its after columns route for route (arrival time, pass and safety brakes) and in
+its summary, with no collisions, red-light or stop-sign violations, failures to yield or deadlock
+overrides. "After" is the working tree on top of main at `9704bfc`, which adds buses on their
+OpenStreetMap routes (in free drives only), traffic and the car letting a bus pull out from its
+stop, bus zones, and the "Pulling out" challenge. The seeded benchmark runs no buses, and without
+them the traffic, parking, car and audit behave as before (the map now carries its `transit`
+routes, which nothing reads unless buses run); these runs confirm it.
+
+## Method
+
+As for 2026-10-26: all 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, on macOS
+27.0.1 (26A434), Apple M5, V8 through `scripts/bench_node.mjs` with Node `v24.19.0` and WebKit through
+`scripts/shot.swift` (`swiftc -O`, a fresh WKWebView per suite, `save: false`, 15 s settle), both
+against `PORT=8331 uv run --locked server.py` serving the working tree. Kitsilano dry, fog and rain
+were rerun in both engines once the last review fixes were in, and match. The
+[machine-readable record](validation/rebaseline-2026-10-27-rules.json) holds both engines'
+summaries and per-route results (WebKit: pass, arrival, time, safety brakes, collisions and
+failures to yield per route); the before columns are the 2026-10-26 record's after columns. Night
+was not run.
+
+## Earlier record: 2026-10-26 (emergency vehicles, unchanged)
 
 Rules passes **70 of 70 routes in both V8 and WebKit**, exactly as in the 2026-10-25b record below:
 every suite matches its after columns route for route (arrival time, pass and safety brakes) and in
@@ -8,7 +31,7 @@ an ambulance or a fire truck now and then in a free drive, everyone pulling over
 "Lights and sirens" challenge. The seeded benchmark sends none, and with none about the traffic,
 the car and the audit behave as before; these runs confirm it.
 
-## Method
+### Method
 
 As for 2026-10-25b: all 15 seeded suites (Kitsilano 12 routes in each of dry, fog, rain and snow,
 the eleven other maps two dry routes each), Rules, suite seed 1, 40 traffic cars, lockstep, on

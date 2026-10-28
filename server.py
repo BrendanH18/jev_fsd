@@ -30,6 +30,7 @@ from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
 from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
+from jev.osm.transit import build_transit
 from jev.routing import Router
 from jev.maps import catalog, map_identity
 from jev.drives import suggested_drives
@@ -67,6 +68,10 @@ def load_map(bbox_text: str = "") -> dict:
     entry = {"bbox": bbox, "pack": None, "router": None, "error": None}
     try:
         entry["pack"] = build_pack(bbox, MAPS_DIR, log=log)
+        # bus routes and stops, kept beside the pack (from the raw OSM download when there is one)
+        transit = build_transit(bbox, MAPS_DIR, entry["pack"], log=log)
+        if transit:
+            entry["pack"] = {**entry["pack"], "transit": transit}
     except fetch.FetchError as err:
         log("map: %s; using the synthetic grid" % err)
         entry["error"] = str(err)

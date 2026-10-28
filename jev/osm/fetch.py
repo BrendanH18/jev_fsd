@@ -45,10 +45,13 @@ def cache_path(cache_dir: Path, bbox: Bbox) -> Path:
 
 def overpass_query(bbox: Bbox) -> str:
     w, s, e, n = bbox
+    # (bus routes with a member in the box too, as the main API returns them, without their members
+    # outside it)
     return (
         "[out:xml][timeout:90][bbox:%f,%f,%f,%f];"
-        "(way[\"highway\"];way[\"building\"];);"
-        "out body;>;out body qt;" % (s, w, n, e)
+        "(way[\"highway\"];way[\"building\"];)->.a;"
+        ".a out body;.a >;out body qt;"
+        "rel[\"route\"~\"^(bus|trolleybus)$\"];out body;" % (s, w, n, e)
     )
 
 
