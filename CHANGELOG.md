@@ -33,7 +33,10 @@
   manoeuvres past the stop are rejected (`fails_to_yield_to_bus`). AI eyes outlines a signalling
   bus in amber and says where the car stops; the HUD shows "BUS 4 PULLING OUT · YIELD". Bus stops
   have a pole and a blue flag. A new challenge, **Pulling out** (Kitsilano), starts the car on West
-  4th Avenue 100 m behind a bus at its stop, which signals once the car is 45 m from it. New checks
+  4th Avenue 100 m behind a bus at its stop, which signals once the car is 45 m from it. With a
+  thirteenth challenge, two evaluations of every challenge no longer fitted the arena's 4 MB browser
+  history, so saving a new one dropped the chosen baseline: the budget is now 6 MB (counted as two
+  bytes a character, about 3.1 million characters, well inside browsers' localStorage quotas). New checks
   in `scripts/test_buses.mjs` and `tests/test_transit.py`. The seeded benchmark runs no buses, so
   its traffic and parking are as they were: in the seeded V8 and WebKit benchmarks Rules passes all
   70 routes in each engine, every route exactly as before; see

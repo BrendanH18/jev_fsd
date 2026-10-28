@@ -42,6 +42,16 @@ test("trimming history keeps the chosen baseline, dropping other older evaluatio
   assert.deepEqual(saveEvaluation(at(4), quota, at(1)).map((r) => r.created_at), [at(4).created_at, at(1).created_at]);
   assert.deepEqual(saveEvaluation(at(4), quota).map((r) => r.created_at), [at(4).created_at, at(3).created_at]);
 });
+test("a full-size new evaluation is saved beside a full-size baseline", () => {
+  // (a run of every challenge with two drivers: some 1.1 million characters, mostly decision traces)
+  const decisions = Array.from({ length: 600 }, (_, i) => ({ id: i + 1, at_s: i * 0.2, chosen_id: "keep_lane_target", motion: "drive", source: "rules",
+    error: null, context_recorded: false, flags: [], state: null, candidates: null }));
+  const big = (m) => ({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, m)).toISOString(), results: Array.from({ length: 13 }, () => ({ ...result, decisions_trace: decisions, events: [] })) });
+  const store = new Map(), roomy = { getItem: (k) => store.get(k), setItem: (k, v) => store.set(k, v) };
+  assert.ok(JSON.stringify(big(1)).length > 1.1e6, "full size");
+  saveEvaluation(big(1), roomy);
+  assert.deepEqual(saveEvaluation(big(2), roomy, readEvaluations(roomy)[0]).map((r) => r.created_at), [big(2).created_at, big(1).created_at]);
+});
 test("untrusted pass labels cannot bypass the audited pass criteria", () => {
   assert.equal(validateEvaluation({ ...run, results: [{ ...result, collisions: 1 }] }).results[0].pass, false);
   assert.equal(validateEvaluation({ ...run, results: [{ ...result, stopped: true, report: { ...result.report, status: "stopped" } }] }).results[0].pass, false);

@@ -320,8 +320,9 @@ below the results and label manual, mixed and replay-branch drives.
 Evaluations save automatically to this browser, including completed attempts from a stopped
 or failed suite. **View** reopens a saved run; **Export results** downloads the selected run
 with its original timestamp. **Import JSON** validates a v1 or v2 export as data and saves it
-locally without executing any agent. Up to ten runs fit within a 4 MB history budget; older
-runs are dropped first. Storage failures leave the current run available for export. Imports
+locally without executing any agent. Up to ten runs fit within a 6 MB history budget (counted
+as two bytes a character: room for a baseline and a new run of every challenge); older runs are
+dropped first, the chosen baseline last. Storage failures leave the current run available for export. Imports
 are limited to 5 MB. **Delete saved run** removes only the selected saved evaluation.
 
 Choose **Compare against**, then a **Baseline driver**. Each current driver is compared with
