@@ -196,6 +196,24 @@ test("a school bus coming the other way stops for one with its reds on too", () 
   assert.ok(fleet.vehicles.includes(other) && minGap > ONCOMING_M - 2, `stopped short of it (${minGap.toFixed(1)} m)`);
 });
 
+test("a school bus never takes a parking bay, nor leaves when a parked car pulls out", () => {
+  setWeather("dry");
+  // (the parking bays laid out, all but empty)
+  const world = new World(KITS, { seed: 1, parked: 1e-9, pedestrians: 0 });
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 1 });
+  const slot = world.parked.slots.find((x) => x.curb === "right" && KITS.edges.get(x.edge).lanes === 1 && projectOnLane(KITS.lane(x.edge, 0), [x.x, x.y]) > 40);
+  const lane = KITS.lane(slot.edge, 0), bus = fleet.addSchoolBus(lane, projectOnLane(lane, [slot.x, slot.y]) - 35, 5);
+  assert.ok(!fleet.maybePark() && !bus.parking, "not parking");
+  // (a parked car pulling out takes the place of the farthest car once there are too many)
+  // (with the car far off, and a car to spare)
+  world.ego.x = bus.x + 600; world.ego.y = bus.y;
+  const car = Object.assign(new Vehicle(slot.x, slot.y, slot.psi, 0), { id: "parked_test", curb: slot.curb, edge: slot.edge, slot, color: 0 });
+  world.parked.add(car);
+  fleet.target = 0;
+  assert.ok(fleet.startPullOut(car), "the parked car pulls out");
+  assert.ok(fleet.vehicles.includes(bus), "the school bus is still there");
+});
+
 test("without school buses, traffic runs exactly as before", () => {
   setWeather("dry");
   const run = (opts) => {

@@ -1167,7 +1167,7 @@ export class NpcFleet {
   // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
   maybePark() {
     for (const n of this.vehicles) {
-      if (n.kind === "bike" || n.transit || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      if (n.kind === "bike" || n.transit || n.school || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
       const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
       const e = this.map.edges.get(edge.id);
       const choices = this.world.parked.slots.filter((slot) => {
@@ -1256,7 +1256,7 @@ export class NpcFleet {
     v.parked = false;
     v.pull = { lat: proj.lateral, t: 0, T: 3.5, wait: 1.5 + this.events() * 2.5 };
     this.vehicles.push(v);
-    const cars = this.vehicles.filter((k) => k.kind !== "bike" && !isBus(k));
+    const cars = this.vehicles.filter((k) => k.kind !== "bike" && !isLong(k));
     if (cars.length > this.target) {
       let far = null;
       for (const k of cars) {
