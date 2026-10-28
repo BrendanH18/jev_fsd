@@ -110,9 +110,8 @@ def places(osm: OsmData, proj: Projection) -> List[dict]:
         kind = kind_of(r["tags"])
         if not kind:
             continue
-        rings = [outline(ways[ref]["nodes"]) for t, ref, role in r["members"]
-                 if t == "way" and role in ("outer", "") and ref in ways]
-        rings = [ring for ring in rings if len(ring) >= 2]
+        parts = [ways[ref]["nodes"] for t, ref, role in r["members"] if t == "way" and role in ("outer", "") and ref in ways]
+        rings = [ring for ring in (outline(nodes) for nodes in _join(parts)) if len(ring) >= 2]
         if rings:
             out.append({"id": "%sr%d" % (kind[0], r["id"]), "kind": kind, "name": r["tags"].get("name", ""),
                         "rings": rings, "points": []})
@@ -185,6 +184,30 @@ def _box(place: dict, reach: float) -> Tuple[float, float, float, float]:
     pad = reach + (NODE_R_M if place["points"] else 0.0)
     return (min(x for x, _ in pts) - pad, min(y for _, y in pts) - pad,
             max(x for x, _ in pts) + pad, max(y for _, y in pts) + pad)
+
+
+def _join(parts: List[List[int]]) -> List[List[int]]:
+    """A multipolygon's outer ways joined end to end at shared nodes into rings (closed where they
+    meet up; what is missing from the download stays open)."""
+    left = [list(p) for p in parts if len(p) >= 2]
+    rings = []
+    while left:
+        ring = left.pop(0)
+        joined = True
+        while joined and ring[0] != ring[-1]:
+            joined = False
+            for i, part in enumerate(left):
+                if part[0] == ring[-1] or part[-1] == ring[-1]:
+                    ring += (part if part[0] == ring[-1] else part[::-1])[1:]
+                elif part[-1] == ring[0] or part[0] == ring[0]:
+                    ring = (part if part[-1] == ring[0] else part[::-1])[:-1] + ring
+                else:
+                    continue
+                left.pop(i)
+                joined = True
+                break
+        rings.append(ring)
+    return rings
 
 
 def _inside(ring: List[Point], p: Point) -> bool:

@@ -134,6 +134,16 @@ class ZoneTests(unittest.TestCase):
                '<relation id="72"><tag k="type" v="multipolygon"/><tag k="landuse" v="grass"/></relation></osm>')
         self.assertEqual([r["id"] for r in parse_xml(xml).relations], [71], "only schools and playgrounds are kept")
 
+    def test_grounds_split_across_several_outer_ways_are_one_ring(self):
+        # a square round the middle of the street, its outline in two ways (reversed, as mapped)
+        osm, bbox = street([(80, {}, [(-60, -40), (60, -40), (60, 40)]), (81, {}, [(-60, -40), (-60, 40), (60, 40)])])
+        n80, n81 = osm.ways[-2]["nodes"], osm.ways[-1]["nodes"]
+        osm.ways[-1]["nodes"] = [n80[0]] + n81[1:-1] + [n80[-1]]   # (sharing the corner nodes)
+        osm.add_relation(82, [("way", 80, "outer"), ("way", 81, "outer")], {"type": "multipolygon", "amenity": "school"})
+        out = zones_from_osm(osm, pack_from_osm(osm, bbox))
+        spans = out["zones"][0]["spans"]
+        self.assertTrue(spans and all(s["to"] - s["from"] > 120 for s in spans), spans)
+
     def test_the_overpass_query_asks_for_schools_and_playgrounds(self):
         q = fetch.overpass_query((-123.1, 49.2, -123.0, 49.3))
         for part in ('way["amenity"="school"]', 'way["leisure"="playground"]', 'node["amenity"="school"]', 'rel["amenity"="school"]'):
