@@ -7,7 +7,7 @@ school and playground zones, their signs and the "School zone" challenge. The se
 world has no clock, so no zone is in effect there, and the new sign posts stand off the road; these
 runs confirm that nothing it drives changes.
 
-### Method
+## Method
 
 As for 2026-10-28 below: all 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, V8
 through `scripts/bench_node.mjs` with Node `v22.23.4` on a Raspberry Pi (Linux 6.18, arm64), main
