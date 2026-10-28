@@ -29,7 +29,9 @@
   18 m away. Rules and the cautious agent keep to 30 km/h and stop short of the child; the same Rules
   driver with no zone in effect reaches the child at 50 km/h and hits them.
 - New checks in `scripts/test_speed_zones.mjs` and `tests/test_zones.py`; the drive-lab checks now run
-  every challenge with its map's zones, in effect at the challenge's time of day. The seeded benchmark
+  every challenge with its map's zones, in effect at the challenge's time of day. Because that changes existing
+  challenges where a zone is in effect, the evaluation engine version is now `drive-lab-3`, and the arena no
+  longer compares a new run with a saved one from before. The seeded benchmark
   drives no zones (its world has no clock), so its results are unchanged.
 
 - School buses (`static/js/sim/school-bus.js`, `render/school-bus.js`). On the school run (7:00 to
