@@ -130,7 +130,8 @@ export class Hud {
     // (in a school or playground zone in effect, the sign says which)
     setText(this.el.limitLabel, road?.zone ? (road.zone.kind === "school" ? "SCHOOL" : "PLAYGROUND") : "MAXIMUM");
     this.el.limitSign.classList.toggle("zone", !!road?.zone);
-    this.el.limitSign.title = road?.zone ? `${road.zone.kind === "school" ? "School" : "Playground"} zone${road.zone.name ? `: ${road.zone.name}` : ""}` : "Speed limit";
+    const title = road?.zone ? `${road.zone.kind === "school" ? "School" : "Playground"} zone${road.zone.name ? `: ${road.zone.name}` : ""}` : "Speed limit";
+    if (this.el.limitSign.title !== title) this.el.limitSign.title = title;
     setText(this.el.street, road?.name || (road?.on_road === false ? "off road" : "unnamed road"));
     this.updateNav(nav, paused, hasRoute);
     this.updateDecision(decision, autopilot);
