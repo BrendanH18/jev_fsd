@@ -13,6 +13,7 @@ import { StaticObstacles, poseOf } from "./static-obstacles.js";
 import { AllWayStops } from "./all-way.js";
 import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
 import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency } from "./emergency.js";
+import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -74,16 +75,24 @@ const AUDIT_EV_BLOCK_S = 6;
 const AUDIT_EV_PULLED_M = 0.2;
 const AUDIT_EV_PULL_S = 4;
 const AUDIT_EV_SIDE_M = 8;
+// Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
+// lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
+// or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
+// The car fails to yield if, owing it, it draws level with the bus (its front past the bus's rear) at
+// more than 1 m/s before the bus has pulled out. Counted once each time a bus pulls out.
+const AUDIT_BUS_DECEL = 3.5;
+const AUDIT_BUS_MOVING_MPS = 1;
 
 export class World {
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR } = {}) {
+  // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
-    this.parked = new ParkedCars(map, { seed, density: parked });
+    this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
     this.t = 0;
     this.tick = 0;
     this.ego = new Vehicle(0, 0, 0, 0, vehicleSpec);
@@ -102,6 +111,7 @@ export class World {
     this.evCalls = new Map();     // emergency vehicle id -> { since, v0, lead }: since it called on the car
     this.evCounted = new Set();   // emergency vehicles a failure to yield was counted for
     this.evJunction = null;       // the junction the car's front is in, while one is about
+    this.busCalls = new Map();    // "<bus id>:<departure>" -> { owed, counted }: a bus pulling out ahead
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
@@ -172,6 +182,7 @@ export class World {
     this.hookCounted.clear();
     this.evCalls.clear();
     this.evJunction = null;
+    this.busCalls.clear();
   }
 
   auditStatic(dt) {
@@ -362,6 +373,30 @@ export class World {
     this.auditGiveWay();
     this.auditCyclists();
     this.auditEmergency(road);
+    this.auditBuses();
+  }
+
+  auditBuses() {
+    const ego = this.ego;
+    for (const bus of this.npcs) {
+      if (!isBus(bus) || !busHasRightOfWay(bus)) continue;
+      const key = `${bus.id}:${bus.transit.departures}`, r = busRelation(ego, bus);
+      let rec = this.busCalls.get(key);
+      if (!r || !r.inLane) continue;
+      // (it owes the bus the right of way if it was behind it when it first saw it signal, and could
+      // stop then; until it sees it, nothing is decided)
+      if (!rec) {
+        if (!this.visibility.sees(ego, bus)) continue;
+        this.busCalls.set(key, rec = { owed: r.behind_m > 0 && r.behind_m - BUS_YIELD_GAP_M >= Math.max(0, ego.v) ** 2 / (2 * AUDIT_BUS_DECEL), counted: false });
+      }
+      if (rec.owed && !rec.counted && r.behind_m < 0 && ego.v > AUDIT_BUS_MOVING_MPS) {
+        rec.counted = true;
+        this.violations.failed_to_yield++;
+        this.events.push({ type: "failed_to_yield", to: "bus", with: bus.id });
+      }
+    }
+    // (forget buses that have pulled out)
+    if (this.busCalls.size > 20) for (const key of [...this.busCalls.keys()].slice(0, 10)) this.busCalls.delete(key);
   }
 
   auditEmergency(road) {

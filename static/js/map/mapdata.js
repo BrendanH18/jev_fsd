@@ -166,6 +166,8 @@ export class MapData {
     this.stops = new Map(pack.stops.map((s) => [s.id, s]));
     this.yields = new Map((pack.yields || []).map((y) => [y.id, y]));
     this.roundabouts = new Map((pack.roundabouts || []).map((r) => [r.id, r]));
+    // bus routes and their stops (jev/osm/transit.py), when the map has them
+    this.transit = pack.transit || null;
     this.grid = new Map();
     for (const lane of this.laneList) {
       for (const key of cellsOf(lane.pts)) {

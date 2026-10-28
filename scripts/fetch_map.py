@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Download and build the map pack for a bounding box ahead of time, and print its statistics.
+"""Download and build the map pack for a bounding box ahead of time, with its bus routes and stops
+(jev/osm/transit.py), and print its statistics.
 
     uv run scripts/fetch_map.py                                   # the configured/default bbox
     uv run scripts/fetch_map.py -123.1120,49.2570,-123.0940,49.2680   # W,S,E,N
     uv run scripts/fetch_map.py mount_pleasant                   # a preset name
     uv run scripts/fetch_map.py ... --force                       # rebuild even when cached
+    uv run scripts/fetch_map.py ... --transit                     # (re)build only the bus routes, downloading
+                                                                  # the raw OSM again if it is not cached
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from jev.config import MAPS_DIR, Settings, parse_bbox  # noqa: E402
 from jev.osm import fetch  # noqa: E402
 from jev.osm.pack import build_pack, pack_path  # noqa: E402
+from jev.osm.transit import build_transit, transit_path  # noqa: E402
 
 
 def main(argv: list) -> int:
@@ -28,10 +32,16 @@ def main(argv: list) -> int:
         return 2
     print("bbox W,S,E,N = %s" % ",".join("%.5f" % v for v in bbox))
     try:
-        pack = build_pack(bbox, MAPS_DIR, force=force, log=print)
+        pack = build_pack(bbox, MAPS_DIR, force=force and "--transit" not in argv, log=print)
+        if "--transit" in argv:
+            # (the pack stays as it is: only its bus routes are rebuilt, from today's OSM)
+            fetch.fetch_osm_xml(bbox, MAPS_DIR, log=print)
+        transit = build_transit(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
     except fetch.FetchError as err:
         print("FAILED: %s" % err)
         return 1
+    if transit:
+        print("transit: %s (%d routes, %d stops)" % (transit_path(MAPS_DIR, bbox), len(transit["routes"]), len(transit["stops"])))
     print("pack: %s" % pack_path(MAPS_DIR, bbox))
     print("edges %d, lanes %d, signalled intersections %d, stop signs %d, buildings %d" % (
         len(pack["edges"]), len(pack["lanes"]), len(pack["intersections"]), len(pack["stops"]), len(pack["buildings"])))

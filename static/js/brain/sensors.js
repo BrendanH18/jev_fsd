@@ -15,6 +15,7 @@ import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
 import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, isEmergency, isJunction, leadsEmergency, nearestCall, pullOverOffset } from "../sim/emergency.js";
+import { busYield, canStopFor, isBus } from "../sim/bus.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 export const TRAFFIC_RADIUS_M = 60;
@@ -128,7 +129,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -231,6 +232,7 @@ export function buildSnapshot(world, executing = null) {
     snap.right_hook = rightHook(world, p, frontS, lane);
     snap.emergency = emergencyYield(world, p, frontS, lane, visible);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
+    snap.bus = busPullingOut(world, frontS, visible);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -486,6 +488,30 @@ function emergencyYield(world, p, frontS, lane, visible) {
   const offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
   return { id: ev.id, kind: EMERGENCY_NAMES[ev.kind] || ev.kind, from: call.relation, distance_m: call.distance_m, eta_s: call.eta_s, seen: visible.includes(ev),
     stop_s_route: lead ? null : plan.stop, bumper_to_stop_m: lead ? null : plan.stop - frontS, offset_m: lead ? 0 : offset, clearing: plan.clearing, lead };
+}
+
+// A bus ahead signalling to pull out from its stop that the car must let out (sim/bus.js, BC MVA
+// s. 169.1), or null: which bus (`id`, its route `ref`), how far ahead its rear is (`gap_m`) and
+// where the car stops for it (`stop_s_route`, front bumper, 2 m behind it), and whether it is already
+// moving out. The car owes it the right of way when it sees it signal from the lane it pulls out into,
+// behind it, if it could stop there braking at no more than 3 m/s^2 then; from then on until the bus
+// has pulled out. Decided once each time a bus pulls out, and remembered in `world.busYields`.
+function busPullingOut(world, frontS, visible) {
+  let best = null;
+  world.busYields ||= new Map();
+  for (const bus of world.npcs) {
+    if (!isBus(bus) || !visible.includes(bus)) continue;
+    const y = busYield(world.ego, bus);
+    if (!y) continue;
+    const key = `${bus.id}:${bus.transit.departures}`;
+    if (!world.busYields.has(key)) {
+      if (world.busYields.size > 20) world.busYields.delete(world.busYields.keys().next().value);
+      world.busYields.set(key, canStopFor(world.ego.v, y.stop_m));
+    }
+    if (!world.busYields.get(key)) continue;
+    if (!best || y.stop_m < best.bumper_to_stop_m) best = { id: bus.id, ref: bus.ref || "", gap_m: y.behind_m, stop_s_route: frontS + y.stop_m, bumper_to_stop_m: y.stop_m, moving_out: bus.transit.phase === "out" };
+  }
+  return best;
 }
 
 // An emergency vehicle with its siren on ahead of the car, going its way along its route, within
@@ -804,6 +830,11 @@ export function desiredSpeed(snap) {
     const vh = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
     if (vh < v) { v = vh; reasons.push("cyclist on the right"); }
   }
+  if (snap.bus) {
+    const room = snap.bus.bumper_to_stop_m;
+    const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vb < v) { v = vb; reasons.push("bus pulling out"); }
+  }
   const ev = snap.emergency;
   if (ev && ev.bumper_to_stop_m !== null) {
     const room = ev.bumper_to_stop_m;
@@ -859,6 +890,7 @@ export function hazardFlags(snap) {
   if (snap.pedestrian) f.push("pedestrian");
   if (snap.right_hook) f.push("cyclist");
   if (snap.emergency) f.push("emergency vehicle");
+  if (snap.bus) f.push("bus");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");

@@ -15,8 +15,8 @@ Most self-driving demos ask you to trust a video. This one hands you the wheel.
 
 Jev Drive Lab builds real neighbourhoods from OpenStreetMap: the roads, lanes, stop signs, traffic
 lights and buildings. It lines the kerbs with parked cars and fills the streets with traffic,
-cyclists and people on foot, and now and then an ambulance or fire truck answering a call that
-everyone must pull over for. Then
+cyclists and people on foot, runs buses along their real routes, stopping at their real stops, and
+now and then sends an ambulance or fire truck answering a call that everyone must pull over for. Then
 it lets you drive them yourself, or watch an AI driver do it. Every decision the AI makes is
 recorded. You can pause the drive, scrub back to the moment a car door swung open, and see what the
 driver could see, what it considered, and why it rejected each alternative.
@@ -54,7 +54,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Twelve hand-built scenarios test the situations real drivers get wrong:
+Thirteen hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -70,6 +70,7 @@ Twelve hand-built scenarios test the situations real drivers get wrong:
 | **The blind corner** | Vancouver, afternoon | A two-way stop where a building hides the through road: stop, creep forward to look, and wait for both sides |
 | **The right hook** | Vancouver, afternoon | A right turn off a bikeway, with a cyclist coming up in the empty parking lane on your right |
 | **Lights and sirens** | Edmonton, afternoon | An ambulance coming up behind you just before a junction: pull over and stop, but not in the junction |
+| **Pulling out** | Kitsilano, afternoon | A bus at its stop on West 4th Avenue signals to pull out as you come up behind it: let it go first |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

@@ -66,6 +66,14 @@ export const FIRE_TRUCK = {
   power: 330000, cdA: 6.8, crr: 0.009, brakeFront: 0.6, driveFront: 0, accelLag: 0.4,
 };
 
+// A 12 m (40 ft) low-floor city bus, as TransLink and most Canadian cities run (sim/bus.js): its
+// size, weight with a typical load, and power. Rear-engined, driving its rear axle.
+export const BUS = {
+  ...CAR, kind: "bus", wheelbase: 6.2, length: 12.2, width: 2.55, rearOverhang: 3.3, maxSteer: 45 * Math.PI / 180,
+  maxAccel: 1.3, maxSpeed: 25, mass: 15000, yawInertia: 160000, cgToFront: 3.6, cgHeight: 1.1, track: 2.1,
+  power: 210000, cdA: 6.4, crr: 0.009, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
+};
+
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
 export const ROAD = { mu: 0.9 };
 export const G = 9.81;

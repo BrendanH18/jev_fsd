@@ -260,7 +260,14 @@ waits for a cyclist coming up on its right (a right hook). Pedestrians cross at 
 sometimes mid-block and carry umbrellas in rain. In a free drive an ambulance or a fire truck
 answers a call now and then, lights flashing and siren wailing (with **Sound** on), coming up
 behind the car, toward it or across the junction ahead; everyone pulls over to the right, clear of
-any junction, and stops until it has gone by (`?emergency=0` turns them off).
+any junction, and stops until it has gone by (`?emergency=0` turns them off). Buses run their
+real routes (up to four at a time, `?buses=0` takes them off) and stop at the routes' real stops:
+they signal, pull in to the curb, wait 10 to 25 s with their doors open, signal left and pull out.
+Where the limit is 60 km/h or less, traffic and the driven car coming up behind a bus at a stop
+that is signalling to pull out let it go first (BC Motor Vehicle Act s. 169.1) when they can stop
+2 m behind it braking at up to 3 m/s^2; nobody parks in a bus zone, and traffic eases left in its
+lane to get past a bus standing at its stop. See `static/js/sim/bus.js` and
+[maps.md](maps.md#bus-routes) for where the routes come from.
 
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery
