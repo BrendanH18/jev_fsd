@@ -6,8 +6,8 @@
     uv run scripts/fetch_map.py -123.1120,49.2570,-123.0940,49.2680   # W,S,E,N
     uv run scripts/fetch_map.py mount_pleasant                   # a preset name
     uv run scripts/fetch_map.py ... --force                       # rebuild even when cached
-    uv run scripts/fetch_map.py ... --transit                     # (re)build only the bus routes, downloading
-                                                                  # the raw OSM again if it is not cached
+    uv run scripts/fetch_map.py ... --transit                     # rebuild only the bus routes, from a fresh
+                                                                  # download of the raw OSM
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def main(argv: list) -> int:
         pack = build_pack(bbox, MAPS_DIR, force=force and "--transit" not in argv, log=print)
         if "--transit" in argv:
             # (the pack stays as it is: only its bus routes are rebuilt, from today's OSM)
-            fetch.fetch_osm_xml(bbox, MAPS_DIR, log=print)
+            fetch.fetch_osm_xml(bbox, MAPS_DIR, force=True, log=print)
         transit = build_transit(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
     except fetch.FetchError as err:
         print("FAILED: %s" % err)

@@ -871,7 +871,8 @@ export class NpcFleet {
     }
     if (t.phase === "in") {
       const at = this.stopOnPath(n, t.stop, front), to = at === null ? -Infinity : at - front;
-      if (to < -3) { t.phase = "out"; t.next++; }
+      // (past it without stopping: back into its lane, with no right of way, as it has not stopped)
+      if (to < -3) Object.assign(t, { phase: "drive", next: t.next + 1, curb: 0 });
       else {
         signal = "right";
         target = to < BUS_TAPER_M ? t.curb : 0;

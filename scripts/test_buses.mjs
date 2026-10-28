@@ -18,7 +18,7 @@ const { Autopilot } = await import("../static/js/brain/brain.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
 const { StopMemory } = await import("../static/js/sim/signals.js");
 const { obbOverlap } = await import("../static/js/sim/collision.js");
-const { busStopFront, busYield, busZones, curbShift, isBus } = await import("../static/js/sim/bus.js");
+const { busHasRightOfWay, busStopFront, busYield, busZones, curbShift, isBus } = await import("../static/js/sim/bus.js");
 
 // One street, West Street, crossing North Street at the origin: one lane each way 3.2 m wide with a
 // 2.1 m parking lane, arms 200 m long. A bus route runs east along it with a stop 120 m along the
@@ -119,6 +119,13 @@ test("a bus signals, pulls in to the curb, waits with its doors open, signals le
   assert.ok(until(world, fleet, bus, "out", 10), "pulls out");
   assert.ok(world.t - leaveStart >= 2 - 1e-6 && world.t - leaveStart < 2.2, "after signalling for 2 s, with nothing coming");
   assert.ok(until(world, fleet, bus, "drive", 15), "back in its lane");
+  // carried past a stop without stopping (held up, say): back into its lane, with no right of way
+  const past = setup();
+  assert.ok(until(past.world, past.fleet, past.bus, "in", 40), "approaches its stop");
+  for (let k = 0; k < 60 * 20 && past.bus.transit.shift < 0.5; k++) step(past.world, past.fleet);   // (moving over to the curb)
+  past.bus.transit.stop = { ...past.bus.transit.stop, front: 5 };
+  step(past.world, past.fleet);
+  assert.ok(past.bus.transit.phase === "drive" && !busHasRightOfWay(past.bus) && past.bus.transit.departures === 0, `no pull-out without a stop (${past.bus.transit.phase}, ${busHasRightOfWay(past.bus)}, ${past.bus.transit.departures})`);
   assert.ok(Math.abs(-bus.y - HALF) < 0.3 && bus.v > 2, `driving on along its lane (${(-bus.y - HALF).toFixed(2)} m, ${bus.v.toFixed(1)} m/s)`);
 });
 
