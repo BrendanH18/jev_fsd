@@ -195,6 +195,9 @@ test("decision models and LLMs are told about the stopped car", () => {
 test("a car that cannot stop in time when it first sees the stopped car is not held", () => {
   const { world } = threat({ back: 12, v: 13 });
   assert.equal(buildSnapshot(world).crosswalk_stop, null);
+  // (reset, standing still, it is decided afresh)
+  world.resetToLane();
+  assert.ok(buildSnapshot(world).crosswalk_stop, "held after a reset");
 });
 
 test("once it has stood still at the crosswalk for 2 s it may go on, looking", () => {

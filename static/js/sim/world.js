@@ -200,6 +200,7 @@ export class World {
     this.evJunction = null;
     this.busCalls.clear();
     this.crosswalkCalls.clear();
+    this.crosswalkYields?.clear();
     this.crosswalkStop = null;
     this._cwFront = null;
   }
