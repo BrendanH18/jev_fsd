@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- School and playground zones (BC MVA s. 147; `static/js/sim/speed-zones.js`). Each bundled map now
+  has its school and playground zones from OpenStreetMap beside its pack, in
+  `data/maps/<key>.zones.v1.json` (`jev/osm/zones.py`): every stretch of street, each way the traffic
+  goes, whose centreline passes within 22 m of a school's grounds or 35 m of a playground, or through
+  them. A school is a way or multipolygon tagged `amenity=school`, or a point tagged so that gives its
+  grades, and not a post-secondary one. That makes 138 zones across the twelve maps (58 schools, 80
+  playgrounds). The packs are unchanged; the server and the browser demo add the file to the map as
+  `zones`, with the city's UTC offset as `utc_offset`, and `scripts/fetch_map.py <preset> --zones`
+  rebuilds it. The Overpass fallback query now asks for schools and playgrounds too.
+- Where a zone is in effect the limit is 30 km/h, never above the street's own: a school zone's from
+  8:00 to 17:00 (the sim has no calendar, so every day is a school day), a playground zone's from dawn
+  to dusk (the sun above -6 deg, placed as the sky draws it; that maths moved from the renderer into
+  the sim). The world's road info reports the zone and its limit, so the HUD's limit sign turns
+  yellow-green and says SCHOOL or PLAYGROUND (with a badge on the way in), the coaching score counts
+  speeding against it and logs "Speeding in a school zone" once a visit, with its own tip, and Rules
+  keeps to it. Rules slows on the way in, to be at 30 km/h as its front reaches the sign
+  ("school zone ahead"), and traffic keeps to it from 15 m before. Signs stand where each stretch
+  starts and, short of the end of its street, where it ends: a pentagon or a diamond with a 30 km/h
+  tab. AI eyes outlines the zones in effect nearby in yellow-green and says where the next one
+  starts. Decision models and LLMs get `speed_zone` (kind, school name, limit, hours, where it starts
+  and ends), a situation line and a prompt line.
+- New challenge, "School zone" (Kitsilano, 9:00): West 11th Avenue past Lord Tennyson Elementary,
+  a 50 km/h street whose block is a school zone. The car starts 4 m into it; 85 m on, a child waits
+  at the curb between two parked cars and runs straight across the street once the car's front is
+  18 m away. Rules and the cautious agent keep to 30 km/h and stop short of the child; the same Rules
+  driver with no zone in effect reaches the child at 50 km/h and hits them.
+- New checks in `scripts/test_speed_zones.mjs` and `tests/test_zones.py`; the drive-lab checks now run
+  every challenge with its map's zones, in effect at the challenge's time of day. The seeded benchmark
+  drives no zones (its world has no clock), so its results are unchanged.
+
 - School buses (`static/js/sim/school-bus.js`, `render/school-bus.js`). On the school run (7:00 to
   17:00) a free drive has two Type C school buses (11.4 m, real size, weight and power; `?schoolbuses=0`
   takes them off) driving the streets as traffic. Every 150 to 400 m one stops in its lane to let

@@ -296,8 +296,9 @@ function threatSites(map, street) {
 // School zone: the car starts 4 m into a street that is a school zone (in effect at the challenge's
 // time) with a higher limit of its own and a parking lane on the right, and a child waits at the
 // curb 85 m on, between two parked cars, with at least 40 m of zone before them and no stop line
-// within 30 m after. Once the car's front is 24 m from them they run out across the street.
-const ZONE_START_M = 4, CHILD_AT_M = 85, CHILD_ZONE_BEFORE_M = 40, CHILD_TRIGGER_M = 24, CHILD_MPS = 2.4;
+// within 30 m after. Once the car's front is 18 m from them they run out across the street: at
+// 30 km/h the car stops short of them, at the street's 50 it cannot.
+const ZONE_START_M = 4, CHILD_AT_M = 85, CHILD_ZONE_BEFORE_M = 40, CHILD_TRIGGER_M = 18, CHILD_MPS = 2.4;
 const zoneSiteCache = new WeakMap();
 function zoneSites(map, street) {
   if (!zoneSiteCache.has(map)) {
