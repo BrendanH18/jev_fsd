@@ -1,4 +1,20 @@
-# Rules benchmark baseline — 2026-10-28b (school and playground zones, unchanged)
+# Rules benchmark baseline — 2026-10-29 (slow down, move over, unchanged)
+
+Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
+`689121c` route for route, in every result field but wall-clock time and decision latency, with no
+collisions, red-light or stop-sign violations, failures to yield or deadlock overrides. "After" is
+this branch, which adds vehicles stopped at the roadside with their lights flashing (in free drives
+only), slowing down and moving over for them, and the "Move over" challenge. The seeded benchmark's
+world has no roadside stops, and without them traffic, the car and the audit behave as before.
+
+## Method
+
+As for 2026-10-28 below: all 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, V8
+through `scripts/bench_node.mjs` with Node `v22.23.4` on a Raspberry Pi (Linux 6.18, arm64), main
+and the branch each against its own `uv run --locked server.py`, compared field by field. WebKit and
+night were not run.
+
+## Earlier record: 2026-10-28b (school and playground zones, unchanged)
 
 Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
 `2697ce1` route for route, in every result field but wall-clock time, with no collisions, red-light
