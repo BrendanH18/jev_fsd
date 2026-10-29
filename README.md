@@ -16,7 +16,7 @@ Most self-driving demos ask you to trust a video. This one hands you the wheel.
 Jev Drive Lab builds real neighbourhoods from OpenStreetMap: the roads, lanes, crosswalks, stop signs, traffic
 lights and buildings. It lines the kerbs with parked cars and fills the streets with traffic,
 cyclists and people on foot, runs buses along their real routes, stopping at their real stops, sends
-school buses round to let children off, signs 30 km/h zones past schools and playgrounds, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. Then
+school buses round to let children off, signs 30 km/h zones past schools and playgrounds, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. Then
 it lets you drive them yourself, or watch an AI driver do it. Every decision the AI makes is
 recorded. You can pause the drive, scrub back to the moment a car door swung open, and see what the
 driver could see, what it considered, and why it rejected each alternative.
@@ -54,7 +54,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Sixteen hand-built scenarios test the situations real drivers get wrong:
+Seventeen hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -74,6 +74,7 @@ Sixteen hand-built scenarios test the situations real drivers get wrong:
 | **The multiple threat** | Kitsilano, afternoon | A car has stopped at a marked crosswalk on West Broadway, in the lane beside yours: don't pass it, because it hides the person it stopped for |
 | **Flashing reds** | Kitsilano, afternoon | A school bus coming the other way on West 2nd Avenue has stopped with its red lights flashing: stop, though your side of the road is clear, because a child crosses in front of it |
 | **School zone** | Kitsilano, 9 am | West 11th Avenue past an elementary school: its limit is 50 km/h, but the school zone's is 30, and a child runs out between parked cars |
+| **Move over** | Winnipeg, afternoon | A tow truck at the curb on Princess Street with its amber lights flashing, beside your lane: slow to 40 and move over, because its operator steps out into that lane |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign
@@ -254,6 +255,7 @@ node scripts/test_all_way_stop.mjs              # turn order at all-way stops, l
 node scripts/test_give_way.mjs                  # two-way stops, junctions without a sign, creeping forward to look
 node scripts/test_right_hook.mjs                # cyclists in the parking lane, right turns that wait for them
 node scripts/test_speed_zones.mjs               # school and playground zones, and the School zone challenge
+node scripts/test_roadside.mjs                  # slowing down and moving over for vehicles stopped with lights flashing
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

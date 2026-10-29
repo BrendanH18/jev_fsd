@@ -125,6 +125,11 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.school_bus = { id: b.id, coming_toward_car: b.relation === "oncoming", lights: b.lights, gap_m: r1(Math.max(0, b.gap_m)),
       ...(b.lights === "red" ? { stop: true, wait_in_m: r1(Math.max(0, b.bumper_to_stop_m)) } : { about_to_stop: true }) };
   }
+  if (snap.roadside_stop) {
+    const r = snap.roadside_stop;
+    state.roadside_vehicle = { id: r.id, kind: r.name, lights: r.lights, ...(r.gap_m > 0 ? { gap_m: r1(r.gap_m) } : { beside_car: true }), pass_at: r1(r.limit_mps),
+      in_lane_next_to_it: r.in_adjacent_lane, ...(r.in_adjacent_lane && r.other_lane ? { move_over: true } : {}) };
+  }
   if (snap.emergency_ahead) state.emergency_vehicle_ahead = { id: snap.emergency_ahead.id, kind: snap.emergency_ahead.kind, gap_m: r1(snap.emergency_ahead.gap_m), keep_back_m: FOLLOW_M };
   if (snap.turnaround) state.turnaround = { under_way: snap.turnaround.phase !== "start", ...(snap.turnaround.phase !== "start" ? { leg: snap.turnaround.phase, legs_done: snap.turnaround.legs } : {}) };
   if (snap.rear_follower && snap.rear_follower.gap_m < 12) state.rear_follower = { id: snap.rear_follower.id, gap_m: r1(snap.rear_follower.gap_m) };
@@ -159,6 +164,7 @@ function outcomeLabel(c, snap) {
     ? `clear, pulls over to the right and stops ${Math.max(0, r1(snap.emergency.bumper_to_stop_m - c.sim.progress_m))} m before its stop` : "clear, pulls over to the right and stops";
   if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
   if (!c.sim.stays_on_road) return c.sim.off_road_fraction > 0.5 ? "leaves the road" : "touches the road edge";
+  if (c.change?.offer === "move_over" && snap.roadside_stop) return `clear, moves over into the ${c.change.dir} lane, away from the stopped ${snap.roadside_stop.name}${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
   if (c.change) return `clear, ${c.change.offer === "pass" || c.change.prepare ? "moves into" : "moves back into"} the ${c.change.dir} lane${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
   if (!c.sim.stays_in_lane) return "clear, drifts out of lane";
   if (c.sim.min_gap_m < 4) return `clear, but closes to ${r1(c.sim.min_gap_m)} m of a car`;
@@ -231,6 +237,7 @@ export function situationClauses(snap) {
       ? `School bus \`${b.id}\`, ${where}, is stopped with its red lights flashing, letting children off; they may cross in front of it, hidden by it. Traffic both ways must stop for it and stay stopped until it moves off or the lights go off: ${w < 2 ? "hold still where the car is." : `slow down and stop ${w} m ahead, short of it (\`stop_for_school_bus\`).`}`
       : `School bus \`${b.id}\`, ${where}, has its amber lights flashing: it is about to stop and let children off, and traffic both ways will have to stop for it. Slow down, ready to stop short of it; \`car.target_speed\` already does.`);
   }
+  if (snap.roadside_stop) out.push(roadsideClause(snap));
   if (snap.emergency_ahead) out.push(`${/^[aeiou]/.test(snap.emergency_ahead.kind) ? "An" : "A"} ${snap.emergency_ahead.kind} with its siren on is ${Math.round(snap.emergency_ahead.gap_m)} m ahead, going the car's way: do not follow it within ${FOLLOW_M} m; \`car.target_speed\` already keeps the car back.`);
   if (snap.following) {
     const label = gapLabel(snap.following.gap_m, snap.following.closing_mps);
@@ -252,7 +259,8 @@ export function situationClauses(snap) {
     const car = laneName(snap.lane.index, snap.lane.lanes), route = laneName(snap.lane.route_index, snap.lane.lanes);
     const turn = snap.nav && (snap.nav.next_turn === "left" || snap.nav.next_turn === "right") ? ` for the ${snap.nav.next_turn} turn${snap.nav.turn_street ? ` onto ${snap.nav.turn_street}` : ""}` : " for a turn";
     if (snap.lane.route_ahead) out.push(`The car is in the ${car} lane, and its route moves to the ${route} lane ahead${turn}. Choose a \`change_${back}_*\` candidate to move into it when one is offered; the car must be in that lane within ${within} m.`);
-    else out.push(`The car is in the ${car} lane, but its route continues in the ${route} lane. Choose a \`change_${back}_*\` candidate to return when one is offered; the car must be back within ${within} m.`);
+    // (moved over for a vehicle stopped at the roadside: not until past it)
+    else out.push(`The car is in the ${car} lane, but its route continues in the ${route} lane. Choose a \`change_${back}_*\` candidate to return ${snap.roadside_stop && !snap.roadside_stop.in_adjacent_lane ? `once past the ${snap.roadside_stop.name}, ` : ""}when one is offered; the car must be back within ${within} m.`);
   }
   if (snap.roadside?.length) out.push("Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes.");
   if (!snap.road.on_road) out.push("The car is off the road; the candidates steer back toward the lane.");
@@ -303,6 +311,19 @@ function rightOnRedClause(i, m, atLine) {
   if (!r.stop_completed) return atLine ? "The car is at the line and the signal is red. It turns right here, and a right turn on red is allowed only after a full stop: hold still until the stop is completed." : `The signal ${m} m ahead is red and the car turns right there. A right turn on red is allowed only after a full stop: keep rolling toward the line and stop just before it.`;
   const why = !w ? "" : w.kind === "pedestrian" ? `: \`${w.id}\` is crossing or about to cross` : w.kind === "view" ? ": the car cannot see far enough along the street to its left to know it is clear" : w.kind === "junction" ? `: \`${w.id}\` is crossing the junction` : w.kind === "lane" ? ": it can turn on red only from the curb lane" : `: \`${w.id}\` is coming from the left and has the green`;
   return `The car has stopped fully at the red light and turns right here. A right turn on red is allowed, but it must yield first${why}. Hold still at the line until it is clear or the light turns green.`;
+}
+
+// Slowing down and moving over for a vehicle stopped at the roadside with its lights flashing
+// (sim/roadside.js).
+function roadsideClause(snap) {
+  const r = snap.roadside_stop, kmh = Math.round(r.limit_mps * 3.6);
+  const where = r.gap_m > 0 ? `${Math.round(r.gap_m)} m ahead on the right` : "beside the car on the right";
+  const lead = `A ${r.name} (\`${r.id}\`) is stopped at the roadside ${where} with its ${r.lights} lights flashing; people may be working beside it, at the edge of the lane next to it. Slow to ${kmh} km/h to pass it (\`car.target_speed\` already does)`;
+  if (!r.in_adjacent_lane) return `${lead}, and keep out of the lane next to it until past it.`;
+  if (!r.other_lane) return `${lead}; there is no other lane going the car's way to move over into, so stay in this one.`;
+  const offered = snap.lane && Object.values(snap.lane.sides).some((side) => side.offer === "move_over");
+  return offered ? `${lead}, and move over: a \`change_left_*\` candidate moves the car into the lane to its left, away from it. Stay in that lane until past it.`
+    : `${lead}. Move over into the lane to the left once that is safe; until then stay in this lane.`;
 }
 
 export function needsMotionQuestion(snap) {

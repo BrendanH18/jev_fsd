@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Sixteen authored challenges
+## Seventeen authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -25,8 +25,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | The multiple threat | Vancouver, Kitsilano | Straight on along West Broadway in the lane beside the curb lane, 110 m before a marked crosswalk; a car stands at the crosswalk in the curb lane, hiding a person on it in front of it. Once the car is 45 m from the crosswalk they walk on across, out into its lane. The car must not pass the stopped car (BC MVA s. 179(3)): it stops beside it, looks, and gives way |
 | Flashing reds | Vancouver, Kitsilano | Straight on along West 2nd Avenue, a two-way street with one lane each way; a school bus coming the other way stands 110 m ahead with its red lights flashing and its stop arm out. Once the car is 45 m from it, a child who has just got off walks forward past its front and crosses in front of it, into the car's lane. Traffic both ways must stop for it (BC MVA s. 149): the car stops 10 m short of the bus's front and waits until the child is across and the reds go off |
 | School zone | Vancouver, Kitsilano | 9:00 on West 11th Avenue past Lord Tennyson Elementary: a 50 km/h street whose block is a school zone, in effect at 30 km/h (BC MVA s. 147). The car starts 4 m into the zone; 85 m on, a child waits at the curb between two parked cars, and once the car's front is 15 m from them they run straight across the street, without looking. At 30 km/h the car stops for them; at the street's 50 it cannot |
+| Move over | Winnipeg, Exchange District | A tow truck stands at the curb on Princess Street (three lanes one way, 50 km/h) with its amber lights flashing, the car it is about to tow parked behind it and its operator between the two. The car starts in the curb lane, the one next to it, its front 76 m behind the truck. Once the car's front is 16 m from the operator they step out into the curb lane without looking, stand there 3 s and step back. Moving over (BC MVA Regulations s. 47.02) the car is a lane clear of them; staying in the curb lane at 40 km/h it can stop for them, at the street's 50 it cannot |
 
-Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds and the school zone joined it later, at version 1. Each challenge separately versions
+Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone and move over joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
 and snow challenges remain version 1; the rainy crossing is version 2 because its person
 now correctly waits for the approach trigger rather than starting during setup.

@@ -67,10 +67,11 @@ export function sampleCandidates(snap, world) {
           steer: d === 0 ? (shifting ? `continue into the ${lane.from_center > keep.center ? "left" : "right"} lane` : "hold lane") : `shift ${Math.abs(d)} m ${d < 0 ? "left" : "right"}`, speed: speedLabel(vt, v, limit) });
       }
     }
-    // Change into a lane beside this one: to pass, to return toward the route's lane, or to go back
-    // to the lane a change started from. The car signals and eases across over about 3.5 s, or
-    // more sharply to finish before the lane it is leaving ends; too late for that, it waits. The
-    // prediction checks the car is actually across by then (`leave`).
+    // Change into a lane beside this one: to pass, to move over for a vehicle stopped at the roadside
+    // with its lights flashing, to return toward the route's lane, or to go back to the lane a change
+    // started from. The car signals and eases across over about 3.5 s, or more sharply to finish
+    // before the lane it is leaving ends; too late for that, it waits. The prediction checks the car
+    // is actually across by then (`leave`).
     const leaving = lane && lane.delta ? lane.until_s - s - FRONT : Infinity;
     const leave = lane && lane.delta ? { by: lane.until_s, center: lane.center } : null;
     const len = Math.max(MIN_CHANGE_M, Math.min(laneChangeLength(v), leaving));
@@ -78,14 +79,16 @@ export function sampleCandidates(snap, world) {
       if (!side.offer) continue;
       const prepare = side.delta === 0 && lane.route_ahead && side.offer === "return";
       const toRoute = side.delta === 0 ? (prepare ? " for the turn ahead" : " (the route's lane)") : "";
-      const vs = new Set([v, Math.min(side.target_v, v + 2), ...(side.offer === "pass" ? [] : [Math.max(0, v - 3)])].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
+      // (moving over, also at the speed it could keep there: it is no time to hang back)
+      const vs = new Set([v, Math.min(side.target_v, v + 2), ...(side.offer === "pass" ? [] : [Math.max(0, v - 3)]), ...(side.offer === "move_over" ? [side.target_v] : [])].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
       for (const vt of [...vs].sort((a, b) => b - a)) {
         if (vt <= 0.05) continue;
         const name = Math.abs(vt - v) < 0.3 ? "hold" : vt > v ? "faster" : "slow";
         out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, ...(prepare ? { prepare } : {}), gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M, leave }, laneUntil: side.until_s, laneTarget: side.target_v,
           law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, laneIdx: lane.route_index + side.delta, chain: lane.chain, fromLane: lane.delta, fromIdx: lane.index, vTarget: vt,
             shift: { from: snap.routeProj.lateral, start: s, len } },
-          steer: side.offer === "pass" ? `change to the ${side.dir} lane to pass` : side.offer === "abort" ? `move back to the ${side.dir} lane` : `${prepare ? "change" : "return"} to the ${side.dir} lane${toRoute}`, speed: speedLabel(vt, v, limit) });
+          steer: side.offer === "pass" ? `change to the ${side.dir} lane to pass` : side.offer === "abort" ? `move back to the ${side.dir} lane`
+            : side.offer === "move_over" ? `move over to the ${side.dir} lane, away from the stopped ${snap.roadside_stop.name}` : `${prepare ? "change" : "return"} to the ${side.dir} lane${toRoute}`, speed: speedLabel(vt, v, limit) });
       }
     }
     // Stopping maneuvers stop at their mark or queue 2.5 m behind whoever is in front of it, and

@@ -14,6 +14,11 @@ export class DriveScore {
     this.elapsed = 0; this.distance = 0; this.moving = 0; this.speeding = 0;
     // (of which in a school or playground zone in effect, and the zone it was last counted in)
     this.zoneSpeeding = 0; this.zoneCounted = null;
+    // (passing a vehicle stopped at the roadside with its lights flashing: too fast, and without
+    // moving over, and the vehicles each was counted for)
+    this.roadsideSpeeding = 0; this.noMoveOver = 0; this.roadsideCounted = new Set(); this.moveOverCounted = new Set();
+    // (the vehicles the car had room to move over for, on the way up to them)
+    this.moveOverRoom = new Set();
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -46,6 +51,21 @@ export class DriveScore {
       if (this.zoneCounted !== zone.id) { this.zoneCounted = zone.id; this.incident("zone_speeding", `Speeding in a ${zone.kind} zone`, { zone: zone.id }); }
     }
     if (!zone) this.zoneCounted = null;
+    // slow down and move over (sim/roadside.js): past a vehicle stopped at the roadside with its lights
+    // flashing, its speed is the limit; drawing level with it in the lane next to it, where there is
+    // another lane going the car's way that was clear at some point on the way up, is not moving over
+    const passing = world.roadside?.passing(road?.limit ?? 11.2) || null, name = passing?.name;
+    const roadsideFast = !!passing && speed > passing.limit + SPEED_GRACE_MPS;
+    if (roadsideFast) {
+      this.roadsideSpeeding += dt;
+      if (!speeding) this.speeding += dt;
+      if (!this.roadsideCounted.has(passing.vehicle.id)) { this.roadsideCounted.add(passing.vehicle.id); this.incident("roadside_speeding", `Passed a stopped ${name} too fast`, { vehicle: passing.vehicle.id }); }
+    }
+    if (passing?.room && passing.relation.ahead_m > 0) this.moveOverRoom.add(passing.vehicle.id);
+    if (passing && passing.relation.adjacent && passing.other_lane && passing.relation.ahead_m <= 0 && speed > 1 && this.moveOverRoom.has(passing.vehicle.id) && !this.moveOverCounted.has(passing.vehicle.id)) {
+      this.moveOverCounted.add(passing.vehicle.id); this.noMoveOver++;
+      this.incident("no_move_over", `Didn’t move over for a stopped ${name}`, { vehicle: passing.vehicle.id });
+    }
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
     if (Math.abs(ego.latAccel || 0) > 3.0) this.cornering += dt;
@@ -61,6 +81,7 @@ export class DriveScore {
     this.coach = offRoad ? "Ease off and return to the road."
       : wrongWay ? "Check your direction of travel."
       : speeding && zone ? `Slow to ${Math.round(road.limit * 3.6)}. You’re in a ${zone.kind} zone.`
+      : roadsideFast ? `Slow to ${Math.round(passing.limit * 3.6)} and move over. A ${name} is stopped with its lights flashing.`
       : speeding ? "Ease off. You’re above the speed limit."
       : Math.abs(ego.latAccel || 0) > 3 ? "Slow down before the bend."
       : this.lastTtc < 1.5 ? "Brake gently now. The gap is closing."
@@ -116,7 +137,7 @@ export class DriveScore {
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
       safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6)),
-      legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2)),
+      legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
@@ -131,6 +152,7 @@ export class DriveScore {
     if (reds || stops || yields) tips.push("Slow early for junctions. Stop fully and check crossings before entering.");
     if (this.zoneSpeeding > 1) tips.push("Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.");
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
+    if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
     if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
     if (this.harsh + this.jerk + this.cornering > 2) tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
     if (this.offRoad + this.wrongWay > 0.5 || this.resets) tips.push("Keep to your lane and plan turns before reaching the junction.");
@@ -141,7 +163,7 @@ export class DriveScore {
       elapsed_s: round(this.elapsed), distance_m: Math.round(this.distance), moving_s: round(this.moving),
       max_kmh: round(this.maxSpeed * 3.6), progress: round(clamp(this.progress, 0, 1), 3),
       collisions, at_fault: atFault, red_lights: reds, stop_signs: stops, failed_to_yield: yields,
-      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
+      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };

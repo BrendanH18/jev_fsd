@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- Slow down, move over (BC MVA Regulations s. 47.02; `static/js/sim/roadside.js`,
+  `render/roadside.js`). In a free drive two vehicles stand at the roadside with their lights
+  flashing at any time (`?roadside=0` takes them off): a light-duty tow truck (6.6 m, amber lights) in
+  front of the car it is about to tow, or a police SUV (red and blue) behind the car it has pulled
+  over. Each takes two bays in a row of a street's right-hand parking lane (whoever was parked there
+  leaves), 150 to 450 m from the car where it cannot see them, clear of marked crosswalks, for 2.5 to
+  6 minutes; then it leaves once the car is 150 m away and cannot see it, and another turns up. Half
+  of them stand on streets with another lane going the same way. They are parked cars that never
+  pull out or open a door, so traffic, cyclists, parking and collisions treat them as any other.
+- The rule: passing one going its way, from 30 m short of its rear until the driver's rear is past
+  its front, the speed is 40 km/h (70 where the limit is 80 or more; never above the limit), and in
+  the lane next to it (its near side within 3 m of the driver's line), where another lane goes the
+  same way, the driver moves over if it safely can. Traffic keeps to the speed in every lane from
+  40 m before that (it does not move over). The car's sensing reports `roadside_stop` (within 100 m,
+  seen); the snapshot's `limit` comes down to the speed along the way in, so Rules is at 40 km/h by
+  then, and in the lane next to it the car is offered a `move_over` lane change to the left (not
+  within 5 m of it, only into a lane that runs on 10 m past it, and not in a junction). Rules takes it
+  and keeps out of that lane until past it: any manoeuvre left in it costs more. Decision models and
+  LLMs get `roadside_vehicle` (kind, lights, gap, the speed to pass at, whether to move over), a
+  situation line and two prompt lines. The HUD says "TOW TRUCK · LIGHTS FLASHING · SLOW TO 40 · MOVE
+  OVER" once a vehicle; AI eyes outlines it in amber and says what to do. The coaching score counts
+  passing too fast ("Passed a stopped tow truck too fast") and drawing level with it in the lane next
+  to it where there was another ("Didn't move over for a stopped tow truck"), each once a vehicle,
+  with a tip; it is not a violation.
+- New challenge, "Move over" (Winnipeg, Princess Street, three lanes one way, 50 km/h): a tow truck at
+  the curb with its ambers on, the car it is about to tow parked 1.6 m behind it and its operator
+  between the two. The car starts in the curb lane, its front 76 m behind the truck. Once the car's
+  front is 16 m from the operator they step out into the curb lane without looking, to 0.4 m right of
+  its centre, stand there 3 s and step back. Rules moves over and passes at 40 km/h, a lane clear of
+  them; the cautious agent stays in the curb lane at about 35 and stops for them. With the truck's
+  lights off, Rules comes by in the curb lane at 50 and hits them at 30 km/h, at fault; at 40 it stops
+  1.6 m short. The other challenges have no roadside stops, so they and the evaluation engine version
+  are unchanged.
+- Replays: a restored checkpoint ties the roadside stops back to the live world, as it does the crowd.
+- New checks in `scripts/test_roadside.mjs`. The seeded benchmark runs no roadside stops.
+
 - School and playground zones (BC MVA s. 147; `static/js/sim/speed-zones.js`). Each bundled map now
   has its school and playground zones from OpenStreetMap beside its pack, in
   `data/maps/<key>.zones.v1.json` (`jev/osm/zones.py`): every stretch of street, each way the traffic
