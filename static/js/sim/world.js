@@ -158,7 +158,8 @@ export class World {
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
   // controllers do not mistake a large building's center for a vehicle in their lane.
   obstaclesNear(x, y, r) {
-    const out = this.npcs.filter((n) => Math.abs(n.x - x) < r + 5 && Math.abs(n.y - y) < r + 5);
+    // (a vehicle by its reference point, its rear axle: a long one's front is up to its length away)
+    const out = this.npcs.filter((n) => { const m = r + Math.max(5, n.spec?.length || 0); return Math.abs(n.x - x) < m && Math.abs(n.y - y) < m; });
     return out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
   }
 

@@ -301,6 +301,19 @@ test("with the doors shut, Rules comes by at the limit and the rider who steps o
   assert.ok(world.violations.collisions >= 1, "the rule is what keeps them safe");
 });
 
+test("a collision with a streetcar's front section is found, 25 m from its reference point", () => {
+  setWeather("dry");
+  const world = new World(ANNEX, { seed: 1, parked: 0, pedestrians: 0 });
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 1 });
+  world.ego.x = 23; world.ego.y = 0; world.ego.psi = 0;
+  const tram = Object.assign(tramAt(0, 0), { id: "streetcar_test" });
+  fleet.vehicles.push(tram);
+  assert.ok(obbOverlap(world.ego.obb(), tram.obb(), 0), "the car is in its front section");
+  assert.ok(world.obstaclesNear(world.ego.x, world.ego.y, 12).includes(tram), "found near the car");
+  world.audit(1 / 60, {});
+  assert.equal(world.violations.collisions, 1);
+});
+
 test("a checkpoint and restore brings back the streetcar's riders", () => {
   const ctx = setupChallenge(ANNEX, challenge);
   const recorder = new DriveRecorder();
