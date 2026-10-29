@@ -43,8 +43,9 @@ const CROSSWALK_CLEAR_M = 15;
 // A gap in the next lane, as for a lane change (brain/sensors.js): 6 m between bumpers plus 2 s of
 // closing speed to the vehicle ahead, and 2.5 s to the one behind.
 const GAP_M = 6, GAP_AHEAD_S = 2, GAP_BEHIND_S = 2.5;
-// (and far enough short of the vehicle to get across before it: the sharpest lane change the car makes)
-const ROOM_AHEAD_M = 12;
+// (and far enough short of the vehicle to get across before it: the sharpest lane change the car makes,
+// or 1.5 s at its speed)
+const ROOM_AHEAD_M = 12, ROOM_S = 1.5;
 
 export const isRoadside = (v) => !!v && v.roadside === true;
 export const flashing = (v) => isRoadside(v) && v.flashing === true;
@@ -153,7 +154,7 @@ export class RoadsideStops {
 
   // The one the driven car is passing now (the rule holds for it), on a street limited to `limit`:
   // { vehicle, name, relation, limit (the speed to pass it at), other_lane (there is another lane
-  // going the car's way), room (in the lane next to it, at least ROOM_AHEAD_M short of it, the lane to
+  // going the car's way), room (in the lane next to it, far enough short of it, the lane to
   // the car's left has a gap it could move over into, as a lane change needs: see roomLeft) }, or
   // null. Sensing-free, for the coaching score.
   passing(limit) {
@@ -163,7 +164,7 @@ export class RoadsideStops {
       const r = roadsideRelation(ego, v);
       if (!r?.holds) continue;
       const lane = world.map.nearestLane(ego.x, ego.y, ego.psi, 6)?.lane.edgeRef, other = (lane?.lanes || 1) > 1, w = lane?.lane_width || 3.3;
-      const room = other && r.adjacent && r.ahead_m >= ROOM_AHEAD_M && roomLeft(ego, world.npcs || [], w);
+      const room = other && r.adjacent && r.ahead_m >= Math.max(ROOM_AHEAD_M, ROOM_S * Math.max(0, ego.v)) && roomLeft(ego, world.npcs || [], w);
       return { vehicle: v, name: ROADSIDE_NAMES[v.kind], relation: r, limit: passLimit(limit), other_lane: other, room };
     }
     return null;

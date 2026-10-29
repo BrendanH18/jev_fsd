@@ -291,6 +291,18 @@ test("coaching: passing too fast, and in the lane next to it, each counted once"
     tooLate.record(late.world, late.world.roadInfo(), 1 / 60);
   }
   assert.equal(tooLate.finish().no_move_over, 0, "it cleared too late to move over");
+  // and at 70 km/h, clearing 20 m short of it is too late too (1.5 s is 29 m)
+  const fastLate = princess();
+  drive(fastLate.world, fastLate.truck, { back: 30, v: 70 / 3.6 });
+  const fe = fastLate.world.ego, alongFast = new Vehicle(fe.x - Math.sin(fe.psi) * PRINCESS.lane_width, fe.y + Math.cos(fe.psi) * PRINCESS.lane_width, fe.psi, fe.v);
+  fastLate.world.npcs = [alongFast];
+  const fastScore = new DriveScore(fastLate.world, { title: "test" });
+  for (let t = 0; t < 3; t += 1 / 60) {
+    for (const o of [fe, alongFast]) { o.x += Math.cos(o.psi) * o.v / 60; o.y += Math.sin(o.psi) * o.v / 60; }
+    if (roadsideRelation(fe, fastLate.truck)?.ahead_m < 20) fastLate.world.npcs = [];
+    fastScore.record(fastLate.world, fastLate.world.roadInfo(), 1 / 60);
+  }
+  assert.equal(fastScore.finish().no_move_over, 0, "at 70 km/h it cleared too late");
   assert.ok(SPEED_GRACE_MPS > 0);
 });
 
