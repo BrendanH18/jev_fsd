@@ -12,6 +12,8 @@ import { createEmergencyMesh, syncEmergency } from "./render/emergency.js";
 import { buildBusStops, createBusMesh, syncBus } from "./render/bus.js";
 import { busYield, isBus } from "./sim/bus.js";
 import { createSchoolBusMesh, syncSchoolBus } from "./render/school-bus.js";
+import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
+import { ROADSIDE_COUNT, ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -133,20 +135,23 @@ export async function boot() {
     const pedestrians = hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined;
     // buses run their routes in a free drive (`?buses=0` takes them off)
     const buses = params.get("buses") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses });
+    // and vehicles stopped at the roadside with their lights flashing (`?roadside=0` takes them off)
+    const roadside = params.get("roadside") !== "0" ? ROADSIDE_COUNT : 0;
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
     fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, schoolBuses });
     autopilot = new Autopilot(world, callbacks);
   }
-  view.addScenery(buildParkedCars(world.parked.list));
+  // (those stopped at the roadside with their lights flashing get a mesh each, below)
+  view.addScenery(buildParkedCars(world.parked.list.filter(c => !c.roadside)));
   const originalParked = world.parked.list.slice();
-  world.parked.added.length = 0;
+  world.parked.added = world.parked.added.filter(c => c.roadside);
   // (a mesh per person, by id: children get off school buses and go home)
   const pedMeshes = new Map();
   const pedMesh = (p) => {
-    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child }); view.scene.add(m); pedMeshes.set(p.id, m); }
+    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker }); view.scene.add(m); pedMeshes.set(p.id, m); }
     return pedMeshes.get(p.id);
   };
   world.crowd.list.forEach(pedMesh);
@@ -166,8 +171,8 @@ export async function boot() {
     }
     for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); previousCars.delete(id); }
     for (const car of world.parked.added.splice(0)) {
-      const m = createCarMesh(car.color, car.id, car.style ?? null);
-      syncCar(m, car);
+      const m = car.roadside ? createRoadsideMesh(car) : createCarMesh(car.color, car.id, car.style ?? null);
+      (car.roadside ? syncRoadside : syncCar)(m, car);
       view.scene.add(m);
       parkedMeshes.set(car.id, m);
     }
@@ -588,7 +593,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -663,6 +668,7 @@ export async function boot() {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id);
       (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isSchoolBus(n) ? syncSchoolBus : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
     }
+    for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
     const evs = fleet.vehicles.filter(isEmergency);
     const call = evs.length ? nearestCall(world.ego, evs) : null;
@@ -686,6 +692,14 @@ export async function boot() {
     const school = fleet.schoolBuses?.find((b) => { const r = redsOn(b) && schoolBusRelation(world.ego, b); return r && r.ahead_m > 0 && r.ahead_m < 70 && Math.abs(r.right_m) < SCHOOL_SIDE_M && world.visibility.sees(world.ego, b); });
     const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
     if (school && schoolKey !== announcedSchool) { announcedSchool = schoolKey; hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500); }
+    // a vehicle stopped at the roadside ahead with its lights flashing: say so once
+    // (and to move over, in the lane next to it where there is another going the car's way)
+    const roadsideAhead = world.roadside.vehicles.map((v) => ({ v, r: roadsideRelation(world.ego, v) })).find(({ v, r }) => r && r.ahead_m < 70 && world.sees(world.ego, v));
+    if (roadsideAhead && roadsideAhead.v.id !== announcedRoadside) {
+      announcedRoadside = roadsideAhead.v.id;
+      const moveOver = roadsideAhead.r.adjacent && (map.nearestLane(world.ego.x, world.ego.y, world.ego.psi, 6)?.lane.edgeRef.lanes || 1) > 1;
+      hud.badge(`${ROADSIDE_NAMES[roadsideAhead.v.kind].toUpperCase()} · LIGHTS FLASHING · SLOW TO ${Math.round(passLimit(world._road?.limit ?? 11.2) * 3.6)}${moveOver ? " · MOVE OVER" : ""}`, "safety", 2500);
+    }
     // into a school or playground zone in effect: say so once
     const zone = world._road?.zone;
     if (zone && zone.id !== announcedZone) hud.badge(`${ZONE_NAMES[zone.kind].toUpperCase()} · ${Math.round(world._road.limit * 3.6)} KM/H`, "", 2500);

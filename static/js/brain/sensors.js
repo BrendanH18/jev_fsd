@@ -19,6 +19,7 @@ import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
+import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -38,6 +39,10 @@ const GAP_AHEAD_S = 2.0;
 const GAP_BEHIND_S = 2.5;
 export const LANE_CLEAR_M = 2.2;   // a car this far across has left its old lane
 const SHIFT_DONE_M = 0.15;         // a lane change this close to the new lane's centre is over
+// Moving over for a vehicle stopped at the roadside: not once the car's front is this close to its
+// rear, and only into a lane that runs on this far past its front.
+const MOVE_OVER_MIN_M = 5;
+const MOVE_OVER_PAST_M = 10;
 // Turning left at a signal: oncoming traffic has the right of way. The car turns in front of an
 // oncoming vehicle only if it would clear that vehicle's path (6 m past the junction's centre, plus
 // its own length, taking the turn at up to 6 m/s and pulling away at 2 m/s^2) 1.5 s before the
@@ -135,7 +140,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, speed_zone: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, speed_zone: null, roadside_stop: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -241,6 +246,7 @@ export function buildSnapshot(world, executing = null) {
     snap.bus = busPullingOut(world, frontS, visible);
     snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
     snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
+    snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -284,7 +290,7 @@ export function buildSnapshot(world, executing = null) {
     if (!o.parked && o.kind !== "door" && !o.parking && !o.pull) continue;
     const local = ego.toLocal(o.x, o.y);
     if (local.ahead < -5 || local.ahead > 40 || Math.abs(local.right) > 8) continue;
-    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
+    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : ROADSIDE_NAMES[o.kind] || "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
   }
   snap.roadside.sort((a, b) => a.ahead - b.ahead);
   snap.roadside = snap.roadside.slice(0, 6);
@@ -292,6 +298,9 @@ export function buildSnapshot(world, executing = null) {
   snap.traffic = snap.traffic.slice(0, 8);
   if (executing && executing.hazard) snap.current_path_hazard = executing.hazard;
   snap.speed_zone = speedZone(world, snap, FRONT);
+  // (coming up to a vehicle stopped at the roadside with its lights flashing, and passing it, the
+  // speed to be down to by then is the limit, so that no manoeuvre goes faster)
+  if (snap.roadside_stop) snap.limit = Math.min(snap.limit, roadsideSpeed(snap.roadside_stop));
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
@@ -601,6 +610,41 @@ function schoolBusStop(world, route, frontS, visibleNpcs) {
   return red || amber;
 }
 
+// A vehicle stopped at the roadside with its lights flashing that the car must slow down and move over
+// for (sim/roadside.js, BC MVA Regulations s. 47.02): the nearest it can see on the right of its route
+// ahead, going its way, within ROADSIDE_LOOK_M, until the car's rear is past its front. `gap_m` is
+// from the car's front to its rear (negative beside it), `limit_mps` the speed to pass it at (from
+// APPROACH_M short of it), `adjacent_delta` the lane next to it (by lanes right of the route's, as
+// `lane.delta`), `in_adjacent_lane` whether the car is in it, and `other_lane` whether there is a
+// lane further from it going the car's way to move over into.
+const ROADSIDE_LOOK_M = 100;
+function roadsideStop(world, p, frontS, lane, road) {
+  const { ego, route } = world;
+  let best = null;
+  for (const v of world.roadside?.vehicles || []) {
+    if (!flashing(v) || Math.hypot(v.x - ego.x, v.y - ego.y) > ROADSIDE_LOOK_M + 20 || !world.sees(ego, v)) continue;
+    const { rear, front } = endsOf(v), qr = route.project(rear[0], rear[1], p.index), qf = route.project(front[0], front[1], p.index);
+    if (!qr || !qf || qr.distance > 15 || Math.abs(wrap(v.psi - qr.heading)) > Math.PI / 6) continue;
+    const gap = qr.s - frontS;
+    if (gap > ROADSIDE_LOOK_M || p.s - ego.spec.rearOverhang > qf.s) continue;
+    // its near side, in metres right of the route where the car is
+    const side = Math.min(qr.lateral + route.frameMove(p.s, qr.s), qf.lateral + route.frameMove(p.s, qf.s)) - v.spec.width / 2;
+    if (side - lane.center < 0 || side - lane.center > ROADSIDE_SIDE_M) continue;
+    if (best && gap >= best.gap_m) continue;
+    // the lanes going the car's way, left of it: the one nearest it is next to it
+    const here = route.laneAt(p.s), lanes = [];
+    for (let d = -here.idx; d < here.lanes - here.idx; d++) {
+      const span = d === 0 ? { offset: here.center } : route.laneSpan(p.s, d);
+      if (span && span.offset < side) lanes.push({ d, offset: span.offset });
+    }
+    lanes.sort((a, b) => b.offset - a.offset);
+    const adjacent = lanes.length && side - lanes[0].offset < ADJACENT_M ? lanes[0].d : null;
+    best = { id: v.id, kind: v.kind, name: ROADSIDE_NAMES[v.kind] || v.kind, lights: ROADSIDE_LIGHTS[v.kind] || "flashing", gap_m: gap, s_rear_route: qr.s, s_front_route: qf.s,
+      limit_mps: passLimit(road.limit || 11.2), adjacent_delta: adjacent, in_adjacent_lane: adjacent !== null && lane.delta === adjacent, other_lane: adjacent !== null && lanes.length > 1 };
+  }
+  return best;
+}
+
 // An emergency vehicle with its siren on ahead of the car, going its way along its route, within
 // FOLLOW_M (one it has let go by): the car drops back that far.
 function emergencyAhead(world, p, frontS) {
@@ -821,6 +865,10 @@ function laneOptions(snap, world) {
   const turnLane = lane.route_ahead || (snap.nav && snap.nav.next_turn !== "none" && snap.nav.turn_in_m < PREPARE_LANE_M);
   const slowAhead = f && f.gap_m < 60 && (f.speed < 0.5 || f.speed < free - 2.5 || f.kind !== "car")
     && !(i && line < f.gap_m + 20) && !(turnLane && f.kind === "car");
+  // In the lane next to a vehicle stopped at the roadside with its lights flashing, still short of it:
+  // move over, to the lane on the left, if it runs on past it.
+  const rs = snap.roadside_stop;
+  const moveOver = rs && rs.in_adjacent_lane && rs.other_lane && rs.gap_m > MOVE_OVER_MIN_M;
   for (const dir of ["left", "right"]) {
     const delta = lane.delta + (dir === "left" ? -1 : 1);
     const span = route.laneSpan(s, delta);
@@ -844,7 +892,8 @@ function laneOptions(snap, world) {
     const room = (side.until_s ?? route.length) - (s + FRONT);
     if (lane.shift) side.offer = delta === lane.from_delta && !inJunction(CHANGE_JUNCTION_M) ? "abort" : null;
     else if (Math.abs(delta) < Math.abs(lane.delta)) side.offer = inJunction(CHANGE_JUNCTION_M) ? null : "return";
-    else side.offer = slowAhead && side.target_v > f.speed + 2 && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M) ? "pass" : null;
+    else side.offer = slowAhead && side.target_v > f.speed + 2 && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M) ? "pass"
+      : moveOver && dir === "left" && (side.until_s ?? route.length) > rs.s_front_route + MOVE_OVER_PAST_M && !inJunction(CHANGE_JUNCTION_M) ? "move_over" : null;
     lane.sides[dir] = side;
   }
 }
@@ -878,6 +927,13 @@ export function desiredSpeed(snap) {
     const lim = z.limit_mps * (weather.speed < 1 ? weather.speed : 1);
     const vz = Math.sqrt(lim * lim + 2 * decel * 0.6 * Math.max(0, z.starts_in_m - 2));
     if (vz < v) { v = vz; reasons.push(`${ZONE_NAMES[z.kind]} ahead`); }
+  }
+  // a vehicle stopped at the roadside with its lights flashing: down to the speed to pass it at a
+  // little before APPROACH_M short of it, gently, and no faster until past it
+  const rs = snap.roadside_stop;
+  if (rs) {
+    const vr = roadsideSpeed(rs, weather.speed < 1 ? weather.speed : 1);
+    if (vr <= v + 0.05) { v = Math.min(v, vr); reasons.push(rs.gap_m <= APPROACH_M ? `passing a ${rs.name} with its lights flashing` : `${rs.name} ahead, lights flashing`); }
   }
   if (snap.following) {
     // close in on the leader gently, and never faster than lets the car stop comfortably behind it
@@ -971,6 +1027,13 @@ export function desiredSpeed(snap) {
   return { v: Math.max(0, v), reasons };
 }
 
+// The speed to pass a vehicle stopped at the roadside at (see roadsideStop), or, short of it, the speed
+// from which the car slows to that comfortably by 5 m before APPROACH_M short of it.
+function roadsideSpeed(rs, factor = 1) {
+  const lim = rs.limit_mps * factor;
+  return Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, rs.gap_m - APPROACH_M - 5));
+}
+
 // Stopped at an all-way stop, waiting for a vehicle that goes first (a car that overshot the line
 // still waits there; one well into the junction is clearing it).
 export function waitsItsTurn(i) {
@@ -1000,6 +1063,7 @@ export function hazardFlags(snap) {
   if (snap.bus) f.push("bus");
   if (snap.crosswalk_stop) f.push("crosswalk");
   if (snap.school_bus) f.push("school bus");
+  if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");

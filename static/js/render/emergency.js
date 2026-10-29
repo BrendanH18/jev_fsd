@@ -14,7 +14,7 @@ const FLASH_S = 0.5;   // one left-right cycle of the light bars
 
 const box = (sx, sy, sz, x, y, z) => new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z);
 const merge = (parts) => mergeGeometries(parts.map((p) => p.toNonIndexed()), false);
-const shared = {
+export const shared = {
   glass: new THREE.MeshPhysicalMaterial({ color: 0x141c24, metalness: 0.2, roughness: 0.05, clearcoat: 1, envMapIntensity: 2 }),
   trim: new THREE.MeshStandardMaterial({ color: 0x17191c, roughness: 0.7 }),
   chrome: new THREE.MeshStandardMaterial({ color: 0xd8dde2, metalness: 1, roughness: 0.2 }),
@@ -29,11 +29,11 @@ const shared = {
 };
 
 // A light lens: its own material, so each vehicle's bars flash on their own.
-function lamp(color) {
+export function lamp(color) {
   return new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0, roughness: 0.2, transparent: true, opacity: 0.92 });
 }
 
-function wheel(r, width) {
+export function wheel(r, width) {
   const g = new THREE.Group();
   const tire = new THREE.Mesh(new THREE.CylinderGeometry(r, r, width, 20).rotateX(Math.PI / 2), shared.tire);
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, width + 0.02, 12).rotateX(Math.PI / 2), shared.rim);
@@ -118,19 +118,7 @@ export function createEmergencyMesh(kind, id = kind) {
   add(parts.chrome, shared.chrome, false, "brightwork");
   add(parts.trim, shared.trim, false, "trim");
   add(parts.head, shared.head, false, "headlamps");
-  // light bars: lenses alternating colour along each bar, split into a left and a right half
-  const lenses = { left: [], right: [] };
-  for (const bar of parts.bars) {
-    add(box(bar.len + 0.04, 0.06, bar.span + 0.04, bar.x, bar.y - 0.06, bar.z), shared.trim, false, "light-bar-base");
-    const n = 6;
-    for (let k = 0; k < n; k++) {
-      const z = bar.z - bar.span / 2 + (k + 0.5) * bar.span / n, color = parts.colors[k % parts.colors.length];
-      const m = new THREE.Mesh(box(bar.len, 0.12, bar.span / n - 0.02, bar.x, bar.y, z), lamp(color));
-      m.name = "light-bar-lens";
-      body.add(m);
-      (z < bar.z ? lenses.left : lenses.right).push(m);
-    }
-  }
+  const lenses = addLightBars(body, parts.bars, parts.colors);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.6, spec.width + 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(spec.length / 2 - spec.rearOverhang, 0.02, 0);
   blob.renderOrder = 1;
@@ -149,6 +137,36 @@ export function createEmergencyMesh(kind, id = kind) {
   return g;
 }
 
+// Light bars (`bars`: { x, y, z, len, span } in the vehicle's frame) on `body`: lenses alternating
+// colour along each bar, split into a left and a right half. Returns the halves, for flashLights.
+export function addLightBars(body, bars, colors) {
+  const lenses = { left: [], right: [] };
+  for (const bar of bars) {
+    const base = new THREE.Mesh(box(bar.len + 0.04, 0.06, bar.span + 0.04, bar.x, bar.y - 0.06, bar.z), shared.trim);
+    base.name = "light-bar-base"; base.receiveShadow = true;
+    body.add(base);
+    const n = 6;
+    for (let k = 0; k < n; k++) {
+      const z = bar.z - bar.span / 2 + (k + 0.5) * bar.span / n, color = colors[k % colors.length];
+      const m = new THREE.Mesh(box(bar.len, 0.12, bar.span / n - 0.02, bar.x, bar.y, z), lamp(color));
+      m.name = "light-bar-lens";
+      body.add(m);
+      (z < bar.z ? lenses.left : lenses.right).push(m);
+    }
+  }
+  return lenses;
+}
+
+// Left and right halves of the bars in turn, each lens strobing twice per half-cycle, while `on`.
+export function flashLights(lenses, on, t, offset = 0) {
+  const phase = ((t + offset) % FLASH_S) / FLASH_S;
+  const left = phase < 0.5, strobe = (phase * 4) % 1 < 0.6;
+  for (const [side, list] of Object.entries(lenses)) {
+    const lit = on && strobe && (side === "left") === left;
+    for (const m of list) m.material.emissiveIntensity = lit ? 9 : 0;
+  }
+}
+
 export function syncEmergency(mesh, vehicle, dt = 0, t = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
@@ -158,11 +176,5 @@ export function syncEmergency(mesh, vehicle, dt = 0, t = 0) {
     w.wheel.rotation.z = -u.spin;
     w.pivot.rotation.y = w.steer ? vehicle.delta : 0;
   }
-  // light bars: left and right halves in turn, each lens strobing twice per half-cycle
-  const on = !!vehicle.siren, phase = ((t + u.phase) % FLASH_S) / FLASH_S;
-  const left = phase < 0.5, strobe = (phase * 4) % 1 < 0.6;
-  for (const [side, list] of Object.entries(u.lenses)) {
-    const lit = on && strobe && (side === "left") === left;
-    for (const m of list) m.material.emissiveIntensity = lit ? 9 : 0;
-  }
+  flashLights(u.lenses, !!vehicle.siren, t, u.phase);
 }

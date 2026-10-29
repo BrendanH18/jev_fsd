@@ -83,6 +83,14 @@ export const SCHOOL_BUS = {
   power: 190000, cdA: 6.6, crr: 0.009, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
 };
 
+// Vehicles stopped at the roadside with their lights flashing (sim/roadside.js), which never move: a
+// light-duty wheel-lift tow truck on a one-ton cab-and-chassis, and a police SUV, at the size of the
+// sim's other cars.
+export const TOW_TRUCK = {
+  ...CAR, kind: "tow_truck", wheelbase: 3.6, length: 6.6, width: 2.2, rearOverhang: 2.1, mass: 6500, cgHeight: 0.9, track: 1.75,
+};
+export const POLICE_CAR = { ...CAR, kind: "police" };
+
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
 export const ROAD = { mu: 0.9 };
 export const G = 9.81;

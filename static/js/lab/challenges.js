@@ -1,6 +1,6 @@
 import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
-import { Vehicle, BIKE, BUS, CAR, SCHOOL_BUS } from "../sim/vehicle.js";
+import { Vehicle, BIKE, BUS, CAR, SCHOOL_BUS, TOW_TRUCK } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
 import { isJunction } from "../sim/emergency.js";
 import { BUS_YIELD_LIMIT_MPS, busStopFront, curbShift } from "../sim/bus.js";
@@ -11,6 +11,7 @@ import { StopMemory, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
 import { Visibility } from "../sim/visibility.js";
 import { ZONE_LIMIT_MPS } from "../sim/speed-zones.js";
+import { SLOW_FAST_MPS, SLOW_MPS, curbOffset, endsOf } from "../sim/roadside.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -46,6 +47,8 @@ export const CHALLENGES = [
     description: "A school bus coming the other way on West 2nd Avenue has stopped with its red lights flashing. Your side of the road is clear.", lesson: "In BC, traffic going both ways must stop for a school bus stopped with its red lights flashing, and stay stopped until it moves off or the lights go off. Children getting off often cross the street in front of it." },
   { id: "school-zone", title: "School zone", map: "kitsilano", weather: "dry", time: "morning", seed: 16042, icon: "◭", difficulty: "Anticipation", hazard: "school-zone", street: "West 11th Avenue",
     description: "West 11th Avenue past Lord Tennyson Elementary, at 9 in the morning. The street's limit is 50 km/h, but this block is a school zone, and the cars parked along it hide the curb.", lesson: "In BC a school zone's 30 km/h holds from 8:00 to 17:00 on school days, and a playground zone's from dawn to dusk every day. At 30 km/h a car stops in about a third of the distance it needs at 50, so a child running out between parked cars can be missed." },
+  { id: "move-over", title: "Move over", map: "winnipeg", weather: "dry", time: "afternoon", seed: 17042, icon: "⚠", difficulty: "Courtesy", hazard: "roadside", street: "Princess Street",
+    description: "A tow truck is at the curb on Princess Street with its amber lights flashing, hooking up a car. You're in the lane right beside it.", lesson: "Slow down and move over: passing a vehicle stopped at the roadside with its lights flashing, slow to 40 km/h where the limit is under 80 (70 where it is 80 or more), and move out of the lane next to it if you safely can. That is BC's law, and every province has one like it. The people working there stand at the edge of that lane, and step into it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -339,6 +342,37 @@ function schoolSites(map, street) {
   return on.length ? on : sites;
 }
 
+// Move over: a street with two or more lanes going the car's way and a parking lane on the right,
+// whose limit the rule brings down (above 40 km/h, under 80), going straight on into a street with as
+// many lanes, with no marked crosswalk on it. A tow truck stands at its right curb, its front
+// TOW_CLEAR_M short of the street's end (or its stop line), with the car it is about to tow parked
+// OPERATOR_GAP_M behind it and its operator between them, on the traffic side. The car starts in the
+// curb lane with its front ROADSIDE_START_M behind the truck's rear. Once its front is
+// OPERATOR_TRIGGER_M from the operator they step out, without looking, into the curb lane, to
+// OPERATOR_OUT_M right of its centre, stand there for OPERATOR_PAUSE_S and step back. In the lane
+// beside it the car is clear of them; in the curb lane at 40 km/h it can stop for them, at 50 it cannot.
+const TOW_CLEAR_M = 25, ROADSIDE_START_M = 76, OPERATOR_GAP_M = 1.6, OPERATOR_TRIGGER_M = 16, OPERATOR_OUT_M = 0.4, OPERATOR_PAUSE_S = 3, OPERATOR_MPS = 1.3;
+const roadsideSiteCache = new WeakMap();
+function roadsideSites(map, street) {
+  if (!roadsideSiteCache.has(map)) {
+    const sites = [];
+    for (const e of map.edges.values()) {
+      if (e.ring || e.lanes < 2 || !(e.parking?.[1] >= 1.8) || e.limit <= SLOW_MPS + 1 || e.limit >= SLOW_FAST_MPS + 10 / 3.6) continue;
+      if ((map.crosswalks || []).some(c => c.edge === e.id)) continue;
+      const straight = map.successors(e.id).find(id => map.classifyTurn(map.turnAngle(e.id, id)) === "straight" && map.edges.get(id).lanes >= e.lanes && !map.edges.get(id).ring);
+      const L = e.cum.at(-1), to = Math.min(L, e.control?.s_line ?? L) - TOW_CLEAR_M, from = to - (TOW_TRUCK.length + CAR.length + OPERATOR_GAP_M + 0.4);
+      const lane = map.lane(e.id, e.lanes - 1), scale = lane.length / Math.max(1, L);
+      const startS = (to - 0.2 - TOW_TRUCK.length - ROADSIDE_START_M) * scale - (CAR.length - CAR.rearOverhang);
+      if (!straight || startS < 4) continue;
+      sites.push({ lane, startS, stop: { edge: e.id, from, to } });
+    }
+    sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    roadsideSiteCache.set(map, sites);
+  }
+  const sites = roadsideSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -382,11 +416,14 @@ export function challengeScenario(map, challenge) {
   const zones = challenge.hazard === "school-zone" ? zoneSites(map, challenge.street) : null;
   if (zones && !zones.length) throw new Error("This map has no school zone on a street with a parking lane and a higher limit of its own.");
   const zone = zones ? zones[Math.floor(random() * zones.length)] : null;
-  const start = zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const roadsides = challenge.hazard === "roadside" ? roadsideSites(map, challenge.street) : null;
+  if (roadsides && !roadsides.length) throw new Error("This map has no street with two lanes going one way, a parking lane on the right and a limit between 40 and 80 km/h.");
+  const roadside = roadsides ? roadsides[Math.floor(random() * roadsides.length)] : null;
+  const start = roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -417,6 +454,7 @@ export function challengeScenario(map, challenge) {
     ...(bus ? { bus: bus.bus } : {}),
     ...(school ? { schoolBus: school.bus } : {}),
     ...(zone ? { child: { s: zone.hazardS, zone: zone.zone } } : {}),
+    ...(roadside ? { roadside: roadside.stop } : {}),
     ...(threat ? { multiThreat: { crosswalk: threat.crosswalk, s: threat.s, curb: { edge: threat.curb.edge, lane: threat.curb.idx, s: threat.sCurb } } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
@@ -449,6 +487,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.multiThreat) Object.assign(world.challenge, placeThreat(world, fleet, scenario.multiThreat, challenge.seed));
   if (scenario.schoolBus) Object.assign(world.challenge, placeSchoolBus(world, fleet, scenario.schoolBus, challenge.seed));
   if (scenario.child) Object.assign(world.challenge, placeChild(world, lane, scenario.child.s, challenge.seed));
+  if (scenario.roadside) Object.assign(world.challenge, placeTowTruck(world, scenario.roadside, challenge.seed));
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -469,6 +508,7 @@ export function stepChallenge(world, fleet) {
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "school-zone" ? local.ahead < CHILD_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
+    : state.hazard === "roadside" ? local.ahead < OPERATOR_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
@@ -498,6 +538,8 @@ export function stepChallenge(world, fleet) {
     if (child) child.held = false;
   }
   const ped = state.pedestrianId && world.crowd.list.find(p => p.id === state.pedestrianId);
+  // (the tow truck's operator stands in the lane a moment before stepping back)
+  if (ped && state.hazard === "roadside" && state.triggered && !state.paused && ped.path.length === 1) { state.paused = true; ped.frozen = OPERATOR_PAUSE_S; }
   if (ped && !ped.path.length) { ped.frozen = 1e6; ped.v = 0; }
 }
 
@@ -660,6 +702,21 @@ function placeChild(world, lane, s, seed) {
   ped.frozen = 1e6;
   world.crowd.list.push(ped);
   return { pedestrianId: ped.id };
+}
+// Move over: the tow truck at the curb, lights flashing, the car it is about to tow parked behind it,
+// and its operator between the two, at the traffic side, about to step out into the curb lane (see
+// roadsideSites).
+function placeTowTruck(world, { edge, from, to }, seed) {
+  const e = world.map.edges.get(edge), stop = world.roadside.place({ edge, from, to, kind: "tow_truck", gap: OPERATOR_GAP_M, color: 0x6b7f8c });
+  const truck = stop.vehicle, h = truck.psi, { rear } = endsOf(truck);
+  const at = (back, right) => [rear[0] - Math.cos(h) * back + Math.sin(h) * right, rear[1] - Math.sin(h) * back - Math.cos(h) * right];
+  const toLane = e.lane_offsets[e.lanes - 1] - curbOffset(e, TOW_TRUCK);
+  const start = at(OPERATOR_GAP_M / 2, -(TOW_TRUCK.width / 2 - 0.4)), out = at(OPERATOR_GAP_M / 2, toLane + OPERATOR_OUT_M);
+  const ped = new Pedestrian({ id: "challenge_operator", x: start[0], y: start[1], psi: Math.atan2(out[1] - start[1], out[0] - start[0]), v: 0, speed: OPERATOR_MPS, dart: true, worker: true,
+    path: [{ p: out, cross: { node: null, from: start, to: out, jaywalk: true } }, { p: start }], crossing: null, waiting: 0, phase: 0, look: seed, at: null });
+  ped.frozen = 1e6;
+  world.crowd.list.push(ped);
+  return { pedestrianId: ped.id, roadsideId: truck.id, at: start };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

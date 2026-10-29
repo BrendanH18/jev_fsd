@@ -2,7 +2,8 @@
 // traffic, and every candidate forward-simulation can hit them. Cars open street-side doors,
 // pull out into traffic, and park in vacant bays (see NpcFleet). Placement is seeded, so a
 // scenario always has the same cars in the same spots. With buses running, nobody parks in a bus
-// zone (`zones`, see sim/bus.js busZones): its bays are left out.
+// zone (`zones`, see sim/bus.js busZones): its bays are left out. A car that `stay`s (at a roadside
+// stop, sim/roadside.js) neither opens a door nor pulls out.
 
 import { Vehicle, CAR } from "./vehicle.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
@@ -156,7 +157,7 @@ export class ParkedCars {
     const nearby = this.near(world.ego.x, world.ego.y, 45).filter((c) => {
       const l = world.ego.toLocal(c.x, c.y);
       const stoppingRoom = world.ego.v * world.ego.v / (2 * 4) + world.ego.v * 1.5 + 5;
-      return !c.door && l.ahead > Math.max(15, stoppingRoom) && l.ahead < 40 && Math.abs(l.right) < 7;
+      return !c.door && !c.stay && l.ahead > Math.max(15, stoppingRoom) && l.ahead < 40 && Math.abs(l.right) < 7;
     });
     if (nearby.length) this.openDoor(nearby[Math.floor(this.random() * nearby.length)]);
   }

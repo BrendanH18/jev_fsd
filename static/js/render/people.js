@@ -35,10 +35,11 @@ function tint(geo, hex) {
 const segment = (r0, r1, len) => new THREE.CylinderGeometry(r0, r1, len, 8).translate(0, -len / 2, 0);
 const ball = (r) => new THREE.SphereGeometry(r, 8, 6);
 
-export function createPersonMesh(look = 0, { child = false } = {}) {
+// (`worker`: a hi-vis vest over the top, as a tow truck's operator wears)
+export function createPersonMesh(look = 0, { child = false, worker = false } = {}) {
   const k = (i) => hash01(String(look), i);
   const pick = (list, i) => list[Math.floor(k(i) * list.length)];
-  const skin = pick(SKIN, 1), top = pick(TOPS, 2), bottom = pick(BOTTOMS, 3), hair = pick(HAIR, 4), shoes = pick(SHOES, 6);
+  const skin = pick(SKIN, 1), top = worker ? 0xd8ff1e : pick(TOPS, 2), bottom = pick(BOTTOMS, 3), hair = pick(HAIR, 4), shoes = pick(SHOES, 6);
   const height = child ? 0.62 + k(5) * 0.14 : 0.9 + k(5) * 0.18, build = 0.9 + k(7) * 0.25;
   const longHair = k(8) < 0.35, backpack = child || k(9) < 0.25, coat = k(10) < 0.4;
 

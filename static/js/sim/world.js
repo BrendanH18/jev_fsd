@@ -17,6 +17,7 @@ import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from 
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { BEHIND_M, ONCOMING_M, SIDE_M, canStopFor as canStopForSchool, redsOn, schoolBusRelation } from "./school-bus.js";
 import { zoneLimit } from "./speed-zones.js";
+import { RoadsideStops } from "./roadside.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -101,8 +102,9 @@ const AUDIT_CROSSWALK_MOVING_MPS = 1;
 const AUDIT_SCHOOL_MOVING_MPS = 1;
 
 export class World {
-  // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false } = {}) {
+  // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
+  // vehicles stand at the roadside with their lights flashing at a time (sim/roadside.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0 } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -140,6 +142,7 @@ export class World {
     this.lastRoad = null;
     this.lastSignal = null;
     this.spawnEgo();
+    this.roadside = new RoadsideStops(this, { count: roadside, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
   }
 

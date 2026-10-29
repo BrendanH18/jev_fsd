@@ -19,6 +19,7 @@ import { EMERGENCY_SPECS, EV_JUNCTION_MPS, EV_LIMIT_FACTOR, EV_MAX_MPS, EV_PASS_
   FOLLOW_M, IN_WAY_M, closestOnPath, evOffset, isEmergency, isEmergencyVehicle, isJunction as junctionAt, leadsEmergency, nearestCall, planBehind, planCrossing, planOncoming, pullOverOffset, threadGap } from "./emergency.js";
 import { BUS_DWELL_S, BUS_SIGNAL_M, BUS_TAPER_M, busMayPullOut, busStopFront, busYield, canStopFor, curbShift, isBus } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
+import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -41,6 +42,7 @@ function driverProfile(random, bike = false) {
 const PALETTE = [0xeeeeea, 0x8d9299, 0x1a1c20, 0xc4c8cc, 0x2b3a55, 0x9b1e1e, 0xf2f2ee, 0x4a4f57, 0x0f1114, 0x6b7f5e, 0xb9b3a5];
 const LOOK_M = 60;
 const ZONE_AHEAD_M = 15;
+const ROADSIDE_AHEAD_M = 40;
 export const BIKES = 12;
 const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xdd6b20];
 const SHARP_TURN = 130 * Math.PI / 180;   // mirrors SHARP_TURN_DEG in jev/routing.py
@@ -696,7 +698,7 @@ export class NpcFleet {
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
-      const limit = Math.min(edge.limit, this.zoneLimit(path, front));
+      const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit));
       const v0 = Math.min(n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
       const D = n.driver || IDM;
       let a;
@@ -1102,9 +1104,6 @@ export class NpcFleet {
     return nudge;
   }
 
-  // A driver yielding to a bus pulling out from its stop (sim/bus.js): where it stops, as metres from
-  // its front, or null. It yields once it sees the bus signal if it can stop 2 m behind it braking at
-  // up to 3 m/s^2, and from then on until the bus has pulled out (or it is no longer behind it).
   // The limit of a school or playground zone in effect at the front of a vehicle on `path`, or one
   // that starts within ZONE_AHEAD_M of it, so that it slows on the way in (sim/speed-zones.js);
   // Infinity when there is none.
@@ -1120,6 +1119,21 @@ export class NpcFleet {
     return Infinity;
   }
 
+  // Passing a vehicle stopped at the roadside with its lights flashing (sim/roadside.js): the speed
+  // to keep to, from ROADSIDE_AHEAD_M before APPROACH_M short of it (so that it is down to it by
+  // then) until past it; Infinity when there is none.
+  roadsideLimit(n, limit) {
+    for (const v of this.world.roadside?.vehicles || []) {
+      if (Math.abs(v.x - n.x) > 80 || Math.abs(v.y - n.y) > 80) continue;
+      const r = roadsideRelation(n, v);
+      if (r && r.ahead_m <= APPROACH_M + ROADSIDE_AHEAD_M) return passLimit(limit);
+    }
+    return Infinity;
+  }
+
+  // A driver yielding to a bus pulling out from its stop (sim/bus.js): where it stops, as metres from
+  // its front, or null. It yields once it sees the bus signal if it can stop 2 m behind it braking at
+  // up to 3 m/s^2, and from then on until the bus has pulled out (or it is no longer behind it).
   yieldToBus(n) {
     let best = null;
     for (const bus of this.buses) {
@@ -1243,7 +1257,7 @@ export class NpcFleet {
   maybePullOut() {
     const world = this.world, ego = world.ego, map = this.map;
     const cx = ego.x + Math.cos(ego.psi) * 55, cy = ego.y + Math.sin(ego.psi) * 55;
-    const near = world.parked.near(cx, cy, 45).filter((c) => { const l = ego.toLocal(c.x, c.y); return l.ahead > 20 && l.ahead < 90 && c.edge && !c.door; });
+    const near = world.parked.near(cx, cy, 45).filter((c) => { const l = ego.toLocal(c.x, c.y); return l.ahead > 20 && l.ahead < 90 && c.edge && !c.door && !c.stay; });
     if (!near.length) return null;
     const car = near[Math.floor(this.events() * near.length)];
     return this.startPullOut(car);
