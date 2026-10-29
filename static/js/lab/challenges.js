@@ -1,6 +1,6 @@
 import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
-import { Vehicle, BIKE, BUS, CAR, SCHOOL_BUS, TOW_TRUCK } from "../sim/vehicle.js";
+import { Vehicle, BIKE, BUS, CAR, SCHOOL_BUS, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
 import { isJunction } from "../sim/emergency.js";
 import { BUS_YIELD_LIMIT_MPS, busStopFront, curbShift } from "../sim/bus.js";
@@ -12,6 +12,7 @@ import { rng } from "../common.js";
 import { Visibility } from "../sim/visibility.js";
 import { ZONE_LIMIT_MPS } from "../sim/speed-zones.js";
 import { SLOW_FAST_MPS, SLOW_MPS, curbOffset, endsOf } from "../sim/roadside.js";
+import { doorPoints } from "../sim/streetcar.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -49,6 +50,8 @@ export const CHALLENGES = [
     description: "West 11th Avenue past Lord Tennyson Elementary, at 9 in the morning. The street's limit is 50 km/h, but this block is a school zone, and the cars parked along it hide the curb.", lesson: "In BC a school zone's 30 km/h holds from 8:00 to 17:00 on school days, and a playground zone's from dawn to dusk every day. At 30 km/h a car stops in about a third of the distance it needs at 50, so a child running out between parked cars can be missed." },
   { id: "move-over", title: "Move over", map: "winnipeg", weather: "dry", time: "afternoon", seed: 17042, icon: "⚠", difficulty: "Courtesy", hazard: "roadside", street: "Princess Street",
     description: "A tow truck is at the curb on Princess Street with its amber lights flashing, hooking up a car. You're in the lane right beside it.", lesson: "Slow down and move over: passing a vehicle stopped at the roadside with its lights flashing, slow to 40 km/h where the limit is under 80 (70 where it is 80 or more), and move out of the lane next to it if you safely can. That is BC's law, and every province has one like it. The people working there stand at the edge of that lane, and step into it." },
+  { id: "streetcar", title: "Behind the doors", map: "toronto", weather: "dry", time: "afternoon", seed: 18042, icon: "▥", difficulty: "Courtesy", hazard: "streetcar", street: "Bathurst Street",
+    description: "A 511 streetcar has stopped at its stop on Bathurst Street, in the lane beside yours, with its doors open. Your lane is clear.", lesson: "In Ontario, traffic behind a streetcar that has stopped to let people on or off must stop at least 2 m behind its rear doors and wait until they have got on, or reached the curb. Its riders cross your lane to get to it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -238,7 +241,7 @@ const busSiteCache = new WeakMap();
 function busSites(map, street) {
   if (!busSiteCache.has(map)) {
     const sites = [], seen = new Set();
-    (map.transit?.routes || []).forEach((route) => route.runs.forEach((run, runIndex) => {
+    (map.transit?.routes || []).forEach((route) => route.mode !== "tram" && route.runs.forEach((run, runIndex) => {
       for (const stop of run.stops) {
         const k = run.edges.indexOf(stop.edge), e = map.edges.get(stop.edge), prev = map.edges.get(run.edges[k - 1]);
         if (k < 1 || !e || !prev || seen.has(stop.id) || e.ring || prev.ring || e.limit > BUS_YIELD_LIMIT_MPS) continue;
@@ -373,6 +376,40 @@ function roadsideSites(map, street) {
   return on.length ? on : sites;
 }
 
+// Behind the doors: a streetcar stopped at a stop of its route's run (sim/streetcar.js), with its
+// doors open, on a street with another lane going its way on the curb side of its track, with no
+// junction and no school or playground zone between it and the car. The car starts in that lane,
+// TRAM_START_M behind the streetcar's rear. A rider waits at the curb abreast of
+// its rear doors; once the car's front is RIDER_TRIGGER_M from them, they walk out across the car's
+// lane to the doors without looking, and get on. The streetcar closes its doors RIDER_ABOARD_S
+// later and moves off.
+// On the challenge's `street` where it has one.
+const TRAM_START_M = 75, RIDER_TRIGGER_M = 10, RIDER_MPS = 1.4, RIDER_ABOARD_S = 4;
+const tramSiteCache = new WeakMap();
+function tramSites(map, street) {
+  if (!tramSiteCache.has(map)) {
+    const sites = [];
+    (map.transit?.routes || []).forEach((route) => route.mode === "tram" && route.runs.forEach((run, runIndex) => {
+      for (const stop of run.stops) {
+        const k = run.edges.indexOf(stop.edge), e = map.edges.get(stop.edge), front = busStopFront(map, stop.edge, stop.s, STREETCAR.length);
+        if (k < 0 || !e || front === null || e.lanes < 2 || (run.lane ?? 0) >= e.lanes - 1) continue;
+        const lengths = run.edges.map((id) => map.edges.get(id).length);
+        let at = lengths.slice(0, k).reduce((a, l) => a + l, 0) + front - STREETCAR.length - TRAM_START_M - (CAR.length - CAR.rearOverhang), j = 0;
+        if (at < 3) continue;
+        while (j < k && at > lengths[j]) at -= lengths[j++];
+        if (j < k || map.zoneSpans.has(stop.edge)) continue;
+        const lane = map.lane(run.edges[j], map.edges.get(run.edges[j]).lanes - 1);
+        if (!lane || lane.idx <= (run.lane ?? 0)) continue;
+        sites.push({ lane, startS: at * lane.length / Math.max(1, lengths[j]), streetcar: { route: route.id, run: runIndex, stop: stop.id, edge: stop.edge, front } });
+      }
+    }));
+    sites.sort((a, b) => a.streetcar.stop.localeCompare(b.streetcar.stop) || a.streetcar.route.localeCompare(b.streetcar.route));
+    tramSiteCache.set(map, sites);
+  }
+  const sites = tramSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -419,11 +456,14 @@ export function challengeScenario(map, challenge) {
   const roadsides = challenge.hazard === "roadside" ? roadsideSites(map, challenge.street) : null;
   if (roadsides && !roadsides.length) throw new Error("This map has no street with two lanes going one way, a parking lane on the right and a limit between 40 and 80 km/h.");
   const roadside = roadsides ? roadsides[Math.floor(random() * roadsides.length)] : null;
-  const start = roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const trams = challenge.hazard === "streetcar" ? tramSites(map, challenge.street) : null;
+  if (trams && !trams.length) throw new Error("This map has no streetcar stop on a street with another lane going its way beside the track.");
+  const tram = trams ? trams[Math.floor(random() * trams.length)] : null;
+  const start = tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -455,6 +495,7 @@ export function challengeScenario(map, challenge) {
     ...(school ? { schoolBus: school.bus } : {}),
     ...(zone ? { child: { s: zone.hazardS, zone: zone.zone } } : {}),
     ...(roadside ? { roadside: roadside.stop } : {}),
+    ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(threat ? { multiThreat: { crosswalk: threat.crosswalk, s: threat.s, curb: { edge: threat.curb.edge, lane: threat.curb.idx, s: threat.sCurb } } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
@@ -488,6 +529,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.schoolBus) Object.assign(world.challenge, placeSchoolBus(world, fleet, scenario.schoolBus, challenge.seed));
   if (scenario.child) Object.assign(world.challenge, placeChild(world, lane, scenario.child.s, challenge.seed));
   if (scenario.roadside) Object.assign(world.challenge, placeTowTruck(world, scenario.roadside, challenge.seed));
+  if (scenario.streetcar) Object.assign(world.challenge, placeStreetcar(world, fleet, scenario.streetcar, challenge.seed));
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -509,6 +551,7 @@ export function stepChallenge(world, fleet) {
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "school-zone" ? local.ahead < CHILD_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "roadside" ? local.ahead < OPERATOR_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
+    : state.hazard === "streetcar" ? local.ahead < RIDER_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
@@ -536,7 +579,13 @@ export function stepChallenge(world, fleet) {
     if (school?.school.phase === "red") Object.assign(school.school, { held: false, t: 0, red: SCHOOL_RED_S });
     const child = state.childId && world.crowd.list.find(p => p.id === state.childId);
     if (child) child.held = false;
+    // (the rider walks out to the streetcar's doors)
+    const rider = state.riderId && world.crowd.list.find(p => p.id === state.riderId);
+    if (rider) { rider.held = false; rider.crossing = rider.path[0].cross; }
   }
+  // (once the rider is aboard, the streetcar closes its doors RIDER_ABOARD_S later and moves off)
+  const tram = state.streetcarId && state.triggered ? fleet.vehicles.find(v => v.id === state.streetcarId) : null;
+  if (tram?.transit.held && !world.crowd.list.some(p => p.id === state.riderId)) Object.assign(tram.transit, { held: false, dwell: tram.transit.t + RIDER_ABOARD_S });
   const ped = state.pedestrianId && world.crowd.list.find(p => p.id === state.pedestrianId);
   // (the tow truck's operator stands in the lane a moment before stepping back)
   if (ped && state.hazard === "roadside" && state.triggered && !state.paused && ped.path.length === 1) { state.paused = true; ped.frozen = OPERATOR_PAUSE_S; }
@@ -717,6 +766,25 @@ function placeTowTruck(world, { edge, from, to }, seed) {
   ped.frozen = 1e6;
   world.crowd.list.push(ped);
   return { pedestrianId: ped.id, roadsideId: truck.id, at: start };
+}
+// Behind the doors: the streetcar standing at its stop, doors open, held there until its rider is
+// aboard; and the rider at the curb abreast of its rear doors, who will walk out to them across the
+// lane beside it without looking (`dart`), and get on (see tramSites).
+function placeStreetcar(world, fleet, { route: routeId, run: runIndex, stop: stopId, edge, front }, seed) {
+  const map = world.map, route = map.transit.routes.find(r => r.id === routeId), run = route.runs[runIndex];
+  const k = run.edges.indexOf(edge), before = run.edges.slice(0, k).reduce((a, id) => a + map.edges.get(id).length, 0);
+  const car = fleet.spawnBus(0, { route, run }, before + front - (STREETCAR.length - STREETCAR.rearOverhang), true);
+  if (!car) return { streetcarId: null };
+  car.v = 0;
+  Object.assign(car.transit, { phase: "dwell", stop: { id: stopId, edge, front }, t: 5, dwell: Infinity, doors: true, held: true });
+  car.doors = true;
+  const e = map.edges.get(edge), door = doorPoints(car)[3], q = projectPoint(e.pts, e.cum, door, null);
+  const h = headingAt(e.pts, e.cum, q.s), curb = [q.point[0] + Math.sin(h) * (e.asphalt[1] + 0.3), q.point[1] - Math.cos(h) * (e.asphalt[1] + 0.3)];
+  const rider = new Pedestrian({ id: "challenge_rider", x: curb[0], y: curb[1], psi: Math.atan2(door[1] - curb[1], door[0] - curb[0]), v: 0, speed: RIDER_MPS, dart: true,
+    path: [{ p: door, cross: { node: null, from: curb, to: door, jaywalk: true, streetcar: car.id, boarding: true } }], crossing: null, waiting: 0, phase: 0, look: seed, at: null,
+    streetcar: car.id, boarding: true, home: true, held: true });
+  world.crowd.list.push(rider);
+  return { streetcarId: car.id, riderId: rider.id, at: curb };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

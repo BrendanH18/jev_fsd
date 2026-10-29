@@ -4,12 +4,15 @@
 // there, stepping off once nothing coming is too close to stop for them (BC MVA s. 179).
 // Quiet residential blocks may jaywalk after looking both ways (they yield; drivers still avoid them).
 // Children get off school buses and walk home, some crossing in front of the bus (sim/school-bus.js).
+// Riders get off streetcars and walk across the lane beside them to the curb, and walk out to them
+// from the curb to get on (sim/streetcar.js).
 
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
 import { pedPhase } from "./signals.js";
 import { rng } from "../common.js";
 import { CROSS_AHEAD_M, redsOn } from "./school-bus.js";
+import { doorPoints, doorsOpen } from "./streetcar.js";
 
 export const PEDESTRIANS = 60;
 export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 };   // footprint for collisions
@@ -151,6 +154,42 @@ export class Crowd {
       path, crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), child: true, school: bus.id, home: true });
     this.list.push(kid);
     return kid;
+  }
+
+  // A rider getting off streetcar `car`, stopped on street edge `e` (sim/streetcar.js), by one of its
+  // doors (one of the back three, at random): across the lane beside it to the sidewalk, once nothing
+  // coming is too close to stop; then 20 to 40 m along the sidewalk, and away (off the map).
+  rideOff(car, e, random) {
+    const door = doorPoints(car)[1 + Math.floor(random() * 3)], s0 = projectPoint(e.pts, e.cum, door).s, L = e.cum[e.cum.length - 1];
+    const curb = offsetPoint(e, s0, sidewalkOffset(e, 1)), path = [{ p: curb, cross: { node: null, from: door, to: curb, jaywalk: true, streetcar: car.id } }];
+    const dir = random() < 0.5 ? 1 : -1, len = 20 + random() * 20;
+    for (let u = 5; u <= len; u += 5) path.push({ p: offsetPoint(e, Math.max(2, Math.min(L - 2, s0 + dir * u)), sidewalkOffset(e, 1)) });
+    const rider = new Pedestrian({ id: `rider_${++this.kids}`, x: door[0], y: door[1], psi: car.psi - Math.PI / 2, v: 0, speed: 1.2 + random() * 0.3,
+      path, crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), streetcar: car.id, home: true });
+    this.list.push(rider);
+    return rider;
+  }
+
+  // A rider getting on streetcar `car`, stopped on street edge `e`: from the sidewalk a few metres
+  // short of one of its doors (any of the four), out across the lane beside it to the door, once
+  // nothing coming is too close to stop; there they get on.
+  rideOn(car, e, random) {
+    const door = doorPoints(car)[Math.floor(random() * 4)], s0 = projectPoint(e.pts, e.cum, door).s, L = e.cum[e.cum.length - 1];
+    const start = offsetPoint(e, Math.max(2, Math.min(L - 2, s0 - 2 - random() * 4)), sidewalkOffset(e, 1)), curb = offsetPoint(e, s0, sidewalkOffset(e, 1));
+    const rider = new Pedestrian({ id: `rider_${++this.kids}`, x: start[0], y: start[1], psi: car.psi, v: 0, speed: 1.2 + random() * 0.3,
+      path: [{ p: curb }, { p: door, cross: { node: null, from: curb, to: door, jaywalk: true, streetcar: car.id, boarding: true } }], crossing: null, waiting: 0, phase: 0,
+      look: Math.floor(random() * 1e6), streetcar: car.id, boarding: true, home: true });
+    this.list.push(rider);
+    return rider;
+  }
+
+  // A rider still at the curb when the streetcar's doors close has missed it: they walk off along the
+  // sidewalk, and away.
+  missed(rider, e) {
+    const s0 = projectPoint(e.pts, e.cum, [rider.x, rider.y]).s, L = e.cum[e.cum.length - 1];
+    rider.path = [{ p: offsetPoint(e, Math.max(2, Math.min(L - 2, s0 - 25)), sidewalkOffset(e, 1)) }];
+    rider.boarding = false;
+    rider.streetcar = null;
   }
 
   // Queue a walk along street `st`'s sidewalk on `side` from `s` toward the end in direction `dir`.
@@ -301,6 +340,12 @@ export class Crowd {
   mayCross(cross, t) {
     // (a child off a school bus crosses in front of it while its reds flash, once nothing coming is
     // too close to stop; with them off, on a gap)
+    // (a streetcar's rider steps into the street while its doors are open, once nothing coming is too
+    // close to stop; with them closed, getting off, on a gap; to get on, not at all)
+    if (cross.streetcar) {
+      const car = this.world.npcs.find((v) => v.id === cross.streetcar);
+      return doorsOpen(car) ? this.canStopFor(cross) : !cross.boarding && this.clearFor(cross, JAYWALK_GAP_S, 70);
+    }
     if (cross.school) return redsOn(this.world.npcs.find((v) => v.id === cross.school)) ? this.canStopFor(cross) : this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.jaywalk) return this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.marked) return this.canStopFor(cross);

@@ -2,7 +2,7 @@
 // size: a white body over a blue skirt, a band of windows, two doors on the curb side that open at a
 // stop, a lit destination sign with the route number, indicators, brake lights and headlamps.
 // Local +X is forward, +Z is right, rear axle at the origin, as for cars. Each stop is a pole with a
-// blue bus-stop flag facing along the street.
+// blue bus-stop flag facing along the street; a streetcar stop's flag is the TTC's, red and white.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -144,26 +144,35 @@ export function syncBus(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   }
 }
 
-// The map's bus stops: a pole with a flag at each, square to the street beside it.
+// A stop flag: `ground` colour, its name on a white panel at the top, STOP under it.
+function flagMaterial(ground, name) {
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 96;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = ground; ctx.fillRect(0, 0, 64, 96);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(6, 6, 52, 30);
+  ctx.fillStyle = ground; ctx.font = `bold ${name.length > 3 ? 16 : 20}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(name, 32, 22);
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 13px sans-serif"; ctx.fillText("STOP", 32, 60);
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshStandardMaterial({ map: texture, roughness: 0.6, side: THREE.DoubleSide });
+}
+
+// The map's bus and streetcar stops: a pole with a flag at each, square to the street beside it.
 export function buildBusStops(map) {
   const root = new THREE.Group();
   root.name = "bus-stops";
   const stops = map.transit?.stops || [];
   if (!stops.length) return root;
-  const c = document.createElement("canvas");
-  c.width = 64; c.height = 96;
-  const ctx = c.getContext("2d");
-  ctx.fillStyle = "#1d4f9a"; ctx.fillRect(0, 0, 64, 96);
-  ctx.fillStyle = "#ffffff"; ctx.fillRect(6, 6, 52, 30);
-  ctx.fillStyle = "#1d4f9a"; ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("BUS", 32, 22);
-  ctx.fillStyle = "#ffffff"; ctx.font = "bold 13px sans-serif"; ctx.fillText("STOP", 32, 60);
-  const texture = new THREE.CanvasTexture(c);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const flag = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.6, side: THREE.DoubleSide });
-  const flags = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.42, 0.63), flag, stops.length);
+  const tram = new Set((map.transit.routes || []).filter((r) => r.mode === "tram").flatMap((r) => r.runs.flatMap((run) => run.stops.map((st) => st.id))));
+  const count = tram.size;
+  const flags = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.42, 0.63), flagMaterial("#1d4f9a", "BUS"), stops.length - count);
+  const tramFlags = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.42, 0.63), flagMaterial("#c8102e", "TTC"), Math.max(1, count));
+  tramFlags.count = count;
   const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 2.9, 6), shared.pole, stops.length);
   const o = new THREE.Object3D();
+  let nb = 0, nt = 0;
   stops.forEach((stop, i) => {
     const road = map.roadDistance(stop.x, stop.y), e = road?.edge;
     let heading = 0;
@@ -177,9 +186,11 @@ export function buildBusStops(map) {
     }
     o.position.set(stop.x, 1.45, -stop.y); o.rotation.set(0, 0, 0); o.updateMatrix(); poles.setMatrixAt(i, o.matrix);
     // (the flag sticks out from the pole toward the road, read by traffic coming along it)
-    o.position.set(stop.x, 2.55, -stop.y); o.rotation.set(0, heading - Math.PI / 2, 0); o.updateMatrix(); flags.setMatrixAt(i, o.matrix);
+    o.position.set(stop.x, 2.55, -stop.y); o.rotation.set(0, heading - Math.PI / 2, 0); o.updateMatrix();
+    if (tram.has(stop.id)) tramFlags.setMatrixAt(nt++, o.matrix); else flags.setMatrixAt(nb++, o.matrix);
   });
-  for (const m of [flags, poles]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); root.add(m); }
+  for (const m of [flags, tramFlags, poles]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); root.add(m); }
   root.userData.stopCount = stops.length;
+  root.userData.streetcarStops = count;
   return root;
 }

@@ -17,6 +17,7 @@ import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from 
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { BEHIND_M, ONCOMING_M, SIDE_M, canStopFor as canStopForSchool, redsOn, schoolBusRelation } from "./school-bus.js";
 import { zoneLimit } from "./speed-zones.js";
+import { HOLD_M as STREETCAR_HOLD_M, STOP_M as STREETCAR_STOP_M, IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, canStopFor as canStopForStreetcar, doorsOpen, streetcarRelation } from "./streetcar.js";
 import { RoadsideStops } from "./roadside.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -100,6 +101,13 @@ const AUDIT_CROSSWALK_MOVING_MPS = 1;
 // 3.5 m/s^2. It fails to yield if, owing it, its front draws level with that end of the bus at more
 // than 1 m/s while the reds are still on. Counted once a stop.
 const AUDIT_SCHOOL_MOVING_MPS = 1;
+// Not passing a streetcar with its doors open (sim/streetcar.js, Ontario HTA s. 166): once the car,
+// going its way behind it in its lane or in the lane beside it on the side its riders use, first sees
+// its doors open, it owes the stop if it could then stop where drivers do (4 m behind its rear doors,
+// or 4 m behind it in its lane) braking at up to 3.5 m/s^2. It fails to yield if, owing it, its front
+// comes within 2 m of the rear doors (of the streetcar, in its lane) at more than 1 m/s while they are
+// still open. Counted once a stop.
+const AUDIT_STREETCAR_MOVING_MPS = 1;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
@@ -134,6 +142,7 @@ export class World {
     this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it
     this.crosswalkStop = null;    // the marked crosswalk the car has stood still at (sim/crosswalk.js)
     this.schoolCalls = new Map(); // "<school bus id>:<stop>" -> { owed, counted }: one with its reds on
+    this.streetcarCalls = new Map(); // "<streetcar id>:<departure>" -> { owed, counted }: one with its doors open
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -216,6 +225,8 @@ export class World {
     this.evJunction = null;
     this.busCalls.clear();
     this.schoolCalls.clear();
+    this.streetcarCalls.clear();
+    this.streetcarYields?.clear();
     this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
@@ -420,6 +431,28 @@ export class World {
     this.auditEmergency(road);
     this.auditBuses();
     this.auditSchoolBuses();
+    this.auditStreetcars();
+  }
+
+  auditStreetcars() {
+    const ego = this.ego;
+    for (const car of this.npcs) {
+      if (!doorsOpen(car)) continue;
+      const key = `${car.id}:${car.transit.departures}`, r = streetcarRelation(ego, car);
+      if (!r || r.right_m < -IN_LANE_M || r.right_m > STREETCAR_SIDE_M) continue;
+      let rec = this.streetcarCalls.get(key);
+      // (decided when the car first sees the doors open, still short of where it must stop)
+      if (!rec) {
+        if (r.ahead_m <= 0 || !this.visibility.sees(ego, car)) continue;
+        this.streetcarCalls.set(key, rec = { owed: canStopForStreetcar(ego.v, r.ahead_m), counted: false });
+      }
+      if (rec.owed && !rec.counted && r.ahead_m <= STREETCAR_HOLD_M - STREETCAR_STOP_M && ego.v > AUDIT_STREETCAR_MOVING_MPS) {
+        rec.counted = true;
+        this.violations.failed_to_yield++;
+        this.events.push({ type: "failed_to_yield", to: "streetcar", with: car.id });
+      }
+    }
+    if (this.streetcarCalls.size > 20) for (const key of [...this.streetcarCalls.keys()].slice(0, 10)) this.streetcarCalls.delete(key);
   }
 
   auditSchoolBuses() {

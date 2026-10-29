@@ -79,7 +79,7 @@ some) and moved back the 202 signal and 2 stop lines set back from those streets
 build of Kitsilano from its cached OSM with the fixed code gives the same roads, lanes and controls
 as its migrated pack, except for one stop line 1 cm away (packs store lengths to the centimetre).
 
-### Bus routes
+### Bus and streetcar routes
 
 Each bundled map has its bus and trolleybus routes and their stops beside its pack, in
 `data/maps/<key>.transit.v1.json` (`jev/osm/transit.py`). They were built on 2026-10-27 from
@@ -91,6 +91,15 @@ demo add the file to the map as `transit`. With buses running, the sim keeps a b
 parking at each stop. To rebuild a map's routes from today's OSM without touching its pack, run
 `uv run scripts/fetch_map.py <preset> --transit`. A custom area gets its routes from the same
 download as its pack.
+
+Streetcar routes are in the same file, with mode `tram`. Their ways are the tracks, not the streets
+they are laid in, so they are matched to the streets by where they lie: every 2 m along the tracks,
+the directed edge going the same way with a lane whose centre is within 1 m of them. A run is a chain
+of those edges joined end to end, and says which lane the track is in (`lane`). Tracks in a right of
+way of their own, such as the median of Spadina Avenue, lie in no lane and are left out. The Annex's
+file was rebuilt on 2026-10-29 from that day's OSM, which gave its bus routes, crosswalks and zones
+exactly as before and added the 511 Bathurst both ways along Bathurst Street. No other bundled map has
+a streetcar route in a traffic lane.
 
 ### Crosswalks
 
