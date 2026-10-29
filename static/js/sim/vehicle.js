@@ -83,6 +83,15 @@ export const SCHOOL_BUS = {
   power: 190000, cdA: 6.6, crr: 0.009, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
 };
 
+// A Flexity Outlook, the TTC's low-floor streetcar (sim/streetcar.js): 30.2 m long in five sections,
+// 2.54 m wide, about 56 t with a typical load, eight 85 kW motors. Its bogies run on rails: modelled as
+// one rigid body, it only ever follows its track, along the lane it is laid in.
+export const STREETCAR = {
+  ...CAR, kind: "streetcar", wheelbase: 20.2, length: 30.2, width: 2.54, rearOverhang: 5.0, maxSteer: 12 * Math.PI / 180,
+  maxAccel: 1.3, maxSpeed: 19.4, mass: 56000, yawInertia: 4.3e6, cgToFront: 10.1, cgHeight: 1.0, track: 1.49,
+  power: 680000, cdA: 8.5, crr: 0.002, brakeFront: 0.5, driveFront: 0.5, accelLag: 0.5,
+};
+
 // Vehicles stopped at the roadside with their lights flashing (sim/roadside.js), which never move: a
 // light-duty wheel-lift tow truck on a one-ton cab-and-chassis, and a police SUV, at the size of the
 // sim's other cars.

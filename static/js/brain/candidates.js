@@ -148,6 +148,13 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_for_school_bus", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(school.stop_s_route - FRONT) }),
         steer: "hold lane", speed: school.relation === "behind" ? "stop behind the school bus" : "stop short of the school bus coming the other way" });
     }
+    // A streetcar ahead with its doors open: stop behind its rear doors (behind it, in its lane), and
+    // stay stopped while they are open.
+    const tram = snap.streetcar;
+    if (tram && tram.doors && tram.bumper_to_stop_m > 0.3) {
+      out.push({ id: "stop_for_streetcar", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(tram.stop_s_route - FRONT) }),
+        steer: "hold lane", speed: tram.beside ? "stop behind the streetcar's rear doors" : "stop behind the streetcar" });
+    }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -221,6 +228,8 @@ export function simulateAll(candidates, snap, world) {
   const cwStop = snap.crosswalk_stop?.stop_s_route ?? null;
   // where the car stops for a school bus with its reds flashing
   const schoolStop = snap.school_bus?.lights === "red" ? snap.school_bus.stop_s_route : null;
+  // where the car stops for a streetcar with its doors open
+  const tramStop = snap.streetcar?.doors ? snap.streetcar.stop_s_route : null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
@@ -230,7 +239,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let passesBus = false, passesCw = false, passesSchool = false, passesEv = false, pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesEv = false, pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -271,6 +280,8 @@ export function simulateAll(candidates, snap, world) {
         if (cwStop !== null && s + FRONT > cwStop + 1.5) passesCw = true;
         // (and here: 1.5 m past where it stops is still well short of the bus)
         if (schoolStop !== null && s + FRONT > schoolStop + 1.5) passesSchool = true;
+        // (and here: 1.5 m past where it stops is still short of the doors)
+        if (tramStop !== null && s + FRONT > tramStop + 1.5) passesTram = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -332,6 +343,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";
     else if (passesSchool && c.law.kind !== "hard_brake") reject = "passes_stopped_school_bus";
+    else if (passesTram && c.law.kind !== "hard_brake") reject = "passes_streetcar_doors";
     else if (passesHold && c.law.kind !== "hard_brake") reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";
     c.reject = reject;

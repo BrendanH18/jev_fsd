@@ -273,7 +273,7 @@ Where the limit is 60 km/h or less, traffic and the driven car coming up behind 
 that is signalling to pull out let it go first (BC Motor Vehicle Act s. 169.1) when they can stop
 2 m behind it braking at up to 3 m/s^2; nobody parks in a bus zone, and traffic eases left in its
 lane to get past a bus standing at its stop. See `static/js/sim/bus.js` and
-[maps.md](maps.md#bus-routes) for where the routes come from. On the school run (7:00 to 17:00)
+[maps.md](maps.md#bus-and-streetcar-routes) for where the routes come from. On the school run (7:00 to 17:00)
 two school buses drive the streets (`?schoolbuses=0` takes them off) and every 150 to 400 m stop in
 their lane, mid-block on a two-way street with one lane each way and a limit of 50 km/h or less, to
 let one to three children off: ambers flashing as they slow, then reds and the stop arm. Some of
@@ -310,6 +310,22 @@ it safely can. The coaching score counts passing too fast and passing it in the 
 each once a vehicle, with a tip; the HUD says "TOW TRUCK · LIGHTS FLASHING · SLOW TO 40 · MOVE OVER",
 and AI eyes outlines it in amber. The seeded benchmark and the other challenges have none. See
 `static/js/sim/roadside.js`.
+
+Streetcars (Ontario Highway Traffic Act s. 166): in a free drive two streetcars run the map's
+streetcar runs (`?streetcars=0` takes them off; only The Annex has any, the 511 on Bathurst Street),
+placed and replaced as buses are. A streetcar keeps to the lane its track is laid in, never changing
+lanes or pulling over, stops in it at each of its stops, and opens its doors while up to three
+riders get off across the lane beside it to the curb and up to three walk out to it from the curb;
+its doors never close on a rider in the street. At the end of its run it waits until the car is well
+away or out of sight, and leaves. A driver going its way, behind it in its lane or in the lane beside
+it on the curb side, stops 4 m behind its rear doors (the law's line is 2 m behind them; 4 m behind
+it in its own lane) while they are open, if it could stop there braking at up to 3.5 m/s^2 when it first saw them open: traffic,
+cyclists and the driven car alike. Rules gets a `stop_for_streetcar` candidate and rejects going past
+that point (`passes_streetcar_doors`), and slows for a streetcar slowing for its stop. Decision models
+and LLMs get `streetcar`. The audit counts a failure to yield once a stop if the car, owing it,
+comes within 2 m of the rear doors at more than 1 m/s while they are open. The HUD says "STREETCAR · DOORS OPEN ·
+STOP BEHIND THE DOORS", and AI eyes outline it in amber. The seeded benchmark and the other
+challenges have none. See `static/js/sim/streetcar.js`.
 
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery
@@ -492,6 +508,7 @@ node --experimental-default-type=module scripts/test_give_way.mjs
 node --experimental-default-type=module scripts/test_right_hook.mjs
 node --experimental-default-type=module scripts/test_speed_zones.mjs
 node --experimental-default-type=module scripts/test_roadside.mjs
+node --experimental-default-type=module scripts/test_streetcars.mjs
 node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 uv run scripts/verify_jev.py --offline
 ```

@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- Streetcars (`static/js/sim/streetcar.js`, `render/streetcar.js`). Streetcar routes now come from
+  OpenStreetMap with the bus routes (`jev/osm/transit.py`, mode `tram`): a route's ways are its
+  tracks, not the streets they are laid in, so every 2 m along them the street edge going the same
+  way with a lane whose centre is within 1 m of them is matched, and a run is a chain of such edges
+  joined end to end, in that lane (`lane`). Tracks in a right of way of their own, as on Spadina
+  Avenue, lie in no lane and are left out. The Annex's transit file now has the 511 Bathurst both
+  ways along Bathurst Street (one run each way, about 800 m, in the inner lane), stopping at Lennox
+  and Harbord; its bus routes, crosswalks and zones are unchanged, rebuilt from today's OSM. The
+  download now asks Overpass for streetcar routes and tracks too, and no other bundled map has a
+  streetcar route in a traffic lane.
+- In a free drive two Flexity Outlook streetcars (30.2 m, five sections, real size, weight and power;
+  `?streetcars=0` takes them off) run the map's streetcar runs, placed and replaced as buses are. A
+  streetcar keeps to its track: it never changes lanes or pulls over. It stops in its lane with its
+  front 1 m past each stop's pole, opens its doors and waits 12 to 22 s while up to three riders get
+  off by its doors and walk across the lane beside it to the curb, and up to three walk out from the
+  curb to its doors and get on, each stepping into the street once nothing coming is too close to
+  stop. Its doors close once its riders are clear of the street (never on one in it), and it moves
+  off. At the end of its run it waits until the car is well away or cannot see it, and leaves. The
+  tracks are drawn as rails in the lane with the trolley wire over them, and its stops have the TTC's
+  red flag.
+- The rule (Ontario HTA s. 166(1)): a driver going a streetcar's way, behind it in its lane or in the
+  lane beside it on the side its riders use, must not pass it or come within 2 m of its rear doors
+  while they are open: it stops with its front 4 m behind them, leaving room to spare (4 m behind the
+  streetcar in its own lane), if, seeing them open, it could stop there braking at up to 3.5 m/s^2. Traffic, cyclists and
+  the driven car all do. The car's sensing reports `streetcar` (with its doors open, or slowing for
+  its stop); Rules gets a `stop_for_streetcar` candidate, manoeuvres past that point are rejected
+  (`passes_streetcar_doors`), and with the streetcar slowing for its stop the car slows so it could
+  stop there comfortably (at least 4 m/s). Decision models and LLMs get `streetcar` (route, whether
+  it is beside it, doors, where to stop), a situation line, a motion criterion and a prompt line. The
+  audit counts a failure to yield (`streetcar`) once a stop if the car, owing it, comes within 2 m of
+  its rear doors at more than 1 m/s while they are open. The HUD says "STREETCAR · DOORS OPEN · STOP BEHIND
+  THE DOORS", and AI eyes outline it in amber.
+- New challenge, "Behind the doors" (Toronto, Bathurst Street, two lanes each way, 40 km/h): a 511
+  stopped at Harbord with its doors open in the inner lane, and the car in the curb lane beside its
+  track, 75 m behind it. A rider waits at the curb abreast of its rear doors; once the car's front is
+  10 m from them they walk out across the car's lane to the doors without looking, and get on, and
+  the streetcar shuts its doors 4 s later and moves off. Rules and the cautious agent stop behind the
+  doors, never within 2 m of them, and pass. With the doors shut, Rules comes by at 40 km/h and hits
+  the rider. The other challenges and the seeded benchmark run no streetcars, so they and the
+  evaluation engine version are unchanged.
+- New checks in `scripts/test_streetcars.mjs` and `tests/test_transit.py`.
+
 - Slow down, move over (BC MVA Regulations s. 47.02; `static/js/sim/roadside.js`,
   `render/roadside.js`). In a free drive two vehicles stand at the roadside with their lights
   flashing at any time (`?roadside=0` takes them off): a light-duty tow truck (6.6 m, amber lights) in

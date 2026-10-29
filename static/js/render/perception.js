@@ -41,8 +41,9 @@ export class PerceptionView {
       // (an emergency vehicle with its siren on is heard whether or not it is seen: magenta)
       // (a bus signalling to pull out from its stop, seen: amber)
       // (a vehicle stopped at a crosswalk that the car must not pass, a school bus showing its
-      // lights, or one stopped at the roadside with its lights flashing: amber too)
-      const color = isEmergency(object) ? [1, 0.3, 0.9] : visible && (busSignalling(object) || object.id === snap.crosswalk_stop?.id || object.id === snap.school_bus?.id || object.id === snap.roadside_stop?.id) ? [1, 0.7, 0.15] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
+      // lights, a streetcar stopping or with its doors open, or one stopped at the roadside with its
+      // lights flashing: amber too)
+      const color = isEmergency(object) ? [1, 0.3, 0.9] : visible && (busSignalling(object) || object.id === snap.crosswalk_stop?.id || object.id === snap.school_bus?.id || object.id === snap.streetcar?.id || object.id === snap.roadside_stop?.id) ? [1, 0.7, 0.15] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
       for (let i = 0; i < 4; i++) add(boxes, boxColors, corners[i], corners[(i + 1) % 4], color);
     }
     // school and playground zones in effect nearby: their side of the street outlined in yellow-green
@@ -65,7 +66,7 @@ export class PerceptionView {
     }
     const reasons = { collision: "Predicted collision", visibility_stopping_distance: "Beyond stopping sight", passes_cyclist_too_close: "Too close to cyclist",
       off_road: "Leaves the road", runs_red: "Red light", fails_to_yield: "Must yield", runs_stop: "Missed stop", fails_to_yield_to_pedestrian: "Person crossing",
-      fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", fails_to_yield_to_bus: "Bus pulling out", passes_car_stopped_at_crosswalk: "Car stopped at crosswalk", passes_stopped_school_bus: "School bus stopped", enters_unseen_junction: "Cannot see yet",
+      fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", fails_to_yield_to_bus: "Bus pulling out", passes_car_stopped_at_crosswalk: "Car stopped at crosswalk", passes_stopped_school_bus: "School bus stopped", passes_streetcar_doors: "Streetcar doors open", enters_unseen_junction: "Cannot see yet",
       passes_turn_round_point: "Turns round here" };
     const e = snap.emergency;
     const emergency = e ? `${e.kind[0].toUpperCase()}${e.kind.slice(1)} ${e.from === "behind" ? "behind" : e.from === "ahead" ? "ahead" : `from the ${e.from}`}, ${Math.round(e.distance_m)} m${e.seen ? "" : ", heard not seen"}: ${e.lead ? "stuck behind the car, driving on ahead" : `pull over ${e.offset_m.toFixed(1)} m, stop in ${Math.max(0, Math.round(e.bumper_to_stop_m))} m${e.clearing ? " past the junction" : ""}`}` : null;
@@ -75,11 +76,13 @@ export class PerceptionView {
     const crosswalk = w ? `${w.kind[0].toUpperCase()}${w.kind.slice(1)} ${w.stopped ? "stopped" : "stopping"} at a crosswalk in the next lane, ${Math.round(Math.max(0, w.bumper_to_crosswalk_m))} m ahead: stop in ${Math.max(0, Math.round(w.bumper_to_stop_m))} m and look` : null;
     const k = snap.school_bus;
     const school = k ? `School bus ${k.relation === "behind" ? "ahead" : "coming the other way"}, ${Math.round(Math.max(0, k.gap_m))} m: ${k.lights === "red" ? `red lights flashing, stop in ${Math.max(0, Math.round(k.bumper_to_stop_m))} m` : "amber lights, about to stop"}` : null;
+    const q = snap.streetcar;
+    const streetcar = q ? `Streetcar${q.ref ? ` ${q.ref}` : ""} ${q.beside ? "in the next lane" : "ahead"}, ${Math.round(Math.max(0, q.gap_m))} m: ${q.doors ? `doors open, stop in ${Math.max(0, Math.round(q.bumper_to_stop_m))} m, behind them` : "stopping, its doors about to open"}` : null;
     const z = snap.speed_zone;
     const zone = z ? `${ZONE_NAMES[z.kind][0].toUpperCase()}${ZONE_NAMES[z.kind].slice(1)}${z.name ? ` (${z.name})` : ""}, ${ZONE_HOURS[z.kind]}: ${Math.round(z.limit_mps * 3.6)} km/h ${z.in_zone ? (z.ends_in_m !== null ? `for ${Math.round(z.ends_in_m)} m` : "here") : `from ${Math.round(Math.max(0, z.starts_in_m))} m ahead`}` : null;
     const r = snap.roadside_stop;
     const roadside = r ? `${r.name[0].toUpperCase()}${r.name.slice(1)} at the roadside, lights flashing, ${r.gap_m > 0 ? `${Math.round(r.gap_m)} m ahead` : "beside"}: pass at ${Math.round(r.limit_mps * 3.6)} km/h${r.in_adjacent_lane && r.other_lane ? ", move over" : ""}` : null;
-    return { seen, hidden, emergency, bus, crosswalk, school, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

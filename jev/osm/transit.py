@@ -1,4 +1,4 @@
-"""Bus routes and their stops for a map pack, from OpenStreetMap route relations.
+"""Bus and streetcar routes and their stops for a map pack, from OpenStreetMap route relations.
 
     transit = build_transit(bbox, maps_dir, pack)   # cached beside the pack; None without the raw OSM
     transit = transit_from_osm(osm, pack)
@@ -13,6 +13,12 @@ The route's stops (its platform and stop members: the bus stop sign by the curb,
 road) are placed along each run, on the right-hand side of the street within STOP_REACH_M of its
 centreline, and not within STOP_END_M of either end of the run. A stop is kept as a point along an
 edge (`edge`, `s` metres along its centreline) and where its sign stands (`x`, `y`).
+
+A streetcar route's ways are its tracks, not the streets they are laid in, so they are matched to
+the streets by where they lie: every TRACK_STEP_M along the tracks, the directed edge going the same
+way (within TRACK_HEADING_DEG) with a lane whose centre is within TRACK_LANE_M of them. A run is a
+chain of such edges, joined end to end, in that lane (`lane`): the streetcar runs in mixed traffic.
+Tracks in a reserved right of way of their own (in a median, say) lie in no lane, and are not kept.
 
 The file is separate from the pack (`<key>.transit.v1.json`), so adding it leaves the streets as
 they were.
@@ -37,6 +43,9 @@ STOP_LEFT_M = 3.0     # (a stop on the road can be a little left of the street's
 STOP_END_M = 15.0
 STOP_MERGE_M = 30.0   # a route's sign and its stop on the road, this close along the run, are one stop
 SIGN_BACK_M = 1.2     # a stop on the road has its sign this far beyond the edge of the asphalt
+TRACK_STEP_M = 2.0
+TRACK_LANE_M = 1.0
+TRACK_HEADING_DEG = 20.0
 STOP_ROLES = ("stop", "stop_entry_only", "stop_exit_only", "platform", "platform_entry_only", "platform_exit_only")
 
 Bbox = Tuple[float, float, float, float]
@@ -75,6 +84,7 @@ def transit_from_osm(osm: OsmData, pack: dict) -> dict:
     for e in pack["edges"]:
         between.setdefault((e["from"], e["to"]), []).append(e)
     ways = {w["id"]: w for w in osm.ways}
+    tracks = _Tracks(pack["edges"])
     routes, stops, seen = [], {}, set()
     for rel in sorted(osm.relations, key=lambda r: r["id"]):
         tags = rel["tags"]
@@ -91,14 +101,17 @@ def transit_from_osm(osm: OsmData, pack: dict) -> dict:
                 signs.append({"osm": ref_id, "xy": proj.to_xy(lat, lon), "name": ntags.get("name") or "",
                               "road": role.startswith("stop")})
         runs = []
+        tram = tags.get("route") == "tram"
         for chain in _chains(members, ways):
-            for run in _runs(chain, nodes, between):
+            found = _track_runs([proj.to_xy(*osm.nodes[n][:2]) for n in chain if n in osm.nodes], tracks) if tram else [(r, None) for r in _runs(chain, nodes, between)]
+            for run, lane in found:
                 key = (ref, tuple(e["id"] for e in run))
                 if key in seen:
                     continue
                 seen.add(key)
                 placed = _place_stops(run, signs, stops)
-                runs.append({"edges": [e["id"] for e in run], "length": g.r1(sum(e["length"] for e in run)), "stops": placed})
+                runs.append({"edges": [e["id"] for e in run], "length": g.r1(sum(e["length"] for e in run)), "stops": placed,
+                             **({"lane": lane} if lane is not None else {})})
         if runs:
             routes.append({"id": "r%d" % rel["id"], "ref": ref, "name": tags.get("name") or ref,
                            "mode": tags.get("route"), **({"colour": tags["colour"]} if tags.get("colour") else {}), "runs": runs})
@@ -181,6 +194,71 @@ def _runs(chain: List[int], nodes: set, between: Dict[Tuple[str, str], List[dict
     if cur:
         runs.append(cur)
     return [r for r in runs if sum(e["length"] for e in r) >= MIN_RUN_M]
+
+
+class _Tracks:
+    """The pack's directed edges, bucketed on a grid for finding the ones near a point."""
+
+    CELL = 50.0
+
+    def __init__(self, edges: List[dict]):
+        self.grid: Dict[Tuple[int, int], List[dict]] = {}
+        self.cum = {}
+        for e in edges:
+            if e.get("ring"):
+                continue
+            self.cum[e["id"]] = g.cumulative_s([tuple(p) for p in e["pts"]])
+            xs, ys = [p[0] for p in e["pts"]], [p[1] for p in e["pts"]]
+            for i in range(int(math.floor(min(xs) / self.CELL)) - 1, int(math.floor(max(xs) / self.CELL)) + 2):
+                for j in range(int(math.floor(min(ys) / self.CELL)) - 1, int(math.floor(max(ys) / self.CELL)) + 2):
+                    self.grid.setdefault((i, j), []).append(e)
+
+    def near(self, p) -> List[dict]:
+        return self.grid.get((int(math.floor(p[0] / self.CELL)), int(math.floor(p[1] / self.CELL))), [])
+
+    def match(self, p, heading: float) -> Optional[Tuple[dict, int, float]]:
+        """The directed edge going `heading` (within TRACK_HEADING_DEG) with a lane whose centre is
+        within TRACK_LANE_M of `p`, the nearest: (edge, lane, how far from its centre), or None."""
+        best = None
+        for e in self.near(p):
+            q = g.project_point([tuple(x) for x in e["pts"]], p, self.cum[e["id"]])
+            # (beside the edge, not off either end of it)
+            if q["distance"] > max(abs(o) for o in e["lane_offsets"]) + e["lane_width"] or q["distance"] - abs(q["lateral"]) > 0.5:
+                continue
+            if abs(g.wrap_angle(q["heading"] - heading)) > math.radians(TRACK_HEADING_DEG):
+                continue
+            lane = min(range(len(e["lane_offsets"])), key=lambda i: abs(q["lateral"] - e["lane_offsets"][i]))
+            off = abs(q["lateral"] - e["lane_offsets"][lane])
+            if off <= TRACK_LANE_M and (best is None or off < best[2]):
+                best = (e, lane, off)
+        return best
+
+
+def _track_runs(pts: List[Tuple[float, float]], tracks: _Tracks) -> List[Tuple[List[dict], int]]:
+    """The stretches of a streetcar's tracks laid in a lane of the street graph, as runs of its
+    directed edges joined end to end, MIN_RUN_M or longer, each in one lane: [(edges, lane)]."""
+    samples = g.resample(g.dedupe_consecutive(pts), TRACK_STEP_M) if len(pts) >= 2 else []
+    seq: List[Tuple[dict, int]] = []
+    for a, b in zip(samples, samples[1:]):
+        m = tracks.match(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), g.heading_of(a, b))
+        if m is None:
+            seq.append((None, -1))
+        # (near a junction the edge before can be as near: the tracks do not go back to it)
+        elif not any(e is m[0] for e, _ln in seq[-3:]):
+            seq.append((m[0], m[1]))
+    runs, cur, lane = [], [], None
+    for e, ln in seq + [(None, -1)]:
+        # (a run goes on through a junction: the next edge starts where the last ended, in the same
+        # lane; a gap in the matching, or a turn, ends it)
+        if e is not None and cur and cur[-1]["to"] == e["from"] and ln == lane:
+            cur.append(e)
+            continue
+        if e is not None and cur and cur[-1] is e:
+            continue
+        if cur:
+            runs.append((cur, lane))
+        cur, lane = ([e], ln) if e is not None else ([], None)
+    return [(r, ln) for r, ln in runs if sum(e["length"] for e in r) >= MIN_RUN_M]
 
 
 def _place_stops(run: List[dict], signs: List[dict], stops: Dict[str, dict]) -> List[dict]:

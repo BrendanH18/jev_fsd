@@ -97,16 +97,58 @@ class TransitTests(unittest.TestCase):
         self.assertEqual([e["from"] for e in chain], ["n3", "n2"])
         self.assertGreaterEqual(MIN_RUN_M, 150)
 
-    def test_parsing_keeps_only_bus_routes(self):
+    def test_streetcar_tracks_laid_in_a_lane_become_a_run_in_that_lane(self):
+        # tracks 1.6 m right of the avenue's centreline each way (in its lanes, mixed traffic), drawn
+        # as ways of their own (two each, joined end to end, which gives the way they go), and a third
+        # 9 m out, in a right of way of its own
+        proj = Projection(LAT0, LON0)
+
+        def track(osm, first, way_id, y, xs):
+            for i, x in enumerate(xs):
+                lat, lon = proj.to_latlon(x, y)
+                osm.add_node(first + i, lat, lon, {})
+            ids = list(range(first, first + len(xs)))
+            osm.add_way(way_id, ids[:2], {"railway": "tram"})
+            osm.add_way(way_id + 100, ids[1:], {"railway": "tram"})
+            return [("way", way_id, ""), ("way", way_id + 100, "")]
+
+        osm, bbox = avenue()
+        east = track(osm, 1000, 60, -1.6, [-290, -100, 120, 290])
+        west = track(osm, 1100, 61, 1.6, [290, 150, -60, -290])
+        median = track(osm, 1200, 62, -9, [-290, 0, 290])
+        lat, lon = proj.to_latlon(60, -1.6)
+        osm.add_node(1300, lat, lon, {"railway": "tram_stop", "name": "Tram 1"})
+        osm.add_relation(950, east + [("node", 1300, "stop")], {"type": "route", "route": "tram", "ref": "5", "name": "5 East"})
+        osm.add_relation(951, west, {"type": "route", "route": "tram", "ref": "5", "name": "5 West"})
+        osm.add_relation(952, median, {"type": "route", "route": "tram", "ref": "6", "name": "6 Median"})
+        pack = pack_from_osm(osm, bbox)
+        transit = transit_from_osm(osm, pack)
+        trams = {r["name"]: r for r in transit["routes"] if r["mode"] == "tram"}
+        self.assertEqual(set(trams), {"5 East", "5 West"})
+        edges = {e["id"]: e for e in pack["edges"]}
+        for name, nodes in (("5 East", ["n1", "n2", "n3", "n4", "n5"]), ("5 West", ["n5", "n4", "n3", "n2", "n1"])):
+            runs = trams[name]["runs"]
+            self.assertEqual(len(runs), 1, name)
+            chain = [edges[i] for i in runs[0]["edges"]]
+            self.assertEqual([e["from"] for e in chain] + [chain[-1]["to"]], nodes, name)
+            self.assertEqual(runs[0]["lane"], 0)
+        stops = trams["5 East"]["runs"][0]["stops"]
+        self.assertEqual([s["id"] for s in stops], ["s1300"])
+        self.assertAlmostEqual(stops[0]["s"], 60, delta=0.5)
+        # (the bus route is as it was)
+        self.assertNotIn("lane", next(r for r in transit["routes"] if r["mode"] == "bus")["runs"][0])
+
+    def test_parsing_keeps_only_bus_and_streetcar_routes(self):
         xml = b"""<?xml version="1.0"?><osm>
           <node id="1" lat="49" lon="-123"/><node id="2" lat="49.001" lon="-123"/>
           <way id="5"><nd ref="1"/><nd ref="2"/><tag k="highway" v="residential"/></way>
           <relation id="7"><member type="way" ref="5" role=""/><member type="node" ref="1" role="stop 1"/>
             <tag k="type" v="route"/><tag k="route" v="bus"/><tag k="ref" v="4"/></relation>
           <relation id="8"><member type="way" ref="5" role=""/><tag k="type" v="route"/><tag k="route" v="bicycle"/></relation>
+          <relation id="9"><member type="way" ref="5" role=""/><tag k="type" v="route"/><tag k="route" v="tram"/></relation>
         </osm>"""
         osm = parse_xml(xml)
-        self.assertEqual([r["id"] for r in osm.relations], [7])
+        self.assertEqual([r["id"] for r in osm.relations], [7, 9])
         self.assertEqual(osm.relations[0]["members"], [("way", 5, ""), ("node", 1, "stop 1")])
 
     def test_built_beside_the_pack_from_the_cached_download_only(self):

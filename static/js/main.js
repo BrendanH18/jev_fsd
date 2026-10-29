@@ -12,6 +12,8 @@ import { createEmergencyMesh, syncEmergency } from "./render/emergency.js";
 import { buildBusStops, createBusMesh, syncBus } from "./render/bus.js";
 import { busYield, isBus } from "./sim/bus.js";
 import { createSchoolBusMesh, syncSchoolBus } from "./render/school-bus.js";
+import { buildTracks, createStreetcarMesh, syncStreetcar } from "./render/streetcar.js";
+import { IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, doorsOpen, isStreetcar, streetcarRelation } from "./sim/streetcar.js";
 import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
 import { ROADSIDE_COUNT, ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
@@ -97,6 +99,7 @@ export async function boot() {
   view.scene.add(buildings);
   view.addScenery(buildTrees(map, roads, buildings.userData.index));
   view.addScenery(buildBusStops(map));
+  view.addScenery(buildTracks(map));
   view.scene.add(buildSurroundings(map));
   view.scene.add(buildCityIdentity(map, status.map.id));
   view.backdrop.visible = inVancouver(pack.origin);   // the North Shore mountains
@@ -141,7 +144,9 @@ export async function boot() {
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
-    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, schoolBuses });
+    // streetcars run their routes on their tracks, where the map has any (`?streetcars=0` takes them off)
+    const streetcars = params.get("streetcars") !== "0";
+    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, streetcars, schoolBuses });
     autopilot = new Autopilot(world, callbacks);
   }
   // (those stopped at the roadside with their lights flashing get a mesh each, below)
@@ -165,7 +170,7 @@ export async function boot() {
     for (const n of fleet.vehicles) {
       ids.add(n.id);
       if (npcMeshes.has(n.id)) continue;
-      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isSchoolBus(n) ? createSchoolBusMesh(n.id) : createCarMesh(n.color, n.id, n.style ?? null);
+      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isStreetcar(n) ? createStreetcarMesh(n.id, n.headsign || n.ref || "") : isSchoolBus(n) ? createSchoolBusMesh(n.id) : createCarMesh(n.color, n.id, n.style ?? null);
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
@@ -593,7 +598,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -666,7 +671,7 @@ export async function boot() {
     syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id);
-      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isSchoolBus(n) ? syncSchoolBus : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
+      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isSchoolBus(n) ? syncSchoolBus : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
     }
     for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
@@ -692,6 +697,10 @@ export async function boot() {
     const school = fleet.schoolBuses?.find((b) => { const r = redsOn(b) && schoolBusRelation(world.ego, b); return r && r.ahead_m > 0 && r.ahead_m < 70 && Math.abs(r.right_m) < SCHOOL_SIDE_M && world.visibility.sees(world.ego, b); });
     const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
     if (school && schoolKey !== announcedSchool) { announcedSchool = schoolKey; hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500); }
+    // a streetcar ahead with its doors open, that the car must stop behind: say so once
+    const tram = fleet.streetcars?.find((c) => { const r = doorsOpen(c) && streetcarRelation(world.ego, c); return r && r.ahead_m > 0 && r.ahead_m < 70 && r.right_m > -STREETCAR_IN_LANE_M && r.right_m < STREETCAR_SIDE_M && world.visibility.sees(world.ego, c); });
+    const tramKey = tram ? `${tram.id}:${tram.transit.departures}` : null;
+    if (tram && tramKey !== announcedStreetcar) { announcedStreetcar = tramKey; hud.badge("STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS", "safety", 2500); }
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once
     // (and to move over, in the lane next to it where there is another going the car's way)
     const roadsideAhead = world.roadside.vehicles.map((v) => ({ v, r: roadsideRelation(world.ego, v) })).find(({ v, r }) => r && r.ahead_m < 70 && world.sees(world.ego, v));
@@ -710,7 +719,7 @@ export async function boot() {
       const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
       syncPerson(pedMesh(p), next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha), view.camera, world.weather === "rain");
     }
-    for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
+    for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_") || id.startsWith("rider_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision));
     weatherView.update(dt);

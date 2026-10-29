@@ -18,6 +18,7 @@ import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, isEmergency, isJunction, leadsEmer
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
+import { STOP_M as STREETCAR_STOP_M, IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, canStopFor as canStopForStreetcar, doorsOpen, holdFromRear, isStreetcar, stoppingAt, streetcarHold, streetcarRelation } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
 
@@ -140,7 +141,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, speed_zone: null, roadside_stop: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, speed_zone: null, roadside_stop: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -246,6 +247,7 @@ export function buildSnapshot(world, executing = null) {
     snap.bus = busPullingOut(world, frontS, visible);
     snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
     snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
+    snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
@@ -608,6 +610,38 @@ function schoolBusStop(world, route, frontS, visibleNpcs) {
     if (world.schoolYields.get(key) && (!red || h.stop_m < red.bumper_to_stop_m)) red = out;
   }
   return red || amber;
+}
+
+// A streetcar the car must not pass (sim/streetcar.js, Ontario HTA s. 166): stopped with its doors
+// open, ahead on the car's route going its way, with the car in its lane behind it or in the lane
+// beside it on the side its riders use (`beside`). The car stops with its front 4 m behind its rear
+// doors, short of the law's 2 m, or 4 m behind it in its lane (`stop_s_route`), and stays stopped
+// while they are open. Owed
+// when the car, first seeing them open, could stop there braking at no more than 3.5 m/s^2; decided
+// once a stop and remembered in `world.streetcarYields`. With none, the nearest slowing for its stop
+// (`doors` false, `stopping` true), or null.
+function streetcarStop(world, route, frontS, visibleNpcs) {
+  world.streetcarYields ||= new Map();
+  let open = null, stopping = null;
+  for (const car of visibleNpcs) {
+    if (!isStreetcar(car) || !(doorsOpen(car) || stoppingAt(car))) continue;
+    const h = streetcarHold(route.pts, route.cum, frontS, car), r = streetcarRelation(world.ego, car);
+    if (!h || !r || r.right_m < -STREETCAR_IN_LANE_M || r.right_m > STREETCAR_SIDE_M) continue;
+    // (in its lane or beside it, by where the car is now)
+    const stop = h.gap_m + holdFromRear(r.right_m);
+    // (until its front reaches the doors, or the streetcar in its lane: just past where it stops, it
+    // stays stopped)
+    if (stop + STREETCAR_STOP_M <= 0) continue;
+    const out = { id: car.id, ref: car.ref || null, beside: r.beside, doors: doorsOpen(car), gap_m: h.gap_m, stop_s_route: frontS + stop, bumper_to_stop_m: stop };
+    if (!out.doors) { if (!stopping || h.gap_m < stopping.gap_m) stopping = { ...out, stopping: true }; continue; }
+    const key = `${car.id}:${car.transit.departures}`;
+    if (!world.streetcarYields.has(key)) {
+      if (world.streetcarYields.size > 20) world.streetcarYields.delete(world.streetcarYields.keys().next().value);
+      world.streetcarYields.set(key, canStopForStreetcar(world.ego.v, stop));
+    }
+    if (world.streetcarYields.get(key) && (!open || stop < open.bumper_to_stop_m)) open = out;
+  }
+  return open || stopping;
 }
 
 // A vehicle stopped at the roadside with its lights flashing that the car must slow down and move over
@@ -1011,6 +1045,13 @@ export function desiredSpeed(snap) {
     const vs = sb.lights === "red" ? (room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel)) : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
     if (vs < v) { v = vs; reasons.push(sb.lights === "red" ? "school bus stopped, red lights flashing" : "school bus about to stop"); }
   }
+  // a streetcar with its doors open: stop behind them; slowing for its stop, slow down, ready to
+  const sc = snap.streetcar;
+  if (sc) {
+    const room = sc.bumper_to_stop_m;
+    const vs = sc.doors ? (room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel)) : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
+    if (vs < v) { v = vs; reasons.push(sc.doors ? "streetcar stopped, doors open" : "streetcar stopping"); }
+  }
   if (snap.pedestrian) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
@@ -1063,6 +1104,7 @@ export function hazardFlags(snap) {
   if (snap.bus) f.push("bus");
   if (snap.crosswalk_stop) f.push("crosswalk");
   if (snap.school_bus) f.push("school bus");
+  if (snap.streetcar) f.push("streetcar");
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");

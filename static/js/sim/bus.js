@@ -49,13 +49,13 @@ function crossingAt(map, node, e) {
 // Where along edge `edgeId` (metres along its centreline) a bus's front stops for a stop whose sign
 // is `s` metres along it: 1 m past the sign, its rear clear of the junction the street starts at,
 // and 1 m short of the crossing street at its end (or 0.5 m short of a stop line there). Null when
-// the street is too short for both.
-export function busStopFront(map, edgeId, s) {
+// the street is too short for both. (`length`: a streetcar's, sim/streetcar.js, is longer.)
+export function busStopFront(map, edgeId, s, length = BUS.length) {
   const e = map.edges.get(edgeId);
   if (!e) return null;
   const L = e.cum ? e.cum[e.cum.length - 1] : e.length;
   let front = s + SIGN_TO_FRONT_M;
-  if (isJunction(map, e.from)) front = Math.max(front, crossingAt(map, e.from, e) + BUS.length + 1);
+  if (isJunction(map, e.from)) front = Math.max(front, crossingAt(map, e.from, e) + length + 1);
   let last = L - 0.5;
   if (isJunction(map, e.to)) last = Math.min(last, L - map.crossingHalfWidth(e.id) - 1);
   if (e.control) last = Math.min(last, e.control.s_line - 0.5);
@@ -68,6 +68,7 @@ export function busZones(map) {
   if (zoneCache.has(map)) return zoneCache.get(map);
   const zones = new Map();
   for (const route of map.transit?.routes || []) for (const run of route.runs) for (const stop of run.stops) {
+    if (route.mode === "tram") continue;   // (a streetcar stops in its lane, sim/streetcar.js)
     const front = busStopFront(map, stop.edge, stop.s);
     if (front === null) continue;
     if (!zones.has(stop.edge)) zones.set(stop.edge, []);
