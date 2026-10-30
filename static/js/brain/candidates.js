@@ -19,7 +19,9 @@ const LANE_TOL = 1.2;
 const CYCLIST_CLEARANCE_M = 1.0;
 const QUEUE_GAP_M = 2.5;
 const LANE_RETURN_MARGIN_M = 8;
-const MIN_CHANGE_M = 12;   // the sharpest lane change offered, for leaving a lane about to end
+const MIN_CHANGE_M = 12;
+// Scenery standing in the car's lane ahead, as far as this, gets nudges of a full metre on offer.
+const SCENERY_LOOK_M = 40;   // the sharpest lane change offered, for leaving a lane about to end
 
 function speedLabel(v, ego, limit) {
   if (v <= 0.05) return "stop";
@@ -31,6 +33,19 @@ function speedLabel(v, ego, limit) {
 export function speedVsTarget(v, target) {
   if (Math.abs(v - target) < 0.4) return "at target";
   return v < target ? (v <= 0.05 ? "stopped" : "below target") : "above target";
+}
+
+// Whether scenery stands in the car's lane within SCENERY_LOOK_M (a building's corner mapped over the
+// curb lane, say): the car, centred in the lane (`center` metres right of the route), would touch it.
+// A half-metre nudge may not clear it, and without a wider one the car could only stop short of it.
+function sceneryInLane(snap, world, center) {
+  const route = snap.route, p = snap.routeProj, obstacles = world.staticObstacles;
+  if (!route || !p || !obstacles) return false;
+  for (let d = 2; d <= SCENERY_LOOK_M && p.s + d < route.length; d += 2) {
+    const [x, y] = route.pointAt(p.s + d), h = route.headingAt(p.s + d);
+    if (obstacles.touching({ x: x + Math.sin(h) * center, y: y - Math.cos(h) * center, psi: h }, world.ego.spec)) return true;
+  }
+  return false;
 }
 
 export function sampleCandidates(snap, world) {
@@ -51,11 +66,16 @@ export function sampleCandidates(snap, world) {
   // A continuing change keeps the lane it started from, so going back stays on offer.
   const carry = shifting ? { shift: shifting, ...(lane.from_delta !== null ? { fromLane: lane.from_delta, fromIdx: lane.route_index + lane.from_delta } : {}) } : {};
   const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry) });
+  // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
+  // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
+  // lane beside it.
+  const scenery = !shifting && !!lane && sceneryInLane(snap, world, keep.center);
+  const nudge = scenery ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : 0;
 
   if (!lost && !offRoad) {
     const offsets = shifting ? [0] : [0, -0.5, 0.5];
     const lateral = lane ? Math.abs(lane.lateral) : snap.routeProj ? Math.abs(snap.routeProj.lateral) : 0;
-    if (!shifting && (lateral > 0.5 || snap.following || (snap.traffic.length || snap.roadside?.length))) offsets.push(-1.0, 1.0);
+    if (!shifting && (lateral > 0.5 || snap.following || (snap.traffic.length || snap.roadside?.length) || scenery)) offsets.push(-1.0, 1.0);
     const target = snap.target ? snap.target.v : limit;
     const speeds = new Set([0, Math.max(0, v - 3), v, Math.min(limit, v + 2), limit, target, target * 0.75].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
     for (const d of offsets) {
@@ -98,7 +118,7 @@ export function sampleCandidates(snap, world) {
     const queue = f ? f.s - (f.vehicle.spec || CAR).rearOverhang - FRONT - QUEUE_GAP_M : Infinity;
     const stopAt = (mark) => Math.min(mark, queue);
     if (snap.intersection && snap.intersection.bumper_to_line_m > 0.3) {
-      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
+      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "approach and stop at the line" });
     }
     // Giving way at a two-way stop or a junction without a sign: past the line, wait where the car
@@ -206,7 +226,7 @@ export function sampleCandidates(snap, world) {
   // changes ahead of small nudges.
   const priority = (c) => c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
   const list = dedupe(out).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
-  list.push({ id: "hard_brake", law: inLane({ kind: "hard_brake" }), steer: "hold lane", speed: "brake hard" });
+  list.push({ id: "hard_brake", law: inLane({ kind: "hard_brake", offset: nudge }), steer: "hold lane", speed: "brake hard" });
   return list;
 }
 
