@@ -50,7 +50,9 @@ export class DriveScore {
     const speeding = !!road && speed > road.limit + SPEED_GRACE_MPS;
     const offRoad = road?.on_road === false;
     const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
-    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0;
+    // (going round a work zone's closed stretch through the other lane, sim/work-zone.js, is not)
+    const zonePass = world.workZones?.passing(road?.limit ?? 11.2) || null;
+    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0 && zonePass?.side !== "closed";
     if (speeding) this.speeding += dt;
     const zone = road?.zone;
     if (speeding && zone) {
@@ -89,7 +91,6 @@ export class DriveScore {
     }
     // a work zone (sim/work-zone.js): its limit holds from the stop line to the end of the one-lane
     // section
-    const zonePass = world.workZones?.passing(road?.limit ?? 11.2) || null;
     const workZoneFast = !!zonePass && speed > zonePass.limit + SPEED_GRACE_MPS;
     if (workZoneFast) {
       this.workZoneSpeeding += dt;

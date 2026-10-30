@@ -405,12 +405,13 @@ await test("the challenge, closed loop: Rules and the cautious agent wait at the
   for (const brain of ["rules", "cautious"]) {
     let arrived = false;
     const ctx = setupChallenge(OTT, challenge, { brain, onEvent: (e) => { if (e.type === "arrived") arrived = true; } });
-    const { world, fleet, autopilot } = ctx, zone = world.workZones.zones[0];
+    const { world, fleet, autopilot } = ctx, zone = world.workZones.zones[0], score = new DriveScore(world);
     assert.equal(OTT.edges.get(zone.closed).name, "Queen Street", "on Queen Street");
     assert.equal(world.route.edges[0], zone.closed, "the car's lane closed");
     let inOneLaneOnStop = 0, waited = 0, met = 0, minLat = Infinity;
     while (world.t < 120 && autopilot.enabled && !arrived) {
-      step({ world, fleet, autopilot });
+      const road = step({ world, fleet, autopilot });
+      score.record(world, road, 1 / 60);
       if (autopilot.firing) await autopilot.firing;
       const f = frontOn(zone, "closed", world.ego);
       if (paddle(zone, "closed") === "stop" && f > zone.d0 && f < zone.d1) inOneLaneOnStop++;
@@ -425,6 +426,8 @@ await test("the challenge, closed loop: Rules and the cautious agent wait at the
     assert.ok(waited > 8, `${brain} waited ${waited.toFixed(1)} s at the line`);
     assert.ok(met > 0, "while the oncoming cars came by");
     assert.ok(minLat < -1, `${brain} went round the work`);
+    // (going round on SLOW is not driving the wrong way)
+    assert.equal(score.snapshot().wrong_way_s, 0, `${brain}: going round is not the wrong way`);
   }
 });
 
