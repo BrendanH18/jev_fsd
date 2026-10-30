@@ -109,6 +109,9 @@ test("a left arrow: green for the turn while the approach opposite waits on red,
   near(secondsToGreen(SIG16, "A", 20, ISABEL, "left"), 5, 0.2, "to the arrow");
   near(secondsToGreen(SIG16, "A", 20, ISABEL, "straight"), 17, 0.2, "to the green going straight");
   assert.equal(secondsToGreen(SIG16, "A", 30, ISABEL, "left"), 0);
+  // (on the yellow arrow, or the red after it, the group's green is next)
+  near(secondsToGreen(SIG16, "A", 34, ISABEL, "left"), 3, 0.2, "after the yellow arrow");
+  near(secondsToGreen(SIG16, "A", 36.5, ISABEL, "left"), 0.5, 0.2, "after the red");
   near(secondsToGreen(SIG16, "A", 30, OPPOSITE, "straight"), 7, 0.2, "opposite");
   assert.equal(secondsToGreen(SIG16, "A", 30), 0, "the group's green");
 });

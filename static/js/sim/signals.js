@@ -194,10 +194,13 @@ export function secondsToGreen(intersection, group, t, edgeId = null, turn = "st
     return ((p.start - u) % c + c) % c;
   }
   if (movementSignal(approachPhase(intersection, edgeId, t), turn) === "green") return 0;
+  // (the approach with the advance turning left has two greens a cycle, the arrow and the group's
+  // green after its clearance: the nearer one)
   const adv = plan.advance;
-  const leads = !adv || adv.group !== group || (edgeId === adv.edge && (adv.style === "flash" || isLeft(turn)));
-  const start = leads ? p.start : p.start + adv.length + adv.clear;
-  return ((start - u) % c + c) % c;
+  if (!adv || adv.group !== group) return ((p.start - u) % c + c) % c;
+  const starts = [p.start + adv.length + adv.clear];
+  if (edgeId === adv.edge && (adv.style === "flash" || isLeft(turn))) starts.push(p.start);
+  return Math.min(...starts.map((s) => ((s - u) % c + c) % c));
 }
 
 // Stop-sign progress for one vehicle: approaching -> stopped -> completed. Reset when the vehicle
