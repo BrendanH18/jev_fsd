@@ -150,6 +150,9 @@ export class StaticObstacles {
     return out;
   }
 
+  // The first obstacle a vehicle of `spec` standing at `pose` (its rear axle) touches, or null.
+  touching(pose, spec, margin = 0) { return this.overlaps(boxAt(pose, spec), margin)[0] || null; }
+
   overlaps(box, margin = 0) {
     const r = Math.hypot(box.halfLength + margin / 2, box.halfWidth + margin / 2);
     return this.query([box.center[0] - r, box.center[1] - r, box.center[0] + r, box.center[1] + r])

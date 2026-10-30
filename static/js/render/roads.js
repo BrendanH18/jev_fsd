@@ -10,7 +10,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { GeoBuilder } from "./geo.js";
 import { LAYER, groundLayer, toThree } from "./scene.js";
-import { asphaltTexture, concreteTexture, crosswalkSignTexture, zoneSignTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation, walkSignalTexture, handSignalTexture } from "./textures.js";
+import { asphaltTexture, concreteTexture, crosswalkSignTexture, zoneSignTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation, walkSignalTexture, handSignalTexture, leftArrowTexture } from "./textures.js";
 import { snowable } from "./weather.js";
 import { buildStreetLights } from "./citylights.js";
 import { wetReflective } from "./reflection.js";
@@ -242,7 +242,10 @@ const T = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
 const metal = () => new THREE.MeshStandardMaterial({ color: 0x4a4f55, roughness: 0.45, metalness: 0.7 });
 
 // Far-side mast arms: a pole on the far right corner of each approach with one head over each lane,
-// the Vancouver style of yellow heads on black backplates.
+// the Vancouver style of yellow heads on black backplates. At a junction with an advance green
+// (sim/signals.js) each approach's heads light on their own, and where it shows as a left arrow the
+// head over the approach's left lane has two more sections below: a yellow arrow and a green arrow.
+// Where it shows as a flashing green, the green ball blinks.
 function buildSignals(map, group) {
   const pole = new THREE.CylinderGeometry(0.13, 0.17, 6.4, 12).translate(0, 3.2, 0);
   const arm = (len) => new THREE.CylinderGeometry(0.07, 0.1, len, 8).rotateX(Math.PI / 2).translate(0, 6.1, -len / 2);
@@ -257,13 +260,17 @@ function buildSignals(map, group) {
   const pedHousing = new THREE.BoxGeometry(0.22, 0.42, 0.36);
   const pedLens = new THREE.PlaneGeometry(0.3, 0.3).rotateY(-Math.PI / 2);
   const pedGeos = new Map();    // "inter|group|walk" and "inter|group|hand" -> geometries
-  const lampGeos = new Map();   // "inter|group|color" -> geometries
-  const sprites = new Map();    // "inter|group|color" -> sprites
-  const colors = { red: 0xff2a1a, yellow: 0xffb21a, green: 0x1aff8c };
+  const lampGeos = new Map();   // "inter|head|color" -> geometries (head: the group, or "@edge")
+  const sprites = new Map();    // "inter|head|color" -> sprites
+  const colors = { red: 0xff2a1a, yellow: 0xffb21a, green: 0x1aff8c, arrow_yellow: 0xffb21a, arrow_green: 0x1aff8c };
+  const arrowHousing = new THREE.BoxGeometry(0.36, 0.72, 0.4);
+  const arrowPlate = new THREE.BoxGeometry(0.03, 0.72, 0.78);
   const glowMats = Object.fromEntries(Object.entries(colors).map(([k, c]) => [k, new THREE.SpriteMaterial({
     map: glowTexture(), color: c, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
   })]));
   for (const { inter, a, e, heading: h, poleLat, x: px, y: py } of sceneryFor(map).signals) {
+      const adv = inter.plan?.advance, head = adv ? `@${a.edge}` : a.group;
+      const arrows = adv?.style === "arrow" && adv.edge === a.edge;
       for (const kind of ["walk", "hand"]) {
         const k = `${inter.id}|${a.group}|${kind}`;
         if (!pedGeos.has(k)) pedGeos.set(k, []);
@@ -282,16 +289,22 @@ function buildSignals(map, group) {
         housings.push(placed(housing, px, py, 0, h, T(x, y, z)));
         plates.push(placed(backplate, px, py, 0, h, T(x + 0.2, y, z)));
         if (!onPole) poles.push(placed(hanger, px, py, 0, h, T(x, 5.9, z)));
-        ["red", "yellow", "green"].forEach((name, k) => {
+        // (the left arrow: under the head over the left lane)
+        const withArrow = arrows && i === 0;
+        if (withArrow) {
+          housings.push(placed(arrowHousing, px, py, 0, h, T(x, y - 0.9, z)));
+          plates.push(placed(arrowPlate, px, py, 0, h, T(x + 0.2, y - 0.9, z)));
+        }
+        (withArrow ? ["red", "yellow", "green", "arrow_yellow", "arrow_green"] : ["red", "yellow", "green"]).forEach((name, k) => {
           const ly = y + 0.34 - k * 0.34;
           housings.push(placed(hood, px, py, 0, h, T(x - 0.28, ly + 0.15, z)));
-          const key = `${inter.id}|${a.group}|${name}`;
+          const key = `${inter.id}|${head}|${name}`;
           if (!lampGeos.has(key)) { lampGeos.set(key, []); sprites.set(key, []); }
           lampGeos.get(key).push(placed(lens, px, py, 0, h, T(x - 0.185, ly, z)));
           const sp = new THREE.Sprite(glowMats[name]);
           const wp = new THREE.Vector3(x - 0.3, ly, z).applyMatrix4(new THREE.Matrix4().compose(toThree(px, py, 0), new THREE.Quaternion().setFromAxisAngle(Y_AXIS, h), new THREE.Vector3(1, 1, 1)));
           sp.position.copy(wp);
-          sp.scale.setScalar(1.1);
+          sp.scale.setScalar(name.startsWith("arrow_") ? 0.7 : 1.1);
           sp.visible = false;
           group.add(sp);
           sprites.get(key).push(sp);
@@ -309,8 +322,9 @@ function buildSignals(map, group) {
   addMerged(plates, new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.7 }));
   const lampMats = new Map();
   for (const [key, geos] of lampGeos) {
-    const name = key.split("|")[2];
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, emissive: colors[name], emissiveIntensity: 0.04, roughness: 0.3 });
+    const name = key.split("|")[2], arrow = name.startsWith("arrow_");
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, emissive: colors[name], emissiveIntensity: 0.04, roughness: 0.3,
+      ...(arrow ? { emissiveMap: leftArrowTexture() } : {}) });
     lampMats.set(key, mat);
     addMerged(geos, mat, false);
   }
@@ -334,18 +348,25 @@ function buildSignals(map, group) {
         hand.emissiveIntensity = state === "dont" || (state === "flash" && blink) ? 3 : 0;
       }
     },
-    set(intersectionId, phaseByGroup) {
-      for (const g of ["A", "B"]) {
-        const state = phaseByGroup[g] || "red";
-        const key = `${intersectionId}|${g}`;
-        if (last.get(key) === state) continue;
-        last.set(key, state);
-        for (const name of ["red", "yellow", "green"]) {
+    // `phases`: what each group shows ({ A, B }), or at a junction with an advance green, each
+    // approach ("@<edge>": sim/signals.js approachPhase); `t` blinks a flashing green
+    set(intersectionId, phases, t = 0) {
+      const blink = (t % 1) < 0.5;
+      for (const [head, state] of Object.entries(phases)) {
+        if (head === "u") continue;
+        const key = `${intersectionId}|${head}`;
+        const lit = state === "advance" ? (blink ? ["green"] : []) : state === "arrow" ? ["red", "arrow_green"]
+          : state === "arrow_yellow" ? ["red", "arrow_yellow"] : [state || "red"];
+        const shown = lit.join(",");
+        if (last.get(key) === shown) continue;
+        last.set(key, shown);
+        for (const name of ["red", "yellow", "green", "arrow_yellow", "arrow_green"]) {
           const mat = lampMats.get(`${key}|${name}`);
           if (!mat) continue;
-          const on = name === state;
+          const on = lit.includes(name);
           mat.emissiveIntensity = on ? 5 : 0.04;
-          mat.color.setHex(on ? colors[name] : 0x1a1a1a);
+          // (an arrow lights only its arrow, not the whole lens)
+          mat.color.setHex(on && !name.startsWith("arrow_") ? colors[name] : 0x1a1a1a);
           for (const sp of sprites.get(`${key}|${name}`)) sp.visible = on;
         }
       }

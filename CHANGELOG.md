@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- Advance greens and left-turn arrows (`static/js/sim/signals.js`). Where two multi-lane major streets
+  cross at a signal, one approach on one of them (with an approach opposite it and a left turn out of
+  it) leads its group with a protected left turn. The cycle grows by 12 s for it: 8 s in which only that
+  approach goes while the approach opposite waits on red, then 4 s of clearance, then the group's usual
+  green, with left turns yielding to oncoming traffic as before. In Ontario and Québec it is a flashing
+  green ball, under which the approach may go any way (the MTO Driver's Handbook; the SAAQ's "feu vert
+  clignotant"); everywhere else a green left arrow beside a red ball, under which only the turn goes
+  (BC's Motor Vehicle Act s. 130), never a flashing green in BC, where that means a pedestrian-controlled
+  signal. The bundled maps have 50 such junctions (none in Saint-Roch). People walking alongside start
+  their walk once the clearance is over.
+- Every signal's light is now the light for one approach and one movement (`approachPhase`,
+  `movementSignal`): traffic, buses, streetcars and the driven car turn left on the arrow and wait for
+  their own green going any other way, and a right turn on red from the approach opposite waits while
+  the advance runs, as its protected turns come into the same street. The car's sensing reports
+  `intersection.advance` and the light for its own movement in `intersection.signal`; a protected left
+  does not wait for oncoming traffic. Decision models and LLMs get `intersection.advance`, a situation
+  line and a prompt line. The audit counts a red light run for crossing on a red for the car's movement,
+  and judges a car that crossed on a left arrow by which way it went. Signal heads light per approach
+  there, with a yellow and a green arrow section on the left-lane head, or a blinking green ball; the
+  HUD says "LEFT ARROW · NOT YOUR LIGHT · WAIT FOR GREEN", "LEFT ARROW · TURN PROTECTED" and the like.
+- New challenge, "Not your arrow" (Winnipeg, Isabel Street at William Avenue): the car waits at a red
+  in the right lane, going straight on, as a green left arrow comes on for the three cars turning left
+  beside it. Rules and the cautious agent wait for their own green and arrive; a driver who goes with the
+  turning cars runs the red. The other twenty challenges play out exactly as before, and the evaluation
+  engine version is unchanged.
+- New checks in `scripts/test_advance_green.mjs`.
+- Scenery standing in the car's lane (`static/js/brain/candidates.js`): where the car, centred in its
+  lane, would touch a building, wall or post within 40 m, Rules is offered nudges of a full metre (not
+  only half a metre), and stops at a line or brakes hard where it is, not back in the middle of the lane.
+  On Belleville Street in Victoria's Old Town a mapped building's corner stands 0.4 m from the curb
+  lane's centre; the car used to stop short of it until passing traffic unlocked a wider nudge (over two
+  minutes on the seeded benchmark), and with the new signal timing then hit it. New check in
+  `scripts/test_scenery_collision.mjs`; the seeded benchmark is in `docs/rules-baseline.md`.
+
 - Keeping the junction clear (`static/js/sim/junction-box.js`). Québec's Highway Safety Code: even on
   a green, a driver must not enter an intersection without room past it to clear it completely, and
   stops before it instead (Québec.ca, "Savoir manœuvrer aux intersections"; the SPVM's guide). At a

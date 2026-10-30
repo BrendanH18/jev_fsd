@@ -10,7 +10,7 @@
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, comfort } from "./vehicle.js";
 import { purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
-import { phaseOf, StopMemory } from "./signals.js";
+import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
 import { rng } from "../common.js";
 import { wrap } from "./world.js";
 import { obbOverlap } from "./collision.js";
@@ -698,7 +698,9 @@ export class NpcFleet {
         if (bumperToLine < -1) continue;
         if (bumperToLine > 70) break;
         if (e.control.type === "signal") {
-          const st = phaseOf(this.map.intersections.get(e.control.id), world.t)[e.control.group];
+          // (the light for the way it goes: under a left arrow, only a left turn has a green)
+          const after = path.edges[path.edges.indexOf(e) + 1];
+          const st = movementSignal(approachPhase(this.map.intersections.get(e.control.id), e.id, world.t), after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight");
           const canStop = bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
           else if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
@@ -942,7 +944,8 @@ export class NpcFleet {
       const lineS = control ? c.sStart + (control.s_line / Math.max(1, map.edges.get(c.id).length)) * (c.sEnd - c.sStart) : c.sEnd - half;
       const toLine = lineS - front;
       if (!control && !junctionAt(map, c.to)) continue;
-      const st = control?.type === "signal" ? phaseOf(map.intersections.get(control.id), world.t)[control.group] : null;
+      const after = path.edges[path.edges.indexOf(c) + 1];
+      const st = control?.type === "signal" ? movementSignal(approachPhase(map.intersections.get(control.id), c.id, world.t), after ? map.classifyTurn(map.turnAngle(c.id, after.id)) : "straight") : null;
       const noWay = control && (control.type !== "signal" || st !== "green");
       // through a junction it has no right of way at, slow to a walking-plus pace; through any other,
       // to 8 m/s; and wait at the line for anything crossing
@@ -1698,6 +1701,9 @@ export class NpcFleet {
     const edge = this.map.edges.get(e.id);
     if (!next || e.lane !== edge.lanes - 1 || this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right") return false;
     if (n.stopMem.update(e.control, bumperToLine, n.v, dt) !== "completed") return false;
+    // (not across the protected left turns of an advance green opposite)
+    const inter = this.map.intersections.get(e.control.id);
+    if (inter && advanceHolds(inter, e.id, this.world.t)) return false;
     if (this.boxBusy(n, e) || this.crossComing(n, e.to, RTOR_EXTRA_GAP_S)) return false;
     const crowd = this.world.crowd;
     return !kerbConflict(path.pts, path.cum, front - 2, front + 30, crowd, crowd.list, this.world.t, RTOR_WALK_S);

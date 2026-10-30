@@ -18,7 +18,8 @@ lights and buildings. It lines the kerbs with parked cars and fills the streets 
 cyclists and people on foot, runs buses along their real routes, stopping at their real stops, runs
 Toronto's streetcars on their tracks, their riders crossing to the doors, rings Edmonton's heritage
 High Level Bridge Streetcar over its level crossings, keeps Montréal's junctions clear when traffic
-backs up past them, sends
+backs up past them, gives big junctions advance greens (a flashing green in Ontario and Québec, a
+green left arrow everywhere else), sends
 school buses round to let children off, signs 30 km/h zones past schools and playgrounds, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. Then
 it lets you drive them yourself, or watch an AI driver do it. Every decision the AI makes is
 recorded. You can pause the drive, scrub back to the moment a car door swung open, and see what the
@@ -57,7 +58,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Twenty hand-built scenarios test the situations real drivers get wrong:
+Twenty-one hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -81,6 +82,7 @@ Twenty hand-built scenarios test the situations real drivers get wrong:
 | **Behind the doors** | Toronto, afternoon | A 511 streetcar at its stop on Bathurst Street with its doors open, in the lane beside yours: stop at least 2 m behind its rear doors, because its riders cross your lane to reach them |
 | **Clear the tracks** | Edmonton, afternoon | 106 Street crosses the High Level Bridge Streetcar's tracks with crossbucks alone, and traffic is backed up from 86 Avenue to just past them: never stop on the tracks, and when the streetcar comes ringing, stop at least 5 m back from the nearest rail |
 | **Keep the box clear** | Montréal, afternoon | Avenue du Mont-Royal Est meets Rue Saint-Denis at a green light, but traffic is backed up from Rue Rivard to just past the junction: even on a green, wait at the line until there is room for all of your car beyond it |
+| **Not your arrow** | Winnipeg, afternoon | Going straight on Isabel Street at a red light, as a green left arrow comes on for the cars waiting to turn beside you: the arrow is for them, so wait for your own green |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign
@@ -265,6 +267,7 @@ node scripts/test_roadside.mjs                  # slowing down and moving over f
 node scripts/test_streetcars.mjs                # streetcars on their tracks, and stopping behind their open doors
 node scripts/test_level_crossings.mjs           # level crossings: stopping for a train, and never on the tracks
 node scripts/test_junction_box.mjs              # keeping a signal's junction clear: waiting at the line for room past it
+node scripts/test_advance_green.mjs             # advance greens and left arrows: phases, who goes, sensing, the audit
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

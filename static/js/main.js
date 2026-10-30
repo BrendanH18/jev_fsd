@@ -40,7 +40,7 @@ import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
-import { pedPhase } from "./sim/signals.js";
+import { advanceNotice, approachPhase, pedPhase } from "./sim/signals.js";
 import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
 import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
 import { DriveScore, saveDrive } from "./sim/drive-score.js";
@@ -604,7 +604,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -665,7 +665,8 @@ export async function boot() {
     const renderEgo = replayNext ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
       : Number.isFinite(previousEgo.x) ? interpolatePose(world.ego, previousEgo, alpha) : world.ego;
     for (const inter of map.intersections.values()) {
-      roads.signals.set(inter.id, world.phase(inter.id));
+      // (with an advance green, each approach shows its own lights)
+      roads.signals.set(inter.id, inter.plan?.advance ? Object.fromEntries(inter.approaches.map((a) => [`@${a.edge}`, approachPhase(inter, a.edge, world.t)])) : world.phase(inter.id), world.t);
       roads.signals.setPed(inter.id, { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) }, world.t);
     }
     syncFleetMeshes();
@@ -716,6 +717,11 @@ export async function boot() {
     const box = boxNotice(world);
     if (box && box.key !== announcedBox) { announcedBox = box.key; hud.badge(box.text, "safety", 2500); }
     if (!box) announcedBox = null;
+    // an advance green on the car's approach: whether its turn is protected, or the arrow is not its
+    // light: say so once
+    const advance = advanceNotice(world);
+    if (advance && advance.key !== announcedAdvance) { announcedAdvance = advance.key; hud.badge(advance.text, advance.protected ? "stop" : "safety", 2500); }
+    if (!advance) announcedAdvance = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once

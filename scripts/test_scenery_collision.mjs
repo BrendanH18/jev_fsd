@@ -202,4 +202,44 @@ test('a creep stopped for a post further on keeps steering around a nearer one',
   assert(world.violations.deadlock_overrides>0,'the creep starts');
   assert.equal(world.violations.collisions,0);
 });
+{
+  // Belleville Street in Victoria's Old Town, westbound in the curb lane toward Government Street,
+  // where it turns right: a mapped building's corner stands 0.4 m from the lane's centre, closer than
+  // half the car's width. With no traffic about, the car used to stop short of it for good.
+  const pack=JSON.parse(fs.readFileSync(new URL('../data/maps/d7454a9751b7.v6.pack.json',import.meta.url)));
+  const map=new MapData(pack);
+  const { routeFromLanes }=await import('../static/js/demo/routing.js');
+  const { NpcFleet }=await import('../static/js/sim/npc.js');
+  const { stepWorld }=await import('../static/js/sim/step.js');
+  const e=map.edges.get('e392'),right=map.successors('e392').find(id=>map.classifyTurn(map.turnAngle('e392',id))==='right');
+  const lane=map.lane('e392',e.lanes-1),turn=map.lane(right,map.edges.get(right).lanes-1);
+  const route=routeFromLanes(map,[lane,turn],5,Math.min(40,turn.length-5));
+  const world=new World(map,{seed:3});
+  world.placeOnLane(lane,5);
+  const ctx={world,fleet:new NpcFleet(world,{count:0,seed:3}),autopilot:new Autopilot(world)};
+  ctx.autopilot.setBrain('rules');
+  world.route=new Route(route,map,world.ego.spec); world.destination=route.polyline.at(-1);
+  ctx.autopilot.setEnabled(true);
+  const { buildSnapshot }=await import('../static/js/brain/sensors.js');
+  const { sampleCandidates }=await import('../static/js/brain/candidates.js');
+  // (10 m along at 4 m/s, the candidates run past the cap of 15)
+  world.placeOnLane(lane,10); world.ego.v=4;
+  const offered=sampleCandidates(buildSnapshot(world),world).map(c=>c.id);
+  world.placeOnLane(lane,5); world.ego.v=0;
+  const line=ctx.world.route.controls.find(c=>c.control.id==='sig36').sRoute;
+  let past=null;
+  while(ctx.world.t<60&&past===null){
+    stepWorld(ctx,1/60,ctx.world.t*1000);
+    const p=ctx.world.route.project(ctx.world.ego.x,ctx.world.ego.y);
+    if(p.s>line+2)past=ctx.world.t;
+  }
+  test('with a building corner in the lane ahead, full-metre nudges either way are offered, within the cap on candidates',()=>{
+    for(const id of ['left_1_hold','left_1_target','right_1_hold','right_1_target'])assert(offered.includes(id),`${id}: ${offered.join(' ')}`);
+  });
+  test('a building corner standing in the curb lane: the car moves over a metre to pass it, stops at the line beside it, and turns',()=>{
+    assert.equal(ctx.world.violations.collisions,0);
+    assert.notEqual(past,null,'past the line within 60 s');
+    assert.equal(ctx.world.violations.red_lights_run,0);
+  });
+}
 console.log(`${passed} scenery collision tests passed`);

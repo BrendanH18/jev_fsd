@@ -352,6 +352,17 @@ export const handSignalTexture = () => once("handsig", () => {
   return toTexture(c, { repeat: false });
 });
 
+// A left-turn arrow lens, lit on black (tinted green or yellow by its lamp's colour).
+export const leftArrowTexture = () => once("leftarrow", () => {
+  const size = 64, c = canvas(size), ctx = c.getContext("2d");
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(10, 32); ctx.lineTo(30, 14); ctx.lineTo(30, 25); ctx.lineTo(52, 25);
+  ctx.lineTo(52, 39); ctx.lineTo(30, 39); ctx.lineTo(30, 50); ctx.closePath(); ctx.fill();
+  return toTexture(c, { repeat: false });
+});
+
 // A crosswalk sign (TAC RA-4): a black walking figure over crosswalk bars on a white square, on the
 // fluorescent yellow-green board BC puts behind them.
 export const crosswalkSignTexture = () => once("crosswalk", () => {

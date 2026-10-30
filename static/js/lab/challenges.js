@@ -7,7 +7,7 @@ import { BUS_YIELD_LIMIT_MPS, busStopFront, curbShift } from "../sim/bus.js";
 import { HOLD_M } from "../sim/crosswalk.js";
 import { ONCOMING_M, firstStop, stopRange } from "../sim/school-bus.js";
 import { Pedestrian } from "../sim/pedestrians.js";
-import { StopMemory, phaseOf } from "../sim/signals.js";
+import { StopMemory, approachPhase, movementSignal, phaseOf } from "../sim/signals.js";
 import { rng } from "../common.js";
 import { Visibility } from "../sim/visibility.js";
 import { ZONE_LIMIT_MPS } from "../sim/speed-zones.js";
@@ -58,6 +58,8 @@ export const CHALLENGES = [
     description: "106 Street crosses the High Level Bridge Streetcar's tracks on the level, with crossbucks and nothing else: no lights, no gates, no bell. Past them, traffic is backed up from 86 Avenue behind a car waiting to turn left.", lesson: "Never stop on the tracks: don't start across a level crossing unless there is room for all of your car past it. And when a train is coming, stop at least 5 m back from the nearest rail and wait until it has passed (Alberta's Use of Highway and Rules of the Road Regulation, s. 42). A streetcar can't steer round you, and takes far longer to stop than a car." },
   { id: "junction-box", title: "Keep the box clear", map: "montreal", weather: "dry", time: "afternoon", seed: 20042, icon: "⊠", difficulty: "Judgement", hazard: "junction-box", street: "Avenue du Mont-Royal Est",
     description: "Avenue du Mont-Royal Est meets Rue Saint-Denis at a light that is green as you come up. Past it, traffic is backed up from Rue Rivard, behind a car waiting to turn left, to just beyond Saint-Denis.", lesson: "Even on a green, don't enter a junction unless there is room for all of your car past it: wait at the line until there is. That is Québec's Highway Safety Code, and Montréal police fine drivers who block an intersection. A driver who follows the queue in is stuck in the middle when the light changes, and the cross street can't go." },
+  { id: "left-arrow", title: "Not your arrow", map: "winnipeg", weather: "dry", time: "afternoon", seed: 21042, icon: "⇠", difficulty: "Judgement", hazard: "left-arrow", street: "Isabel Street",
+    description: "You're going straight on Isabel Street at William Avenue, first at a red light in the right lane. Beside you, cars wait in the left lane to turn left. Then a green arrow comes on, and they go.", lesson: "A green arrow is for the way it points, and no other: going straight, your light is still red. Wait for your own green, even while the lane beside you moves." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -105,7 +107,8 @@ function oncomingSites(map) {
     const inter = map.intersections.get(control.id);
     if (!left || !straight || !inter || !oncomingStarts(map, opposite).every(Boolean)) continue;
     let green = true;
-    for (let t = LEFT_GREEN_S[0]; t <= LEFT_GREEN_S[1] && green; t += 0.5) green = phaseOf(inter, t)[control.group] === "green";
+    // (a plain green: not an advance green, under which the turn would be protected)
+    for (let t = LEFT_GREEN_S[0]; t <= LEFT_GREEN_S[1] && green; t += 0.5) green = approachPhase(inter, edge.id, t) === "green" && approachPhase(inter, opposite, t) === "green";
     if (green) sites.push({ lane: map.lane(edge.id, 0), left, opposite, straight });
   }
   sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
@@ -140,10 +143,9 @@ function crossSites(map) {
     });
     const inter = map.intersections.get(control.id);
     if (!fromLeft || !inter || !oncomingStarts(map, fromLeft).every(Boolean) || !openView(edge, fromLeft)) continue;
-    const group = map.edges.get(fromLeft).control.group;
     let ok = true;
-    for (let t = RIGHT_RED_S[0]; t <= RIGHT_RED_S[1] && ok; t += 0.5) ok = phaseOf(inter, t)[control.group] === "red";
-    for (let t = CROSS_GREEN_S[0]; t <= CROSS_GREEN_S[1] && ok; t += 0.5) ok = phaseOf(inter, t)[group] === "green";
+    for (let t = RIGHT_RED_S[0]; t <= RIGHT_RED_S[1] && ok; t += 0.5) ok = approachPhase(inter, edge.id, t) === "red";
+    for (let t = CROSS_GREEN_S[0]; t <= CROSS_GREEN_S[1] && ok; t += 0.5) ok = movementSignal(approachPhase(inter, fromLeft, t), "straight") === "green";
     if (ok) sites.push({ lane: map.lane(edge.id, edge.lanes - 1), right, fromLeft });
   }
   sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
@@ -479,7 +481,7 @@ function boxSites(map, street) {
       const c = e.control, inter = c?.type === "signal" ? map.intersections.get(c.id) : null;
       if (!inter || e.lanes !== 1 || e.ring) continue;
       let green = true;
-      for (let t = BOX_GREEN_S[0]; t <= BOX_GREEN_S[1] && green; t += 0.5) green = phaseOf(inter, t)[c.group] === "green";
+      for (let t = BOX_GREEN_S[0]; t <= BOX_GREEN_S[1] && green; t += 0.5) green = movementSignal(approachPhase(inter, e.id, t), "straight") === "green";
       if (!green) continue;
       // (straight on past it to a junction where traffic can turn left)
       const ahead = [];
@@ -511,6 +513,52 @@ function boxSites(map, street) {
   }
   const sites = boxSiteCache.get(map), on = sites.filter((s) => (s.ahead || s.lane).edgeRef.name === street);
   return on.length ? on : sites;
+}
+
+// Not your arrow: an approach whose advance green shows as a left arrow (sim/signals.js), at least 90 m
+// long with its line at least ARROW_START_M + 5 m along, with two lanes or more, a street straight
+// on at least 60 m long and one to the left; where the light is red from 3 s and the arrow comes on
+// between ARROW_AT_S, so the car is stopped at the line on the red before it does. The car starts
+// ARROW_START_M before the line in the right lane, going straight; two cars wait at the line in the
+// left lane to turn left, and a third comes up beside the car (ARROW_TURNERS). The route ends
+// ARROW_ROUTE_M from the start, on the street straight on.
+const ARROW_START_M = 95, ARROW_ROUTE_M = 220, ARROW_AT_S = [16, 32], ARROW_TURNERS = [{ back: 1, v: 0 }, { back: 8.5, v: 0 }, { back: 50, v: 9 }];
+const arrowSiteCache = new WeakMap();
+function arrowSites(map, street) {
+  if (!arrowSiteCache.has(map)) {
+    const sites = [];
+    for (const inter of map.intersections.values()) {
+      const adv = inter.plan?.advance, e = adv?.style === "arrow" ? map.edges.get(adv.edge) : null;
+      if (!e || e.length < 90 || e.control?.s_line < ARROW_START_M + 5 || e.lanes < 2) continue;
+      const turn = (dir, min) => map.successors(e.id).find((id) => map.classifyTurn(map.turnAngle(e.id, id)) === dir && map.edges.get(id).length > min);
+      const straight = turn("straight", 60), left = turn("left", 40);
+      if (!straight || !left) continue;
+      let at = null;
+      for (let t = 3; t <= ARROW_AT_S[1] && at === null; t += 0.5) {
+        const shows = approachPhase(inter, e.id, t);
+        if (shows === "arrow") at = t;
+        else if (shows !== "red") break;
+      }
+      if (at === null || at < ARROW_AT_S[0]) continue;
+      sites.push({ lane: map.lane(e.id, e.lanes - 1), signal: inter.id, straight, left, arrowAt: at });
+    }
+    sites.sort((a, b) => a.signal.localeCompare(b.signal));
+    arrowSiteCache.set(map, sites);
+  }
+  const sites = arrowSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+// The cars turning left on the arrow, in the left lane: held at their red like any driver.
+function placeTurners(world, fleet, { edge, left }, seed) {
+  const map = world.map, random = rng(seed), lane = map.lane(edge, 0), line = map.edges.get(edge).control.s_line * lane.length / Math.max(1, map.edges.get(edge).length);
+  return ARROW_TURNERS.map(({ back, v }, i) => {
+    const s = line - back - (CAR.length - CAR.rearOverhang), p = pointAt(lane.pts, lane.cum, s);
+    const car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
+    Object.assign(car, { id: `challenge_turner_${i + 1}`, color: [0x6b2737, 0xb0b5b9, 0x3d5a80][i], v0: 11, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5 + random() * 0.3, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+    car.path.start(edge, 0, s, [[left, 0]]); fleet.vehicles.push(car);
+    return car.id;
+  });
 }
 
 export function challengeScenario(map, challenge) {
@@ -568,22 +616,25 @@ export function challengeScenario(map, challenge) {
   const boxes = challenge.hazard === "junction-box" ? boxSites(map, challenge.street) : null;
   if (boxes && !boxes.length) throw new Error("This map has no signalled junction on a one-lane street with room past it for a short queue before the next junction.");
   const box = boxes ? boxes[Math.floor(random() * boxes.length)] : null;
-  const start = box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const arrows = challenge.hazard === "left-arrow" ? arrowSites(map, challenge.street) : null;
+  if (arrows && !arrows.length) throw new Error("This map has no signal with a left arrow on a street with two lanes or more, where the car can wait at a red before the arrow comes on.");
+  const arrow = arrows ? arrows[Math.floor(random() * arrows.length)] : null;
+  const start = arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
-  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
+  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
     : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge;
+  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge;
   if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   // (through the signal, along the queue past it)
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
-  for (let i = 0; i < 12 && length < (box ? BOX_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -592,7 +643,9 @@ export function challengeScenario(map, challenge) {
     const lane = map.lane(id, turn === "left" ? 0 : edge.lanes - 1);
     chain.push(lane); seen.add(id); length += lane.length;
   }
-  const route = routeFromLanes(map, chain, startS, Math.max(10, chain.at(-1).length - 10));
+  // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : last.length - 10;
+  const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
     route, goal: route.polyline.at(-1), traffic_seed: challenge.seed,
@@ -610,6 +663,7 @@ export function challengeScenario(map, challenge) {
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
+    ...(arrow ? { leftArrow: { signal: arrow.signal, edge: start.edge, left: arrow.left } } : {}),
     ...(threat ? { multiThreat: { crosswalk: threat.crosswalk, s: threat.s, curb: { edge: threat.curb.edge, lane: threat.curb.idx, s: threat.sCurb } } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
@@ -646,6 +700,10 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.streetcar) Object.assign(world.challenge, placeStreetcar(world, fleet, scenario.streetcar, challenge.seed));
   if (scenario.levelCrossing) Object.assign(world.challenge, placeLevelCrossing(world, fleet, scenario.levelCrossing, challenge.seed));
   if (scenario.junctionBox) Object.assign(world.challenge, placeBoxQueue(world, fleet, scenario.junctionBox, challenge.seed));
+  if (scenario.leftArrow) {
+    const inter = world.map.intersections.get(scenario.leftArrow.signal);
+    Object.assign(world.challenge, { turnerIds: placeTurners(world, fleet, scenario.leftArrow, challenge.seed), signalId: scenario.leftArrow.signal, arrowEdge: scenario.leftArrow.edge, ...(inter ? { at: [inter.x, inter.y] } : {}) });
+  }
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -669,6 +727,8 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "roadside" ? local.ahead < OPERATOR_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "streetcar" ? local.ahead < RIDER_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "level-crossing" ? local.ahead < TRACKS_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
+    // (the arrow comes on, and the cars beside the car turn)
+    : state.hazard === "left-arrow" ? approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow"
     : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;

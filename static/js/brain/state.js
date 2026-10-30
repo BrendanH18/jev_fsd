@@ -92,6 +92,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       state.intersection.priority = p.arrived ? { stopped_at_line: true, your_turn: p.go, ...(p.wait_for ? { wait_for: p.wait_for } : {}), ...(p.waiting.length ? { goes_first: p.waiting } : {}) }
         : { stopped_at_line: false, ...(p.waiting.length ? { waiting_at_junction: p.waiting } : {}) };
     }
+    if (i.advance) state.intersection.advance = { light: i.advance.light, ...(i.advance.protected ? { protected_left: true } : {}) };
     if (i.right_on_red) {
       const r = i.right_on_red, w = r.wait_for;
       state.intersection.right_on_red = { allowed: true, stop_completed: r.stop_completed, clear: r.clear, ...(w ? { wait_for: w.id || w.kind } : {}) };
@@ -202,6 +203,7 @@ export function situationClauses(snap) {
     else if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
+    if (i.advance) out.push(advanceClause(i));
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
@@ -334,12 +336,22 @@ function emergencyClause(e) {
   return `${lead}. ${e.clearing ? "The car is too close to the junction ahead to stop short of it, or already in it: clear the junction, then " : ""}${e.clearing ? "pull" : "Pull"} over ${r1(e.offset_m)} m to the right and stop ${w} m ahead (\`pull_over\`).`;
 }
 
+// An advance green at the signal ahead: a flashing green ball or a green left arrow on the car's
+// approach, or one on the approach opposite holding the car on red (sensors.js).
+function advanceClause(i) {
+  const a = i.advance, left = i.turn === "left" || i.turn === "uturn", way = i.turn === "right" ? "turns right" : "goes straight on";
+  if (a.light === "held") return "The approach opposite has an advance green: its left turns cross in front of the car, and oncoming traffic there is protected. The car's light stays red until the advance is over.";
+  if (a.light === "flashing_green") return a.protected ? "The light is a flashing green, an advance green: oncoming traffic is held on red, so the car's left turn is protected and need not wait for it." : "The light is a flashing green, an advance green: the car may go; oncoming traffic is held on red.";
+  if (a.light === "left_arrow") return a.protected ? "A green left arrow shows: the car's left turn is protected, and oncoming traffic is held on red." : `A green left arrow shows, for left turns only. The car ${way}, so its light is red: do not go with the cars turning left beside it, and wait for its own green.`;
+  return left ? "The left arrow has turned yellow: the protected turn is ending. Stop before the line if that is comfortable; once the arrow goes out, oncoming traffic has the green and the car must yield to it." : `The left arrow beside the car is turning yellow, but it is for left turns only. The car ${way}, and its light is still red.`;
+}
+
 // A red light where the car turns right and a right turn on red is allowed after a full stop.
 function rightOnRedClause(i, m, atLine) {
   const r = i.right_on_red, w = r.wait_for;
   if (r.go) return r.entered ? "The car is turning right on the red light: complete the turn." : "The car has stopped fully at the red light and turns right here, where a right turn on red is allowed. Nothing it must yield to is in the way: it may turn now, or keep waiting for the green.";
   if (!r.stop_completed) return atLine ? "The car is at the line and the signal is red. It turns right here, and a right turn on red is allowed only after a full stop: hold still until the stop is completed." : `The signal ${m} m ahead is red and the car turns right there. A right turn on red is allowed only after a full stop: keep rolling toward the line and stop just before it.`;
-  const why = !w ? "" : w.kind === "pedestrian" ? `: \`${w.id}\` is crossing or about to cross` : w.kind === "view" ? ": the car cannot see far enough along the street to its left to know it is clear" : w.kind === "junction" ? `: \`${w.id}\` is crossing the junction` : w.kind === "lane" ? ": it can turn on red only from the curb lane" : `: \`${w.id}\` is coming from the left and has the green`;
+  const why = !w ? "" : w.kind === "pedestrian" ? `: \`${w.id}\` is crossing or about to cross` : w.kind === "view" ? ": the car cannot see far enough along the street to its left to know it is clear" : w.kind === "junction" ? `: \`${w.id}\` is crossing the junction` : w.kind === "lane" ? ": it can turn on red only from the curb lane" : w.kind === "advance" ? ": the approach opposite has an advance green, and its protected left turns come into the street the car turns into" : `: \`${w.id}\` is coming from the left and has the green`;
   return `The car has stopped fully at the red light and turns right here. A right turn on red is allowed, but it must yield first${why}. Hold still at the line until it is clear or the light turns green.`;
 }
 
