@@ -22,6 +22,7 @@ const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "s
 const MAJOR = new Set(["primary", "secondary"]);
 export const ADVANCE_S = 8;
 export const ADVANCE_CLEAR_S = 4;
+const ARROW_YELLOW_S = 3;
 // An approach and the one opposite it: headings within this of a half turn apart.
 const OPPOSITE_RAD = Math.PI / 6;
 // Ontario and Québec, where an advance green is a flashing green ball (lon, lat): a coarse outline,
@@ -140,9 +141,10 @@ export function pedPhase(intersection, group, t) {
 
 // What one approach (by its edge) shows: its group's "green", "yellow" or "red", or, while an advance
 // green leads its group, "advance" (a flashing green ball: go any way, the turn left protected),
-// "arrow" (a green left arrow beside a red ball) or "arrow_yellow" (the arrow turning yellow) for the
-// approach that has it, "green" for it through the clearance under a flashing green, and "red" for
-// the rest of its group until the clearance is over.
+// "arrow" (a green left arrow beside a red ball) or "arrow_yellow" (the arrow turning yellow, for
+// ARROW_YELLOW_S, then red to the end of the clearance) for the approach that has it, "green" for it
+// through the clearance under a flashing green, and "red" for the rest of its group until the
+// clearance is over.
 export function approachPhase(intersection, edgeId, t) {
   const plan = planOf(intersection);
   const a = intersection.approaches?.find((x) => x.edge === edgeId);
@@ -154,7 +156,7 @@ export function approachPhase(intersection, edgeId, t) {
   if (d >= adv.length + adv.clear) return base;
   if (edgeId !== adv.edge) return "red";
   if (d < adv.length) return adv.style === "flash" ? "advance" : "arrow";
-  return adv.style === "flash" ? "green" : "arrow_yellow";
+  return adv.style === "flash" ? "green" : d < adv.length + ARROW_YELLOW_S ? "arrow_yellow" : "red";
 }
 
 // Whether an advance green (or its clearance) held by another approach is under way while `edgeId`

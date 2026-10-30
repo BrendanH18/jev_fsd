@@ -46,8 +46,8 @@ const AUDIT_BOX_M = 12;
 // left (heading within 60 deg of the way the car turns) due at the junction within 2 s, or that
 // would reach the car within 2 s along the street both are in.
 const AUDIT_RTOR_OUT_M = 15;
-// Which way a car that crossed the line on a left arrow went is judged this far from the junction's
-// centre.
+// Which way a car that crossed the line on a left arrow went is judged on its way out of the junction,
+// this far from its centre.
 const AUDIT_ARROW_OUT_M = 15;
 // A junction without a sign stops being the control the audit follows this far past its line
 // (after the tick that sees the car cross it).
@@ -484,7 +484,10 @@ export class World {
   auditArrow() {
     const a = this.arrowCheck, ego = this.ego;
     if (!a) return;
-    if (Math.hypot(ego.x - a.centre[0], ego.y - a.centre[1]) < AUDIT_ARROW_OUT_M) return;
+    // (on its way out: in the junction first, then that far from its centre)
+    const d = Math.hypot(ego.x - a.centre[0], ego.y - a.centre[1]);
+    a.inside ||= d < AUDIT_ARROW_OUT_M;
+    if (!a.inside || d < AUDIT_ARROW_OUT_M) return;
     this.arrowCheck = null;
     const turned = wrap(ego.psi - a.approach);
     if (turned > Math.PI / 4 || (a.stopped && turned < -Math.PI / 4)) return;

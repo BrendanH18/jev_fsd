@@ -42,8 +42,8 @@ const CHALLENGE = CHALLENGES.find((c) => c.id === "left-arrow");
 const FRONT = CAR.length - CAR.rearOverhang;
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
 const step = (ctx, input = null) => stepWorld({ ...ctx, input }, 1 / 60, ctx.world.t * 1000);
-// (Isabel Street northbound at William Avenue: its left arrow from 25 s to 33 s, yellow to 37 s, then
-// the whole group green to 62.5 s; Isabel southbound, opposite, red until 37 s)
+// (Isabel Street northbound at William Avenue: its left arrow from 25 s to 33 s, yellow to 36 s, red
+// to 37 s, then the whole group green to 62.5 s; Isabel southbound, opposite, red until 37 s)
 const SIG16 = WINNIPEG.intersections.get("sig16"), ISABEL = "e272", OPPOSITE = "e482";
 const sequence = (inter, edge, until = inter.plan.cycle) => {
   const out = []; let prev = null;
@@ -94,8 +94,8 @@ test("the advance adds itself and its clearance to its group's green and the cyc
   assert.equal(plan.B.green, plain.B.green);
 });
 
-test("a left arrow: green for the turn while the approach opposite waits on red, then yellow, then the whole group's green", () => {
-  assert.deepEqual(sequence(SIG16, ISABEL), [[0, "red"], [25, "arrow"], [33, "arrow_yellow"], [37, "green"], [62.5, "yellow"], [65.5, "red"]]);
+test("a left arrow: green for the turn while the approach opposite waits on red, then 3 s of yellow and 1 s of red, then the whole group's green", () => {
+  assert.deepEqual(sequence(SIG16, ISABEL), [[0, "red"], [25, "arrow"], [33, "arrow_yellow"], [36, "red"], [37, "green"], [62.5, "yellow"], [65.5, "red"]]);
   assert.deepEqual(sequence(SIG16, OPPOSITE), [[0, "red"], [37, "green"], [62.5, "yellow"], [65.5, "red"]]);
   // (the street across goes as it did; the group view still says A is green from 25 s)
   assert.equal(signals.phaseOf(SIG16, 30).A, "green");
@@ -290,6 +290,22 @@ test("a driver who goes with the cars turning left runs the red", () => {
   for (let k = 0; k < 60 * 10; k++) step(left);
   assert.equal(left.world.violations.red_lights_run, 0);
   assert.ok(Math.hypot(left.world.ego.x - SIG16.x, left.world.ego.y - SIG16.y) > 15, "through the turn");
+});
+
+test("a car that crossed on an arrow is judged on its way out of the junction, however wide: a left turn is fine, straight on is a red", () => {
+  const ctx = setupChallenge(WINNIPEG, CHALLENGE), { world } = ctx, ego = world.ego;
+  const put = (x, y, psi) => { ego.x = x; ego.y = y; ego.psi = psi; world.auditArrow(); };
+  for (const [exit, runs] of [[Math.PI / 2, 0], [0, 1]]) {
+    const before = world.violations.red_lights_run;
+    // (crossing the line 20 m short of a wide junction's centre, facing straight on along +x)
+    world.arrowCheck = { id: "sig16", centre: [20, 0], approach: 0, stopped: false };
+    put(0, 0, 0);
+    assert.equal(world.violations.red_lights_run, before, "not judged before it is in the junction");
+    put(15, 0, exit / 2);
+    put(20 + 20 * Math.cos(exit), 20 * Math.sin(exit), exit);
+    assert.equal(world.violations.red_lights_run - before, runs, exit ? "turned left" : "went straight on");
+    assert.equal(world.arrowCheck, null);
+  }
 });
 
 console.log(`\n${checks} advance green checks passed`);
