@@ -341,7 +341,7 @@ length and 1 m clear of the train's envelope (2.5 m either side of the track's c
 cyclists and the driven car alike; an emergency vehicle waits only for the train. Rules gets a
 `stop_before_tracks` candidate and rejects going past that point (`crosses_in_front_of_train`,
 `no_room_past_tracks`). Decision models and LLMs get `level_crossing`. The audit counts a failure to
-yield to the train once a train a crossing if the car, owing the stop, comes within 5 m of the nearest
+yield to the train once per train at each crossing if the car, owing the stop, comes within 5 m of the nearest
 rail at more than 1 m/s while it is approaching, or stands on the tracks slower than 1 m/s while it is;
 the coaching score counts standing on the tracks for a second, once a visit ("Stopped on the tracks"),
 with a tip. The HUD says "LEVEL CROSSING · STREETCAR COMING · STOP 5 M BACK" or "LEVEL CROSSING · NO

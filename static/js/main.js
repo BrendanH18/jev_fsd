@@ -710,6 +710,7 @@ export async function boot() {
     // and sound the gong of a train ringing nearby
     const crossing = crossingNotice(world);
     if (crossing && crossing.key !== announcedCrossing) { announcedCrossing = crossing.key; hud.badge(crossing.text, "safety", 2500); }
+    if (!crossing) announcedCrossing = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once

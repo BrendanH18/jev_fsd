@@ -32,7 +32,7 @@
   The car's sensing reports `level_crossing`; Rules gets a `stop_before_tracks` candidate, and
   manoeuvres past that point are rejected (`crosses_in_front_of_train`, `no_room_past_tracks`).
   Decision models and LLMs get `level_crossing`, a situation line, a motion criterion and a prompt line.
-  The audit counts a failure to yield to the train once a train a crossing if the car, owing the stop,
+  The audit counts a failure to yield to the train once per train at each crossing if the car, owing the stop,
   comes within 5 m of the nearest rail at more than 1 m/s while it is approaching, or stands on the
   tracks while it is; the coaching score counts standing on the tracks ("Stopped on the tracks"),
   with a tip. The HUD says "LEVEL CROSSING · STREETCAR COMING · STOP 5 M BACK" or "LEVEL CROSSING · NO

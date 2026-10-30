@@ -114,8 +114,8 @@ const AUDIT_STREETCAR_MOVING_MPS = 1;
 // owes the stop if it could then stop where drivers do (7 m back from the nearest rail) braking at up
 // to 3.5 m/s^2. It fails to yield if, owing it, its front comes within 5 m of the nearest rail at more
 // than 1 m/s while the train is still approaching (coming, or on the crossing), or if any of it stands
-// on the tracks (in the train's envelope) slower than 1 m/s while the train is. Counted once a train
-// a crossing.
+// on the tracks (in the train's envelope) slower than 1 m/s while the train is. Counted once per
+// train at each crossing.
 const AUDIT_TRAIN_MOVING_MPS = 1;
 
 export class World {
