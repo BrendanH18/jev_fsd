@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+- Railway level crossings (`jev/osm/rail.py`, `static/js/sim/rail.js`, `render/rail.js`). A map's
+  railway and streetcar tracks that cross its streets on the level now come from OpenStreetMap, in a
+  file of their own beside the pack (`<key>.rail.v1.json`): a track is a chain of railway ways joined
+  end to end, clipped to the map, with its stops and whether each end is a terminus or runs off the
+  map; a level crossing is a node of a track tagged `railway=level_crossing` (or
+  `tram_level_crossing`) that is also a node of a street, placed on each pack edge it crosses, with
+  the angle between them and what warns of a train. Old Strathcona's file has the High Level Bridge
+  Streetcar's heritage line, about 1.1 km from the map's edge to its Whyte Avenue terminus, stopping at
+  107 Street, Old Strathcona and Whyte Avenue, and its eight crossings of 104, 105, 106, 106A and 107
+  Street, 83 Avenue and Gateway Boulevard, each marked by crossbucks alone. No other bundled map has a
+  level crossing on its streets. The download now asks Overpass for every kind of track and for the
+  stops beside them; `fetch_map.py --rail` rebuilds only the file.
+- In a free drive one heritage streetcar (13.7 m, a double-truck wooden car of the 1910s, as the
+  Edmonton Radial Railway Society runs; `?trains=0` takes it off) runs the line at up to 25 km/h,
+  stops at its stops, waits at its terminus and turns back, and comes back a while after running off
+  the map. It rings its gong on the way to each crossing, from 150 m out, and brakes for anything in
+  its way that its motorman can see. The track is drawn as rails on ties and ballast (only the rails
+  where it crosses a street), with its trolley wire on poles beside it; each approach to a crossing has
+  a crossbuck. With sound on, its gong is heard.
+- The rules (Alberta AR 304/2002 s. 42, and every driver's handbook): while a train is approaching a
+  crossing (coming toward it ringing, within 150 m, or on it), a driver crossing the track stops with
+  its front 7 m back from the nearest rail, short of the law's 5 m, and waits until it has passed, if it
+  could stop there braking at up to 3.5 m/s^2 when it first heard (within 250 m) or saw it. And
+  whatever is coming, nobody stops on the tracks: a driver waits at the same place while a vehicle past
+  them, stopped or slower than 3 m/s, leaves less than its own length and 1 m clear of the train's
+  envelope. One that is past where it stops goes on, unless barely moving and still short of the
+  envelope. Traffic, cyclists and the driven car all do; an emergency vehicle waits only for the train.
+  The car's sensing reports `level_crossing`; Rules gets a `stop_before_tracks` candidate, and
+  manoeuvres past that point are rejected (`crosses_in_front_of_train`, `no_room_past_tracks`).
+  Decision models and LLMs get `level_crossing`, a situation line, a motion criterion and a prompt line.
+  The audit counts a failure to yield to the train once a train a crossing if the car, owing the stop,
+  comes within 5 m of the nearest rail at more than 1 m/s while it is approaching, or stands on the
+  tracks while it is; the coaching score counts standing on the tracks ("Stopped on the tracks"),
+  with a tip. The HUD says "LEVEL CROSSING · STREETCAR COMING · STOP 5 M BACK" or "LEVEL CROSSING · NO
+  ROOM PAST THE TRACKS · WAIT SHORT OF THEM", and AI eyes outline the streetcar in amber.
+- New challenge, "Clear the tracks" (Edmonton, 106 Street, one lane each way, 40 km/h): past the
+  crossing a car waits at 86 Avenue to turn left, with two more queued behind it, the last just past
+  the tracks. Once the car is 30 m from the crossing, a streetcar out of sight sets off toward it,
+  ringing; once it has passed by, the queue moves off. Rules and the cautious agent wait short of the
+  tracks for room, stop 5 m or more back from the nearest rail while the streetcar passes, and pass. A
+  driver who just follows the queue ends up on the tracks as the streetcar comes: it fails to yield,
+  and the streetcar stops short of it. The other challenges and the evaluation engine version are
+  unchanged.
+- New checks in `scripts/test_level_crossings.mjs` and `tests/test_rail.py`.
+
 - Streetcars (`static/js/sim/streetcar.js`, `render/streetcar.js`). Streetcar routes now come from
   OpenStreetMap with the bus routes (`jev/osm/transit.py`, mode `tram`): a route's ways are its
   tracks, not the streets they are laid in, so every 2 m along them the street edge going the same

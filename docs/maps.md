@@ -134,6 +134,26 @@ the file to the map as `zones`, and the city's UTC offset as `utc_offset` (the s
 when the sun is up). `--transit` rebuilds it with the bus routes; `uv run scripts/fetch_map.py
 <preset> --zones` rebuilds only the zones, downloading the raw OSM if it is not cached.
 
+### Railway level crossings
+
+Maps with railway or streetcar tracks crossing their streets on the level have them beside their pack,
+in `data/maps/<key>.rail.v1.json` (`jev/osm/rail.py`). A track is a chain of ways tagged `railway` rail,
+light_rail, tram or narrow_gauge (not disused) joined end to end where exactly two meet, clipped to
+the map's extent; its ends say whether it stops there (`terminus`) or runs on off the map (`edge`), and
+its stops are the nodes tagged `railway` tram_stop, halt or station on it or within 12 m of it. A level
+crossing is a node of a track tagged `railway=level_crossing` or `tram_level_crossing` that is also a
+node of a drivable street, placed on each pack edge whose centreline passes within 3 m of it (both
+ways of a two-way street), with the angle between the street and the track and what warns of a train
+(OSM's `crossing:light`, `crossing:barrier` and `crossing:bell`). Only tracks with such a crossing are
+kept. Edmonton's file was built on 2026-10-29 from that day's OSM: the High Level Bridge Streetcar's
+heritage line through Old Strathcona, about 1.1 km from the map's edge to its Whyte Avenue terminus,
+stopping at 107 Street, Old Strathcona and Whyte Avenue, and its eight crossings of 104, 105, 106,
+106A and 107 Street, 83 Avenue and Gateway Boulevard, all marked by crossbucks alone. Its CPKC yard
+tracks cross only service roads, which the pack leaves out. Kitsilano's file is empty; no other
+bundled map has a level crossing on its streets (checked against Overpass that day). The packs are
+unchanged; the server and the browser demo add the file to the map as `rail`, `--transit` rebuilds it
+with the bus routes, and `uv run scripts/fetch_map.py <preset> --rail` rebuilds only it.
+
 To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
 data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep
 using `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.

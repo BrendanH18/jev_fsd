@@ -171,6 +171,8 @@ export class MapData {
     this.transit = pack.transit || null;
     // marked crosswalks between junctions (jev/osm/crossings.py), when the map has them
     this.crosswalks = (pack.crossings?.crossings || []).filter((c) => this.edges.has(c.edge));
+    // railway tracks and their level crossings with the streets (jev/osm/rail.py; sim/rail.js)
+    this.rail = pack.rail || null;
     // school and playground zones (jev/osm/zones.py), each edge's stretches of them in order
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);

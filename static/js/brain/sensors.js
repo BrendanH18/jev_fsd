@@ -20,6 +20,7 @@ import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
 import { STOP_M as STREETCAR_STOP_M, IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, canStopFor as canStopForStreetcar, doorsOpen, holdFromRear, isStreetcar, stoppingAt, streetcarHold, streetcarRelation } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
+import { HEAR_M, HOLD_M as RAIL_HOLD_M, canStopFor as canStopForTrain, crossingsAhead, railIndex, roomBlocker, trainAt, waitsAt } from "../sim/rail.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -141,7 +142,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, speed_zone: null, roadside_stop: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, speed_zone: null, roadside_stop: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -248,6 +249,7 @@ export function buildSnapshot(world, executing = null) {
     snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
     snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
     snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);
+    snap.level_crossing = levelCrossing(world, route, frontS, vehicles);
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
@@ -642,6 +644,42 @@ function streetcarStop(world, route, frontS, visibleNpcs) {
     if (world.streetcarYields.get(key) && (!open || stop < open.bumper_to_stop_m)) open = out;
   }
   return open || stopping;
+}
+
+// A level crossing on the car's route ahead (sim/rail.js, Alberta AR 304/2002 s. 42): the nearest
+// within 80 m, or the one it is on the tracks of (`on_tracks`). The car stops with its front 7 m back
+// from the nearest rail (`stop_s_route`), short of the law's 5 m, and waits there while a train it
+// hears (ringing its gong, within 250 m) or sees is approaching the crossing (`wait` "train"): owed
+// when the car, first hearing or seeing it, could stop there braking at no more than 3.5 m/s^2,
+// decided once a train and remembered in `world.trainYields`. And it waits there too while a vehicle
+// it can see past the tracks, stopped or slower than 3 m/s, leaves no room for all of the car beyond
+// them (`wait` "room", `blocker`). Once its front is past where it would stop it goes on, unless it is
+// barely moving and still short of the train's envelope; on the tracks it always goes on. Or null.
+function levelCrossing(world, route, frontS, vehicles) {
+  if (!railIndex(world.map).crossings.length) return null;
+  const ego = world.ego, x = crossingsAhead(world.map, route.pts, route.cum, frontS, ego.spec)[0];
+  if (!x) return null;
+  world.trainYields ||= new Map();
+  const track = railIndex(world.map).tracks.get(x.c.track), at = trainAt(world.npcs, x.c);
+  let train = null, wait = null, blocker = null;
+  if (at) {
+    const n = at.train, d = Math.hypot(n.x - ego.x, n.y - ego.y), seen = world.sees(ego, n), heard = !!n.rail.gong && d < HEAR_M;
+    if (seen || heard) {
+      train = { id: n.id, seen, heard, on: at.on, gap_m: at.gap_m, eta_s: at.eta_s };
+      const key = `${x.c.id}:${n.id}:${n.rail.departures}`;
+      if (!world.trainYields.has(key)) {
+        if (world.trainYields.size > 20) world.trainYields.delete(world.trainYields.keys().next().value);
+        world.trainYields.set(key, canStopForTrain(ego.v, x.stop_m) || ego.v < 0.5);
+      }
+      if (world.trainYields.get(key) && waitsAt(x, ego.v)) wait = "train";
+    }
+  }
+  if (waitsAt(x, ego.v)) {
+    const b = roomBlocker(route.pts, route.cum, frontS, ego.spec, x, vehicles, ego);
+    if (b) { blocker = { id: b.vehicle.id, past_tracks_m: b.rear_m }; wait ||= "room"; }
+  }
+  return { id: x.c.id, kind: track?.kind || "rail", line: track?.name || "", to_rail_m: x.hold_m + RAIL_HOLD_M, stop_s_route: frontS + x.stop_m, bumper_to_stop_m: x.stop_m,
+    on_tracks: x.fouling, clear_in_m: x.exit_m, train, wait, blocker };
 }
 
 // A vehicle stopped at the roadside with its lights flashing that the car must slow down and move over
@@ -1052,6 +1090,13 @@ export function desiredSpeed(snap) {
     const vs = sc.doors ? (room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel)) : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
     if (vs < v) { v = vs; reasons.push(sc.doors ? "streetcar stopped, doors open" : "streetcar stopping"); }
   }
+  // a level crossing to wait at, for a train coming or for room past the tracks: stop short of it
+  const lx = snap.level_crossing;
+  if (lx?.wait) {
+    const room = lx.bumper_to_stop_m;
+    const vl = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vl < v) { v = vl; reasons.push(lx.wait === "train" ? "train coming at the level crossing" : "no room past the tracks"); }
+  }
   if (snap.pedestrian) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
@@ -1105,6 +1150,7 @@ export function hazardFlags(snap) {
   if (snap.crosswalk_stop) f.push("crosswalk");
   if (snap.school_bus) f.push("school bus");
   if (snap.streetcar) f.push("streetcar");
+  if (snap.level_crossing) f.push("level crossing");
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");

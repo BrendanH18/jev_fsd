@@ -46,15 +46,15 @@ def cache_path(cache_dir: Path, bbox: Bbox) -> Path:
 def overpass_query(bbox: Bbox) -> str:
     w, s, e, n = bbox
     # (bus and streetcar routes with a member in the box too, as the main API returns them, without
-    # their members outside it, and the streetcar tracks; and schools and playgrounds, jev/osm/zones.py,
-    # with the ways of their multipolygons)
+    # their members outside it, and the railway and streetcar tracks, jev/osm/rail.py; and schools and
+    # playgrounds, jev/osm/zones.py, with the ways of their multipolygons; and the stops beside the tracks)
     return (
         "[out:xml][timeout:90][bbox:%f,%f,%f,%f];"
-        "(way[\"highway\"];way[\"building\"];way[\"railway\"=\"tram\"];way[\"amenity\"=\"school\"];way[\"leisure\"=\"playground\"];)->.a;"
+        "(way[\"highway\"];way[\"building\"];way[\"railway\"~\"^(rail|light_rail|tram|narrow_gauge)$\"];way[\"amenity\"=\"school\"];way[\"leisure\"=\"playground\"];)->.a;"
         "(rel[\"amenity\"=\"school\"];rel[\"leisure\"=\"playground\"];)->.z;way(r.z)->.zw;"
         "(.a;.zw;)->.a;"
         ".a out body;.a >;out body qt;"
-        "(node[\"amenity\"=\"school\"];node[\"leisure\"=\"playground\"];);out body qt;"
+        "(node[\"amenity\"=\"school\"];node[\"leisure\"=\"playground\"];node[\"railway\"~\"^(tram_stop|halt|station)$\"];);out body qt;"
         ".z out body;"
         "rel[\"route\"~\"^(bus|trolleybus|tram)$\"];out body;" % (s, w, n, e)
     )

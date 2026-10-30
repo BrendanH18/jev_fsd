@@ -37,6 +37,7 @@ How to choose \`candidate\`:
 - Choose \`yield_to_bus\` when \`situation\` says a bus ahead is pulling out from its stop and the car must let it out.
 - Choose \`stop_at_crosswalk\` when \`situation\` says a vehicle in the next lane is stopped at a crosswalk ahead: never pass it until the car has stopped and looked.
 - Choose \`stop_for_streetcar\` when \`situation\` says a streetcar ahead, going the car's way, is stopped with its doors open: riders cross between it and the curb. Keep the car stopped behind its rear doors until they close.
+- Choose \`stop_before_tracks\` when \`situation\` says a train is coming at a level crossing ahead, or that there is no room past the tracks: never stop on them. Keep the car stopped short of them until the train has passed and there is room for all of the car beyond them.
 - Choose \`stop_for_school_bus\` when \`situation\` says a school bus ahead, going either way, is stopped with its red lights flashing, and keep the car stopped until they go off.
 - In a school or playground zone (\`speed_zone\`), keep to its limit while it is in effect: prefer a candidate whose \`end_speed\` is at or below \`car.target_speed\`.
 - Passing a vehicle stopped at the roadside with its lights flashing (\`roadside_vehicle\`), keep to \`car.target_speed\`, and when \`situation\` says to move over, choose the \`change_left_*\` candidate that does; then stay out of the lane next to it until past it.

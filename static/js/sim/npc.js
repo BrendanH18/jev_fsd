@@ -3,9 +3,11 @@
 // parked up ahead of the ego signals, waits for a gap, and pulls out into the lane. Buses drive
 // their routes and stop at their stops (sim/bus.js), and streetcars theirs, on their tracks; nobody
 // passes one with its doors open on the side its riders use (sim/streetcar.js). School buses stop to
-// let children off, and everyone stops for them (sim/school-bus.js).
+// let children off, and everyone stops for them (sim/school-bus.js). Trains run their tracks, off
+// the streets, and everyone stops short of a level crossing for one coming, and never on the tracks
+// (sim/rail.js).
 
-import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, comfort } from "./vehicle.js";
+import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, comfort } from "./vehicle.js";
 import { purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { phaseOf, StopMemory } from "./signals.js";
@@ -22,6 +24,7 @@ import { BUS_DWELL_S, BUS_SIGNAL_M, BUS_TAPER_M, busMayPullOut, busStopFront, bu
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
 import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import { DEPART_S, DOORS_DELAY_S, DWELL_MAX_S, DWELL_S, RIDER_EVERY_S, RIDERS_OFF, RIDERS_ON, canStopFor as canStopForStreetcar, doorsOpen, isStreetcar, streetcarHold } from "./streetcar.js";
+import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex, stepTrain, trainState } from "./rail.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -148,8 +151,12 @@ const SCHOOL_COLOR = 0xf7b500;
 const MAX_STREETCARS = 2;
 const STREETCAR_COLOR = 0xc8102e;
 const STREETCAR_DECEL = 1.1;
-// (a bus, school bus or streetcar: long, so looked for all along its body)
-const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o);
+// Trains in free drives (sim/rail.js): one at a time on a map with a track, placed somewhere along it
+// at the start, and brought back from the edge of the map AWAY_S after it runs off it.
+const MAX_TRAINS = 1;
+const TRAIN_COLOR = 0x7a1d1d;
+// (a bus, school bus, streetcar or train: long, so looked for all along its body)
+const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o) || isTrain(o);
 
 // How far ahead of a cyclist's front wheel any part of another vehicle's body is in its way, or
 // null: within its own body (and 0.05 m) moving straight on as it is heading for the next 2 m, or
@@ -273,7 +280,7 @@ function curveSpeed(path, s) {
 }
 
 export class NpcFleet {
-  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, schoolBuses = 0 } = {}) {
+  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0 } = {}) {
     this.world = world;
     this.map = world.map;
     this.random = rng(seed);
@@ -316,7 +323,55 @@ export class NpcFleet {
     for (let i = 0; i < schoolBuses; i++) this.spawnSchoolBus(SCHOOL_START_M);
     this.nextSchool = world.t + SCHOOL_EVERY_S[0];
     this.schoolBuses = this.vehicles.filter(isSchoolBus);
+    // (and trains, on their tracks)
+    this.rails = rng(seed * 86028121 + 19);
+    this.trainCount = 0;
+    this.crossings = railIndex(this.map).crossings.length > 0;
+    this.trainTarget = trains ? Math.min(MAX_TRAINS, railIndex(this.map).tracks.size) : 0;
+    for (let i = 0; i < this.trainTarget; i++) this.spawnTrain(true);
+    this.nextTrain = world.t + AWAY_S[0];
+    this.trains = this.vehicles.filter(isTrain);
     world.npcs = this.vehicles;
+  }
+
+  // Put a train on a track of the map (sim/rail.js): `anywhere`, somewhere along it going either way,
+  // at least 150 m from the car; else coming onto the map from an end where its track leaves it.
+  // Returns it, or null.
+  spawnTrain(anywhere = false, track = null, front = null, dir = null) {
+    const tracks = [...railIndex(this.map).tracks.values()], ego = this.world.ego, random = this.rails;
+    for (let attempt = 0; tracks.length && attempt < 12; attempt++) {
+      const t = track || tracks[Math.floor(random() * tracks.length)];
+      let d = dir, f = front;
+      if (f === null) {
+        if (anywhere) { d = random() < 0.5 ? 1 : -1; f = 30 + random() * (t.length - 60); }
+        else {
+          const edges = [0, 1].filter((k) => t.ends[k] === "edge");
+          if (!edges.length) return null;
+          const k = edges[Math.floor(random() * edges.length)];
+          d = k === 0 ? 1 : -1; f = k === 0 ? 1 : t.length - 1;
+        }
+      }
+      const n = Object.assign(new Vehicle(0, 0, 0, 0, HERITAGE_STREETCAR), { id: `train_${++this.trainCount}`, kind: "train", color: TRAIN_COLOR,
+        name: t.name || "", frozen: 0, waiting: 0 }, trainState(t, f, d, anywhere ? 0 : 6));
+      stepTrain(n, t, 0, [], () => false, random);
+      if (anywhere && Math.hypot(n.x - ego.x, n.y - ego.y) < 150 && front === null) { this.trainCount--; continue; }
+      this.vehicles.push(n);
+      this.trains = this.vehicles.filter(isTrain);
+      return n;
+    }
+    return null;
+  }
+
+  // Trains: take off one that has run off the map, and send another back after a while.
+  manageTrains() {
+    for (const n of this.vehicles.filter((v) => isTrain(v) && v.rail.gone)) {
+      this.vehicles.splice(this.vehicles.indexOf(n), 1);
+      this.nextTrain = Math.max(this.nextTrain, this.world.t + AWAY_S[0] + this.rails() * (AWAY_S[1] - AWAY_S[0]));
+    }
+    if (this.vehicles.filter(isTrain).length < this.trainTarget && this.world.t >= this.nextTrain) {
+      if (!this.spawnTrain()) this.nextTrain = this.world.t + 30;
+    }
+    this.trains = this.vehicles.filter(isTrain);
   }
 
   // Place a school bus in the curb lane of a street `away[0]` to `away[1]` metres from the car, clear
@@ -492,9 +547,15 @@ export class NpcFleet {
     if (this.buses.length || this.busTarget) this.manageBuses();
     if (this.streetcars.length || this.streetcarTarget) this.manageBuses(true);
     if (this.schoolBuses.length || this.schoolTarget) this.manageSchoolBuses();
+    if (this.trains.length || this.trainTarget) this.manageTrains();
     const all = [world.ego, ...this.vehicles];
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
+      // a train on its track (sim/rail.js), braking for anything in its way that it can see
+      if (isTrain(n)) {
+        stepTrain(n, railIndex(this.map).tracks.get(n.rail.track), dt, [...all, ...world.crowd.list], (cab, o) => world.visibility.sees(cab, o), this.rails);
+        continue;
+      }
       if (isEmergencyVehicle(n)) { this.emergencyStep(n, dt, all); continue; }
       if (n.pull && n.pull.wait > 0) {
         n.signal = n.pull.lat > 0 ? "left" : "right";
@@ -722,6 +783,10 @@ export class NpcFleet {
       // not passing a streetcar with its doors open on the side its riders use (sim/streetcar.js)
       const forStreetcar = this.streetcars.length && !isEmergencyVehicle(n) && !n.transit?.tram ? this.yieldToStreetcar(n, front) : null;
       if (forStreetcar !== null && forStreetcar < gap) { gap = Math.max(0.05, forStreetcar); leadV = 0; }
+      // at a level crossing: short of the tracks for a train coming, or for a queue backed up past them
+      // (sim/rail.js; an emergency vehicle only for the train)
+      const forRail = this.crossings ? this.yieldAtCrossing(n, front, all) : null;
+      if (forRail !== null && forRail < gap) { gap = Math.max(0.05, forRail); leadV = 0; }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -879,6 +944,9 @@ export class NpcFleet {
     }
     const cw = crosswalkConflict(path.pts, path.cum, front - 2, front + 35, world.crowd, spec.width / 2 + 0.9 + Math.abs(offset));
     if (cw) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
+    // (and short of a level crossing for a train coming: sim/rail.js)
+    const forRail = this.crossings ? this.yieldAtCrossing(n, front, all) : null;
+    if (forRail !== null) stopAt = stopAt === null ? forRail : Math.min(stopAt, forRail);
     if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
     const v0 = Math.min(n.v0 * weather.speed, e.limit * (n.siren ? EV_LIMIT_FACTOR : 1) * weather.speed, EV_MAX_MPS, curveSpeed(path, path.s), vCap);
     const D = n.driver;
@@ -1188,6 +1256,23 @@ export class NpcFleet {
     return best;
   }
 
+  // Where a driver's front stops for the level crossings ahead on its path (sim/rail.js crossingHold),
+  // or null. It owes the stop for a train when it first hears it coming and can stop then; an emergency
+  // vehicle does not wait for room past the tracks.
+  yieldAtCrossing(n, front, all) {
+    n.railOwed ||= new Map();
+    const owes = (x, at) => {
+      const key = `${x.c.id}:${at.train.id}:${at.train.rail.departures}`;
+      if (!n.railOwed.has(key)) {
+        if (n.railOwed.size > 8) n.railOwed.delete(n.railOwed.keys().next().value);
+        n.railOwed.set(key, canStopForTrain(n.v, x.stop_m) || n.v < 0.5);
+      }
+      return n.railOwed.get(key);
+    };
+    const hold = crossingHold(this.map, n.path.pts, n.path.cum, front, n.spec, n.v, { trains: this.trains, vehicles: isEmergencyVehicle(n) ? [] : all, self: n, owes });
+    return hold ? hold.stop_m : null;
+  }
+
   // How far left of its lane's path (negative) a driver eases to pass a bus standing at its stop just
   // ahead or beside it (see NUDGE_MPS), or 0.
   busNudge(n, pe) {
@@ -1306,7 +1391,7 @@ export class NpcFleet {
   // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
   maybePark() {
     for (const n of this.vehicles) {
-      if (n.kind === "bike" || n.transit || n.school || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      if (n.kind === "bike" || n.transit || n.school || n.rail || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
       const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
       const e = this.map.edges.get(edge.id);
       const choices = this.world.parked.slots.filter((slot) => {
