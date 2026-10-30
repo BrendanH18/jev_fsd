@@ -368,7 +368,8 @@ The HUD says "JUNCTION · NO ROOM PAST IT · WAIT AT THE LINE" while the light i
 outline the vehicle that leaves no room in amber. At an all-way stop, traffic also waits for a car
 coming in on a street without a sign there (the short link between two junctions close together),
 which does not stop, and that car gives way to one pulling away from an all-way stop's line. Both
-reach the seeded benchmark. See `static/js/sim/junction-box.js`.
+reach the seeded benchmark (see [the Rules baseline](rules-baseline.md)). See
+`static/js/sim/junction-box.js`.
 
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery

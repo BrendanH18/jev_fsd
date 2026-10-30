@@ -1,4 +1,32 @@
-# Rules benchmark baseline — 2026-10-29 (level crossings, unchanged)
+# Rules benchmark baseline — 2026-10-30 (keeping the junction clear)
+
+Rules passes **70 of 70 routes in V8, as on main** at `d69239b`, with no collisions, red-light or
+stop-sign violations, failures to yield or deadlock overrides on either side, and 24 safety brakes on
+each. "After" is this branch, which adds keeping a signal's junction clear (traffic and the car wait at
+the line, even on a green, while traffic past the junction leaves no room), traffic at an all-way stop
+waiting for a car coming in on a street without a sign there, and the "Keep the box clear" challenge.
+Unlike the last few changes this reaches the seeded benchmark: its 40 traffic cars now wait at signals
+for room, so where that changes the traffic around a route, the drive changes too.
+
+- **64 of 70 routes are identical** to main in every result field but wall-clock time and decision
+  latency, including all twelve of Kitsilano's in dry, fog and rain.
+- **Six routes move a little, all still passing:**
+  - Toronto `s1-2`: 250.5 → 245.8 s, safety brakes 3 → 1.
+  - Edmonton `s1-2`: 146.6 → 146.9 s.
+  - Kitsilano snow `s1-3`: 135.5 → 135.6 s.
+  - Kitsilano snow `s1-6`: 244.0 → 248.4 s, safety brakes 1 → 3.
+  - Kitsilano snow `s1-11`: 369 → 366 decisions, otherwise identical.
+  - Kitsilano snow `s1-12`: 284.8 → 253.7 s, its closest gap 2.6 → 12.8 m.
+
+## Method
+
+All 15 seeded suites (Kitsilano 12 routes in each of dry, fog, rain and snow, the eleven other maps two
+dry routes each), Rules, suite seed 1, 40 traffic cars, lockstep, V8 through `scripts/bench_node.mjs`
+with Node `v22.23.4` on a Raspberry Pi (Linux 6.18, arm64), one suite at a time on each side, main and
+the branch side by side, each from its own worktree against its own `uv run --locked server.py`,
+compared field by field. WebKit and night were not run.
+
+## Earlier record: 2026-10-29 (level crossings, unchanged)
 
 Rules passes the Edmonton suite **2 of 2 in V8, exactly as on main** at `6cb513f`: route for route,
 every result field but wall-clock time and decision latency is the same, with no collisions,
