@@ -220,6 +220,12 @@ test('a creep stopped for a post further on keeps steering around a nearer one',
   ctx.autopilot.setBrain('rules');
   world.route=new Route(route,map,world.ego.spec); world.destination=route.polyline.at(-1);
   ctx.autopilot.setEnabled(true);
+  const { buildSnapshot }=await import('../static/js/brain/sensors.js');
+  const { sampleCandidates }=await import('../static/js/brain/candidates.js');
+  // (10 m along at 4 m/s, the candidates run past the cap of 15)
+  world.placeOnLane(lane,10); world.ego.v=4;
+  const offered=sampleCandidates(buildSnapshot(world),world).map(c=>c.id);
+  world.placeOnLane(lane,5); world.ego.v=0;
   const line=ctx.world.route.controls.find(c=>c.control.id==='sig36').sRoute;
   let past=null;
   while(ctx.world.t<60&&past===null){
@@ -227,6 +233,9 @@ test('a creep stopped for a post further on keeps steering around a nearer one',
     const p=ctx.world.route.project(ctx.world.ego.x,ctx.world.ego.y);
     if(p.s>line+2)past=ctx.world.t;
   }
+  test('with a building corner in the lane ahead, full-metre nudges either way are offered, within the cap on candidates',()=>{
+    for(const id of ['left_1_hold','left_1_target','right_1_hold','right_1_target'])assert(offered.includes(id),`${id}: ${offered.join(' ')}`);
+  });
   test('a building corner standing in the curb lane: the car moves over a metre to pass it, stops at the line beside it, and turns',()=>{
     assert.equal(ctx.world.violations.collisions,0);
     assert.notEqual(past,null,'past the line within 60 s');

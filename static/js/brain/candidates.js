@@ -73,9 +73,11 @@ export function sampleCandidates(snap, world) {
   const nudge = scenery ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : 0;
 
   if (!lost && !offRoad) {
-    const offsets = shifting ? [0] : [0, -0.5, 0.5];
+    // (with scenery in the lane the full-metre nudges come first, so the cap on candidates below
+    // cuts half-metre ones rather than either of them)
+    const offsets = shifting ? [0] : scenery ? [0, -1.0, 1.0, -0.5, 0.5] : [0, -0.5, 0.5];
     const lateral = lane ? Math.abs(lane.lateral) : snap.routeProj ? Math.abs(snap.routeProj.lateral) : 0;
-    if (!shifting && (lateral > 0.5 || snap.following || (snap.traffic.length || snap.roadside?.length) || scenery)) offsets.push(-1.0, 1.0);
+    if (!shifting && !scenery && (lateral > 0.5 || snap.following || (snap.traffic.length || snap.roadside?.length))) offsets.push(-1.0, 1.0);
     const target = snap.target ? snap.target.v : limit;
     const speeds = new Set([0, Math.max(0, v - 3), v, Math.min(limit, v + 2), limit, target, target * 0.75].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10));
     for (const d of offsets) {
