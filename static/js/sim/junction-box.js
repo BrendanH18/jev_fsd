@@ -4,17 +4,19 @@
 // sécuritaire de la route"). The same holds for a level crossing (sim/rail.js), whose room rule this
 // mirrors. At a signal the box is the junction from the stop line to the far side of the widest street
 // across it; a driver short of the line, or barely over it, waits there while a vehicle ahead on its
-// way past the junction, going its way, stopped or slower than 3 m/s, leaves less than its own length
-// and 1 m clear of the box; and so does one a little further over it, barely moving and still short of
+// way past the junction, going its way, stopped or slower than 3 m/s, leaves less than its own length,
+// the gap it would stop behind that vehicle and 1 m clear of the box; and so does one a little further over it, barely moving and still short of
 // the street across. Once into the junction it is committed, and drives on. Traffic, buses,
 // streetcars and the driven car all do; cyclists, who keep right of the queue, and emergency vehicles
 // with their sirens on do not. Junctions without a signal, and roundabouts, are left out.
 
 import { projectPoint } from "../map/mapdata.js";
-import { QUEUE_MPS, ROOM_M } from "./rail.js";
+import { QUEUE_MPS, ROOM_M as SPARE_M } from "./rail.js";
 import { isEmergency } from "./emergency.js";
 
-export { QUEUE_MPS, ROOM_M };
+export { QUEUE_MPS };
+export const STANDSTILL_M = 2.5;    // the gap a driver stops behind a stopped vehicle (traffic 2 m, Rules 2.5 m)
+export const ROOM_M = STANDSTILL_M + SPARE_M;   // what a driver needs past the box besides its own length
 export const ENTERED_M = 1;         // a front this far past the line waits there only if barely moving
 export const CREEP_MPS = 2;         // (and short of the street across)
 export const LOOK_M = 60;           // a line further ahead than this is not checked yet
@@ -38,8 +40,9 @@ export const boxStart = (map, edgeId, centreS) => centreS - map.crossingHalfWidt
 // The vehicle that leaves no room past the box for a vehicle of `spec` on the path (`pts`, `cum`),
 // whose line is at `line` and box ends at `far` along it: the nearest, among `vehicles`, on the path
 // (its rear within STAY_M of it) and going its way, stopped or slower than QUEUE_MPS, with its rear
-// past the line and short of `far` + its length + ROOM_M. `{ vehicle, rear_m }` (how far past the box
-// its rear is), or null. `centre`: the junction, for skipping those far from it.
+// past the line and short of `far` + its length + ROOM_M (its rear, stopped behind the vehicle, clear
+// of the box), and the path within STAY_M of it (not just level with the path's end). `{ vehicle, rear_m }`
+// (how far past the box the vehicle's rear is), or null. `centre`: the junction, for skipping those far from it.
 export function boxBlocker(pts, cum, line, far, spec, vehicles, self = null, centre = null) {
   const need = far + spec.length + ROOM_M;
   let best = null;
@@ -49,7 +52,7 @@ export function boxBlocker(pts, cum, line, far, spec, vehicles, self = null, cen
     const os = o.spec || o;
     const rearX = o.x - Math.cos(o.psi) * (os.rearOverhang || 0), rearY = o.y - Math.sin(o.psi) * (os.rearOverhang || 0);
     const q = projectPoint(pts, cum, [rearX, rearY], null);
-    if (!q || q.s < line + PAST_LINE_M || q.s > need || Math.abs(q.lateral) > STAY_M + (os.width || 1.9) / 2) continue;
+    if (!q || q.s < line + PAST_LINE_M || q.s > need || q.distance > STAY_M + (os.width || 1.9) / 2) continue;
     if (Math.abs(wrap(o.psi - q.heading)) > SAME_WAY) continue;
     if (!best || q.s < best.s) best = { vehicle: o, s: q.s };
   }

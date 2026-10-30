@@ -71,6 +71,18 @@ test("the box of a signal runs from its line to the far side of the widest stree
   assert.ok(!box.waitsAt(-2, 1, 5) && !box.waitsAt(-3, -0.5, 0));
 });
 
+test("the room past the box counts the gap a driver stops behind a car, and a car level with a short path's end but far beyond it is not in the way", () => {
+  // (a straight path along x, its line at 10 m and its box ending at 25 m: a car needs its length,
+  // the 2.5 m it stops behind another and 1 m)
+  const pts = [[0, 0], [60, 0]], cum = [0, 60], need = 25 + CAR.length + box.ROOM_M;
+  const at = (rear) => new Vehicle(rear + CAR.rearOverhang, 0, 0, 0, CAR);
+  near(box.ROOM_M, 3.5, 1e-9, "room");
+  assert.ok(box.boxBlocker(pts, cum, 10, 25, CAR, [at(25 + CAR.length + 2)], null), "its length and 2 m: no room");
+  assert.equal(box.boxBlocker(pts, cum, 10, 25, CAR, [at(need + 0.5)], null), null);
+  // (a path ending 3 m past the box, and a car stopped 30 m beyond its end)
+  assert.equal(box.boxBlocker([[0, 0], [28, 0]], [0, 28], 10, 25, CAR, [at(58)], null), null);
+});
+
 test("challenge: Mont-Royal Est at Saint-Denis on the green, a queue back from Rue Rivard to just past the junction", () => {
   const ctx = setupChallenge(MONTREAL, CHALLENGE), { world, scenario } = ctx;
   assert.equal(scenario.start.edge, "e191");
@@ -83,7 +95,7 @@ test("challenge: Mont-Royal Est at Saint-Denis on the green, a queue back from R
   const c = world.route.controls.find((x) => x.control.id === "sig14"), far = box.boxEnd(MONTREAL, c.edge, c.sJunction);
   const b = box.boxBlocker(world.route.pts, world.route.cum, c.sRoute, far, world.ego.spec, cars, world.ego);
   assert.equal(b?.vehicle, cars.at(-1));
-  assert.ok(b.rear_m > 1.5 && b.rear_m < world.ego.spec.length + box.ROOM_M, `${b.rear_m.toFixed(2)} m past the junction`);
+  assert.ok(b.rear_m > 1.5 && b.rear_m < world.ego.spec.length + 1, `${b.rear_m.toFixed(2)} m past the junction`);
   // (the car's light is green as it comes up, and turns red while the queue is still there)
   for (const t of [4, 10, 20]) { world.t = t; assert.equal(world.phase("sig14").B, "green", `${t} s`); }
   world.t = 26; assert.equal(world.phase("sig14").B, "red");

@@ -352,8 +352,8 @@ Keeping the junction clear (Québec's Highway Safety Code; Québec.ca, "Savoir m
 intersections"): even on a green, a driver must not enter a junction without room past it to clear it
 completely. At a signal the box runs from the stop line to the far side of the widest street across
 it. A driver short of the line, or up to 1 m over it, waits there while a vehicle ahead on its way past
-the junction, going its way, stopped or slower than 3 m/s, leaves less than its own length and 1 m
-clear of the box; so does one further over, slower than 2 m/s and still short of the street across.
+the junction, going its way, stopped or slower than 3 m/s, leaves less than its own length, the 2.5 m
+it would stop behind that vehicle and 1 m clear of the box; so does one further over, slower than 2 m/s and still short of the street across.
 Into the junction it is committed. Traffic, buses and streetcars wait (at the line, 2 m back, as at any
 line); cyclists, who keep right of the queue, and emergency vehicles with their sirens on do not.
 Junctions without a signal, and roundabouts, are left out. The car's sensing reports `junction_box`

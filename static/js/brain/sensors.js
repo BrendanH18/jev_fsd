@@ -690,7 +690,7 @@ function levelCrossing(world, route, frontS, vehicles) {
 // BOX_SHORT_M short of it, as a slow stop runs on a little), even on a green, until there is room. Its front barely over the line still waits there, and so does a car
 // a little further over, barely moving and short of the street across; further in, it has entered
 // the junction and drives on. `room_m`: how far past the box the vehicle's rear is, against
-// `need_m`, the car's length and 1 m. Or null.
+// `need_m`, the car's length, the gap it stops behind a car and 1 m. Or null.
 const BOX_SHORT_M = 1;
 function junctionBox(world, route, frontS, vehicles, inter) {
   const ego = world.ego, box = routeBoxAhead(world.map, route, frontS, ego.v);
