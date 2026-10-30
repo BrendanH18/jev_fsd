@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- Keeping the junction clear (`static/js/sim/junction-box.js`). Québec's Highway Safety Code: even on
+  a green, a driver must not enter an intersection without room past it to clear it completely, and
+  stops before it instead (Québec.ca, "Savoir manœuvrer aux intersections"; the SPVM's guide). At a
+  signal the box runs from the stop line to the far side of the widest street across it. A driver
+  short of the line, or up to 1 m over it, waits there while a vehicle ahead on its way past the
+  junction, going its way, stopped or slower than 3 m/s, leaves less than its own length, the 2.5 m it
+  would stop behind that vehicle and 1 m clear of the box (much as at a level crossing); so does one further over, slower than 2 m/s and short of the
+  street across. Into the junction it is committed and drives on. Traffic, buses, streetcars and the
+  driven car all do; cyclists, who keep right of the queue, and emergency vehicles with their sirens on
+  do not. Junctions without a signal, and roundabouts, are left out. The car's sensing reports
+  `junction_box`; Rules gets a `wait_short_of_junction` candidate, and manoeuvres past the line are
+  rejected (`blocks_junction`). Decision models and LLMs get `junction_box`, a situation line, a motion
+  criterion and a prompt line. The audit counts a failure to yield (`to: "cross traffic"`) once a visit
+  if the car entered the junction while traffic past it left no room, and then stands in it while its
+  light is red; the coaching score counts standing in a junction with no room past it ("Stopped in the
+  junction"), with a tip. The HUD says "JUNCTION · NO ROOM PAST IT · WAIT AT THE LINE", and AI eyes
+  outline the vehicle that leaves no room in amber.
+- At an all-way stop, traffic now also waits for a car coming in on a street without a sign at the same
+  junction (the short link between two junctions close together, as on Howland and Albany Avenues in
+  The Annex), which does not stop, and that car gives way to one already pulling away from an all-way
+  stop's line. The new waits at signals had shifted traffic onto the gap: two crossing cars could be in
+  such a junction together.
+- New challenge, "Keep the box clear" (Montréal, Avenue du Mont-Royal Est at Rue Saint-Denis): the
+  light is green as the car comes up, but past the junction a car waits at Rue Rivard to turn left, with
+  eight more queued behind it, the last just beyond Saint-Denis. The queue moves off 6 s after the car's
+  light turns red. Rules and the cautious agent wait at the line through the green, and go on the next
+  one. A driver who follows the queue in is stuck in the junction when the light turns red: it fails to
+  yield, and is coached. The other challenges and the evaluation engine version are unchanged.
+- The arena's saved history now holds 8 MiB (about 4.2 million characters) instead of 7: one run of
+  every challenge under both drivers is about 1.85 million characters with twenty challenges, and a
+  baseline and a new run no longer fitted, so saving the new run dropped the baseline.
+- New checks in `scripts/test_junction_box.mjs`.
+
 - Railway level crossings (`jev/osm/rail.py`, `static/js/sim/rail.js`, `render/rail.js`). A map's
   railway and streetcar tracks that cross its streets on the level now come from OpenStreetMap, in a
   file of their own beside the pack (`<key>.rail.v1.json`): a track is a chain of railway ways joined

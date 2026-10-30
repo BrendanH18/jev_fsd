@@ -162,6 +162,13 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_before_tracks", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lx.stop_s_route - FRONT) }),
         steer: "hold lane", speed: lx.wait === "train" ? "stop short of the level crossing for the train" : "wait short of the tracks for room past them" });
     }
+    // A signal it could not clear, for traffic past the junction: wait at the line, even on a green,
+    // until there is room for all of the car beyond it.
+    const jb = snap.junction_box;
+    if (jb && jb.bumper_to_stop_m > 0.3) {
+      out.push({ id: "wait_short_of_junction", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(jb.stop_s_route - FRONT) }),
+        steer: "hold lane", speed: "wait at the line for room past the junction" });
+    }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -239,6 +246,8 @@ export function simulateAll(candidates, snap, world) {
   const tramStop = snap.streetcar?.doors ? snap.streetcar.stop_s_route : null;
   // where the car waits short of a level crossing
   const railStop = snap.level_crossing?.wait ? snap.level_crossing.stop_s_route : null;
+  // where the car waits at a signal it could not clear
+  const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
@@ -248,7 +257,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesEv = false, pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesEv = false, pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -293,6 +302,8 @@ export function simulateAll(candidates, snap, world) {
         if (tramStop !== null && s + FRONT > tramStop + 1.5) passesTram = true;
         // (and here: 1.5 m past where it waits is still 5.5 m back from the nearest rail)
         if (railStop !== null && s + FRONT > railStop + 1.5) passesRail = true;
+        // (and here: 1.5 m past the line is still short of the street across)
+        if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -356,6 +367,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesSchool && c.law.kind !== "hard_brake") reject = "passes_stopped_school_bus";
     else if (passesTram && c.law.kind !== "hard_brake") reject = "passes_streetcar_doors";
     else if (passesRail && c.law.kind !== "hard_brake") reject = snap.level_crossing.wait === "train" ? "crosses_in_front_of_train" : "no_room_past_tracks";
+    else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if (passesHold && c.law.kind !== "hard_brake") reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";
     c.reject = reject;
