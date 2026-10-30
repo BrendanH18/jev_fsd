@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- Work zones with a flagger (Ontario HTA s. 146.1; the Ontario Traffic Manual, Book 7;
+  `static/js/sim/work-zone.js`, `render/work-zone.js`). A road crew closes one lane of a straight block
+  of a two-way street with one lane each way, and a flagger on the sidewalk at each end turns a STOP/SLOW
+  paddle so each direction takes its turn through the lane that is left. The zone is 100 m from stop line
+  to stop line: 6 m, a 30 m taper across, the 24 m closed stretch (the closed lane and its parking lane, a
+  parked obstacle; the crew's dump truck with an arrow board, two workers, cones angled across the lane),
+  a 30 m taper back, 6 m. SLOW lasts 10 to 25 s; then both paddles show STOP until the one-lane section is
+  clear (at least 2 s), and the other side gets SLOW. Everyone keeps to 30 km/h through it; a driver short
+  of its line when its paddle turns to STOP stops there if it could at 3.5 m/s^2, and one too close goes on
+  and is waited for. Traffic, buses and cyclists stop for STOP and the closed side goes round the work
+  through the other lane. In a free drive one zone stands at a time, 150 to 450 m away out of sight, for 4
+  to 8 minutes (`?workzones=0` takes them off), only where the block has no marked crosswalk, transit route
+  or level crossing, 20 m or more from its junctions: 590 places on the bundled maps (a block
+  counts once for each side whose lane can be closed), from 6 in Le Plateau to 118 in Kitsilano.
+- The driven car's sensing reports `work_zone` (its side, what the paddle shows it, its stop line, whether
+  it must wait, and on the closed side the detour round the work in route arc lengths). A lane law can
+  carry a `detour` (`sim/controller.js` `detourAt`), and every lane and hard-brake candidate does on the
+  closed side, so the car goes round the work whatever it chooses. Rules gets a `stop_for_flagger`
+  candidate, and going past the line while it must wait is rejected (`runs_flagger_stop`). Decision models
+  and LLMs get `work_zone`, a situation line, a motion criterion and a prompt line. The audit counts a
+  missed stop (`stop_signs_run`, with `flagger: true`) once each time a paddle turns to STOP if the car,
+  owing it, goes more than 2 m past the line at more than 1 m/s; the coaching score counts going through
+  too fast (`work_zone_speeding_s`) and the flagger's STOP gone past (`flagger_stops_run`), with tips. The
+  HUD says "WORK ZONE · FLAGGER SHOWS STOP · WAIT AT THE LINE" or "WORK ZONE · SLOW · 30 · ONE LANE · GO
+  ROUND IT", and AI eyes outline the closed stretch in amber. A restored checkpoint ties the zones back to
+  the live world.
+- New challenge, "Follow the flagger" (Ottawa, Queen Street): the car's lane is closed, and the flagger at
+  its end shows STOP while three cars come the other way through the one lane. Rules and the cautious agent
+  wait at the line for about 17 s, then go round the work at 30 km/h on SLOW and arrive. The other
+  twenty-one challenges play out exactly as before, and the evaluation engine version is unchanged.
+- New checks in `scripts/test_work_zones.mjs`.
+
 - Advance greens and left-turn arrows (`static/js/sim/signals.js`). Where two multi-lane major streets
   cross at a signal, one approach on one of them (with an approach opposite it and a left turn out of
   it) leads its group with a protected left turn. The cycle grows by 12 s for it: 8 s in which only that
