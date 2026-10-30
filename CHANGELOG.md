@@ -30,6 +30,9 @@
   light turns red. Rules and the cautious agent wait at the line through the green, and go on the next
   one. A driver who follows the queue in is stuck in the junction when the light turns red: it fails to
   yield, and is coached. The other challenges and the evaluation engine version are unchanged.
+- The arena's saved history now holds 8 MiB (about 4.2 million characters) instead of 7: one run of
+  every challenge under both drivers is about 1.85 million characters with twenty challenges, and a
+  baseline and a new run no longer fitted, so saving the new run dropped the baseline.
 - New checks in `scripts/test_junction_box.mjs`.
 
 - Railway level crossings (`jev/osm/rail.py`, `static/js/sim/rail.js`, `render/rail.js`). A map's
