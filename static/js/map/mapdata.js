@@ -2,7 +2,7 @@
 // adjacency, and traffic-control lookups. Coordinates: x east, y north, meters. Headings are
 // radians counter-clockwise from +x.
 
-import { timingPlan } from "../sim/signals.js";
+import { advanceStyle, timingPlan } from "../sim/signals.js";
 import { zoneAt, zoneSpans } from "../sim/speed-zones.js";
 
 const CELL = 50;
@@ -142,6 +142,8 @@ export class MapData {
     this.bbox = pack.bbox;
     this.routingBbox = pack.routing_bbox || pack.bbox;
     this.rightOnRed = rightOnRedAllowed(this.routingBbox);
+    // how an advance green shows here: a flashing green ball or a green left arrow (sim/signals.js)
+    this.advanceStyle = advanceStyle(this.routingBbox);
     this.extent = pack.extent;
     this.edges = new Map(pack.edges.map((e) => [e.id, { ...e, cum: cumulative(e.pts) }]));
     this.lanes = new Map();

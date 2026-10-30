@@ -72,7 +72,7 @@ export class Route {
         turn, sJunction,
         // where the front bumper stops to look, giving way (sim/priority.js)
         sPeek: Math.max(sRoute, (sJunction ?? sRoute + 8) - map.crossingHalfWidth(e.id) - PEEK_SHORT_M),
-        secondsToGreen: inter ? (t) => secondsToGreenFor(inter, control.group, t) : null,
+        secondsToGreen: inter ? (t) => secondsToGreenFor(inter, control.group, t, e.id, turn) : null,
       });
     }
     this.controls.sort((a, b) => a.sRoute - b.sRoute);

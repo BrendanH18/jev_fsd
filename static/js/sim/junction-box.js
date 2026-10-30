@@ -115,7 +115,7 @@ export function boxNotice(world) {
   const p = route.project(ego.x, ego.y, route.hint);
   if (!p || p.distance > 4) return null;
   const box = routeBoxAhead(world.map, route, p.s + ego.spec.length - ego.spec.rearOverhang, ego.v);
-  if (!box?.waits || world.phase(box.c.control.id)[box.c.control.group] === "red") return null;
+  if (!box?.waits || world.light(box.c.control.id, box.c.edge, box.c.turn) === "red") return null;
   const visible = world.npcs.filter((n) => world.sees(ego, n));
   return boxBlocker(route.pts, route.cum, box.line, box.far, ego.spec, visible, ego) ? { key: `${box.c.control.id}:${Math.round(box.line)}`, text: "JUNCTION · NO ROOM PAST IT · WAIT AT THE LINE" } : null;
 }

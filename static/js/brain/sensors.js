@@ -3,7 +3,7 @@
 
 import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
-import { signalFor, STOP_ZONE_M } from "../sim/signals.js";
+import { advanceHolds, approachPhase, movementSignal, protectedLeft, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
@@ -66,6 +66,8 @@ const CLEAR_PAST_M = 6;
 const GAP_MARGIN_S = 1.5;
 const GAP_KEEP_S = 0.75;
 export const ONCOMING_STOP_M = 1.5;
+// What the car's approach shows under an advance green (sim/signals.js approachPhase), as sensed.
+const ADVANCE_LIGHTS = { advance: "flashing_green", arrow: "left_arrow", arrow_yellow: "left_arrow_yellow" };
 const NEXT_CONTROL_M = 30;
 const LEFT_SIGNAL_M = 40;
 // A car this far past a stop line is inside the junction and clears it: a light that changes or a
@@ -189,7 +191,12 @@ export function buildSnapshot(world, executing = null) {
       const bumperToLine = c.sRoute - frontS;
       const inter = control.type === "signal" ? map.intersections.get(control.id) : null;
       const junction = inter ? [inter.x, inter.y] : c.junction;
-      const signal = control.type === "signal" ? (junction && world.visibility.canSee(ego, ...junction) ? signalFor(map, control, world.t) : "unknown") : null;
+      // (the light for the way the car goes: under a left arrow only a left turn has a green; and
+      // whether an advance green shows, or holds the car while the approach opposite has it)
+      const shows = inter && junction && world.visibility.canSee(ego, ...junction) ? approachPhase(inter, c.edge, world.t) : null;
+      const signal = control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null;
+      const advance = !shows ? null : ADVANCE_LIGHTS[shows] ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
+        : shows === "red" && advanceHolds(inter, c.edge, world.t) ? { light: "held", protected: false } : null;
       let crossTraffic = false;
       const rb = control.type === "yield" ? map.roundabouts.get(control.roundabout) : null;
       // yielding at a roundabout: look further round the ring the longer the car needs to reach the line
@@ -216,18 +223,19 @@ export function buildSnapshot(world, executing = null) {
         : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow";
       const giveWay = (control.type === "uncontrolled" && control.rule !== "major") || (control.type === "stop" && !control.all_way && stopCompleted)
         ? giveWayAt(world, c, frontS) : null;
-      const oncoming = leftTurn && turnNow ? oncomingYield(world, c, frontS) : null;
+      // (a left turn under an advance green is protected: oncoming traffic is held on its red)
+      const oncoming = leftTurn && turnNow && !advance?.protected ? oncomingYield(world, c, frontS) : null;
       // A junction without a sign that asks nothing of the car right now (it has the right of way,
       // or nothing it gives way to is coming and it can see) does not hide a control further on:
       // a signal just beyond it, say.
       if (control.type === "uncontrolled" && (!giveWay || giveWay.go) && !oncoming && next && next.sRoute - frontS <= LOOK_AHEAD_CONTROL_M) continue;
       snap.intersection = {
-        id: control.id, control: control.type, signal, group: control.group || null,
+        id: control.id, control: control.type, signal, group: control.group || null, advance,
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
         entered, turn: c.turn || "straight",
         oncoming,
         right_on_red: control.type === "signal" && map.rightOnRed && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
-          ? rightOnRed(world, c, inter, frontS, visible) : null,
+          ? rightOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
         stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
         rule: control.type === "uncontrolled" ? control.rule : null,
@@ -795,7 +803,7 @@ function etaOf(world, n, distance) {
 // moves across the car's nose to its right: heading a right turn's worth (as classifyTurn reads
 // it) off the way the car came in, or close to the street it turns into (at a skewed junction the
 // street from the left need not run straight on into it).
-function rightOnRed(world, c, inter, frontS, visible) {
+function rightOnRed(world, c, inter, frontS, visible, held = false) {
   const { ego, route, map } = world;
   // traffic from the left is looked for as far as the car can see, beyond TRAFFIC_RADIUS_M
   const visibleNpcs = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M).filter((o) => world.npcs.includes(o));
@@ -807,6 +815,8 @@ function rightOnRed(world, c, inter, frontS, visible) {
   const fromLeft = (h) => Math.abs(wrap(h - exit)) <= RTOR_CONE || map.classifyTurn(wrap(h - inward)) === "right";
   const need = clearTime(ego.v, Math.max(0, sCentre - frontS) + ego.spec.length) + RTOR_MARGIN_S;
   out.need_s = need;
+  // (an advance green opposite sends protected left turns into the street the car turns into)
+  if (held && !entered) { out.wait_for = { kind: "advance" }; return out; }
   for (const n of visibleNpcs) {
     const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
     if (d < JUNCTION_BOX_M) {

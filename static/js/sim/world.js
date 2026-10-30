@@ -2,7 +2,7 @@
 
 import { Vehicle, CAR } from "./vehicle.js";
 import { headingAt } from "../map/mapdata.js";
-import { phaseOf, StopMemory } from "./signals.js";
+import { approachPhase, movementSignal, phaseOf, StopMemory } from "./signals.js";
 import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
@@ -46,6 +46,9 @@ const AUDIT_BOX_M = 12;
 // left (heading within 60 deg of the way the car turns) due at the junction within 2 s, or that
 // would reach the car within 2 s along the street both are in.
 const AUDIT_RTOR_OUT_M = 15;
+// Which way a car that crossed the line on a left arrow went is judged this far from the junction's
+// centre.
+const AUDIT_ARROW_OUT_M = 15;
 // A junction without a sign stops being the control the audit follows this far past its line
 // (after the tick that sees the car cross it).
 const PASSED_M = 1;
@@ -168,6 +171,7 @@ export class World {
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
     this.lastSignal = null;
+    this.arrowCheck = null;       // the left arrow the car crossed the line on: which way did it go?
     this.spawnEgo();
     this.roadside = new RoadsideStops(this, { count: roadside, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
@@ -226,6 +230,13 @@ export class World {
   }
 
   phase(intersectionId) { return phaseOf(this.map.intersections.get(intersectionId), this.t); }
+  // The light for one movement through a signal: from the approach `edgeId`, turning `turn`
+  // (sim/signals.js: under a left arrow only a left turn has a green).
+  light(intersectionId, edgeId, turn = "straight") {
+    const inter = this.map.intersections.get(intersectionId);
+    if (!inter?.plan?.advance) return this.phase(intersectionId)[this.map.edges.get(edgeId)?.control?.group];
+    return movementSignal(approachPhase(inter, edgeId, this.t), turn);
+  }
 
   resetContactHistory() {
     this.ego.vy = 0; this.ego.r = 0; this.ego.ax = 0; this.ego.latAccel = 0;
@@ -234,6 +245,7 @@ export class World {
     this._lastFront = null;
     this.lastRoad = null;
     this.lastSignal = null;
+    this.arrowCheck = null;
     this.giveWay = null;
     this.egoPeek = null;
     this.turnaround = null;
@@ -390,11 +402,17 @@ export class World {
       const crossed = past >= 0;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
         if (control.type === "signal") {
-          const state = this.phase(control.id)[control.group];
           const inter = this.map.intersections.get(control.id);
+          const shows = inter?.plan?.advance ? approachPhase(inter, rc ? rc.edge : edge.id, this.t) : this.phase(control.id)[control.group];
+          // under a left arrow (green or turning yellow), which way it turns decides: judged once
+          // it is through the junction (auditArrow)
+          const arrow = shows === "arrow" || shows === "arrow_yellow";
+          const state = arrow ? "green" : movementSignal(shows, "straight");
           // after a full stop, where turning right on red is allowed, which way it turns decides
           const pending = state === "red" && this.map.rightOnRed && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
           if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light" }); }
+          this.arrowCheck = arrow && inter ? { id: control.id, centre: [inter.x, inter.y], approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
+            stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed } : null;
           // the approach's heading and, on a route, the street it turns into (without one, the
           // street the car is heading into is the way it faces)
           if (inter) {
@@ -457,6 +475,21 @@ export class World {
     this.auditStreetcars();
     this.auditCrossings(dt);
     this.auditBox(dt, followsRoute ? frontS : null);
+    this.auditArrow();
+  }
+
+  // Through a junction on a left arrow: anything but a left turn (heading more than 45 deg left of
+  // the approach once AUDIT_ARROW_OUT_M from its centre) went on a red, unless it was a right turn on
+  // red after a full stop where that is allowed.
+  auditArrow() {
+    const a = this.arrowCheck, ego = this.ego;
+    if (!a) return;
+    if (Math.hypot(ego.x - a.centre[0], ego.y - a.centre[1]) < AUDIT_ARROW_OUT_M) return;
+    this.arrowCheck = null;
+    const turned = wrap(ego.psi - a.approach);
+    if (turned > Math.PI / 4 || (a.stopped && turned < -Math.PI / 4)) return;
+    this.violations.red_lights_run++;
+    this.events.push({ type: "red_light", arrow: true });
   }
 
   // (see AUDIT_BOX_MOVING_MPS) `frontS`: the car's front along its route, or null off it.
@@ -468,7 +501,7 @@ export class World {
     // (entering the junction, its front past the near side of the street across: was there room
     // past it?)
     if (ahead && ahead.toNear <= 0 && this.inBox?.key !== key) {
-      this.inBox = { key, id: ahead.c.control.id, group: ahead.c.control.group, line: ahead.line, near: ahead.near, far: ahead.far, since: this.t, still: 0, counted: false,
+      this.inBox = { key, id: ahead.c.control.id, edge: ahead.c.edge, turn: ahead.c.turn || "straight", line: ahead.line, near: ahead.near, far: ahead.far, since: this.t, still: 0, counted: false,
         noRoom: !!boxBlocker(route.pts, route.cum, ahead.line, ahead.far, ego.spec, this.npcs, ego) };
     }
     const box = this.inBox;
@@ -477,7 +510,7 @@ export class World {
     if (frontS - ego.spec.length > box.far || frontS < box.near - 2) { this.inBox = null; return; }
     box.still = Math.abs(ego.v) < 0.3 ? box.still + dt : 0;
     box.blocked = !!boxBlocker(route.pts, route.cum, box.line, box.far, ego.spec, this.npcs, ego);
-    if (box.noRoom && !box.counted && Math.abs(ego.v) < AUDIT_BOX_MOVING_MPS && this.phase(box.id)[box.group] === "red") {
+    if (box.noRoom && !box.counted && Math.abs(ego.v) < AUDIT_BOX_MOVING_MPS && this.light(box.id, box.edge, box.turn) === "red") {
       box.counted = true;
       this.violations.failed_to_yield++;
       this.events.push({ type: "failed_to_yield", to: "cross traffic", junction: box.id, blocking: true });
