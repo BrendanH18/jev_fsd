@@ -31,6 +31,7 @@ from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.osm.crossings import build_crossings
+from jev.osm.rail import build_rail
 from jev.osm.transit import build_transit
 from jev.osm.zones import build_zones
 from jev.routing import Router
@@ -82,6 +83,10 @@ def load_map(bbox_text: str = "") -> dict:
         zones = build_zones(bbox, MAPS_DIR, entry["pack"], log=log)
         if zones:
             entry["pack"] = {**entry["pack"], "zones": zones}
+        # railway tracks and their level crossings with the streets, likewise
+        rail = build_rail(bbox, MAPS_DIR, entry["pack"], log=log)
+        if rail:
+            entry["pack"] = {**entry["pack"], "rail": rail}
         # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
         offset = map_identity(bbox).get("utc_offset")
         if offset is not None:

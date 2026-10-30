@@ -86,6 +86,7 @@ export class DeadlockDetector {
       || (snap && snap.crosswalk_stop && snap.crosswalk_stop.bumper_to_stop_m < 8)
       || (snap && snap.school_bus?.lights === "red" && snap.school_bus.bumper_to_stop_m < 8)
       || (snap && snap.streetcar?.doors && snap.streetcar.bumper_to_stop_m < 8)
+      || (snap && snap.level_crossing?.wait && snap.level_crossing.bumper_to_stop_m < 8)
       || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)
       || (snap && snap.turnaround?.executing && snap.turnaround.idle_s < TURN_ROUND_IDLE_S)
       || !world.route;

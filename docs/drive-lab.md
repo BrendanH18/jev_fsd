@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Eighteen authored challenges
+## Nineteen authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -27,8 +27,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | School zone | Vancouver, Kitsilano | 9:00 on West 11th Avenue past Lord Tennyson Elementary: a 50 km/h street whose block is a school zone, in effect at 30 km/h (BC MVA s. 147). The car starts 4 m into the zone; 85 m on, a child waits at the curb between two parked cars, and once the car's front is 15 m from them they run straight across the street, without looking. At 30 km/h the car stops for them; at the street's 50 it cannot |
 | Move over | Winnipeg, Exchange District | A tow truck stands at the curb on Princess Street (three lanes one way, 50 km/h) with its amber lights flashing, the car it is about to tow parked behind it and its operator between the two. The car starts in the curb lane, the one next to it, its front 76 m behind the truck. Once the car's front is 16 m from the operator they step out into the curb lane without looking, stand there 3 s and step back. Moving over (BC MVA Regulations s. 47.02) the car is a lane clear of them; staying in the curb lane at 40 km/h it can stop for them, at the street's 50 it cannot |
 | Behind the doors | Toronto, The Annex | A 511 streetcar stands at its stop at Harbord on Bathurst Street (northbound) (two lanes each way, 40 km/h) in the inner lane, where its track is laid, with its doors open. The car starts in the curb lane beside it, 75 m behind it. A rider waits at the curb abreast of its rear doors; once the car's front is 10 m from them they walk out across the car's lane to the doors without looking, and get on. The car must stop at least 2 m behind the rear doors and wait while they are open (Ontario HTA s. 166) |
+| Clear the tracks | Edmonton, Old Strathcona | 106 Street (southbound, one lane each way, 40 km/h) crosses the High Level Bridge Streetcar's track 57 m past 87 Avenue, with crossbucks alone. Past it, a car waits at 86 Avenue to turn left, its indicator on, with two more queued behind it, the last 2.5 m past the train's envelope: no room for the car past the tracks. The car comes down from 87 Avenue. Once its front is 30 m from the crossing, a heritage streetcar standing 100 m along the track, out of sight, sets off toward it ringing its gong; 4 s after it has passed by (or 30 s after it set off), the queue moves off. The car must wait short of the tracks for room, never stop on them, and stop at least 5 m back from the nearest rail while the streetcar comes (Alberta AR 304/2002 s. 42) |
 
-Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over and behind the doors joined it later, at version 1. Each challenge separately versions
+Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors and clear the tracks joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
 and snow challenges remain version 1; the rainy crossing is version 2 because its person
 now correctly waits for the approach trigger rather than starting during setup.

@@ -27,7 +27,7 @@ function test(name, fn) { fn(); checks++; console.log(`✓ ${name}`); }
 const root = new URL("../data/maps/", import.meta.url);
 const load = (key) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
-  for (const name of ["transit", "crossings", "zones"]) {
+  for (const name of ["transit", "crossings", "zones", "rail"]) {
     const url = new URL(`${key}.${name}.v1.json`, root);
     if (fs.existsSync(url)) pack[name] = JSON.parse(fs.readFileSync(url));
   }

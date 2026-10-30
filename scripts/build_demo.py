@@ -14,6 +14,7 @@ from jev.config import MAPS_DIR, PRESET_BBOXES
 from jev.maps import catalog
 from jev.osm.pack import pack_path
 from jev.osm.crossings import load_crossings
+from jev.osm.rail import load_rail
 from jev.osm.transit import load_transit
 from jev.osm.zones import load_zones
 
@@ -29,7 +30,7 @@ def build(output: Path) -> None:
     for page in ("index.html", "bench.html", "arena.html"):
         text = (ROOT / "static" / page).read_text()
         text = text.replace("<head>", '<head>\n  <meta name="jev-demo" content="rules-only">\n  <meta name="description" content="Drive real Canadian streets, challenge an AI driver, and inspect every decision. Free open-source browser simulator.">')
-        text = text.replace("</head>", '<meta property="og:title" content="Jev Drive Lab — Can you beat the AI?">\n<meta property="og:description" content="Real Canadian streets. Sixteen driving challenges. Inspect every decision.">\n<meta property="og:image" content="https://brendanh18.github.io/jev_fsd/assets/drive-lab.png">\n<meta name="twitter:card" content="summary_large_image">\n</head>')
+        text = text.replace("</head>", '<meta property="og:title" content="Jev Drive Lab — Can you beat the AI?">\n<meta property="og:description" content="Real Canadian streets. Nineteen driving challenges. Inspect every decision.">\n<meta property="og:image" content="https://brendanh18.github.io/jev_fsd/assets/drive-lab.png">\n<meta name="twitter:card" content="summary_large_image">\n</head>')
         text = re.sub(r'(["\'])/(css|js|vendor)/', r'\1./\2/', text)
         text = text.replace('href="/"', 'href="./"')
         text = text.replace('href="/favicon.svg"', 'href="./favicon.svg"')
@@ -52,6 +53,9 @@ def build(output: Path) -> None:
         zones = load_zones(PRESET_BBOXES[item["id"]], MAPS_DIR)
         if zones:
             pack["zones"] = zones
+        rail = load_rail(PRESET_BBOXES[item["id"]], MAPS_DIR)
+        if rail:
+            pack["rail"] = rail
         pack["utc_offset"] = item["utc_offset"]
         (data / f"{item['id']}.json").write_text(json.dumps(pack, separators=(",", ":")))
     (data / "catalog.json").write_text(json.dumps(maps, separators=(",", ":")))

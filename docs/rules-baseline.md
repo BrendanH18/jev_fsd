@@ -1,4 +1,23 @@
-# Rules benchmark baseline — 2026-10-29 (slow down, move over, unchanged)
+# Rules benchmark baseline — 2026-10-29 (level crossings, unchanged)
+
+Rules passes the Edmonton suite **2 of 2 in V8, exactly as on main** at `6cb513f`: route for route,
+every result field but wall-clock time and decision latency is the same, with no collisions,
+red-light or stop-sign violations, failures to yield or deadlock overrides. "After" is this branch,
+which adds railway level crossings from OpenStreetMap (only Old Strathcona has any, the High Level
+Bridge Streetcar's eight), the heritage streetcar that runs over them (in free drives only), stopping
+for it and never on the tracks, and the "Clear the tracks" challenge. The branch's server serves
+Edmonton with its crossings, so the room rule applies to its traffic and the car; on these routes no
+queue backed up across the tracks. The other fourteen suites' maps have no level crossing, and there
+everything the change adds is skipped (traffic, sensing and the audit look for crossings only on a map
+that has one), so they were not rerun.
+
+## Method
+
+Edmonton dry, Rules, suite seed 1, 2 routes, 40 traffic cars, lockstep, V8 through
+`scripts/bench_node.mjs` with Node `v22.23.4` on a Raspberry Pi (Linux 6.18, arm64), main and the
+branch each against its own `uv run --locked server.py`, compared field by field.
+
+## Earlier record: 2026-10-29b (slow down, move over, unchanged)
 
 Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
 `689121c` route for route, in every result field but wall-clock time and decision latency, with no

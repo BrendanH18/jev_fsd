@@ -92,6 +92,15 @@ export const STREETCAR = {
   power: 680000, cdA: 8.5, crr: 0.002, brakeFront: 0.5, driveFront: 0.5, accelLag: 0.5,
 };
 
+// A heritage streetcar on the High Level Bridge line (sim/rail.js), as the Edmonton Radial Railway
+// Society runs: a double-truck wooden car of the 1910s, about 13.7 m long and 2.6 m wide, some 18 t,
+// its trucks 7.3 m apart. It runs on its own track, off the street, and only along it.
+export const HERITAGE_STREETCAR = {
+  ...CAR, kind: "train", wheelbase: 7.3, length: 13.7, width: 2.6, rearOverhang: 3.2, maxSteer: 0,
+  maxAccel: 0.8, maxSpeed: 11, mass: 18000, yawInertia: 3.0e5, cgToFront: 3.65, cgHeight: 1.1, track: 1.44,
+  power: 120000, cdA: 7.5, crr: 0.002, brakeFront: 0.5, driveFront: 0.5, accelLag: 0.5,
+};
+
 // Vehicles stopped at the roadside with their lights flashing (sim/roadside.js), which never move: a
 // light-duty wheel-lift tow truck on a one-ton cab-and-chassis, and a police SUV, at the size of the
 // sim's other cars.

@@ -71,6 +71,16 @@ export class DriveAudio {
     this.sirenTone.oscillator.frequency.setTargetAtTime(650 + 700 * sweep, now, 0.02);
   }
 
+  // A streetcar's gong `distance` m away while it rings (Infinity: none): a double strike every 1.2 s,
+  // a bell's inharmonic partials, quieter farther off.
+  gong(distance, t, paused) {
+    if (!this.enabled || paused || !Number.isFinite(distance) || this.context?.state !== "running") return;
+    const strike = Math.floor(t / 0.3);
+    if (strike === this.lastStrike || strike % 4 > 1) return;
+    this.lastStrike = strike;
+    this.beep([1180, 2950, 4300], 0.5, 0.05 * Math.min(1, Math.max(0, 1 - distance / 250)) ** 2);
+  }
+
   tick() { this.beep([850], 0.045, 0.025); }
   horn() { this.beep([350, 440], 0.32, 0.14); }
   beep(frequencies, duration, volume) {
