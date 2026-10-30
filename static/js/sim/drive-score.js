@@ -21,6 +21,8 @@ export class DriveScore {
     this.moveOverRoom = new Set();
     // (standing on the tracks at a level crossing, sim/rail.js: how often, and where it last was)
     this.onTracks = 0; this.tracksCounted = null;
+    // (standing in a signal's junction with no room past it, sim/junction-box.js: how often, and where)
+    this.blockedJunctions = 0; this.boxCounted = null;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -75,6 +77,13 @@ export class DriveScore {
       this.tracksCounted = `${tracks.id}:${tracks.since}`; this.onTracks++;
       this.incident("stopped_on_tracks", "Stopped on the tracks", { crossing: tracks.id });
     }
+    // don't block the junction (sim/junction-box.js): standing in it for a second with traffic past it
+    // leaving no room is counted once a visit
+    const box = world.inBox, blocking = box?.blocked && box.still > 0.5;
+    if (blocking && box.still > 1 && this.boxCounted !== `${box.key}:${box.since}`) {
+      this.boxCounted = `${box.key}:${box.since}`; this.blockedJunctions++;
+      this.incident("blocked_junction", "Stopped in the junction", { junction: box.id });
+    }
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
     if (Math.abs(ego.latAccel || 0) > 3.0) this.cornering += dt;
@@ -91,6 +100,7 @@ export class DriveScore {
       : wrongWay ? "Check your direction of travel."
       : speeding && zone ? `Slow to ${Math.round(road.limit * 3.6)}. You’re in a ${zone.kind} zone.`
       : tracks?.still > 0.5 ? "Clear the tracks. Never stop on them."
+      : blocking ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
       : roadsideFast ? `Slow to ${Math.round(passing.limit * 3.6)} and move over. A ${name} is stopped with its lights flashing.`
       : speeding ? "Ease off. You’re above the speed limit."
       : Math.abs(ego.latAccel || 0) > 3 ? "Slow down before the bend."
@@ -163,6 +173,7 @@ export class DriveScore {
     if (this.zoneSpeeding > 1) tips.push("Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.");
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
     if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
+    if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
     if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
     if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
     if (this.harsh + this.jerk + this.cornering > 2) tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
@@ -174,7 +185,7 @@ export class DriveScore {
       elapsed_s: round(this.elapsed), distance_m: Math.round(this.distance), moving_s: round(this.moving),
       max_kmh: round(this.maxSpeed * 3.6), progress: round(clamp(this.progress, 0, 1), 3),
       collisions, at_fault: atFault, red_lights: reds, stop_signs: stops, failed_to_yield: yields,
-      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, stopped_on_tracks: this.onTracks, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
+      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };

@@ -21,6 +21,7 @@ import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../s
 import { STOP_M as STREETCAR_STOP_M, IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, canStopFor as canStopForStreetcar, doorsOpen, holdFromRear, isStreetcar, stoppingAt, streetcarHold, streetcarRelation } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { HEAR_M, HOLD_M as RAIL_HOLD_M, canStopFor as canStopForTrain, crossingsAhead, railIndex, roomBlocker, trainAt, waitsAt } from "../sim/rail.js";
+import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -142,7 +143,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, speed_zone: null, roadside_stop: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -250,6 +251,7 @@ export function buildSnapshot(world, executing = null) {
     snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
     snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);
     snap.level_crossing = levelCrossing(world, route, frontS, vehicles);
+    snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
@@ -682,6 +684,25 @@ function levelCrossing(world, route, frontS, vehicles) {
     on_tracks: x.fouling, clear_in_m: x.exit_m, train, wait, blocker };
 }
 
+// The signal the car's route takes it through next, within 60 m, when traffic it can see past the
+// junction, going its way, stopped or slower than 3 m/s, leaves no room for all of the car beyond it
+// (sim/junction-box.js, Québec's Highway Safety Code): it waits at the line (`stop_s_route`, aimed
+// BOX_SHORT_M short of it, as a slow stop runs on a little), even on a green, until there is room. Its front barely over the line still waits there, and so does a car
+// a little further over, barely moving and short of the street across; further in, it has entered
+// the junction and drives on. `room_m`: how far past the box the vehicle's rear is, against
+// `need_m`, the car's length and 1 m. Or null.
+const BOX_SHORT_M = 1;
+function junctionBox(world, route, frontS, vehicles, inter) {
+  const ego = world.ego, box = routeBoxAhead(world.map, route, frontS, ego.v);
+  if (!box?.waits) return null;
+  const node = world.map.nodes.get(world.map.edges.get(box.c.edge).to);
+  const b = boxBlocker(route.pts, route.cum, box.line, box.far, ego.spec, vehicles, ego, node ? [node.x, node.y] : null);
+  if (!b) return null;
+  const signal = inter && inter.id === box.c.control.id ? inter.signal : null;
+  return { id: box.c.control.id, signal, s_line_route: box.line, stop_s_route: box.line - BOX_SHORT_M, bumper_to_stop_m: box.toLine - BOX_SHORT_M, box_m: box.far - box.line,
+    blocker: { id: b.vehicle.id, speed: b.vehicle.v }, room_m: b.rear_m, need_m: ego.spec.length + BOX_ROOM_M };
+}
+
 // A vehicle stopped at the roadside with its lights flashing that the car must slow down and move over
 // for (sim/roadside.js, BC MVA Regulations s. 47.02): the nearest it can see on the right of its route
 // ahead, going its way, within ROADSIDE_LOOK_M, until the car's rear is past its front. `gap_m` is
@@ -1097,6 +1118,13 @@ export function desiredSpeed(snap) {
     const vl = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
     if (vl < v) { v = vl; reasons.push(lx.wait === "train" ? "train coming at the level crossing" : "no room past the tracks"); }
   }
+  // a signal it could not clear for traffic past the junction: wait at the line
+  const jb = snap.junction_box;
+  if (jb) {
+    const room = jb.bumper_to_stop_m;
+    const vj = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vj < v) { v = vj; reasons.push("no room past the junction"); }
+  }
   if (snap.pedestrian) {
     const room = snap.pedestrian.bumper_to_crosswalk_m - CROSSWALK_STOP_M;
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
@@ -1151,6 +1179,7 @@ export function hazardFlags(snap) {
   if (snap.school_bus) f.push("school bus");
   if (snap.streetcar) f.push("streetcar");
   if (snap.level_crossing) f.push("level crossing");
+  if (snap.junction_box) f.push("junction box");
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");

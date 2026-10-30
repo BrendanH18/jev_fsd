@@ -15,6 +15,7 @@ import { createSchoolBusMesh, syncSchoolBus } from "./render/school-bus.js";
 import { buildTracks, createStreetcarMesh, syncStreetcar } from "./render/streetcar.js";
 import { buildRail, createTrainMesh, syncTrain } from "./render/rail.js";
 import { crossingNotice, isTrain } from "./sim/rail.js";
+import { boxNotice } from "./sim/junction-box.js";
 import { IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, doorsOpen, isStreetcar, streetcarRelation } from "./sim/streetcar.js";
 import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
 import { ROADSIDE_COUNT, ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
@@ -603,7 +604,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -711,6 +712,10 @@ export async function boot() {
     const crossing = crossingNotice(world);
     if (crossing && crossing.key !== announcedCrossing) { announcedCrossing = crossing.key; hud.badge(crossing.text, "safety", 2500); }
     if (!crossing) announcedCrossing = null;
+    // a signal ahead the car could not clear, for traffic past the junction: say so once
+    const box = boxNotice(world);
+    if (box && box.key !== announcedBox) { announcedBox = box.key; hud.badge(box.text, "safety", 2500); }
+    if (!box) announcedBox = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once

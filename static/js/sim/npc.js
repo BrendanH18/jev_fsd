@@ -5,7 +5,7 @@
 // passes one with its doors open on the side its riders use (sim/streetcar.js). School buses stop to
 // let children off, and everyone stops for them (sim/school-bus.js). Trains run their tracks, off
 // the streets, and everyone stops short of a level crossing for one coming, and never on the tracks
-// (sim/rail.js).
+// (sim/rail.js). Nobody enters a signalled junction without room past it (sim/junction-box.js).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, comfort } from "./vehicle.js";
 import { purePursuit, speedControl } from "./controller.js";
@@ -25,9 +25,11 @@ import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
 import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import { DEPART_S, DOORS_DELAY_S, DWELL_MAX_S, DWELL_S, RIDER_EVERY_S, RIDERS_OFF, RIDERS_ON, canStopFor as canStopForStreetcar, doorsOpen, isStreetcar, streetcarHold } from "./streetcar.js";
 import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex, stepTrain, trainState } from "./rail.js";
+import { boxHold } from "./junction-box.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
+const UNSIGNED_NEAR_M = 15;
 
 // Seeded per-driver IDM and lane-change temperament so adding NPCs does not shift spawn points.
 function driverProfile(random, bike = false) {
@@ -709,8 +711,9 @@ export class NpcFleet {
           if (e.control.all_way) world.allWay.note(n, e.control, e.id, next ? this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) : "straight", bumperToLine, n.v, world);
           if (state !== "completed") stopAt = bumperToLine;
           // stopped: go when the junction is clear and, at a two-way stop, when nothing on the
-          // through road would get there first; at an all-way stop, when it is its turn
-          else if (this.boxBusy(n, e) || (e.control.all_way ? world.allWay.status(n, world)?.go === false : this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
+          // through road would get there first; at an all-way stop, when it is its turn, and nothing
+          // coming in on a street without a sign there (which does not stop) would get there first
+          else if (this.boxBusy(n, e) || (e.control.all_way ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id) : this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
         }
         break;
       }
@@ -746,7 +749,8 @@ export class NpcFleet {
       if (stopAt === null) {
         const next = path.edges.find((e) => e.sEnd > front);
         const toNode = next ? next.sEnd - front : Infinity;
-        if (next && !next.control && toNode > 5 && toNode < 25 && this.isJunction(next.to) && this.boxBusy(n, next)) {
+        // (and, coming in on a street without a sign to an all-way stop, to one pulling away from its line)
+        if (next && !next.control && toNode > 5 && toNode < 25 && this.isJunction(next.to) && (this.boxBusy(n, next) || this.allWayLeaving(n, next.to))) {
           gap = Math.min(gap, Math.max(0.05, toNode - 6)); leadV = 0;
         }
         const rule = next && !next.control ? this.map.priorityOf(next.id) : null;
@@ -787,6 +791,10 @@ export class NpcFleet {
       // (sim/rail.js; an emergency vehicle only for the train)
       const forRail = this.crossings ? this.yieldAtCrossing(n, front, all) : null;
       if (forRail !== null && forRail < gap) { gap = Math.max(0.05, forRail); leadV = 0; }
+      // at a signal: at the line, while traffic past the junction leaves no room to clear it
+      // (sim/junction-box.js; not a cyclist)
+      const forBox = boxHold(this.map, n, front, all);
+      if (forBox !== null && forBox < gap) { gap = Math.max(0.05, forBox); leadV = 0; }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -1743,6 +1751,40 @@ export class NpcFleet {
       if (!a || !outranks(this.map, a.edge, edgeId)) continue;
       const eta = Math.max(0, a.to_node_m) / o.v;
       if (eta < Math.min(GIVE_WAY_HORIZON_S, mine + GIVE_WAY_AFTER_S)) return true;
+    }
+    return false;
+  }
+
+  // At an all-way stop on `edgeId`, whether someone crossing its way, coming in on a street without a
+  // sign at the same junction (the link between two junctions close together, say), would get there
+  // within a few seconds, or is moving within UNSIGNED_NEAR_M of it: it does not stop, and has the
+  // right of way.
+  unsignedComing(n, edgeId) {
+    const nodeId = this.map.edges.get(edgeId).to, node = this.map.nodes.get(nodeId);
+    if (!node) return false;
+    const gapS = n.driver ? 3.2 + n.driver.T * 1.7 : 5;
+    for (const o of [this.world.ego, ...this.vehicles]) {
+      if (o === n || o.v < 0.3 || Math.abs(wrap(o.psi - n.psi)) < Math.PI / 6) continue;
+      if (Math.abs(node.x - o.x) > 90 || Math.abs(node.y - o.y) > 90) continue;
+      const a = approachTo(this.map, o, nodeId);
+      if (!a || a.edge === edgeId || this.map.edges.get(a.edge)?.control) continue;
+      // (moving at all, and close: one on a short link speeds up as it comes)
+      if (a.to_node_m < UNSIGNED_NEAR_M || Math.max(0, a.to_node_m) / o.v < gapS) return true;
+    }
+    return false;
+  }
+
+  // Whether someone crossing this driver's way is pulling away from an all-way stop's line at junction
+  // `nodeId`, within UNSIGNED_NEAR_M of it (for one coming in on a street without a sign there; see
+  // unsignedComing, the other side of it).
+  allWayLeaving(n, nodeId) {
+    const node = this.map.nodes.get(nodeId);
+    if (!node) return false;
+    for (const o of [this.world.ego, ...this.vehicles]) {
+      if (o === n || o.v < 0.5 || Math.abs(wrap(o.psi - n.psi)) < Math.PI / 6) continue;
+      if (Math.abs(node.x - o.x) > UNSIGNED_NEAR_M + 5 || Math.abs(node.y - o.y) > UNSIGNED_NEAR_M + 5) continue;
+      const a = approachTo(this.map, o, nodeId);
+      if (a && a.to_node_m < UNSIGNED_NEAR_M && this.map.edges.get(a.edge)?.control?.all_way) return true;
     }
     return false;
   }

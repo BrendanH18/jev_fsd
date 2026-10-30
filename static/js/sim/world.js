@@ -20,6 +20,7 @@ import { zoneLimit } from "./speed-zones.js";
 import { HOLD_M as STREETCAR_HOLD_M, STOP_M as STREETCAR_STOP_M, IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, canStopFor as canStopForStreetcar, doorsOpen, streetcarRelation } from "./streetcar.js";
 import { RoadsideStops } from "./roadside.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
+import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -117,6 +118,11 @@ const AUDIT_STREETCAR_MOVING_MPS = 1;
 // on the tracks (in the train's envelope) slower than 1 m/s while the train is. Counted once per
 // train at each crossing.
 const AUDIT_TRAIN_MOVING_MPS = 1;
+// Keeping the junction clear (sim/junction-box.js, Québec's Highway Safety Code): the car, following
+// its route, fails to yield if it entered a signal's junction (its front past the near side of the
+// street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
+// red, blocking the cross street's green. Counted once a visit.
+const AUDIT_BOX_MOVING_MPS = 1;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
@@ -154,6 +160,7 @@ export class World {
     this.streetcarCalls = new Map(); // "<streetcar id>:<departure>" -> { owed, counted }: one with its doors open
     this.trainCalls = new Map();  // "<crossing id>:<train id>:<departure>" -> { owed, counted }: one approaching it
     this.onTracks = null;         // the level crossing the car is standing on the tracks of, and since when
+    this.inBox = null;            // the signal's junction the car is in, whether it had room past it, and since when
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -242,6 +249,7 @@ export class World {
     this.trainCalls.clear();
     this.trainYields?.clear();
     this.onTracks = null;
+    this.inBox = null;
     this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
@@ -448,6 +456,32 @@ export class World {
     this.auditSchoolBuses();
     this.auditStreetcars();
     this.auditCrossings(dt);
+    this.auditBox(dt, followsRoute ? frontS : null);
+  }
+
+  // (see AUDIT_BOX_MOVING_MPS) `frontS`: the car's front along its route, or null off it.
+  auditBox(dt, frontS) {
+    const ego = this.ego, route = this.route;
+    if (frontS === null || !route) { this.inBox = null; return; }
+    const ahead = routeBoxAhead(this.map, route, frontS, ego.v);
+    const key = ahead ? `${ahead.c.control.id}:${Math.round(ahead.line)}` : null;
+    // (entering the junction, its front past the near side of the street across: was there room
+    // past it?)
+    if (ahead && ahead.toNear <= 0 && this.inBox?.key !== key) {
+      this.inBox = { key, id: ahead.c.control.id, group: ahead.c.control.group, line: ahead.line, near: ahead.near, far: ahead.far, since: this.t, still: 0, counted: false,
+        noRoom: !!boxBlocker(route.pts, route.cum, ahead.line, ahead.far, ego.spec, this.npcs, ego) };
+    }
+    const box = this.inBox;
+    if (!box) return;
+    // (out of it: all of the car past its far side, or backed out of it)
+    if (frontS - ego.spec.length > box.far || frontS < box.near - 2) { this.inBox = null; return; }
+    box.still = Math.abs(ego.v) < 0.3 ? box.still + dt : 0;
+    box.blocked = !!boxBlocker(route.pts, route.cum, box.line, box.far, ego.spec, this.npcs, ego);
+    if (box.noRoom && !box.counted && Math.abs(ego.v) < AUDIT_BOX_MOVING_MPS && this.phase(box.id)[box.group] === "red") {
+      box.counted = true;
+      this.violations.failed_to_yield++;
+      this.events.push({ type: "failed_to_yield", to: "cross traffic", junction: box.id, blocking: true });
+    }
   }
 
   auditCrossings(dt) {

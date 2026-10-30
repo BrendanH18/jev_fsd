@@ -4,8 +4,8 @@ export const EVALUATION_SCHEMA = "jev-agent-evaluation-v2";
 export const EVALUATION_HISTORY_KEY = "jev-fsd-evaluations-v2";
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 // Saved history, counted as UTF-16 (two bytes a character, see saveEvaluation): about 3.6 million
-// characters of JSON, room for a baseline and a new run of every challenge (some 1.7 million each with
-// 19 challenges and two drivers), well inside the 5 million or so characters of ASCII that browsers
+// characters of JSON, room for a baseline and a new run of every challenge (some 1.8 million each with
+// 20 challenges and two drivers), well inside the 5 million or so characters of ASCII that browsers
 // allow an origin. A browser that allows less reports QuotaExceededError, and older runs are dropped.
 const MAX_HISTORY_BYTES = 7 * 1024 * 1024;
 const CONDITIONS = { version: "challenge version", map: "map", pack: "map-pack version", seed: "seed",

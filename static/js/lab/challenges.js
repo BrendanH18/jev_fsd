@@ -14,6 +14,7 @@ import { ZONE_LIMIT_MPS } from "../sim/speed-zones.js";
 import { SLOW_FAST_MPS, SLOW_MPS, curbOffset, endsOf } from "../sim/roadside.js";
 import { doorPoints } from "../sim/streetcar.js";
 import { approach, crossingsAhead, railIndex, trainSpan } from "../sim/rail.js";
+import { boxEnd } from "../sim/junction-box.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -55,6 +56,8 @@ export const CHALLENGES = [
     description: "A 511 streetcar has stopped at its stop on Bathurst Street, in the lane beside yours, with its doors open. Your lane is clear.", lesson: "In Ontario, traffic behind a streetcar that has stopped to let people on or off must stop at least 2 m behind its rear doors and wait until they have got on, or reached the curb. Its riders cross your lane to get to it." },
   { id: "level-crossing", title: "Clear the tracks", map: "edmonton", weather: "dry", time: "afternoon", seed: 19042, icon: "╫", difficulty: "Judgement", hazard: "level-crossing", street: "106 Street NW",
     description: "106 Street crosses the High Level Bridge Streetcar's tracks on the level, with crossbucks and nothing else: no lights, no gates, no bell. Past them, traffic is backed up from 86 Avenue behind a car waiting to turn left.", lesson: "Never stop on the tracks: don't start across a level crossing unless there is room for all of your car past it. And when a train is coming, stop at least 5 m back from the nearest rail and wait until it has passed (Alberta's Use of Highway and Rules of the Road Regulation, s. 42). A streetcar can't steer round you, and takes far longer to stop than a car." },
+  { id: "junction-box", title: "Keep the box clear", map: "montreal", weather: "dry", time: "afternoon", seed: 20042, icon: "⊠", difficulty: "Judgement", hazard: "junction-box", street: "Avenue du Mont-Royal Est",
+    description: "Avenue du Mont-Royal Est meets Rue Saint-Denis at a light that is green as you come up. Past it, traffic is backed up from Rue Rivard, behind a car waiting to turn left, to just beyond Saint-Denis.", lesson: "Even on a green, don't enter a junction unless there is room for all of your car past it: wait at the line until there is. That is Québec's Highway Safety Code, and Montréal police fine drivers who block an intersection. A driver who follows the queue in is stuck in the middle when the light changes, and the cross street can't go." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -454,6 +457,62 @@ function trackSites(map, street) {
   return on.length ? on : sites;
 }
 
+// Keep the box clear: a signalled approach in one lane whose light is green from BOX_GREEN_S[0] to
+// BOX_GREEN_S[1] s into the drive, going straight on, along streets of one lane without a signal, to a
+// junction within BOX_AHEAD_EDGES streets where traffic can turn left, with BOX_ROOM_M of them between
+// the far side of the signal's junction (sim/junction-box.js boxEnd) and the line a car waits at to
+// turn there (its sign's or give-way line, else just short of the junction). A car waits there to
+// turn left, and a queue of cars stands behind it, the last BOX_TAIL_M past the signal's junction: no
+// room for the car beyond it. The car starts BOX_START_M before the line (on the street straight
+// before it where this one is too short), so it comes up on the green. BOX_RED_S after its light
+// turns red (or BOX_MAX_S into the drive, whatever happens), the car at the far junction turns and
+// the queue moves off; the car's light turns green again a while later. On the challenge's `street`
+// where it has one. Positions along the streets past the signal (`queue`) are lane arc length from
+// the junction's node.
+const BOX_START_M = 60, BOX_ROUTE_M = 180, BOX_GREEN_S = [4, 20], BOX_ROOM_M = [15, 70], BOX_TAIL_M = 2.5, BOX_RED_S = 6, BOX_MAX_S = 90, BOX_AHEAD_EDGES = 3;
+const boxSiteCache = new WeakMap();
+function boxSites(map, street) {
+  if (!boxSiteCache.has(map)) {
+    const sites = [];
+    const turn = (from, dir) => map.successors(from).find((id) => map.classifyTurn(map.turnAngle(from, id)) === dir);
+    for (const e of map.edges.values()) {
+      const c = e.control, inter = c?.type === "signal" ? map.intersections.get(c.id) : null;
+      if (!inter || e.lanes !== 1 || e.ring) continue;
+      let green = true;
+      for (let t = BOX_GREEN_S[0]; t <= BOX_GREEN_S[1] && green; t += 0.5) green = phaseOf(inter, t)[c.group] === "green";
+      if (!green) continue;
+      // (straight on past it to a junction where traffic can turn left)
+      const ahead = [];
+      let cur = e.id, length = 0, left = null, straight = null;
+      for (let k = 0; k < BOX_AHEAD_EDGES; k++) {
+        const next = turn(cur, "straight"), ne = next && map.edges.get(next);
+        if (!ne || ne.lanes !== 1 || ne.ring || ne.control?.type === "signal") break;
+        ahead.push(next); cur = next;
+        if (isJunction(map, ne.to)) { left = turn(next, "left"); straight = turn(next, "straight"); break; }
+        length += map.lane(next, 0).length;
+      }
+      if (!left || !straight) continue;
+      const last = map.edges.get(cur), lane = map.lane(cur, 0), scale = lane.length / Math.max(1, last.length);
+      const line = last.control?.s_line ?? map.priorityOf(cur)?.s_line ?? last.length - map.crossingHalfWidth(cur) - 1;
+      const lead = length + line * scale, far = boxEnd(map, e.id, 0), room = lead - far;
+      if (room < BOX_ROOM_M[0] || room > BOX_ROOM_M[1]) continue;
+      // (the car starts on this street, or on the one straight before it)
+      let start = map.lane(e.id, 0), startS = c.s_line * start.length / Math.max(1, e.length) - BOX_START_M;
+      const approachLane = start;
+      if (startS < 5) {
+        const before = (map.inn.get(e.from) || []).map((id) => map.edges.get(id)).find((b) => !b.ring && !b.control && map.classifyTurn(map.turnAngle(b.id, e.id)) === "straight" && b.length + startS > 8);
+        if (!before) continue;
+        start = map.lane(before.id, 0); startS += start.length;
+      }
+      sites.push({ lane: start, startS, ahead: start === approachLane ? null : approachLane, signal: c.id, group: c.group, queue: { edges: ahead, lead, tail: far + BOX_TAIL_M, left, straight } });
+    }
+    sites.sort((a, b) => a.signal.localeCompare(b.signal) || a.queue.edges[0].localeCompare(b.queue.edges[0]));
+    boxSiteCache.set(map, sites);
+  }
+  const sites = boxSiteCache.get(map), on = sites.filter((s) => (s.ahead || s.lane).edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 export function challengeScenario(map, challenge) {
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
@@ -506,19 +565,25 @@ export function challengeScenario(map, challenge) {
   const tracks = challenge.hazard === "level-crossing" ? trackSites(map, challenge.street) : null;
   if (tracks && !tracks.length) throw new Error("This map has no level crossing with room for a short queue between the tracks and a junction past them.");
   const track = tracks ? tracks[Math.floor(random() * tracks.length)] : null;
-  const start = track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const boxes = challenge.hazard === "junction-box" ? boxSites(map, challenge.street) : null;
+  if (boxes && !boxes.length) throw new Error("This map has no signalled junction on a one-lane street with room past it for a short queue before the next junction.");
+  const box = boxes ? boxes[Math.floor(random() * boxes.length)] : null;
+  const start = box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge;
-  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
-  for (let i = 0; i < 12 && length < 260; i++) {
+  const straight = stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge;
+  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
+  // (through the signal, along the queue past it)
+  for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
+  // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
+  for (let i = 0; i < 12 && length < (box ? BOX_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -544,6 +609,7 @@ export function challengeScenario(map, challenge) {
     ...(roadside ? { roadside: roadside.stop } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
+    ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
     ...(threat ? { multiThreat: { crosswalk: threat.crosswalk, s: threat.s, curb: { edge: threat.curb.edge, lane: threat.curb.idx, s: threat.sCurb } } } : {}),
     tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
       stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
@@ -579,6 +645,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.roadside) Object.assign(world.challenge, placeTowTruck(world, scenario.roadside, challenge.seed));
   if (scenario.streetcar) Object.assign(world.challenge, placeStreetcar(world, fleet, scenario.streetcar, challenge.seed));
   if (scenario.levelCrossing) Object.assign(world.challenge, placeLevelCrossing(world, fleet, scenario.levelCrossing, challenge.seed));
+  if (scenario.junctionBox) Object.assign(world.challenge, placeBoxQueue(world, fleet, scenario.junctionBox, challenge.seed));
   if (["pedestrian", "occluded-pedestrian"].includes(challenge.hazard)) {
     const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
     const crossing = { node: null, from, to, jaywalk: true };
@@ -646,6 +713,15 @@ export function stepChallenge(world, fleet) {
     if ((state.passedAt !== undefined && world.t - state.passedAt >= QUEUE_CLEAR_S) || world.t - state.setOff >= QUEUE_MAX_S) {
       state.released = true;
       for (const id of state.queueIds) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
+    }
+  }
+  // (BOX_RED_S after the car's light turns red, the car at the far junction turns, and the queue
+  // behind it moves off)
+  if (state.boxQueueIds && !state.released) {
+    if (world.phase(state.signalId)[state.signalGroup] === "red" && world.t > BOX_GREEN_S[1]) state.redAt ??= world.t;
+    if ((state.redAt !== undefined && world.t - state.redAt >= BOX_RED_S) || world.t >= BOX_MAX_S) {
+      state.released = true;
+      for (const id of state.boxQueueIds) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
     }
   }
   // (once the rider is aboard, the streetcar closes its doors RIDER_ABOARD_S later and moves off)
@@ -878,6 +954,28 @@ function placeLevelCrossing(world, fleet, { crossing, queue }, seed) {
   const train = hidden && fleet.spawnTrain(false, track, hidden.front, hidden.dir);
   if (train) { train.v = 0; Object.assign(train.rail, { phase: "dwell", held: true, dwell: Infinity, t: 0 }); }
   return { queueIds: ids, crossingId: crossing, trainId: train?.id || null, at: [c.x, c.y] };
+}
+// Keep the box clear: the car waiting at the far junction to turn left, its indicator on, and the
+// queue behind it back to just past the signal's junction, all held until the car's light has been
+// red a while (see boxSites).
+function placeBoxQueue(world, fleet, { signal, group, queue }, seed) {
+  const map = world.map, random = rng(seed), ids = [], front = CAR.length - CAR.rearOverhang;
+  const lanes = queue.edges.map((id) => map.lane(id, 0));
+  const count = Math.max(1, Math.floor((queue.lead - queue.tail + QUEUE_GAP_M[0]) / (CAR.length + QUEUE_GAP_M[0])));
+  const gap = count > 1 ? Math.min(QUEUE_GAP_M[1], (queue.lead - queue.tail - count * CAR.length) / (count - 1)) : 0;
+  // (from the last of the queue, its rear BOX_TAIL_M past the junction, up to the car turning left)
+  for (let i = count - 1; i >= 0; i--) {
+    let s = queue.tail + i * (CAR.length + gap) + CAR.rearOverhang, k = 0;
+    while (k < lanes.length - 1 && s > lanes[k].length) { s -= lanes[k].length; k++; }
+    const lane = lanes[k], p = pointAt(lane.pts, lane.cum, s), lead = i === count - 1;
+    const car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), 0);
+    Object.assign(car, { id: `challenge_queue_${count - i}`, color: [0x3d5a80, 0xb0b5b9, 0x6b2737, 0x2f4f3a][(count - i - 1) % 4], v0: 11, driver: { aMax: 1.4, b: 2, s0: 2, T: 1.3, react: 0.6 + random() * 0.4, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 1e6, waiting: 0, ...(lead ? { signal: "left" } : {}) });
+    car.path.start(lane.edge, 0, s, [...queue.edges.slice(k + 1).map((id) => [id, 0]), [lead ? queue.left : queue.straight, 0]]);
+    fleet.vehicles.push(car); ids.push(car.id);
+  }
+  const inter = map.intersections.get(signal);
+  return { boxQueueIds: ids, signalId: signal, signalGroup: group, ...(inter ? { at: [inter.x, inter.y] } : {}) };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);
