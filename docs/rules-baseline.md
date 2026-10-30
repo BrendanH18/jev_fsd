@@ -1,4 +1,40 @@
-# Rules benchmark baseline — 2026-10-30 (keeping the junction clear)
+# Rules benchmark baseline — 2026-10-30b (advance greens and left arrows)
+
+Rules passes **70 of 70 routes in V8, as on main** at `9de8480`, with no collisions, red-light or
+stop-sign violations, failures to yield or deadlock overrides on either side, and 23 safety brakes
+against main's 24. "After" is this branch, which gives 50 junctions on the bundled maps an advance green
+or left arrow (each lengthens its cycle by 12 s and holds the approach opposite on red), makes every
+light the light for one approach and movement, adds the "Not your arrow" challenge, and offers the car a
+full-metre nudge when scenery stands in its lane. The new phasing changes the timing of traffic on
+every map with an advance, so the drives around it change too.
+
+- **25 of 70 routes are identical** to main in every result field but wall-clock time and decision
+  latency: both of Calgary's, Montréal's and Québec City's, one each of Halifax, Mount Pleasant, Ottawa
+  and Winnipeg, and 15 of Kitsilano's 48.
+- **45 routes move, all still passing**, most by a few seconds. The largest:
+  - Victoria `s1-1`: 258.8 → 139.2 s. On main the car stands for over two minutes on Belleville Street,
+    short of Government Street, where a mapped building's corner stands 0.4 m from the curb lane's
+    centre, closer than half the car's width: every way forward but a stop predicts touching it, and
+    only half-metre nudges were on offer until traffic passing by unlocked wider ones. With this
+    branch's signal timing that happened on a red, the car stopped for the line steering back to the
+    lane's centre, and hit the building, failing the route. Now, with scenery in its lane within 40 m,
+    the car is offered nudges of a full metre and stops at a line, or brakes hard, where it is; it moves
+    over past the corner without stopping. That is the only route the scenery change alters.
+  - Toronto `s1-2`: 245.8 → 170.7 s. Ottawa `s1-1`: 175.4 → 145.7 s.
+  - Kitsilano rain `s1-8`: 217.6 → 189.6 s, safety brakes 0 → 2. Kitsilano fog `s1-10`: 222.0 →
+    207.3 s, safety brakes 2 → 0. Kitsilano snow `s1-6`: 248.4 → 264.8 s, safety brakes 3 → 2.
+  - Kitsilano fog `s1-8`: closest gap 0.4 → 2.1 m.
+
+## Method
+
+All 15 seeded suites (Kitsilano 12 routes in each of dry, fog, rain and snow, the eleven other maps two
+dry routes each), Rules, suite seed 1, 40 traffic cars, lockstep, V8 through `scripts/bench_node.mjs`
+with Node `v22.23.4` on a Raspberry Pi (Linux 6.18, arm64), main and the branch side by side, each from
+its own worktree against its own `uv run --locked server.py`, compared field by field. The branch was
+run before and after the scenery change; only Victoria `s1-1` differs between the two. WebKit and night
+were not run.
+
+## Earlier record: 2026-10-30 (keeping the junction clear)
 
 Rules passes **70 of 70 routes in V8, as on main** at `d69239b`, with no collisions, red-light or
 stop-sign violations, failures to yield or deadlock overrides on either side, and 24 safety brakes on

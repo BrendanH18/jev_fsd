@@ -402,6 +402,11 @@ left lane, and a flashing green blinks. The HUD says "LEFT ARROW · NOT YOUR LIG
 TURN PROTECTED" or "ADVANCE GREEN · ONCOMING TRAFFIC HELD". This reaches the seeded benchmark (see
 [the Rules baseline](rules-baseline.md)).
 
+Where the car, centred in its lane, would touch static scenery within 40 m along its route (a building's
+corner mapped over the curb lane, as on Belleville Street in Victoria), Rules is offered lateral nudges of
+a full metre either way as well as half a metre, and `stop_at_line` and `hard_brake` keep the car's
+current nudge (to the nearest half metre, at most a metre) instead of steering back to the lane's centre.
+
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery
 placements. Swept checks stop the car before penetration and count contact once until it separates;

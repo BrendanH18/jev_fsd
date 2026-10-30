@@ -28,6 +28,13 @@
   turning cars runs the red. The other twenty challenges play out exactly as before, and the evaluation
   engine version is unchanged.
 - New checks in `scripts/test_advance_green.mjs`.
+- Scenery standing in the car's lane (`static/js/brain/candidates.js`): where the car, centred in its
+  lane, would touch a building, wall or post within 40 m, Rules is offered nudges of a full metre (not
+  only half a metre), and stops at a line or brakes hard where it is, not back in the middle of the lane.
+  On Belleville Street in Victoria's Old Town a mapped building's corner stands 0.4 m from the curb
+  lane's centre; the car used to stop short of it until passing traffic unlocked a wider nudge (over two
+  minutes on the seeded benchmark), and with the new signal timing then hit it. New check in
+  `scripts/test_scenery_collision.mjs`; the seeded benchmark is in `docs/rules-baseline.md`.
 
 - Keeping the junction clear (`static/js/sim/junction-box.js`). Québec's Highway Safety Code: even on
   a green, a driver must not enter an intersection without room past it to clear it completely, and
