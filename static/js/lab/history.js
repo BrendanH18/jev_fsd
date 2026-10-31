@@ -3,11 +3,11 @@ import { failures } from "../bench/metrics.js";
 export const EVALUATION_SCHEMA = "jev-agent-evaluation-v2";
 export const EVALUATION_HISTORY_KEY = "jev-fsd-evaluations-v2";
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
-// Saved history, counted as UTF-16 (two bytes a character, see saveEvaluation): about 4.2 million
-// characters of JSON, room for a baseline and a new run of every challenge (some 1.85 million each with
-// 20 challenges and two drivers), inside the 5 million or so characters of ASCII that browsers allow an
+// Saved history, counted as UTF-16 (two bytes a character, see saveEvaluation): about 4.7 million
+// characters of JSON, room for a baseline and a new run of every challenge (some 2.06 million each with
+// 22 challenges and two drivers), inside the 5 million or so characters of ASCII that browsers allow an
 // origin. A browser that allows less reports QuotaExceededError, and older runs are dropped.
-const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
+const MAX_HISTORY_BYTES = 9 * 1024 * 1024;
 const CONDITIONS = { version: "challenge version", map: "map", pack: "map-pack version", seed: "seed",
   weather: "weather", time: "time of day", car: "vehicle", mode: "decision clock", limit_s: "time limit" };
 const COUNTERS = ["time_s", "collisions", "red_lights", "stop_signs", "failed_to_yield", "off_road_s", "hard_brakes", "cost_usd"];

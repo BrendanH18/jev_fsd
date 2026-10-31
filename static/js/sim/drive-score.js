@@ -23,6 +23,9 @@ export class DriveScore {
     this.onTracks = 0; this.tracksCounted = null;
     // (standing in a signal's junction with no room past it, sim/junction-box.js: how often, and where)
     this.blockedJunctions = 0; this.boxCounted = null;
+    // (through a work zone, sim/work-zone.js: too fast, the zones that was counted for, and going past
+    // a flagger's STOP paddle, which the audit counts as a missed stop)
+    this.workZoneSpeeding = 0; this.workZoneCounted = new Set(); this.flaggerStops = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -47,7 +50,9 @@ export class DriveScore {
     const speeding = !!road && speed > road.limit + SPEED_GRACE_MPS;
     const offRoad = road?.on_road === false;
     const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
-    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0;
+    // (going round a work zone's closed stretch through the other lane, sim/work-zone.js, is not)
+    const zonePass = world.workZones?.passing(road?.limit ?? 11.2) || null;
+    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0 && zonePass?.side !== "closed";
     if (speeding) this.speeding += dt;
     const zone = road?.zone;
     if (speeding && zone) {
@@ -84,6 +89,15 @@ export class DriveScore {
       this.boxCounted = `${box.key}:${box.since}`; this.blockedJunctions++;
       this.incident("blocked_junction", "Stopped in the junction", { junction: box.id });
     }
+    // a work zone (sim/work-zone.js): its limit holds from the stop line to the end of the one-lane
+    // section
+    const workZoneFast = !!zonePass && speed > zonePass.limit + SPEED_GRACE_MPS;
+    if (workZoneFast) {
+      this.workZoneSpeeding += dt;
+      if (!speeding) this.speeding += dt;
+      if (!this.workZoneCounted.has(zonePass.zone.id)) { this.workZoneCounted.add(zonePass.zone.id); this.incident("work_zone_speeding", "Too fast through a work zone", { zone: zonePass.zone.id }); }
+    }
+    for (const ev of world.events || []) if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
     if (Math.abs(ego.latAccel || 0) > 3.0) this.cornering += dt;
@@ -101,6 +115,7 @@ export class DriveScore {
       : speeding && zone ? `Slow to ${Math.round(road.limit * 3.6)}. You’re in a ${zone.kind} zone.`
       : tracks?.still > 0.5 ? "Clear the tracks. Never stop on them."
       : blocking ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
+      : workZoneFast ? `Slow to ${Math.round(zonePass.limit * 3.6)}. You’re in a work zone.`
       : roadsideFast ? `Slow to ${Math.round(passing.limit * 3.6)} and move over. A ${name} is stopped with its lights flashing.`
       : speeding ? "Ease off. You’re above the speed limit."
       : Math.abs(ego.latAccel || 0) > 3 ? "Slow down before the bend."
@@ -173,6 +188,8 @@ export class DriveScore {
     if (this.zoneSpeeding > 1) tips.push("Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.");
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
     if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
+    if (this.flaggerStops) tips.push("At a work zone, stop for the flagger’s STOP paddle and wait for it to turn to SLOW. Traffic coming the other way has the one lane until then.");
+    if (this.workZoneSpeeding > 0.5) tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
     if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
     if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
@@ -185,7 +202,7 @@ export class DriveScore {
       elapsed_s: round(this.elapsed), distance_m: Math.round(this.distance), moving_s: round(this.moving),
       max_kmh: round(this.maxSpeed * 3.6), progress: round(clamp(this.progress, 0, 1), 3),
       collisions, at_fault: atFault, red_lights: reds, stop_signs: stops, failed_to_yield: yields,
-      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
+      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };

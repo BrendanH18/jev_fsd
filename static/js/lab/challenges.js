@@ -15,6 +15,7 @@ import { SLOW_FAST_MPS, SLOW_MPS, curbOffset, endsOf } from "../sim/roadside.js"
 import { doorPoints } from "../sim/streetcar.js";
 import { approach, crossingsAhead, railIndex, trainSpan } from "../sim/rail.js";
 import { boxEnd } from "../sim/junction-box.js";
+import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, workZoneSites } from "../sim/work-zone.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -60,8 +61,36 @@ export const CHALLENGES = [
     description: "Avenue du Mont-Royal Est meets Rue Saint-Denis at a light that is green as you come up. Past it, traffic is backed up from Rue Rivard, behind a car waiting to turn left, to just beyond Saint-Denis.", lesson: "Even on a green, don't enter a junction unless there is room for all of your car past it: wait at the line until there is. That is Québec's Highway Safety Code, and Montréal police fine drivers who block an intersection. A driver who follows the queue in is stuck in the middle when the light changes, and the cross street can't go." },
   { id: "left-arrow", title: "Not your arrow", map: "winnipeg", weather: "dry", time: "afternoon", seed: 21042, icon: "⇠", difficulty: "Judgement", hazard: "left-arrow", street: "Isabel Street",
     description: "You're going straight on Isabel Street at William Avenue, first at a red light in the right lane. Beside you, cars wait in the left lane to turn left. Then a green arrow comes on, and they go.", lesson: "A green arrow is for the way it points, and no other: going straight, your light is still red. Wait for your own green, even while the lane beside you moves." },
+  { id: "flagger", title: "Follow the flagger", map: "ottawa", weather: "dry", time: "afternoon", seed: 22042, icon: "⚑", difficulty: "Patience", hazard: "work-zone", street: "Queen Street",
+    description: "A road crew has closed your lane on Queen Street, leaving one lane for both directions. The flagger at your end holds up a STOP paddle while cars come the other way through it.", lesson: "A flagger's paddle is a traffic sign: on STOP, stop before reaching them and stay stopped; on SLOW, go on with care, at the work zone's speed. Where your lane is closed you go round the work in the other lane, so wait until you're waved through: oncoming traffic has that lane until then. That is Ontario's Highway Traffic Act, and every province has a rule like it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
+
+// Follow the flagger: a work zone (sim/work-zone.js) where the car's lane is closed, on a block of the
+// challenge's `street` (where it has one) with a limit above the zone's, with room for the car to
+// start from a standstill WZ_START_M short of its stop line and for WZ_CARS cars, WZ_CAR_GAP_M apart,
+// to wait short of the stop line at the other end. The flaggers show STOP to the car and hold it
+// there (`held`); once the car's front is WZ_TRIGGER_M from its line those cars set off through the
+// one lane, and once the last of them is past its own line (or after WZ_HOLD_MAX_S) the flaggers go
+// on as usual: STOP both ways until the one lane is clear, then SLOW for the car.
+const WZ_START_M = 65, WZ_TRIGGER_M = 45, WZ_CARS = 3, WZ_CAR_GAP_M = 12, WZ_HOLD_MAX_S = 40;
+const workZoneSiteCache = new WeakMap();
+function flaggerSites(map, street) {
+  if (!workZoneSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang;
+    for (const site of workZoneSites(map)) {
+      const e = map.edges.get(site.closed);
+      if (e.limit <= WZ_LIMIT_MPS + 1) continue;
+      const a = Math.min(site.hi, Math.max(site.lo, WZ_START_M + front + 4)), lane = map.lane(site.closed, 0);
+      const startS = (a - WZ_START_M - front) * lane.length / e.length;
+      if (startS < 2 || e.length - a - WZ_SPAN_M < WZ_CARS * WZ_CAR_GAP_M + 6) continue;
+      sites.push({ lane, startS, zone: { closed: site.closed, open: site.open, a } });
+    }
+    workZoneSiteCache.set(map, sites);
+  }
+  const sites = workZoneSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
 
 const blindSites = new WeakMap();
 function occludedCrossings(map, lanes) {
@@ -619,11 +648,14 @@ export function challengeScenario(map, challenge) {
   const arrows = challenge.hazard === "left-arrow" ? arrowSites(map, challenge.street) : null;
   if (arrows && !arrows.length) throw new Error("This map has no signal with a left arrow on a street with two lanes or more, where the car can wait at a red before the arrow comes on.");
   const arrow = arrows ? arrows[Math.floor(random() * arrows.length)] : null;
-  const start = arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const flaggers = challenge.hazard === "work-zone" ? flaggerSites(map, challenge.street) : null;
+  if (flaggers && !flaggers.length) throw new Error("This map has no straight block of a two-way street with one lane each way, a limit above 30 km/h and room for a work zone.");
+  const flagger = flaggers ? flaggers[Math.floor(random() * flaggers.length)] : null;
+  const start = flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -660,6 +692,7 @@ export function challengeScenario(map, challenge) {
     ...(school ? { schoolBus: school.bus } : {}),
     ...(zone ? { child: { s: zone.hazardS, zone: zone.zone } } : {}),
     ...(roadside ? { roadside: roadside.stop } : {}),
+    ...(flagger ? { workZone: flagger.zone } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -700,6 +733,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.streetcar) Object.assign(world.challenge, placeStreetcar(world, fleet, scenario.streetcar, challenge.seed));
   if (scenario.levelCrossing) Object.assign(world.challenge, placeLevelCrossing(world, fleet, scenario.levelCrossing, challenge.seed));
   if (scenario.junctionBox) Object.assign(world.challenge, placeBoxQueue(world, fleet, scenario.junctionBox, challenge.seed));
+  if (scenario.workZone) Object.assign(world.challenge, placeWorkZone(world, fleet, scenario.workZone, challenge.seed));
   if (scenario.leftArrow) {
     const inter = world.map.intersections.get(scenario.leftArrow.signal);
     Object.assign(world.challenge, { turnerIds: placeTurners(world, fleet, scenario.leftArrow, challenge.seed), signalId: scenario.leftArrow.signal, arrowEdge: scenario.leftArrow.edge, ...(inter ? { at: [inter.x, inter.y] } : {}) });
@@ -727,6 +761,7 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "roadside" ? local.ahead < OPERATOR_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "streetcar" ? local.ahead < RIDER_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "level-crossing" ? local.ahead < TRACKS_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
+    : state.hazard === "work-zone" ? local.ahead < WZ_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     // (the arrow comes on, and the cars beside the car turn)
     : state.hazard === "left-arrow" ? approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow"
     : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
@@ -762,6 +797,18 @@ export function stepChallenge(world, fleet) {
     // (the streetcar sets off toward the crossing, ringing)
     const train = state.trainId && fleet.vehicles.find(v => v.id === state.trainId);
     if (train) Object.assign(train.rail, { held: false, dwell: 0 });
+    // (the cars at the far end of the work zone set off through its one lane)
+    for (const id of state.zoneCarIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
+  }
+  // (once the last of them is past its stop line, the flaggers go on as usual)
+  if (state.workZoneId && state.triggered && !state.released) {
+    const z = world.workZones.zones.find(w => w.id === state.workZoneId), e = z && world.map.edges.get(z.open);
+    state.setOff ??= world.t;
+    const past = (car) => !car || projectPoint(e.pts, e.cum, [car.x, car.y], null).s + car.spec.length - car.spec.rearOverhang > e.length - z.b + 1;
+    if (!z || state.zoneCarIds.every(id => past(fleet.vehicles.find(v => v.id === id))) || world.t - state.setOff >= WZ_HOLD_MAX_S) {
+      state.released = true;
+      if (z) z.held = false;
+    }
   }
   // (once it has passed by the crossing, QUEUE_CLEAR_S later the car at the junction turns, and the
   // queue behind it moves off)
@@ -1036,6 +1083,23 @@ function placeBoxQueue(world, fleet, { signal, group, queue }, seed) {
   }
   const inter = map.intersections.get(signal);
   return { boxQueueIds: ids, signalId: signal, signalGroup: group, ...(inter ? { at: [inter.x, inter.y] } : {}) };
+}
+// The work zone (see flaggerSites), its flaggers holding STOP for the car, and the cars waiting at its
+// far end, short of their stop line, until the car comes up.
+function placeWorkZone(world, fleet, { closed, open, a }, seed) {
+  const map = world.map, random = rng(seed), z = world.workZones.place({ closed, open, a, phase: "open" }), ids = [];
+  z.held = true;
+  const e = map.edges.get(open), lane = map.lane(open, 0), line = e.length - z.b;
+  for (let i = 0; i < WZ_CARS; i++) {
+    // (rear axles: the first one's front 4 m short of its line)
+    const s = (line - 4 - (CAR.length - CAR.rearOverhang) - i * WZ_CAR_GAP_M) * lane.length / e.length;
+    const p = pointAt(lane.pts, lane.cum, s), car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), 0);
+    Object.assign(car, { id: `challenge_zone_${i + 1}`, color: [0x2b3a55, 0xb0b5b9, 0x9b1e1e][i % 3], v0: 11, driver: { aMax: 1.4, b: 2, s0: 2, T: 1.3, react: 0.5 + random() * 0.3, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 1e6, waiting: 0 });
+    car.path.start(open, 0, s);
+    fleet.vehicles.push(car); ids.push(car.id);
+  }
+  return { workZoneId: z.id, zoneCarIds: ids, at: z.flaggers.closed };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

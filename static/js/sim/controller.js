@@ -43,14 +43,26 @@ export function stopSpeedFor(distance, decel = comfort().decel) {
 // Offsets are measured from the route where the law was chosen (s0), and `shift.from` where the change
 // started; where the route itself moves to another lane after that, the target moves back by as
 // much, so the car holds its lane.
+// With `detour` (route arc lengths, see detourAt) the target also moves across to go round a work
+// zone's closed stretch (sim/work-zone.js).
 export function lateralAt(law, s, route = null) {
   const shift = law.shift;
   const move = (s0) => (route && route.frameMove ? route.frameMove(s0, s) : 0);
-  const to = (law.offset || 0) - move(law.s0);
+  const to = (law.offset || 0) - move(law.s0) + detourAt(law.detour, s);
   if (!shift) return to;
   const from = shift.from - move(shift.start);
   const u = clamp((s - shift.start) / shift.len, 0, 1);
   return from + (to - from) * u * u * (3 - 2 * u);
+}
+
+// How far a detour `{ from, full, back, to, shift }` moves the lateral target at arc length s: easing
+// across from `from` to `full`, all of `shift` (metres right: negative goes left) until `back`, and
+// easing back by `to`; nothing outside them.
+export function detourAt(detour, s) {
+  if (!detour || s <= detour.from || s >= detour.to) return 0;
+  const ease = (u) => u * u * (3 - 2 * u);
+  const u = s < detour.full ? ease((s - detour.from) / (detour.full - detour.from)) : s > detour.back ? ease((detour.to - s) / (detour.to - detour.back)) : 1;
+  return detour.shift * u;
 }
 
 // The lane centre a law tracks at s, without its small lateral nudge (`center` is the target lane's

@@ -1,7 +1,7 @@
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
 import { Vehicle, CAR } from "./vehicle.js";
-import { headingAt } from "../map/mapdata.js";
+import { headingAt, projectPoint } from "../map/mapdata.js";
 import { approachPhase, movementSignal, phaseOf, StopMemory } from "./signals.js";
 import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
@@ -21,6 +21,7 @@ import { HOLD_M as STREETCAR_HOLD_M, STOP_M as STREETCAR_STOP_M, IN_LANE_M, SIDE
 import { RoadsideStops } from "./roadside.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
+import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -126,11 +127,20 @@ const AUDIT_TRAIN_MOVING_MPS = 1;
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
+// Stopping for a flagger's STOP paddle (sim/work-zone.js, Ontario HTA s. 146.1): once the car, heading
+// into a work zone along its street, first sees its flagger showing STOP while still short of the
+// one-lane section, it owes the stop if it could then stop at the line braking at up to 3.5 m/s^2
+// (standing still, it can). It misses the stop if, owing it, its front goes more than 2 m past the
+// line at more than 1 m/s while the paddle still shows STOP. Counted once each time that paddle turns
+// to STOP.
+const AUDIT_FLAGGER_PAST_M = 2;
+const AUDIT_FLAGGER_MOVING_MPS = 1;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
   // vehicles stand at the roadside with their lights flashing at a time (sim/roadside.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0 } = {}) {
+  // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0 } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -164,6 +174,7 @@ export class World {
     this.trainCalls = new Map();  // "<crossing id>:<train id>:<departure>" -> { owed, counted }: one approaching it
     this.onTracks = null;         // the level crossing the car is standing on the tracks of, and since when
     this.inBox = null;            // the signal's junction the car is in, whether it had room past it, and since when
+    this.flaggerCalls = new Map(); // "<work zone id>:<paddle change>" -> { owed, counted }: a flagger showing STOP
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -174,6 +185,7 @@ export class World {
     this.arrowCheck = null;       // the left arrow the car crossed the line on: which way did it go?
     this.spawnEgo();
     this.roadside = new RoadsideStops(this, { count: roadside, seed });
+    this.workZones = new WorkZones(this, { count: workZones, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
   }
 
@@ -262,6 +274,8 @@ export class World {
     this.trainYields?.clear();
     this.onTracks = null;
     this.inBox = null;
+    this.flaggerCalls.clear();
+    this.flaggerYields?.clear();
     this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
@@ -476,6 +490,33 @@ export class World {
     this.auditCrossings(dt);
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
+    this.auditFlaggers();
+  }
+
+  // Going past a flagger's STOP paddle once the stop was owed (see AUDIT_FLAGGER_PAST_M).
+  auditFlaggers() {
+    const zones = this.workZones.zones;
+    if (!zones.length) return;
+    const ego = this.ego, FRONT = ego.spec.length - ego.spec.rearOverhang;
+    for (const z of zones) {
+      if (Math.abs(ego.x - z.x) > WZ_SPAN_M + 80 || Math.abs(ego.y - z.y) > WZ_SPAN_M + 80) continue;
+      for (const side of ["closed", "open"]) {
+        if (paddle(z, side) !== "stop") continue;
+        const e = this.map.edges.get(z[side]), p = projectPoint(e.pts, e.cum, [ego.x, ego.y], null);
+        if (!p || p.lateral < e.asphalt[0] - 1 || p.lateral > e.asphalt[1] + 1 || Math.abs(wrap(ego.psi - p.heading)) > Math.PI / 3) continue;
+        const m = marksOn(z, side), front = p.s + FRONT, key = stopKey(z, side);
+        if (front > m.to) continue;
+        let rec = this.flaggerCalls.get(key);
+        // (decided when the car first sees the flagger showing STOP, still short of the one-lane section)
+        if (!rec && front < m.from && this.visibility.canSee(ego, ...z.flaggers[side])) this.flaggerCalls.set(key, rec = { owed: canStopForFlagger(ego.v, Math.max(0, m.line - front)), counted: false });
+        if (rec?.owed && !rec.counted && front > m.line + AUDIT_FLAGGER_PAST_M && ego.v > AUDIT_FLAGGER_MOVING_MPS) {
+          rec.counted = true;
+          this.violations.stop_signs_run++;
+          this.events.push({ type: "stop_sign", flagger: true, zone: z.id });
+        }
+      }
+    }
+    if (this.flaggerCalls.size > 20) for (const key of [...this.flaggerCalls.keys()].slice(0, 10)) this.flaggerCalls.delete(key);
   }
 
   // Through a junction on a left arrow: anything but a left turn (heading more than 45 deg left of

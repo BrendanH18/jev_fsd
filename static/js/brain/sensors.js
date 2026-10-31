@@ -5,11 +5,11 @@ import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
 import { advanceHolds, approachPhase, movementSignal, protectedLeft, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
-import { curveProfileSpeed, laneCenterAt, laneChangeLength } from "../sim/controller.js";
+import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
-import { pointAt } from "../map/mapdata.js";
+import { pointAt, projectPoint } from "../map/mapdata.js";
 import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
@@ -23,6 +23,7 @@ import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { HEAR_M, HOLD_M as RAIL_HOLD_M, canStopFor as canStopForTrain, crossingsAhead, railIndex, roomBlocker, trainAt, waitsAt } from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
+import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -145,7 +146,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -261,6 +262,7 @@ export function buildSnapshot(world, executing = null) {
     snap.level_crossing = levelCrossing(world, route, frontS, vehicles);
     snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
+    snap.work_zone = workZone(world, p, frontS, road);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -274,7 +276,9 @@ export function buildSnapshot(world, executing = null) {
     const clearS = lane.from_center !== null ? laneClearS(lane.shift, lane.from_center, lane.center) : -Infinity;
     const inOrigin = (a) => lane.from_center !== null && Math.abs(p.lateral - lane.from_center) < LANE_CLEAR_M
       && Math.abs(a.lateral - lane.from_center) <= 1.7 && a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
-    const frame = (s) => route.frameMove(p.s, s);
+    // (going round a work zone's closed stretch, along the way the car will go: see workZone)
+    const detour = snap.work_zone?.detour || null;
+    const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
     const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center, frame)
       .filter((a) => Math.abs(a.lateral - lane.center) <= 1.7 || inOrigin(a) || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking)
       .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6));
@@ -304,7 +308,7 @@ export function buildSnapshot(world, executing = null) {
     if (!o.parked && o.kind !== "door" && !o.parking && !o.pull) continue;
     const local = ego.toLocal(o.x, o.y);
     if (local.ahead < -5 || local.ahead > 40 || Math.abs(local.right) > 8) continue;
-    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : ROADSIDE_NAMES[o.kind] || "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
+    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : isWorkZone(o) ? "work zone" : ROADSIDE_NAMES[o.kind] || "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
   }
   snap.roadside.sort((a, b) => a.ahead - b.ahead);
   snap.roadside = snap.roadside.slice(0, 6);
@@ -315,6 +319,8 @@ export function buildSnapshot(world, executing = null) {
   // (coming up to a vehicle stopped at the roadside with its lights flashing, and passing it, the
   // speed to be down to by then is the limit, so that no manoeuvre goes faster)
   if (snap.roadside_stop) snap.limit = Math.min(snap.limit, roadsideSpeed(snap.roadside_stop));
+  // (likewise coming up to a work zone, and through it)
+  if (snap.work_zone) snap.limit = Math.min(snap.limit, workZoneSpeed(snap.work_zone));
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
@@ -690,6 +696,49 @@ function levelCrossing(world, route, frontS, vehicles) {
   }
   return { id: x.c.id, kind: track?.kind || "rail", line: track?.name || "", to_rail_m: x.hold_m + RAIL_HOLD_M, stop_s_route: frontS + x.stop_m, bumper_to_stop_m: x.stop_m,
     on_tracks: x.fouling, clear_in_m: x.exit_m, train, wait, blocker };
+}
+
+// A work zone with a flagger on the car's route ahead (sim/work-zone.js), from when the car can see the
+// flagger at its end of it (or is already past the line) until its front is out of the one-lane
+// section. `side` is "closed" when the car's lane is the one shut; `paddle` what that flagger shows
+// ("stop" or "slow"); `stop_s_route` the stop line (for the front bumper); `wait` whether the car must
+// stop there now: the paddle shows STOP, and when the car first saw it turned to STOP, still short of
+// the one-lane section, it could have stopped at the line braking at OWED_DECEL, or was standing still
+// (a car too close to stop by then goes on through, and the flaggers wait for it), and its front is
+// not yet in the one-lane section; `detour`, on the closed
+// side, the way round the closed stretch through the other lane in route arc lengths
+// (sim/controller.js detourAt); `limit_mps` the zone's limit, never above the street's. Or null.
+const WZ_LOOK_M = 120;
+function workZone(world, p, frontS, road) {
+  const { ego, route, map } = world, zones = world.workZones?.zones;
+  if (!zones?.length) return null;
+  for (const z of zones) {
+    if (Math.hypot(z.x - ego.x, z.y - ego.y) > WZ_LOOK_M + WZ_SPAN_M) continue;
+    const i = route.edges.findIndex((id, k) => sideOf(z, id) && route.edgeStarts[k + 1] > frontS - ego.spec.length);
+    if (i < 0) continue;
+    const side = sideOf(z, route.edges[i]), e = map.edges.get(route.edges[i]), lane = map.lane(e.id, 0), m = marksOn(z, side);
+    // (along the route: where the edge puts it, as projected onto the route's own line)
+    const toRoute = (x) => {
+      const est = route.edgeStarts[i + 1] - (e.length - x), q = pointAt(lane.pts, lane.cum, x * lane.length / e.length), r = projectPoint(route.pts, route.cum, q);
+      return r && r.distance < 1.5 && Math.abs(r.s - est) < 15 ? r.s : est;
+    };
+    const line = toRoute(m.line), from = toRoute(m.from), to = toRoute(m.to);
+    if (frontS > to || line - frontS > WZ_LOOK_M) continue;
+    const flagger = z.flaggers[side];
+    if (frontS < line && !world.visibility.canSee(ego, flagger[0], flagger[1])) continue;
+    const shows = paddle(z, side), key = stopKey(z, side);
+    world.flaggerYields ||= new Map();
+    // (decided when the car first sees the paddle showing STOP, short of the one-lane section)
+    if (shows === "stop" && !world.flaggerYields.has(key) && frontS < from) {
+      if (world.flaggerYields.size > 20) world.flaggerYields.delete(world.flaggerYields.keys().next().value);
+      world.flaggerYields.set(key, canStopForFlagger(ego.v, Math.max(0, line - frontS)));
+    }
+    const d = side === "closed" ? detourOf(z) : null;
+    return { id: z.id, side, paddle: shows, stop_s_route: line, bumper_to_stop_m: line - frontS, wait: shows === "stop" && !!world.flaggerYields.get(key) && frontS < from - 0.5,
+      one_lane: { from_s: from, to_s: to }, in_one_lane: frontS > from, closure_id: z.closure.id, limit_mps: Math.min(road.limit || 11.2, WZ_LIMIT_MPS),
+      detour: d ? { from: toRoute(d.from), full: toRoute(d.full), back: toRoute(d.back), to: toRoute(d.to), shift: d.shift } : null };
+  }
+  return null;
 }
 
 // The signal the car's route takes it through next, within 60 m, when traffic it can see past the
@@ -1128,6 +1177,13 @@ export function desiredSpeed(snap) {
     const vl = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
     if (vl < v) { v = vl; reasons.push(lx.wait === "train" ? "train coming at the level crossing" : "no room past the tracks"); }
   }
+  // a work zone's flagger showing STOP: stop at the line
+  const wz = snap.work_zone;
+  if (wz?.wait) {
+    const room = wz.bumper_to_stop_m;
+    const vw = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vw < v) { v = vw; reasons.push("flagger showing STOP"); }
+  } else if (wz && workZoneSpeed(wz) <= v + 0.05) reasons.push(wz.side === "closed" ? "work zone: round it through the other lane" : "work zone: one lane");
   // a signal it could not clear for traffic past the junction: wait at the line
   const jb = snap.junction_box;
   if (jb) {
@@ -1156,6 +1212,13 @@ export function desiredSpeed(snap) {
 function roadsideSpeed(rs, factor = 1) {
   const lim = rs.limit_mps * factor;
   return Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, rs.gap_m - APPROACH_M - 5));
+}
+
+// The speed to go through a work zone at (see workZone), from 5 m short of its stop line, or, short of
+// that, the speed from which the car slows to it comfortably by then.
+function workZoneSpeed(wz) {
+  if (wz.bumper_to_stop_m <= 5) return wz.limit_mps;
+  return Math.sqrt(wz.limit_mps * wz.limit_mps + 2 * comfort().decel * 0.6 * (wz.bumper_to_stop_m - 5));
 }
 
 // Stopped at an all-way stop, waiting for a vehicle that goes first (a car that overshot the line
@@ -1191,6 +1254,7 @@ export function hazardFlags(snap) {
   if (snap.level_crossing) f.push("level crossing");
   if (snap.junction_box) f.push("junction box");
   if (snap.roadside_stop) f.push("roadside vehicle");
+  if (snap.work_zone) f.push("work zone");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");
