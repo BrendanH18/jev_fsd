@@ -1,4 +1,14 @@
-# Rules benchmark baseline — 2026-10-30c (work zones with a flagger, unchanged)
+# Rules benchmark baseline — 2026-10-31 (power cuts, unchanged)
+
+Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
+`7749aec` route for route, in every result field but wall-clock time and decision latency, with no
+collisions, red-light or stop-sign violations, failures to yield or deadlock overrides, and 23 safety
+brakes on both sides. "After" is this branch, which adds power cuts (in free drives only), where a
+signal whose lights are out is an all-way stop, and the "Lights out" challenge. The seeded benchmark's
+world has no power cuts, and without them traffic, the car and the audit behave as before. Method as
+for 2026-10-30c below.
+
+## Earlier record: 2026-10-30c (work zones with a flagger, unchanged)
 
 Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
 `58516cf` route for route, in every result field but wall-clock time and decision latency, with no

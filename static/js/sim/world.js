@@ -22,6 +22,7 @@ import { RoadsideStops } from "./roadside.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
+import { Outages, controlAt } from "./outage.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -139,8 +140,9 @@ const AUDIT_FLAGGER_MOVING_MPS = 1;
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
   // vehicles stand at the roadside with their lights flashing at a time (sim/roadside.js).
-  // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0 } = {}) {
+  // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js). `outages`: how
+  // many signals at a time have their lights out (sim/outage.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0 } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -186,6 +188,7 @@ export class World {
     this.spawnEgo();
     this.roadside = new RoadsideStops(this, { count: roadside, seed });
     this.workZones = new WorkZones(this, { count: workZones, seed });
+    this.outages = new Outages(this, { count: outages, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
   }
 
@@ -243,8 +246,10 @@ export class World {
 
   phase(intersectionId) { return phaseOf(this.map.intersections.get(intersectionId), this.t); }
   // The light for one movement through a signal: from the approach `edgeId`, turning `turn`
-  // (sim/signals.js: under a left arrow only a left turn has a green).
+  // (sim/signals.js: under a left arrow only a left turn has a green), or "dark" while its lights are
+  // out (sim/outage.js).
   light(intersectionId, edgeId, turn = "straight") {
+    if (this.outages?.isDark(intersectionId)) return "dark";
     const inter = this.map.intersections.get(intersectionId);
     if (!inter?.plan?.advance) return this.phase(intersectionId)[this.map.edges.get(edgeId)?.control?.group];
     return movementSignal(approachPhase(inter, edgeId, this.t), turn);
@@ -406,7 +411,8 @@ export class World {
     if (looked) this.egoPeek = looked.control.id;
     else if (!followsRoute || !this.route.controls.some((c) => c.control.id === this.egoPeek && frontS <= c.sPeek + 12)) this.egoPeek = null;
     const edge = rc ? this.map.edges.get(rc.edge) : road.edge;
-    const control = rc ? rc.control : edge?.control || (edge ? this.map.priorityOf(edge.id) : null);
+    // (a signal whose lights are out is an all-way stop: sim/outage.js)
+    const control = controlAt(this, rc ? rc.control : edge?.control || (edge ? this.map.priorityOf(edge.id) : null), rc ? rc.edge : edge?.id);
     if (control && (rc || road.lane)) {
       // how far the front bumper is past the line: along the route when there is one, exactly as the
       // sensors measure it (a lane polyline's length differs from the centerline's on a bend), else
@@ -437,7 +443,7 @@ export class World {
           }
         } else if (control.type === "stop" && !this.egoStop.completed) {
           this.violations.stop_signs_run++;
-          this.events.push({ type: "stop_sign" });
+          this.events.push({ type: "stop_sign", ...(control.dark ? { dark: true } : {}) });
         } else if (control.type === "yield" && ringBusy(this.map.roundabouts.get(control.roundabout), this.map.nodes.get(edge.to), this.npcs)) {
           this.violations.failed_to_yield++;
           this.events.push({ type: "failed_to_yield", to: "roundabout traffic" });
@@ -473,7 +479,7 @@ export class World {
       if (missed && !this.allWayCounted) {
         this.allWayCounted = control.id;
         this.violations.failed_to_yield++;
-        this.events.push({ type: "failed_to_yield", to: "all-way stop", with: missed.id });
+        this.events.push({ type: "failed_to_yield", to: "all-way stop", with: missed.id, ...(control.dark ? { dark: true } : {}) });
       }
     } else {
       this.lastRoad = edge ? { edgeId: edge.id, crossed: false } : null;

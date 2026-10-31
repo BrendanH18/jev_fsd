@@ -4,6 +4,7 @@
 import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
 import { advanceHolds, approachPhase, movementSignal, protectedLeft, STOP_ZONE_M } from "../sim/signals.js";
+import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
@@ -181,7 +182,13 @@ export function buildSnapshot(world, executing = null) {
     if (turns.length && turns[0].dir === "uturn" && turns[0].at_m > p.s && !world.turnaround) snap.nav.turn_round_in_m = turnaroundStopS(route, turns[0]) - p.s;
     const frontS = p.s + FRONT;
     for (let k = 0; k < route.controls.length; k++) {
-      const c = route.controls[k], control = c.control, next = route.controls[k + 1];
+      const c = route.controls[k], next = route.controls[k + 1];
+      // (a signal whose lights are out is an all-way stop, once the car can see that they are:
+      // sim/outage.js; until then it is a signal it cannot see)
+      const inter = c.control.type === "signal" ? map.intersections.get(c.control.id) : null;
+      const junction = inter ? [inter.x, inter.y] : c.junction;
+      const dark = !!inter && world.outages?.isDark(inter.id) && !!junction && world.visibility.canSee(ego, ...junction);
+      const control = dark ? darkControl(c.control, c.edge) : c.control;
       const leftTurn = (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
       // already through this one (a left turn stays in view until the car is past oncoming traffic,
       // unless the next control is coming up)
@@ -190,11 +197,9 @@ export function buildSnapshot(world, executing = null) {
       // (the nearest junction, for lane changes, even when a control beyond it is the one reported)
       if (snap.control_line_m === null) snap.control_line_m = c.sRoute - frontS;
       const bumperToLine = c.sRoute - frontS;
-      const inter = control.type === "signal" ? map.intersections.get(control.id) : null;
-      const junction = inter ? [inter.x, inter.y] : c.junction;
       // (the light for the way the car goes: under a left arrow only a left turn has a green; and
       // whether an advance green shows, or holds the car while the approach opposite has it)
-      const shows = inter && junction && world.visibility.canSee(ego, ...junction) ? approachPhase(inter, c.edge, world.t) : null;
+      const shows = inter && !dark && junction && world.visibility.canSee(ego, ...junction) ? approachPhase(inter, c.edge, world.t) : null;
       const signal = control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null;
       const advance = !shows ? null : ADVANCE_LIGHTS[shows] ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
         : shows === "red" && advanceHolds(inter, c.edge, world.t) ? { light: "held", protected: false } : null;
@@ -239,12 +244,13 @@ export function buildSnapshot(world, executing = null) {
           ? rightOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
         stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
+        ...(dark ? { dark: true } : {}),
         rule: control.type === "uncontrolled" ? control.rule : null,
         priority,
         give_way: giveWay,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
         cross_traffic_moving: crossTraffic,
-        seconds_to_green: c.secondsToGreen ? c.secondsToGreen(world.t) : null,
+        seconds_to_green: c.secondsToGreen && !dark ? c.secondsToGreen(world.t) : null,
       };
       break;
     }
@@ -819,7 +825,7 @@ function emergencyAhead(world, p, frontS) {
 function allWayPriority(world, control, visible) {
   const st = world.allWay.status(world.ego, world, (v) => visible.includes(v));
   if (!st) {
-    const junction = world.map.stops.get(control.id)?.junction;
+    const junction = control.junction ?? world.map.stops.get(control.id)?.junction;
     const queue = world.allWay.at(junction, world).filter((e) => e.vehicle !== world.ego && visible.includes(e.vehicle)).sort((a, b) => a.arrived - b.arrived);
     return { arrived: false, go: false, wait_for: null, waiting: queue.map((e) => e.vehicle.id) };
   }
