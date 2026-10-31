@@ -63,6 +63,8 @@ export const CHALLENGES = [
     description: "You're going straight on Isabel Street at William Avenue, first at a red light in the right lane. Beside you, cars wait in the left lane to turn left. Then a green arrow comes on, and they go.", lesson: "A green arrow is for the way it points, and no other: going straight, your light is still red. Wait for your own green, even while the lane beside you moves." },
   { id: "flagger", title: "Follow the flagger", map: "ottawa", weather: "dry", time: "afternoon", seed: 22042, icon: "⚑", difficulty: "Patience", hazard: "work-zone", street: "Queen Street",
     description: "A road crew has closed your lane on Queen Street, leaving one lane for both directions. The flagger at your end holds up a STOP paddle while cars come the other way through it.", lesson: "A flagger's paddle is a traffic sign: on STOP, stop before reaching them and stay stopped; on SLOW, go on with care, at the work zone's speed. Where your lane is closed you go round the work in the other lane, so wait until you're waved through: oncoming traffic has that lane until then. That is Ontario's Highway Traffic Act, and every province has a rule like it." },
+  { id: "lights-out", title: "Lights out", map: "halifax", weather: "dry", time: "afternoon", seed: 23042, icon: "☇", difficulty: "Judgement", hazard: "outage", street: "Barrington Street",
+    description: "A storm has knocked out the power in downtown Halifax, and the traffic lights where Barrington Street meets Morris Street are dark. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left.", lesson: "When traffic lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stops first goes first; stop together and the car on the right goes first. Never drive through as if your light were green: the cross street has no red either. Driver's handbooks across Canada say the same." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -200,6 +202,32 @@ function allWaySites(map) {
   }
   sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
   allWaySiteCache.set(map, sites); return sites;
+}
+
+// Lights out: a signal with four approaches at one node, where the approach (on the challenge's
+// `street`, where it has one) and the approaches from the right and opposite meet allWaySites' terms
+// for an all-way stop. Its lights are out (sim/outage.js), so it is one.
+const darkSiteCache = new WeakMap();
+function darkSites(map, street) {
+  if (!darkSiteCache.has(map)) {
+    const sites = [];
+    const exit = (id, dir, min = 0) => map.successors(id).find(o => map.classifyTurn(map.turnAngle(id, o)) === dir && map.edges.get(o).length > min);
+    for (const inter of map.intersections.values()) {
+      if ((inter.vertices || []).length !== 1 || inter.approaches.length !== 4) continue;
+      for (const { edge: id } of inter.approaches) {
+        const edge = map.edges.get(id);
+        if (edge.length < 90 || edge.control.s_line < 75) continue;
+        const at = (turn, min) => inter.approaches.map(a => a.edge).find(o => o !== id && Math.abs(wrapAngle(map.headingIn(o) - map.headingIn(id) - turn)) < 0.35 && map.edges.get(o).control.s_line >= min);
+        const straight = exit(id, "straight", 60), fromRight = at(Math.PI / 2, 40), opposite = at(Math.PI, 60);
+        const across = fromRight && exit(fromRight, "straight"), left = opposite && exit(opposite, "left");
+        if (straight && across && left) sites.push({ lane: map.lane(id, edge.lanes - 1), signal: inter.id, straight, fromRight, across, opposite, left });
+      }
+    }
+    sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    darkSiteCache.set(map, sites);
+  }
+  const sites = darkSiteCache.get(map), on = sites.filter(s => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
 }
 
 // Blind two-way stops: an approach with a stop sign at least 90 m long, its line at least 75 m
@@ -611,7 +639,9 @@ export function challengeScenario(map, challenge) {
   const right = rights ? rights[Math.floor(random() * rights.length)] : null;
   const stops = challenge.hazard === "all-way" ? allWaySites(map) : null;
   if (stops && !stops.length) throw new Error("This map has no all-way stop with traffic from the right and ahead.");
-  const stop = stops ? stops[Math.floor(random() * stops.length)] : null;
+  const darks = challenge.hazard === "outage" ? darkSites(map, challenge.street) : null;
+  if (darks && !darks.length) throw new Error("This map has no signal with four approaches, traffic from the right and ahead, and room to queue on each.");
+  const stop = stops ? stops[Math.floor(random() * stops.length)] : darks ? darks[Math.floor(random() * darks.length)] : null;
   const blinds = challenge.hazard === "two-way" ? twoWaySites(map) : null;
   if (blinds && !blinds.length) throw new Error("This map has no two-way stop with a building hiding the through road.");
   const blind = blinds ? blinds[Math.floor(random() * blinds.length)] : null;
@@ -685,6 +715,7 @@ export function challengeScenario(map, challenge) {
     ...(left ? { oncoming: { edge: left.opposite, then: left.straight } } : {}),
     ...(right ? { oncoming: { edge: right.fromLeft, then: right.right, lane: "curb" } } : {}),
     ...(stop ? { allWay: allWayCars(map, stop) } : {}),
+    ...(stop?.signal ? { outage: { signal: stop.signal } } : {}),
     ...(blind ? { twoWay: twoWayCars(map, blind) } : {}),
     ...(hook ? { cyclist: { edge: hook.lane.edge, s: startS + HOOK_LEAD_M, then: hook.straight } } : {}),
     ...(siren ? { emergency: { kind: "ambulance", relation: "behind", distance: SIREN_BACK_M } } : {}),
@@ -734,6 +765,8 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.levelCrossing) Object.assign(world.challenge, placeLevelCrossing(world, fleet, scenario.levelCrossing, challenge.seed));
   if (scenario.junctionBox) Object.assign(world.challenge, placeBoxQueue(world, fleet, scenario.junctionBox, challenge.seed));
   if (scenario.workZone) Object.assign(world.challenge, placeWorkZone(world, fleet, scenario.workZone, challenge.seed));
+  // (the signal's lights are out for the whole drive)
+  if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
     const inter = world.map.intersections.get(scenario.leftArrow.signal);
     Object.assign(world.challenge, { turnerIds: placeTurners(world, fleet, scenario.leftArrow, challenge.seed), signalId: scenario.leftArrow.signal, arrowEdge: scenario.leftArrow.edge, ...(inter ? { at: [inter.x, inter.y] } : {}) });
@@ -764,7 +797,7 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "work-zone" ? local.ahead < WZ_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     // (the arrow comes on, and the cars beside the car turn)
     : state.hazard === "left-arrow" ? approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow"
-    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "outage", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);

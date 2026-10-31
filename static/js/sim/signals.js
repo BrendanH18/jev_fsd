@@ -243,7 +243,8 @@ export function advanceNotice(world) {
   const front = p.s + ego.spec.length - ego.spec.rearOverhang;
   const c = route.controls.find((k) => k.control.type === "signal" && k.sRoute > front - 1);
   const inter = c && c.sRoute - front <= NOTICE_M ? map.intersections.get(c.control.id) : null;
-  if (!inter?.plan?.advance || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
+  // (not while its lights are out: sim/outage.js)
+  if (!inter?.plan?.advance || world.outages?.isDark(inter.id) || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
   const shows = approachPhase(inter, c.edge, world.t), text = NOTICES[shows]?.[isLeft(c.turn) ? 0 : 1];
   return text ? { key: `${inter.id}:${shows}`, text, protected: protectedLeft(shows, c.turn) } : null;
 }

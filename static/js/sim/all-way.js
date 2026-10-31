@@ -11,7 +11,11 @@
 // in the queue; one that leaves the stop zone without its turn (running the stop) leaves it.
 //
 // The world keeps one queue for every vehicle, the driven car included; traffic and the driven
-// car's sensing both read it, and the audit uses it to judge whether the car went out of turn.
+// car's sensing both read it, and the audit uses it to judge whether the car went out of turn. A
+// signal whose lights are out (sim/outage.js) is an all-way stop too: its queue is keyed on the
+// signal's id (`control.junction`), as its approaches may end at different nodes, and a vehicle that
+// went has cleared it only once it is past the far side of the widest street there (a signal's
+// junction is often far wider than a stop sign's, and may be mapped as several nodes about its centre).
 
 import { STOP_ZONE_M } from "./signals.js";
 import { wrap } from "./world.js";
@@ -23,6 +27,7 @@ const GOING_MPS = 0.3;
 const GONE_MPS = 0.5;
 const STALE_TICKS = 2;      // an entry not refreshed for this many ticks has left
 const CLEAR_M = 6;          // past the junction's centre, a vehicle that went has cleared it
+const CLEAR_PAST_M = 2;     // (at a dark signal, this far past the far side of the widest street)
 const GOING_MAX_S = 20;     // and one still going after this long has gone elsewhere
 
 const lefty = (turn) => turn === "left" || turn === "uturn";
@@ -35,7 +40,7 @@ export class AllWayStops {
   // vehicle it should have waited for when it goes out of turn: its front crosses the line, or it
   // leaves the queue moving past the line (after a stop made past it), without its turn. Else null.
   note(vehicle, control, edgeId, turn, bumperToLine, v, world) {
-    const junction = this.map.stops.get(control.id)?.junction ?? this.map.edges.get(edgeId)?.to;
+    const junction = control.junction ?? this.map.stops.get(control.id)?.junction ?? this.map.edges.get(edgeId)?.to;
     let e = this.entries.get(vehicle);
     // one that went has the right of way until it clears the junction (see `at`)
     if (e?.going) { if (!this.cleared(e, world)) return null; this.entries.delete(vehicle); e = null; }
@@ -73,10 +78,22 @@ export class AllWayStops {
   }
 
   cleared({ vehicle, junction, since }, world) {
-    const node = this.map.nodes.get(junction);
+    const node = this.map.nodes.get(junction) ?? this.map.intersections?.get(junction);
     if (!node || world.t - since > GOING_MAX_S) return true;
     const dx = node.x - vehicle.x, dy = node.y - vehicle.y;
-    return Math.hypot(dx, dy) > CLEAR_M && dx * Math.cos(vehicle.psi) + dy * Math.sin(vehicle.psi) < 0;
+    return Math.hypot(dx, dy) > this.clearM(junction) && dx * Math.cos(vehicle.psi) + dy * Math.sin(vehicle.psi) < 0;
+  }
+
+  // How far past the centre a vehicle's reference point (its rear axle) is clear of the junction.
+  clearM(junction) {
+    const inter = this.map.nodes.has(junction) ? null : this.map.intersections?.get(junction);
+    if (!inter) return CLEAR_M;
+    this.clears ||= new Map();
+    if (!this.clears.has(junction)) {
+      const spread = Math.max(0, ...(inter.vertices || []).map((id) => { const n = this.map.nodes.get(id); return n ? Math.hypot(n.x - inter.x, n.y - inter.y) : 0; }));
+      this.clears.set(junction, Math.max(CLEAR_M, ...inter.approaches.map((a) => spread + this.map.crossingHalfWidth(a.edge) + CLEAR_PAST_M)));
+    }
+    return this.clears.get(junction);
   }
 
   // Whether `b` goes before `a`.

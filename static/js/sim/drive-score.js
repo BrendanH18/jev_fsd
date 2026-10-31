@@ -26,6 +26,8 @@ export class DriveScore {
     // (through a work zone, sim/work-zone.js: too fast, the zones that was counted for, and going past
     // a flagger's STOP paddle, which the audit counts as a missed stop)
     this.workZoneSpeeding = 0; this.workZoneCounted = new Set(); this.flaggerStops = 0;
+    // (a missed stop, or going out of turn, at a signal whose lights are out: sim/outage.js)
+    this.darkSignals = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -97,7 +99,10 @@ export class DriveScore {
       if (!speeding) this.speeding += dt;
       if (!this.workZoneCounted.has(zonePass.zone.id)) { this.workZoneCounted.add(zonePass.zone.id); this.incident("work_zone_speeding", "Too fast through a work zone", { zone: zonePass.zone.id }); }
     }
-    for (const ev of world.events || []) if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
+    for (const ev of world.events || []) {
+      if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
+      if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
+    }
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
     if (Math.abs(ego.latAccel || 0) > 3.0) this.cornering += dt;
@@ -188,6 +193,7 @@ export class DriveScore {
     if (this.zoneSpeeding > 1) tips.push("Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.");
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
     if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
+    if (this.darkSignals) tips.push("Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.");
     if (this.flaggerStops) tips.push("At a work zone, stop for the flagger’s STOP paddle and wait for it to turn to SLOW. Traffic coming the other way has the one lane until then.");
     if (this.workZoneSpeeding > 0.5) tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");

@@ -350,7 +350,8 @@ export class Crowd {
     if (cross.jaywalk) return this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.marked) return this.canStopFor(cross);
     const info = this.legsAt.get(cross.node);
-    if (info.inter && cross.leg.group) {
+    // (with a signal's lights out, its walk signals are out too: cross on a gap, as where there is none)
+    if (info.inter && cross.leg.group && !this.world.outages?.isDark(info.inter.id)) {
       // walk with the parallel traffic, and only step off on the walk signal
       return pedPhase(info.inter, cross.leg.group === "A" ? "B" : "A", t) === "walk";
     }
@@ -434,7 +435,7 @@ export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
     const c = wp?.cross;
     if (!c || c.jaywalk || dist([ped.x, ped.y], c.from) > KERB_M) continue;
     const info = crowd.legsAt.get(c.node);
-    if (!info?.inter || !c.leg?.group) continue;
+    if (!info?.inter || !c.leg?.group || crowd.world?.outages?.isDark(info.inter.id)) continue;
     const group = c.leg.group === "A" ? "B" : "A";
     if (pedPhase(info.inter, group, t) !== "walk" && pedPhase(info.inter, group, t + within) !== "walk") continue;
     if (segmentCrossing(pts, cum, sFrom, sTo, c.from, c.to)) return ped;
