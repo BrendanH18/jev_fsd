@@ -56,6 +56,7 @@ const FAR_M = 50;                   // someone this near the junction ahead may 
 const STANDING_MPS = 0.5;
 const SIGHT_SLACK_M = 10;          // (the car's eyes are behind its front: see as far as it ever does, less this)
 const ON_STREET_M = 1;              // on the street: within this of its asphalt
+const END_REACH_M = 6;              // or up to this far past its far end
 const SAME_WAY = Math.PI / 4;
 const HELD_M = 4;                   // parked cars along the way round, and this far beyond it, stay put while it stands there
 // Free drive: how many stand at once, where they turn up, for how long, and how far away the car
@@ -111,21 +112,24 @@ function at(e, s, lat) {
 
 // Vehicle `n` on the street of edge `e`: { s (its reference point along `e`), lateral (right of the
 // centre line), same (heading the way of `e`), opposite (heading against it) }, or null when it is
-// not on the street.
+// not on the street. (One just past its far end, coming into it from the junction there, is on it,
+// at its end.)
 function onStreet(e, n) {
   const p = projectPoint(e.pts, e.cum, [n.x, n.y], null);
-  if (!p || p.s < 0.5 || p.s > e.length - 0.5 || p.lateral < e.asphalt[0] - ON_STREET_M || p.lateral > e.asphalt[1] + ON_STREET_M) return null;
+  if (!p || p.s < 0.5 || p.distance > Math.abs(p.lateral) + END_REACH_M || p.lateral < e.asphalt[0] - ON_STREET_M || p.lateral > e.asphalt[1] + ON_STREET_M) return null;
   const d = wrap(n.psi - p.heading);
   return { s: p.s, lateral: p.lateral, same: Math.abs(d) < SAME_WAY, opposite: Math.abs(d) > Math.PI - SAME_WAY };
 }
 
 // How long a driver at `v` takes to cover `d` metres going round, pulling away at PASS_ACCEL up to
-// PASS_MPS (or slowing to it).
-export function passTime(d, v) {
+// PASS_MPS (or slowing to it). `driver` ({ accel, react, vmax }), for traffic: as that driver pulls
+// away, no faster than that, after its reaction time if it is standing still, up to its own speed.
+export function passTime(d, v, driver = null) {
   if (d <= 0) return 0;
-  const v0 = Math.min(Math.max(0, v), PASS_MPS), da = (PASS_MPS * PASS_MPS - v0 * v0) / (2 * PASS_ACCEL);
-  if (d <= da) return (Math.sqrt(v0 * v0 + 2 * PASS_ACCEL * d) - v0) / PASS_ACCEL;
-  return (PASS_MPS - v0) / PASS_ACCEL + (d - da) / PASS_MPS;
+  const a = Math.min(PASS_ACCEL, driver?.accel ?? PASS_ACCEL), vm = Math.min(PASS_MPS, driver?.vmax ?? PASS_MPS), wait = v < 0.3 ? driver?.react ?? 0 : 0;
+  const v0 = Math.min(Math.max(0, v), vm), da = (vm * vm - v0 * v0) / (2 * a);
+  if (d <= da) return wait + (Math.sqrt(v0 * v0 + 2 * a * d) - v0) / a;
+  return wait + (vm - v0) / a + (d - da) / vm;
 }
 
 // When vehicle `n`'s front, coming the other way, reaches the end of the way round van `d` (seconds;
@@ -160,9 +164,9 @@ function arrival(map, d, n) {
 // it can see the oncoming lane `s` along the street; it need not see further than DAYLIGHT_RANGE_M
 // past its front, less SIGHT_SLACK_M): { clear, need_s (until its front is at the end of the way
 // round), oncoming: { vehicle, eta_s } (the first one coming that leaves too little time),
-// sees_far_enough }.
-export function wayRound(world, d, frontS, v, others, sight = null) {
-  const map = world.map, e = map.edges.get(d.edge), need = passTime(d.detour.to - frontS, v), by = need + MARGIN_S;
+// sees_far_enough }. `driver`: as for passTime.
+export function wayRound(world, d, frontS, v, others, sight = null, driver = null) {
+  const map = world.map, e = map.edges.get(d.edge), need = passTime(d.detour.to - frontS, v, driver), by = need + MARGIN_S;
   let first = null;
   for (const n of others) {
     if (n.parked || isVan(n) || n.rail || n.kind === "pedestrian" || n.kind === "door") continue;

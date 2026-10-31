@@ -1430,8 +1430,10 @@ export class NpcFleet {
         let go = n.vanGo === d.id;
         // (not from closer than where it would wait: too close to pull out round it, it waits for it to go)
         if (!go && at(d.rear) - front < DECIDE_M && front < at(d.wait) + WAIT_SLACK_M) {
-          const sFront = (front - e.sStart) / k, extra = Math.max(0, n.spec.length - CAR.length);
-          if (!queuedAhead(this.world, d, sFront, n, all) && wayRound(this.world, d, sFront - extra, n.v, all.filter((o) => o !== n)).clear) {
+          // (as this driver pulls away: its own acceleration, reaction and speed)
+          const sFront = (front - e.sStart) / k, extra = Math.max(0, n.spec.length - CAR.length), D = n.driver || IDM;
+          const self = { accel: D.aMax, react: D.react || 0, vmax: n.v0 * weather.speed };
+          if (!queuedAhead(this.world, d, sFront, n, all) && wayRound(this.world, d, sFront - extra, n.v, all.filter((o) => o !== n), null, self).clear) {
             go = true;
             // (committed once its pursuit point is past where the way round starts)
             if (path.s + lookahead(n.v) > detour.from + 2) n.vanGo = d.id;

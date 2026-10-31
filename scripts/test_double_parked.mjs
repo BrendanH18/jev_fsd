@@ -188,6 +188,25 @@ await test("traffic waits a car length back while cars come the other way, then 
   assert.equal([...hits].filter((k) => !k.split("|").every((id) => id.startsWith("parked"))).length, 0, `no contacts: ${[...hits]}`);
 });
 
+await test("a slow driver, slow to move off, waits for a gap it can use: the way round allows for its own pulling away", () => {
+  const { world, van } = brunswick();
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 });
+  drive(world, { back: 100 });
+  const slow = npc(world, fleet, { back: WAIT_M + 2, v: 0, id: "slow" });
+  Object.assign(slow.driver, { aMax: 0.7, react: 1.3 });
+  const onc = npc(world, fleet, { past: 80, v: 6, id: "onc" });
+  onc.v0 = 6;
+  const hits = new Set();
+  let went = false;
+  for (let i = 0; i < 60 * 30; i++) {
+    step({ world, fleet, autopilot: idle });
+    if (lateralOn(slow) < 0) went = true;
+    contacts([slow, onc, van.van], hits);
+  }
+  assert.equal(hits.size, 0, `no contacts: ${[...hits]}`);
+  assert.ok(went && frontOn(slow) > van.front, "and it goes round once the oncoming car is by");
+});
+
 await test("a driver too close behind the van to pull out round it waits for it to leave", () => {
   const { world, van } = brunswick();
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 });
