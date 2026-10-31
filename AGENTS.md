@@ -64,3 +64,11 @@ Headless (macOS): `swift scripts/shot.swift URL OUT.png [wait] [post_js] [pre_js
 
 - Ask before adding any dependency, tool or service.
 - New maps are Canadian cities. LLM drivers use a generic OpenAI-compatible endpoint. A Claude brain is deferred; keep the brain interface open for it.
+
+## Context maintenance
+
+- Keep project rules and durable project knowledge in tracked `AGENTS.md` and
+  repository docs; do not store them in agent auto-memory or machine-local notes.
+- `CLAUDE.md` contains only `@AGENTS.md`. Shared hooks, scripts and settings
+  belong in tracked files. Do not ignore instruction files or shared settings;
+  ignore only machine-local settings and agent worktrees.
