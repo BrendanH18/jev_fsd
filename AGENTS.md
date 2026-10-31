@@ -56,6 +56,9 @@ Headless (macOS): `swift scripts/shot.swift URL OUT.png [wait] [post_js] [pre_js
 - In Node tests, never pass sim objects (World, Route, MapData, vehicles) to `assert`; assert on primitives such as ids, counts and booleans. A failing assert on one makes Node print the whole object graph, which has used 70–200 GB of memory on a 16 GB Mac, and `--max-old-space-size` does not stop it. Run heavy checks one at a time; the full Playwright suites run in CI.
 - Node test scripts that build an `Autopilot` never exit on their own; end them with `process.exit(0)`. Run `scripts/test_*.mjs` with Node 22, as CI does; Node 24 rejects `--experimental-default-type`.
 - `window.__bench.run` saves to `data/runs/` unless you pass `save: false`. For before/after benchmarks, check that the before tree really matches its commit (`diff -r` against a fresh `git archive`) and that its results reproduce the previous record; WebKit can expose timing bugs V8 misses.
+- Saved arena runs are close to the 9 MB `MAX_HISTORY_BYTES` cap in `static/js/lab/history.js` (about 91% with 23 challenges, 2026-10-31), so only about two more challenges fit at today's run size. Make new challenges' runs smaller.
+- After changing candidates or sensing, rerun `scripts/build_jev_fixtures.mjs --check` (see `docs/project-reference.md`).
+- Keep benchmark worktrees out of `/tmp`.
 
 ## Decisions
 
