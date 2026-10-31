@@ -7,9 +7,11 @@
 // the streets, and everyone stops short of a level crossing for one coming, and never on the tracks
 // (sim/rail.js). Nobody enters a signalled junction without room past it (sim/junction-box.js). At a
 // work zone everyone stops for the flagger's STOP paddle, keeps to 30 km/h, and the direction whose
-// lane is closed goes round the work through the other lane (sim/work-zone.js).
+// lane is closed goes round the work through the other lane (sim/work-zone.js). Behind a van
+// double-parked in its lane a driver waits until the oncoming lane is clear, then goes round it through
+// that lane (sim/double-parked.js).
 
-import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, comfort } from "./vehicle.js";
+import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
@@ -30,9 +32,13 @@ import { DEPART_S, DOORS_DELAY_S, DWELL_MAX_S, DWELL_S, RIDER_EVERY_S, RIDERS_OF
 import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex, stepTrain, trainState } from "./rail.js";
 import { boxHold } from "./junction-box.js";
 import { WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, marksOn, paddle, stopKey } from "./work-zone.js";
+import { DECIDE_M, PASS_DECEL, PASS_MPS, VAN_LOOK_M, queuedAhead, wayRound } from "./double-parked.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
+// Behind a double-parked van, a driver more than this past where it would wait is too close to pull out
+// round it (sim/double-parked.js).
+const WAIT_SLACK_M = 1.5;
 const UNSIGNED_NEAR_M = 15;
 // A driver too close to its line to stop there when the lights at its signal go out (within
 // DARK_CAUGHT_S of it) goes on through, for DARK_GO_S.
@@ -292,6 +298,14 @@ function curveSpeed(path, s) {
   return best;
 }
 
+// The speed a driver keeps to going round a double-parked van (sim/double-parked.js): PASS_MPS from
+// where it would wait behind it until it is back in its lane past it, and short of that, the speed
+// from which it slows to that by then braking at PASS_DECEL.
+function vanLimit(dp, front) {
+  if (front > dp.to + 2) return Infinity;
+  return Math.sqrt(PASS_MPS * PASS_MPS + 2 * PASS_DECEL * Math.max(0, dp.wait - front));
+}
+
 // The speed a driver keeps to at a work zone (sim/work-zone.js): its limit from 5 m short of the stop
 // line to the end of the one-lane section, and short of that, the speed from which it slows to that
 // by then braking at WZ_DECEL.
@@ -405,7 +419,7 @@ export class NpcFleet {
       let pick = this.school() * total, lane = lanes[0];
       for (const l of lanes) { pick -= l.length; if (pick <= 0) { lane = l; break; } }
       const s = 5 + this.school() * (lane.length - 10), p = pointAt(lane.pts, lane.cum, s), d = Math.hypot(p[0] - ego.x, p[1] - ego.y);
-      if (d < away[0] || d > away[1] || this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SCHOOL_BUS.length + 6) || this.world.workZones?.covers(p[0], p[1])) continue;
+      if (d < away[0] || d > away[1] || this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SCHOOL_BUS.length + 6) || this.world.workZones?.covers(p[0], p[1]) || this.world.doubleParked?.covers(p[0], p[1])) continue;
       // (partway to its next stop already)
       const bus = this.addSchoolBus(lane, s, Math.min(8, lane.edgeRef.limit * 0.6));
       bus.school.odo = this.school() * bus.school.every;
@@ -569,6 +583,7 @@ export class NpcFleet {
     if (this.streetcars.length || this.streetcarTarget) this.manageBuses(true);
     if (this.schoolBuses.length || this.schoolTarget) this.manageSchoolBuses();
     if (this.trains.length || this.trainTarget) this.manageTrains();
+    if (world.doubleParked?.vans.length) this.driveOffVans();
     const all = [world.ego, ...this.vehicles];
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
@@ -652,7 +667,12 @@ export class NpcFleet {
       // detour will be at its pursuit point
       const wz = this.workZoneAhead(n, path, front);
       const wzShift = wz?.detour ? detourAt(wz.detour, path.s + lookahead(n.v)) : 0;
-      let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.transit ? n.transit.shift : 0) + (n.nudge || 0) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) + wzShift;
+      // a van double-parked in its lane ahead: wait behind it, and round it through the oncoming
+      // lane once the way is clear (a cyclist riding the empty parking lane goes by it on the right)
+      const dp = world.doubleParked?.vans.length && !(n.kind === "bike" && n.side > 1.2) ? this.vanAhead(n, path, front, all) : null;
+      if (!dp && n.vanGo) n.vanGo = null;
+      const dpShift = dp?.go ? detourAt(dp.detour, path.s + lookahead(n.v)) : 0;
+      let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.transit ? n.transit.shift : 0) + (n.nudge || 0) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) + wzShift + dpShift;
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -670,6 +690,8 @@ export class NpcFleet {
         if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
         // (going round a work zone's closed stretch, not up to it)
         if (wz?.detour && o === wz.zone.closure) continue;
+        // (nor round a double-parked van)
+        if (dp?.go && o === dp.van) continue;
         const os = o.spec || CAR, reach = (spec.width + os.width) / 2 + LEADER_MARGIN_M;
         // in the way on the current lane, or on the target lane of a lane change: closer to the
         // path than the two half-widths plus a margin
@@ -677,7 +699,9 @@ export class NpcFleet {
         // round a work zone, the line it will keep to where `o` is)
         const inWay = (lat, at) => {
           if (wz?.detour) lat -= detourAt(wz.detour, at) - wzShift;
-          return Math.abs(lat - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0)) <= reach;
+          // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
+          const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
+          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0)) <= reach;
         };
         const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
         if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral, p.s)) {
@@ -836,10 +860,13 @@ export class NpcFleet {
       // (sim/work-zone.js)
       const forFlagger = wz ? this.flaggerHold(n, wz, front) : null;
       if (forFlagger !== null && forFlagger < gap) { gap = Math.max(0.05, forFlagger); leadV = 0; }
+      // behind a double-parked van while the way round is not clear: where it waits, back far enough
+      // to pull out round it (sim/double-parked.js)
+      if (dp && !dp.go && dp.wait - front > -1 && dp.wait - front < gap) { gap = Math.max(0.05, dp.wait - front); leadV = 0; }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
-      const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit), wz ? workZoneLimit(wz, front) : Infinity);
+      const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit), wz ? workZoneLimit(wz, front) : Infinity, dp ? vanLimit(dp, front) : Infinity);
       const v0 = Math.min(n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
       const D = n.driver || IDM;
       let a;
@@ -1382,6 +1409,59 @@ export class NpcFleet {
         detour: d ? { from: at(d.from), full: at(d.full), back: at(d.back), to: at(d.to), shift: d.shift } : null };
     }
     return null;
+  }
+
+  // A van double-parked in the driver's lane ahead on its path, within VAN_LOOK_M (sim/double-parked.js),
+  // with its marks along the path: { van, d (its record), go (going round it now), detour, wait (where
+  // the front waits), to (the end of the way round) }, or null once past it. The driver goes round once
+  // its front is within DECIDE_M of the van, nobody waits ahead of it and the way is clear (a long
+  // vehicle needs the time its extra length takes too), and once it has started across it carries on
+  // round (`vanGo`). One whose front is more than WAIT_SLACK_M past where it would wait is too close to
+  // pull out round it, and waits for it to leave.
+  vanAhead(n, path, front, all) {
+    const vans = this.world.doubleParked;
+    for (const e of path.edges) {
+      if (e.sEnd < path.s) continue;
+      if (e.sStart - front > VAN_LOOK_M) break;
+      for (const d of vans.on(e.id)) {
+        const k = (e.sEnd - e.sStart) / Math.max(1, this.map.edges.get(e.id).length), at = (s) => e.sStart + s * k;
+        if (front > at(d.detour.to) || at(d.rear) - front > VAN_LOOK_M) continue;
+        const detour = { from: at(d.detour.from), full: at(d.detour.full), back: at(d.detour.back), to: at(d.detour.to), shift: d.detour.shift };
+        let go = n.vanGo === d.id;
+        // (not from closer than where it would wait: too close to pull out round it, it waits for it to go)
+        if (!go && at(d.rear) - front < DECIDE_M && front < at(d.wait) + WAIT_SLACK_M) {
+          // (as this driver pulls away: its own acceleration, reaction and speed)
+          const sFront = (front - e.sStart) / k, extra = Math.max(0, n.spec.length - CAR.length), D = n.driver || IDM;
+          const self = { accel: D.aMax, react: D.react || 0, vmax: n.v0 * weather.speed };
+          if (!queuedAhead(this.world, d, sFront, n, all) && wayRound(this.world, d, sFront - extra, n.v, all.filter((o) => o !== n), null, self).clear) {
+            go = true;
+            // (committed once its pursuit point is past where the way round starts)
+            if (path.s + lookahead(n.v) > detour.from + 2) n.vanGo = d.id;
+          }
+        }
+        return { van: d.van, d, go, detour, wait: at(d.wait), to: detour.to };
+      }
+    }
+    return null;
+  }
+
+  // Vans whose drivers are back and that the car can see (sim/double-parked.js `leaving`): switch the
+  // hazards off and drive away as traffic, from where they stand.
+  driveOffVans() {
+    const vans = this.world.doubleParked;
+    for (const d of vans.vans.filter((x) => x.leaving)) {
+      const old = d.van, lane = this.map.lane(d.edge, 0);
+      vans.retire(d);
+      if (!lane) continue;
+      const s = projectPoint(lane.pts, lane.cum, [old.x, old.y], null).s;
+      const v = new Vehicle(old.x, old.y, old.psi, 0, DELIVERY_VAN);
+      Object.assign(v, { id: `${old.id}_away`, kind: "delivery_van", color: old.color, v0: lane.edgeRef.limit * 0.9,
+        driver: { aMax: 1.2, b: 2, s0: 2.5, T: 1.4, react: 1.0, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
+      // (its own stream for the turns it takes, so the rest of the traffic is as it was)
+      v.path = new NpcPath(this.map, rng(7919 * (Number(d.id.slice(4)) || 1) + 11));
+      v.path.start(d.edge, 0, s);
+      this.vehicles.push(v);
+    }
   }
 
   // Where a driver stops for a work zone's flagger showing STOP, as metres from its front, or null:

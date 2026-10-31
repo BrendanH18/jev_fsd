@@ -82,7 +82,7 @@ export class DriveRecorder {
       for (const field of Object.keys(object)) if (!(field in state[key])) delete object[field];
       Object.assign(object, state[key]);
     }
-    target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.outages.world = target.world;
+    target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world;
     target.world.npcs = target.fleet.vehicles;
     Object.assign(target.autopilot, callbacks, { world: target.world, inFlight: null, firing: null, rerouting: false, epoch: epoch + 1 });
     target.world.paused = true;
