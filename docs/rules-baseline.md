@@ -1,4 +1,21 @@
-# Rules benchmark baseline — 2026-10-30b (advance greens and left arrows)
+# Rules benchmark baseline — 2026-10-30c (work zones with a flagger, unchanged)
+
+Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
+`58516cf` route for route, in every result field but wall-clock time and decision latency, with no
+collisions, red-light or stop-sign violations, failures to yield or deadlock overrides, and 23 safety
+brakes on both sides. "After" is this branch, which adds work zones with a flagger (in free drives
+only), stopping for the flagger's STOP paddle, going round the work through the other lane, and the
+"Follow the flagger" challenge. The seeded benchmark's world has no work zones, and without them
+traffic, the car and the audit behave as before.
+
+## Method
+
+As for 2026-10-30b below: all 15 seeded suites, Rules, suite seed 1, 40 traffic cars, lockstep, V8
+through `scripts/bench_node.mjs` with Node `v22.23.4` on a Raspberry Pi (Linux 6.18, arm64), main and
+the branch side by side, each from its own frozen copy against its own `uv run --locked server.py`,
+compared field by field.
+
+## Earlier record: 2026-10-30b (advance greens and left arrows)
 
 Rules passes **70 of 70 routes in V8, as on main** at `9de8480`, with no collisions, red-light or
 stop-sign violations, failures to yield or deadlock overrides on either side, and 23 safety brakes
