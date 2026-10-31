@@ -112,6 +112,7 @@ export const POLICE_CAR = { ...CAR, kind: "police" };
 // to a door (sim/double-parked.js), and driving off as traffic once they are back.
 export const DELIVERY_VAN = {
   ...CAR, kind: "delivery_van", wheelbase: 3.66, length: 5.95, width: 2.05, rearOverhang: 1.25, mass: 3200, cgHeight: 0.85, track: 1.72, maxSpeed: 30, power: 105000, cdA: 1.3,
+  yawInertia: 7500, cgToFront: 1.65,   // (an empty cargo van, a little over half its weight on the front axle)
 };
 
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.

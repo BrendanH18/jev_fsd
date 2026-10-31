@@ -41,8 +41,13 @@ export function createVanMesh(vehicle) {
     screen,                                                                                                   // the cab's front, raked back
     box(xf - screenFoot, hoodTop - sill - 0.1, w - 0.12, (screenFoot + xf) / 2, sill + 0.05 + (hoodTop - sill - 0.1) / 2, 0),   // hood
   ]), paint, true, "bodywork");
+  // (the windscreen lies on the raked front, a few millimetres proud of it)
+  const glass = new THREE.BoxGeometry(0.03, roof - hoodTop - 0.3, w - 0.34).translate(0, hoodTop + 0.1 + (roof - hoodTop - 0.3) / 2, 0), gp = glass.attributes.position;
+  const raked = (y) => screenFoot + 0.57 - (0.77 * (y - hoodTop)) / (roof - hoodTop);
+  for (let i = 0; i < gp.count; i++) gp.setX(i, raked(gp.getY(i)) + (gp.getX(i) > 0 ? 0.03 : 0.005));
+  glass.computeVertexNormals();
   add(merge([
-    box(0.06, 0.78, w - 0.34, screenFoot - 0.06, hoodTop + 0.48, 0),                                         // windscreen
+    glass,                                                                                                    // windscreen
     ...[-1, 1].map((side) => box(cabRear - (screenFoot - 0.45) + 0.6, 0.58, 0.02, cabRear + 0.32, 1.62, side * (w / 2 + 0.005))),   // cab side windows
   ]), shared.glass, false, "windows");
   add(merge([

@@ -15,10 +15,12 @@ export class PerceptionView {
     this.group.add(this.bounds);
   }
   setEnabled(on) { this.group.visible = on; this.last = -Infinity; }
-  update(world, now, decision) {
+  // `executing`: the manoeuvre the car is carrying out, so the snapshot sees it as the brain does
+  // (going round a double-parked van, say)
+  update(world, now, decision, executing = null) {
     if (!this.group.visible || now - this.last < 250) return null;
     this.last = now;
-    const snap = buildSnapshot(world), ego = world.ego, rays = [], rayColors = [], boxes = [], boxColors = [];
+    const snap = buildSnapshot(world, executing), ego = world.ego, rays = [], rayColors = [], boxes = [], boxColors = [];
     const add = (target, colors, from, to, color) => { target.push(from[0], 0.14, -from[1], to[0], 0.14, -to[1]); colors.push(...color, ...color); };
     for (let i = 0; i < 64; i++) {
       const angle = ego.psi + i / 64 * Math.PI * 2;
