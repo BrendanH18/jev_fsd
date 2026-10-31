@@ -27,8 +27,6 @@ data/maps/*.osm.xml
 .DS_Store
 .demo-site/
 
-# Claude Code local settings
-.claude/
-
-# Claude Code project notes (local only)
-CLAUDE.md
+# Claude Code machine-local files
+.claude/settings.local.json
+.claude/worktrees/
