@@ -21,6 +21,7 @@ import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
 import { ROADSIDE_COUNT, ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
 import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
 import { WORK_ZONE_COUNT, workZoneNotice } from "./sim/work-zone.js";
+import { OUTAGE_COUNT, outageNotice } from "./sim/outage.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -148,7 +149,9 @@ export async function boot() {
     const roadside = params.get("roadside") !== "0" ? ROADSIDE_COUNT : 0;
     // and work zones with a flagger at each end (`?workzones=0` takes them off)
     const workZones = params.get("workzones") !== "0" ? WORK_ZONE_COUNT : 0;
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones });
+    // and power cuts that turn a signal's lights off for a while (`?outages=0` turns them off)
+    const outages = params.get("outages") !== "0" ? OUTAGE_COUNT : 0;
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -610,7 +613,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -644,7 +647,7 @@ export async function boot() {
           recorder.mark(world.t, ev.type);
           if (ev.type === "collision") { hud.flash(); hud.badge(`COLLISION · ${(ev.kind || "object").replace(/_/g, " ").toUpperCase()}`, "alert", 1500); }
           else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "alert", 1500);
-          else if (ev.type === "stop_sign") hud.badge(ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : "RAN A STOP SIGN", "alert", 1500);
+          else if (ev.type === "stop_sign") hud.badge(ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : ev.dark ? "NO STOP AT A DARK SIGNAL" : "RAN A STOP SIGN", "alert", 1500);
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
@@ -671,9 +674,11 @@ export async function boot() {
     const renderEgo = replayNext ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
       : Number.isFinite(previousEgo.x) ? interpolatePose(world.ego, previousEgo, alpha) : world.ego;
     for (const inter of map.intersections.values()) {
-      // (with an advance green, each approach shows its own lights)
-      roads.signals.set(inter.id, inter.plan?.advance ? Object.fromEntries(inter.approaches.map((a) => [`@${a.edge}`, approachPhase(inter, a.edge, world.t)])) : world.phase(inter.id), world.t);
-      roads.signals.setPed(inter.id, { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) }, world.t);
+      // (with an advance green, each approach shows its own lights; with the power out, none do)
+      const dark = world.outages.isDark(inter.id);
+      roads.signals.set(inter.id, inter.plan?.advance ? Object.fromEntries(inter.approaches.map((a) => [`@${a.edge}`, dark ? "dark" : approachPhase(inter, a.edge, world.t)]))
+        : dark ? { A: "dark", B: "dark" } : world.phase(inter.id), world.t);
+      roads.signals.setPed(inter.id, dark ? { A: "dark", B: "dark" } : { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) }, world.t);
     }
     syncFleetMeshes();
     if (manualSignal && !autopilot.enabled) {
@@ -733,6 +738,10 @@ export async function boot() {
     const workZone = workZoneNotice(world);
     if (workZone && workZone.key !== announcedWorkZone) { announcedWorkZone = workZone.key; hud.badge(workZone.text, workZone.stop ? "safety" : "", 2500); }
     if (!workZone) announcedWorkZone = null;
+    // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
+    const outage = outageNotice(world);
+    if (outage && outage.key !== announcedOutage) { announcedOutage = outage.key; hud.badge(outage.text, outage.stop ? "safety" : "stop", 2500); }
+    if (!outage) announcedOutage = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once

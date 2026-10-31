@@ -22,7 +22,8 @@ backs up past them, gives big junctions advance greens (a flashing green in Onta
 green left arrow everywhere else), sends
 school buses round to let children off, signs 30 km/h zones past schools and playgrounds, closes a lane
 for a road crew now and then, with a flagger at each end taking turns to wave each direction through
-the one lane left, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. Then
+the one lane left, cuts the power to a signal now and then, so everyone takes turns at its dark lights as
+at an all-way stop, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. Then
 it lets you drive them yourself, or watch an AI driver do it. Every decision the AI makes is
 recorded. You can pause the drive, scrub back to the moment a car door swung open, and see what the
 driver could see, what it considered, and why it rejected each alternative.
@@ -60,7 +61,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Twenty-two hand-built scenarios test the situations real drivers get wrong:
+Twenty-three hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -86,6 +87,7 @@ Twenty-two hand-built scenarios test the situations real drivers get wrong:
 | **Keep the box clear** | Montréal, afternoon | Avenue du Mont-Royal Est meets Rue Saint-Denis at a green light, but traffic is backed up from Rue Rivard to just past the junction: even on a green, wait at the line until there is room for all of your car beyond it |
 | **Not your arrow** | Winnipeg, afternoon | Going straight on Isabel Street at a red light, as a green left arrow comes on for the cars waiting to turn beside you: the arrow is for them, so wait for your own green |
 | **Follow the flagger** | Ottawa, afternoon | A road crew has closed your lane on Queen Street, and the flagger at your end shows STOP while cars come the other way through the one lane left: wait at the line until the paddle turns to SLOW, then go round the work at 30 km/h |
+| **Lights out** | Halifax, afternoon | A storm has knocked out the power, and the lights where Barrington Street meets Morris Street are dark: treat the junction as an all-way stop, and let the car from the right and an oncoming left turn, both there first, go before you |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign
@@ -272,6 +274,7 @@ node scripts/test_level_crossings.mjs           # level crossings: stopping for 
 node scripts/test_junction_box.mjs              # keeping a signal's junction clear: waiting at the line for room past it
 node scripts/test_advance_green.mjs             # advance greens and left arrows: phases, who goes, sensing, the audit
 node scripts/test_work_zones.mjs                # work zones with a flagger: the paddles' turns, traffic, the detour, the audit
+node scripts/test_outages.mjs                   # power cuts: dark signals as all-way stops, traffic, sensing, the audit
 python3 scripts/build_demo.py                   # build the static GitHub Pages demo
 ```
 

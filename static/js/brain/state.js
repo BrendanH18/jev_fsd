@@ -77,6 +77,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       control: i.control, ...(i.signal ? { signal: i.signal } : {}),
       bumper_to_line_m: r1(i.bumper_to_line_m), distance: distLabel(i.bumper_to_line_m), entered: i.entered,
       ...(i.control === "stop" ? { stop_completed: i.stop_completed, all_way: i.all_way } : {}),
+      ...(i.dark ? { lights_out: true } : {}),
       ...(i.control === "yield" ? { roundabout: true, ring_traffic: i.cross_traffic_moving } : { cross_traffic_moving: i.cross_traffic_moving }),
     };
     if (i.control === "uncontrolled") state.intersection.right_of_way = RIGHT_OF_WAY[i.rule];
@@ -214,6 +215,7 @@ export function situationClauses(snap) {
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
+    if (i.dark) out.push(`The traffic lights at the junction ${i.entered ? "the car is in" : `${m} m ahead`} are out: treat it as an all-way stop. Every driver stops at the line, then goes in turn.`);
     if (!i.stop_completed) {
       if (!p) out.push(atLine ? "The car is at the stop line and the stop is not completed yet: hold still until it is." : `A stop sign is ${m} m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear.`);
       else {

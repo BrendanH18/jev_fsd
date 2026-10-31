@@ -13,6 +13,7 @@ import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, com
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
+import { controlAt } from "./outage.js";
 import { rng } from "../common.js";
 import { wrap } from "./world.js";
 import { obbOverlap } from "./collision.js";
@@ -33,6 +34,9 @@ import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STO
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
 const UNSIGNED_NEAR_M = 15;
+// A driver too close to its line to stop there when the lights at its signal go out (within
+// DARK_CAUGHT_S of it) goes on through, for DARK_GO_S.
+const DARK_CAUGHT_S = 0.5, DARK_GO_S = 10;
 
 // Seeded per-driver IDM and lane-change temperament so adding NPCs does not shift spawn points.
 function driverProfile(random, bike = false) {
@@ -718,29 +722,35 @@ export class NpcFleet {
       let stopAt = null;
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
-        const lineS = e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
+        // (a signal whose lights are out is an all-way stop: sim/outage.js)
+        const ctl = controlAt(world, e.control, e.id);
+        const lineS = e.sStart + (ctl.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
         const bumperToLine = lineS - front;
         if (bumperToLine < -1) continue;
         if (bumperToLine > 70) break;
-        if (e.control.type === "signal") {
+        if (ctl.type === "signal") {
           // (the light for the way it goes: under a left arrow, only a left turn has a green)
           const after = path.edges[path.edges.indexOf(e) + 1];
           const st = movementSignal(approachPhase(this.map.intersections.get(e.control.id), e.id, world.t), after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight");
           const canStop = bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
           else if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
-        } else if (e.control.type === "yield") {
+        } else if (ctl.type === "yield") {
           // roundabout entry: wait at the line while someone in the ring would arrive first
-          if (bumperToLine < 12 && ringBusy(this.map.roundabouts.get(e.control.roundabout), this.map.nodes.get(e.to), all, n)) stopAt = bumperToLine;
+          if (bumperToLine < 12 && ringBusy(this.map.roundabouts.get(ctl.roundabout), this.map.nodes.get(e.to), all, n)) stopAt = bumperToLine;
         } else {
-          const state = n.stopMem.update(e.control, bumperToLine, n.v, dt);
+          const state = n.stopMem.update(ctl, bumperToLine, n.v, dt);
           const next = path.edges[path.edges.indexOf(e) + 1];
-          if (e.control.all_way) world.allWay.note(n, e.control, e.id, next ? this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) : "straight", bumperToLine, n.v, world);
+          // (a signal's lights going out with the driver too close to its line to stop there: it
+          // goes on through, as on a yellow)
+          if (ctl.dark && state === "approaching" && world.t - world.outages.since(ctl.junction) < DARK_CAUGHT_S && bumperToLine < n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1) n.darkGo = { edge: e.id, t: world.t };
+          if (ctl.dark && n.darkGo?.edge === e.id && world.t - n.darkGo.t < DARK_GO_S) break;
+          if (ctl.all_way) world.allWay.note(n, ctl, e.id, next ? this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) : "straight", bumperToLine, n.v, world);
           if (state !== "completed") stopAt = bumperToLine;
           // stopped: go when the junction is clear and, at a two-way stop, when nothing on the
           // through road would get there first; at an all-way stop, when it is its turn, and nothing
           // coming in on a street without a sign there (which does not stop) would get there first
-          else if (this.boxBusy(n, e) || (e.control.all_way ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id) : this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
+          else if (this.boxBusy(n, e) || (ctl.all_way ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id) : this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
         }
         break;
       }
@@ -787,7 +797,7 @@ export class NpcFleet {
         }
       }
       // intersection box rule for signals too: don't enter while a crossing car is inside
-      if (stopAt === null && edge.control && edge.control.type === "signal") {
+      if (stopAt === null && edge.control && controlAt(world, edge.control, edge.id).type === "signal") {
         const lineS = edge.sStart + (edge.control.s_line / Math.max(1, this.map.edges.get(edge.id).length)) * (edge.sEnd - edge.sStart);
         const b = lineS - front;
         if (b > -1 && b < 6 && this.boxBusy(n, edge)) { gap = Math.min(gap, Math.max(0.05, b)); leadV = 0; }
@@ -969,7 +979,7 @@ export class NpcFleet {
       if (toNode > 60) break;
       const half = map.crossingHalfWidth(c.id);
       if (toNode < -half - 3) continue;
-      const control = c.control;
+      const control = controlAt(world, c.control, c.id);
       const lineS = control ? c.sStart + (control.s_line / Math.max(1, map.edges.get(c.id).length)) * (c.sEnd - c.sStart) : c.sEnd - half;
       const toLine = lineS - front;
       if (!control && !junctionAt(map, c.to)) continue;
@@ -1851,7 +1861,7 @@ export class NpcFleet {
       if (o === n || o.v < 0.5 || Math.abs(wrap(o.psi - n.psi)) < Math.PI / 6) continue;
       if (Math.abs(node.x - o.x) > UNSIGNED_NEAR_M + 5 || Math.abs(node.y - o.y) > UNSIGNED_NEAR_M + 5) continue;
       const a = approachTo(this.map, o, nodeId);
-      if (a && a.to_node_m < UNSIGNED_NEAR_M && this.map.edges.get(a.edge)?.control?.all_way) return true;
+      if (a && a.to_node_m < UNSIGNED_NEAR_M && controlAt(this.world, this.map.edges.get(a.edge)?.control, a.edge)?.all_way) return true;
     }
     return false;
   }

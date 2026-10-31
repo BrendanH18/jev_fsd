@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Power cuts (`static/js/sim/outage.js`). Where a signal's lights are out, every driver treats the junction
+  as an all-way stop, as every province's driver's handbook says: each approach obeys an all-way stop on
+  the signal's line in place of its signal (`controlAt`; its own stop, as a stop sign's, so a stop made at
+  one approach is not a stop at the next), all of them in one queue for the junction (`sim/all-way.js`,
+  keyed on the signal's id), where a vehicle that went has cleared it once it is 2 m past the far side of
+  its widest street. The signal heads and walk signals go dark, and people on foot cross on a gap. A
+  traffic driver too close to its line to stop when the lights go out goes on through. In a free drive one
+  signal at a time is dark, 150 to 450 m away out of sight with nobody within 40 m, for 4 to 8 minutes; it
+  comes back on once the car is 150 m away and out of sight with nobody within 40 m, and the next goes dark
+  60 to 180 s later (`?outages=0` turns them off).
+- The driven car's sensing is honest about it: an unseen signal until the car can see the junction, then
+  an all-way stop (`intersection.control` `stop`, `all_way`, `dark`, and its place in the order). Rules
+  needs nothing new. Decision models and LLMs get `intersection.lights_out`, a situation line and a prompt
+  line. The audit counts going through without a full stop as a missed stop, and going out of turn as a
+  failure to yield (both events with `dark`), with a coaching tip; the HUD says "LIGHTS OUT · ALL-WAY STOP
+  · STOP AT THE LINE", "· WAIT YOUR TURN" or "· YOUR TURN". A restored checkpoint ties the power cut back
+  to the live world.
+- New challenge, "Lights out" (Halifax, Barrington Street at Morris Street): a storm has cut the power,
+  and the car from the right and an oncoming left turn stop at their lines before the car does. Rules and
+  the cautious agent stop at the line, let them go, then go, and arrive. The other twenty-two challenges
+  play out exactly as before, and the evaluation engine version is unchanged.
+- New checks in `scripts/test_outages.mjs`.
+
 - Work zones with a flagger (Ontario HTA s. 146.1; the Ontario Traffic Manual, Book 7;
   `static/js/sim/work-zone.js`, `render/work-zone.js`). A road crew closes one lane of a straight block
   of a two-way street with one lane each way, and a flagger on the sidewalk at each end turns a STOP/SLOW

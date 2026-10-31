@@ -349,13 +349,14 @@ function buildSignals(map, group) {
       }
     },
     // `phases`: what each group shows ({ A, B }), or at a junction with an advance green, each
-    // approach ("@<edge>": sim/signals.js approachPhase); `t` blinks a flashing green
+    // approach ("@<edge>": sim/signals.js approachPhase), "dark" while its lights are out
+    // (sim/outage.js); `t` blinks a flashing green
     set(intersectionId, phases, t = 0) {
       const blink = (t % 1) < 0.5;
       for (const [head, state] of Object.entries(phases)) {
         if (head === "u") continue;
         const key = `${intersectionId}|${head}`;
-        const lit = state === "advance" ? (blink ? ["green"] : []) : state === "arrow" ? ["red", "arrow_green"]
+        const lit = state === "dark" ? [] : state === "advance" ? (blink ? ["green"] : []) : state === "arrow" ? ["red", "arrow_green"]
           : state === "arrow_yellow" ? ["red", "arrow_yellow"] : [state || "red"];
         const shown = lit.join(",");
         if (last.get(key) === shown) continue;
