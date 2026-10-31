@@ -28,6 +28,9 @@ export class DriveScore {
     this.workZoneSpeeding = 0; this.workZoneCounted = new Set(); this.flaggerStops = 0;
     // (a missed stop, or going out of turn, at a signal whose lights are out: sim/outage.js)
     this.darkSignals = 0;
+    // (going round a double-parked van into the way of oncoming traffic, which the audit counts as a
+    // failure to yield: sim/double-parked.js)
+    this.vanCutoffs = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -52,9 +55,10 @@ export class DriveScore {
     const speeding = !!road && speed > road.limit + SPEED_GRACE_MPS;
     const offRoad = road?.on_road === false;
     const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
-    // (going round a work zone's closed stretch through the other lane, sim/work-zone.js, is not)
+    // (going round a work zone's closed stretch through the other lane, sim/work-zone.js, is not, and
+    // nor is going round a double-parked van through the oncoming lane, sim/double-parked.js)
     const zonePass = world.workZones?.passing(road?.limit ?? 11.2) || null;
-    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0 && zonePass?.side !== "closed";
+    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0 && zonePass?.side !== "closed" && !world.doubleParked?.passing();
     if (speeding) this.speeding += dt;
     const zone = road?.zone;
     if (speeding && zone) {
@@ -102,6 +106,7 @@ export class DriveScore {
     for (const ev of world.events || []) {
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
+      if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
     }
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
@@ -194,6 +199,7 @@ export class DriveScore {
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
     if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
     if (this.darkSignals) tips.push("Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.");
+    if (this.vanCutoffs) tips.push("Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.");
     if (this.flaggerStops) tips.push("At a work zone, stop for the flagger’s STOP paddle and wait for it to turn to SLOW. Traffic coming the other way has the one lane until then.");
     if (this.workZoneSpeeding > 0.5) tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
@@ -208,7 +214,7 @@ export class DriveScore {
       elapsed_s: round(this.elapsed), distance_m: Math.round(this.distance), moving_s: round(this.moving),
       max_kmh: round(this.maxSpeed * 3.6), progress: round(clamp(this.progress, 0, 1), 3),
       collisions, at_fault: atFault, red_lights: reds, stop_signs: stops, failed_to_yield: yields,
-      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
+      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, van_cutoffs: this.vanCutoffs, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };

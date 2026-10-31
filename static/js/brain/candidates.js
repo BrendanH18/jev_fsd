@@ -66,8 +66,9 @@ export function sampleCandidates(snap, world) {
   // A continuing change keeps the lane it started from, so going back stays on offer.
   const carry = shifting ? { shift: shifting, ...(lane.from_delta !== null ? { fromLane: lane.from_delta, fromIdx: lane.route_index + lane.from_delta } : {}) } : {};
   // (round a work zone's closed stretch, through the other lane, whatever else the car does: see
-  // brain/sensors.js workZone)
-  const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : {};
+  // brain/sensors.js workZone; and round a double-parked van, through the oncoming lane, once the way
+  // round is clear or the car has started round it: see doubleParked)
+  const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour } : {};
   const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
   // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
@@ -200,6 +201,13 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_for_flagger", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(wz.stop_s_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "stop at the line for the flagger's STOP paddle" });
     }
+    // A van double-parked in the lane ahead, and no way round it yet: stop behind it, back far enough to
+    // pull out round it, and wait there until the oncoming lane is clear.
+    const dp = snap.double_parked;
+    if (dp?.wait && dp.bumper_to_stop_m > 0.3) {
+      out.push({ id: "wait_behind_van", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(dp.stop_s_route - FRONT) }),
+        steer: "hold lane", speed: dp.queued ? "stop behind the car waiting at the double-parked van" : "stop behind the double-parked van and wait for the oncoming lane to clear" });
+    }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -281,6 +289,8 @@ export function simulateAll(candidates, snap, world) {
   const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the car stops for a flagger showing STOP
   const flaggerStop = snap.work_zone?.wait ? snap.work_zone.stop_s_route : null;
+  // where the car waits behind a double-parked van it cannot go round yet (still ahead of it)
+  const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > 0.3 ? snap.double_parked.stop_s_route : null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
@@ -290,7 +300,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesEv = false, pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesVan = false, passesEv = false, pastTurnPoint = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -339,6 +349,8 @@ export function simulateAll(candidates, snap, world) {
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
         // (and here: 1.5 m past the line is still 4.5 m short of the one-lane section)
         if (flaggerStop !== null && s + FRONT > flaggerStop + 1.5) passesFlagger = true;
+        // (and here: 1.5 m past where it waits still leaves room to pull out round the van)
+        if (vanStop !== null && s + FRONT > vanStop + 1.5) passesVan = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -404,6 +416,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesRail && c.law.kind !== "hard_brake") reject = snap.level_crossing.wait === "train" ? "crosses_in_front_of_train" : "no_room_past_tracks";
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if (passesFlagger && c.law.kind !== "hard_brake") reject = "runs_flagger_stop";
+    else if (passesVan && c.law.kind !== "hard_brake") reject = "no_room_to_go_round";
     else if (passesHold && c.law.kind !== "hard_brake") reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";
     c.reject = reject;

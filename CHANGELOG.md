@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+- Double-parked delivery vans (`static/js/sim/double-parked.js`, `render/delivery-van.js`). A high-roof
+  cargo van stops in the travel lane of a straight block of a two-way street with one lane each way,
+  beside the cars parked at the curb, its hazards flashing while its driver runs a parcel to a door. The
+  only way past is round it through the oncoming lane, and, as every province's driver's handbook says,
+  oncoming traffic has the right of way: a driver goes round only once it can see the way is clear for
+  long enough to get round and back. Along the van's street the way round (a `detour`, as at a work zone)
+  eases across from 18 m short of the van to just short of it, all the way into the oncoming lane, and
+  back by 16 m past it; a driver waits with its front 7 m short of the van, back far enough to pull out
+  round it, and keeps to 20 km/h round it. It goes once nobody is waiting ahead of it and nobody coming the
+  other way, in the oncoming lane or signalling a turn into it at the junction ahead, would reach the end
+  of the way round sooner than 2 s after it, going round at 20 km/h and pulling away at 1.5 m/s^2, has its
+  front there; once it has started across it carries on. Closer to the van than where it would wait, it is
+  too close to pull out, and waits for the van to leave. The cars parked along the way round stay put,
+  doors shut, while it stands there. Traffic and cyclists all do (a cyclist riding the empty parking lane
+  goes by on the right). In a free drive one van stands at a time, by day and out of fog, 150 to 450 m away
+  out of sight, for 1 to 3 minutes; then, once nobody is beside it or going round it, it goes, out of
+  sight, or, in sight, switches its hazards off and drives away as traffic (`?vans=0` takes them off). Vans
+  stop only where there is no marked crosswalk, transit route or level crossing on the block, with room
+  for the way round and a short queue clear of the junction lines at each end, and never on the block of a
+  work zone or near a vehicle stopped at the roadside: 1,569 places on the bundled maps (a block counts
+  once for each direction), from 12 in Le Plateau to 258 in Kitsilano.
+- The driven car's sensing reports `double_parked` (where it waits, the way round as far as it can tell
+  from what it can see, who is waiting ahead of it, whether it has started round, and, once it goes, the
+  detour in route arc lengths, which every lane and hard-brake candidate then follows). It must see along
+  the oncoming lane as far as anyone at the street's limit would come in the time it needs, or as far as it
+  ever sees (80 m), so by night or in fog it waits. Short of where it waits, the van is a stop, not a car to
+  follow. Rules gets a `wait_behind_van` candidate, and pulling up closer than where it waits while it must
+  is rejected (`no_room_to_go_round`). Decision models and LLMs get `double_parked`, a situation line, a
+  motion criterion and a prompt line. The audit counts going round into the way of an oncoming vehicle
+  (across the centre line alongside the way round, meeting one less than 8 m or 2 s away) as a failure to
+  yield (with `double_parked`), once a pass, with a coaching tip (`van_cutoffs`); going round is not driving
+  the wrong way. The HUD says "DOUBLE-PARKED VAN · ONCOMING TRAFFIC · WAIT BEHIND IT", "· CAN'T SEE PAST ·
+  WAIT BEHIND IT", "· WAIT YOUR TURN BEHIND IT" or "· WAY CLEAR · GO ROUND IT", and AI eyes outline the van
+  in amber. A restored checkpoint ties the vans back to the live world.
+- New challenge, "Round the van" (Toronto, Brunswick Avenue): a delivery van is double-parked beside the
+  parked cars, and once the car is 40 m from it two cars come down the oncoming lane, out of sight at first
+  and in the way round just as the car gets there. Rules and the cautious agent stop a car length back, let
+  them by, go round and arrive. The route stays on the block, so its saved runs are short. The other
+  twenty-three challenges play out exactly as before, and the evaluation engine version is unchanged.
+- New checks in `scripts/test_double_parked.mjs`.
+
 - Power cuts (`static/js/sim/outage.js`). Where a signal's lights are out, every driver treats the junction
   as an all-way stop, as every province's driver's handbook says: each approach obeys an all-way stop on
   the signal's line in place of its signal (`controlAt`; its own stop, as a stop sign's, so a stop made at

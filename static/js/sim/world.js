@@ -22,6 +22,7 @@ import { RoadsideStops } from "./roadside.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
+import { DoubleParked } from "./double-parked.js";
 import { Outages, controlAt } from "./outage.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -136,13 +137,22 @@ const AUDIT_BOX_MOVING_MPS = 1;
 // to STOP.
 const AUDIT_FLAGGER_PAST_M = 2;
 const AUDIT_FLAGGER_MOVING_MPS = 1;
+// Going round a double-parked van (sim/double-parked.js): the car, going its street's way alongside
+// the way round (its front between where that starts and ends) and across the centre line (its
+// centre left of it), fails to yield if it meets a vehicle coming the other way on the street ahead
+// of it, on its side of the street or within AUDIT_MEET_SIDE_M of the centre line, closer than
+// AUDIT_MEET_M front to front or AUDIT_MEET_S at the speed they close at. Counted once a pass.
+const AUDIT_MEET_M = 8;
+const AUDIT_MEET_S = 2;
+const AUDIT_MEET_SIDE_M = 1;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
   // vehicles stand at the roadside with their lights flashing at a time (sim/roadside.js).
   // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js). `outages`: how
-  // many signals at a time have their lights out (sim/outage.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0 } = {}) {
+  // many signals at a time have their lights out (sim/outage.js). `vans`: how many delivery vans
+  // stand double-parked at a time (sim/double-parked.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0 } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -177,6 +187,7 @@ export class World {
     this.onTracks = null;         // the level crossing the car is standing on the tracks of, and since when
     this.inBox = null;            // the signal's junction the car is in, whether it had room past it, and since when
     this.flaggerCalls = new Map(); // "<work zone id>:<paddle change>" -> { owed, counted }: a flagger showing STOP
+    this.vanPass = null;          // the double-parked van the car is going round, and whether it failed to yield then
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -189,6 +200,7 @@ export class World {
     this.roadside = new RoadsideStops(this, { count: roadside, seed });
     this.workZones = new WorkZones(this, { count: workZones, seed });
     this.outages = new Outages(this, { count: outages, seed });
+    this.doubleParked = new DoubleParked(this, { count: vans, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
   }
 
@@ -281,6 +293,7 @@ export class World {
     this.inBox = null;
     this.flaggerCalls.clear();
     this.flaggerYields?.clear();
+    this.vanPass = null;
     this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
@@ -497,6 +510,43 @@ export class World {
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
     this.auditFlaggers();
+    this.auditVans();
+  }
+
+  // Going round a double-parked van into the way of oncoming traffic (see AUDIT_MEET_M).
+  auditVans() {
+    const vans = this.doubleParked.vans;
+    if (!vans.length) { this.vanPass = null; return; }
+    const ego = this.ego, FRONT = ego.spec.length - ego.spec.rearOverhang;
+    // (one pass lasts while the car's front is alongside the way round, across the centre line or not)
+    let passing = null;
+    for (const d of vans) {
+      if (Math.abs(ego.x - d.x) > 60 || Math.abs(ego.y - d.y) > 60) continue;
+      const e = this.map.edges.get(d.edge), p = projectPoint(e.pts, e.cum, [ego.x, ego.y], null);
+      if (!p || Math.abs(wrap(ego.psi - p.heading)) > Math.PI / 3 || p.lateral < e.asphalt[0] - 1 || p.lateral > e.asphalt[1] + 1) continue;
+      const front = p.s + FRONT;
+      if (front < d.detour.from || front > d.detour.to) continue;
+      passing = { d, e, front, across: p.lateral < 0 };
+      break;
+    }
+    if (!passing) { this.vanPass = null; return; }
+    const { d, e, front, across } = passing;
+    if (this.vanPass?.id !== d.id) this.vanPass = { id: d.id, counted: false };
+    if (this.vanPass.counted || !across) return;
+    for (const n of this.npcs) {
+      if (n.rail || Math.abs(n.x - ego.x) > 60 || Math.abs(n.y - ego.y) > 60) continue;
+      const q = projectPoint(e.pts, e.cum, [n.x, n.y], null);
+      if (!q || q.s < 0.5 || q.s > e.length - 0.5 || q.lateral > AUDIT_MEET_SIDE_M || q.lateral < e.asphalt[0] - 1 || Math.abs(wrap(n.psi - q.heading)) < Math.PI * 3 / 4) continue;
+      const gap = q.s - ((n.spec || CAR).length - (n.spec || CAR).rearOverhang) - front;
+      if (gap < -1) continue;
+      const closing = Math.max(0, ego.v) + Math.max(0, n.v);
+      if (gap < AUDIT_MEET_M || (closing > 0.5 && gap / closing < AUDIT_MEET_S)) {
+        this.vanPass.counted = true;
+        this.violations.failed_to_yield++;
+        this.events.push({ type: "failed_to_yield", to: "oncoming traffic", with: n.id, double_parked: true, van: d.id });
+        return;
+      }
+    }
   }
 
   // Going past a flagger's STOP paddle once the stop was owed (see AUDIT_FLAGGER_PAST_M).

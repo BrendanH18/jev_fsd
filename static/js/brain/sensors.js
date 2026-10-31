@@ -24,6 +24,7 @@ import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { HEAR_M, HOLD_M as RAIL_HOLD_M, canStopFor as canStopForTrain, crossingsAhead, railIndex, roomBlocker, trainAt, waitsAt } from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
+import { PASS_DECEL, PASS_MPS, VAN_LOOK_M, VAN_NAME, isVan, queuedAhead, wayRound } from "../sim/double-parked.js";
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -147,7 +148,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -269,6 +270,7 @@ export function buildSnapshot(world, executing = null) {
     snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     snap.work_zone = workZone(world, p, frontS, road);
+    snap.double_parked = doubleParked(world, p, frontS, lane, executing);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -282,17 +284,22 @@ export function buildSnapshot(world, executing = null) {
     const clearS = lane.from_center !== null ? laneClearS(lane.shift, lane.from_center, lane.center) : -Infinity;
     const inOrigin = (a) => lane.from_center !== null && Math.abs(p.lateral - lane.from_center) < LANE_CLEAR_M
       && Math.abs(a.lateral - lane.from_center) <= 1.7 && a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
-    // (going round a work zone's closed stretch, along the way the car will go: see workZone)
-    const detour = snap.work_zone?.detour || null;
+    // (going round a work zone's closed stretch, or a double-parked van, along the way the car will
+    // go: see workZone and doubleParked)
+    const detour = snap.work_zone?.detour || snap.double_parked?.detour || null;
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
+    const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
     const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center, frame)
       .filter((a) => Math.abs(a.lateral - lane.center) <= 1.7 || inOrigin(a) || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking)
-      .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6));
+      .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6))
+      // (a double-parked van the car waits behind, short of where it waits, is a stop, not a car to
+      // follow: see doubleParked)
+      .filter((a) => !(vanStop && a.vehicle.id === snap.double_parked.van_id));
     if (ahead.length) {
       const lead = ahead[0];
       const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
       snap.following = { id: lead.vehicle.id, gap_m: gap, speed: lead.vehicle.v, closing_mps: ego.v - lead.vehicle.v, vehicle: lead.vehicle, s: lead.s,
-        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : lead.vehicle.parked ? "parked car" : "car" };
+        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isVan(lead.vehicle) ? "double-parked van" : lead.vehicle.parked ? "parked car" : "car" };
     }
     const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
     if (behind.length) {
@@ -314,7 +321,7 @@ export function buildSnapshot(world, executing = null) {
     if (!o.parked && o.kind !== "door" && !o.parking && !o.pull) continue;
     const local = ego.toLocal(o.x, o.y);
     if (local.ahead < -5 || local.ahead > 40 || Math.abs(local.right) > 8) continue;
-    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : isWorkZone(o) ? "work zone" : ROADSIDE_NAMES[o.kind] || "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
+    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : isWorkZone(o) ? "work zone" : isVan(o) ? "double-parked van" : ROADSIDE_NAMES[o.kind] || "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
   }
   snap.roadside.sort((a, b) => a.ahead - b.ahead);
   snap.roadside = snap.roadside.slice(0, 6);
@@ -327,6 +334,8 @@ export function buildSnapshot(world, executing = null) {
   if (snap.roadside_stop) snap.limit = Math.min(snap.limit, roadsideSpeed(snap.roadside_stop));
   // (likewise coming up to a work zone, and through it)
   if (snap.work_zone) snap.limit = Math.min(snap.limit, workZoneSpeed(snap.work_zone));
+  // (and coming up to a double-parked van, and round it)
+  if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
@@ -743,6 +752,48 @@ function workZone(world, p, frontS, road) {
     return { id: z.id, side, paddle: shows, stop_s_route: line, bumper_to_stop_m: line - frontS, wait: shows === "stop" && !!world.flaggerYields.get(key) && frontS < from - 0.5,
       one_lane: { from_s: from, to_s: to }, in_one_lane: frontS > from, closure_id: z.closure.id, limit_mps: Math.min(road.limit || 11.2, WZ_LIMIT_MPS),
       detour: d ? { from: toRoute(d.from), full: toRoute(d.full), back: toRoute(d.back), to: toRoute(d.to), shift: d.shift } : null };
+  }
+  return null;
+}
+
+// A van double-parked in the car's lane on its route ahead (sim/double-parked.js), from when the car
+// can see it, VAN_LOOK_M short of its rear or nearer, until its front is past the end of the way
+// round. `stop_s_route` is where its front waits (WAIT_M short of the van, back far enough to pull out
+// round it); `way` the way round as far as the car can tell, from what it can see (`clear`, `oncoming`:
+// the first vehicle coming the other way that leaves too little time, and when it gets there,
+// `sees_far_enough`: along the oncoming lane, as far as anyone at the street's limit would come in
+// the time it takes); `queued` someone waiting behind the van ahead of the car; `going_round` the car
+// has started round it (it is executing a law that goes round, and has moved across or past where
+// it waits), and carries on; `go` it goes round now (going round, or the way clear with nobody
+// waiting ahead of it), and then `detour` is the way round in route arc lengths (sim/controller.js
+// detourAt); `wait` it waits behind it instead. Or null.
+function doubleParked(world, p, frontS, lane, executing) {
+  const { ego, route, map } = world, vans = world.doubleParked;
+  if (!vans?.vans.length) return null;
+  for (const d of vans.vans) {
+    if (Math.hypot(d.x - ego.x, d.y - ego.y) > VAN_LOOK_M + 30) continue;
+    const i = route.edges.findIndex((id, k) => id === d.edge && route.edgeStarts[k + 1] > frontS - ego.spec.length);
+    if (i < 0) continue;
+    const e = map.edges.get(d.edge), el = map.lane(e.id, 0), base = route.edgeStarts[i + 1] - e.length;
+    // (along the route: where the edge puts it, as projected onto the route's own line)
+    const toRoute = (x) => {
+      const est = base + x, q = pointAt(el.pts, el.cum, x * el.length / e.length), r = projectPoint(route.pts, route.cum, q);
+      return r && r.distance < 1.5 && Math.abs(r.s - est) < 15 ? r.s : est;
+    };
+    const rear = toRoute(d.rear), to = toRoute(d.detour.to), stop = toRoute(d.wait);
+    if (frontS > to || rear - frontS > VAN_LOOK_M) continue;
+    if (frontS < rear && !world.sees(ego, d.van)) continue;
+    // (what is coming the other way, as far as the car can see: further than the traffic it follows)
+    const sFront = frontS - base, others = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M + 10).filter((o) => o !== ego && !o.parked && o.kind !== "pedestrian");
+    const way = wayRound(world, d, sFront, ego.v, others, vans.sightFor(d));
+    const queued = queuedAhead(world, d, sFront, ego, others);
+    const across = p.lateral - (lane?.center ?? 0) < -0.3;
+    const going = executing?.law?.detour?.id === d.id && (across || frontS > stop + 0.5);
+    const go = going || (way.clear && !queued);
+    return { id: d.id, van_id: d.van.id, kind: VAN_NAME, gap_m: rear - frontS, beside: frontS > rear, stop_s_route: stop, bumper_to_stop_m: stop - frontS,
+      way: { clear: way.clear, sees_far_enough: way.sees_far_enough, need_s: way.need_s, oncoming: way.oncoming ? { id: way.oncoming.vehicle.id, eta_s: way.oncoming.eta_s } : null },
+      queued: queued ? queued.id : null, going_round: going, go, wait: !go, limit_mps: PASS_MPS,
+      detour: go ? { id: d.id, from: toRoute(d.detour.from), full: toRoute(d.detour.full), back: toRoute(d.detour.back), to, shift: d.detour.shift } : null };
   }
   return null;
 }
@@ -1190,6 +1241,13 @@ export function desiredSpeed(snap) {
     const vw = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
     if (vw < v) { v = vw; reasons.push("flagger showing STOP"); }
   } else if (wz && workZoneSpeed(wz) <= v + 0.05) reasons.push(wz.side === "closed" ? "work zone: round it through the other lane" : "work zone: one lane");
+  // a double-parked van with no way round it yet: wait behind it
+  const dp = snap.double_parked;
+  if (dp?.wait && dp.bumper_to_stop_m > -1) {
+    const room = dp.bumper_to_stop_m;
+    const vv = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vv < v) { v = vv; reasons.push(dp.queued ? "waiting in turn behind a double-parked van" : "double-parked van: wait for the way round to clear"); }
+  } else if (dp?.go && vanSpeed(dp) <= v + 0.05) reasons.push("going round a double-parked van");
   // a signal it could not clear for traffic past the junction: wait at the line
   const jb = snap.junction_box;
   if (jb) {
@@ -1227,6 +1285,13 @@ function workZoneSpeed(wz) {
   return Math.sqrt(wz.limit_mps * wz.limit_mps + 2 * comfort().decel * 0.6 * (wz.bumper_to_stop_m - 5));
 }
 
+// The speed to go round a double-parked van at (see doubleParked), from where the car would wait
+// behind it, or, short of that, the speed from which it slows to it gently by then.
+function vanSpeed(dp) {
+  if (dp.bumper_to_stop_m <= 0) return dp.limit_mps;
+  return Math.sqrt(dp.limit_mps * dp.limit_mps + 2 * PASS_DECEL * dp.bumper_to_stop_m);
+}
+
 // Stopped at an all-way stop, waiting for a vehicle that goes first (a car that overshot the line
 // still waits there; one well into the junction is clearing it).
 export function waitsItsTurn(i) {
@@ -1261,6 +1326,7 @@ export function hazardFlags(snap) {
   if (snap.junction_box) f.push("junction box");
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.work_zone) f.push("work zone");
+  if (snap.double_parked) f.push("double-parked van");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");
