@@ -52,7 +52,7 @@ const LANE_SIDE_M = 0.15;           // the van stands this far right of its lane
 const END_M = 12;                   // the way round, and room for a queue behind it, keep this far from the junction lines
 const QUEUE_M = 15;
 const STRAIGHT_RAD = 0.1;
-const FAR_M = 50;                   // someone this near the junction ahead may turn into the oncoming lane
+const FAR_M = 50;                   // someone this near the junction ahead (or as near as it comes in the time the way round takes) may turn into the oncoming lane
 const STANDING_MPS = 0.5;
 const SIGHT_SLACK_M = 10;          // (the car's eyes are behind its front: see as far as it ever does, less this)
 const ON_STREET_M = 1;              // on the street: within this of its asphalt
@@ -137,7 +137,7 @@ export function passTime(d, v, driver = null) {
 // standing still beyond it. Along the street, by where it is; at the junction ahead, by its indicator:
 // one coming up to the junction whose indicator (or none, going straight on) points into the
 // oncoming lane.
-function arrival(map, d, n) {
+function arrival(map, d, n, by = 0) {
   const e = map.edges.get(d.edge), ns = n.spec || CAR, fr = ns.length - ns.rearOverhang;
   const on = onStreet(e, n);
   if (on) {
@@ -151,7 +151,7 @@ function arrival(map, d, n) {
   const node = map.nodes.get(e.to);
   if (!node || n.v < 1) return null;
   const dx = node.x - n.x, dy = node.y - n.y, dist = Math.hypot(dx, dy);
-  if (dist > FAR_M || (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) < 0.3 * dist) return null;
+  if (dist > Math.max(FAR_M, n.v * by) || (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) < 0.3 * dist) return null;
   const o = map.edges.get(d.opposite), turn = wrap(headingAt(o.pts, o.cum, 0) - n.psi);
   if (Math.abs(turn) > Math.PI * 3 / 4) return null;
   const way = Math.abs(turn) < Math.PI / 4 ? null : turn > 0 ? "left" : "right";
@@ -171,7 +171,7 @@ export function wayRound(world, d, frontS, v, others, sight = null, driver = nul
   for (const n of others) {
     if (n.parked || isVan(n) || n.rail || n.kind === "pedestrian" || n.kind === "door") continue;
     if (Math.abs(n.x - d.x) > 300 || Math.abs(n.y - d.y) > 300) continue;
-    const eta = arrival(map, d, n);
+    const eta = arrival(map, d, n, by);
     if (eta !== null && eta < by && (!first || eta < first.eta_s)) first = { vehicle: n, eta_s: eta };
   }
   // (as far along the oncoming lane as anyone at the street's limit would come in that time)

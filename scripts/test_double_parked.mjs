@@ -154,6 +154,11 @@ await test("the way round: clear with nobody coming; not with someone coming too
   assert.ok(way2().clear, "turning the other way");
   turner.signal = null;
   assert.ok(way2().clear, "going straight across");
+  // (and coming straight on toward it from the street beyond, fast enough to arrive in time, from
+  // further off than a turner is looked for)
+  const onward = new Vehicle(node.x - Math.cos(into) * 70, node.y - Math.sin(into) * 70, into, 13);
+  onward.id = "onward";
+  assert.ok(wayRound(w2, near2, 180 - WAIT_M, 0, [onward]).oncoming?.vehicle.id === "onward", "coming straight on from 70 m beyond the junction at 13 m/s");
   // (and someone waiting behind the van ahead of a driver is waited for in turn)
   const queued = npc(world, fleet, { back: WAIT_M, v: 0, id: "queued" });
   assert.equal(queuedAhead(world, van, REAR - 20, null, [queued])?.id, "queued");
@@ -197,14 +202,17 @@ await test("a slow driver, slow to move off, waits for a gap it can use: the way
   const onc = npc(world, fleet, { past: 80, v: 6, id: "onc" });
   onc.v0 = 6;
   const hits = new Set();
-  let went = false;
+  let went = null, by = null;
   for (let i = 0; i < 60 * 30; i++) {
     step({ world, fleet, autopilot: idle });
-    if (lateralOn(slow) < 0) went = true;
+    // (the oncoming car past the way round: its rear short of where it starts)
+    if (by === null && fleet.vehicles.includes(onc) && projectPoint(BRUNSWICK.pts, BRUNSWICK.cum, [onc.x, onc.y], null).s + onc.spec.rearOverhang < van.detour.from) by = i;
+    if (went === null && lateralOn(slow) < 0) went = i;
     contacts([slow, onc, van.van], hits);
   }
   assert.equal(hits.size, 0, `no contacts: ${[...hits]}`);
-  assert.ok(went && frontOn(slow) > van.front, "and it goes round once the oncoming car is by");
+  assert.ok(by !== null && went !== null && went > by, `across the centre line at step ${went}, after the oncoming car was by at ${by}`);
+  assert.ok(frontOn(slow) > van.front, "and round the van");
 });
 
 await test("a driver too close behind the van to pull out round it waits for it to leave", () => {
