@@ -5,6 +5,7 @@
 import { obbOverlap } from "../sim/collision.js";
 import { CAR } from "../sim/vehicle.js";
 import { CLEARING_M, waitsItsTurn } from "./sensors.js";
+import { reversing } from "../sim/parallel-park.js";
 
 // Within this many metres of the destination a stop is not a deadlock, and a car that cannot get
 // any closer because something is parked in the way has arrived.
@@ -18,7 +19,9 @@ export function safetyBrake(world, snap, executing) {
   // A three-point turn moves at walking pace up to kerbs and parked cars on purpose, keeping clear
   // of them itself (sim/turnaround.js), so here only what is closer counts.
   const turning = executing?.law.kind === "turnaround" && world.turnaround === executing.law;
-  if (ego.v < -0.05 || (turning && executing.law.phase === "reverse")) {
+  // Parking, or pulling out of a space, likewise, closer still: up to sim/parallel-park.js CLEAR_M.
+  const parking = executing?.law.kind === "park" && world.parking === executing.law && executing.law.phase !== "done";
+  if (ego.v < -0.05 || (turning && executing.law.phase === "reverse") || (parking && reversing(executing.law))) {
     // reversing: never back into something right behind (not counted while barely moving). A leg
     // of a turnaround ends further out on its own, so this only catches what it did not.
     const box = ego.obb(), reach = Math.max(0.25, -ego.v * 0.5);
@@ -29,7 +32,7 @@ export function safetyBrake(world, snap, executing) {
     }
     return null;
   }
-  const gapStill = turning ? 0.5 : 2.0, gapMoving = turning ? 0.5 : 1.5, ttcMoving = turning ? 0.5 : 1.0;
+  const gapStill = parking ? 0.3 : turning ? 0.5 : 2.0, gapMoving = parking ? 0.3 : turning ? 0.5 : 1.5, ttcMoving = parking ? 0.4 : turning ? 0.5 : 1.0;
   if (ego.v < 0.3) {
     // standing still: never pull away into a car right in front (not counted as an intervention)
     for (const n of world.visibleObstaclesNear(ego.x, ego.y, 12)) {
@@ -55,6 +58,9 @@ export function safetyBrake(world, snap, executing) {
     }
     const local = ego.toLocal(n.x, n.y);
     if (local.ahead < 0 || local.ahead > 20 || Math.abs(local.right) > ego.spec.width / 2 + 0.45) continue;
+    // (parking, or pulling out, at an angle to the street: traffic going the other way in its own lane
+    // is not in the way; the prediction still looks out for it)
+    if (parking && (n.v || 0) > 0.5 && Math.cos(n.psi - ego.psi) < 0) continue;
     const gap = local.ahead - FRONT - (n.spec || CAR).rearOverhang;
     const closing = ego.v - n.v * Math.cos(n.psi - ego.psi);
     if (gap < gapMoving || (closing > 0.1 && gap / closing < ttcMoving)) return { reason: "ahead", gap, closing };
@@ -92,6 +98,8 @@ export class DeadlockDetector {
       || (snap && snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8)
       || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)
       || (snap && snap.turnaround?.executing && snap.turnaround.idle_s < TURN_ROUND_IDLE_S)
+      // (waiting to park, or to pull out, signalling, for what is coming; and parking, at walking pace)
+      || (snap && snap.parking && ((snap.parking.mode === "in" ? !snap.parking.phase && snap.parking.near_start : !snap.parking.phase || snap.parking.phase === "out_wait") || (snap.parking.executing && snap.parking.idle_s < TURN_ROUND_IDLE_S)))
       || !world.route;
     // (creeping forward to look past a building is slow on purpose, unless it is not moving at all)
     const g = snap?.intersection?.give_way, looking = g && !g.wait_for && g.hold_s_route !== null;

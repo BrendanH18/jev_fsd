@@ -9,6 +9,7 @@
 
 import { applyLaw, lateralAt, lookahead, purePursuit } from "../sim/controller.js";
 import { endLeg, linedUp } from "../sim/turnaround.js";
+import { ParkPlanner, leftSpace, parkedPose } from "../sim/parallel-park.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
@@ -49,6 +50,7 @@ export class Autopilot {
     this.goalBlockedBy = null;
     this.turnaroundRoute = null;   // the route world.turnaround was planned on
     this.pausedTurnaround = null;  // one set aside while autopilot is off
+    this.parker = new ParkPlanner();   // parking at the destination (sim/parallel-park.js)
   }
 
   get brain() { return this.brains[this.brainName]; }
@@ -69,6 +71,8 @@ export class Autopilot {
     this.lastStart = -Infinity;
     // A turnaround is set aside while the driver drives (the oncoming-traffic audit skips the car
     // during one), and taken up again on the same route: it still ends once the car is well away.
+    // (parking is given up while the driver drives; parked, the space stays the car's)
+    if (!on && (this.world.park || this.world.parking)) this.parker.clear(this.world);
     if (!on) {
       this.world.stuckFor = 0;
       // (switched off twice, the one set aside is kept)
@@ -103,6 +107,14 @@ export class Autopilot {
       world.turnaround = null;
       this.lastStart = -Infinity;
     }
+    // Parking at the destination, and pulling out of the space the car is parked in (sim/parallel-park.js).
+    // Out of the space, the lane law takes over and the next decision comes at once.
+    if (world.parking?.mode === "out" && world.parking.phase === "done") {
+      world.parking = null; world.park = null;
+      if (world.parkedIn) { world.parkedIn.at = [Infinity, Infinity]; leftSpace(world); }
+      this.lastStart = -Infinity;
+    }
+    const plan = world.parkAtGoal || world.parkedIn || world.parking ? this.parker.update(world, world.route.project(world.ego.x, world.ego.y).s, dt) : null;
     const snap = this.snap = buildSnapshot(world, this.executing);
     const nav = snap.nav;
     // (a U-turn signals left, the way it turns, and so does turning round)
@@ -110,8 +122,12 @@ export class Autopilot {
     // A lane change signals toward the new lane until the car is across.
     const shift = snap.lane && snap.lane.shift && this.executing?.law;
     if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s, world.route) > lateralAt({ ...shift, shift: null }, snap.routeProj.s, world.route) ? "left" : "right";
+    // (parking signals right from 40 m short of where it stops to reverse in, and pulling out, left)
+    const parkPending = !!plan && plan.mode === "in" && plan.status !== "none";
+    if (parkPending) world.ego.signal = plan.status === "parked" ? null : plan.status === "approach" && snap.parking?.stop_in_m > 40 ? world.ego.signal : "right";
+    if (plan?.mode === "out") world.ego.signal = "left";
     this.deadlock.update(world, snap, dt);
-    let blockedBy = atGoal(snap) && world.ego.v < 0.3 && !snap.nav.arrived ? this.goalBlockedBy : null;
+    let blockedBy = atGoal(snap) && world.ego.v < 0.3 && !snap.nav.arrived && !parkPending ? this.goalBlockedBy : null;
     if (blockedBy) {
       // Found at the last decision: check it is still in the way (a parked car can pull out) before
       // ending the drive.
@@ -119,12 +135,22 @@ export class Autopilot {
       simulateAll(candidates, snap, world);
       blockedBy = this.goalBlockedBy = goalBlocker(candidates, world);
     }
-    // (not partway through turning round, standing between legs in the lane coming in)
-    if (snap.nav && ((snap.nav.arrived && !world.turnaround) || arrivedOut || blockedBy) && world.ego.v < 0.3) {
+    // (not partway through turning round, standing between legs in the lane coming in; nor while there
+    // is a space to park in: then it has arrived once parked, or stuck partway in)
+    const law = world.parking;
+    const parkedNow = law?.mode === "in" && (law.phase === "parked" || law.phase === "stuck") && Math.abs(world.ego.v) < 0.05;
+    if (snap.nav && ((snap.nav.arrived && !world.turnaround && !parkPending) || arrivedOut || blockedBy || parkedNow) && world.ego.v < 0.3) {
+      const ev = blockedBy ? { type: "arrived", blocked_by: blockedBy } : { type: "arrived" };
+      if (world.parkAtGoal) {
+        ev.parked = parkedNow && law.phase === "parked";
+        if (parkedNow) Object.assign(ev, { space: law.id, legs: law.legs + 1, ...parkedPose(world.ego, law, world), ...(law.phase === "stuck" ? { stuck: true } : {}) });
+        if (ev.parked) world.ego.signal = null;
+        this.parker.park(world, ev.parked);
+      }
       this.setEnabled(false);
       world.route = null;
       world.destination = null;
-      this.onEvent(blockedBy ? { type: "arrived", blocked_by: blockedBy } : { type: "arrived" });
+      this.onEvent(ev);
       return;
     }
     // off route for a while: ask the server for fresh routes from here (turning round, the car
@@ -277,10 +303,13 @@ export class Autopilot {
     }
     if (chosen) {
       const s0 = snap.routeProj ? snap.routeProj.s : 0;
-      // A turnaround under way carries on as it is (its leg moves on while a model answers).
+      // A turnaround under way carries on as it is (its leg moves on while a model answers), and so
+      // does parking.
       const going = chosen.law.kind === "turnaround" && world.turnaround?.id === chosen.law.id;
-      const law = going ? world.turnaround : { ...chosen.law, s0 };
+      const parking = chosen.law.kind === "park" && world.parking?.id === chosen.law.id;
+      const law = going ? world.turnaround : parking ? world.parking : { ...chosen.law, s0 };
       if (law.kind === "turnaround") { world.turnaround = law; this.turnaroundRoute = world.route; }
+      if (law.kind === "park") { world.parking = law; law.s0 = s0; }
       if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - s0;
       this.executing = { candidate: chosen, law, s0, decidedAt: performance.now(), hazard: null };
     }

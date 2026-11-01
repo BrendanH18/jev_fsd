@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+- Parallel parking at the destination (`static/js/sim/parallel-park.js`). Near the end of a free drive the
+  autopilot looks for an empty space in the parking lane on its right, before the destination and within
+  60 m of it, that it can see and that is legal (BC Motor Vehicle Act s. 189(1) and s. 190(1)): not in a
+  junction or on a crosswalk, nor within 6 m of the approach side of a crosswalk or of a stop line, nor in a
+  bus stop zone, never on the block of a work zone or a double-parked van or on a street a level crossing is
+  on. (Fire hydrants are not on the map, so the 5 m from a hydrant is not checked.) The space has to be long
+  enough to reverse into in one go, which `vehicle.spec` decides: 6.6 m bumper to bumper for the compact,
+  7.0 m for the sedan, 8.2 m for the pickup, about 1.55 car lengths. The car signals right from 40 m out,
+  slows, and pulls up alongside the car in front of the space, its rear bumper level with that car's and
+  0.6 m out from the parked cars (traffic coming up behind keeps back the room it will reverse into). Once
+  nothing is behind it in that room or coming up the lane or the parking lane, it reverses in the way the
+  handbooks teach: full lock toward the kerb, straight back, full lock the other way until parallel, the
+  angle and the straight solved so that its front corner keeps 0.4 m from the car in front's, then straight
+  forward to its spot, 0.9 m behind that car, its body 15 cm off the kerb. Each leg stops short of anything
+  standing still (0.4 m), the wheels never touch the kerb (a bumper may reach over it), and the car stops
+  and turns the wheel before each leg. Rules parks a sedan in a 7.3 m space in about 18 s from stopping.
+  It gives the space up if it can no longer stop for it, if someone takes it, or after 30 s waiting there;
+  with no space to be had it stops in its lane at the destination as before. Parked, the space stays the
+  car's, and the next drive starts by pulling out the way it came in: back to where the S ended, signal
+  left, wait until nothing is coming up the lane beside it within 25 m or 6 s, then out on full lock,
+  straight, and back on the other lock into the lane. In a free drive the car parks wherever it can
+  (`?park=0` stops it in its lane); the seeded benchmark and the other challenges never park and play out
+  exactly as before.
+- Traffic and cyclists coming up behind a car waiting to park hold back the room it reverses into until it
+  is in; a driver stopped too close behind backs up out of it. The space's parking slots are reserved, so
+  nobody else parks there.
+- The driven car's sensing reports `parking` (the space, where it stops to reverse in and how far right of
+  its lane's centre it pulls up there, what keeps it waiting, and the manoeuvre's leg). Rules gets
+  `wait_to_park`, `park` and `pull_out` candidates, and rejects driving on past where it stops to reverse in
+  (`passes_parking_space`); `stop_at_destination` is not offered while there is a space. Decision models and
+  LLMs get `parking`, a situation line, a motion criterion and a prompt line. The cautious example agent
+  parks too. The safety brake lets the car come within 0.3 m of what it parks beside, ignores oncoming
+  traffic in its own lane while the car stands at an angle, and still watches behind it while it reverses.
+- The audit counts a tyre on the kerb while parking or pulling out as a kerb strike, once a contact. The
+  coaching score reports how the drive ended (`parking`: parked, how far from the kerb and how square, or
+  stopped in lane), the kerb strikes, and tips; only drives that park report it. The HUD says "PARKING
+  SPACE AHEAD · SIGNAL RIGHT · PULL UP ALONGSIDE THE CAR IN FRONT", "PARKING · CHECKING BEHIND · WAIT",
+  "· CLEAR BEHIND · REVERSE IN", "· REVERSING IN", "PULLING OUT · TRAFFIC COMING · WAIT", "PULLING OUT",
+  "PARKED" and "KERB STRIKE"; the drive report says "Parked at the destination" or "stopped in lane".
+- New challenge, "Squeeze in" (Kitsilano, West 10th Avenue): one space left, 6.8 m long, between cars
+  parked at the kerb, and a car comes up behind as the car slows for it. Rules and the cautious agent pull
+  up alongside, keep the car behind back, reverse in and park within 30 cm of the kerb, which the
+  challenge requires (`not parked` is a failure). Its runs are smaller than "Round the van"'s. The other
+  twenty-four challenges play out exactly as before, and the evaluation engine version is unchanged.
+- New checks in `scripts/test_parking_ego.mjs` and on the `/tests` page.
+
 - Double-parked delivery vans (`static/js/sim/double-parked.js`, `render/delivery-van.js`). A high-roof
   cargo van stops in the travel lane of a straight block of a two-way street with one lane each way,
   beside the cars parked at the curb, its hazards flashing while its driver runs a parcel to a door. The

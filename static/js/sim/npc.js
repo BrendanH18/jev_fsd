@@ -44,6 +44,12 @@ const UNSIGNED_NEAR_M = 15;
 // DARK_CAUGHT_S of it) goes on through, for DARK_GO_S.
 const DARK_CAUGHT_S = 0.5, DARK_GO_S = 10;
 
+// Stopped too close behind the driven car as it waits to reverse into a space, a driver backs up this
+// long after, by as much as it needs (up to this).
+const PARK_BACK_S = 2;
+const PARK_BACK_MAX_M = 7;
+const PARK_SIDE_M = 4.5;   // (the driven car, parking, is this close to a driver's path: in its lane or the space beside it)
+
 // Seeded per-driver IDM and lane-change temperament so adding NPCs does not shift spawn points.
 function driverProfile(random, bike = false) {
   const r = random();
@@ -741,6 +747,21 @@ export class NpcFleet {
           const hit = close.find((o) => obbOverlap({ ...body, center: [x, y], heading: path.headingAt(mid) }, o.obb(), 0.05));
           if (hit) { gap = d - 0.5; leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi)); leader = hit; break; }
         }
+      }
+      // behind the driven car while it pulls up to a space and reverses into it (sim/parallel-park.js),
+      // wherever its body is, in the lane or partway into the space: keep back the room it reverses
+      // into until it is in, and, stopped too close already, back up out of it
+      if (world.parkHold > 0) {
+        const ego = world.ego, q = projectPoint(path.pts, path.cum, [ego.x, ego.y], null);
+        if (q && q.s > path.s && q.s - path.s < LOOK_M && Math.abs(q.lateral) < PARK_SIDE_M && Math.cos(wrap(ego.psi - n.psi)) > 0.5) {
+          const g = q.s - path.s - (spec.length - spec.rearOverhang) - ego.spec.rearOverhang;
+          if (g - world.parkHold < gap) { gap = Math.max(0.05, g - world.parkHold); leadV = 0; leader = ego; }
+          // (only while the car waits for it, before it starts back)
+          if (n.v < 0.2 && world.park?.blocked === n.id && world.parkHold - g > 0.5 && n.kind !== "bike" && !isLong(n) && (n.parkWait = (n.parkWait || 0) + dt) > PARK_BACK_S) {
+            n.parkWait = 0;
+            n.backoff = { left: Math.min(PARK_BACK_MAX_M, world.parkHold - g + 0.5), t: 0 };
+          }
+        } else n.parkWait = 0;
       }
       n.lead = gap < Infinity ? { gap, v: leadV } : null;
       let stopAt = null;

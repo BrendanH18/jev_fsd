@@ -24,6 +24,7 @@ import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DoubleParked } from "./double-parked.js";
 import { Outages, controlAt } from "./outage.js";
+import { leftSpace, reversing, tyres } from "./parallel-park.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -151,8 +152,9 @@ export class World {
   // vehicles stand at the roadside with their lights flashing at a time (sim/roadside.js).
   // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js). `outages`: how
   // many signals at a time have their lights out (sim/outage.js). `vans`: how many delivery vans
-  // stand double-parked at a time (sim/double-parked.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0 } = {}) {
+  // stand double-parked at a time (sim/double-parked.js). `park`: the autopilot parks at the
+  // destination (sim/parallel-park.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -188,6 +190,16 @@ export class World {
     this.inBox = null;            // the signal's junction the car is in, whether it had room past it, and since when
     this.flaggerCalls = new Map(); // "<work zone id>:<paddle change>" -> { owed, counted }: a flagger showing STOP
     this.vanPass = null;          // the double-parked van the car is going round, and whether it failed to yield then
+    // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
+    // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
+    // spaces it gave up, the space it is parked in, and the kerb strikes the audit counted
+    this.parkAtGoal = !!park;
+    this.park = null;
+    this.parking = null;
+    this.parkHold = 0;
+    this.parkTried = [];
+    this.parkedIn = null;
+    this.kerbContact = false;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -294,6 +306,9 @@ export class World {
     this.flaggerCalls.clear();
     this.flaggerYields?.clear();
     this.vanPass = null;
+    // (moved by hand: whatever space it was going for, or parked in, is let go)
+    for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
+    this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
     this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
@@ -511,6 +526,18 @@ export class World {
     this.auditArrow();
     this.auditFlaggers();
     this.auditVans();
+    this.auditKerb();
+    leftSpace(this);
+  }
+
+  // Parking or pulling out (sim/parallel-park.js), a tyre on the kerb is a kerb strike: counted once a
+  // contact (a bumper reaching over it is not).
+  auditKerb() {
+    const law = this.parking;
+    if (!law || law.phase === "done") { this.kerbContact = false; return; }
+    const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
+    if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
+    this.kerbContact = on;
   }
 
   // Going round a double-parked van into the way of oncoming traffic (see AUDIT_MEET_M).

@@ -31,6 +31,9 @@ export class DriveScore {
     // (going round a double-parked van into the way of oncoming traffic, which the audit counts as a
     // failure to yield: sim/double-parked.js)
     this.vanCutoffs = 0;
+    // (parking at the destination, sim/parallel-park.js: how it ended, and the kerb strikes on the way in
+    // or out; reported only for a drive with parking)
+    this.parking = null; this.kerbStrikes = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -39,6 +42,15 @@ export class DriveScore {
     this.hardBrakes = 0; this.minGap = Infinity; this.maxSpeed = 0; this.progress = 0;
     this.incidents = []; this.coach = "Settle in. Look ahead and leave room.";
     this.finished = null; this.startedAt = new Date().toISOString();
+  }
+
+  // The autopilot's arrival, with parking at the destination (Autopilot.step's "arrived" event):
+  // parked, and how well, or stopped in its lane.
+  noteArrival(ev) {
+    if (this.finished || ev?.parked === undefined) return;
+    this.parking = ev.parked ? { result: "parked", kerb_m: ev.kerb_m, angle_deg: ev.angle_deg, within_kerb: !!ev.within_kerb, legs: ev.legs }
+      : { result: ev.stuck ? "stuck partway in" : "stopped in lane" };
+    this.incident("parking", ev.parked ? `Parked, ${Math.round(ev.kerb_m * 100)} cm from the kerb` : ev.stuck ? "Gave up partway into the space" : "No space to park in: stopped in the lane");
   }
 
   incident(type, message, extra = {}) {
@@ -107,6 +119,7 @@ export class DriveScore {
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
+      if (ev.type === "kerb_strike") { this.kerbStrikes++; this.incident("kerb", ev.reversing ? "Backed a wheel onto the kerb" : "Drove a wheel onto the kerb"); }
     }
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
@@ -200,6 +213,9 @@ export class DriveScore {
     if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
     if (this.darkSignals) tips.push("Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.");
     if (this.vanCutoffs) tips.push("Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.");
+    if (this.kerbStrikes) tips.push("Parking, creep in slowly and stop before a wheel touches the kerb. Turn the wheel only while the car is moving if you have to, and check your mirror on the kerb side.");
+    if (this.parking?.result === "parked" && !this.parking.within_kerb) tips.push("Park parallel to the kerb with your wheels within 30 cm of it. If you end up further out, pull forward and reverse in again.");
+    if (this.parking?.result === "stuck partway in") tips.push("Choose a space at least one and a half times your car's length, and start with your rear bumper level with the car in front, about a door's width from it.");
     if (this.flaggerStops) tips.push("At a work zone, stop for the flagger’s STOP paddle and wait for it to turn to SLOW. Traffic coming the other way has the one lane until then.");
     if (this.workZoneSpeeding > 0.5) tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
@@ -217,6 +233,7 @@ export class DriveScore {
       speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, van_cutoffs: this.vanCutoffs, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
+      ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };
   }
 

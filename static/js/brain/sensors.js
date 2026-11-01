@@ -25,6 +25,9 @@ import { HEAR_M, HOLD_M as RAIL_HOLD_M, canStopFor as canStopForTrain, crossings
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
 import { PASS_DECEL, PASS_MPS, VAN_LOOK_M, VAN_NAME, isVan, queuedAhead, wayRound } from "../sim/double-parked.js";
+import { TRY_START_M } from "../sim/parallel-park.js";
+// Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
+const PARK_STOP_DECEL = 1.2;
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -148,7 +151,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null, parking: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -337,9 +340,25 @@ export function buildSnapshot(world, executing = null) {
   // (and coming up to a double-parked van, and round it)
   if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
   snap.turnaround = turnaroundState(world, snap, executing);
+  snap.parking = parkingState(world, snap, executing);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
   return snap;
+}
+
+// Parking at the destination, or pulling out of the space the car is parked in (sim/parallel-park.js,
+// World.park): the space, where the car stops to reverse into it (rear axle, route arc length) and how
+// far right of its lane's centre it pulls up there, whether something behind keeps it waiting
+// (`wait_for`), and once under way the manoeuvre's leg. Null without one, or once there is no space
+// to be had.
+function parkingState(world, snap, executing) {
+  const p = world.park, law = world.parking;
+  if (!p || p.status === "none" || !snap.routeProj) return null;
+  const leg = law ? { phase: law.phase, legs: law.legs, executing: executing?.law === law, idle_s: law.idle || 0 } : { phase: null, legs: 0, executing: false, idle_s: 0 };
+  if (p.mode === "out") return { mode: "out", status: p.status, id: p.id, wait_for: p.blocked, ready: !law, ...leg };
+  const s = snap.routeProj.s;
+  return { mode: "in", status: p.status, id: p.id, length_m: p.length, kerb: "right", stop_s_route: p.stopS, stop_in_m: p.stopS - s, nudge_m: p.nudge,
+    wait_for: p.blocked, waited_s: p.waited || 0, ready: !law && p.status === "waiting" && !p.blocked, near_start: Math.abs(p.stopS - s) < TRY_START_M, ...leg };
 }
 
 // The school or playground zone in effect that the car is in (the world's road info says so), or the
@@ -1260,6 +1279,12 @@ export function desiredSpeed(snap) {
     const vp = room < 1.0 ? 0 : stopSpeedFor(room, decel);
     if (vp < v) { v = vp; reasons.push("pedestrian crossing"); }
   }
+  // a space to park in: stop where the car reverses into it
+  const pk = snap.parking;
+  if (pk?.mode === "in" && !pk.phase) {
+    const vk = stopSpeedFor(Math.max(0, pk.stop_in_m - 0.3), Math.min(decel * 0.8, PARK_STOP_DECEL));
+    if (vk < v) { v = vk; reasons.push("parking space ahead"); }
+  }
   if (snap.nav && snap.nav.turn_round_in_m !== undefined) {
     const vr = stopSpeedFor(Math.max(0, snap.nav.turn_round_in_m), decel);
     if (vr < v) { v = vr; reasons.push("turning round ahead"); }
@@ -1327,6 +1352,7 @@ export function hazardFlags(snap) {
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.work_zone) f.push("work zone");
   if (snap.double_parked) f.push("double-parked van");
+  if (snap.parking) f.push("parking");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");

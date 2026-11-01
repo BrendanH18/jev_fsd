@@ -26,7 +26,8 @@ export class RulesBrain {
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;
-    if (snap.nav && snap.nav.arrived) stop = true;
+    // (parking, the space is the destination: sim/parallel-park.js)
+    if (snap.nav && snap.nav.arrived && snap.parking?.mode !== "in") stop = true;
 
     const vDesired = snap.target ? snap.target.v : desiredSpeed(snap).v;
     // A manoeuvre that leaves the car outside the lane its route takes for a turn ahead gains
@@ -56,6 +57,10 @@ export class RulesBrain {
       // Turning round where the route makes a U-turn is the only way on, and once begun it carries
       // on whenever its prediction is clear.
       if (c.law.kind === "turnaround") cost -= 50;
+      // Likewise parking at the destination, and pulling out of the space at the start of a drive; and
+      // pulling up where the car reverses into the space comes before driving on past it.
+      if (c.law.kind === "park") cost -= 50;
+      if (c.id === "wait_to_park") cost -= 12;
       if (c.law.kind === "hard_brake") cost += 3;
       if (c.law.kind === "reverse") cost += 2;
       if (!s.stays_in_lane) cost += 2;
@@ -71,8 +76,8 @@ export class RulesBrain {
       if (s.min_gap_m < 3) cost += (3 - s.min_gap_m) * 3;
       if (best === null || cost < best.cost) best = { c, cost };
     }
-    // (the reasons to stop above are for driving ahead; a turnaround that is clear goes on)
-    const motion = stop && best?.c.law.kind !== "turnaround" ? "stop" : "drive";
+    // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
+    const motion = stop && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park" ? "stop" : "drive";
     return { motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
   }
 

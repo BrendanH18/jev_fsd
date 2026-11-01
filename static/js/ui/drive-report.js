@@ -36,7 +36,8 @@ export class DriveReport {
     this.number.dataset.qualified = String(r.qualified);
     this.title.textContent = r.title;
     this.stats.textContent = `${(r.distance_m / 1000).toFixed(2)} km · ${time(r.elapsed_s)} · ${r.qualified ? `Grade ${r.grade}` : "100 m to qualify"}`;
-    this.coach.textContent = r.status === "active" ? r.coach : `${r.status === "arrived" ? "Destination reached" : "Drive finished"} · ${r.tips[0]}`;
+    const reached = r.parking?.result === "parked" ? "Parked at the destination" : r.parking ? `Destination reached · ${r.parking.result}` : "Destination reached";
+    this.coach.textContent = r.status === "active" ? r.coach : `${r.status === "arrived" ? reached : "Drive finished"} · ${r.tips[0]}`;
     this.finishButton.disabled = r.status !== "active";
     this.bars.replaceChildren(...this.categoryBars(r));
   }
@@ -49,7 +50,7 @@ export class DriveReport {
   show(report, saved = true) {
     this.dialog.replaceChildren(
       h("div", { class: "dialog-header" }, h("span", { class: "label" }, "DRIVE REPORT"), h("button", { class: "toggle", "aria-label": "Close report", onclick: () => this.dialog.close() }, "×")),
-      h("h2", {}, report.title), h("p", { class: "muted" }, `${report.map} · ${report.driver} · ${report.status}${report.modified ? " · modified challenge" : ""}`),
+      h("h2", {}, report.title), h("p", { class: "muted" }, `${report.map} · ${report.driver} · ${report.status}${report.parking && report.parking.result !== "not yet" ? ` · ${report.parking.result}${report.parking.result === "parked" ? `, ${Math.round(report.parking.kerb_m * 100)} cm from the kerb` : ""}` : ""}${report.modified ? " · modified challenge" : ""}`),
       h("div", { class: "report-score" }, h("strong", {}, report.qualified ? report.score : "—"), h("span", {}, report.qualified ? `Grade ${report.grade} / 100` : "Practice drive · not yet graded")),
       h("div", { class: "report-metrics" }, h("span", {}, `${(report.distance_m / 1000).toFixed(2)} km`), h("span", {}, time(report.elapsed_s)), h("span", {}, `${report.max_kmh} km/h peak`)),
       h("div", { class: "report-categories" }, this.categoryBars(report)),
