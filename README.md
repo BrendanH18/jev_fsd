@@ -26,7 +26,8 @@ the one lane left, cuts the power to a signal now and then, so everyone takes tu
 at an all-way stop, double-parks delivery vans in the lane, so drivers wait for the oncoming lane to clear
 before going round them, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. At the
 end of a drive the AI driver parallel parks in a space near the destination, and pulls out of it again
-to start the next one. Then
+to start the next one. Cars parked at the kerb hide the sidewalk behind them, now and then someone steps
+out from between two of them, and the AI driver keeps to a speed it can stop from beside them. Then
 it lets you drive them yourself, or watch an AI driver do it. Every decision the AI makes is
 recorded. You can pause the drive, scrub back to the moment a car door swung open, and see what the
 driver could see, what it considered, and why it rejected each alternative.
@@ -64,7 +65,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Twenty-five hand-built scenarios test the situations real drivers get wrong:
+Twenty-six hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -93,6 +94,7 @@ Twenty-five hand-built scenarios test the situations real drivers get wrong:
 | **Lights out** | Halifax, afternoon | A storm has knocked out the power, and the lights where Barrington Street meets Morris Street are dark: treat the junction as an all-way stop, and let the car from the right and an oncoming left turn, both there first, go before you |
 | **Round the van** | Toronto, afternoon | A delivery van is double-parked in your lane on Brunswick Avenue, hazards flashing, and the only way past is the oncoming lane, where two cars are coming that you can't see yet: stop a car length back, let them by, then go round |
 | **Squeeze in** | Vancouver, afternoon | One space is left on a block of West 10th Avenue lined with parked cars, 6.8 m long, and a car comes up behind as you slow for it: signal, pull up alongside the car in front, wait until it's clear behind, then reverse in and park within 30 cm of the kerb |
+| **Between the cars** | Vancouver, afternoon | A quiet 50 km/h street in Kitsilano, lined with parked cars on your side, and a child hidden between two of them steps out when you're 15 m away: at about 30 km/h you stop short of them, at 50 you can't |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

@@ -16,7 +16,7 @@ import { parseHour } from "../sim/world-clock.js";
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
 export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
-  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park });
+  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden });
   world.visibility.setNight(challenge.time === "night" ? 1 : 0);
   // (school and playground zones go by the challenge's time of day)
   world.setClock(mapClock(parseHour(challenge.time), map));

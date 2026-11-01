@@ -25,6 +25,7 @@ import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksO
 import { DoubleParked } from "./double-parked.js";
 import { Outages, controlAt } from "./outage.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
+import { StepOuts, standingNear } from "./hidden-hazards.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -153,8 +154,10 @@ export class World {
   // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js). `outages`: how
   // many signals at a time have their lights out (sim/outage.js). `vans`: how many delivery vans
   // stand double-parked at a time (sim/double-parked.js). `park`: the autopilot parks at the
-  // destination (sim/parallel-park.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false } = {}) {
+  // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
+  // driven car keeps to a speed it can stop from beside them; `stepOuts`: with that, how many people at
+  // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0 } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -200,6 +203,7 @@ export class World {
     this.parkTried = [];
     this.parkedIn = null;
     this.kerbContact = false;
+    this.hazards = !!hazards;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -214,6 +218,7 @@ export class World {
     this.outages = new Outages(this, { count: outages, seed });
     this.doubleParked = new DoubleParked(this, { count: vans, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
+    this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -229,9 +234,10 @@ export class World {
   }
 
   // Line of sight: buildings, weather and darkness hide anything, and a vehicle in traffic hides a
-  // pedestrian behind it (sim/crosswalk.js).
+  // pedestrian behind it (sim/crosswalk.js); with hidden hazards on, so does one standing at the kerb
+  // (sim/hidden-hazards.js).
   sees(observer, o) {
-    return this.visibility.sees(observer, o) && !(o.kind === "pedestrian" && hiddenByTraffic(observer, o, this.npcs));
+    return this.visibility.sees(observer, o) && !(o.kind === "pedestrian" && hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []));
   }
 
   // Middle of a long residential edge near the map center, facing along it.

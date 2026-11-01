@@ -38,7 +38,7 @@ export class DriveRecorder {
   reset() { this.frames = []; this.markers = []; this.at = -Infinity; this.branched = false; this.baseShared = null; this.indexedMap = null; }
   sharedFor({ world, fleet, autopilot }) {
     const shared = this.baseShared ||= new Set([world.map, world.staticObstacles, world.visibility, world.crowd.streets,
-      world.crowd.legsAt, world.crowd.ringNodes, autopilot.brains, autopilot.onDecision, autopilot.onEvent]);
+      world.crowd.legsAt, world.crowd.streetIndex, world.crowd.ringNodes, autopilot.brains, autopilot.onDecision, autopilot.onEvent]);
     if (!this.indexedMap) {
       for (const collection of [world.map.lanes, world.map.edges, world.map.nodes]) for (const value of collection.values()) shared.add(value);
       this.indexedMap = world.map;
@@ -82,7 +82,7 @@ export class DriveRecorder {
       for (const field of Object.keys(object)) if (!(field in state[key])) delete object[field];
       Object.assign(object, state[key]);
     }
-    target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world;
+    target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world;
     target.world.npcs = target.fleet.vehicles;
     Object.assign(target.autopilot, callbacks, { world: target.world, inFlight: null, firing: null, rerouting: false, epoch: epoch + 1 });
     target.world.paused = true;

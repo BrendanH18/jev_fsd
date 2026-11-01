@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- Hidden hazards (`static/js/sim/hidden-hazards.js`, `sim/blind-spot.js`). Cars parked at the kerb now hide the people behind
+  them, as moving traffic already did: with the `World` option `hazards`, a vehicle standing at the kerb
+  (a parked car, a van double-parked or stopped at the roadside) hides a pedestrian from the driven car when
+  every line to them passes through it (sensing is in plan view, so a body hides whatever is behind it,
+  whatever its height). Driver's handbooks across Canada say to watch for children stepping out from
+  between parked cars and to drive at a speed you can stop from, and the car now does: beside a blind spot,
+  a vehicle standing at the kerb ahead of it, parallel to it, within 2 m of its side, on a quiet street
+  (residential, unclassified or a living street) or in a school or playground zone in effect, it keeps to
+  the blind-spot speed, from which, 0.6 s after seeing someone step out 15 m ahead and braking at three
+  quarters of the hardest the road allows, it stops 2 m short of them: 32 km/h on a dry road, 27 in rain,
+  19 in snow. It slows to it gently by 20 m short of the first such vehicle (nobody steps out further ahead
+  than 15 m) and keeps to it through gaps shorter than that; it looks 60 m ahead, and only vehicles it can
+  see count.
+- In a free drive (`?hazards=0` turns all of this off) someone now and then waits hidden between two cars
+  parked along the car's side of a quiet street, 35 to 70 m ahead of it: a child more often than not, 20 to
+  60 s into the drive and every 60 to 150 s after that, one at a time. Once the car's front is 15 m from
+  their line they step out and walk across the street without looking, unless something else is on the
+  street ahead of the car or coming the other way, in which case they stay put and go home unseen. Across
+  the street they walk on along the far sidewalk with the crowd. The car only sees them as they come out
+  from behind the cars. In 28 minutes of free-drive soaks on Kitsilano with 40 cars (two seeds dry, one in
+  rain), ten people stepped out; Rules saw each of them at 13.9 to 14.8 m and stopped 4.8 to 10.2 m short,
+  with no collisions.
+- The driven car's sensing reports `blind_spot` (the side, how far ahead the parked cars start and end,
+  the gap to them, why it counts, and the blind-spot speed), caps the limit and the target speed at it, and
+  decides every 250 ms from 25 m short of one. Rules and every other driver keep to it through the limit;
+  decision models and LLMs get `blind_spot`, a situation line and a prompt line. The coaching score counts
+  time beside a blind spot faster than the blind-spot speed (`blind_spot_speeding_s`, once a street, in
+  safety) with a coaching line and a tip, only for drives with hidden hazards. The HUD says "PARKED CARS
+  HIDE THE SIDEWALK · 32 KM/H" and "CHILD STEPPING OUT FROM THE PARKED CARS · STOP" (or "PERSON").
+- New challenge, "Between the cars" (Kitsilano, Stephens Street, 50 km/h): the car's side of the street
+  is lined with parked cars 1.6 m apart, and a child stands hidden between two of them 110 m ahead. Once
+  the car's front is 15 m from them they step out at 1.5 m/s. Rules and the cautious agent keep to
+  32 km/h beside the parked cars, see the child at about 14 m, and stop 4 m short of them. Without hidden
+  hazards, Rules is doing 49 km/h when they step out and hits them. Its two runs add 2.1% to the saved
+  arena history, which with all twenty-six challenges takes 98.2% of the 9 MB cap. The seeded benchmark and
+  the other twenty-five challenges have no hidden hazards, and play out exactly as before.
+- New checks in `scripts/test_hidden_hazards.mjs` and on the `/tests` page.
+
 - Parallel parking at the destination (`static/js/sim/parallel-park.js`). Near the end of a free drive the
   autopilot looks for an empty space in the parking lane on its right, before the destination and within
   60 m of it, that it can see and that is legal (BC Motor Vehicle Act s. 189(1) and s. 190(1)): not in a

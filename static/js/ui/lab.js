@@ -116,7 +116,7 @@ export class DriveLab {
   }
   showPerception(data) {
     if (!data) return;
-    this.sight.textContent = `${data.emergency ? `${data.emergency} · ` : ""}${data.bus ? `${data.bus} · ` : ""}${data.crosswalk ? `${data.crosswalk} · ` : ""}${data.school ? `${data.school} · ` : ""}${data.streetcar ? `${data.streetcar} · ` : ""}${data.crossing ? `${data.crossing} · ` : ""}${data.box ? `${data.box} · ` : ""}${data.workZone ? `${data.workZone} · ` : ""}${data.van ? `${data.van} · ` : ""}${data.roadside ? `${data.roadside} · ` : ""}${data.zone ? `${data.zone} · ` : ""}${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`;
+    this.sight.textContent = `${data.emergency ? `${data.emergency} · ` : ""}${data.bus ? `${data.bus} · ` : ""}${data.crosswalk ? `${data.crosswalk} · ` : ""}${data.school ? `${data.school} · ` : ""}${data.streetcar ? `${data.streetcar} · ` : ""}${data.crossing ? `${data.crossing} · ` : ""}${data.box ? `${data.box} · ` : ""}${data.workZone ? `${data.workZone} · ` : ""}${data.van ? `${data.van} · ` : ""}${data.blind ? `${data.blind} · ` : ""}${data.roadside ? `${data.roadside} · ` : ""}${data.zone ? `${data.zone} · ` : ""}${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`;
     this.rejections.replaceChildren(...data.rejected.slice(0, 4).map(c => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason))));
   }
   update(recorder, now) {

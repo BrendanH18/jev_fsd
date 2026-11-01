@@ -8,6 +8,7 @@ import { current as weather } from "../sim/weather.js";
 import { CLEARING_M, waitsItsTurn } from "./sensors.js";
 import { FOLLOW_M } from "../sim/emergency.js";
 import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
+import { STEP_OUT_M } from "../sim/hidden-hazards.js";
 
 export const DEFAULT_STYLE = "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly";
 const PREAMBLE = "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`.";
@@ -162,6 +163,11 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.roadside_vehicle = { id: r.id, kind: r.name, lights: r.lights, ...(r.gap_m > 0 ? { gap_m: r1(r.gap_m) } : { beside_car: true }), pass_at: r1(r.limit_mps),
       in_lane_next_to_it: r.in_adjacent_lane, ...(r.in_adjacent_lane && r.other_lane ? { move_over: true } : {}) };
   }
+  if (snap.blind_spot) {
+    const b = snap.blind_spot;
+    state.blind_spot = { side: b.side, ...(b.from_m > 0 ? { parked_cars_from_m: r1(b.from_m) } : { beside_car: true }), parked_cars_to_m: r1(Math.max(0, b.to_m)),
+      clearance_m: r1(b.gap_m), street: b.why, hides: "the sidewalk: someone may step out from between the parked cars", stop_within_m: STEP_OUT_M, pass_at: r1(b.limit_mps) };
+  }
   if (snap.emergency_ahead) state.emergency_vehicle_ahead = { id: snap.emergency_ahead.id, kind: snap.emergency_ahead.kind, gap_m: r1(snap.emergency_ahead.gap_m), keep_back_m: FOLLOW_M };
   if (snap.turnaround) state.turnaround = { under_way: snap.turnaround.phase !== "start", ...(snap.turnaround.phase !== "start" ? { leg: snap.turnaround.phase, legs_done: snap.turnaround.legs } : {}) };
   if (snap.parking) state.parking = parkingState(snap.parking);
@@ -293,6 +299,7 @@ export function situationClauses(snap) {
   if (snap.work_zone) out.push(workZoneClause(snap));
   if (snap.double_parked) out.push(vanClause(snap));
   if (snap.roadside_stop) out.push(roadsideClause(snap));
+  if (snap.blind_spot) out.push(blindClause(snap.blind_spot));
   if (snap.emergency_ahead) out.push(`${/^[aeiou]/.test(snap.emergency_ahead.kind) ? "An" : "A"} ${snap.emergency_ahead.kind} with its siren on is ${Math.round(snap.emergency_ahead.gap_m)} m ahead, going the car's way: do not follow it within ${FOLLOW_M} m; \`car.target_speed\` already keeps the car back.`);
   if (snap.following) {
     const label = gapLabel(snap.following.gap_m, snap.following.closing_mps);
@@ -390,6 +397,12 @@ function roadsideClause(snap) {
   const offered = snap.lane && Object.values(snap.lane.sides).some((side) => side.offer === "move_over");
   return offered ? `${lead}, and move over: a \`change_left_*\` candidate moves the car into the lane to its left, away from it. Stay in that lane until past it.`
     : `${lead}. Move over into the lane to the left once that is safe; until then stay in this lane.`;
+}
+
+// Cars parked at the kerb that hide the sidewalk beside the car's way (sim/hidden-hazards.js).
+function blindClause(b) {
+  const kmh = Math.round(b.limit_mps * 3.6), where = b.from_m > 0 ? `from ${Math.round(b.from_m)} m ahead` : "beside the car";
+  return `Cars parked along the ${b.side} ${where}, ${r1(b.gap_m)} m from the car's side, hide the sidewalk${b.why === "quiet street" ? " on this quiet street" : ` in this ${b.why}`}: someone could step out from between them, unseen until they do. Keep to ${kmh} km/h beside them, a speed from which the car can stop for someone who steps out ${STEP_OUT_M} m ahead (\`car.target_speed\` already does).`;
 }
 
 // A work zone with a flagger on the route ahead (sim/work-zone.js).

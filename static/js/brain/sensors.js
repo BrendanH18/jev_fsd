@@ -26,6 +26,7 @@ import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
 import { PASS_DECEL, PASS_MPS, VAN_LOOK_M, VAN_NAME, isVan, queuedAhead, wayRound } from "../sim/double-parked.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
+import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
@@ -151,7 +152,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null, parking: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null, parking: null, blind_spot: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -339,6 +340,10 @@ export function buildSnapshot(world, executing = null) {
   if (snap.work_zone) snap.limit = Math.min(snap.limit, workZoneSpeed(snap.work_zone));
   // (and coming up to a double-parked van, and round it)
   if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
+  // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
+  // sim/hidden-hazards.js)
+  snap.blind_spot = blindSpot(world, ego, road);
+  if (snap.blind_spot) snap.limit = Math.min(snap.limit, blindApproach(snap.blind_spot.limit_mps, snap.blind_spot.from_m));
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.parking = parkingState(world, snap, executing);
   snap.target = desiredSpeed(snap);
@@ -1163,6 +1168,13 @@ export function desiredSpeed(snap) {
     const vr = roadsideSpeed(rs, weather.speed < 1 ? weather.speed : 1);
     if (vr <= v + 0.05) { v = Math.min(v, vr); reasons.push(rs.gap_m <= APPROACH_M ? `passing a ${rs.name} with its lights flashing` : `${rs.name} ahead, lights flashing`); }
   }
+  // cars parked at the kerb that hide the sidewalk (sim/hidden-hazards.js): down to the speed the car
+  // can stop from for someone stepping out from between them, gently, by the first of them
+  const bs = snap.blind_spot;
+  if (bs) {
+    const vb = blindApproach(bs.limit_mps, bs.from_m);
+    if (vb <= v + 0.05) { v = Math.min(v, vb); reasons.push(bs.from_m <= STEP_OUT_M ? "parked cars hide the sidewalk" : "parked cars ahead hide the sidewalk"); }
+  }
   if (snap.following) {
     // close in on the leader gently, and never faster than lets the car stop comfortably behind it
     // even if it brakes hard (it is assumed able to stop at 4 m/s^2)
@@ -1353,6 +1365,7 @@ export function hazardFlags(snap) {
   if (snap.work_zone) f.push("work zone");
   if (snap.double_parked) f.push("double-parked van");
   if (snap.parking) f.push("parking");
+  if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");

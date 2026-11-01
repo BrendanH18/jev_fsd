@@ -23,6 +23,8 @@ import { Visibility } from "../js/sim/visibility.js";
 import { fixtureWorld, crossingPedestrian, buildRealismCases } from "./jev-fixtures.js";
 import { buildSuite } from "../js/bench/scenarios.js";
 import { planParking, spacesAlong, stepParking, parkedPose, KERB_MAX_M } from "../js/sim/parallel-park.js";
+import { blindSpeed, blindSpot } from "../js/sim/hidden-hazards.js";
+import { Pedestrian } from "../js/sim/pedestrians.js";
 
 const out = document.getElementById("out");
 const results = [];
@@ -370,6 +372,30 @@ async function run() {
       const pose = parkedPose(world.ego, law, world);
       check("parallel parking: parked parallel, within 30 cm of the kerb, touching nothing", law.phase === "parked" && pose.within_kerb && pose.kerb_m <= KERB_MAX_M && !touched, `${law.phase} ${pose.kerb_m} m ${pose.angle_deg} deg`);
     }
+  }
+  // Hidden hazards (sim/hidden-hazards.js), on a quiet straight street with cars parked along the right
+  // kerb: with them on, the cars hide someone standing between two of them, and the car keeps to the
+  // blind-spot speed beside them; off, neither.
+  {
+    setWeather("dry");
+    const street = { lanes: 1, lane_width: 3.5, width: 11.8, lane_offsets: [1.75], asphalt: [-5.9, 5.9], parking: [2.4, 2.4], cls: "residential", limit: 13.9, oneway: false, name: "Quiet Street" };
+    const quietMap = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -40, 220, 40],
+      edges: [{ id: "in", from: "a", to: "b", pts: [[0, 0], [200, 0]], length: 200, ...street }, { id: "out", from: "b", to: "a", pts: [[200, 0], [0, 0]], length: 200, ...street }],
+      lanes: [{ edge: "in", idx: 0, pts: [[0, -1.75], [200, -1.75]] }, { edge: "out", idx: 0, pts: [[200, 1.75], [0, 1.75]] }],
+      nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 200, y: 0 }], intersections: [], stops: [], buildings: [] });
+    const quiet = (hazards) => {
+      const world = new World(quietMap, { parked: 0, pedestrians: 0, hazards });
+      for (const [i, rear] of [60, 66.1, 72.2, 78.3, 84.4].entries()) { const c = new Vehicle(rear + CAR.rearOverhang, -4.65, 0, 0); Object.assign(c, { id: `q${i}`, edge: "in", curb: "right" }); world.parked.add(c); }
+      const ped = new Pedestrian({ id: "between", x: 83.6, y: -4.65 + CAR.width / 2 - 0.6, psi: Math.PI / 2, v: 0, speed: 1.5, path: [], crossing: null, waiting: 0, phase: 0, look: 1, at: null, held: true });
+      world.crowd.list.push(ped);
+      Object.assign(world.ego, { x: 30, y: -1.75, psi: 0, v: 12 });
+      world._road = world.roadInfo();
+      return { world, ped };
+    };
+    const on = quiet(true), off = quiet(false);
+    check("hidden hazards: parked cars hide someone standing between them", !on.world.sees(on.world.ego, on.ped) && off.world.sees(off.world.ego, off.ped));
+    const bs = blindSpot(on.world);
+    check("hidden hazards: beside them, a blind spot, at about 32 km/h on a dry road", !!bs && bs.side === "right" && Math.round(bs.limit_mps * 3.6) === 32 && Math.abs(blindSpeed() - bs.limit_mps) < 1e-9 && !blindSpot(off.world), JSON.stringify(bs));
   }
   const fixtures = buildRealismCases();
   window.__jevFixtures = fixtures;
