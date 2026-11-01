@@ -269,8 +269,9 @@ await test("the challenge, closed loop: Rules and the cautious agent keep to the
   assert.ok(off.out.v > 13, `${off.out.v}`);
   assert.ok(off.seenAt > 60);
   assert.equal(off.collisions, 1);
-  // nothing else has hidden hazards: the other challenges and the benchmark
-  assert.equal(CHALLENGES.filter((c) => c.hidden).length, 1);
+  // nothing else has hidden hazards but "Blind left" (scripts/test_hidden_traffic.mjs): the other
+  // challenges and the benchmark
+  assert.deepEqual(CHALLENGES.filter((c) => c.hidden).map((c) => c.id), ["step-out", "blind-left"]);
   const lane = [...KITS.lanes.values()][0];
   const bench = setupScenario(KITS, { start: { edge: lane.edge, lane: lane.idx, s: 2 }, route: { id: "x", polyline: [lane.pts[0], lane.pts.at(-1)], edges: [lane.edge], turns: [] }, goal: lane.pts.at(-1), traffic_seed: 1 }, { npcs: 0 });
   assert.equal(bench.world.hazards, false);
