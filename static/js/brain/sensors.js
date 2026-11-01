@@ -286,7 +286,7 @@ export function buildSnapshot(world, executing = null) {
     snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     snap.work_zone = workZone(world, p, frontS, road);
-    snap.lane_closure = laneClosure(world, frontS, road);
+    snap.lane_closure = laneClosure(world, p, frontS, road, lane);
     snap.double_parked = doubleParked(world, p, frontS, lane, executing);
     snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
@@ -858,8 +858,10 @@ function workZone(world, p, frontS, road) {
 // of it), once it could stop LET_IN_M short of the merge point braking at LET_IN_DECEL. `stop_s_route` is
 // where the front stops, either way, and `bumper_to_stop_m` how far that is; `detour`, in the closed lane,
 // the way across into the open lane at the merge point and back once past the work, in route arc lengths
-// (sim/controller.js detourAt); `limit_mps` the zone's limit, never above the street's. Or null.
-function laneClosure(world, frontS, road) {
+// (sim/controller.js detourAt), while the lane the car keeps to is the closed one (on the closure's
+// street: switched back on in the open lane beside the work, it is across already); `limit_mps` the
+// zone's limit, never above the street's. Or null.
+function laneClosure(world, p, frontS, road, lane) {
   const { ego, route, map } = world, lc = world.laneClosures;
   if (!lc?.zones.length) return null;
   const here = lc.egoAt();
@@ -896,7 +898,7 @@ function laneClosure(world, frontS, road) {
     }
     world.mergeLetIn = letInFor ? `${z.id}:${letInFor}` : null;
   }
-  const d = side === "closed" ? closureDetour(z) : null;
+  const onStreet = p.s >= route.edgeStarts[i], d = side === "closed" && (!onStreet || lane.index === z.closed) ? closureDetour(z) : null;
   const right = z.closed === e.lanes - 1 ? "right" : "left";
   return { id: z.id, side, closed_lane: right, merge_s_route: m, bumper_to_merge_m: m - frontS, at_merge: z.head === EGO_ID, turn: z.turn, let_in: z.grant === EGO_ID,
     wait, wait_for: waitFor, let_in_for: letInFor, stop_s_route: stop, bumper_to_stop_m: stop === null ? null : stop - frontS, closure_id: z.closure.id,

@@ -266,6 +266,21 @@ await test("closed loop, Rules: in the closed lane it waits at the merge point f
     assert.ok(!events.some((e) => ["collision", "merged_out_of_turn", "merged_early"].includes(e.type)), JSON.stringify(events));
     assert.equal(ctx.world.violations.merge_cut_ins || 0, 0);
   }
+  // (switched off and on again beside the work, across in the open lane, it stays there: the way across
+  // is not taken twice)
+  {
+    const ctx = street();
+    drive(ctx.world, CLOSED, M - 10, 4);
+    const { autopilot } = await run(ctx, { limit: 30, until: (w) => frontOf(w.ego) > ctx.zone.r + 4 });
+    autopilot.setEnabled(false); autopilot.setEnabled(true);
+    const c = { ...ctx, autopilot };
+    let worst = 0;
+    while (frontOf(ctx.world.ego) < ctx.zone.f) {
+      step(c); if (autopilot.firing) await autopilot.firing;
+      worst = Math.max(worst, Math.abs(along(ctx.world.ego).lateral - E.lane_offsets[OPEN]));
+    }
+    assert.ok(worst < 0.8, `${worst.toFixed(2)} m off the open lane`);
+  }
   {
     const ctx = street();
     const c = car(ctx, CLOSED, M - 20, "c1", { v: 4 });
