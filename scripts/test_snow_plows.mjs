@@ -276,6 +276,13 @@ await test("closed loop: Rules passes a curb-lane plow on the left in clear weat
     const q = await closedLoop(ctx, p, { limit: 60, settle: 25 });
     assert.equal(q.level, null, "stays behind");
     assert.ok(q.minGap > 70, `above 80 km/h, ${q.minGap.toFixed(1)} m back`);
+    // (and traffic, which sees as far as it needs to, 100 m)
+    const t = william({ weather: "dry", s: 15 });
+    const tp = t.fleet.addPlow(WPG.lane(EDGE, 1), 160, PLOW_MPS, [[NEXT, 1]]);
+    const car = npc(t.world, t.fleet, { lane: 1, s: 40, v: 10, id: "fast_follower" });
+    let gap = Infinity;
+    for (let i = 0; i < 60 * 50; i++) { step({ world: t.world, fleet: t.fleet, autopilot: idle }); if (i > 60 * 30) gap = Math.min(gap, plowRelation(car, tp)?.gap_m ?? Infinity); }
+    assert.ok(gap > 98, `traffic above 80 km/h: ${gap.toFixed(1)} m back`);
   } finally { for (const [id, limit] of fast) WPG.edges.get(id).limit = limit; }
   setWeather("dry");
 });

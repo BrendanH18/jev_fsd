@@ -775,8 +775,9 @@ export class NpcFleet {
           }
         } else n.parkWait = 0;
       } else if (n.parkWait) n.parkWait = 0;
-      // a snow plow ahead in the lane to its left (sim/snow-plow.js): never passed on the right
-      const forPlow = this.plows.length ? this.plowHold(n, path, front, offset) : null;
+      // a snow plow ahead (sim/snow-plow.js), as far as the distance to stay back from it: in its lane,
+      // or in the lane to its left, never passed on the right
+      const forPlow = this.plows.length ? this.plowHold(n, path, front, offset, edge.limit) : null;
       if (forPlow && forPlow.gap < gap) { gap = forPlow.gap; leadV = forPlow.plow.v; leader = forPlow.plow; }
       // (and stays back the distance the law asks of it, less the room it leaves anyway)
       if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
@@ -1183,20 +1184,21 @@ export class NpcFleet {
     return plow;
   }
 
-  // A snow plow ahead of driver `n` going its way, in the lane to the left of the line it keeps to
-  // (`offset`, right of its path), and not turning left: the driver stays behind it rather than pass it
-  // on the right; and in poor sight one in the lane to its right too: no passing it at all.
+  // A snow plow ahead of driver `n` going its way, out to the stay-back distance (further than it looks
+  // for a leader where the limit is over 80 km/h): in the lane it keeps to (`offset`, right of its
+  // path); in the lane to its left, not turning left, as the driver stays behind it rather than pass it
+  // on the right; and in poor sight in the lane to its right too: no passing it at all.
   // { plow, gap (front to its rear) }, or null.
-  plowHold(n, path, front, offset) {
+  plowHold(n, path, front, offset, limit) {
     if (isPlow(n) || n.kind === "bike" || n.transit?.tram || n.pull) return null;
-    const sight = this.world.visibility.range >= PASS_SIGHT_M;
+    const sight = this.world.visibility.range >= PASS_SIGHT_M, look = Math.max(LOOK_M, stayBack(limit) + 10);
     let best = null;
     for (const o of this.plows) {
-      if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5 || turningLeft(o) || Math.abs(wrap(o.psi - n.psi)) > Math.PI / 4) continue;
+      if (Math.abs(o.x - n.x) > look + 5 || Math.abs(o.y - n.y) > look + 5 || Math.abs(wrap(o.psi - n.psi)) > Math.PI / 4) continue;
       const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
-      if (!p || p.s <= path.s + 0.5 || p.s > path.s + LOOK_M) continue;
+      if (!p || p.s <= path.s + 0.5 || p.s > path.s + look) continue;
       const lat = p.lateral - offset;
-      if (!(lat < -SAME_LANE_M && lat > -NEXT_LANE_M) && !(!sight && lat > SAME_LANE_M && lat < NEXT_LANE_M)) continue;
+      if (!(Math.abs(lat) < SAME_LANE_M) && !(lat < -SAME_LANE_M && lat > -NEXT_LANE_M && !turningLeft(o)) && !(!sight && lat > SAME_LANE_M && lat < NEXT_LANE_M)) continue;
       const gap = p.s - front - o.spec.rearOverhang;
       if (gap > -1 && (!best || gap < best.gap)) best = { plow: o, gap: Math.max(0.05, gap) };
     }
