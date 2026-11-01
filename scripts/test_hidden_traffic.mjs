@@ -88,6 +88,11 @@ await test("with hazards on, a vehicle in traffic hides a car or a cyclist behin
     assert.equal(world.sees(ego, hidden), !hazards, `hidden car, hazards ${hazards}`);
     assert.equal(world.sees(ego, bike), !hazards, `hidden cyclist, hazards ${hazards}`);
     assert.equal(world.sees(ego, van), true);
+    // (the audit's `unseen`: hidden by a vehicle's body, not just out of sight)
+    assert.equal(world.hiddenByVehicle(hidden), hazards);
+    const far = car("far", ego.x + 140, -HALF, Math.PI, 8); world.npcs.push(far);
+    assert.equal(world.sees(ego, far), false); assert.equal(world.hiddenByVehicle(far), false);
+    world.npcs.splice(world.npcs.indexOf(far), 1);
     // (a cyclist hides nothing)
     world.npcs.splice(world.npcs.indexOf(van), 1);
     const small = Object.assign(car("bike2", ego.x + 15, -HALF, 0, 4, BIKE), { kind: "bike" });

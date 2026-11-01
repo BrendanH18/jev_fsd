@@ -614,7 +614,7 @@ nothing it can see is coming. Turning right on red (`rightOnRed`), a vehicle hid
 its left is a `view` it waits for (`hidden_by`). Decision models and LLMs get
 `intersection.oncoming.lane_hidden_by` and `sees_lane_m`, `give_way.view` naming the vehicle, situation
 lines and a prompt line. The audit's failures to yield at a give-way junction or to oncoming or cross
-traffic carry `unseen` when the vehicle was hidden from the car as it pulled out; the coaching score counts
+traffic carry `unseen` when another vehicle's body hid it from the car as it pulled out (`World.hiddenByVehicle`); the coaching score counts
 those (`hidden_cutoffs`, an incident each, and a tip), reported only with hidden hazards on. The HUD says
 "THE VAN HIDES THE ONCOMING LANE · WAIT UNTIL YOU CAN SEE", "THE CAR HIDES THE CROSS STREET · CREEP UP AND
 LOOK" (or "· WAIT UNTIL YOU CAN SEE" once it has looked) and "THE CAR HIDES TRAFFIC FROM THE LEFT · WAIT",

@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Twenty-six authored challenges
+## Twenty-seven authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|

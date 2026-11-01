@@ -240,6 +240,11 @@ export class World {
   // Line of sight: buildings, weather and darkness hide anything, and a vehicle in traffic hides a
   // pedestrian behind it (sim/crosswalk.js); with hidden hazards on, so does one standing at the kerb
   // (sim/hidden-hazards.js), and road vehicles hide other vehicles and cyclists (sim/hidden-traffic.js).
+  // (with hidden traffic: a vehicle or cyclist the car would see but for another vehicle's body)
+  hiddenByVehicle(o, observer = this.ego) {
+    return this.hazards && hideable(o) && this.visibility.sees(observer, o) && hiddenVehicle(this, observer, o);
+  }
+
   sees(observer, o) {
     if (!this.visibility.sees(observer, o)) return false;
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
@@ -859,8 +864,8 @@ export class World {
     if (due) {
       g.counted = true;
       this.violations.failed_to_yield++;
-      // (with hidden traffic, sim/hidden-traffic.js: whether a vehicle hid it from the car as it pulled out)
-      this.events.push({ type: "failed_to_yield", to: g.to, with: due.id, ...(this.hazards && !this.sees(this.ego, due) ? { unseen: true } : {}) });
+      // (with hidden traffic, sim/hidden-traffic.js: whether another vehicle hid it from the car as it pulled out)
+      this.events.push({ type: "failed_to_yield", to: g.to, with: due.id, ...(this.hiddenByVehicle(due) ? { unseen: true } : {}) });
     }
   }
 
@@ -950,7 +955,7 @@ export class World {
     if (due) {
       j.counted = true;
       this.violations.failed_to_yield++;
-      this.events.push({ type: "failed_to_yield", to: j.rightOnRed ? "cross traffic" : "oncoming traffic", with: due.id, ...(this.hazards && !this.sees(this.ego, due) ? { unseen: true } : {}) });
+      this.events.push({ type: "failed_to_yield", to: j.rightOnRed ? "cross traffic" : "oncoming traffic", with: due.id, ...(this.hiddenByVehicle(due) ? { unseen: true } : {}) });
     }
   }
 
