@@ -1,6 +1,6 @@
 import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
-import { Vehicle, BIKE, BUS, CAR, DELIVERY_VAN, SCHOOL_BUS, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
+import { Vehicle, BIKE, BUS, CAR, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
 import { isJunction } from "../sim/emergency.js";
 import { BUS_YIELD_LIMIT_MPS, busStopFront, curbShift } from "../sim/bus.js";
@@ -19,6 +19,7 @@ import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, workZoneSites } from "../sim/work-zo
 import { vanSites } from "../sim/double-parked.js";
 import { legalStretches, straight as straightKerb } from "../sim/parallel-park.js";
 import { QUIET, STEP_OUT_M } from "../sim/hidden-hazards.js";
+import { PLOW_MPS } from "../sim/snow-plow.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -76,6 +77,8 @@ export const CHALLENGES = [
     description: "A quiet street in Kitsilano, lined with parked cars on your side. The limit is 50 km/h, and you can't see the sidewalk behind them.", lesson: "Cars parked at the kerb hide whoever is behind them, and a child can step out from between two of them before you can see them. Beside parked cars on a quiet street, drive at a speed you can stop from in the distance you can see: about 30 km/h on a dry road, slower in rain or snow. Driver's handbooks across Canada say the same." },
   { id: "blind-left", title: "Blind left", map: "kitsilano", weather: "dry", time: "afternoon", seed: 27042, icon: "◐", difficulty: "Sight lines", hazard: "hidden-left", hidden: true, street: "West 4th Avenue",
     description: "A left turn on a green on West 4th Avenue. A van on the other side of the junction is waiting to turn left too, and the lane beside it is hidden behind it.", lesson: "A vehicle waiting to turn left opposite you can hide traffic coming straight through in the lane beside it. Don't turn until you can see that lane is clear: wait in the junction, and go once you can see that nothing is coming." },
+  { id: "snow-plow", title: "Behind the plow", map: "winnipeg", weather: "snow", time: "afternoon", seed: 28042, icon: "❆", difficulty: "Patience", hazard: "snow-plow", street: "William Avenue",
+    description: "It's snowing on William Avenue, two lanes each way. A city plow is clearing the left lane just ahead of you at 18 km/h, its blue and amber lamps flashing, and the right lane beside it is wide open.", lesson: "Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h): that is Manitoba's law, and other provinces' handbooks say the same. Never pass one on the right, the side its blade throws snow and debris, and don't pass one at all when blowing snow hides the road ahead. Pass only on the left, where you can see the way is clear, and move back in well ahead of it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -186,6 +189,44 @@ function doubleParkSites(map, street) {
     vanSiteCache.set(map, sites);
   }
   const sites = vanSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
+// Behind the plow: a snow plow (sim/snow-plow.js) clearing the left lane of a straight street with two
+// lanes or more going the car's way and a limit of 80 km/h or less (on the challenge's `street`, where
+// it has one), at its clearing speed, its rear PLOW_AHEAD_M ahead of the car's front as the car starts
+// from a standstill in the curb lane, PLOW_START_M along the street. The curb lane beside the plow is
+// empty all the way to the destination, PLOW_ROUTE_M on and at least PLOW_END_M short of the junction
+// at the street's end: the car could draw level with the plow and go by it on the right, which it must
+// never do. It stays STAY_BACK_M behind it in the curb lane all the way, the plow carrying straight on
+// past the junction. (In falling snow it cannot see far enough to pass the plow on the left.)
+const PLOW_START_M = 15, PLOW_AHEAD_M = 20, PLOW_ROUTE_M = 330, PLOW_END_M = 60;
+const plowSiteCache = new WeakMap();
+function plowSites(map, street) {
+  if (!plowSiteCache.has(map)) {
+    const sites = [];
+    for (const e of map.edges.values()) {
+      if (e.ring || e.lanes < 2 || e.limit > 80 / 3.6 + 0.1 || (map.crosswalks || []).some(c => c.edge === e.id)) continue;
+      const end = (e.control?.s_line ?? e.length) - PLOW_END_M;
+      if (end - PLOW_START_M < PLOW_ROUTE_M) continue;
+      const h0 = headingAt(e.pts, e.cum, PLOW_START_M);
+      let straight = true;
+      for (let s = PLOW_START_M; s <= end && straight; s += 10) straight = Math.abs(wrapAngle(headingAt(e.pts, e.cum, s) - h0)) < 0.08;
+      if (!straight) continue;
+      // (the plow carries straight on along the street past the junction, in its leftmost lane)
+      const ahead = [];
+      for (let prev = e.id, i = 0; i < 4; i++) {
+        const next = map.successors(prev).find(id => map.classifyTurn(map.turnAngle(prev, id)) === "straight" && !map.edges.get(id).ring);
+        if (!next) break;
+        ahead.push([next, 0]); prev = next;
+      }
+      const lane = map.lane(e.id, e.lanes - 1), scale = lane.length / e.length;
+      sites.push({ lane, startS: PLOW_START_M * scale, goalS: (PLOW_START_M + PLOW_ROUTE_M) * scale, plow: { edge: e.id, ahead } });
+    }
+    sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    plowSiteCache.set(map, sites);
+  }
+  const sites = plowSiteCache.get(map), on = sites.filter(s => s.lane.edgeRef.name === street);
   return on.length ? on : sites;
 }
 
@@ -801,11 +842,14 @@ export function challengeScenario(map, challenge) {
   const steps = challenge.hazard === "step-out" ? stepOutSites(map, challenge.street) : null;
   if (steps && !steps.length) throw new Error("This map has no straight block of a quiet two-way street with one lane each way and a parking lane, long enough and outside any school or playground zone.");
   const step = steps ? steps[Math.floor(random() * steps.length)] : null;
-  const start = step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const plows = challenge.hazard === "snow-plow" ? plowSites(map, challenge.street) : null;
+  if (plows && !plows.length) throw new Error("This map has no long straight street with two lanes or more going one way and a limit of 80 km/h or less.");
+  const plow = plows ? plows[Math.floor(random() * plows.length)] : null;
+  const start = plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -817,7 +861,7 @@ export function challengeScenario(map, challenge) {
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
   // (past a double-parked van, along its street only)
-  for (let i = 0; i < 12 && !van && !park && !step && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && !van && !park && !step && !plow && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -827,7 +871,7 @@ export function challengeScenario(map, challenge) {
     chain.push(lane); seen.add(id); length += lane.length;
   }
   // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
-  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : last.length - 10;
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : last.length - 10;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
@@ -849,6 +893,7 @@ export function challengeScenario(map, challenge) {
     ...(van ? { doubleParked: van.van } : {}),
     ...(park ? { parking: park.space } : {}),
     ...(step ? { stepOut: step.stepOut } : {}),
+    ...(plow ? { snowPlow: plow.plow } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -894,6 +939,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.parking) Object.assign(world.challenge, placeParking(world, fleet, scenario.parking, challenge.seed));
   if (scenario.stepOut) Object.assign(world.challenge, placeStepOut(world, scenario.stepOut, challenge.seed));
   if (scenario.blindLeft) Object.assign(world.challenge, placeBlindLeft(world, fleet, scenario.blindLeft));
+  if (scenario.snowPlow) Object.assign(world.challenge, placePlow(world, fleet, scenario.snowPlow, scenario.start));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -1336,6 +1382,14 @@ function placeVan(world, fleet, { edge, rear }, seed) {
     fleet.vehicles.push(car); ids.push(car.id);
   }
   return { vanId: d.van.id, vanCarIds: ids, at: pointAt(e.pts, e.cum, rear) };
+}
+// The snow plow in the leftmost lane (see plowSites), its rear PLOW_AHEAD_M ahead of the car's front,
+// already clearing at its speed, carrying straight on.
+function placePlow(world, fleet, { edge, ahead }, start) {
+  const map = world.map, e = map.edges.get(edge), curb = map.lane(edge, start.lane), lane = map.lane(edge, 0), spec = world.ego.spec;
+  const rear = start.s * e.length / curb.length + (spec.length - spec.rearOverhang) + PLOW_AHEAD_M + SNOW_PLOW.rearOverhang;
+  const plow = fleet.addPlow(lane, rear * lane.length / e.length, PLOW_MPS, ahead);
+  return { plowId: plow.id, at: [plow.x, plow.y] };
 }
 // The cars parked either side of the space (see parkingSites), staying put, and the car that will come
 // up behind, waiting until the car comes up to the space.

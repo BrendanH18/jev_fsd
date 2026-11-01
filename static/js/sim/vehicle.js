@@ -115,6 +115,15 @@ export const DELIVERY_VAN = {
   yawInertia: 7500, cgToFront: 1.65,   // (an empty cargo van, a little over half its weight on the front axle)
 };
 
+// A city snow plow (sim/snow-plow.js): a single-axle dump truck with a salt spreader on its box, a
+// one-way front blade angled across its nose (2.9 m long, at 30 degrees it spans its 2.6 m width) and a
+// wing blade folded up along its right side, loaded with salt and sand. Its length takes in the blade.
+export const SNOW_PLOW = {
+  ...CAR, kind: "snow_plow", wheelbase: 5.2, length: 9.8, width: 2.6, rearOverhang: 1.9, maxSteer: 40 * Math.PI / 180,
+  maxAccel: 1.2, maxSpeed: 25, mass: 16000, yawInertia: 110000, cgToFront: 2.3, cgHeight: 1.3, track: 2.0,
+  power: 250000, cdA: 7.5, crr: 0.01, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
+};
+
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
 export const ROAD = { mu: 0.9 };
 export const G = 9.81;

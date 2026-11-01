@@ -23,6 +23,7 @@ import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIn
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DoubleParked } from "./double-parked.js";
+import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
 import { Outages, controlAt } from "./outage.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
@@ -148,6 +149,13 @@ const AUDIT_FLAGGER_MOVING_MPS = 1;
 const AUDIT_MEET_M = 8;
 const AUDIT_MEET_S = 2;
 const AUDIT_MEET_SIDE_M = 1;
+// Snow plows (sim/snow-plow.js): the car passes one when its centre draws level with the plow's,
+// going its way in the lane beside it. On its right (the plow not turning left), that is passing it on
+// the right, counted once a pass. Having passed one on the left, moving back into its lane with its
+// rear less than the stay-back distance, less AUDIT_CUT_SLACK_M, ahead of the plow's front is cutting
+// in front of it (an event for coaching, once a pass).
+const AUDIT_PLOW_M = 40;
+const AUDIT_CUT_SLACK_M = 3;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
@@ -211,7 +219,9 @@ export class World {
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
-    this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0 };
+    this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0, plow_right_passes: 0 };
+    this.plowPass = new Map();     // snow plow id -> where the car was beside it last tick, and what it has counted this pass
+    this.plowsSeen = false;        // whether a snow plow has worked the streets this drive (sim/snow-plow.js)
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
     this.lastSignal = null;
@@ -323,6 +333,7 @@ export class World {
     this.flaggerCalls.clear();
     this.flaggerYields?.clear();
     this.vanPass = null;
+    this.plowPass.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -543,6 +554,7 @@ export class World {
     this.auditArrow();
     this.auditFlaggers();
     this.auditVans();
+    this.auditPlows();
     this.auditKerb();
     leftSpace(this);
   }
@@ -590,6 +602,38 @@ export class World {
         this.events.push({ type: "failed_to_yield", to: "oncoming traffic", with: n.id, double_parked: true, van: d.id });
         return;
       }
+    }
+  }
+
+  // Passing a snow plow on the right, and cutting back in front of one passed on the left (see
+  // AUDIT_PLOW_M).
+  auditPlows() {
+    const npcs = this.npcs || [];
+    if (!npcs.some(isPlow)) { this.plowPass.clear(); return; }
+    this.plowsSeen = true;
+    const ego = this.ego, keep = stayBack(this._road?.limit ?? 11.2);
+    for (const n of npcs) {
+      if (!isPlow(n)) continue;
+      const rel = Math.abs(n.x - ego.x) < AUDIT_PLOW_M && Math.abs(n.y - ego.y) < AUDIT_PLOW_M ? plowRelation(ego, n) : null;
+      if (!rel) { this.plowPass.delete(n.id); continue; }
+      const prev = this.plowPass.get(n.id), pass = prev ? { ...prev } : { right: false, left: false, cut: false };
+      // (the car's centre drawing level with the plow's, from behind; and the plow getting ahead again
+      // starts a new pass)
+      if (prev && prev.ahead > 0 && rel.ahead_m <= 0) {
+        const beside = Math.abs(rel.right_m) > SAME_LANE_M && Math.abs(rel.right_m) < NEXT_LANE_M;
+        if (beside && rel.right_m < 0 && !turningLeft(n) && !pass.right) {
+          pass.right = true;
+          this.violations.plow_right_passes++;
+          this.events.push({ type: "passed_plow_on_right", plow: n.id });
+        }
+        if (beside && rel.right_m > 0) pass.left = true;
+      } else if (prev && prev.ahead <= 0 && rel.ahead_m > 0) Object.assign(pass, { right: false, left: false, cut: false });
+      if (pass.left && !pass.cut && Math.abs(rel.right_m) < SAME_LANE_M && rel.clear_m > -1 && rel.clear_m < keep - AUDIT_CUT_SLACK_M) {
+        pass.cut = true;
+        this.events.push({ type: "cut_in_front_of_plow", plow: n.id, ahead_m: Math.round(rel.clear_m * 10) / 10 });
+      }
+      pass.ahead = rel.ahead_m;
+      this.plowPass.set(n.id, pass);
     }
   }
 

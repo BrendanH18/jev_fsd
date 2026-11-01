@@ -162,6 +162,13 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(d.queued ? { waiting_ahead: d.queued } : {}), pass_at: r1(d.limit_mps),
       ...(d.wait ? { stop: true, wait_in_m: r1(Math.max(0, d.bumper_to_stop_m)) } : { go_round: true }) };
   }
+  if (snap.snow_plow) {
+    const p = snap.snow_plow;
+    state.snow_plow = { id: p.id, kind: p.kind, lights: "blue and amber, flashing", lane: p.lane === "same" ? "the car's lane" : `the lane to the car's ${p.lane}`,
+      ...(p.gap_m > 0 ? { gap_m: r1(p.gap_m) } : p.clear_m > 0 ? { behind_car_m: r1(p.clear_m) } : { beside_car: true }), speed: r1(p.speed), keep_back_m: p.keep_back_m,
+      ...(p.turning_left ? { turning_left: true } : {}),
+      pass: p.passing ? `car is passing it on the left: back in only ${p.keep_back_m} m ahead of it` : p.lane === "right" ? "on the left only" : p.holds ? (p.may_pass ? "on the left only" : "do not pass") : "on the left only" };
+  }
   if (snap.roadside_stop) {
     const r = snap.roadside_stop;
     state.roadside_vehicle = { id: r.id, kind: r.name, lights: r.lights, ...(r.gap_m > 0 ? { gap_m: r1(r.gap_m) } : { beside_car: true }), pass_at: r1(r.limit_mps),
@@ -302,6 +309,7 @@ export function situationClauses(snap) {
   }
   if (snap.work_zone) out.push(workZoneClause(snap));
   if (snap.double_parked) out.push(vanClause(snap));
+  if (snap.snow_plow) out.push(plowClause(snap.snow_plow));
   if (snap.roadside_stop) out.push(roadsideClause(snap));
   if (snap.blind_spot) out.push(blindClause(snap.blind_spot));
   if (snap.emergency_ahead) out.push(`${/^[aeiou]/.test(snap.emergency_ahead.kind) ? "An" : "A"} ${snap.emergency_ahead.kind} with its siren on is ${Math.round(snap.emergency_ahead.gap_m)} m ahead, going the car's way: do not follow it within ${FOLLOW_M} m; \`car.target_speed\` already keeps the car back.`);
@@ -327,7 +335,7 @@ export function situationClauses(snap) {
     const turn = snap.nav && (snap.nav.next_turn === "left" || snap.nav.next_turn === "right") ? ` for the ${snap.nav.next_turn} turn${snap.nav.turn_street ? ` onto ${snap.nav.turn_street}` : ""}` : " for a turn";
     if (snap.lane.route_ahead) out.push(`The car is in the ${car} lane, and its route moves to the ${route} lane ahead${turn}. Choose a \`change_${back}_*\` candidate to move into it when one is offered; the car must be in that lane within ${within} m.`);
     // (moved over for a vehicle stopped at the roadside: not until past it)
-    else out.push(`The car is in the ${car} lane, but its route continues in the ${route} lane. Choose a \`change_${back}_*\` candidate to return ${snap.roadside_stop && !snap.roadside_stop.in_adjacent_lane ? `once past the ${snap.roadside_stop.name}, ` : ""}when one is offered; the car must be back within ${within} m.`);
+    else out.push(`The car is in the ${car} lane, but its route continues in the ${route} lane. Choose a \`change_${back}_*\` candidate to return ${snap.roadside_stop && !snap.roadside_stop.in_adjacent_lane ? `once past the ${snap.roadside_stop.name}, ` : snap.snow_plow?.passing ? `once ${snap.snow_plow.keep_back_m} m ahead of the snow plow, ` : ""}when one is offered; the car must be back within ${within} m.`);
   }
   if (snap.roadside?.length) out.push("Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes.");
   if (!snap.road.on_road) out.push("The car is off the road; the candidates steer back toward the lane.");
@@ -420,6 +428,18 @@ function workZoneClause(snap) {
   if (w.wait) return `${lead} Stop at the line and do not go on until the paddle turns to SLOW: traffic coming the other way has the one lane now. ${at < 2 ? "Hold still where the car is." : `Slow down and stop ${at} m ahead (\`stop_for_flagger\`).`}${round}`;
   if (w.paddle === "stop") return `${lead} The car was too close to stop for it when it turned: keep going through the one lane at ${kmh} km/h, with care.${round}`;
   return `${lead} Go on with care at no more than ${kmh} km/h (\`car.target_speed\` already does): the crew works beside the lane.${round}`;
+}
+
+// A snow plow ahead of the car, or beside it (sim/snow-plow.js).
+function plowClause(p) {
+  const where = p.lane === "same" ? "in the car's lane" : `in the lane to the car's ${p.lane}`, kmh = Math.round(p.speed * 3.6);
+  const lead = `A snow plow (\`${p.id}\`), its blue and amber lamps flashing, is clearing the road ${p.gap_m > 0 ? `${Math.round(p.gap_m)} m ahead` : "beside the car"} ${where}, going the car's way at ${kmh} km/h, throwing snow to its right.`;
+  const keep = `Stay at least ${p.keep_back_m} m behind it: \`car.target_speed\` already keeps the car back.`;
+  if (p.passing) return `${lead} The car is passing it on the left: carry on past, and move back into its lane only once the car is ${p.keep_back_m} m ahead of it (the candidates offer that only then).`;
+  if (p.lane === "right") return `${lead} The car may pass it on the left, in the lane it is in.`;
+  if (p.turning_left) return `${lead} It is signalling a left turn: let it turn.`;
+  if (p.lane === "left") return `${lead} Never pass a snow plow on the right, the side its blade throws snow and debris: stay behind it in this lane. ${keep}`;
+  return `${lead} ${keep} ${p.may_pass ? "Pass it only on the left, through the lane to the car's left (a `change_left_*` candidate, when one is offered), never on the right." : "Do not pass it: the road ahead cannot be seen clearly enough, or there is no lane going the car's way to its left."}`;
 }
 
 // A van double-parked in the car's lane ahead (sim/double-parked.js).

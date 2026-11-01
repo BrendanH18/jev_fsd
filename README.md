@@ -24,7 +24,8 @@ school buses round to let children off, signs 30 km/h zones past schools and pla
 for a road crew now and then, with a flagger at each end taking turns to wave each direction through
 the one lane left, cuts the power to a signal now and then, so everyone takes turns at its dark lights as
 at an all-way stop, double-parks delivery vans in the lane, so drivers wait for the oncoming lane to clear
-before going round them, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. At the
+before going round them, sends a snow plow down the main streets while it snows, which everyone stays
+30 m behind and never passes on the right, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. At the
 end of a drive the AI driver parallel parks in a space near the destination, and pulls out of it again
 to start the next one. Cars parked at the kerb hide the sidewalk behind them, now and then someone steps
 out from between two of them, and the AI driver keeps to a speed it can stop from beside them. Then
@@ -65,7 +66,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Twenty-seven hand-built scenarios test the situations real drivers get wrong:
+Twenty-eight hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -96,6 +97,7 @@ Twenty-seven hand-built scenarios test the situations real drivers get wrong:
 | **Squeeze in** | Vancouver, afternoon | One space is left on a block of West 10th Avenue lined with parked cars, 6.8 m long, and a car comes up behind as you slow for it: signal, pull up alongside the car in front, wait until it's clear behind, then reverse in and park within 30 cm of the kerb |
 | **Between the cars** | Vancouver, afternoon | A quiet 50 km/h street in Kitsilano, lined with parked cars on your side, and a child hidden between two of them steps out when you're 15 m away: at about 30 km/h you stop short of them, at 50 you can't |
 | **Blind left** | Vancouver, afternoon | A left turn on a green on West 4th Avenue, with a delivery van waiting in the junction opposite to turn left: the lane beside it is hidden behind it, and a car is coming straight through in it. Wait at the edge of the cross street until you can see that lane is clear |
+| **Behind the plow** | Winnipeg, afternoon, snow | A city plow is clearing the left lane of William Avenue at 18 km/h, blue and amber lamps flashing, and the right lane beside it is wide open: stay 30 m behind it all the way, and never go by it on the right |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

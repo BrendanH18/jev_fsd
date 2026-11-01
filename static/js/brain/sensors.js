@@ -28,6 +28,7 @@ import { PASS_DECEL, PASS_MPS, VAN_LOOK_M, VAN_NAME, isVan, queuedAhead, wayRoun
 import { TRY_START_M } from "../sim/parallel-park.js";
 import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
 import { laneSight } from "../sim/hidden-traffic.js";
+import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_LOOK_M, PLOW_NAME, SAME_LANE_M, isPlow, stayBack, turningLeft } from "../sim/snow-plow.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
@@ -157,7 +158,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null, parking: null, blind_spot: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null, snow_plow: null, parking: null, blind_spot: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -282,6 +283,7 @@ export function buildSnapshot(world, executing = null) {
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     snap.work_zone = workZone(world, p, frontS, road);
     snap.double_parked = doubleParked(world, p, frontS, lane, executing);
+    snap.snow_plow = snowPlow(world, p, frontS, lane, visibleNpcs, road.limit || 11.2);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -310,7 +312,7 @@ export function buildSnapshot(world, executing = null) {
       const lead = ahead[0];
       const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
       snap.following = { id: lead.vehicle.id, gap_m: gap, speed: lead.vehicle.v, closing_mps: ego.v - lead.vehicle.v, vehicle: lead.vehicle, s: lead.s,
-        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isVan(lead.vehicle) ? "double-parked van" : lead.vehicle.parked ? "parked car" : "car" };
+        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isVan(lead.vehicle) ? "double-parked van" : isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car" };
     }
     const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
     if (behind.length) {
@@ -878,6 +880,38 @@ function doubleParked(world, p, frontS, lane, executing) {
   return null;
 }
 
+// A snow plow the car can see going its way (sim/snow-plow.js), in its lane or a lane beside it, from
+// PLOW_LOOK_M ahead of it until the car's rear is the stay-back distance past its front: the nearest.
+// `lane` is where it is from the car: "same", "left" (the lane to the car's left) or "right";
+// `gap_m` from the car's front to its rear (negative once beside it), `clear_m` from its front to the
+// car's rear (positive once the car is wholly past it), `s_rear_route` and `lateral_route` where it is
+// along and across the route (right of the route's line, in the frame at the car); `keep_back_m` the
+// distance to stay back from it. `holds`: the car must stay back of it, in its lane or in the lane to
+// the car's left (never passing it on the right), unless it is turning left; `may_pass`: the car may
+// pass it on the left now: in the car's lane, with a lane to the car's left going its way, and the
+// car seeing as far as it ever does (nothing hiding the road ahead); `passing`: the car is beside it
+// or past it on its left. Or null.
+function snowPlow(world, p, frontS, lane, visibleNpcs, limit) {
+  const { route, ego } = world, keep = stayBack(limit);
+  let best = null;
+  for (const n of visibleNpcs) {
+    if (!isPlow(n)) continue;
+    const q = route.project(n.x, n.y, p.index);
+    if (!q || q.distance > NEXT_LANE_M + 4 || Math.abs(wrap(n.psi - q.heading)) > Math.PI / 4) continue;
+    const across = q.lateral + route.frameMove(p.s, q.s), side = across - lane.center;
+    const where = Math.abs(side) < SAME_LANE_M ? "same" : side < 0 && side > -NEXT_LANE_M ? "left" : side > 0 && side < NEXT_LANE_M ? "right" : null;
+    const rear = q.s - n.spec.rearOverhang, gap = rear - frontS, clear = p.s - ego.spec.rearOverhang - (rear + n.spec.length);
+    if (!where || gap > PLOW_LOOK_M || clear > keep) continue;
+    if (best && Math.abs(gap) >= Math.abs(best.gap_m)) continue;
+    const turning = turningLeft(n);
+    best = { id: n.id, kind: PLOW_NAME, lane: where, gap_m: gap, clear_m: clear, speed: Math.max(0, n.v), s_rear_route: rear, lateral_route: across, keep_back_m: keep, turning_left: turning,
+      holds: (where === "same" || (where === "left" && !turning)) && clear < 0,
+      may_pass: where === "same" && !!route.laneSpan(p.s, lane.delta - 1) && world.visibility.range >= PASS_SIGHT_M,
+      passing: where === "right" && gap < 0 };
+  }
+  return best;
+}
+
 // The signal the car's route takes it through next, within 60 m, when traffic it can see past the
 // junction, going its way, stopped or slower than 3 m/s, leaves no room for all of the car beyond it
 // (sim/junction-box.js, Québec's Highway Safety Code): it waits at the line (`stop_s_route`, aimed
@@ -1174,6 +1208,7 @@ function laneOptions(snap, world) {
   // In the lane next to a vehicle stopped at the roadside with its lights flashing, still short of it:
   // move over, to the lane on the left, if it runs on past it.
   const rs = snap.roadside_stop;
+  const sp = snap.snow_plow;
   const moveOver = rs && rs.in_adjacent_lane && rs.other_lane && rs.gap_m > MOVE_OVER_MIN_M;
   for (const dir of ["left", "right"]) {
     const delta = lane.delta + (dir === "left" ? -1 : 1);
@@ -1193,12 +1228,17 @@ function laneOptions(snap, world) {
     const v = Math.max(0, ego.v);
     side.gap_ok = !side.alongside
       && (!side.leader || side.leader.gap_m >= LANE_GAP_M + Math.max(0, v - side.leader.speed) * GAP_AHEAD_S)
-      && (!side.rear || side.rear.gap_m >= LANE_GAP_M + Math.max(0, side.rear.speed - v) * GAP_BEHIND_S);
-    side.target_v = desiredSpeed({ ...snap, following: side.leader ? { gap_m: side.leader.gap_m, speed: side.leader.speed } : null }).v;
+      && (!side.rear || side.rear.gap_m >= LANE_GAP_M + Math.max(0, side.rear.speed - v) * GAP_BEHIND_S)
+      // (never in front of a snow plow closer than the distance to stay back from it: sim/snow-plow.js)
+      && !(sp && side.rear?.id === sp.id && side.rear.gap_m < sp.keep_back_m);
+    // (in a lane with a snow plow on its right, the car need not stay back of it: sim/snow-plow.js)
+    const plowThere = sp && sp.lateral_route - span.offset > SAME_LANE_M ? null : sp;
+    side.target_v = desiredSpeed({ ...snap, snow_plow: plowThere, following: side.leader ? { gap_m: side.leader.gap_m, speed: side.leader.speed } : null }).v;
     const room = (side.until_s ?? route.length) - (s + FRONT);
     if (lane.shift) side.offer = delta === lane.from_delta && !inJunction(CHANGE_JUNCTION_M) ? "abort" : null;
     else if (Math.abs(delta) < Math.abs(lane.delta)) side.offer = inJunction(CHANGE_JUNCTION_M) ? null : "return";
-    else side.offer = slowAhead && side.target_v > f.speed + 2 && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M) ? "pass"
+    // (a snow plow, only on the left and only when the car may pass it: sim/snow-plow.js)
+    else side.offer = slowAhead && !(f.id === sp?.id && (dir === "right" || !sp.may_pass)) && side.target_v > f.speed + 2 && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M) ? "pass"
       : moveOver && dir === "left" && (side.until_s ?? route.length) > rs.s_front_route + MOVE_OVER_PAST_M && !inJunction(CHANGE_JUNCTION_M) ? "move_over" : null;
     lane.sides[dir] = side;
   }
@@ -1311,6 +1351,14 @@ export function desiredSpeed(snap) {
   if (ea) {
     const va = ea.speed * Math.max(0, Math.min(1, (ea.gap_m - 30) / (FOLLOW_M - 30)));
     if (va < v) { v = va; reasons.push(`keeping ${FOLLOW_M} m behind the ${ea.kind}`); }
+  }
+  // a snow plow it must stay back of (sim/snow-plow.js): no closer than the stay-back distance, standing
+  // still within a third of it; beside one on its right, drop back behind it
+  const sp = snap.snow_plow;
+  if (sp?.holds && sp.gap_m < sp.keep_back_m) {
+    const stand = sp.keep_back_m / 3;
+    const vp = sp.gap_m < -1 ? Math.max(0, sp.speed - 1.5) : sp.speed * Math.max(0, Math.min(1, (sp.gap_m - stand) / (sp.keep_back_m - stand)));
+    if (vp < v) { v = vp; reasons.push(sp.gap_m < -1 ? `dropping back behind the ${sp.kind}` : `staying ${sp.keep_back_m} m behind the ${sp.kind}`); }
   }
   if (snap.crosswalk_stop) {
     const room = snap.crosswalk_stop.bumper_to_stop_m;
@@ -1437,6 +1485,7 @@ export function hazardFlags(snap) {
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.work_zone) f.push("work zone");
   if (snap.double_parked) f.push("double-parked van");
+  if (snap.snow_plow) f.push("snow plow");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
