@@ -109,9 +109,39 @@ test("event-linked snapshots are retained while unassociated choices remain comp
   trace.decision(decision, 1); trace.event("safety", "Emergency brake", 1.1);
   trace.decision(decision, 2); trace.decision(decision, 3); trace.event("arrived", "Arrived", 3.1);
   assert.equal(trace.decisions[0].state.car.speed, 5); assert.equal(trace.decisions[0].context_recorded, true);
-  assert.equal(trace.decisions[1].state, null); assert.equal(trace.decisions[1].candidates, null);
+  assert.equal(trace.decisions[1].state, undefined); assert.equal(trace.decisions[1].candidates, undefined);
+  assert.equal(trace.decisions[1].context_recorded, undefined);
   assert.equal(trace.decisions[2].context_recorded, true);
   validateEvaluation({ ...run, results: [{ ...result, ...trace.export() }] });
+});
+test("a run of the same compact choice is folded into its first record, and events still link to theirs", () => {
+  const trace = new EvaluationTrace(), make = (id, flags = []) => ({ chosenId: id, motion: "drive", meta: { source: "rules" }, flags, candidates: [{ id, eligible: true, law: { vTarget: 8 } }], state: { car: { speed: 8 } } });
+  for (let k = 0; k < 5; k++) trace.decision(make("keep_lane_target", ["intersection"]), 1 + k * 0.25);
+  trace.decision(make("keep_lane_target"), 2.5);
+  trace.decision(make("stop_at_line", ["intersection"]), 2.75); trace.event("hard_brake", "Hard braking", 2.8, { count: 1 });
+  trace.decision(make("stop_at_line", ["intersection"]), 3); trace.decision(make("stop_at_line", ["intersection"]), 3.25);
+  const { decisions_trace: d } = trace.export();
+  assert.deepEqual(d.map((x) => [x.id, x.chosen_id, x.repeats ?? 1]), [[1, "keep_lane_target", 5], [6, "keep_lane_target", 1], [7, "stop_at_line", 1], [8, "stop_at_line", 2]]);
+  assert.deepEqual(d[0], { id: 1, at_s: 1, chosen_id: "keep_lane_target", motion: "drive", source: "rules", flags: ["intersection"], repeats: 5, until_s: 2 });
+  assert.deepEqual(d[1], { id: 6, at_s: 2.5, chosen_id: "keep_lane_target", motion: "drive", source: "rules" });
+  assert.equal(d[2].context_recorded, true); assert.equal(d[2].state.car.speed, 8); assert.equal(d[2].candidates[0].target_mps, 8);
+  assert.equal(trace.events[0].decision_id, 7);
+  validateEvaluation({ ...run, results: [{ ...result, ...trace.export() }] });
+  // (a record an event links to is never folded into the one before it, nor the next into it)
+  assert.equal(d.filter((x) => x.context_recorded).length, 1);
+});
+test("v2 exports with full compact records still import; malformed v3 compact records do not", () => {
+  const trace = new EvaluationTrace(), decision = { chosenId: "hold", motion: "stop", meta: { source: "rules" }, candidates: [], state: {} };
+  trace.decision(decision, 1); trace.decision({ ...decision, chosenId: "go" }, 2); trace.event("arrived", "Arrived", 2.1);
+  const v3 = { ...result, ...trace.export() };
+  const v2 = { ...v3, decisions_trace: v3.decisions_trace.map((d) => d.context_recorded ? d : { error: null, flags: [], context_recorded: false, state: null, candidates: null, ...d }) };
+  assert.equal(validateEvaluation({ ...run, schema: "jev-agent-evaluation-v2", results: [v2] }).results.length, 1);
+  assert.equal(validateEvaluation({ ...run, results: [v2] }).results.length, 1);
+  assert.throws(() => validateEvaluation({ ...run, schema: "jev-agent-evaluation-v2", results: [v3] }), /decision trace/);
+  const bad = (d0) => ({ ...run, results: [{ ...v3, decisions_trace: [d0, v3.decisions_trace[1]] }] });
+  const c = v3.decisions_trace[0];
+  for (const d0 of [{ ...c, repeats: 1, until_s: 1 }, { ...c, repeats: 3 }, { ...c, repeats: 2, until_s: 0.5 }, { ...c, state: {} }, { ...c, flags: [] }, { ...c, error: "" },
+    { ...v3.decisions_trace[1], id: 1, repeats: 2, until_s: 2 }]) assert.throws(() => validateEvaluation(bad(d0)), /decision trace/);
 });
 test("later audited failures remain visible after the coaching incident log is full", () => {
   const trace = new EvaluationTrace(), world = { t: 1, violations: { collisions: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0 } };
@@ -125,7 +155,8 @@ test("later audited failures remain visible after the coaching incident log is f
 });
 test("trace limits explicitly label missing later context", () => {
   const trace = new EvaluationTrace();
-  for (let i = 0; i < 602; i++) trace.decision({ motion: "stop", chosenId: "hold", meta: { source: "rules" }, candidates: [] }, i);
+  // (alternating choices, which do not fold together)
+  for (let i = 0; i < 602; i++) trace.decision({ motion: "stop", chosenId: i % 2 ? "hold" : "wait", meta: { source: "rules" }, candidates: [] }, i);
   trace.event("timeout", "Time limit", 605);
   assert.equal(trace.decisions.length, 600); assert.equal(trace.events[0].decision_id, null); assert.equal(trace.export().trace_truncated, true);
 });

@@ -45,7 +45,7 @@ def check(url, chromium=None, output=None):
         export = Path(directory) / "evaluation.json"
         downloaded.value.save_as(export)
         original = json.loads(export.read_text())
-        assert original["schema"] == "jev-agent-evaluation-v2"
+        assert original["schema"] == "jev-agent-evaluation-v3"
         assert all(r["decisions_trace"] for r in original["results"])
         assert all(r["events"] for r in original["results"])
         assert all(r["hard_brakes"] == sum(e["type"] == "hard_brake" for e in r["events"]) for r in original["results"])
