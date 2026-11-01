@@ -24,6 +24,8 @@ import { WORK_ZONE_COUNT, workZoneNotice } from "./sim/work-zone.js";
 import { OUTAGE_COUNT, outageNotice } from "./sim/outage.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
 import { VAN_COUNT, vanNotice } from "./sim/double-parked.js";
+import { PLOW_COUNT, isPlow, plowNotice } from "./sim/snow-plow.js";
+import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
 import { parkNotice } from "./sim/parallel-park.js";
 import { STEP_OUT_COUNT, hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
@@ -172,7 +174,9 @@ export async function boot() {
     const streetcars = params.get("streetcars") !== "0";
     // and trains theirs, over the level crossings (`?trains=0` takes them off)
     const trains = params.get("trains") !== "0";
-    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, streetcars, trains, schoolBuses });
+    // and, while it snows, a snow plow clears the main streets (`?plows=0` takes them off)
+    const plows = params.get("plows") !== "0" ? PLOW_COUNT : 0;
+    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, streetcars, trains, schoolBuses, plows });
     autopilot = new Autopilot(world, callbacks);
   }
   // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
@@ -197,7 +201,7 @@ export async function boot() {
     for (const n of fleet.vehicles) {
       ids.add(n.id);
       if (npcMeshes.has(n.id)) continue;
-      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isStreetcar(n) ? createStreetcarMesh(n.id, n.headsign || n.ref || "") : isTrain(n) ? createTrainMesh(n.id) : isSchoolBus(n) ? createSchoolBusMesh(n.id) : n.kind === "delivery_van" ? createVanMesh(n) : createCarMesh(n.color, n.id, n.style ?? null);
+      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isStreetcar(n) ? createStreetcarMesh(n.id, n.headsign || n.ref || "") : isTrain(n) ? createTrainMesh(n.id) : isSchoolBus(n) ? createSchoolBusMesh(n.id) : isPlow(n) ? createPlowMesh(n) : n.kind === "delivery_van" ? createVanMesh(n) : createCarMesh(n.color, n.id, n.style ?? null);
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
@@ -626,7 +630,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null, announcedVan = null, announcedPark = null, announcedHazard = null, announcedTraffic = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -703,7 +707,7 @@ export async function boot() {
     syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id);
-      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
+      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha), dt, world.t, lightsOn);
     }
     for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
     for (const z of world.workZones.zones) syncWorkZone(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
@@ -761,6 +765,10 @@ export async function boot() {
     const van = vanNotice(world);
     if (van && van.key !== announcedVan) { announcedVan = van.key; hud.badge(van.text, van.wait ? "safety" : "", 2500); }
     if (!van) announcedVan = null;
+    // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
+    const plowLine = plowNotice(world);
+    if (plowLine && plowLine.key !== announcedPlow) { announcedPlow = plowLine.key; hud.badge(plowLine.text, plowLine.wait ? "safety" : "", 2500); }
+    if (!plowLine) announcedPlow = null;
     // parking at the destination: the space, checking behind, reversing in, parked
     const parkLine = parkNotice(world);
     if (parkLine && parkLine.key !== announcedPark) { announcedPark = parkLine.key; hud.badge(parkLine.text, parkLine.wait ? "safety" : "stop", 2500); }

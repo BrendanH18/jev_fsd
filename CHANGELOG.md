@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- Snow plows (`static/js/sim/snow-plow.js`, `render/snow-plow.js`). While it snows, a city plow clears the
+  main streets at 18 km/h, its blue and amber lamps flashing, its blade angled to throw the snow off to
+  the right. Manitoba's Highway Traffic Act (in force in 2026) says to stay 30 m back from a plow with its
+  blue warning lamps on where the limit is 80 km/h or less (100 m above that), and not to pass one where
+  blowing snow hides the view ahead; the City of Winnipeg adds never to pass one on the right, the side
+  the snow and debris are plowed to. The driven car now stays that far behind a plow in its lane, and
+  behind one in the lane to its left as well, never drawing level with one on its right. It passes one
+  only on the left, through a lane going its way, never across the centre line, and only when it can see
+  its route ahead and as far as it ever does (so never in falling snow, fog, rain or after dark, from whichever lane), and
+  moves back in only once it is the stay-back distance ahead of it. A plow signalling a left turn may be
+  passed on the right. The 100 m is further than the car ever sees, so there it keeps back as far as it
+  can see. Traffic keeps to the same rules, the stay-back distance included.
+- The driven car's sensing reports `snow_plow` (its lane from the car, the gap, its speed, whether the car
+  must stay back of it, may pass it on the left, or is passing it). The target speed keeps the car back,
+  the lane options offer a pass only on the left and only when it may, and no lane change puts the car in
+  front of one closer than the stay-back distance. Candidates that would take the car past a plow on its
+  right (`passes_plow_on_right`) or close in on one inside the stay-back distance
+  (`follows_plow_too_close`) are rejected. Decision models and LLMs get `snow_plow`, a situation line and
+  a prompt line.
+- The audit counts passing a plow on the right (`plow_right_passes`), which fails a drive (`passed plow
+  on the right`) once a plow has worked in it, and notes moving back in front of one too soon. Coaching
+  counts time too close behind one (`plow_close_s`), passes on the right and cut-ins, with tips, only for
+  drives a plow worked in. The HUD says "SNOW PLOW AHEAD · STAY 30 M BACK", "SNOW PLOW · NEVER PASS ON THE
+  RIGHT · STAY 30 M BACK", "SNOW PLOW · CAN'T SEE TO PASS · STAY 30 M BACK" and "PASSING THE SNOW PLOW · BACK IN ONLY 30 M AHEAD OF IT"; AI eyes outline the
+  plow in amber.
+- In a free drive in snow one plow at a time works the primary, secondary and tertiary streets, put down
+  out of sight 150 to 450 m from the car and taken off once out of sight 500 m away (`?plows=0` takes them
+  off).
+- New challenge, "Behind the plow" (Winnipeg, William Avenue, two lanes each way, 50 km/h, snow): a plow
+  clears the left lane 20 m ahead of the car, and the curb lane beside it is empty to the destination.
+  Rules and the cautious agent stay 30 m behind it in the curb lane all the way; with the same truck not
+  known to be a plow, Rules goes by it on the right.
+- New checks in `scripts/test_snow_plows.mjs`. The seeded benchmark and the other twenty-seven challenges
+  have no plows and play out exactly as before.
+
 - Hidden traffic (`static/js/sim/hidden-traffic.js`). With the `World` option `hazards` (free drives,
   unless `?hazards=0`; challenges with `hidden: true`), road vehicles now hide other vehicles and cyclists
   from the driven car, as they already hid pedestrians: one is out of sight when every line from the car to

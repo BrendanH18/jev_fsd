@@ -81,6 +81,8 @@ export class DriveMetrics {
       red_lights: v.red_lights_run,
       stop_signs: v.stop_signs_run,
       failed_to_yield: v.failed_to_yield || 0,
+      // (only for a drive a snow plow worked in: sim/snow-plow.js)
+      ...(world.plowsSeen ? { plow_right_passes: v.plow_right_passes || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -121,6 +123,7 @@ export function failures(m) {
   if (m.stop_signs) f.push("stop sign");
   if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
+  if (m.plow_right_passes) f.push("passed plow on the right");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

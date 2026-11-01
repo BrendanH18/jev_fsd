@@ -1,11 +1,15 @@
 // Deterministic coaching model, independent of the driver. Deductions accumulate in simulation
 // time, so pauses, frame rate and the decision API cannot change the score.
 import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
+import { egoPlow } from "./snow-plow.js";
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
 export const SPEED_GRACE_MPS = 5 / 3.6;
 const clamp = (n, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
 const round = (n, digits = 1) => Math.round(n * 10 ** digits) / 10 ** digits;
+// Closer than the stay-back distance less this, moving, behind a snow plow the car must stay back of,
+// is following it too closely (sim/snow-plow.js).
+const PLOW_CLOSE_SLACK_M = 10;
 const COUNTERS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield" };
 
 export class DriveScore {
@@ -42,6 +46,10 @@ export class DriveScore {
     // (and with hidden traffic, sim/hidden-traffic.js: failures to yield to a vehicle the car could
     // not see as it pulled out, hidden behind another)
     this.hiddenCutoffs = 0;
+    // (with a snow plow at work, sim/snow-plow.js: time following one too closely, passing one on the
+    // right, and moving back in front of one too soon after passing it on the left; reported only for
+    // a drive a plow worked in)
+    this.plows = false; this.plowClose = 0; this.plowCounted = null; this.plowRightPasses = 0; this.plowCutIns = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -132,7 +140,17 @@ export class DriveScore {
       const key = `${blind.edge}:${blind.side}`;
       if (!this.blindCounted.has(key)) { this.blindCounted.add(key); this.incident("blind_spot_speeding", "Passed parked cars too fast to stop for someone stepping out", { edge: blind.edge }); }
     }
+    // a snow plow (sim/snow-plow.js): stay back of it
+    if (world.plowsSeen) this.plows = true;
+    const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
+    const plowClose = !!plow?.holds && speed > 1 && plow.rel.gap_m > -1 && plow.rel.gap_m < plow.keep - PLOW_CLOSE_SLACK_M;
+    if (plowClose) {
+      this.plowClose += dt;
+      if (this.plowCounted !== plow.plow.id) { this.plowCounted = plow.plow.id; this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id }); }
+    }
     for (const ev of world.events || []) {
+      if (ev.type === "passed_plow_on_right") { this.plowRightPasses++; this.incident("plow_right_pass", "Passed a snow plow on the right", { plow: ev.plow }); }
+      if (ev.type === "cut_in_front_of_plow") { this.plowCutIns++; this.incident("plow_cut_in", "Moved back in too close in front of a snow plow", { plow: ev.plow }); }
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
@@ -157,6 +175,7 @@ export class DriveScore {
       : tracks?.still > 0.5 ? "Clear the tracks. Never stop on them."
       : blocking ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
       : workZoneFast ? `Slow to ${Math.round(zonePass.limit * 3.6)}. You’re in a work zone.`
+      : plowClose ? `Drop back. Stay ${plow.keep} m behind the snow plow.`
       : blindFast ? `Slow to ${Math.round(blind.limit_mps * 3.6)}. Parked cars hide the sidewalk: someone could step out.`
       : roadsideFast ? `Slow to ${Math.round(passing.limit * 3.6)} and move over. A ${name} is stopped with its lights flashing.`
       : speeding ? "Ease off. You’re above the speed limit."
@@ -213,8 +232,8 @@ export class DriveScore {
     const collisions = delta("collisions"), atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
-      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2)),
-      legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10)),
+      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6)),
+      legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
@@ -233,6 +252,8 @@ export class DriveScore {
     if (this.blindSpeeding > 0.5) tips.push("Beside cars parked at the kerb on quiet streets and in school zones, slow to a speed you can stop from in about 15 m. Someone can step out from between them before you can see them.");
     if (this.darkSignals) tips.push("Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.");
     if (this.hiddenCutoffs) tips.push("A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.");
+    if (this.plowRightPasses) tips.push("Never pass a snow plow on the right. Its blade throws snow and debris that way, and a wing blade can reach well into the next lane.");
+    if (this.plowClose > 1 || this.plowCutIns) tips.push("Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h). Pass one only on the left, where you can see the road ahead is clear, and move back in well ahead of it.");
     if (this.vanCutoffs) tips.push("Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.");
     if (this.kerbStrikes) tips.push("Parking, creep in slowly and stop before a wheel touches the kerb. Turn the wheel only while the car is moving if you have to, and check your mirror on the kerb side.");
     if (this.parking?.result === "parked" && !this.parking.within_kerb) tips.push("Park parallel to the kerb with your wheels within 30 cm of it. If you end up further out, pull forward and reverse in again.");
@@ -254,6 +275,7 @@ export class DriveScore {
       speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, van_cutoffs: this.vanCutoffs, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
+      ...(this.plows ? { plow_close_s: round(this.plowClose), plow_right_passes: this.plowRightPasses, plow_cut_ins: this.plowCutIns } : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };

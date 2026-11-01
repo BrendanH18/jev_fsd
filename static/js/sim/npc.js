@@ -9,9 +9,10 @@
 // work zone everyone stops for the flagger's STOP paddle, keeps to 30 km/h, and the direction whose
 // lane is closed goes round the work through the other lane (sim/work-zone.js). Behind a van
 // double-parked in its lane a driver waits until the oncoming lane is clear, then goes round it through
-// that lane (sim/double-parked.js).
+// that lane (sim/double-parked.js). While it snows, plows clear the main streets; nobody passes one on
+// the right, and only with a clear view ahead on the left (sim/snow-plow.js).
 
-import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, comfort } from "./vehicle.js";
+import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
@@ -33,6 +34,7 @@ import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex
 import { boxHold } from "./junction-box.js";
 import { WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DECIDE_M, PASS_DECEL, PASS_MPS, VAN_LOOK_M, queuedAhead, wayRound } from "./double-parked.js";
+import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -181,7 +183,7 @@ const STREETCAR_DECEL = 1.1;
 const MAX_TRAINS = 1;
 const TRAIN_COLOR = 0x7a1d1d;
 // (a bus, school bus, streetcar or train: long, so looked for all along its body)
-const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o) || isTrain(o);
+const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o) || isTrain(o) || isPlow(o);
 
 // How far ahead of a cyclist's front wheel any part of another vehicle's body is in its way, or
 // null: within its own body (and 0.05 m) moving straight on as it is heading for the next 2 m, or
@@ -321,7 +323,8 @@ function workZoneLimit(wz, front) {
 }
 
 export class NpcFleet {
-  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0 } = {}) {
+  // `plows`: how many snow plows work the main streets at a time while it snows (sim/snow-plow.js).
+  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0, plows = 0 } = {}) {
     this.world = world;
     this.map = world.map;
     this.random = rng(seed);
@@ -372,6 +375,12 @@ export class NpcFleet {
     for (let i = 0; i < this.trainTarget; i++) this.spawnTrain(true);
     this.nextTrain = world.t + AWAY_S[0];
     this.trains = this.vehicles.filter(isTrain);
+    // (and snow plows theirs, put down on the first step once it snows)
+    this.plowStream = rng(seed * 179424673 + 29);
+    this.plowCount = 0;
+    this.plowTarget = plows;
+    this.nextPlow = world.t;
+    this.plows = [];
     world.npcs = this.vehicles;
   }
 
@@ -590,6 +599,7 @@ export class NpcFleet {
     if (this.schoolBuses.length || this.schoolTarget) this.manageSchoolBuses();
     if (this.trains.length || this.trainTarget) this.manageTrains();
     if (world.doubleParked?.vans.length) this.driveOffVans();
+    if (this.plows.length || this.plowTarget) this.managePlows();
     const all = [world.ego, ...this.vehicles];
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
@@ -765,7 +775,13 @@ export class NpcFleet {
           }
         } else n.parkWait = 0;
       } else if (n.parkWait) n.parkWait = 0;
-      n.lead = gap < Infinity ? { gap, v: leadV } : null;
+      // a snow plow ahead (sim/snow-plow.js), as far as the distance to stay back from it: in its lane,
+      // or in the lane to its left, never passed on the right
+      const forPlow = this.plows.length ? this.plowHold(n, path, front, offset, edge.limit) : null;
+      if (forPlow && forPlow.gap < gap) { gap = forPlow.gap; leadV = forPlow.plow.v; leader = forPlow.plow; }
+      // (and stays back the distance the law asks of it, less the room it leaves anyway)
+      if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
+      n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
       let stopAt = null;
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
@@ -890,7 +906,8 @@ export class NpcFleet {
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
       const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit), wz ? workZoneLimit(wz, front) : Infinity, dp ? vanLimit(dp, front) : Infinity);
-      const v0 = Math.min(n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
+      // (a snow plow keeps to its clearing speed, whatever the weather)
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
       const D = n.driver || IDM;
       let a;
       if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
@@ -1120,6 +1137,72 @@ export class NpcFleet {
       else this.nextSchool = this.world.t + SCHOOL_EVERY_S[0];
     }
     this.schoolBuses = this.vehicles.filter(isSchoolBus);
+  }
+
+  // Snow plows (sim/snow-plow.js): one out of the car's sight PLOW_GONE_M away is taken off, and while
+  // it snows another is put down when there are too few.
+  managePlows() {
+    const world = this.world, ego = world.ego;
+    for (const n of this.vehicles.filter(isPlow)) {
+      if (Math.hypot(n.x - ego.x, n.y - ego.y) <= PLOW_GONE_M || world.visibility.canSee(ego, n.x, n.y)) continue;
+      this.vehicles.splice(this.vehicles.indexOf(n), 1);
+      this.nextPlow = Math.max(this.nextPlow, world.t + PLOW_EVERY_S[0] + this.plowStream() * (PLOW_EVERY_S[1] - PLOW_EVERY_S[0]));
+    }
+    this.plows = this.vehicles.filter(isPlow);
+    if (this.plows.length < this.plowTarget && world.t >= this.nextPlow && weather.name === "snow") {
+      if (!this.spawnPlow()) this.nextPlow = world.t + 5;
+      else this.nextPlow = world.t + PLOW_EVERY_S[0];
+    }
+  }
+
+  // Put a snow plow down on a lane of a main street PLOW_SPAWN_M from the car, out of its sight and
+  // clear of other traffic, driving on at its clearing speed. Returns it, or null.
+  spawnPlow() {
+    const world = this.world, ego = world.ego, lanes = plowLanes(this.map), random = this.plowStream;
+    const total = lanes.reduce((a, l) => a + l.length, 0);
+    for (let attempt = 0; lanes.length && attempt < 40; attempt++) {
+      let pick = random() * total, lane = lanes[0];
+      for (const l of lanes) { pick -= l.length; if (pick <= 0) { lane = l; break; } }
+      const s = 5 + random() * (lane.length - 20), p = pointAt(lane.pts, lane.cum, s), d = Math.hypot(p[0] - ego.x, p[1] - ego.y);
+      if (d < PLOW_SPAWN_M[0] || d > PLOW_SPAWN_M[1] || world.visibility.canSee(ego, p[0], p[1])) continue;
+      if (this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SNOW_PLOW.length + 8) || world.workZones?.covers(p[0], p[1]) || world.doubleParked?.covers(p[0], p[1])) continue;
+      return this.addPlow(lane, s, Math.min(PLOW_MPS, lane.edgeRef.limit));
+    }
+    return null;
+  }
+
+  // A snow plow on `lane`, its rear axle `s` along it, at `v`, driving on as traffic (`planned`: the
+  // edges it takes next, before it picks its own turns).
+  addPlow(lane, s, v = 0, planned = []) {
+    const p = pointAt(lane.pts, lane.cum, s), plow = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, SNOW_PLOW);
+    Object.assign(plow, { id: `plow_${++this.plowCount}`, kind: "snow_plow", color: PLOW_COLOR, v0: PLOW_MPS, beacons: true,
+      driver: { aMax: 1.0, b: 1.8, T: 1.8, s0: 3.0, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
+    plow.path = new NpcPath(this.map, this.plowStream);
+    plow.path.start(lane.edge, lane.idx, s, planned);
+    this.vehicles.push(plow);
+    this.plows = this.vehicles.filter(isPlow);
+    return plow;
+  }
+
+  // A snow plow ahead of driver `n` going its way, out to the stay-back distance (further than it looks
+  // for a leader where the limit is over 80 km/h): in the lane it keeps to (`offset`, right of its
+  // path); in the lane to its left, not turning left, as the driver stays behind it rather than pass it
+  // on the right; and in poor sight in the lane to its right too: no passing it at all.
+  // { plow, gap (front to its rear) }, or null.
+  plowHold(n, path, front, offset, limit) {
+    if (isPlow(n) || n.kind === "bike" || n.transit?.tram || n.pull) return null;
+    const sight = this.world.visibility.range >= PASS_SIGHT_M, look = Math.max(LOOK_M, stayBack(limit) + 10);
+    let best = null;
+    for (const o of this.plows) {
+      if (Math.abs(o.x - n.x) > look + 5 || Math.abs(o.y - n.y) > look + 5 || Math.abs(wrap(o.psi - n.psi)) > Math.PI / 4) continue;
+      const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
+      if (!p || p.s <= path.s + 0.5 || p.s > path.s + look) continue;
+      const lat = p.lateral - offset;
+      if (!(Math.abs(lat) < SAME_LANE_M) && !(lat < -SAME_LANE_M && lat > -NEXT_LANE_M && !turningLeft(o)) && !(!sight && lat > SAME_LANE_M && lat < NEXT_LANE_M)) continue;
+      const gap = p.s - front - o.spec.rearOverhang;
+      if (gap > -1 && (!best || gap < best.gap)) best = { plow: o, gap: Math.max(0.05, gap) };
+    }
+    return best;
   }
 
   // Where along a school bus's path its front stops for `stop` ({ edge, s }: metres along the edge's
@@ -1576,7 +1659,7 @@ export class NpcFleet {
   // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
   maybePark() {
     for (const n of this.vehicles) {
-      if (n.kind === "bike" || n.transit || n.school || n.rail || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      if (n.kind === "bike" || n.transit || n.school || n.rail || isPlow(n) || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
       const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
       const e = this.map.edges.get(edge.id);
       const choices = this.world.parked.slots.filter((slot) => {
@@ -1847,6 +1930,8 @@ export class NpcFleet {
     else if (turn === "right" && edge.lane < e.lanes - 1) dir = 1;
     else if (turn === "straight" && n.lead && n.lead.gap < 35 && n.lead.v < n.v0 - 2.5 && this.random() < 0.02 * (n.driver ? n.driver.lcRate : 1)) {
       dir = edge.lane > 0 ? -1 : 1;
+      // (a snow plow only on the left, and only with a clear view ahead: sim/snow-plow.js)
+      if (n.lead.plow && (dir > 0 || this.world.visibility.range < PASS_SIGHT_M)) dir = 0;
     }
     if (!dir) return;
     const to = edge.lane + dir;
@@ -1858,7 +1943,9 @@ export class NpcFleet {
       const p = projectPoint(lane.pts, lane.cum, [o.x, o.y], null);
       if (!p || Math.abs(p.lateral) > 2.2) continue;
       const ds = p.s - me.s;
-      const need = ds >= 0 ? 8 + Math.max(0, n.v - o.v) * 2 : 8 + Math.max(0, o.v - n.v) * 2.5;
+      let need = ds >= 0 ? 8 + Math.max(0, n.v - o.v) * 2 : 8 + Math.max(0, o.v - n.v) * 2.5;
+      // (never in front of a snow plow closer than the distance to stay back from it)
+      if (ds < 0 && isPlow(o)) need = Math.max(need, stayBack(e.limit));
       const ns = n.spec || CAR, os = o.spec || CAR;
       const bodyGap = ds >= 0 ? ns.length - ns.rearOverhang + os.rearOverhang : os.length - os.rearOverhang + ns.rearOverhang;
       if (Math.abs(ds) < need + bodyGap) return;
