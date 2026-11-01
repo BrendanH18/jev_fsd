@@ -164,7 +164,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   }
   if (snap.snow_plow) {
     const p = snap.snow_plow;
-    state.snow_plow = { id: p.id, kind: p.kind, lights: "blue and amber, flashing", lane: p.lane === "same" ? "the car's lane" : `the lane to the car's ${p.lane}`,
+    state.snow_plow = { id: p.id, kind: p.kind, lights: "blue and amber, flashing", lane: p.lane === "same" ? "the car's lane" : `a lane to the car's ${p.lane}`,
       ...(p.gap_m > 0 ? { gap_m: r1(p.gap_m) } : p.clear_m > 0 ? { behind_car_m: r1(p.clear_m) } : { beside_car: true }), speed: r1(p.speed), keep_back_m: p.keep_back_m,
       ...(p.turning_left ? { turning_left: true } : {}),
       pass: p.passing ? `car is passing it on the left: back in only ${p.keep_back_m} m ahead of it` : p.holds && !p.may_pass ? "do not pass" : "on the left only" };
@@ -432,7 +432,7 @@ function workZoneClause(snap) {
 
 // A snow plow ahead of the car, or beside it (sim/snow-plow.js).
 function plowClause(p) {
-  const where = p.lane === "same" ? "in the car's lane" : `in the lane to the car's ${p.lane}`, kmh = Math.round(p.speed * 3.6);
+  const where = p.lane === "same" ? "in the car's lane" : `in a lane to the car's ${p.lane}`, kmh = Math.round(p.speed * 3.6);
   const lead = `A snow plow (\`${p.id}\`), its blue and amber lamps flashing, is clearing the road ${p.gap_m > 0 ? `${Math.round(p.gap_m)} m ahead` : "beside the car"} ${where}, going the car's way at ${kmh} km/h, throwing snow to its right.`;
   const keep = `Stay at least ${p.keep_back_m} m behind it: \`car.target_speed\` already keeps the car back.`;
   if (p.passing) return `${lead} The car is passing it on the left: carry on past, and move back into its lane only once the car is ${p.keep_back_m} m ahead of it (the candidates offer that only then).`;

@@ -287,6 +287,38 @@ await test("closed loop: Rules passes a curb-lane plow on the left in clear weat
   setWeather("dry");
 });
 
+await test("three lanes one way: a plow two lanes to the left still holds the car back, and the audit counts passing it on the right; working plows never park", async () => {
+  // (Princess Street, Winnipeg: three lanes one way, straight for 160 m)
+  const E = "e270", N = WPG.successors(E).find((id) => WPG.classifyTurn(WPG.turnAngle(E, id)) === "straight");
+  for (const w of ["snow", "dry"]) {
+    setWeather(w);
+    const world = new World(WPG, { seed: 2, weather: w, parked: 0, pedestrians: 0, vehicleSpec: COMPACT });
+    const own = WPG.lane(E, 2), next = WPG.lane(N, Math.min(2, WPG.edges.get(N).lanes - 1));
+    world.placeOnLane(own, 5);
+    world.route = new Route(routeFromLanes(WPG, [own, next], 5, Math.min(60, next.length - 5)), WPG, world.ego.spec);
+    const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 2 });
+    const plow = fleet.addPlow(WPG.lane(E, 0), 45, PLOW_MPS, [[N, 0]]);
+    assert.equal(plowRelation(world.ego, plow).lane, "left", "two lanes over");
+    const r = await closedLoop({ world, fleet }, plow, { limit: 35, settle: 15 });
+    assert.equal(r.level, null, `${w}: the car stays behind a plow two lanes to its left`);
+  }
+  // (the audit counts passing it two lanes over)
+  const { world, fleet } = william({ weather: "snow" });
+  const map3 = WPG, plow = fleet.addPlow(map3.lane(E, 0), 80, 0, [[N, 0]]);
+  const l = map3.lane(E, 2);
+  for (let s = 30; s <= 120; s += 0.5) { const p = pointAt(l.pts, l.cum, s); Object.assign(world.ego, { x: p[0], y: p[1], psi: headingAt(l.pts, l.cum, s), v: 8 }); world.auditPlows(); }
+  assert.equal(world.violations.plow_right_passes, 1, "passed on the right, two lanes over");
+  // (a working plow is never picked to pull into a parking space)
+  const park = william({ weather: "snow", s: 20 });
+  park.world.parked.slots.length = 0;
+  const p0 = park.fleet.addPlow(WPG.lane(EDGE, 1), 60, PLOW_MPS, [[NEXT, 1]]);
+  const lane = WPG.lane(EDGE, 1), at = pointAt(lane.pts, lane.cum, 100);
+  park.world.parked.slots.push({ edge: EDGE, curb: "right", x: at[0], y: at[1], occupant: null, reserved: null });
+  park.fleet.maybePark();
+  assert.ok(!p0.parking && park.fleet.vehicles.includes(p0), "the plow does not park");
+  setWeather("dry");
+});
+
 await test("the audit: passing a plow on the right fails the drive, once a pass; one turning left may be passed on the right; moving back in too soon after passing on the left is noted", () => {
   const { world, fleet } = william({ weather: "snow", s: 20 });
   const plow = fleet.addPlow(WPG.lane(EDGE, 0), 80, 0, [[NEXT, 0]]);
@@ -351,7 +383,7 @@ await test("what models are told: the plow in the state, a situation line for ea
   plowAhead(world, fleet, { lane: 0, gap: 20 });
   let snap = buildSnapshot(world), cands = sampleCandidates(snap, world), res = simulateAll(cands, snap, world);
   let state = toJevState(snap, res.eligible, {});
-  assert.equal(state.snow_plow.lane, "the lane to the car's left");
+  assert.equal(state.snow_plow.lane, "a lane to the car's left");
   assert.equal(state.snow_plow.keep_back_m, 30);
   assert.equal(state.snow_plow.pass, "do not pass");
   assert.ok(situationClauses(snap).some((l) => l.includes("Never pass a snow plow on the right")));

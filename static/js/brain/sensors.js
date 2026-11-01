@@ -883,7 +883,7 @@ function doubleParked(world, p, frontS, lane, executing) {
 // A snow plow the car can see going its way (sim/snow-plow.js), in its lane or a lane beside it, from
 // PLOW_LOOK_M (or the stay-back distance, where that is further) ahead of it until the car's rear is
 // the stay-back distance past its front: the nearest.
-// `lane` is where it is from the car: "same", "left" (the lane to the car's left) or "right";
+// `lane` is where it is from the car: "same", "left" (a lane to the car's left, up to two over) or "right";
 // `gap_m` from the car's front to its rear (negative once beside it), `clear_m` from its front to the
 // car's rear (positive once the car is wholly past it), `s_rear_route` and `lateral_route` where it is
 // along and across the route (right of the route's line, in the frame at the car); `keep_back_m` the

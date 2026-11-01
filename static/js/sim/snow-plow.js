@@ -32,7 +32,7 @@ export const STAY_BACK_M = 30;             // limit 80 km/h or less
 export const STAY_BACK_FAST_M = 100;       // above 80 km/h
 const FAST_LIMIT_MPS = 80 / 3.6;
 export const SAME_LANE_M = 1.7;            // a plow whose centre line is within this of the car's is in its lane
-export const NEXT_LANE_M = 5.3;            // and within this, in the lane beside it
+export const NEXT_LANE_M = 8.8;            // and within this, in a lane beside it (up to two lanes over)
 export const PLOW_LOOK_M = 60;             // the car looks out for one this far ahead
 export const PASS_SIGHT_M = DAYLIGHT_RANGE_M;
 const SAME_WAY = Math.PI / 4;
@@ -53,8 +53,8 @@ export const turningLeft = (plow) => plow.signal === "left";
 
 // Plow `plow` as vehicle `v` sees it, going its way (or null when it is not): { gap_m (v's front to
 // the plow's rear, along v's heading; negative once alongside), ahead_m (centre to centre), right_m
-// (the plow's centre line right of v's), lane ("same", "left" of v, "right" of v, or null further
-// across), clear_m (v's rear past the plow's front; positive once v is wholly ahead of it) }.
+// (the plow's centre line right of v's), lane ("same", in a lane "left" of v, "right" of v, or null
+// further across), clear_m (v's rear past the plow's front; positive once v is wholly ahead of it) }.
 export function plowRelation(v, plow) {
   if (Math.abs(wrap(plow.psi - v.psi)) > SAME_WAY) return null;
   const vs = v.spec, ps = plow.spec;
