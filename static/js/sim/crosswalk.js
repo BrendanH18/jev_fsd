@@ -13,8 +13,9 @@
 // is given way to as usual.
 //
 // Road vehicles also hide people: a pedestrian is out of a driver's sight when every line from the
-// driver to them passes through the body of a vehicle in traffic (`hiddenByTraffic`). Cyclists and
-// parked cars do not hide anyone.
+// driver to them passes through the body of a vehicle in traffic (`hiddenByTraffic`). Cyclists do
+// not hide anyone, nor do parked cars, except with hidden hazards on (sim/hidden-hazards.js), when
+// the vehicles standing at the kerb (`standing`) hide people too.
 
 import { CAR } from "./vehicle.js";
 
@@ -124,12 +125,13 @@ export const canStopShort = (v, toCentre) => toCentre - HOLD_M >= Math.max(0, v)
 
 // True when every line of sight from `observer` to pedestrian `ped` passes through the body of a
 // road vehicle in traffic (`vehicles`: not cyclists, not parked).
-export function hiddenByTraffic(observer, ped, vehicles) {
+export function hiddenByTraffic(observer, ped, vehicles, standing = []) {
   const dx = ped.x - observer.x, dy = ped.y - observer.y, d = Math.hypot(dx, dy);
   if (d < 1 || d > HIDE_RANGE_M) return false;
   const nx = -dy / d, ny = dx / d;
   const near = vehicles.filter((v) => v !== observer && v.kind !== "bike" && v.kind !== "pedestrian" && !v.parked
-    && Math.abs(v.x - observer.x) < HIDE_RANGE_M + 10 && Math.abs(v.y - observer.y) < HIDE_RANGE_M + 10);
+    && Math.abs(v.x - observer.x) < HIDE_RANGE_M + 10 && Math.abs(v.y - observer.y) < HIDE_RANGE_M + 10)
+    .concat(standing.filter((v) => v !== observer));
   if (!near.length) return false;
   for (const k of [0, 1, -1]) {
     const to = [ped.x + nx * PROBE_M * k, ped.y + ny * PROBE_M * k];

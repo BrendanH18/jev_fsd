@@ -18,6 +18,7 @@ import { boxEnd } from "../sim/junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, workZoneSites } from "../sim/work-zone.js";
 import { vanSites } from "../sim/double-parked.js";
 import { legalStretches, straight as straightKerb } from "../sim/parallel-park.js";
+import { QUIET, STEP_OUT_M } from "../sim/hidden-hazards.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -71,6 +72,8 @@ export const CHALLENGES = [
     description: "A delivery van has stopped in your lane on Brunswick Avenue, its hazards flashing, beside the parked cars. The only way past is the oncoming lane, and you can't see far down it yet.", lesson: "Going round something stopped in your lane takes you into the oncoming lane, and oncoming traffic has the right of way. Stop a car length back, where you can see past it and have room to pull out, and go round only once the way is clear for the whole distance round and back. Driver's handbooks across Canada say the same." },
   { id: "parallel-park", title: "Squeeze in", map: "kitsilano", weather: "dry", time: "afternoon", seed: 25042, icon: "⇲", difficulty: "Control", hazard: "parking", park: true, street: "West 10th Avenue",
     description: "Your destination is on a block in Kitsilano lined with parked cars, and there's one space left, a little over one and a half car lengths long. As you slow for it, a car comes up behind you.", lesson: "Signal early so the driver behind knows you're stopping. Pull up alongside the car in front of the space, about a door's width from it, with your rear bumpers level. Check behind, then reverse in on full lock toward the kerb, straighten, and turn the other way to swing the front in. Finish parallel, within 30 cm of the kerb. Never back into someone: wait until it's clear behind. That is BC's Motor Vehicle Act, and every province's driver's handbook teaches the same." },
+  { id: "step-out", title: "Between the cars", map: "kitsilano", weather: "dry", time: "afternoon", seed: 26042, icon: "⁞", difficulty: "Sight lines", hazard: "step-out", hidden: true,
+    description: "A quiet street in Kitsilano, lined with parked cars on your side. The limit is 50 km/h, and you can't see the sidewalk behind them.", lesson: "Cars parked at the kerb hide whoever is behind them, and a child can step out from between two of them before you can see them. Beside parked cars on a quiet street, drive at a speed you can stop from in the distance you can see: about 30 km/h on a dry road, slower in rain or snow. Driver's handbooks across Canada say the same." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -134,6 +137,36 @@ function parkingSites(map, street) {
     parkSiteCache.set(map, sites);
   }
   const sites = parkSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
+// Between the cars: hidden hazards on (sim/hidden-hazards.js). A straight block of a quiet two-way street
+// with one lane each way, a parking lane on the right, a limit of 40 km/h or more and no school or
+// playground zone, its right kerb lined with cars STEP_GAP_M apart (bumper to bumper) from STEP_ROW_M[0]
+// before the child's line to STEP_ROW_M[1] past it, wherever one may park; the child stands hidden
+// between two of them, STEP_HIDE_M in from their traffic side. The car starts from a standstill in its
+// lane, its front STEP_START_M short of the child's line; the route ends STEP_PAST_M past it, on its
+// street. Once the car's front is STEP_OUT_M from their line, they step out and walk across the street
+// at STEP_MPS without looking: at the blind-spot speed the car stops short of them, at the street's 50 it
+// cannot.
+// (On the challenge's `street`, where it has a block long enough.)
+const STEP_START_M = 110, STEP_ROW_M = [55, 25], STEP_GAP_M = 1.6, STEP_HIDE_M = 0.6, STEP_PAST_M = 30, STEP_MPS = 1.5;
+const stepSiteCache = new WeakMap();
+function stepOutSites(map, street) {
+  if (!stepSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang, crossed = new Set((map.crosswalks || []).map((c) => c.edge));
+    for (const e of map.edges.values()) {
+      if (!e.parking?.[1] || e.ring || e.oneway || e.lanes !== 1 || !QUIET.has(e.cls) || (e.limit || 0) < 40 / 3.6 - 0.1 || crossed.has(e.id) || map.zoneSpans.get(e.id)?.length) continue;
+      const at = STEP_START_M + front + 4, lo = at - STEP_ROW_M[0], hi = at + STEP_ROW_M[1];
+      if (at + STEP_PAST_M > (e.control?.s_line ?? e.length) - 4) continue;
+      if (!legalStretches(map, e).some(([a, b]) => a <= lo && b >= hi) || !straightKerb(e, lo - 2, hi + 2)) continue;
+      const lane = map.lane(e.id, e.lanes - 1), k = lane.length / e.length;
+      sites.push({ lane, startS: (at - STEP_START_M - front) * k, goalS: (at + STEP_PAST_M) * k, stepOut: { edge: e.id, at } });
+    }
+    sites.sort((x, y) => String(x.stepOut.edge).localeCompare(String(y.stepOut.edge)));
+    stepSiteCache.set(map, sites);
+  }
+  const sites = stepSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
   return on.length ? on : sites;
 }
 
@@ -747,11 +780,14 @@ export function challengeScenario(map, challenge) {
   const parks = challenge.hazard === "parking" ? parkingSites(map, challenge.street) : null;
   if (parks && !parks.length) throw new Error("This map has no straight block of a two-way street with one lane each way and a parking lane, long enough to park on.");
   const park = parks ? parks[Math.floor(random() * parks.length)] : null;
-  const start = park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const steps = challenge.hazard === "step-out" ? stepOutSites(map, challenge.street) : null;
+  if (steps && !steps.length) throw new Error("This map has no straight block of a quiet two-way street with one lane each way and a parking lane, long enough and outside any school or playground zone.");
+  const step = steps ? steps[Math.floor(random() * steps.length)] : null;
+  const start = step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -763,7 +799,7 @@ export function challengeScenario(map, challenge) {
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
   // (past a double-parked van, along its street only)
-  for (let i = 0; i < 12 && !van && !park && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && !van && !park && !step && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -773,7 +809,7 @@ export function challengeScenario(map, challenge) {
     chain.push(lane); seen.add(id); length += lane.length;
   }
   // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
-  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : last.length - 10;
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : last.length - 10;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
@@ -793,6 +829,7 @@ export function challengeScenario(map, challenge) {
     ...(flagger ? { workZone: flagger.zone } : {}),
     ...(van ? { doubleParked: van.van } : {}),
     ...(park ? { parking: park.space } : {}),
+    ...(step ? { stepOut: step.stepOut } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -836,6 +873,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.workZone) Object.assign(world.challenge, placeWorkZone(world, fleet, scenario.workZone, challenge.seed));
   if (scenario.doubleParked) Object.assign(world.challenge, placeVan(world, fleet, scenario.doubleParked, challenge.seed));
   if (scenario.parking) Object.assign(world.challenge, placeParking(world, fleet, scenario.parking, challenge.seed));
+  if (scenario.stepOut) Object.assign(world.challenge, placeStepOut(world, scenario.stepOut, challenge.seed));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -868,6 +906,7 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "work-zone" ? local.ahead < WZ_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "double-parked" ? local.ahead < VAN_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "parking" ? local.ahead < PARK_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
+    : state.hazard === "step-out" ? local.ahead < STEP_OUT_M + world.ego.spec.length - world.ego.spec.rearOverhang
     // (the arrow comes on, and the cars beside the car turn)
     : state.hazard === "left-arrow" ? approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow"
     : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "outage", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
@@ -1260,6 +1299,30 @@ function placeParking(world, fleet, { edge, a, b }, seed) {
   car.path.start(edge, lane.idx, s);
   fleet.vehicles.push(car);
   return { followerIds: [car.id], at: pointAt(e.pts, e.cum, a) };
+}
+// Between the cars: the cars lining the kerb (see stepOutSites), staying put, and the child hidden
+// between the two either side of their line, who will walk straight across the street to just past the
+// far kerb without looking (`dart`).
+function placeStepOut(world, { edge, at }, seed) {
+  const map = world.map, random = rng(seed), e = map.edges.get(edge), lat = curbOffset(e, CAR);
+  const colors = [0x8d9299, 0x2b3a55, 0xeeeeea, 0x1a1c20, 0x6b7f5e, 0x9b1e1e];
+  const step = CAR.length + STEP_GAP_M, rears = [];
+  for (let rear = at + STEP_GAP_M / 2; rear + CAR.length <= at + STEP_ROW_M[1]; rear += step) rears.push(rear);
+  for (let rear = at - STEP_GAP_M / 2 - CAR.length; rear >= at - STEP_ROW_M[0]; rear -= step) rears.push(rear);
+  for (const [i, rear] of rears.sort((x, y) => x - y).entries()) {
+    const s = rear + CAR.rearOverhang, p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+    const car = new Vehicle(p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, h, 0);
+    Object.assign(car, { id: `challenge_parked_${i + 1}`, color: colors[i % colors.length], style: [2, 0, 4, 1, 5, 3][i % 6], curb: "right", edge, stay: true });
+    world.parked.add(car);
+  }
+  const p = pointAt(e.pts, e.cum, at), h = headingAt(e.pts, e.cum, at);
+  const off = (right) => [p[0] + Math.sin(h) * right, p[1] - Math.cos(h) * right];
+  const from = off(lat - CAR.width / 2 + STEP_HIDE_M), to = off(e.asphalt[0] - 0.4);
+  const ped = new Pedestrian({ id: "challenge_child", x: from[0], y: from[1], psi: h + Math.PI / 2, v: 0, speed: STEP_MPS, child: true, dart: true, stepOut: true,
+    path: [{ p: to, cross: { node: null, from, to, jaywalk: true } }], crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), at: null });
+  ped.frozen = 1e6;
+  world.crowd.list.push(ped);
+  return { pedestrianId: ped.id, at: from };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

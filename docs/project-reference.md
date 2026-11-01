@@ -554,6 +554,38 @@ CLEAR BEHIND · REVERSE IN", "· REVERSING IN", "PULLING OUT · TRAFFIC COMING �
 CLEAR", "PULLING OUT", then "PARKED", "ARRIVED · STOPPED IN LANE" or "ARRIVED · STUCK PARTWAY IN". The seeded benchmark and the other
 challenges never park.
 
+Hidden hazards (`static/js/sim/hidden-hazards.js`, with the blind spot and its speed in `sim/blind-spot.js`,
+which coaching imports without the DOM): with the `World` option `hazards` (free drives, unless
+`?hazards=0`; challenges with `hidden: true`), a vehicle standing at the kerb (anything in `world.parked`: a
+parked car, a van double-parked or stopped at the roadside) hides a pedestrian from the driven car when
+every line from it to them, to their middle and 0.3 m either side, passes through it or a vehicle in
+traffic (`World.sees`, sim/crosswalk.js `hiddenByTraffic` with `standing`). Sensing is in plan view: a body
+hides whatever is behind it, whatever its height. A blind spot (`blindSpot`) is a vehicle standing at the
+kerb ahead of the car's front (up to 60 m), within 30 deg of parallel to it, whose traffic side is no more
+than 2 m from the car's side, on a quiet street (residential, unclassified or living street, by the edge it
+is parked along) or anywhere in a school or playground zone in effect, that the car can see. Beside one the
+car keeps to the blind-spot speed (`blindSpeed`): the speed from which, 0.6 s after someone steps out 15 m
+ahead of its front and braking at 0.75 of `comfort().hardDecel`, it stops 2 m short of their line (32 km/h
+dry, 27 in rain, 19 in snow), never above the limit. Nobody steps out further ahead than 15 m, so it slows
+to it at 0.6 of the comfortable deceleration by the time its front is 20 m short of the first such vehicle
+(`blindApproach`) and keeps to it until none is left within that distance. In a free drive (`StepOuts`,
+`stepOuts: 1`) someone waits at a time, now and then (first after 20 to 60 s, then 60 to 150 s after each,
+retrying every 3 s), hidden between two cars parked 0.9 to 3.5 m apart along the car's side of the quiet
+street it is on, 35 to 70 m ahead of its front, 0.6 m in from their traffic side: a child 6 times in 10,
+walking at 1.4 to 1.9 m/s (an adult at 1.3 to 1.8). Once the car, heading along the street, has its front
+within 15 m of their line (and no nearer than 9 m), they step out across the street to just past the far
+kerb without looking (`dart`), then walk on along the far sidewalk with the crowd, if no vehicle in traffic
+or cyclist is on the street ahead of the car up to 45 m past their line; otherwise, or after 40 s, they
+stay put and are taken off once out of sight. The car's sensing reports `blind_spot` (`side`, `from_m` and
+`to_m` from its front, `gap_m`, `cars`, the `first` and its `edge`, `why` and `limit_mps`), caps the limit at
+`blindApproach`, adds it to the target speed ("parked cars hide the sidewalk"), and flags "blind spot" for
+250 ms decisions from 25 m short of it. Decision models and LLMs get `blind_spot`, a situation line and a
+prompt line. The coaching score counts time within 15 m of a blind spot more than 5 km/h over the
+blind-spot speed (`blind_spot_speeding_s`, deducted from safety; once a street side as an incident) with a
+coaching line and a tip, reported only with hidden hazards on. The HUD says "PARKED CARS HIDE THE SIDEWALK
+· 32 KM/H" once a street side, and "CHILD STEPPING OUT FROM THE PARKED CARS · STOP" (or "PERSON") when it
+sees one. The seeded benchmark and the other challenges have none.
+
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block
 the driven car and candidate predictions. Rendering and collisions share deterministic scenery
 placements. Swept checks stop the car before penetration and count contact once until it separates;
@@ -702,7 +734,8 @@ browser's local storage unless you export them.
 
 Map tags and procedural geometry limit realism. There is no road elevation or camber, and
 visual body pitch and roll do not add a physical suspension model. Buildings, weather and darkness
-determine sensing; trees and vehicles do not occlude it, and individual street lamps do not extend
+determine sensing; a vehicle in traffic hides a pedestrian behind it, and so, with hidden hazards on, does one
+standing at the kerb, but trees do not occlude it and vehicles do not hide other vehicles or cyclists, and individual street lamps do not extend
 detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car changes lanes only to pass and
 then returns, and to get into the lane for a turn; two or more lanes from its route's lane, it keeps room for one lane change per lane. Where its route makes a U-turn at a dead end, it stops and turns round with a three-point turn (more legs where it is tight), letting its bumpers reach no more than 0.2 m over the kerb and keeping clear of parked cars and scenery; it does not turn round anywhere else, and the router uses U-turns only at dead ends. Where a street's lanes change at the junction
 before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Turning left or making a U-turn at a signal, a stop sign or a junction without either, the car yields to the oncoming traffic it can see, waiting at the line or inside the junction, and it takes an oncoming car's left indicator at its word when that car is in its leftmost lane within 40 m of the junction (anywhere else, it may be a lane change; a car pulling out from the curb is waited for whatever it signals). It turns right on red after a full stop (except on the island of Montréal, judged from the map's centre against a coarse outline of the island), but only where it can see along the street to its left from the line: at a red light it does not creep forward to look, so at a corner a building hides it waits for the green, as it does in fog, rain, snow and after dark. Signs banning a right on red at a particular junction are not read from the map, and left turns on red from one one-way street onto another are not made. At a two-way stop, once its stop is made, the car gives way to traffic on the through road from both sides; at a junction without a sign or signal it gives way to traffic from the right, or to the larger road where a smaller one meets it (road classes from OpenStreetMap: primary and secondary, then tertiary, then the rest). OpenStreetMap misses some stop signs, so a few junctions that have one on the street are treated as having none, and a T-junction follows the same rules as a crossroads. Where a building hides a street it gives way to, the car slows, creeps forward to look and goes once stopped at the point it looks from (0.3 m short of the crossing road's asphalt) if nothing it can see is coming, even if a building still hides part of the street; in fog and after dark it looks only as far as it can see. Traffic gives way by the same rules but does not look: it knows where everyone is. The audit counts pulling out in front of a vehicle with the right of way that is due at the junction within 2 s as a failure to yield, seen or not, if it was already on its way when the car crossed its line. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross

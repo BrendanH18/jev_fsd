@@ -1,5 +1,6 @@
 // Deterministic coaching model, independent of the driver. Deductions accumulate in simulation
 // time, so pauses, frame rate and the decision API cannot change the score.
+import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
 export const SPEED_GRACE_MPS = 5 / 3.6;
@@ -34,6 +35,10 @@ export class DriveScore {
     // (parking at the destination, sim/parallel-park.js: how it ended, and the kerb strikes on the way in
     // or out; reported only for a drive with parking)
     this.parking = null; this.kerbStrikes = 0;
+    // (with hidden hazards on, sim/hidden-hazards.js: beside cars parked at the kerb that hide the
+    // sidewalk, faster than the car could stop from for someone stepping out, and the streets (each
+    // side of each) that was counted for; reported only for a drive with hidden hazards)
+    this.hazards = !!world.hazards; this.blindSpeeding = 0; this.blindCounted = new Set();
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -115,6 +120,15 @@ export class DriveScore {
       if (!speeding) this.speeding += dt;
       if (!this.workZoneCounted.has(zonePass.zone.id)) { this.workZoneCounted.add(zonePass.zone.id); this.incident("work_zone_speeding", "Too fast through a work zone", { zone: zonePass.zone.id }); }
     }
+    // cars parked at the kerb that hide the sidewalk (sim/hidden-hazards.js): within STEP_OUT_M of them,
+    // the blind-spot speed holds
+    const blind = this.hazards ? blindSpot(world, ego, road) : null;
+    const blindFast = !!blind && blind.from_m <= STEP_OUT_M && speed > blind.limit_mps + SPEED_GRACE_MPS;
+    if (blindFast) {
+      this.blindSpeeding += dt;
+      const key = `${blind.edge}:${blind.side}`;
+      if (!this.blindCounted.has(key)) { this.blindCounted.add(key); this.incident("blind_spot_speeding", "Passed parked cars too fast to stop for someone stepping out", { edge: blind.edge }); }
+    }
     for (const ev of world.events || []) {
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
@@ -139,6 +153,7 @@ export class DriveScore {
       : tracks?.still > 0.5 ? "Clear the tracks. Never stop on them."
       : blocking ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
       : workZoneFast ? `Slow to ${Math.round(zonePass.limit * 3.6)}. You’re in a work zone.`
+      : blindFast ? `Slow to ${Math.round(blind.limit_mps * 3.6)}. Parked cars hide the sidewalk: someone could step out.`
       : roadsideFast ? `Slow to ${Math.round(passing.limit * 3.6)} and move over. A ${name} is stopped with its lights flashing.`
       : speeding ? "Ease off. You’re above the speed limit."
       : Math.abs(ego.latAccel || 0) > 3 ? "Slow down before the bend."
@@ -194,7 +209,7 @@ export class DriveScore {
     const collisions = delta("collisions"), atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
-      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6)),
+      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2)),
       legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
@@ -211,6 +226,7 @@ export class DriveScore {
     if (this.zoneSpeeding > 1) tips.push("Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.");
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
     if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
+    if (this.blindSpeeding > 0.5) tips.push("Beside cars parked at the kerb on quiet streets and in school zones, slow to a speed you can stop from in about 15 m. Someone can step out from between them before you can see them.");
     if (this.darkSignals) tips.push("Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.");
     if (this.vanCutoffs) tips.push("Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.");
     if (this.kerbStrikes) tips.push("Parking, creep in slowly and stop before a wheel touches the kerb. Turn the wheel only while the car is moving if you have to, and check your mirror on the kerb side.");
@@ -233,6 +249,7 @@ export class DriveScore {
       speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, van_cutoffs: this.vanCutoffs, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
+      ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding) } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };
   }

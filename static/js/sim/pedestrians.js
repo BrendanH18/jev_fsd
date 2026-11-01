@@ -63,6 +63,7 @@ export class Crowd {
       if (!streets.has(key)) streets.set(key, { id: key, edge: e });
     }
     this.streets = [...streets.values()];
+    this.streetIndex = streets;
     // marked crosswalks between junctions, on the street they cross (`s` along its base edge)
     this.marked = [];
     for (const c of map.crosswalks || []) {
@@ -127,6 +128,9 @@ export class Crowd {
   }
 
   leg(node, st) { return this.legsAt.get(node).list.find((l) => l.st === st); }
+
+  // The street (one entry for both directions of a two-way street) edge `e` is on, or undefined.
+  streetOf(e) { return this.streetIndex.get([e.from, e.to].sort().join("|") + "|" + Math.round(e.length)); }
 
   // A child getting off school bus `bus`, stopped on street edge `e` (sim/school-bus.js), by its front
   // door: to the sidewalk beside it or (`cross`) forward past its front and across the street,
