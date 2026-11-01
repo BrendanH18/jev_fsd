@@ -4,6 +4,7 @@ import { isEmergency } from "../sim/emergency.js";
 import { busSignalling } from "../sim/bus.js";
 import { ZONE_NAMES, ZONE_HOURS, inEffect } from "../sim/speed-zones.js";
 import { headingAt, pointAt } from "../map/mapdata.js";
+import { hiderName } from "../sim/hidden-traffic.js";
 
 // A debug view of geometric sensing, not a claim about a camera or learned perception model.
 export class PerceptionView {
@@ -93,11 +94,14 @@ export class PerceptionView {
     // cars parked at the kerb that hide the sidewalk (sim/blind-spot.js), with hidden hazards on
     const bs = snap.blind_spot;
     const blind = bs ? `Parked cars ${bs.from_m > 0 ? `${Math.round(bs.from_m)} m ahead` : "beside"} hide the sidewalk: ${Math.round(bs.limit_mps * 3.6)} km/h` : null;
+    // a vehicle hiding a lane the car must give way to (sim/hidden-traffic.js), with hidden hazards on
+    const ix = snap.intersection, hid = ix?.oncoming?.view?.hidden_by ?? (ix?.give_way?.go === false ? ix.give_way.hidden_by : null) ?? ix?.right_on_red?.wait_for?.hidden_by ?? null;
+    const lane = hid ? `${ix.oncoming?.view ? "Oncoming lane" : ix.right_on_red?.wait_for?.hidden_by ? "Street to the left" : "Cross street"} hidden behind a ${hiderName(world, hid)}: wait until it can see` : null;
     const z = snap.speed_zone;
     const zone = z ? `${ZONE_NAMES[z.kind][0].toUpperCase()}${ZONE_NAMES[z.kind].slice(1)}${z.name ? ` (${z.name})` : ""}, ${ZONE_HOURS[z.kind]}: ${Math.round(z.limit_mps * 3.6)} km/h ${z.in_zone ? (z.ends_in_m !== null ? `for ${Math.round(z.ends_in_m)} m` : "here") : `from ${Math.round(Math.max(0, z.starts_in_m))} m ahead`}` : null;
     const r = snap.roadside_stop;
     const roadside = r ? `${r.name[0].toUpperCase()}${r.name.slice(1)} at the roadside, lights flashing, ${r.gap_m > 0 ? `${Math.round(r.gap_m)} m ahead` : "beside"}: pass at ${Math.round(r.limit_mps * 3.6)} km/h${r.in_adjacent_lane && r.other_lane ? ", move over" : ""}` : null;
-    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, van, blind, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, van, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

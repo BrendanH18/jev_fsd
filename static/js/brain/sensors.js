@@ -10,7 +10,7 @@ import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../
 import { ringBusy } from "../sim/roundabout.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
-import { pointAt, projectPoint } from "../map/mapdata.js";
+import { headingAt, pointAt, projectPoint } from "../map/mapdata.js";
 import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
@@ -27,6 +27,7 @@ import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROAD
 import { PASS_DECEL, PASS_MPS, VAN_LOOK_M, VAN_NAME, isVan, queuedAhead, wayRound } from "../sim/double-parked.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
 import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
+import { laneSight } from "../sim/hidden-traffic.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
@@ -115,6 +116,10 @@ const IMMEDIATE_S = 2.0;
 const VIEW_CHECK_M = 40;
 const VIEW_STEP_M = 5;
 export const PEEK_MPS = 1.5;
+// With hidden traffic (World option hazards, sim/hidden-traffic.js), a vehicle's body may hide those
+// streets' lanes too. Then, stopped where it looks from, the car waits up to 8 s for the view to clear
+// before going once nothing it can see is coming, as it does past a building.
+const HIDDEN_HOLD_S = 8;
 // Turning right, the car yields to a cyclist on its right going its way (a right hook): one clear
 // of the car's lane line, so passing it on the right rather than following it, heading within 30
 // deg of the street the car turns from, and coming toward the corner. The car turns in front of it
@@ -234,8 +239,10 @@ export function buildSnapshot(world, executing = null) {
         : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow";
       const giveWay = (control.type === "uncontrolled" && control.rule !== "major") || (control.type === "stop" && !control.all_way && stopCompleted)
         ? giveWayAt(world, c, frontS) : null;
-      // (a left turn under an advance green is protected: oncoming traffic is held on its red)
-      const oncoming = leftTurn && turnNow && !advance?.protected ? oncomingYield(world, c, frontS) : null;
+      // (a left turn under an advance green is protected: oncoming traffic is held on its red; and
+      // inside the junction once the light has changed, the car clears it as soon as the traffic it can
+      // see allows, without waiting to see along the oncoming lanes)
+      const oncoming = leftTurn && turnNow && !advance?.protected ? oncomingYield(world, c, frontS, !(control.type === "signal" && entered && signal !== "green")) : null;
       // A junction without a sign that asks nothing of the car right now (it has the right of way,
       // or nothing it gives way to is coming and it can see) does not hide a control further on:
       // a signal just beyond it, say.
@@ -441,14 +448,58 @@ function laneState(route, p, law) {
   };
 }
 
+// Where the car's route first comes within half the two widths plus 0.5 m of the line of a vehicle at
+// (x, y) heading `psi` in `lane` of an oncoming street (taken over to its innermost lane: the car must
+// cross that one first), from its front or the line on, or null if it does not.
+function pathHit(world, c, frontS, x, y, psi, spec, lane) {
+  const { ego, route } = world;
+  const reach = (ego.spec.width + spec.width) / 2 + 0.5;
+  const ux = Math.cos(psi), uy = Math.sin(psi);
+  // its lane's offset from the innermost lane of its street (lane 0 is leftmost), to its left
+  const inner = lane ? Math.max(0, lane.offset - lane.edgeRef.lane_offsets[0]) : 0;
+  const ox = x - uy * inner, oy = y + ux * inner;
+  for (let s = Math.max(c.sRoute, frontS) - 2; s <= c.sJunction + JUNCTION_BOX_M; s += 0.5) {
+    const [px, py] = route.pointAt(s);
+    const ax = px - ox, ay = py - oy;
+    if (ax * ux + ay * uy > -spec.length && Math.abs(ax * uy - ay * ux) < reach) return s;
+  }
+  return null;
+}
+
+// Hidden traffic: the first oncoming lane the car cannot see far enough along (see oncomingYield), or
+// null: the lane, how far along it the car sees (`sight_m`, from the junction), the vehicle that hides
+// the rest (`hidden_by`), and the first point it cannot see (`at`, heading along the lane: `heading`).
+// Oncoming lanes are those of the streets into the junction heading within 60 deg of straight at the
+// car's approach.
+function oncomingView(world, c, need) {
+  const { ego, route, map } = world;
+  const node = map.edges.get(c.edge)?.to, facing = route.headingAt(c.sRoute) + Math.PI;
+  let worst = null;
+  for (const id of map.inn.get(node) || []) {
+    const e = map.edges.get(id);
+    if (id === c.edge || Math.abs(wrap(map.headingIn(id) - facing)) > ONCOMING_CONE) continue;
+    const far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * weather.speed * need;
+    for (let idx = 0; idx < e.lanes; idx++) {
+      const lane = map.lane(id, idx);
+      if (!lane) continue;
+      const seen = laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
+      if (!seen || (worst && worst.sight_m <= seen.sight_m)) continue;
+      const L = lane.cum[lane.cum.length - 1];
+      worst = { ...seen, lane, heading: headingAt(lane.pts, lane.cum, Math.max(0, L - seen.back)) };
+    }
+  }
+  return worst;
+}
+
 // Turning left at a signal: the oncoming vehicle the car must wait for, or null when there is none
 // or the car can no longer stop short of oncoming traffic's path (it has committed and clears the
 // junction). Past the wait point but short of the path it still waits. `yield_s_route` is where
 // the front bumper stops, ONCOMING_STOP_M before the first point where the car's path comes within
 // half the two widths plus 0.5 m of the line of the innermost oncoming lane, measured from a
 // conflicting vehicle's line of travel (so a car in a far lane is waited for short of the near
-// lane too). Only vehicles the car can see count.
-function oncomingYield(world, c, frontS) {
+// lane too). Only vehicles the car can see count; with hidden traffic (World option hazards), what it
+// cannot see along an oncoming lane holds it too (`id` null, `view`).
+function oncomingYield(world, c, frontS, look = true) {
   const { ego, route } = world;
   const centre = route.pointAt(c.sJunction);
   const toClear = c.sJunction + CLEAR_PAST_M + ego.spec.length - frontS;
@@ -474,25 +525,30 @@ function oncomingYield(world, c, frontS) {
     // brake lights: a vehicle that will stop well short of the junction is not coming through
     if (!inBox && n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
     const eta = inBox ? 0 : etaOf(world, n, d - JUNCTION_BOX_M / 2);
-    if (eta >= need || !world.visibility.sees(ego, n)) continue;
-    const spec = n.spec || CAR;
-    const reach = (ego.spec.width + spec.width) / 2 + 0.5;
-    const ux = Math.cos(n.psi), uy = Math.sin(n.psi);
-    // its lane's offset from the innermost lane of its street (lane 0 is leftmost), to its left
-    const inner = lane ? Math.max(0, lane.offset - lane.edgeRef.lane_offsets[0]) : 0;
-    const ox = n.x - uy * inner, oy = n.y + ux * inner;
-    let hit = null;
-    for (let s = Math.max(c.sRoute, frontS) - 2; s <= c.sJunction + JUNCTION_BOX_M; s += 0.5) {
-      const [px, py] = route.pointAt(s);
-      const ax = px - ox, ay = py - oy;
-      if (ax * ux + ay * uy > -spec.length && Math.abs(ax * uy - ay * ux) < reach) { hit = s; break; }
-    }
+    if (eta >= need || !world.sees(ego, n)) continue;
+    const hit = pathHit(world, c, frontS, n.x, n.y, n.psi, n.spec || CAR, lane);
     if (hit === null) continue;
     const at = hit - ONCOMING_STOP_M;
     if (!best || at < best.yield_s_route) best = { id: n.id, eta_s: eta, need_s: need, yield_s_route: at, bumper_to_yield_m: at - frontS };
   }
+  // Hidden traffic (World option hazards, sim/hidden-traffic.js): along each oncoming lane, as far as
+  // traffic at its street's limit covers in that time, a vehicle's body (one waiting to turn left
+  // opposite, say) may hide what is coming. Until the car can see that far, it waits short of that
+  // lane's path, as it would for a vehicle there, but no further in than the near edge of the street it
+  // crosses (so that a vehicle waiting to turn left opposite has room to turn in front of it), or, past
+  // that, where it can stop braking gently.
+  const view = look && world.hazards ? oncomingView(world, c, need) : null;
+  if (view) {
+    const hit = pathHit(world, c, frontS, view.at[0], view.at[1], view.heading, CAR, view.lane);
+    if (hit !== null) {
+      const edge = c.sJunction - world.map.crossingHalfWidth(c.edge), soonest = frontS + ego.v * ego.v / (2 * comfort().decel);
+      const at = Math.min(hit - ONCOMING_STOP_M, Math.max(edge, soonest)), hidden = { hidden_by: view.hidden_by, sight_m: view.sight_m, lane: view.lane.idx };
+      if (!best || at < best.yield_s_route) best = { id: null, eta_s: null, need_s: need, yield_s_route: at, bumper_to_yield_m: at - frontS, view: hidden, path_s: hit };
+      else best.view = hidden;
+    }
+  }
   // too late to stop short of its path (not just of the wait point): carry on through
-  if (!best || best.bumper_to_yield_m + ONCOMING_STOP_M < ego.v * ego.v / (2 * Math.min(4, comfort().hardDecel)) + 0.3) return null;
+  if (!best || (best.path_s !== undefined ? best.path_s - frontS : best.bumper_to_yield_m + ONCOMING_STOP_M) < ego.v * ego.v / (2 * Math.min(4, comfort().hardDecel)) + 0.3) return null;
   return best;
 }
 
@@ -987,6 +1043,12 @@ function rightOnRed(world, c, inter, frontS, visible, held = false) {
         if (back < far * k / 4) break;
         last = back;
       }
+      // hidden traffic (World option hazards, sim/hidden-traffic.js): nor may a vehicle's body hide
+      // that street's lanes
+      for (let idx = 0; world.hazards && idx < e.lanes; idx++) {
+        const lane = map.lane(e.id, idx), seen = lane && laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
+        if (seen) { out.wait_for = { kind: "view", sight_m: Math.round(seen.sight_m), hidden_by: seen.hidden_by }; return out; }
+      }
     }
   }
   return out;
@@ -1025,7 +1087,7 @@ function giveWayAt(world, c, frontS) {
   for (const n of world.npcs) {
     if (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) continue;
     const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
-    if (d > ONCOMING_LOOK_M || !world.visibility.sees(ego, n)) continue;
+    if (d > ONCOMING_LOOK_M || !world.sees(ego, n)) continue;
     const rel = wrap(n.psi - inward);
     if (d < JUNCTION_BOX_M) {
       // moving across the junction (not coming straight on toward the car, and heading the car's way
@@ -1063,10 +1125,21 @@ function giveWayAt(world, c, frontS) {
       }
       // (how far it sees along the street it cannot see far enough along)
       if (blocked) { out.view_clear = false; out.sight_m = out.sight_m === null ? last : Math.min(out.sight_m, last); }
+      // hidden traffic (World option hazards, sim/hidden-traffic.js): a vehicle's body may hide the
+      // street's lanes where buildings do not
+      for (let idx = 0; world.hazards && !blocked && idx < e.lanes; idx++) {
+        const lane = map.lane(id, idx), seen = lane && laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
+        if (!seen) continue;
+        out.view_clear = false;
+        if (out.sight_m === null || seen.sight_m < out.sight_m) { out.sight_m = seen.sight_m; out.hidden_by = seen.hidden_by; }
+      }
     }
     out.peeked = !out.view_clear && atPeek;
+    // A vehicle hiding the view moves on before long, unlike a building: stopped where it looks from,
+    // the car waits up to HIDDEN_HOLD_S for it to, before going as it would past a building.
+    if (out.hidden_by && out.peeked && world.egoPeek === c.control.id && world.t - world.egoPeekAt < HIDDEN_HOLD_S) out.waiting_to_see = true;
   }
-  out.hold_s_route = out.wait_for ? (frontS < c.sRoute - 0.3 ? c.sRoute : peekS) : out.view_clear === false && !out.peeked ? peekS : null;
+  out.hold_s_route = out.wait_for ? (frontS < c.sRoute - 0.3 ? c.sRoute : peekS) : out.view_clear === false && (!out.peeked || out.waiting_to_see) ? peekS : null;
   if (out.hold_s_route !== null) out.bumper_to_hold_m = out.hold_s_route - frontS;
   out.go = out.hold_s_route === null;
   return out;

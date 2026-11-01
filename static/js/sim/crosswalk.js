@@ -141,7 +141,7 @@ export function hiddenByTraffic(observer, ped, vehicles, standing = []) {
 }
 
 // Does segment a-b pass through box (an OBB)? Liang–Barsky in the box's frame.
-function segmentHitsBox(a, b, box) {
+export function segmentHitsBox(a, b, box) {
   const c = Math.cos(box.heading), s = Math.sin(box.heading);
   const loc = (p) => { const x = p[0] - box.center[0], y = p[1] - box.center[1]; return [x * c + y * s, -x * s + y * c]; };
   const p = loc(a), q = loc(b);

@@ -26,6 +26,7 @@ import { createVanMesh, syncVan } from "./render/delivery-van.js";
 import { VAN_COUNT, vanNotice } from "./sim/double-parked.js";
 import { parkNotice } from "./sim/parallel-park.js";
 import { STEP_OUT_COUNT, hazardNotice } from "./sim/hidden-hazards.js";
+import { trafficNotice } from "./sim/hidden-traffic.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -625,7 +626,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null, announcedVan = null, announcedPark = null, announcedHazard = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null, announcedVan = null, announcedPark = null, announcedHazard = null, announcedTraffic = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -768,6 +769,10 @@ export async function boot() {
     const hazardLine = hazardNotice(world);
     if (hazardLine && hazardLine.key !== announcedHazard) { announcedHazard = hazardLine.key; hud.badge(hazardLine.text, hazardLine.wait ? "safety" : "", 2500); }
     if (!hazardLine) announcedHazard = null;
+    // a vehicle hiding a lane the car must give way to (sim/hidden-traffic.js)
+    const trafficLine = trafficNotice(world, autopilot.snap);
+    if (trafficLine && trafficLine.key !== announcedTraffic) { announcedTraffic = trafficLine.key; hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500); }
+    if (!trafficLine) announcedTraffic = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once
