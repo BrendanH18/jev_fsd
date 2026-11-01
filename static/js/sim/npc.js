@@ -757,12 +757,14 @@ export class NpcFleet {
           const g = q.s - path.s - (spec.length - spec.rearOverhang) - ego.spec.rearOverhang;
           if (g - world.parkHold < gap) { gap = Math.max(0.05, g - world.parkHold); leadV = 0; leader = ego; }
           // (only while the car waits for it, before it starts back)
-          if (n.v < 0.2 && world.park?.blocked === n.id && world.parkHold - g > 0.5 && n.kind !== "bike" && !isLong(n) && (n.parkWait = (n.parkWait || 0) + dt) > PARK_BACK_S) {
+          const waits = n.v < 0.2 && world.park?.blocked === n.id && world.parkHold - g > 0.5 && n.kind !== "bike" && !isLong(n);
+          n.parkWait = waits ? (n.parkWait || 0) + dt : 0;
+          if (n.parkWait > PARK_BACK_S) {
             n.parkWait = 0;
             n.backoff = { left: Math.min(PARK_BACK_MAX_M, world.parkHold - g + 0.5), t: 0 };
           }
         } else n.parkWait = 0;
-      }
+      } else if (n.parkWait) n.parkWait = 0;
       n.lead = gap < Infinity ? { gap, v: leadV } : null;
       let stopAt = null;
       for (const e of path.edges) {

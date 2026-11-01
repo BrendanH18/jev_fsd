@@ -551,7 +551,7 @@ coaching score reports `parking` (`parked`, with how far from the kerb and how s
 or `stuck partway in`) with the kerb strikes and tips, only for drives that park. The HUD says "PARKING
 SPACE AHEAD · SIGNAL RIGHT · PULL UP ALONGSIDE THE CAR IN FRONT", "PARKING · CHECKING BEHIND · WAIT", "·
 CLEAR BEHIND · REVERSE IN", "· REVERSING IN", "PULLING OUT · TRAFFIC COMING · WAIT", "· SIGNAL LEFT ·
-CLEAR", "PULLING OUT", then "PARKED" or "ARRIVED · STOPPED IN LANE". The seeded benchmark and the other
+CLEAR", "PULLING OUT", then "PARKED", "ARRIVED · STOPPED IN LANE" or "ARRIVED · STUCK PARTWAY IN". The seeded benchmark and the other
 challenges never park.
 
 Buildings, tree trunks, signposts, signal poles, street lamps, porches and hedges physically block

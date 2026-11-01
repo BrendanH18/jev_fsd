@@ -128,7 +128,7 @@ export async function boot() {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
     onEvent: (ev) => {
       recorder.mark(world.t, ev.type);
-      if (ev.type === "arrived") { arrivalPending = true; drive?.noteArrival(ev); hud.badge(ev.parked ? "PARKED" : ev.parked === false ? "ARRIVED · STOPPED IN LANE" : "ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
+      if (ev.type === "arrived") { arrivalPending = true; drive?.noteArrival(ev); hud.badge(ev.parked ? "PARKED" : ev.parked === false ? (ev.stuck ? "ARRIVED · STUCK PARTWAY IN" : "ARRIVED · STOPPED IN LANE") : "ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
       else if (ev.type === "safety") hud.badge("SAFETY BRAKE", "safety", 700);
       else if (ev.type === "fallback") hud.badge(`fallback: ${ev.error}`, "safety", 1800);
       else if (ev.type === "reroute") { hud.badge(`re-routed (${ev.count} options)`, "", 1000); overlays.setRoute(world.route); }
