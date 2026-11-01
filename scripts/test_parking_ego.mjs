@@ -262,7 +262,7 @@ await test("with no space to be had it stops in its lane at the destination; wit
   assert.ok(plain && !("parked" in plain), JSON.stringify(plain));
 });
 
-await test("pulling out: it backs up, waits for traffic coming up the lane, pulls out on full lock and lets the space go", async () => {
+await test("pulling out: it backs up, waits for traffic coming up the lane, pulls out on full lock, waits for anyone in the way out, and lets the space go", async () => {
   const { world, fleet } = street1({ gap: 7.3 });
   const first = pilot(world);
   await run({ world, fleet, autopilot: first.autopilot }, 120);
@@ -276,11 +276,20 @@ await test("pulling out: it backs up, waits for traffic coming up the lane, pull
   const coming = car(world, fleet, "coming", world.ego.x - 45, 8);
   const autopilot = first.autopilot;
   autopilot.setEnabled(true);
-  let waitedFor = null, out = false, wentFirst = null;
-  const r = await run({ world, fleet, autopilot }, 90, (w) => {
+  let waitedFor = null, out = false, wentFirst = null, blocker = null, heldFor = 0;
+  const r = await run({ world, fleet, autopilot }, 120, (w) => {
     if (w.park?.mode === "out" && w.park.blocked) waitedFor = w.park.blocked;
     if (w.parking?.mode === "out" && w.parking.phase === "out1" && !out) { out = true; wentFirst = w.ego.toLocal(coming.x, coming.y).ahead > 0; }
+    // halfway out, a car stops in the way for 6 s, then drives off: the car waits, then carries on out
+    if (w.parking?.mode === "out" && w.parking.phase === "out2" && !blocker) {
+      const h = w.ego.psi, x = w.ego.x + Math.cos(h) * 7.5, y = -LANE;
+      blocker = car(w, fleet, "blocker", x, 0);
+      blocker.frozen = 1e6;
+    }
+    if (blocker && fleet.vehicles.includes(blocker) && (heldFor += DT) > 6) fleet.vehicles.splice(fleet.vehicles.indexOf(blocker), 1);
+    if (blocker && w.parking?.mode === "out") assert.notEqual(w.parking.phase, "stuck", "a car in the way out does not leave it stuck");
   });
+  assert.ok(blocker && heldFor > 6, "a car stopped in the way out");
   assert.equal(waitedFor, "coming");
   assert.ok(out && r.signals.has("left"), "pulled out, signalling left");
   assert.equal(r.contacts + r.kerb, 0);

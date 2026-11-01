@@ -619,9 +619,10 @@ function stepOut(vehicle, law, world, dt, speedControl, hold) {
     hold(steer);
     if (Math.abs(vehicle.v) < 0.03) {
       vehicle.v = 0;
+      // (something standing in the way out: wait for it to move, and carry on)
+      if (!room && left > 0 && law.phase !== "out_back") return true;
       law.travelled = 0;
       if (law.phase === "out_back") law.phase = "out_wait";
-      else if (!room) law.phase = "stuck";
       else if (law.phase === "out1") law.phase = toArc > 0.02 ? "out2" : "out3";
       else if (law.phase === "out2") law.phase = "out3";
       else law.phase = "done";

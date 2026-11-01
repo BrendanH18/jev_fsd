@@ -99,7 +99,7 @@ export class DeadlockDetector {
       || (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M)
       || (snap && snap.turnaround?.executing && snap.turnaround.idle_s < TURN_ROUND_IDLE_S)
       // (waiting to park, or to pull out, signalling, for what is coming; and parking, at walking pace)
-      || (snap && snap.parking && ((snap.parking.mode === "in" ? !snap.parking.phase && snap.parking.near_start : !snap.parking.phase || snap.parking.phase === "out_wait") || (snap.parking.executing && snap.parking.idle_s < TURN_ROUND_IDLE_S)))
+      || (snap && snap.parking && ((snap.parking.mode === "in" ? !snap.parking.phase && snap.parking.near_start : !snap.parking.phase || snap.parking.executing) || (snap.parking.executing && snap.parking.idle_s < TURN_ROUND_IDLE_S)))
       || !world.route;
     // (creeping forward to look past a building is slow on purpose, unless it is not moving at all)
     const g = snap?.intersection?.give_way, looking = g && !g.wait_for && g.hold_s_route !== null;
