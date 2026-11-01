@@ -156,7 +156,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   }
   if (snap.lane_closure) {
     const l = snap.lane_closure, closed = l.side === "closed";
-    state.lane_closure = { id: l.id, closed_lane: l.closed_lane, lane: closed ? "closed: merge into the open lane at the merge point, in turn" : "open",
+    state.lane_closure = { id: l.id, closed_lane: l.closed_lane, lane: closed ? (l.merged ? "closed: across into the open lane, past the merge point" : "closed: merge into the open lane at the merge point, in turn") : "open",
       ...(l.merged ? { merge_point: "car is past it" } : { merge_point_m: r1(Math.max(0, l.bumper_to_merge_m)) }), turn: `${l.turn} lane`,
       ...(closed && !l.merged ? { at_merge: l.at_merge, your_turn: l.let_in } : {}), pass_at: r1(l.limit_mps),
       ...(l.wait ? { stop: true, wait_in_m: r1(Math.max(0, l.bumper_to_stop_m)), ...(l.wait_for ? { goes_first: l.wait_for } : {}) } : {}),
@@ -452,6 +452,7 @@ function closureClause(l) {
     if (!l.at_merge) return `${lead} Keep to the car's lane up to the merge point, behind anyone ahead in it, and take the car's turn there.${keep}`;
     return `${lead} The car is too close to stop at the merge point: merge with care.${keep}`;
   }
+  if (l.merged) return `${lead} The car is past the merge point: carry on through the closure at no more than ${kmh} km/h, and do not change lanes before its end.`;
   if (l.let_in_for) return `${lead} The car is in the open lane, and \`${l.let_in_for}\` in the closed lane has its turn to merge in front of it: let it in. Stop ${stop < 2 ? "where the car is" : `${stop} m ahead (\`let_merge_in\`)`}, short of the merge point, and go once it is across in front of the car. Do not move into the closed lane.`;
   return `${lead} The car is in the open lane: keep to it, and let in the one whose turn it is.`;
 }

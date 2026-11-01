@@ -227,6 +227,8 @@ await test("sensing and candidates, closed lane: wait at the merge point on the 
     const c2 = sampleCandidates(snap2, ctx2.world); simulateAll(c2, snap2, ctx2.world);
     assert.ok(c2.some((c) => c.change), "a lane change on offer");
     for (const c of c2.filter((c) => c.change)) assert.equal(c.reject, "into_closed_lane", c.id);
+    // (and models are told it is past the merge point, not to let anyone in)
+    assert.match(situationClauses(snap2).join(" "), /past the merge point: carry on through the closure/);
   }
   assert.ok(!cands.some((c) => c.id === "wait_to_merge"));
 });
