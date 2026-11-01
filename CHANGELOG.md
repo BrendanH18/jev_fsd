@@ -21,8 +21,9 @@
   their line they step out and walk across the street without looking, unless something else is on the
   street ahead of the car or coming the other way, in which case they stay put and go home unseen. Across
   the street they walk on along the far sidewalk with the crowd. The car only sees them as they come out
-  from behind the cars. In a 4-minute soak on Kitsilano with 40 cars, Rules saw a child step out at 14.3 m
-  doing 30 km/h and stopped 6.9 m short of them.
+  from behind the cars. In 28 minutes of free-drive soaks on Kitsilano with 40 cars (two seeds dry, one in
+  rain), ten people stepped out; Rules saw each of them at 13.9 to 14.8 m and stopped 4.8 to 10.2 m short,
+  with no collisions.
 - The driven car's sensing reports `blind_spot` (the side, how far ahead the parked cars start and end,
   the gap to them, why it counts, and the blind-spot speed), caps the limit and the target speed at it, and
   decides every 250 ms from 25 m short of one. Rules and every other driver keep to it through the limit;
