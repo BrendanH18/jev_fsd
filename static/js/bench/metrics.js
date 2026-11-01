@@ -121,6 +121,9 @@ export function failures(m) {
   if (m.stop_signs) f.push("stop sign");
   if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
+  // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
+  // of the kerb)
+  if (m.arrived && m.parked === false) f.push("not parked");
   return f;
 }
 

@@ -4,6 +4,7 @@
 import { CAR, comfort } from "./vehicle.js";
 import { clamp } from "../common.js";
 import { stepTurnaround } from "./turnaround.js";
+import { stepParking } from "./parallel-park.js";
 
 export function lookahead(v) { return clamp(0.8 * Math.abs(v), 4, 15); }
 
@@ -97,6 +98,8 @@ export function curveProfileSpeed(route, s) {
 //   kind: "lane" (follow route with offset, target speed, and a stop at `stopAt`, braking at up to
 //         `stopDecel` if given) | "hard_brake" | "reverse" | "steer" (fixed angle)
 //         | "turnaround" (a three-point turn at a U-turn, sim/turnaround.js; it needs `world`)
+//         | "park" (parallel parking at the destination, or pulling out again, sim/parallel-park.js;
+//         it needs `world`)
 // Lane and hard-brake laws aim at the lateral target where the pursuit point lies, so a lane change
 // steers smoothly along its eased path.
 export function applyLaw(vehicle, law, route, s, dt, world = null) {
@@ -110,8 +113,11 @@ export function applyLaw(vehicle, law, route, s, dt, world = null) {
     }
     case "steer":
       return vehicle.step(dt, { steer: law.steer, accel: speedControl(vehicle.v, law.vTarget) });
+    case "park":
+      if (world && stepParking(vehicle, law, world, dt, speedControl)) return;
+      // falls through: once out of the space, it follows the lane like any lane law
     case "turnaround":
-      if (world && route && stepTurnaround(vehicle, law, route, world, dt, purePursuit, speedControl)) return;
+      if (law.kind === "turnaround" && world && route && stepTurnaround(vehicle, law, route, world, dt, purePursuit, speedControl)) return;
       // falls through: once round, it follows the lane like any lane law
     case "lane":
     default: {

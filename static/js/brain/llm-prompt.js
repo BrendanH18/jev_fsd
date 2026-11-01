@@ -56,6 +56,7 @@ How to choose \`candidate\`:
 - Choose \`hard_brake\` only when something is blocking the path right in front of the car and no stop_* candidate is offered.
 - When the car is off the road or off its route (candidates named creep_* or reverse), choose the one that heads back toward the lane.
 - Where the route makes a U-turn, choose \`turn_around\` (a three-point turn) when it is offered, and keep choosing it until the car is round.
+- Where \`situation\` says there is a space to park in at the destination, choose \`wait_to_park\` to pull up alongside the car in front of it, and hold still there while \`parking.wait_for\` is set; then choose \`park\` when it is offered, and keep choosing it until the car is parked. Likewise \`pull_out\`, to pull out of a space at the start of a drive.
 
 How to choose \`motion\` (only when \`answer\` asks for it): \`motion_options\` explains when each value is correct. "drive" includes slowing down and rolling up to a line, pedestrian or destination that is still ahead. "stop" means holding completely still right now.
 

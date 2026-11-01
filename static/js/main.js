@@ -24,6 +24,7 @@ import { WORK_ZONE_COUNT, workZoneNotice } from "./sim/work-zone.js";
 import { OUTAGE_COUNT, outageNotice } from "./sim/outage.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
 import { VAN_COUNT, vanNotice } from "./sim/double-parked.js";
+import { parkNotice } from "./sim/parallel-park.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -127,7 +128,7 @@ export async function boot() {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
     onEvent: (ev) => {
       recorder.mark(world.t, ev.type);
-      if (ev.type === "arrived") { arrivalPending = true; hud.badge("ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
+      if (ev.type === "arrived") { arrivalPending = true; drive?.noteArrival(ev); hud.badge(ev.parked ? "PARKED" : ev.parked === false ? (ev.stuck ? "ARRIVED · STUCK PARTWAY IN" : "ARRIVED · STOPPED IN LANE") : "ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
       else if (ev.type === "safety") hud.badge("SAFETY BRAKE", "safety", 700);
       else if (ev.type === "fallback") hud.badge(`fallback: ${ev.error}`, "safety", 1800);
       else if (ev.type === "reroute") { hud.badge(`re-routed (${ev.count} options)`, "", 1000); overlays.setRoute(world.route); }
@@ -155,7 +156,9 @@ export async function boot() {
     const outages = params.get("outages") !== "0" ? OUTAGE_COUNT : 0;
     // and delivery vans double-parked now and then, by day (`?vans=0` takes them off)
     const vans = params.get("vans") !== "0" ? VAN_COUNT : 0;
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans });
+    // and the autopilot parks at the destination, where there is a space (`?park=0` stops it in its lane)
+    const park = params.get("park") !== "0";
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -617,7 +620,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null, announcedVan = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null, announcedVan = null, announcedPark = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -653,6 +656,7 @@ export async function boot() {
           else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "alert", 1500);
           else if (ev.type === "stop_sign") hud.badge(ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : ev.dark ? "NO STOP AT A DARK SIGNAL" : "RAN A STOP SIGN", "alert", 1500);
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
+          else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
         acc -= FIXED_DT;
@@ -751,6 +755,10 @@ export async function boot() {
     const van = vanNotice(world);
     if (van && van.key !== announcedVan) { announcedVan = van.key; hud.badge(van.text, van.wait ? "safety" : "", 2500); }
     if (!van) announcedVan = null;
+    // parking at the destination: the space, checking behind, reversing in, parked
+    const parkLine = parkNotice(world);
+    if (parkLine && parkLine.key !== announcedPark) { announcedPark = parkLine.key; hud.badge(parkLine.text, parkLine.wait ? "safety" : "stop", 2500); }
+    if (!parkLine) announcedPark = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once

@@ -8,9 +8,11 @@ export class CautiousAgent {
       + Math.max(0, 5 - candidate.sim.min_gap_m) * 6 - candidate.sim.progress_m * 0.3 }));
     ranked.sort((a, b) => a.cost - b.cost);
     // an emergency vehicle is coming: pull over and stop, whatever it costs in lane position
-    const candidate = eligible.find(c => c.id === "pull_over") || ranked[0]?.candidate;
-    // (pulling over stops on its own, at the side of the road: braking now would stop in the lane)
-    return { motion: candidate?.sim.end_speed < 0.3 && candidate.id !== "pull_over" ? "stop" : "drive", candidateId: candidate?.id ?? null,
+    // parking at the destination, or pulling out of a space, once on offer: carry on with it
+    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "park" || c.id === "pull_out") || ranked[0]?.candidate;
+    // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
+    // pulling up to park stops where the car reverses in)
+    return { motion: candidate?.sim.end_speed < 0.3 && !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) ? "stop" : "drive", candidateId: candidate?.id ?? null,
       meta: { source: this.name, model: this.name, latency_ms: 0, input_tokens: 0, cost_usd: 0 } };
   }
   async decide(snap, eligible) { return this.decideSync(snap, eligible); }

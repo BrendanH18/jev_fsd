@@ -22,6 +22,7 @@ import { safetyBrake } from "../js/brain/safety.js";
 import { Visibility } from "../js/sim/visibility.js";
 import { fixtureWorld, crossingPedestrian, buildRealismCases } from "./jev-fixtures.js";
 import { buildSuite } from "../js/bench/scenarios.js";
+import { planParking, spacesAlong, stepParking, parkedPose, KERB_MAX_M } from "../js/sim/parallel-park.js";
 
 const out = document.getElementById("out");
 const results = [];
@@ -337,6 +338,38 @@ async function run() {
     check("manual steering limits cornering demand at city speed", Math.abs(world.ego.delta) < 0.06 && Math.abs(world.ego.latAccel) < 5);
     for (let i = 0; i < 60; i++) world.stepManual(1 / 60, {});
     check("manual steering recentres after the key is released", Math.abs(world.ego.delta) < 1e-6);
+  }
+  // Parallel parking (sim/parallel-park.js), on a straight street with a parking lane: a space between
+  // two parked cars is found, and the car reverses into it, parallel and within 30 cm of the kerb,
+  // without touching either car; a space too short is not offered.
+  {
+    const street = { lanes: 1, lane_width: 3.5, width: 11.8, lane_offsets: [1.75], asphalt: [-5.9, 5.9], parking: [2.4, 2.4], cls: "residential", limit: 11.2, oneway: false, name: "Test Street" };
+    const kerbMap = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -40, 220, 40],
+      edges: [{ id: "in", from: "a", to: "b", pts: [[0, 0], [200, 0]], length: 200, ...street }, { id: "out", from: "b", to: "a", pts: [[200, 0], [0, 0]], length: 200, ...street }],
+      lanes: [{ edge: "in", idx: 0, pts: [[0, -1.75], [200, -1.75]] }, { edge: "out", idx: 0, pts: [[200, 1.75], [0, 1.75]] }],
+      nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 200, y: 0 }], intersections: [], stops: [], buildings: [] });
+    const spaceOf = (gap) => {
+      const world = new World(kerbMap, { parked: 0, pedestrians: 0, park: true });
+      for (const [id, rear] of [["back", 100 - CAR.length], ["front", 100 + gap]]) { const c = new Vehicle(rear + CAR.rearOverhang, -4.65, 0, 0); Object.assign(c, { id, edge: "in", curb: "right" }); world.parked.add(c); }
+      const pts = [];
+      for (let x = 0; x <= 125; x++) pts.push([x, -1.75]);
+      const r = new Route({ id: "p", polyline: pts, edges: ["in"], turns: [], start_s: 0, goal_s: 125 }, kerbMap);
+      return { world, plan: spacesAlong(world, r, CAR).find((p) => p.sFrom >= 99 && p.sTo <= 100 + gap + 0.1) };
+    };
+    check("parallel parking: a space too short for the car is not offered", !spaceOf(6.8).plan);
+    const { world, plan } = spaceOf(7.4);
+    check("parallel parking: a space long enough is", !!plan);
+    if (plan) {
+      const law = planParking(plan);
+      Object.assign(world.ego, { x: plan.startU, y: -plan.startW, psi: 0, v: 0, delta: 0 });
+      let touched = false;
+      for (let t = 0; t < 60 && law.phase !== "parked" && law.phase !== "stuck"; t += 1 / 60) {
+        stepParking(world.ego, law, world, 1 / 60, speedControl);
+        if (world.parked.list.some((c) => obbOverlap(world.ego.obb(), c.obb(), 0.05))) touched = true;
+      }
+      const pose = parkedPose(world.ego, law, world);
+      check("parallel parking: parked parallel, within 30 cm of the kerb, touching nothing", law.phase === "parked" && pose.within_kerb && pose.kerb_m <= KERB_MAX_M && !touched, `${law.phase} ${pose.kerb_m} m ${pose.angle_deg} deg`);
+    }
   }
   const fixtures = buildRealismCases();
   window.__jevFixtures = fixtures;

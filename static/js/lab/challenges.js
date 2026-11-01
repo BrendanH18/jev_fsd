@@ -17,6 +17,7 @@ import { approach, crossingsAhead, railIndex, trainSpan } from "../sim/rail.js";
 import { boxEnd } from "../sim/junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, workZoneSites } from "../sim/work-zone.js";
 import { vanSites } from "../sim/double-parked.js";
+import { legalStretches, straight as straightKerb } from "../sim/parallel-park.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -68,6 +69,8 @@ export const CHALLENGES = [
     description: "A storm has knocked out the power in downtown Halifax, and the traffic lights where Barrington Street meets Morris Street are dark. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left.", lesson: "When traffic lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stops first goes first; stop together and the car on the right goes first. Never drive through as if your light were green: the cross street has no red either. Driver's handbooks across Canada say the same." },
   { id: "double-parked", title: "Round the van", map: "toronto", weather: "dry", time: "afternoon", seed: 24042, icon: "◫", difficulty: "Patience", hazard: "double-parked", street: "Brunswick Avenue",
     description: "A delivery van has stopped in your lane on Brunswick Avenue, its hazards flashing, beside the parked cars. The only way past is the oncoming lane, and you can't see far down it yet.", lesson: "Going round something stopped in your lane takes you into the oncoming lane, and oncoming traffic has the right of way. Stop a car length back, where you can see past it and have room to pull out, and go round only once the way is clear for the whole distance round and back. Driver's handbooks across Canada say the same." },
+  { id: "parallel-park", title: "Squeeze in", map: "kitsilano", weather: "dry", time: "afternoon", seed: 25042, icon: "⇲", difficulty: "Control", hazard: "parking", park: true, street: "West 10th Avenue",
+    description: "Your destination is on a block in Kitsilano lined with parked cars, and there's one space left, a little over one and a half car lengths long. As you slow for it, a car comes up behind you.", lesson: "Signal early so the driver behind knows you're stopping. Pull up alongside the car in front of the space, about a door's width from it, with your rear bumpers level. Check behind, then reverse in on full lock toward the kerb, straighten, and turn the other way to swing the front in. Finish parallel, within 30 cm of the kerb. Never back into someone: wait until it's clear behind. That is BC's Motor Vehicle Act, and every province's driver's handbook teaches the same." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -105,6 +108,35 @@ function flaggerSites(map, street) {
 // round just as it gets to the van. Going round straight away, it would meet them there; past them the
 // way is clear. The route ends VAN_PAST_M past the van, on its street.
 const VAN_START_M = 62, VAN_TRIGGER_M = 40, VAN_CARS = 2, VAN_CAR_GAP_M = 14, VAN_ONCOMING_M = 70, VAN_PAST_M = 45, VAN_PARKED = 4;
+// Squeeze in: parallel parking (sim/parallel-park.js) in the one space left, SPACE_M long bumper to
+// bumper, on a straight block whose right kerb is lined with cars PARK_CAR_GAP_M apart wherever one may
+// park, at least PARK_CARS of them either side of the space. The car starts from a standstill in its lane, its front PARK_START_M short of the
+// space; the route ends PARK_PAST_M past the space, on its street, so the space is near the destination.
+// (On the challenge's `street`, where it has a block long enough.)
+// A car waits PARK_FOLLOW_M behind the car, out of the way; once the car's front is PARK_TRIGGER_M from
+// the space, it sets off at the street's limit and comes up behind the car as it slows and stops to
+// reverse in. It has to keep back while the car reverses in, and go by once it is in.
+const SPACE_M = 6.8, PARK_CARS = 3, PARK_CAR_GAP_M = 1.6, PARK_START_M = 90, PARK_PAST_M = 25, PARK_FOLLOW_M = 22, PARK_TRIGGER_M = 45;
+const parkSiteCache = new WeakMap();
+function parkingSites(map, street) {
+  if (!parkSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang, row = PARK_CARS * (CAR.length + PARK_CAR_GAP_M);
+    for (const e of map.edges.values()) {
+      if (!e.parking?.[1] || e.ring || e.oneway || e.lanes !== 1 || e.control) continue;
+      const a = PARK_START_M + front + PARK_FOLLOW_M + 8, b = a + SPACE_M;
+      if (b + Math.max(row, PARK_PAST_M) + 4 > e.length) continue;
+      if (!legalStretches(map, e).some(([lo, hi]) => lo <= a - row - 0.5 && hi >= b + row + 0.5)) continue;
+      if (!straightKerb(e, a - row - 2, b + row + 2)) continue;
+      const lane = map.lane(e.id, e.lanes - 1), k = lane.length / e.length;
+      sites.push({ lane, startS: (a - PARK_START_M - front) * k, goalS: (b + PARK_PAST_M) * k, space: { edge: e.id, a, b } });
+    }
+    sites.sort((x, y) => String(x.space.edge).localeCompare(String(y.space.edge)));
+    parkSiteCache.set(map, sites);
+  }
+  const sites = parkSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 const vanSiteCache = new WeakMap();
 function doubleParkSites(map, street) {
   if (!vanSiteCache.has(map)) {
@@ -712,11 +744,14 @@ export function challengeScenario(map, challenge) {
   const vans = challenge.hazard === "double-parked" ? doubleParkSites(map, challenge.street) : null;
   if (vans && !vans.length) throw new Error("This map has no straight block of a two-way street with one lane each way and a parking lane, with room for a van to double-park.");
   const van = vans ? vans[Math.floor(random() * vans.length)] : null;
-  const start = van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const parks = challenge.hazard === "parking" ? parkingSites(map, challenge.street) : null;
+  if (parks && !parks.length) throw new Error("This map has no straight block of a two-way street with one lane each way and a parking lane, long enough to park on.");
+  const park = parks ? parks[Math.floor(random() * parks.length)] : null;
+  const start = park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -728,7 +763,7 @@ export function challengeScenario(map, challenge) {
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
   // (past a double-parked van, along its street only)
-  for (let i = 0; i < 12 && !van && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && !van && !park && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -738,7 +773,7 @@ export function challengeScenario(map, challenge) {
     chain.push(lane); seen.add(id); length += lane.length;
   }
   // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
-  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : last.length - 10;
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : last.length - 10;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
@@ -757,6 +792,7 @@ export function challengeScenario(map, challenge) {
     ...(roadside ? { roadside: roadside.stop } : {}),
     ...(flagger ? { workZone: flagger.zone } : {}),
     ...(van ? { doubleParked: van.van } : {}),
+    ...(park ? { parking: park.space } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -799,6 +835,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.junctionBox) Object.assign(world.challenge, placeBoxQueue(world, fleet, scenario.junctionBox, challenge.seed));
   if (scenario.workZone) Object.assign(world.challenge, placeWorkZone(world, fleet, scenario.workZone, challenge.seed));
   if (scenario.doubleParked) Object.assign(world.challenge, placeVan(world, fleet, scenario.doubleParked, challenge.seed));
+  if (scenario.parking) Object.assign(world.challenge, placeParking(world, fleet, scenario.parking, challenge.seed));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -830,6 +867,7 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "level-crossing" ? local.ahead < TRACKS_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "work-zone" ? local.ahead < WZ_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "double-parked" ? local.ahead < VAN_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
+    : state.hazard === "parking" ? local.ahead < PARK_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     // (the arrow comes on, and the cars beside the car turn)
     : state.hazard === "left-arrow" ? approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow"
     : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "outage", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
@@ -869,6 +907,8 @@ export function stepChallenge(world, fleet) {
     for (const id of state.zoneCarIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
     // (the cars coming the other way past the double-parked van set off down the oncoming lane)
     for (const id of state.vanCarIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) { car.frozen = 0; car.v = car.v0; } }
+    // (the car behind sets off up the street)
+    for (const id of state.followerIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
   }
   // (once the last of them is past its stop line, the flaggers go on as usual)
   if (state.workZoneId && state.triggered && !state.released) {
@@ -1194,6 +1234,32 @@ function placeVan(world, fleet, { edge, rear }, seed) {
     fleet.vehicles.push(car); ids.push(car.id);
   }
   return { vanId: d.van.id, vanCarIds: ids, at: pointAt(e.pts, e.cum, rear) };
+}
+// The cars parked either side of the space (see parkingSites), staying put, and the car that will come
+// up behind, waiting until the car comes up to the space.
+function placeParking(world, fleet, { edge, a, b }, seed) {
+  const map = world.map, random = rng(seed), e = map.edges.get(edge), lat = curbOffset(e, CAR);
+  const colors = [0x2b3a55, 0x8d9299, 0x9b1e1e, 0x1a1c20, 0xeeeeea, 0x6b7f5e];
+  // (the whole block is lined with cars, wherever one may park, but for the space)
+  const step = CAR.length + PARK_CAR_GAP_M, rears = [];
+  for (const [lo, hi] of legalStretches(map, e)) {
+    for (let rear = a - CAR.length; rear >= lo; rear -= step) if (rear + CAR.length <= hi) rears.push(rear);
+    for (let rear = b; rear + CAR.length <= hi; rear += step) if (rear >= lo) rears.push(rear);
+  }
+  for (const [i, rear] of [...new Set(rears)].sort((x, y) => x - y).entries()) {
+    const s = rear + CAR.rearOverhang, p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+    const car = new Vehicle(p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, h, 0);
+    Object.assign(car, { id: `challenge_parked_${i + 1}`, color: colors[i % colors.length], style: [0, 3, 1, 5, 2, 4][i % 6], curb: "right", edge, stay: true });
+    world.parked.add(car);
+  }
+  const lane = map.lane(edge, e.lanes - 1), k = lane.length / e.length, front = CAR.length - CAR.rearOverhang;
+  const s = (a - PARK_START_M - front - PARK_FOLLOW_M) * k, p = pointAt(lane.pts, lane.cum, s);
+  const car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), 0);
+  Object.assign(car, { id: "challenge_follower", color: 0xb0b5b9, v0: e.limit, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5 + random() * 0.3, lcRate: 0 },
+    stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 1e6, waiting: 0 });
+  car.path.start(edge, lane.idx, s);
+  fleet.vehicles.push(car);
+  return { followerIds: [car.id], at: pointAt(e.pts, e.cum, a) };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

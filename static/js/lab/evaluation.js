@@ -4,7 +4,7 @@ import { Route } from "../map/route.js";
 import { Autopilot } from "../brain/brain.js";
 import { stepWorld } from "../sim/step.js";
 import { DriveScore } from "../sim/drive-score.js";
-import { DriveMetrics } from "../bench/metrics.js";
+import { DriveMetrics, failures } from "../bench/metrics.js";
 import { getVehicleModel } from "../sim/vehicle-models.js";
 import { challengeScenario, installChallenge } from "./challenges.js";
 import { yieldNow } from "../bench/runner.js";
@@ -16,7 +16,7 @@ import { parseHour } from "../sim/world-clock.js";
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
 export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
-  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec });
+  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park });
   world.visibility.setNight(challenge.time === "night" ? 1 : 0);
   // (school and playground zones go by the challenge's time of day)
   world.setClock(mapClock(parseHour(challenge.time), map));
@@ -31,12 +31,12 @@ export function setupChallenge(map, challenge, { brain = "rules", onDecision = (
 
 export async function evaluateChallenge(map, challenge, { brain = "rules", mode = "lockstep", shouldStop = () => false, limit = 180 } = {}) {
   if (!["lockstep", "realtime"].includes(mode) || !Number.isFinite(limit) || limit <= 0) throw new Error("Choose a valid evaluation clock and time limit.");
-  let arrived = false;
+  let arrived = false, arrival = null;
   const latencies = [], trace = new EvaluationTrace();
   const ctx = setupChallenge(map, challenge, { brain, onEvent: event => {
-    if (event.type === "arrived") arrived = true;
+    if (event.type === "arrived") { arrived = true; arrival = event; }
     if (event.type === "fallback") return; // Record the fallback when its replacement decision executes below.
-    const messages = { arrived: "Reached the destination", safety: "Shared emergency brake intervened", deadlock: "Deadlock recovery started", reroute: "Route recalculated" };
+    const messages = { arrived: event.parked ? "Parked at the destination" : "Reached the destination", safety: "Shared emergency brake intervened", deadlock: "Deadlock recovery started", reroute: "Route recalculated" };
     trace.event(event.type, messages[event.type] || event.error || event.type, ctx.world.t);
   }, onDecision: decision => {
     if (Number.isFinite(decision.meta?.latency_ms)) latencies.push(decision.meta.latency_ms);
@@ -64,6 +64,14 @@ export async function evaluateChallenge(map, challenge, { brain = "rules", mode 
   if (!arrived) trace.event(status, stopped ? "Evaluation stopped before arrival" : "Time limit reached before arrival", world.t);
   autopilot.setEnabled(false); // Abort outstanding decisions before saving this completed attempt.
   const summary = metrics.summary(world, autopilot, arrived);
+  // (a challenge that parks at the destination is passed only once the car is parked, within 30 cm
+  // of the kerb: sim/parallel-park.js)
+  if (world.parkAtGoal) {
+    if (arrival) score.noteArrival(arrival);
+    summary.parked = !!arrival?.parked && !!arrival.within_kerb;
+    summary.failures = failures(summary);
+    summary.pass = summary.failures.length === 0;
+  }
   const report = score.finish(status);
   return { challenge: challenge.id, version: challenge.version || 1, map: challenge.map, pack: map.pack.pack_version,
     seed: challenge.seed, weather: challenge.weather, time: challenge.time, car: "compact", brain, mode,
