@@ -508,7 +508,8 @@ be passed only in a lane clear of every part of it (a wing can reach 3 m to its 
 stays that far behind a plow going its way in its lane, and behind one in the lane to its left too: it
 never draws level with one on its right. It passes one only on the left, through a lane going its way
 (never across the centre line), and only seeing as far as it ever does (80 m: in falling snow, fog, rain
-or after dark it stays behind, even one in the lane to its right), and it moves back in front of it only
+or after dark it stays behind, even one in the lane to its right) with nothing hiding its route ahead
+within 60 m, and it moves back in front of it only
 once its rear is the stay-back distance ahead of the plow's front. A plow signalling a left turn may be
 passed on the right, as any vehicle turning left. The 100 m is further than the car ever sees, so there
 it keeps back as far as it can see (about 75 m). Traffic keeps to the same rules (following the

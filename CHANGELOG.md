@@ -10,7 +10,7 @@
   the snow and debris are plowed to. The driven car now stays that far behind a plow in its lane, and
   behind one in the lane to its left as well, never drawing level with one on its right. It passes one
   only on the left, through a lane going its way, never across the centre line, and only when it can see
-  as far as it ever does (so never in falling snow, fog, rain or after dark, from whichever lane), and
+  its route ahead and as far as it ever does (so never in falling snow, fog, rain or after dark, from whichever lane), and
   moves back in only once it is the stay-back distance ahead of it. A plow signalling a left turn may be
   passed on the right. The 100 m is further than the car ever sees, so there it keeps back as far as it
   can see. Traffic keeps to the same rules, the stay-back distance included.

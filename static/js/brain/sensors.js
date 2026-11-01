@@ -31,6 +31,9 @@ import { laneSight } from "../sim/hidden-traffic.js";
 import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_LOOK_M, PLOW_NAME, SAME_LANE_M, isPlow, stayBack, turningLeft } from "../sim/snow-plow.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
+// Passing a snow plow, the car's route ahead must be in view as far as it looks for that (the 60 m of
+// `clear_path_m`).
+const PASS_CLEAR_M = 60;
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -283,7 +286,7 @@ export function buildSnapshot(world, executing = null) {
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     snap.work_zone = workZone(world, p, frontS, road);
     snap.double_parked = doubleParked(world, p, frontS, lane, executing);
-    snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2);
+    snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -890,11 +893,13 @@ function doubleParked(world, p, frontS, lane, executing) {
 // distance to stay back from it. `holds`: the car must stay back of it, in its lane or in the lane to
 // the car's left (never passing it on the right), unless it is turning left, or, short of it, in the lane
 // to its right when the car cannot see as far as it ever does (no passing it at all); `may_pass`: the car may
-// pass it on the left now: in the car's lane, with a lane to the car's left going its way, and the
-// car seeing as far as it ever does (nothing hiding the road ahead); `passing`: the car is beside it
+// pass it on the left now: in the car's lane, with a lane to the car's left going its way, the car
+// seeing as far as it ever does, and nothing hiding its route ahead as far as it looks (PASS_CLEAR_M, or
+// to the end of the route); `passing`: the car is beside it
 // or past it on its left. Or null.
-function snowPlow(world, p, frontS, lane, limit) {
+function snowPlow(world, p, frontS, lane, limit, clearPath) {
   const { route, ego } = world, keep = stayBack(limit), look = Math.max(PLOW_LOOK_M, keep), sight = world.visibility.range >= PASS_SIGHT_M;
+  const inView = clearPath >= Math.min(PASS_CLEAR_M, route.length - p.s);
   let best = null;
   for (const n of world.npcs) {
     if (!isPlow(n) || Math.hypot(n.x - ego.x, n.y - ego.y) > look + 20 || !world.sees(ego, n)) continue;
@@ -908,7 +913,7 @@ function snowPlow(world, p, frontS, lane, limit) {
     const turning = turningLeft(n);
     best = { id: n.id, kind: PLOW_NAME, lane: where, gap_m: gap, clear_m: clear, speed: Math.max(0, n.v), s_rear_route: rear, lateral_route: across, keep_back_m: keep, turning_left: turning,
       holds: (where === "same" || (where === "left" && !turning) || (where === "right" && !sight && gap >= 0)) && clear < 0,
-      may_pass: where === "same" && !!route.laneSpan(p.s, lane.delta - 1) && sight,
+      may_pass: where === "same" && !!route.laneSpan(p.s, lane.delta - 1) && sight && inView,
       passing: where === "right" && gap < 0 };
   }
   return best;

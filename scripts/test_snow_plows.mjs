@@ -226,6 +226,12 @@ await test("the driven car's sensing: the plow, in which lane, the stay-back spe
   assert.equal(snap.lane.sides.left.offer, "pass");
   assert.ok(snap.lane.sides.left.target_v > 13, "the left lane is free of the plow's stay-back");
   assert.ok(!snap.lane.sides.right, "no lane to its right");
+  // (with its route hidden 40 m ahead, a bend or a building, say: no passing it)
+  const see = c.world.visibility.canSee.bind(c.world.visibility);
+  c.world.visibility.canSee = (o, x, y) => Math.hypot(x - o.x, y - o.y) < 40 && see(o, x, y);
+  snap = buildSnapshot(c.world);
+  assert.ok(snap.visibility.clear_path_m < 45 && !snap.snow_plow.may_pass && snap.lane.sides.left.offer !== "pass", `not without the road ahead in view: ${snap.visibility.clear_path_m} ${snap.snow_plow?.may_pass} ${snap.lane.sides.left?.offer}`);
+  c.world.visibility.canSee = see;
   // (in the left lane behind a plow, no pass on the right)
   const d = william({ weather: "dry", lane: 0, v: 5 });
   plowAhead(d.world, d.fleet, { lane: 0, gap: 25 });
