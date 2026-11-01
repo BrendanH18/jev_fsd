@@ -86,7 +86,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     if (i.give_way) {
       const g = i.give_way;
       state.intersection.give_way = { clear: g.go, ...(g.wait_for ? { wait_for: g.wait_for.id || g.wait_for.kind } : {}),
-        ...(g.view_clear === false ? { view: g.peeked ? "hidden, looked from as far forward as it can go" : "hidden by buildings", sees_m: r1(g.sight_m) } : {}),
+        ...(g.view_clear === false ? { view: g.waiting_to_see ? `hidden by \`${g.hidden_by}\`, waiting for it to move` : g.peeked ? "hidden, looked from as far forward as it can go" : g.hidden_by ? `hidden by \`${g.hidden_by}\`` : "hidden by buildings", sees_m: r1(g.sight_m) } : {}),
         ...(g.bumper_to_hold_m !== null ? { stop_in_m: r1(Math.max(0, g.bumper_to_hold_m)) } : {}) };
     }
     if (i.priority) {
@@ -99,7 +99,11 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       const r = i.right_on_red, w = r.wait_for;
       state.intersection.right_on_red = { allowed: true, stop_completed: r.stop_completed, clear: r.clear, ...(w ? { wait_for: w.id || w.kind } : {}) };
     }
-    if (i.oncoming) state.intersection.oncoming = { id: i.oncoming.id, arrives_in_s: r1(i.oncoming.eta_s), needed_s: r1(i.oncoming.need_s), wait_in_m: r1(Math.max(0, i.oncoming.bumper_to_yield_m)), yield: true };
+    if (i.oncoming) {
+      const o = i.oncoming, hidden = o.view ? { lane_hidden_by: o.view.hidden_by, sees_lane_m: r1(o.view.sight_m) } : {};
+      state.intersection.oncoming = o.id === null ? { ...hidden, needed_s: r1(o.need_s), wait_in_m: r1(Math.max(0, o.bumper_to_yield_m)), yield: true }
+        : { id: o.id, arrives_in_s: r1(o.eta_s), needed_s: r1(o.need_s), wait_in_m: r1(Math.max(0, o.bumper_to_yield_m)), yield: true, ...hidden };
+    }
   }
   if (snap.following) {
     const f = snap.following;
@@ -341,12 +345,15 @@ function giveWayClause(i, lead, who) {
     const what = g.wait_for.kind === "junction" ? `\`${g.wait_for.id}\` is crossing the junction` : `\`${g.wait_for.id}\` has the right of way, or is too close to stop, and would reach the junction before the car could cross it`;
     return `${lead}, but ${what}: ${at ? "hold still until it has passed" : `slow down and stop ${Math.round(g.bumper_to_hold_m)} m ahead until it has passed${g.hold_s_route > i.s_line_route ? " (`wait_to_give_way`)" : ""}`}.`;
   }
-  return `${lead}, but buildings hide ${who} beyond ${Math.round(g.sight_m)} m: slow down so the car can stop, and creep forward to look (\`creep_to_look\`), stopping ${Math.round(Math.max(0, g.bumper_to_hold_m))} m ahead if it still cannot see.`;
+  if (g.waiting_to_see) return `${lead}, and the car has crept forward as far as it can to look, but \`${g.hidden_by}\` hides ${who} beyond ${Math.round(g.sight_m)} m: hold still until it moves and the car can see.`;
+  return `${lead}, but ${g.hidden_by ? `\`${g.hidden_by}\` hides` : "buildings hide"} ${who} beyond ${Math.round(g.sight_m)} m: slow down so the car can stop, and creep forward to look (\`creep_to_look\`), stopping ${Math.round(Math.max(0, g.bumper_to_hold_m))} m ahead if it still cannot see.`;
 }
 
 // Turning left (or around) with oncoming traffic coming, at a signal or a stop sign.
 function oncomingClause(i) {
   const o = i.oncoming, w = Math.max(0, Math.round(o.bumper_to_yield_m));
+  // (hidden traffic: a vehicle hides an oncoming lane, sim/hidden-traffic.js)
+  if (o.id === null) return `The car turns ${i.turn === "uturn" ? "around" : "left"} here and oncoming traffic has the right of way, but \`${o.view.hidden_by}\` hides the oncoming lane beyond ${Math.round(o.view.sight_m)} m, so the car cannot see whether anything is coming through in it. ${w < 2 ? "Hold still until it can see that the lane is clear." : `Slow down and wait ${w} m ahead, short of oncoming traffic's path, until it can see that the lane is clear (\`stop_for_oncoming\`).`}`;
   return `The car turns ${i.turn === "uturn" ? "around" : "left"} here and oncoming traffic has the right of way: \`${o.id}\` reaches the junction in ${r1(o.eta_s)} s, too soon for the car to turn in front of it (it needs ${r1(o.need_s)} s). ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_oncoming\`).`}`;
 }
 
@@ -382,7 +389,7 @@ function rightOnRedClause(i, m, atLine) {
   const r = i.right_on_red, w = r.wait_for;
   if (r.go) return r.entered ? "The car is turning right on the red light: complete the turn." : "The car has stopped fully at the red light and turns right here, where a right turn on red is allowed. Nothing it must yield to is in the way: it may turn now, or keep waiting for the green.";
   if (!r.stop_completed) return atLine ? "The car is at the line and the signal is red. It turns right here, and a right turn on red is allowed only after a full stop: hold still until the stop is completed." : `The signal ${m} m ahead is red and the car turns right there. A right turn on red is allowed only after a full stop: keep rolling toward the line and stop just before it.`;
-  const why = !w ? "" : w.kind === "pedestrian" ? `: \`${w.id}\` is crossing or about to cross` : w.kind === "view" ? ": the car cannot see far enough along the street to its left to know it is clear" : w.kind === "junction" ? `: \`${w.id}\` is crossing the junction` : w.kind === "lane" ? ": it can turn on red only from the curb lane" : w.kind === "advance" ? ": the approach opposite has an advance green, and its protected left turns come into the street the car turns into" : `: \`${w.id}\` is coming from the left and has the green`;
+  const why = !w ? "" : w.kind === "pedestrian" ? `: \`${w.id}\` is crossing or about to cross` : w.kind === "view" ? `: ${w.hidden_by ? `\`${w.hidden_by}\` hides the street to its left, and ` : ""}the car cannot see far enough along ${w.hidden_by ? "it" : "the street to its left"} to know it is clear` : w.kind === "junction" ? `: \`${w.id}\` is crossing the junction` : w.kind === "lane" ? ": it can turn on red only from the curb lane" : w.kind === "advance" ? ": the approach opposite has an advance green, and its protected left turns come into the street the car turns into" : `: \`${w.id}\` is coming from the left and has the green`;
   return `The car has stopped fully at the red light and turns right here. A right turn on red is allowed, but it must yield first${why}. Hold still at the line until it is clear or the light turns green.`;
 }
 

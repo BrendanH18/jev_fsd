@@ -75,10 +75,11 @@ function render() {
   }));
 }
 function decisionDetails(decision, age) {
-  return h("details", {}, h("summary", {}, `Decision at ${decision.at_s}s · ${decision.source} · ${decision.motion} · ${decision.chosen_id || "no candidate"}${age == null ? "" : ` · ${age}s before event`}`),
+  const repeats = decision.repeats > 1 ? ` · ×${decision.repeats} until ${decision.until_s}s` : "";
+  return h("details", {}, h("summary", {}, `Decision at ${decision.at_s}s · ${decision.source} · ${decision.motion} · ${decision.chosen_id || "no candidate"}${repeats}${age == null ? "" : ` · ${age}s before event`}`),
     decision.error ? h("p", {}, `Fallback: ${decision.error}`) : null,
     h("p", {}, `Hazard flags: ${(decision.flags || []).join(", ") || "none"}. Selected candidates can still produce a poor outcome; emergency braking is shared.`),
-    !decision.context_recorded ? h("p", {}, "Compact choice record. Full candidate and observation snapshots are retained for decisions linked to timeline events.") : null,
+    !decision.context_recorded ? h("p", {}, `Compact choice record${decision.repeats > 1 ? `, standing for ${decision.repeats} decisions in a row with the same choice` : ""}. Full candidate and observation snapshots are retained for decisions linked to timeline events.`) : null,
     decision.candidates ? h("ul", { class: "candidate-list" }, decision.candidates.map(c => h("li", {},
       `${c.id}${c.id === decision.chosen_id ? " · executed" : ""} · ${c.eligible ? "eligible" : `rejected: ${c.reject || "safety filter"}`}${c.target_mps == null ? "" : ` · ${Math.round(c.target_mps * 3.6)} km/h target`}`))) : null,
     decision.state ? h("details", {}, h("summary", {}, "Observed state (m/s and metres)"), h("pre", {}, JSON.stringify(decision.state, null, 2))) : null);
@@ -98,7 +99,7 @@ function details(result) {
       return h("li", {}, h("strong", {}, `${event.at_s}s · ${event.message}${event.count > 1 ? ` ×${event.count}` : ""}`),
         decision ? decisionDetails(decision, event.decision_age_s) : h("p", {}, "No recorded decision context for this event."));
     })) : h("p", {}, "No incidents recorded."),
-    trace.length ? h("details", {}, h("summary", {}, `All ${trace.length} recorded decisions`), ...trace.map(d => decisionDetails(d))) : null].filter(Boolean));
+    trace.length ? h("details", {}, h("summary", {}, `All ${trace.reduce((n, d) => n + (d.repeats || 1), 0)} recorded decisions`), ...trace.map(d => decisionDetails(d))) : null].filter(Boolean));
   $("#arena-details").hidden = false; $("#details-heading").focus(); $("#arena-details").scrollIntoView({ behavior: "instant", block: "start" });
 }
 function busy(value) {

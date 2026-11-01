@@ -39,6 +39,9 @@ export class DriveScore {
     // sidewalk, faster than the car could stop from for someone stepping out, and the streets (each
     // side of each) that was counted for; reported only for a drive with hidden hazards)
     this.hazards = !!world.hazards; this.blindSpeeding = 0; this.blindCounted = new Set();
+    // (and with hidden traffic, sim/hidden-traffic.js: failures to yield to a vehicle the car could
+    // not see as it pulled out, hidden behind another)
+    this.hiddenCutoffs = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -133,6 +136,7 @@ export class DriveScore {
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
+      if (ev.type === "failed_to_yield" && ev.unseen) { this.hiddenCutoffs++; this.incident("hidden_cutoff", "Pulled out in front of a vehicle hidden behind another", { with: ev.with }); }
       if (ev.type === "kerb_strike") { this.kerbStrikes++; this.incident("kerb", ev.reversing ? "Backed a wheel onto the kerb" : "Drove a wheel onto the kerb"); }
     }
     if (offRoad) this.offRoad += dt;
@@ -228,6 +232,7 @@ export class DriveScore {
     if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
     if (this.blindSpeeding > 0.5) tips.push("Beside cars parked at the kerb on quiet streets and in school zones, slow to a speed you can stop from in about 15 m. Someone can step out from between them before you can see them.");
     if (this.darkSignals) tips.push("Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.");
+    if (this.hiddenCutoffs) tips.push("A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.");
     if (this.vanCutoffs) tips.push("Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.");
     if (this.kerbStrikes) tips.push("Parking, creep in slowly and stop before a wheel touches the kerb. Turn the wheel only while the car is moving if you have to, and check your mirror on the kerb side.");
     if (this.parking?.result === "parked" && !this.parking.within_kerb) tips.push("Park parallel to the kerb with your wheels within 30 cm of it. If you end up further out, pull forward and reverse in again.");
@@ -249,7 +254,7 @@ export class DriveScore {
       speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, van_cutoffs: this.vanCutoffs, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
-      ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding) } : {}),
+      ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };
   }

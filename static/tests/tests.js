@@ -5,7 +5,7 @@ import { runUiTests } from "./ui-tests.js";
 import { runExplorerTests } from "./explorer-tests.js";
 import { MapData } from "../js/map/mapdata.js";
 import { Route } from "../js/map/route.js";
-import { Vehicle, CAR, ROAD, comfort } from "../js/sim/vehicle.js";
+import { Vehicle, CAR, BIKE, DELIVERY_VAN, ROAD, comfort } from "../js/sim/vehicle.js";
 import { ringBusy } from "../js/sim/roundabout.js";
 import { crosswalkConflict } from "../js/sim/pedestrians.js";
 import { setWeather } from "../js/sim/weather.js";
@@ -396,6 +396,22 @@ async function run() {
     check("hidden hazards: parked cars hide someone standing between them", !on.world.sees(on.world.ego, on.ped) && off.world.sees(off.world.ego, off.ped));
     const bs = blindSpot(on.world);
     check("hidden hazards: beside them, a blind spot, at about 32 km/h on a dry road", !!bs && bs.side === "right" && Math.round(bs.limit_mps * 3.6) === 32 && Math.abs(blindSpeed() - bs.limit_mps) < 1e-9 && !blindSpot(off.world), JSON.stringify(bs));
+    // Hidden traffic (sim/hidden-traffic.js): a van stopped in the car's lane ahead hides an oncoming
+    // car behind it, and a cyclist; cars parked at the kerb hide neither
+    const hide = (w) => {
+      const van = Object.assign(new Vehicle(48, -1.75, 0, 0, DELIVERY_VAN), { id: "van" });
+      const oncoming = Object.assign(new Vehicle(70, -1.75, Math.PI, 8), { id: "oncoming" });
+      const bike = Object.assign(new Vehicle(62, -1.75, 0, 4, BIKE), { id: "bike", kind: "bike" });
+      w.npcs.push(van, oncoming, bike);
+      return { van, oncoming, bike };
+    };
+    const a = hide(on.world), b = hide(off.world);
+    check("hidden traffic: a van in the lane ahead hides the car and the cyclist behind it, only with hazards on", !on.world.sees(on.world.ego, a.oncoming) && !on.world.sees(on.world.ego, a.bike) && on.world.sees(on.world.ego, a.van)
+      && off.world.sees(off.world.ego, b.oncoming) && off.world.sees(off.world.ego, b.bike));
+    // (a car pulling in just past the parked cars, seen across them)
+    on.world.npcs.splice(on.world.npcs.indexOf(a.van), 1);
+    Object.assign(a.oncoming, { x: 96, y: -4.65 });
+    check("hidden traffic: cars parked at the kerb do not hide traffic", on.world.sees(on.world.ego, a.oncoming) && on.world.sees(on.world.ego, a.bike));
   }
   const fixtures = buildRealismCases();
   window.__jevFixtures = fixtures;

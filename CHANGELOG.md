@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+- Hidden traffic (`static/js/sim/hidden-traffic.js`). With the `World` option `hazards` (free drives,
+  unless `?hazards=0`; challenges with `hidden: true`), road vehicles now hide other vehicles and cyclists
+  from the driven car, as they already hid pedestrians: one is out of sight when every line from the car to
+  its middle, nose and tail passes through the body of another road vehicle, one in traffic (not a cyclist)
+  or one standing in the road (a double-parked van, a vehicle stopped at the roadside, a work zone's). Cars
+  parked in a parking lane do not hide traffic (they still hide people): the car looks from its rear axle,
+  and from there a street lined with them would hide all of its traffic. Sensing, candidate predictions and
+  the emergency brake all go by what the car can see.
+- Turning left, the car now waits until it can see along each oncoming lane, as driver's handbooks across
+  Canada say to: a vehicle waiting to turn left from the other side of the junction can hide a car coming
+  straight through in the lane beside it. It looks back along each lane from the junction, every 3 m, as
+  far as traffic at that street's limit covers in the time it needs to turn, within what it can see at all;
+  a vehicle it can see standing in a lane (queued, or waiting to turn) covers the rest of that lane, one
+  coming along it does not. Until it can see far enough it waits short of that lane's path, but no further
+  in than the near edge of the street it crosses, so that the vehicle waiting opposite has room to turn in
+  front of it. Inside the junction once the light has changed, it clears the junction as before.
+- Giving way at a two-way stop or a junction without a sign, a vehicle hiding the street it gives way to
+  makes the car creep up to look, as a building does; stopped where it looks from, it waits up to 8 s for
+  the vehicle to move before going once nothing it can see is coming. Turning right on red, a vehicle
+  hiding the street to its left keeps it waiting, for the green if need be.
+- The driven car's sensing reports `intersection.oncoming` with `view` (the vehicle hiding the lane and
+  how far along it the car sees; `id` is null when the hidden lane alone holds it), `give_way.hidden_by`
+  and `waiting_to_see`, and `right_on_red.wait_for.hidden_by`. Decision models and LLMs get
+  `intersection.oncoming.lane_hidden_by` and `sees_lane_m`, situation lines and a prompt line. The audit
+  marks a failure to yield to a vehicle the car could not see as it pulled out (`unseen`), and coaching
+  counts those (`hidden_cutoffs`, with an incident and a tip, only with hidden hazards on). The HUD says
+  "THE VAN HIDES THE ONCOMING LANE · WAIT UNTIL YOU CAN SEE", "THE CAR HIDES THE CROSS STREET · CREEP UP
+  AND LOOK" and "… HIDES TRAFFIC FROM THE LEFT · WAIT"; the AI eyes panel says which lane is hidden.
+- New challenge, "Blind left" (Kitsilano, West 4th Avenue, two lanes each way, 50 km/h): a left turn on a
+  green, with a delivery van waiting in the junction opposite to turn left, its indicator on. Once the car
+  is 45 m from its line, a car sets off 75 m before the opposite line in the lane beside the van, at
+  45 km/h, straight through, hidden behind the van; a second after it is through, the van turns. Rules and
+  the cautious agent wait at the edge of the cross street, see the car only as it comes out from behind the
+  van (at about 28 m), and turn once the van has gone and they can see. Held only by what it could not
+  see, Rules had the hidden car 2.2 s from the junction against the 4.4 s it needed to turn. Without hidden
+  hazards the car sees through the van and waits for the car as for any.
+- Saved arena runs take about a third of the space (`static/js/lab/trace.js`, schema
+  `jev-agent-evaluation-v3`): a decision no event links to is kept as a compact choice record, without
+  empty fields, and a run of the same choice one after another as its first record with `repeats` and
+  `until_s`. Two runs of all twenty-seven challenges with Rules and the cautious agent now take 38.8% of
+  the 9 MB cap (36.8% for the twenty-six before "Blind left", down from 98.2%). Results and the linked
+  decision snapshots are unchanged; v1 and v2 exports still import, and the arena shows how many decisions
+  a record stands for.
+- New checks in `scripts/test_hidden_traffic.mjs`, `scripts/test_arena_history.mjs` and on the `/tests`
+  page. The seeded benchmark and the twenty-five challenges without hidden hazards play out exactly as
+  before.
+
 - Hidden hazards (`static/js/sim/hidden-hazards.js`, `sim/blind-spot.js`). Cars parked at the kerb now hide the people behind
   them, as moving traffic already did: with the `World` option `hazards`, a vehicle standing at the kerb
   (a parked car, a van double-parked or stopped at the roadside) hides a pedestrian from the driven car when

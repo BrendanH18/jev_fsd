@@ -26,6 +26,7 @@ import { DoubleParked } from "./double-parked.js";
 import { Outages, controlAt } from "./outage.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
+import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -156,7 +157,9 @@ export class World {
   // stand double-parked at a time (sim/double-parked.js). `park`: the autopilot parks at the
   // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
   // driven car keeps to a speed it can stop from beside them; `stepOuts`: with that, how many people at
-  // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js).
+  // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
+  // `hazards`, road vehicles also hide other vehicles and cyclists, and the car turns left, gives way
+  // and turns right on red only once it can see the lanes it must give way to (sim/hidden-traffic.js).
   constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0 } = {}) {
     this.map = map;
     this.seed = seed;
@@ -177,6 +180,7 @@ export class World {
     this.allWayCounted = null;   // the all-way stop it went out of turn at (counted once a visit)
     this.giveWay = null;         // the junction it last crossed a line into, giving way there
     this.egoPeek = null;         // the control it has stopped at to look past a building, giving way
+    this.egoPeekAt = 0;          // (since when)
     this.turnaround = null;      // the three-point turn the car is making (sim/turnaround.js)
     this.besideRight = new Map(); // cyclist id -> when it last rode on the car's right, going its way
     this.hookCounted = new Map(); // cyclist id -> when cutting across it was last counted
@@ -235,9 +239,16 @@ export class World {
 
   // Line of sight: buildings, weather and darkness hide anything, and a vehicle in traffic hides a
   // pedestrian behind it (sim/crosswalk.js); with hidden hazards on, so does one standing at the kerb
-  // (sim/hidden-hazards.js).
+  // (sim/hidden-hazards.js), and road vehicles hide other vehicles and cyclists (sim/hidden-traffic.js).
+  // (with hidden traffic: a vehicle or cyclist the car would see but for another vehicle's body)
+  hiddenByVehicle(o, observer = this.ego) {
+    return this.hazards && hideable(o) && this.visibility.sees(observer, o) && hiddenVehicle(this, observer, o);
+  }
+
   sees(observer, o) {
-    return this.visibility.sees(observer, o) && !(o.kind === "pedestrian" && hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []));
+    if (!this.visibility.sees(observer, o)) return false;
+    if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
+    return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o));
   }
 
   // Middle of a long residential edge near the map center, facing along it.
@@ -442,7 +453,7 @@ export class World {
     // stopped where it looks from to give way (see brain/sensors.js), remembered until the car is
     // well past that junction
     const looked = followsRoute && Math.abs(this.ego.v) < 0.2 ? this.route.controls.find((c) => Number.isFinite(c.sPeek) && frontS >= c.sPeek - PEEK_AT_M && frontS <= c.sPeek + 1) : null;
-    if (looked) this.egoPeek = looked.control.id;
+    if (looked) { if (this.egoPeek !== looked.control.id) this.egoPeekAt = this.t; this.egoPeek = looked.control.id; }
     else if (!followsRoute || !this.route.controls.some((c) => c.control.id === this.egoPeek && frontS <= c.sPeek + 12)) this.egoPeek = null;
     const edge = rc ? this.map.edges.get(rc.edge) : road.edge;
     // (a signal whose lights are out is an all-way stop: sim/outage.js)
@@ -853,7 +864,8 @@ export class World {
     if (due) {
       g.counted = true;
       this.violations.failed_to_yield++;
-      this.events.push({ type: "failed_to_yield", to: g.to, with: due.id });
+      // (with hidden traffic, sim/hidden-traffic.js: whether another vehicle hid it from the car as it pulled out)
+      this.events.push({ type: "failed_to_yield", to: g.to, with: due.id, ...(this.hiddenByVehicle(due) ? { unseen: true } : {}) });
     }
   }
 
@@ -943,7 +955,7 @@ export class World {
     if (due) {
       j.counted = true;
       this.violations.failed_to_yield++;
-      this.events.push({ type: "failed_to_yield", to: j.rightOnRed ? "cross traffic" : "oncoming traffic", with: due.id });
+      this.events.push({ type: "failed_to_yield", to: j.rightOnRed ? "cross traffic" : "oncoming traffic", with: due.id, ...(this.hiddenByVehicle(due) ? { unseen: true } : {}) });
     }
   }
 

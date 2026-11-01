@@ -65,7 +65,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Twenty-six hand-built scenarios test the situations real drivers get wrong:
+Twenty-seven hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -95,6 +95,7 @@ Twenty-six hand-built scenarios test the situations real drivers get wrong:
 | **Round the van** | Toronto, afternoon | A delivery van is double-parked in your lane on Brunswick Avenue, hazards flashing, and the only way past is the oncoming lane, where two cars are coming that you can't see yet: stop a car length back, let them by, then go round |
 | **Squeeze in** | Vancouver, afternoon | One space is left on a block of West 10th Avenue lined with parked cars, 6.8 m long, and a car comes up behind as you slow for it: signal, pull up alongside the car in front, wait until it's clear behind, then reverse in and park within 30 cm of the kerb |
 | **Between the cars** | Vancouver, afternoon | A quiet 50 km/h street in Kitsilano, lined with parked cars on your side, and a child hidden between two of them steps out when you're 15 m away: at about 30 km/h you stop short of them, at 50 you can't |
+| **Blind left** | Vancouver, afternoon | A left turn on a green on West 4th Avenue, with a delivery van waiting in the junction opposite to turn left: the lane beside it is hidden behind it, and a car is coming straight through in it. Wait at the edge of the cross street until you can see that lane is clear |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

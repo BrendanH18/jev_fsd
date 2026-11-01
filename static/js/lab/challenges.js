@@ -74,6 +74,8 @@ export const CHALLENGES = [
     description: "Your destination is on a block in Kitsilano lined with parked cars, and there's one space left, a little over one and a half car lengths long. As you slow for it, a car comes up behind you.", lesson: "Signal early so the driver behind knows you're stopping. Pull up alongside the car in front of the space, about a door's width from it, with your rear bumpers level. Check behind, then reverse in on full lock toward the kerb, straighten, and turn the other way to swing the front in. Finish parallel, within 30 cm of the kerb. Never back into someone: wait until it's clear behind. That is BC's Motor Vehicle Act, and every province's driver's handbook teaches the same." },
   { id: "step-out", title: "Between the cars", map: "kitsilano", weather: "dry", time: "afternoon", seed: 26042, icon: "⁞", difficulty: "Sight lines", hazard: "step-out", hidden: true, street: "Stephens Street",
     description: "A quiet street in Kitsilano, lined with parked cars on your side. The limit is 50 km/h, and you can't see the sidewalk behind them.", lesson: "Cars parked at the kerb hide whoever is behind them, and a child can step out from between two of them before you can see them. Beside parked cars on a quiet street, drive at a speed you can stop from in the distance you can see: about 30 km/h on a dry road, slower in rain or snow. Driver's handbooks across Canada say the same." },
+  { id: "blind-left", title: "Blind left", map: "kitsilano", weather: "dry", time: "afternoon", seed: 27042, icon: "◐", difficulty: "Sight lines", hazard: "hidden-left", hidden: true, street: "West 4th Avenue",
+    description: "A left turn on a green on West 4th Avenue. A van on the other side of the junction is waiting to turn left too, and the lane beside it is hidden behind it.", lesson: "A vehicle waiting to turn left opposite you can hide traffic coming straight through in the lane beside it. Don't turn until you can see that lane is clear: wait in the junction, and go once you can see that nothing is coming." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -237,6 +239,22 @@ function oncomingSites(map) {
   }
   sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
   leftSites.set(map, sites); return sites;
+}
+
+// Blind left turns: as for an unprotected left, but the approach opposite has two lanes or more, and a
+// left turn of its own (onto a street at least 30 m long), on the street the challenge names. A van
+// waits in the junction to turn left from its leftmost lane, and a car comes straight through in the
+// lane beside it, hidden behind it.
+const blindLeftSites_ = new WeakMap();
+function blindLeftSites(map, street) {
+  const cache = blindLeftSites_.get(map) || blindLeftSites_.set(map, new Map()).get(map);
+  if (cache.has(street)) return cache.get(street);
+  const sites = oncomingSites(map).flatMap(site => {
+    const o = map.edges.get(site.opposite);
+    const turn = map.successors(site.opposite).find(id => map.classifyTurn(map.turnAngle(site.opposite, id)) === "left" && map.edges.get(id).length > 30);
+    return o.lanes >= 2 && turn && site.lane.edgeRef.name === street && o.name === street ? [{ ...site, turnLeft: turn }] : [];
+  });
+  cache.set(street, sites); return sites;
 }
 
 // Right turns on red: a signalled approach at least 90 m long whose route turns right onto a street
@@ -724,8 +742,8 @@ export function challengeScenario(map, challenge) {
   const sites = challenge.hazard === "occluded-pedestrian" ? occludedCrossings(map, lanes) : null;
   if (sites && !sites.length) throw new Error("This map has no clear crossing with a building-obstructed approach.");
   const site = sites ? sites[Math.floor(random() * sites.length)] : null;
-  const lefts = challenge.hazard === "oncoming" ? oncomingSites(map) : null;
-  if (lefts && !lefts.length) throw new Error("This map has no signalled left turn with oncoming traffic.");
+  const lefts = challenge.hazard === "oncoming" ? oncomingSites(map) : challenge.hazard === "hidden-left" ? blindLeftSites(map, challenge.street) : null;
+  if (lefts && !lefts.length) throw new Error(challenge.hazard === "oncoming" ? "This map has no signalled left turn with oncoming traffic." : "This map has no signalled left turn opposite one with two lanes or more and a left turn of its own.");
   const left = lefts ? lefts[Math.floor(random() * lefts.length)] : null;
   const rights = challenge.hazard === "cross" ? crossSites(map) : null;
   if (rights && !rights.length) throw new Error(map.rightOnRed ? "This map has no signalled right turn with traffic from the left." : "Right turns on red are not allowed on this map.");
@@ -815,7 +833,8 @@ export function challengeScenario(map, challenge) {
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
     route, goal: route.polyline.at(-1), traffic_seed: challenge.seed,
     ...(site ? { crossing: { hazardS: site.hazardS, from: site.from, to: site.to } } : {}),
-    ...(left ? { oncoming: { edge: left.opposite, then: left.straight } } : {}),
+    ...(left && !left.turnLeft ? { oncoming: { edge: left.opposite, then: left.straight } } : {}),
+    ...(left?.turnLeft ? { blindLeft: { edge: left.opposite, turn: left.turnLeft, straight: left.straight } } : {}),
     ...(right ? { oncoming: { edge: right.fromLeft, then: right.right, lane: "curb" } } : {}),
     ...(stop ? { allWay: allWayCars(map, stop) } : {}),
     ...(stop?.signal ? { outage: { signal: stop.signal } } : {}),
@@ -842,7 +861,7 @@ export function challengeScenario(map, challenge) {
 export function installChallenge(world, fleet, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
   // an oncoming hazard is placed at the stop line
-  const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? scenario.child?.s ?? (scenario.oncoming || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
+  const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? scenario.child?.s ?? (scenario.oncoming || scenario.blindLeft || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
@@ -874,6 +893,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.doubleParked) Object.assign(world.challenge, placeVan(world, fleet, scenario.doubleParked, challenge.seed));
   if (scenario.parking) Object.assign(world.challenge, placeParking(world, fleet, scenario.parking, challenge.seed));
   if (scenario.stepOut) Object.assign(world.challenge, placeStepOut(world, scenario.stepOut, challenge.seed));
+  if (scenario.blindLeft) Object.assign(world.challenge, placeBlindLeft(world, fleet, scenario.blindLeft));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -909,10 +929,11 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "step-out" ? local.ahead < STEP_OUT_M + world.ego.spec.length - world.ego.spec.rearOverhang
     // (the arrow comes on, and the cars beside the car turn)
     : state.hazard === "left-arrow" ? approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow"
-    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "cross", "all-way", "outage", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "hidden-left", "cross", "all-way", "outage", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);
+    if (state.blindLeft) state.hiddenCarId = releaseHidden(world, fleet, state.blindLeft);
     if (state.allWay) state.allWayIds = releaseAllWay(world, fleet, state.allWay);
     if (state.twoWay) state.twoWayIds = releaseThrough(world, fleet, state.twoWay);
     if (state.emergency) state.emergencyId = fleet.dispatchEmergency(state.emergency)?.id || null;
@@ -948,6 +969,17 @@ export function stepChallenge(world, fleet) {
     for (const id of state.vanCarIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) { car.frozen = 0; car.v = car.v0; } }
     // (the car behind sets off up the street)
     for (const id of state.followerIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
+  }
+  // (once the hidden car is through the junction, BLIND_TURN_S later the van turns left)
+  if (state.blindLeft && state.triggered && !state.released) {
+    const car = fleet.vehicles.find(v => v.id === state.hiddenCarId), van = fleet.vehicles.find(v => v.id === state.vanId);
+    const node = world.map.nodes.get(world.map.edges.get(state.blindLeft.edge).to);
+    if (!car || (car.x - node.x) * Math.cos(car.psi) + (car.y - node.y) * Math.sin(car.psi) > BLIND_PAST_M) state.passedAt ??= world.t;
+    state.setOff ??= world.t;
+    if ((state.passedAt !== undefined && world.t - state.passedAt >= BLIND_TURN_S) || world.t - state.setOff >= BLIND_MAX_S) {
+      state.released = true;
+      if (van) van.frozen = 0;
+    }
   }
   // (once the last of them is past its stop line, the flaggers go on as usual)
   if (state.workZoneId && state.triggered && !state.released) {
@@ -1016,6 +1048,37 @@ function releaseOncoming(world, fleet, { edge, then, lane: which }) {
     car.path.start(id, laneOf(id), s, plan); fleet.vehicles.push(car);
     return car.id;
   });
+}
+
+// Blind left: a delivery van waits in the junction to turn left from the opposite approach's leftmost
+// lane, its front BLIND_VAN_M short of the junction's centre (as traffic waits there), its indicator on.
+// With the car 45 m from its own line, a car sets off BLIND_CAR_M before the opposite approach's line in
+// the lane beside the van, at BLIND_CAR_MPS, straight on through; beyond what the car can see at first,
+// and then hidden behind the van. BLIND_TURN_S after it is BLIND_PAST_M past the junction's centre (or
+// BLIND_MAX_S after setting off, whatever happens), the van turns.
+const BLIND_VAN_M = 5;
+const BLIND_CAR_M = 75;
+const BLIND_CAR_MPS = 12.5;
+const BLIND_PAST_M = 10;
+const BLIND_TURN_S = 1;
+const BLIND_MAX_S = 30;
+function placeBlindLeft(world, fleet, { edge, turn, straight }) {
+  const map = world.map, lane = map.lane(edge, 0), L = lane.cum[lane.cum.length - 1];
+  const s = L - BLIND_VAN_M - (DELIVERY_VAN.length - DELIVERY_VAN.rearOverhang), p = pointAt(lane.pts, lane.cum, s);
+  const van = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), 0, DELIVERY_VAN);
+  Object.assign(van, { id: "challenge_van", kind: "delivery_van", color: 0xeeeeea, v0: 9, signal: "left", driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.6, lcRate: 0 },
+    stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 1e6, waiting: 0 });
+  van.path.start(edge, 0, s, [[turn, 0]]); fleet.vehicles.push(van);
+  return { vanId: van.id, blindLeft: { edge, turn, straight } };
+}
+function releaseHidden(world, fleet, { edge, straight: then }) {
+  const map = world.map, e = map.edges.get(edge);
+  const lane = map.lane(edge, 1), s = Math.max(2, e.control.s_line * lane.length / Math.max(1, e.length) - BLIND_CAR_M), p = pointAt(lane.pts, lane.cum, s);
+  const car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), BLIND_CAR_MPS);
+  Object.assign(car, { id: "challenge_hidden", color: 0x9b1e1e, v0: BLIND_CAR_MPS, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
+    stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+  car.path.start(edge, 1, s, [[then, Math.min(1, map.edges.get(then).lanes - 1)]]); fleet.vehicles.push(car);
+  return car.id;
 }
 
 // At an all-way stop, with the car 45 m from its line: from the right, a hesitant driver 22 m from
