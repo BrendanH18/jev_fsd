@@ -229,8 +229,8 @@ export function spacesAlong(world, route, spec, { fromS = 0 } = {}) {
   for (let i = route.edges.length - 1; i >= 0; i--) {
     const e = map.edges.get(route.edges[i]);
     if (!e || starts[i + 1] < route.length - PARK_NEAR_M - 40) break;
-    // (never on the block of a work zone or a double-parked van)
-    if (world.workZones?.zones.some((z) => z.closed === e.id || z.open === e.id) || world.doubleParked?.vans.some((d) => d.edge === e.id || d.opposite === e.id)) continue;
+    // (never on the block of a work zone, a lane closure or a double-parked van)
+    if (world.workZones?.zones.some((z) => z.closed === e.id || z.open === e.id) || world.laneClosures?.zones.some((z) => z.edge === e.id) || world.doubleParked?.vans.some((d) => d.edge === e.id || d.opposite === e.id)) continue;
     const info = route.laneInfo(i);
     if (!e.parking?.[1] || info.idx !== info.lanes - 1) continue;
     // (on the destination's street, a space ends far enough short of the destination for the car to

@@ -24,6 +24,7 @@ import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DoubleParked } from "./double-parked.js";
 import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
+import { EGO_ID, LET_IN_DECEL, OWED_DECEL as LC_OWED_DECEL, LaneClosures, THROUGH_M, canStop as canStopForMerge } from "./lane-closure.js";
 import { Outages, controlAt } from "./outage.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
@@ -156,6 +157,16 @@ const AUDIT_MEET_SIDE_M = 1;
 // in front of it (an event for coaching, once a pass).
 const AUDIT_PLOW_M = 40;
 const AUDIT_CUT_SLACK_M = 3;
+// Lane closures (sim/lane-closure.js). In the closed lane, the car owes its wait at the merge point once,
+// at the merge (the nearest in its lane to it), it could stop there braking at up to 3.5 m/s^2 and has not
+// been let in; going through the merge point owing it is merging out of turn, forcing in (counted once a
+// visit, with the vehicle in the open lane nearest it). Moving across from the closed lane into the open
+// one more than AUDIT_EARLY_M short of the merge point is merging early; and in the open lane, going
+// AUDIT_LET_IN_PAST_M past where it would let someone in, at more than 1 m/s, once it owed that (it could
+// stop there braking at 2.5 m/s^2), is taking another's turn. Both are events for coaching, once a visit.
+const AUDIT_EARLY_M = 5;
+const AUDIT_LET_IN_PAST_M = 2;
+const AUDIT_MERGE_MOVING_MPS = 1;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
@@ -168,7 +179,8 @@ export class World {
   // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
   // `hazards`, road vehicles also hide other vehicles and cyclists, and the car turns left, gives way
   // and turns right on red only once it can see the lanes it must give way to (sim/hidden-traffic.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0 } = {}) {
+  // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0 } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -222,6 +234,8 @@ export class World {
     this.violations = { collisions: 0, collisions_at_fault: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0, safety_brakes: 0, fallbacks: 0, deadlock_overrides: 0, plow_right_passes: 0 };
     this.plowPass = new Map();     // snow plow id -> where the car was beside it last tick, and what it has counted this pass
     this.plowsSeen = false;        // whether a snow plow has worked the streets this drive (sim/snow-plow.js)
+    this.mergeCall = null;         // the lane closure the car is at, and what it owes and has counted there
+    this.closuresSeen = false;     // whether a lane closure has stood this drive (sim/lane-closure.js)
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
     this.lastSignal = null;
@@ -229,6 +243,7 @@ export class World {
     this.spawnEgo();
     this.roadside = new RoadsideStops(this, { count: roadside, seed });
     this.workZones = new WorkZones(this, { count: workZones, seed });
+    this.laneClosures = new LaneClosures(this, { count: closures, seed });
     this.outages = new Outages(this, { count: outages, seed });
     this.doubleParked = new DoubleParked(this, { count: vans, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
@@ -334,6 +349,7 @@ export class World {
     this.flaggerYields?.clear();
     this.vanPass = null;
     this.plowPass.clear();
+    this.mergeCall = null; this.mergeWait = null; this.mergeLetIn = null;
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -555,6 +571,7 @@ export class World {
     this.auditFlaggers();
     this.auditVans();
     this.auditPlows();
+    this.auditClosures();
     this.auditKerb();
     leftSpace(this);
   }
@@ -635,6 +652,43 @@ export class World {
       pass.ahead = rel.ahead_m;
       this.plowPass.set(n.id, pass);
     }
+  }
+
+  // At a lane closure: merging out of turn, merging early, and not letting someone in (see AUDIT_EARLY_M).
+  auditClosures() {
+    const lc = this.laneClosures;
+    if (!lc.zones.length) { this.mergeCall = null; return; }
+    this.closuresSeen = true;
+    const here = lc.egoAt();
+    if (!here) { this.mergeCall = null; return; }
+    const z = here.zone, ego = this.ego, me = EGO_ID;
+    if (this.mergeCall?.zone !== z.id) this.mergeCall = { zone: z.id, owed: false, crossed: false, lane: here.lane, early: false, letIn: false, took: false };
+    const rec = this.mergeCall;
+    if (here.side === "closed" && here.front < z.m + THROUGH_M) {
+      rec.owed = z.grant !== me && (rec.owed || (z.head === me && canStopForMerge(ego.v, z.m - 0.5 - here.front, LC_OWED_DECEL)));
+    } else if (here.side === "closed" && !rec.crossed) {
+      rec.crossed = true;
+      if (rec.owed) {
+        const e = this.map.edges.get(z.edge), oo = e.lane_offsets[z.open];
+        const cut = lc.movers(z).filter((x) => x.id !== me && Math.abs(x.body.lateral - oo) < 2.2 && x.body.front < here.front + 5 && x.body.front > z.m - 25).sort((a, b) => b.body.front - a.body.front)[0];
+        this.violations.merge_cut_ins = (this.violations.merge_cut_ins || 0) + 1;
+        this.events.push({ type: "merged_out_of_turn", zone: z.id, cut: cut?.id ?? null });
+      }
+    }
+    if (rec.lane === "closed" && here.lane === "open" && here.front < z.m - AUDIT_EARLY_M && !rec.early) {
+      rec.early = true;
+      this.events.push({ type: "merged_early", zone: z.id });
+    }
+    if (here.side === "open") {
+      const line = lc.letInLine(z, -Infinity), owing = z.turn === "closed" && !!z.head && z.head !== me;
+      if (!owing) rec.letIn = false;
+      else if (!rec.letIn && here.front < line + 0.5 && lc.firstInOpen(z, me)) rec.letIn = canStopForMerge(ego.v, line - here.front, LET_IN_DECEL);
+      if (rec.letIn && owing && !rec.took && here.front > line + AUDIT_LET_IN_PAST_M && ego.v > AUDIT_MERGE_MOVING_MPS) {
+        rec.took = true;
+        this.events.push({ type: "took_merge_turn", zone: z.id, from: z.head });
+      }
+    }
+    rec.lane = here.lane;
   }
 
   // Going past a flagger's STOP paddle once the stop was owed (see AUDIT_FLAGGER_PAST_M).

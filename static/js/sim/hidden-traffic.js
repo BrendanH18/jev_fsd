@@ -34,7 +34,7 @@ const HIDE_RANGE_M = 90;
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // Standing in the road rather than parked in a parking lane.
-export const standsInRoad = (c) => !!(c.doubleParked || c.roadside || c.workzone);
+export const standsInRoad = (c) => !!(c.doubleParked || c.roadside || c.workzone || c.closure);
 // What can be hidden: a road vehicle or cyclist moving in traffic (not a train, not anything standing).
 export const hideable = (o) => !!o && !o.parked && o.kind !== "pedestrian" && o.kind !== "door" && o.kind !== "train" && typeof o.obb === "function";
 

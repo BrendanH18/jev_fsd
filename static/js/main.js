@@ -21,6 +21,8 @@ import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
 import { ROADSIDE_COUNT, ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
 import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
 import { WORK_ZONE_COUNT, workZoneNotice } from "./sim/work-zone.js";
+import { createLaneClosureMesh, syncLaneClosure } from "./render/lane-closure.js";
+import { LANE_CLOSURE_COUNT, laneClosureNotice } from "./sim/lane-closure.js";
 import { OUTAGE_COUNT, outageNotice } from "./sim/outage.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
 import { VAN_COUNT, vanNotice } from "./sim/double-parked.js";
@@ -156,6 +158,8 @@ export async function boot() {
     const roadside = params.get("roadside") !== "0" ? ROADSIDE_COUNT : 0;
     // and work zones with a flagger at each end (`?workzones=0` takes them off)
     const workZones = params.get("workzones") !== "0" ? WORK_ZONE_COUNT : 0;
+    // and lane closures where both lanes zipper merge (`?closures=0` takes them off)
+    const closures = params.get("closures") !== "0" ? LANE_CLOSURE_COUNT : 0;
     // and power cuts that turn a signal's lights off for a while (`?outages=0` turns them off)
     const outages = params.get("outages") !== "0" ? OUTAGE_COUNT : 0;
     // and delivery vans double-parked now and then, by day (`?vans=0` takes them off)
@@ -166,7 +170,7 @@ export async function boot() {
     // between them, and the autopilot keeps to a speed it can stop from beside them (`?hazards=0`
     // turns that off)
     const hazards = params.get("hazards") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0 });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -181,9 +185,9 @@ export async function boot() {
   }
   // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
   // work zone's closed stretch)
-  view.addScenery(buildParkedCars(world.parked.list.filter(c => !c.roadside && !c.workzone && !c.doubleParked)));
+  view.addScenery(buildParkedCars(world.parked.list.filter(c => !c.roadside && !c.workzone && !c.closure && !c.doubleParked)));
   const originalParked = world.parked.list.slice();
-  world.parked.added = world.parked.added.filter(c => c.roadside || c.workzone || c.doubleParked);
+  world.parked.added = world.parked.added.filter(c => c.roadside || c.workzone || c.closure || c.doubleParked);
   // (a mesh per person, by id: children get off school buses and go home)
   const pedMeshes = new Map();
   const pedMesh = (p) => {
@@ -208,8 +212,9 @@ export async function boot() {
     for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); previousCars.delete(id); }
     for (const car of world.parked.added.splice(0)) {
       const zone = car.workzone ? world.workZones.zones.find((z) => z.closure === car) : null;
-      const m = car.roadside ? createRoadsideMesh(car) : zone ? createWorkZoneMesh(zone, map) : car.doubleParked ? createVanMesh(car) : createCarMesh(car.color, car.id, car.style ?? null);
-      if (zone) syncWorkZone(m, zone); else (car.roadside ? syncRoadside : car.doubleParked ? syncVan : syncCar)(m, car);
+      const closure = car.closure ? world.laneClosures.zones.find((z) => z.closure === car) : null;
+      const m = car.roadside ? createRoadsideMesh(car) : zone ? createWorkZoneMesh(zone, map) : closure ? createLaneClosureMesh(closure, map) : car.doubleParked ? createVanMesh(car) : createCarMesh(car.color, car.id, car.style ?? null);
+      if (zone) syncWorkZone(m, zone); else if (closure) syncLaneClosure(m, closure); else (car.roadside ? syncRoadside : car.doubleParked ? syncVan : syncCar)(m, car);
       view.scene.add(m);
       parkedMeshes.set(car.id, m);
     }
@@ -630,7 +635,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -666,6 +671,7 @@ export async function boot() {
           else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "alert", 1500);
           else if (ev.type === "stop_sign") hud.badge(ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : ev.dark ? "NO STOP AT A DARK SIGNAL" : "RAN A STOP SIGN", "alert", 1500);
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
+          else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
@@ -711,6 +717,7 @@ export async function boot() {
     }
     for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
     for (const z of world.workZones.zones) syncWorkZone(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
+    for (const z of world.laneClosures.zones) syncLaneClosure(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
     for (const d of world.doubleParked.vans) syncVan(parkedMeshes.get(d.van.id), d.van, dt, world.t);
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
     const evs = fleet.vehicles.filter(isEmergency);
@@ -757,6 +764,10 @@ export async function boot() {
     const workZone = workZoneNotice(world);
     if (workZone && workZone.key !== announcedWorkZone) { announcedWorkZone = workZone.key; hud.badge(workZone.text, workZone.stop ? "safety" : "", 2500); }
     if (!workZone) announcedWorkZone = null;
+    // a lane closed ahead: use both lanes to the merge point, then take turns (said again as the turn changes)
+    const closure = laneClosureNotice(world);
+    if (closure && closure.key !== announcedClosure) { announcedClosure = closure.key; hud.badge(closure.text, closure.stop ? "safety" : "", 2500); }
+    if (!closure) announcedClosure = null;
     // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
     const outage = outageNotice(world);
     if (outage && outage.key !== announcedOutage) { announcedOutage = outage.key; hud.badge(outage.text, outage.stop ? "safety" : "stop", 2500); }

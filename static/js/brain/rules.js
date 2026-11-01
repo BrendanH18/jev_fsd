@@ -26,6 +26,7 @@ export class RulesBrain {
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;
+    if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) stop = true;
     // (parking, the space is the destination: sim/parallel-park.js)
     if (snap.nav && snap.nav.arrived && snap.parking?.mode !== "in") stop = true;
 
@@ -49,7 +50,7 @@ export class RulesBrain {
       if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !i.right_on_red?.go) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
-      if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist" || c.id === "stop_to_turn_round" || c.id === "yield_to_bus" || c.id === "stop_at_crosswalk" || c.id === "stop_for_school_bus" || c.id === "stop_for_streetcar" || c.id === "stop_before_tracks" || c.id === "wait_short_of_junction" || c.id === "stop_for_flagger" || c.id === "wait_behind_van") cost -= 6;
+      if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist" || c.id === "stop_to_turn_round" || c.id === "yield_to_bus" || c.id === "stop_at_crosswalk" || c.id === "stop_for_school_bus" || c.id === "stop_for_streetcar" || c.id === "stop_before_tracks" || c.id === "wait_short_of_junction" || c.id === "stop_for_flagger" || c.id === "wait_behind_van" || c.id === "wait_to_merge" || c.id === "let_merge_in") cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)

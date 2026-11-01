@@ -10,6 +10,7 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   world.parked.step(dt, world);
   world.roadside.step(dt);
   world.workZones.step(dt);
+  world.laneClosures.step(dt);
   world.outages.step(dt);
   world.doubleParked.step(dt);
   world.stepOuts.step(dt);

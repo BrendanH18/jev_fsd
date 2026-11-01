@@ -83,6 +83,8 @@ export class DriveMetrics {
       failed_to_yield: v.failed_to_yield || 0,
       // (only for a drive a snow plow worked in: sim/snow-plow.js)
       ...(world.plowsSeen ? { plow_right_passes: v.plow_right_passes || 0 } : {}),
+      // (only for a drive a lane closure stood in: sim/lane-closure.js)
+      ...(world.closuresSeen ? { merge_cut_ins: v.merge_cut_ins || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -124,6 +126,7 @@ export function failures(m) {
   if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
   if (m.plow_right_passes) f.push("passed plow on the right");
+  if (m.merge_cut_ins) f.push("merged out of turn");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

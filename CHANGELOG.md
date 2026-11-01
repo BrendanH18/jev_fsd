@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+- Lane closures and the zipper merge (`static/js/sim/lane-closure.js`, `render/lane-closure.js`). A road
+  crew closes the curb lane of a straight block with two lanes going its way, with cones angled across it
+  from the merge point, its truck and flashing arrow board, two workers, a "right lane closed ahead" sign
+  80 m back and a "take turns at merge" sign at the merge point, but no flagger. Manitoba's driver's
+  handbook teaches the zipper merge, and the City of Winnipeg signs it at lane closures; Ontario cities
+  and police ask for it too, and the Alberta Motor Association says merging late is right: use both lanes
+  right up to the merge point, then take turns, one vehicle from each lane. Traffic and the driven car now
+  do. Nobody changes lanes into or out of the closed lane from 80 m short of the merge point, and the
+  closed lane's traffic moves across over a 30 m taper at the merge point and back once past the work.
+  Within 25 m of the merge point, the one nearest it in the closed lane is at the merge. It is the closed
+  lane's turn when the last vehicle through came from the open lane, or nobody in the open lane is coming
+  within 40 m; then it is let in once the lane beside it is clear and whoever comes up behind can fall in
+  behind it, and the first in the open lane stops short of it to let it in (7 m short of the merge point,
+  and behind its rear). Otherwise it waits at the merge point. One that stands still 6 s on its turn
+  loses it, so a car that does not go never holds the open lane up. Everyone keeps to 30 km/h from the
+  merge point to the end.
+- The driven car's sensing reports `lane_closure` (its lane, the merge point, whose turn it is, whether it
+  has been let in, whether it waits and for whom, and in the open lane whom it lets in). The candidates
+  `wait_to_merge` and `let_merge_in` stop for it; candidates that go through the merge point out of turn
+  (`merges_out_of_turn`), past where the car lets someone in (`takes_merge_turn`), change lanes out of the
+  closed lane before the merge point (`merges_early`) or into it (`into_closed_lane`) are rejected. In the
+  closed lane every lane candidate carries the way across. Decision models and LLMs get `lane_closure`, a
+  situation line, a motion criterion and a prompt line.
+- The audit counts going through the merge point out of turn, once the car owed its wait there, as
+  `merge_cut_ins`, which fails a drive (`merged out of turn`) once a closure has stood in it. Coaching
+  counts cut-ins, not letting someone in (`merge_turns_taken`) and merging early (`early_merges`), with
+  tips, only for drives a closure stood in, and the closure's 30 km/h as a work zone's. The HUD says
+  "RIGHT LANE CLOSED AHEAD · STAY IN LANE TO THE MERGE · TAKE TURNS", "WAIT YOUR TURN · LET THE NEXT CAR GO
+  FIRST", "YOUR TURN · MERGE NOW" and "LANE ENDS BESIDE YOU · LET ONE CAR IN · TAKE TURNS"; AI eyes
+  outline the closure, and the car it waits for or lets in, in amber.
+- In a free drive one closure at a time stands 150 to 450 m from the car, out of its sight, for 4 to 8
+  minutes (`?closures=0` takes them off).
+- New challenge, "Take turns" (Calgary, 14 Avenue SW, one-way, two lanes, 50 km/h): the right lane is
+  closed, seven cars queue in the left lane back from the merge point and two wait at it in the right
+  lane, ahead of the car. Rules and the cautious agent drive up the right lane, wait their turn and merge
+  after the third car in the left lane, not straight after the second car in their own.
+- New checks in `scripts/test_lane_closures.mjs`. The seeded benchmark and the other twenty-eight
+  challenges have no lane closures and play out exactly as before.
+
 - Snow plows (`static/js/sim/snow-plow.js`, `render/snow-plow.js`). While it snows, a city plow clears the
   main streets at 18 km/h, its blue and amber lamps flashing, its blade angled to throw the snow off to
   the right. Manitoba's Highway Traffic Act (in force in 2026) says to stay 30 m back from a plow with its

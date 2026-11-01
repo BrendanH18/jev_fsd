@@ -1,5 +1,5 @@
 const round = value => Math.round(value * 1000) / 1000;
-const AUDITS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield", plow_right_passes: "Passed a snow plow on the right" };
+const AUDITS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield", plow_right_passes: "Passed a snow plow on the right", merge_cut_ins: "Merged out of turn at a lane closure" };
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and
 // source, and its fallback error and hazard flags when it has any. A run of such records with the same
