@@ -9,7 +9,8 @@
 // work zone everyone stops for the flagger's STOP paddle, keeps to 30 km/h, and the direction whose
 // lane is closed goes round the work through the other lane (sim/work-zone.js). Behind a van
 // double-parked in its lane a driver waits until the oncoming lane is clear, then goes round it through
-// that lane (sim/double-parked.js). While it snows, plows clear the main streets; nobody passes one on
+// that lane (sim/double-parked.js). Where a road crew closes one of two lanes, drivers zipper merge: both
+// lanes up to the merge point, then one from each in turn (sim/lane-closure.js). While it snows, plows clear the main streets; nobody passes one on
 // the right, and only with a clear view ahead on the left (sim/snow-plow.js).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
@@ -34,6 +35,7 @@ import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex
 import { boxHold } from "./junction-box.js";
 import { WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DECIDE_M, PASS_DECEL, PASS_MPS, VAN_LOOK_M, queuedAhead, wayRound } from "./double-parked.js";
+import { AHEAD_M as LC_AHEAD_M, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, OWED_DECEL as LC_OWED_DECEL, THROUGH_M, canStop as canStopForMerge, detourOf as closureDetour } from "./lane-closure.js";
 import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
@@ -322,6 +324,12 @@ function workZoneLimit(wz, front) {
   return Math.sqrt(WZ_LIMIT_MPS * WZ_LIMIT_MPS + 2 * WZ_DECEL * Math.max(0, wz.line - 5 - front));
 }
 
+// Likewise at a lane closure (sim/lane-closure.js): its limit from 5 m short of the merge point to the end.
+function closureLimit(lz, front) {
+  if (front > lz.to + 2) return Infinity;
+  return Math.sqrt(LC_LIMIT_MPS * LC_LIMIT_MPS + 2 * WZ_DECEL * Math.max(0, lz.m - 5 - front));
+}
+
 export class NpcFleet {
   // `plows`: how many snow plows work the main streets at a time while it snows (sim/snow-plow.js).
   constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0, plows = 0 } = {}) {
@@ -434,7 +442,7 @@ export class NpcFleet {
       let pick = this.school() * total, lane = lanes[0];
       for (const l of lanes) { pick -= l.length; if (pick <= 0) { lane = l; break; } }
       const s = 5 + this.school() * (lane.length - 10), p = pointAt(lane.pts, lane.cum, s), d = Math.hypot(p[0] - ego.x, p[1] - ego.y);
-      if (d < away[0] || d > away[1] || this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SCHOOL_BUS.length + 6) || this.world.workZones?.covers(p[0], p[1]) || this.world.doubleParked?.covers(p[0], p[1])) continue;
+      if (d < away[0] || d > away[1] || this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SCHOOL_BUS.length + 6) || this.world.workZones?.covers(p[0], p[1]) || this.world.laneClosures?.covers(p[0], p[1]) || this.world.doubleParked?.covers(p[0], p[1])) continue;
       // (partway to its next stop already)
       const bus = this.addSchoolBus(lane, s, Math.min(8, lane.edgeRef.limit * 0.6));
       bus.school.odo = this.school() * bus.school.every;
@@ -650,6 +658,9 @@ export class NpcFleet {
         if (leadsEmergency(call.ev, n)) n.yieldEv.lead = true;
       } else if (n.yieldEv && (n.yieldEv.clear += dt) > EV_RELEASE_S) n.yieldEv = null;
       const yielding = n.yieldEv && !n.yieldEv.lead ? n.yieldEv : null;
+      // a lane closure on its street (sim/lane-closure.js): no lane changes into or out of the closed lane
+      // on the way up to it, and from the closed lane, across into the open one at the merge point
+      const lz = world.laneClosures?.zones.length ? this.closureAhead(n, path, front) : null;
       if (n.lc) {
         n.lc.t += dt;
         if (n.lc.edge !== edge.id) n.lc = null;   // ran out of edge: the next junction's join takes over
@@ -660,6 +671,7 @@ export class NpcFleet {
         // (a streetcar, on its track, never changes lanes)
         if (n.transit?.tram) { /* on its track */ }
         else if (n.transit && !n.yieldEv) { if (n.transit.phase === "drive") this.maybeChangeLane(n, edge, front, this.busStopSoon(n, front)); }
+        else if (lz) { /* keeping its lane: the zipper */ }
         else if (!n.yieldEv) this.maybeChangeLane(n, edge, front);
         else if (yielding && n.kind !== "bike") this.maybeChangeLane(n, edge, front, true);
       }
@@ -688,7 +700,8 @@ export class NpcFleet {
       const dp = world.doubleParked?.vans.length && !(n.kind === "bike" && n.side > 1.2) ? this.vanAhead(n, path, front, all) : null;
       if (!dp && n.vanGo) n.vanGo = null;
       const dpShift = dp?.go ? detourAt(dp.detour, path.s + lookahead(n.v)) : 0;
-      let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.transit ? n.transit.shift : 0) + (n.nudge || 0) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) + wzShift + dpShift;
+      const lzShift = lz?.detour ? detourAt(lz.detour, path.s + lookahead(n.v)) : 0;
+      let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.transit ? n.transit.shift : 0) + (n.nudge || 0) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) + wzShift + dpShift + lzShift;
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -706,6 +719,8 @@ export class NpcFleet {
         if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
         // (going round a work zone's closed stretch, not up to it)
         if (wz?.detour && o === wz.zone.closure) continue;
+        // (nor, from the closed lane, the lane closure's)
+        if (lz?.detour && o === lz.zone.closure) continue;
         // (nor round a double-parked van)
         if (dp?.go && o === dp.van) continue;
         const os = o.spec || CAR, reach = (spec.width + os.width) / 2 + LEADER_MARGIN_M;
@@ -715,6 +730,7 @@ export class NpcFleet {
         // round a work zone, the line it will keep to where `o` is)
         const inWay = (lat, at) => {
           if (wz?.detour) lat -= detourAt(wz.detour, at) - wzShift;
+          if (lz?.detour) lat -= detourAt(lz.detour, at) - lzShift;
           // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
           const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
           return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0)) <= reach;
@@ -902,10 +918,14 @@ export class NpcFleet {
       // behind a double-parked van while the way round is not clear: where it waits, back far enough
       // to pull out round it (sim/double-parked.js)
       if (dp && !dp.go && dp.wait - front > -1 && dp.wait - front < gap) { gap = Math.max(0.05, dp.wait - front); leadV = 0; }
+      // at a lane closure: in the closed lane, at the merge point until it is its turn; in the open lane,
+      // short of it while letting someone in (sim/lane-closure.js)
+      const forMerge = lz ? this.mergeHold(n, lz, path, front) : null;
+      if (forMerge && forMerge.gap < gap) { gap = Math.max(0.05, forMerge.gap); leadV = forMerge.v; }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
-      const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit), wz ? workZoneLimit(wz, front) : Infinity, dp ? vanLimit(dp, front) : Infinity);
+      const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit), wz ? workZoneLimit(wz, front) : Infinity, dp ? vanLimit(dp, front) : Infinity, lz ? closureLimit(lz, front) : Infinity);
       // (a snow plow keeps to its clearing speed, whatever the weather)
       const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
       const D = n.driver || IDM;
@@ -1165,7 +1185,7 @@ export class NpcFleet {
       for (const l of lanes) { pick -= l.length; if (pick <= 0) { lane = l; break; } }
       const s = 5 + random() * (lane.length - 20), p = pointAt(lane.pts, lane.cum, s), d = Math.hypot(p[0] - ego.x, p[1] - ego.y);
       if (d < PLOW_SPAWN_M[0] || d > PLOW_SPAWN_M[1] || world.visibility.canSee(ego, p[0], p[1])) continue;
-      if (this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SNOW_PLOW.length + 8) || world.workZones?.covers(p[0], p[1]) || world.doubleParked?.covers(p[0], p[1])) continue;
+      if (this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SNOW_PLOW.length + 8) || world.workZones?.covers(p[0], p[1]) || world.laneClosures?.covers(p[0], p[1]) || world.doubleParked?.covers(p[0], p[1])) continue;
       return this.addPlow(lane, s, Math.min(PLOW_MPS, lane.edgeRef.limit));
     }
     return null;
@@ -1573,6 +1593,51 @@ export class NpcFleet {
   // Where a driver stops for a work zone's flagger showing STOP, as metres from its front, or null:
   // short of the line, once it could stop there braking at OWED_DECEL (and from then on while the
   // paddle shows STOP); a driver too close to stop goes on through.
+  // The lane closure on the street a driver is on, or the next it will be on (sim/lane-closure.js), from
+  // AHEAD_M short of its merge point to its end, with its marks along the driver's path: { zone, side
+  // ("closed" when the driver's lane is the one closed, or "open"), m (the merge point), to (its end), at
+  // (from the edge's `s` to the path's), detour (in the closed lane: across into the open lane and back) },
+  // or null.
+  closureAhead(n, path, front) {
+    const lc = this.world.laneClosures;
+    for (const e of path.edges) {
+      if (e.sEnd < path.s) continue;
+      if (e.sStart - front > LC_AHEAD_M + 40) break;
+      const z = lc.on(e.id);
+      if (!z) continue;
+      const k = (e.sEnd - e.sStart) / Math.max(1, this.map.edges.get(e.id).length), at = (s) => e.sStart + s * k;
+      if (front > at(z.to) + 2 || at(z.m) - front > LC_AHEAD_M) continue;
+      const side = e.lane === z.closed ? "closed" : "open", d = side === "closed" ? closureDetour(z) : null;
+      return { zone: z, side, m: at(z.m), to: at(z.to), at, detour: d ? { from: at(d.from), full: at(d.full), back: at(d.back), to: at(d.to), shift: d.shift } : null };
+    }
+    return null;
+  }
+
+  // Where a driver at a lane closure waits, or keeps behind, or null: { gap, v (of what it keeps behind) }.
+  // In the closed lane, at the merge point until it is let in (one too close to stop there by then goes
+  // on). In the open lane, LET_IN_M short of it (and behind the one at the merge) on the closed lane's turn, once it could stop there braking
+  // at LET_IN_DECEL; and behind the one let in while it moves across in front of it, which it cannot yet
+  // see as in its lane (sim/lane-closure.js).
+  mergeHold(n, lz, path, front) {
+    const z = lz.zone, lc = this.world.laneClosures;
+    if (lz.side === "closed") {
+      const toM = lz.m - front;
+      // (it decides at the merge, within HEAD_M of it: further back it drives on up the lane)
+      if (toM < -THROUGH_M || z.grant === n.id || (toM > LC_HEAD_M && n.mergeWait !== z.id)) { n.mergeWait = null; return null; }
+      if (n.mergeWait !== z.id && !canStopForMerge(n.v, toM - 0.5, LC_OWED_DECEL)) return null;
+      n.mergeWait = z.id;
+      return { gap: toM - 0.5, v: 0 };
+    }
+    const toLine = lz.at(lc.letInLine(z, -Infinity)) - front;
+    if (!(z.turn === "closed" || z.merger) || toLine < -0.5) { n.letIn = null; return null; }
+    if (n.letIn !== z.id && !canStopForMerge(n.v, toLine, LET_IN_DECEL)) return null;
+    n.letIn = z.id;
+    let hold = z.turn === "closed" ? { gap: Math.max(0, toLine), v: 0 } : null;
+    const rear = lc.mergerRear(z), q = rear && projectPoint(path.pts, path.cum, [rear.x, rear.y], null);
+    if (q && q.s > path.s && (!hold || q.s - front - 2 < hold.gap)) hold = { gap: Math.max(0, q.s - front - 2), v: rear.v };
+    return hold;
+  }
+
   flaggerHold(n, wz, front) {
     const toLine = wz.line - front;
     if (paddle(wz.zone, wz.side) !== "stop" || toLine < -1) { n.flagger = null; return null; }

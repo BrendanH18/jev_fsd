@@ -48,7 +48,7 @@ export class PerceptionView {
       // the vehicle that leaves no room past a junction ahead, one stopped at the roadside with its
       // lights flashing, a work zone's closed stretch on the car's way, a van double-parked in the
       // car's lane, or a snow plow at work: amber too)
-      const color = isEmergency(object) ? [1, 0.3, 0.9] : visible && (busSignalling(object) || object.id === snap.crosswalk_stop?.id || object.id === snap.school_bus?.id || object.id === snap.streetcar?.id || object.id === snap.level_crossing?.train?.id || object.id === snap.junction_box?.blocker.id || object.id === snap.roadside_stop?.id || object.id === snap.work_zone?.closure_id || object.id === snap.double_parked?.van_id || object.id === snap.snow_plow?.id) ? [1, 0.7, 0.15] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
+      const color = isEmergency(object) ? [1, 0.3, 0.9] : visible && (busSignalling(object) || object.id === snap.crosswalk_stop?.id || object.id === snap.school_bus?.id || object.id === snap.streetcar?.id || object.id === snap.level_crossing?.train?.id || object.id === snap.junction_box?.blocker.id || object.id === snap.roadside_stop?.id || object.id === snap.work_zone?.closure_id || object.id === snap.lane_closure?.closure_id || object.id === snap.lane_closure?.wait_for || object.id === snap.lane_closure?.let_in_for || object.id === snap.double_parked?.van_id || object.id === snap.snow_plow?.id) ? [1, 0.7, 0.15] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
       for (let i = 0; i < 4; i++) add(boxes, boxColors, corners[i], corners[(i + 1) % 4], color);
     }
     // school and playground zones in effect nearby: their side of the street outlined in yellow-green
@@ -89,6 +89,8 @@ export class PerceptionView {
     const box = jb ? `No room past the junction ahead (${Math.round(Math.max(0, jb.room_m))} m of ${Math.round(jb.need_m)}): wait at the line${jb.bumper_to_stop_m > 0.5 ? ` in ${Math.round(jb.bumper_to_stop_m)} m` : ""}` : null;
     const wz = snap.work_zone;
     const workZone = wz ? `Work zone, ${wz.side === "closed" ? "the car's lane closed: round it through the other lane" : "one lane"}; flagger shows ${wz.paddle === "stop" ? "STOP" : "SLOW"}${wz.wait ? `, stop in ${Math.max(0, Math.round(wz.bumper_to_stop_m))} m` : `: ${Math.round(wz.limit_mps * 3.6)} km/h`}` : null;
+    const lz = snap.lane_closure;
+    const closure = lz ? `${lz.closed_lane === "right" ? "Right" : "Left"} lane closed, zipper merge${lz.merged ? "" : ` in ${Math.round(Math.max(0, lz.bumper_to_merge_m))} m`}: ${lz.side === "closed" ? (lz.let_in ? "car's turn, merge" : lz.wait ? `wait at the merge${lz.wait_for ? ` for ${lz.wait_for}` : ""}` : "merge in turn") : lz.let_in_for ? `let ${lz.let_in_for} in` : "take turns"}` : null;
     const dp = snap.double_parked;
     const van = dp ? `Double-parked van ${dp.gap_m > 0 ? `${Math.round(dp.gap_m)} m ahead` : "beside"}: ${dp.going_round ? "going round it" : dp.go ? `way round clear, go round at ${Math.round(dp.limit_mps * 3.6)} km/h` : dp.queued ? "wait in turn behind it" : `${dp.way.oncoming ? "oncoming traffic" : "can't see far enough"}, wait${dp.bumper_to_stop_m > 0.5 ? ` in ${Math.round(dp.bumper_to_stop_m)} m` : ""}`}` : null;
     // cars parked at the kerb that hide the sidewalk (sim/blind-spot.js), with hidden hazards on
@@ -103,7 +105,7 @@ export class PerceptionView {
     const roadside = r ? `${r.name[0].toUpperCase()}${r.name.slice(1)} at the roadside, lights flashing, ${r.gap_m > 0 ? `${Math.round(r.gap_m)} m ahead` : "beside"}: pass at ${Math.round(r.limit_mps * 3.6)} km/h${r.in_adjacent_lane && r.other_lane ? ", move over" : ""}` : null;
     const sp = snap.snow_plow;
     const plow = sp ? `Snow plow ${sp.gap_m > 0 ? `${Math.round(sp.gap_m)} m ahead` : "beside"}${sp.lane === "same" ? "" : ` in the ${sp.lane} lane`}: ${sp.passing ? `passing on the left, back in ${sp.keep_back_m} m ahead` : !sp.holds ? "may pass on the left" : sp.lane === "left" ? `never pass on the right, stay ${sp.keep_back_m} m back` : `stay ${sp.keep_back_m} m back${sp.may_pass ? ", pass only on the left" : ""}`}` : null;
-    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, van, plow, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

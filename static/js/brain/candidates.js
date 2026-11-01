@@ -75,7 +75,8 @@ export function sampleCandidates(snap, world) {
   // (round a work zone's closed stretch, through the other lane, whatever else the car does: see
   // brain/sensors.js workZone; and round a double-parked van, through the oncoming lane, once the way
   // round is clear or the car has started round it: see doubleParked)
-  const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour } : {};
+  // (and, in a lane that is closed ahead, across into the open lane at the merge point: see laneClosure)
+  const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.lane_closure?.detour ? { detour: snap.lane_closure.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour } : {};
   const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
   // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
@@ -208,6 +209,17 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "stop_for_flagger", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(wz.stop_s_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "stop at the line for the flagger's STOP paddle" });
     }
+    // A lane closed ahead (sim/lane-closure.js): in the closed lane, wait at the merge point for the car's
+    // turn; in the open lane, stop short of it to let in the one whose turn it is.
+    const lz = snap.lane_closure;
+    if (lz?.stop_s_route != null && lz.bumper_to_stop_m > 0.3) {
+      // (a metre short of the merge point, and half a metre short of where it lets one in, as a stop
+      // overshoots)
+      out.push(lz.wait ? { id: "wait_to_merge", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 1) }),
+        steer: "hold lane", speed: "stop at the merge point and wait for the car's turn" }
+        : { id: "let_merge_in", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 0.5) }),
+          steer: "hold lane", speed: "stop short of the merge point and let the car in the closed lane go first" });
+    }
     // A van double-parked in the lane ahead, and no way round it yet: stop behind it, back far enough to
     // pull out round it, and wait there until the oncoming lane is clear.
     const dp = snap.double_parked;
@@ -316,6 +328,11 @@ export function simulateAll(candidates, snap, world) {
   const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the car stops for a flagger showing STOP
   const flaggerStop = snap.work_zone?.wait ? snap.work_zone.stop_s_route : null;
+  // at a lane closure: where the car waits for its turn at the merge point, or stops to let one in; and
+  // the lane changes the zipper rules out (sim/lane-closure.js)
+  const lz = snap.lane_closure;
+  const mergeStop = lz?.wait ? lz.stop_s_route : null, letInStop = lz?.let_in_for ? lz.stop_s_route : null;
+  const zipper = lz ? lz.side : null;
   // where the car waits behind a double-parked van it cannot go round yet (still ahead of it)
   const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > 0.3 ? snap.double_parked.stop_s_route : null;
   // a snow plow the car must stay back of, still ahead of it (sim/snow-plow.js): no candidate takes the
@@ -334,7 +351,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesVan = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -385,6 +402,10 @@ export function simulateAll(candidates, snap, world) {
         if (flaggerStop !== null && s + FRONT > flaggerStop + 1.5) passesFlagger = true;
         // (and here: 1.5 m past where it waits still leaves room to pull out round the van)
         if (vanStop !== null && s + FRONT > vanStop + 1.5) passesVan = true;
+        // (and here: a metre past the merge point has not gone through it, sim/lane-closure.js THROUGH_M; 1.5 m past
+        // where it lets one in is still behind it)
+        if (mergeStop !== null && s + FRONT > mergeStop + 1) passesMerge = true;
+        if (letInStop !== null && s + FRONT > letInStop + 1.5) passesLetIn = true;
         // (its rear where it will be by then, going on at its speed)
         if (plow && s + FRONT > plow.s_rear_route + plow.speed * t + 0.5 && (anySide || lateral + route.frameMove(startS, s) - plow.lateral_route > SAME_LANE_M)) passesPlow = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
@@ -455,6 +476,13 @@ export function simulateAll(candidates, snap, world) {
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if (passesFlagger && c.law.kind !== "hard_brake") reject = "runs_flagger_stop";
     else if (passesVan && c.law.kind !== "hard_brake") reject = "no_room_to_go_round";
+    else if (passesMerge && c.law.kind !== "hard_brake") reject = "merges_out_of_turn";
+    else if (passesLetIn && c.law.kind !== "hard_brake") reject = "takes_merge_turn";
+    // (the zipper: in the closed lane, no moving across before the merge point, and past it no lane
+    // change at all, the way across and back being the candidates' own; in the open lane, no moving into
+    // the closed one, to the end of the closure)
+    else if (zipper === "closed" && c.change) reject = lz.merged ? "into_closed_lane" : "merges_early";
+    else if (zipper === "open" && c.change && c.change.dir === lz.closed_lane) reject = "into_closed_lane";
     else if (passesPlow && c.law.kind !== "hard_brake") reject = "passes_plow_on_right";
     // (ending up closer to a snow plow it must stay back of than the stay-back distance, and closer
     // than now: in its lane or a lane to its right, still behind it, the plow going on at its speed)

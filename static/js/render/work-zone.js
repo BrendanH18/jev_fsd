@@ -18,19 +18,20 @@ const ENTRY_TAPER_M = 12;   // the cones angle across the closed lane over this 
 const EXIT_TAPER_M = 6;     // and back over this much after it
 const box = (sx, sy, sz, x, y, z) => new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z);
 const merge = (parts) => mergeGeometries(parts.map((p) => p.toNonIndexed()), false);
-const coneMaterial = snowable(new THREE.MeshStandardMaterial({ color: ORANGE, roughness: 0.6 }), "car");
-const bandMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, emissive: 0x30302a, roughness: 0.4 });
-const postMaterial = new THREE.MeshStandardMaterial({ color: 0x8a8f96, metalness: 0.6, roughness: 0.4 });
+export const coneMaterial = snowable(new THREE.MeshStandardMaterial({ color: ORANGE, roughness: 0.6 }), "car");
+export const bandMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, emissive: 0x30302a, roughness: 0.4 });
+export const postMaterial = new THREE.MeshStandardMaterial({ color: 0x8a8f96, metalness: 0.6, roughness: 0.4 });
 const textures = new Map();
 
-// Where a point `lat` metres right of edge `e`'s centre line, `s` along it, is in the scene.
-function place(e, s, lat) {
+// Where a point `lat` metres right of edge `e`'s centre line, `s` along it, is in the scene. (The cones,
+// the crew's truck and these helpers are shared with lane closures: render/lane-closure.js.)
+export function place(e, s, lat) {
   const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
   return { x: p[0] + Math.sin(h) * lat, y: p[1] - Math.cos(h) * lat, psi: h };
 }
 
 // A canvas texture, drawn once by `draw(ctx, size)`.
-function texture(key, draw, size = 256) {
+export function texture(key, draw, size = 256) {
   if (textures.has(key)) return textures.get(key);
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
@@ -76,7 +77,7 @@ const flaggerSign = () => texture("flagger-ahead", (ctx, n) => {
   ctx.beginPath(); ctx.arc(x + n * 0.13, y - n * 0.07, n * 0.06, 0, Math.PI * 2); ctx.fill();
 });
 
-function cone() {
+export function cone() {
   return {
     body: merge([new THREE.CylinderGeometry(0.035, 0.17, 0.7, 12).translate(0, 0.37, 0), box(0.42, 0.04, 0.42, 0, 0.02, 0)]),
     band: new THREE.CylinderGeometry(0.085, 0.115, 0.12, 12, 1, true).translate(0, 0.45, 0),
@@ -85,7 +86,7 @@ function cone() {
 
 // The crew's dump truck: a cab, a dump body and a lowered arrow board on the back, rear axle at the
 // origin, local +X forward.
-function crewTruck() {
+export function crewTruck() {
   const g = new THREE.Group(), xr = -2.4, xf = 4.4, w = 2.4, wb = 4.2;
   const paint = snowable(new THREE.MeshPhysicalMaterial({ color: ORANGE, metalness: 0.3, roughness: 0.4, clearcoat: 0.6 }), "car");
   const add = (geometry, material, name) => { const m = new THREE.Mesh(geometry, material); m.name = name; m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };

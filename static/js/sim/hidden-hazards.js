@@ -118,7 +118,7 @@ export class StepOuts {
     // the parked cars along the car's side, in order along its way
     const rows = { 1: [], [-1]: [] }, twin = twinOf(map, e)?.id;
     for (const c of world.parked.near(ego.x, ego.y, PLACE_M[1] + FRONT + 12)) {
-      if (c.roadside || c.workzone || c.doubleParked || (c.edge !== e.id && c.edge !== twin)) continue;
+      if (c.roadside || c.workzone || c.closure || c.doubleParked || (c.edge !== e.id && c.edge !== twin)) continue;
       const d = Math.abs(wrap(c.psi - ego.psi));
       if (d > PARALLEL && d < Math.PI - PARALLEL) continue;
       const [cx, cy] = c.center, l = ego.toLocal(cx, cy), cs = c.spec || CAR;

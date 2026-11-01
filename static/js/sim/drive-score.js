@@ -50,6 +50,9 @@ export class DriveScore {
     // right, and moving back in front of one too soon after passing it on the left; reported only for
     // a drive a plow worked in)
     this.plows = false; this.plowClose = 0; this.plowCounted = null; this.plowRightPasses = 0; this.plowCutIns = 0;
+    // (with a lane closure, sim/lane-closure.js: merging out of turn, not letting someone in, and merging
+    // early; reported only for a drive a closure stood in)
+    this.closures = false; this.mergeCutIns = 0; this.mergeTurnsTaken = 0; this.earlyMerges = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -85,7 +88,8 @@ export class DriveScore {
     const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
     // (going round a work zone's closed stretch through the other lane, sim/work-zone.js, is not, and
     // nor is going round a double-parked van through the oncoming lane, sim/double-parked.js)
-    const zonePass = world.workZones?.passing(road?.limit ?? 11.2) || null;
+    // (a lane closure's limit holds the same way, from its merge point: sim/lane-closure.js)
+    const zonePass = world.workZones?.passing(road?.limit ?? 11.2) || world.laneClosures?.passing(road?.limit ?? 11.2) || null;
     const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0 && zonePass?.side !== "closed" && !world.doubleParked?.passing();
     if (speeding) this.speeding += dt;
     const zone = road?.zone;
@@ -142,6 +146,7 @@ export class DriveScore {
     }
     // a snow plow (sim/snow-plow.js): stay back of it
     if (world.plowsSeen) this.plows = true;
+    if (world.closuresSeen) this.closures = true;
     const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
     const plowClose = !!plow?.holds && speed > 1 && plow.rel.gap_m > -1 && plow.rel.gap_m < plow.keep - PLOW_CLOSE_SLACK_M;
     if (plowClose) {
@@ -150,6 +155,9 @@ export class DriveScore {
     }
     for (const ev of world.events || []) {
       if (ev.type === "passed_plow_on_right") { this.plowRightPasses++; this.incident("plow_right_pass", "Passed a snow plow on the right", { plow: ev.plow }); }
+      if (ev.type === "merged_out_of_turn") { this.mergeCutIns++; this.incident("merge_cut_in", "Merged out of turn: forced in ahead of the car whose turn it was", { zone: ev.zone, cut: ev.cut }); }
+      if (ev.type === "took_merge_turn") { this.mergeTurnsTaken++; this.incident("merge_turn_taken", "Didn’t let the car in the closed lane take its turn at the merge", { zone: ev.zone }); }
+      if (ev.type === "merged_early") { this.earlyMerges++; this.incident("early_merge", "Merged early instead of using the lane to the merge point", { zone: ev.zone }); }
       if (ev.type === "cut_in_front_of_plow") { this.plowCutIns++; this.incident("plow_cut_in", "Moved back in too close in front of a snow plow", { plow: ev.plow }); }
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
@@ -233,7 +241,7 @@ export class DriveScore {
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
       safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6)),
-      legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10)),
+      legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
@@ -254,6 +262,8 @@ export class DriveScore {
     if (this.hiddenCutoffs) tips.push("A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.");
     if (this.plowRightPasses) tips.push("Never pass a snow plow on the right. Its blade throws snow and debris that way, and a wing blade can reach well into the next lane.");
     if (this.plowClose > 1 || this.plowCutIns) tips.push("Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h). Pass one only on the left, where you can see the road ahead is clear, and move back in well ahead of it.");
+    if (this.mergeCutIns || this.mergeTurnsTaken) tips.push("Where a lane is closed, zipper merge: use both lanes right up to the merge point, then take turns, one vehicle from each lane. Don't force your way in out of turn, and don't close the gap on someone whose turn it is.");
+    if (this.earlyMerges) tips.push("In slow traffic, don't merge early into the open lane. Stay in your lane to the merge point and take your turn there: using both lanes keeps the queue shorter, and everyone gets through sooner.");
     if (this.vanCutoffs) tips.push("Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.");
     if (this.kerbStrikes) tips.push("Parking, creep in slowly and stop before a wheel touches the kerb. Turn the wheel only while the car is moving if you have to, and check your mirror on the kerb side.");
     if (this.parking?.result === "parked" && !this.parking.within_kerb) tips.push("Park parallel to the kerb with your wheels within 30 cm of it. If you end up further out, pull forward and reverse in again.");
@@ -276,6 +286,7 @@ export class DriveScore {
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
       ...(this.plows ? { plow_close_s: round(this.plowClose), plow_right_passes: this.plowRightPasses, plow_cut_ins: this.plowCutIns } : {}),
+      ...(this.closures ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges } : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };

@@ -34,6 +34,7 @@ const PARK_STOP_DECEL = 1.2;
 // Passing a snow plow, the car's route ahead must be in view as far as it looks for that (the 60 m of
 // `clear_path_m`).
 const PASS_CLEAR_M = 60;
+import { EGO_ID, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, THROUGH_M as LC_THROUGH_M, OWED_DECEL as LC_OWED_DECEL, canStop as canStopForMerge, detourOf as closureDetour, isLaneClosure } from "../sim/lane-closure.js";
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -161,7 +162,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, double_parked: null, snow_plow: null, parking: null, blind_spot: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, lane_closure: null, double_parked: null, snow_plow: null, parking: null, blind_spot: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -285,6 +286,7 @@ export function buildSnapshot(world, executing = null) {
     snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     snap.work_zone = workZone(world, p, frontS, road);
+    snap.lane_closure = laneClosure(world, p, frontS, road, lane);
     snap.double_parked = doubleParked(world, p, frontS, lane, executing);
     snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
@@ -302,7 +304,7 @@ export function buildSnapshot(world, executing = null) {
       && Math.abs(a.lateral - lane.from_center) <= 1.7 && a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
     // (going round a work zone's closed stretch, or a double-parked van, along the way the car will
     // go: see workZone and doubleParked)
-    const detour = snap.work_zone?.detour || snap.double_parked?.detour || null;
+    const detour = snap.work_zone?.detour || snap.lane_closure?.detour || snap.double_parked?.detour || null;
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
     const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
     const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center, frame)
@@ -337,7 +339,7 @@ export function buildSnapshot(world, executing = null) {
     if (!o.parked && o.kind !== "door" && !o.parking && !o.pull) continue;
     const local = ego.toLocal(o.x, o.y);
     if (local.ahead < -5 || local.ahead > 40 || Math.abs(local.right) > 8) continue;
-    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : isWorkZone(o) ? "work zone" : isVan(o) ? "double-parked van" : ROADSIDE_NAMES[o.kind] || "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
+    snap.roadside.push({ id: o.id, kind: o.kind === "door" ? "open door" : o.parking ? "parking" : o.pull ? "pulling out" : isWorkZone(o) ? "work zone" : isLaneClosure(o) ? "lane closure" : isVan(o) ? "double-parked van" : ROADSIDE_NAMES[o.kind] || "parked car", right: local.right, ahead: local.ahead, signal: o.signal || null });
   }
   snap.roadside.sort((a, b) => a.ahead - b.ahead);
   snap.roadside = snap.roadside.slice(0, 6);
@@ -350,6 +352,8 @@ export function buildSnapshot(world, executing = null) {
   if (snap.roadside_stop) snap.limit = Math.min(snap.limit, roadsideSpeed(snap.roadside_stop));
   // (likewise coming up to a work zone, and through it)
   if (snap.work_zone) snap.limit = Math.min(snap.limit, workZoneSpeed(snap.work_zone));
+  // (and at a lane closure, from its merge point: sim/lane-closure.js)
+  if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
   // (and coming up to a double-parked van, and round it)
   if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -839,6 +843,67 @@ function workZone(world, p, frontS, road) {
       detour: d ? { from: toRoute(d.from), full: toRoute(d.full), back: toRoute(d.back), to: toRoute(d.to), shift: d.shift } : null };
   }
   return null;
+}
+
+// A lane closure on the car's route ahead (sim/lane-closure.js), from when the car can see it (or is 30 m
+// short of its merge point) until its front is out of it. `side` is "closed" when the car is in the lane
+// that is closed (past the merge point: came from it) and "open" otherwise; `closed_lane` which lane that
+// is ("right" or "left"); `merge_s_route` the merge point (for the front bumper); `at_merge` whether the
+// car is the one in the closed lane nearest it, within HEAD_M; `turn` whose turn it is there ("closed" or
+// "open" lane); `let_in` whether the car, in the closed lane, has been let in (its turn, and the way clear);
+// `wait` whether it must wait at the merge point now: in the closed lane, short of it and not let in, once
+// it could stop there braking at OWED_DECEL (or was standing still); `wait_for` then, on the open lane's
+// turn, the vehicle in the open lane that goes first. In the open lane, `let_in_for` the vehicle at the
+// merge the car must let in (on the closed lane's turn, or while one let in is still moving across in front
+// of it), once it could stop LET_IN_M short of the merge point braking at LET_IN_DECEL. `stop_s_route` is
+// where the front stops, either way, and `bumper_to_stop_m` how far that is; `detour`, in the closed lane,
+// the way across into the open lane at the merge point and back once past the work, in route arc lengths
+// (sim/controller.js detourAt), while the lane the car keeps to is the closed one (on the closure's
+// street: switched back on in the open lane beside the work, it is across already); `limit_mps` the
+// zone's limit, never above the street's. Or null.
+function laneClosure(world, p, frontS, road, lane) {
+  const { ego, route, map } = world, lc = world.laneClosures;
+  if (!lc?.zones.length) return null;
+  const here = lc.egoAt();
+  if (!here) { world.mergeWait = null; return null; }
+  const z = here.zone, i = route.edges.findIndex((id, k) => id === z.edge && route.edgeStarts[k + 1] > frontS - ego.spec.length);
+  if (i < 0 || (here.front < z.m - 30 && !lc.seen(z))) return null;
+  const e = map.edges.get(z.edge), est = (x) => route.edgeStarts[i + 1] - (e.length - x);
+  // (along the route: where the edge puts it, as projected onto the route's own line)
+  const toRoute = (x) => {
+    const q = pointAt(e.pts, e.cum, x), h = headingAt(e.pts, e.cum, x), off = e.lane_offsets[z.closed];
+    const r = projectPoint(route.pts, route.cum, [q[0] + Math.sin(h) * off, q[1] - Math.cos(h) * off]);
+    return r && r.distance < 5 && Math.abs(r.s - est(x)) < 15 ? r.s : est(x);
+  };
+  const m = toRoute(z.m), side = here.side;
+  let wait = false, waitFor = null, letInFor = null, stop = null;
+  // (it decides at the merge, within HEAD_M of it: further back it drives on up the lane)
+  if (side === "closed" && here.front < z.m + LC_THROUGH_M && z.grant !== EGO_ID && (here.front > z.m - LC_HEAD_M || world.mergeWait === z.id)) {
+    wait = world.mergeWait === z.id || canStopForMerge(ego.v, z.m - 0.5 - here.front, LC_OWED_DECEL);
+    if (wait && z.head === EGO_ID && z.turn === "open") {
+      const oo = e.lane_offsets[z.open];
+      waitFor = lc.movers(z).filter((x) => x.id !== EGO_ID && x.side === "open" && Math.abs(x.body.lateral - oo) < 2.2 && x.body.front < z.m + LC_THROUGH_M).sort((a, b) => b.body.front - a.body.front)[0]?.id ?? null;
+    }
+    if (wait) stop = m;
+  }
+  world.mergeWait = wait ? z.id : null;
+  if (side === "open") {
+    // (only the first in the open lane lets anyone in: one further back is in the queue)
+    const line = lc.letInLine(z, here.front), who = line === null || !lc.firstInOpen(z, EGO_ID) ? null : z.head && z.head !== EGO_ID && z.turn === "closed" ? z.head : z.merger;
+    if (who && (world.mergeLetIn === `${z.id}:${who}` || canStopForMerge(ego.v, line - here.front, LET_IN_DECEL))) {
+      letInFor = who; stop = toRoute(line);
+      // (and behind the one let in, while it moves across in front of the car)
+      const rear = who === z.merger ? lc.mergerRear(z) : null, q = rear && projectPoint(route.pts, route.cum, [rear.x, rear.y]);
+      if (q && q.s - 2 > stop) stop = q.s - 2;
+    }
+    world.mergeLetIn = letInFor ? `${z.id}:${letInFor}` : null;
+  }
+  const onStreet = p.s >= route.edgeStarts[i], d = side === "closed" && (!onStreet || lane.index === z.closed) ? closureDetour(z) : null;
+  const right = z.closed === e.lanes - 1 ? "right" : "left";
+  return { id: z.id, side, closed_lane: right, merge_s_route: m, bumper_to_merge_m: m - frontS, at_merge: z.head === EGO_ID, turn: z.turn, let_in: z.grant === EGO_ID,
+    wait, wait_for: waitFor, let_in_for: letInFor, stop_s_route: stop, bumper_to_stop_m: stop === null ? null : stop - frontS, closure_id: z.closure.id,
+    limit_mps: Math.min(road.limit || 11.2, LC_LIMIT_MPS), merged: here.front >= z.m + LC_THROUGH_M,
+    detour: d ? { from: toRoute(d.from), full: toRoute(d.full), back: toRoute(d.back), to: toRoute(d.to), shift: d.shift } : null };
 }
 
 // A van double-parked in the car's lane on its route ahead (sim/double-parked.js), from when the car
@@ -1400,6 +1465,14 @@ export function desiredSpeed(snap) {
     const vw = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
     if (vw < v) { v = vw; reasons.push("flagger showing STOP"); }
   } else if (wz && workZoneSpeed(wz) <= v + 0.05) reasons.push(wz.side === "closed" ? "work zone: round it through the other lane" : "work zone: one lane");
+  // a lane closure: in the closed lane, wait at the merge point for its turn; in the open lane, let the
+  // one whose turn it is in
+  const lz = snap.lane_closure;
+  if (lz?.stop_s_route != null) {
+    const room = lz.bumper_to_stop_m;
+    const vz = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    if (vz < v) { v = vz; reasons.push(lz.wait ? "lane closed: wait your turn at the merge" : "lane closure: letting a car in"); }
+  } else if (lz && closureSpeed(lz) <= v + 0.05) reasons.push(lz.side === "closed" ? "lane closed: merge in turn" : "lane closure: take turns at the merge");
   // a double-parked van with no way round it yet: wait behind it
   const dp = snap.double_parked;
   if (dp?.wait && dp.bumper_to_stop_m > -1) {
@@ -1450,6 +1523,13 @@ function workZoneSpeed(wz) {
   return Math.sqrt(wz.limit_mps * wz.limit_mps + 2 * comfort().decel * 0.6 * (wz.bumper_to_stop_m - 5));
 }
 
+// The speed to go through a lane closure at (see laneClosure), from 5 m short of its merge point, or, short
+// of that, the speed from which the car slows to it comfortably by then.
+function closureSpeed(lz) {
+  if (lz.bumper_to_merge_m <= 5) return lz.limit_mps;
+  return Math.sqrt(lz.limit_mps * lz.limit_mps + 2 * comfort().decel * 0.6 * (lz.bumper_to_merge_m - 5));
+}
+
 // The speed to go round a double-parked van at (see doubleParked), from where the car would wait
 // behind it, or, short of that, the speed from which it slows to it gently by then.
 function vanSpeed(dp) {
@@ -1491,6 +1571,7 @@ export function hazardFlags(snap) {
   if (snap.junction_box) f.push("junction box");
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.work_zone) f.push("work zone");
+  if (snap.lane_closure) f.push("lane closure");
   if (snap.double_parked) f.push("double-parked van");
   if (snap.snow_plow) f.push("snow plow");
   if (snap.parking) f.push("parking");

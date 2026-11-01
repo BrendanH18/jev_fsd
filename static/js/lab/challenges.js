@@ -20,6 +20,7 @@ import { vanSites } from "../sim/double-parked.js";
 import { legalStretches, straight as straightKerb } from "../sim/parallel-park.js";
 import { QUIET, STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { PLOW_MPS } from "../sim/snow-plow.js";
+import { LC_LIMIT_MPS, SPAN_M as LC_SPAN_M, laneClosureSites } from "../sim/lane-closure.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -79,6 +80,8 @@ export const CHALLENGES = [
     description: "A left turn on a green on West 4th Avenue. A van on the other side of the junction is waiting to turn left too, and the lane beside it is hidden behind it.", lesson: "A vehicle waiting to turn left opposite you can hide traffic coming straight through in the lane beside it. Don't turn until you can see that lane is clear: wait in the junction, and go once you can see that nothing is coming." },
   { id: "snow-plow", title: "Behind the plow", map: "winnipeg", weather: "snow", time: "afternoon", seed: 28042, icon: "❆", difficulty: "Patience", hazard: "snow-plow", street: "William Avenue",
     description: "It's snowing on William Avenue, two lanes each way. A city plow is clearing the left lane just ahead of you at 18 km/h, its blue and amber lamps flashing, and the right lane beside it is wide open.", lesson: "Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h): that is Manitoba's law, and other provinces' handbooks say the same. Never pass one on the right, the side its blade throws snow and debris, and don't pass one at all when blowing snow hides the road ahead. Pass only on the left, where you can see the way is clear, and move back in well ahead of it." },
+  { id: "zipper", title: "Take turns", map: "calgary", weather: "dry", time: "afternoon", seed: 29042, icon: "⋈", difficulty: "Courtesy", hazard: "lane-closure", street: "14 Avenue SW",
+    description: "A road crew has closed the right lane of 14 Avenue SW, one-way with two lanes. The left lane is backed up to the cones, two cars in your lane are waiting at the merge, and the lane ahead of you is otherwise empty.", lesson: "Where a lane is closed, zipper merge: in slow traffic, stay in your lane right up to the merge point, then take turns, one vehicle from each lane. Manitoba's driver's handbook teaches it, and Ontario cities and the Alberta Motor Association ask drivers to merge this way. Merging early makes the queue longer, and following the car ahead in out of turn forces the driver whose turn it is to brake. Wait for your turn, then go." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -201,6 +204,33 @@ function doubleParkSites(map, street) {
 // never do. It stays STAY_BACK_M behind it in the curb lane all the way, the plow carrying straight on
 // past the junction. (In falling snow it cannot see far enough to pass the plow on the left.)
 const PLOW_START_M = 15, PLOW_AHEAD_M = 20, PLOW_ROUTE_M = 330, PLOW_END_M = 60;
+// Take turns: a lane closure (sim/lane-closure.js) on a block of the challenge's `street` (where it has
+// one) with a limit above the closure's, its merge point far enough along for ZIP_QUEUE cars, ZIP_GAP_M
+// apart, to stand queued in the open lane back from it, the first with its front a metre short of it.
+// In the closed lane ZIP_WAITING cars wait at the merge, ZIP_WAIT_GAP_M apart, and the car starts from a
+// standstill behind them, its front ZIP_START_M short of the merge point; the lane ahead of it is
+// otherwise empty. One from each lane in turn, the car merges after the third car in the open lane, not
+// straight after the second car in its own. The route ends ZIP_END_M short of the street's stop line, on
+// the same block.
+const ZIP_START_M = 30, ZIP_QUEUE = 7, ZIP_GAP_M = 7.5, ZIP_WAITING = 2, ZIP_WAIT_GAP_M = 8, ZIP_END_M = 12;
+const zipSiteCache = new WeakMap();
+function zipperSites(map, street) {
+  if (!zipSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang, room = 1 + (ZIP_QUEUE - 1) * ZIP_GAP_M + CAR.length + 4;
+    for (const site of laneClosureSites(map)) {
+      const e = map.edges.get(site.edge);
+      if (e.limit <= LC_LIMIT_MPS + 1) continue;
+      const m = Math.min(site.hi, Math.max(site.lo, room)), end = Math.min(e.length, e.control?.s_line ?? e.length) - ZIP_END_M;
+      if (m < room || end < m + LC_SPAN_M + 10) continue;
+      const lane = map.lane(site.edge, e.lanes - 1), k = lane.length / e.length;
+      sites.push({ lane, startS: (m - ZIP_START_M - front) * k, goalS: end * k, closure: { edge: site.edge, m } });
+    }
+    zipSiteCache.set(map, sites);
+  }
+  const sites = zipSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
 const plowSiteCache = new WeakMap();
 function plowSites(map, street) {
   if (!plowSiteCache.has(map)) {
@@ -845,11 +875,14 @@ export function challengeScenario(map, challenge) {
   const plows = challenge.hazard === "snow-plow" ? plowSites(map, challenge.street) : null;
   if (plows && !plows.length) throw new Error("This map has no long straight street with two lanes or more going one way and a limit of 80 km/h or less.");
   const plow = plows ? plows[Math.floor(random() * plows.length)] : null;
-  const start = plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const zips = challenge.hazard === "lane-closure" ? zipperSites(map, challenge.street) : null;
+  if (zips && !zips.length) throw new Error("This map has no straight block with two lanes going one way, a limit above 30 km/h and room for a lane closure with a queue.");
+  const zip = zips ? zips[Math.floor(random() * zips.length)] : null;
+  const start = zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
@@ -861,7 +894,7 @@ export function challengeScenario(map, challenge) {
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
   // (past a double-parked van, along its street only)
-  for (let i = 0; i < 12 && !van && !park && !step && !plow && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && !van && !park && !step && !plow && !zip && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -871,7 +904,7 @@ export function challengeScenario(map, challenge) {
     chain.push(lane); seen.add(id); length += lane.length;
   }
   // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
-  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : last.length - 10;
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : zip ? zip.goalS : last.length - 10;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
@@ -894,6 +927,7 @@ export function challengeScenario(map, challenge) {
     ...(park ? { parking: park.space } : {}),
     ...(step ? { stepOut: step.stepOut } : {}),
     ...(plow ? { snowPlow: plow.plow } : {}),
+    ...(zip ? { laneClosure: zip.closure } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -940,6 +974,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.stepOut) Object.assign(world.challenge, placeStepOut(world, scenario.stepOut, challenge.seed));
   if (scenario.blindLeft) Object.assign(world.challenge, placeBlindLeft(world, fleet, scenario.blindLeft));
   if (scenario.snowPlow) Object.assign(world.challenge, placePlow(world, fleet, scenario.snowPlow, scenario.start));
+  if (scenario.laneClosure) Object.assign(world.challenge, placeZipper(world, fleet, scenario.laneClosure, challenge.seed));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -1391,6 +1426,25 @@ function placePlow(world, fleet, { edge, ahead }, start) {
   const plow = fleet.addPlow(lane, rear * lane.length / e.length, PLOW_MPS, ahead);
   return { plowId: plow.id, at: [plow.x, plow.y] };
 }
+// The lane closure (see zipperSites), the cars waiting at its merge point in the closed lane, and the
+// queue in the open lane, all standing still.
+function placeZipper(world, fleet, { edge, m }, seed) {
+  const map = world.map, random = rng(seed), e = map.edges.get(edge), z = world.laneClosures.place({ edge, m }), ids = [];
+  const colors = [0x2b3a55, 0xb0b5b9, 0x9b1e1e, 0x1a1c20, 0xeeeeea, 0x6b7f5e, 0x8d9299, 0x4a4f57, 0xc4c8cc];
+  const front = CAR.length - CAR.rearOverhang;
+  const add = (lane, fronts, name) => fronts.forEach((f, i) => {
+    const L = map.lane(edge, lane), s = (f - front) * L.length / e.length, p = pointAt(L.pts, L.cum, s);
+    const car = new Vehicle(p[0], p[1], headingAt(L.pts, L.cum, s), 0);
+    Object.assign(car, { id: `challenge_${name}_${i + 1}`, color: colors[ids.length % colors.length], v0: e.limit, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.4 + random() * 0.3, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+    car.path.start(edge, lane, s);
+    fleet.vehicles.push(car); ids.push(car.id);
+  });
+  add(e.lanes - 1, Array.from({ length: ZIP_WAITING }, (_, i) => m - 0.5 - i * ZIP_WAIT_GAP_M), "merging");
+  add(e.lanes - 2, Array.from({ length: ZIP_QUEUE }, (_, i) => m - 1 - i * ZIP_GAP_M), "queue");
+  return { closureId: z.id, zipperIds: ids, at: pointAt(e.pts, e.cum, m) };
+}
+
 // The cars parked either side of the space (see parkingSites), staying put, and the car that will come
 // up behind, waiting until the car comes up to the space.
 function placeParking(world, fleet, { edge, a, b }, seed) {
