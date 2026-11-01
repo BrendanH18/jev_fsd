@@ -167,7 +167,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.snow_plow = { id: p.id, kind: p.kind, lights: "blue and amber, flashing", lane: p.lane === "same" ? "the car's lane" : `the lane to the car's ${p.lane}`,
       ...(p.gap_m > 0 ? { gap_m: r1(p.gap_m) } : p.clear_m > 0 ? { behind_car_m: r1(p.clear_m) } : { beside_car: true }), speed: r1(p.speed), keep_back_m: p.keep_back_m,
       ...(p.turning_left ? { turning_left: true } : {}),
-      pass: p.passing ? `car is passing it on the left: back in only ${p.keep_back_m} m ahead of it` : p.lane === "right" ? "on the left only" : p.holds ? (p.may_pass ? "on the left only" : "do not pass") : "on the left only" };
+      pass: p.passing ? `car is passing it on the left: back in only ${p.keep_back_m} m ahead of it` : p.holds && !p.may_pass ? "do not pass" : "on the left only" };
   }
   if (snap.roadside_stop) {
     const r = snap.roadside_stop;
@@ -436,7 +436,7 @@ function plowClause(p) {
   const lead = `A snow plow (\`${p.id}\`), its blue and amber lamps flashing, is clearing the road ${p.gap_m > 0 ? `${Math.round(p.gap_m)} m ahead` : "beside the car"} ${where}, going the car's way at ${kmh} km/h, throwing snow to its right.`;
   const keep = `Stay at least ${p.keep_back_m} m behind it: \`car.target_speed\` already keeps the car back.`;
   if (p.passing) return `${lead} The car is passing it on the left: carry on past, and move back into its lane only once the car is ${p.keep_back_m} m ahead of it (the candidates offer that only then).`;
-  if (p.lane === "right") return `${lead} The car may pass it on the left, in the lane it is in.`;
+  if (p.lane === "right") return p.holds ? `${lead} The road ahead cannot be seen clearly enough to pass it: stay behind it, even in this lane. ${keep}` : `${lead} The car may pass it on the left, in the lane it is in.`;
   if (p.turning_left) return `${lead} It is signalling a left turn: let it turn.`;
   if (p.lane === "left") return `${lead} Never pass a snow plow on the right, the side its blade throws snow and debris: stay behind it in this lane. ${keep}`;
   return `${lead} ${keep} ${p.may_pass ? "Pass it only on the left, through the lane to the car's left (a `change_left_*` candidate, when one is offered), never on the right." : "Do not pass it: the road ahead cannot be seen clearly enough, or there is no lane going the car's way to its left."}`;

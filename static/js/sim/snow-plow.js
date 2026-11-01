@@ -10,10 +10,11 @@
 // So the driven car stays STAY_BACK_M behind a plow in its lane, and behind one in the lane to its
 // left as well: it never draws level with one on its right. It passes one only on the left, in a lane
 // going its way (never across the centre line), and only with nothing hiding the road ahead (as far as
-// it ever sees, DAYLIGHT_RANGE_M: in falling snow, fog, rain or darkness it stays behind), and it moves
-// back in front of it only once its rear is the stay-back distance ahead of the plow's front. A plow
-// signalling a left turn is a vehicle turning left, and may be passed on the right as any other.
-// Traffic keeps to the same rules but follows at its own gap (sim/npc.js); the driven car's sensing
+// it ever sees, DAYLIGHT_RANGE_M: in falling snow, fog, rain or darkness it stays behind, even one in
+// the lane to its right), and it moves back in front of it only once its rear is the stay-back distance
+// ahead of the plow's front. A plow signalling a left turn is a vehicle turning left, and may be passed
+// on the right as any other. Where the stay-back distance is further than the car can see (100 m), it
+// keeps back as far as it can see. Traffic keeps to the same rules (sim/npc.js); the driven car's sensing
 // reports `snow_plow` (brain/sensors.js), and the audit counts passing one on the right
 // (sim/world.js), which fails a drive (bench/metrics.js).
 //
@@ -70,19 +71,20 @@ export function plowLanes(map) {
 }
 
 // The plow the driven car must reckon with, as far as it can see, sensing-free (for the HUD and the
-// coaching score): the nearest one going its way in its lane or a lane beside it, from PLOW_LOOK_M
-// ahead of it until the car's rear is the stay-back distance past its front. { plow, rel, keep (the
-// stay-back distance), holds (the car must stay back of it: in its lane, or in the lane to its left
-// and not turning left), passing (the car is beside or ahead of it, on its left) }, or null.
+// coaching score): the nearest one going its way in its lane or a lane beside it, from PLOW_LOOK_M (or
+// the stay-back distance) ahead of it until the car's rear is the stay-back distance past its front.
+// { plow, rel, keep (the stay-back distance), holds (the car must stay back of it: in its lane, in the
+// lane to its left and not turning left, or short of it in the lane to its right in poor sight),
+// passing (the car is beside or ahead of it, on its left) }, or null.
 export function egoPlow(world, limit = 11.2) {
-  const ego = world.ego, keep = stayBack(limit);
+  const ego = world.ego, keep = stayBack(limit), look = Math.max(PLOW_LOOK_M, keep), sight = world.visibility.range >= PASS_SIGHT_M;
   let best = null;
   for (const n of world.npcs || []) {
-    if (!isPlow(n) || Math.abs(n.x - ego.x) > PLOW_LOOK_M + 20 || Math.abs(n.y - ego.y) > PLOW_LOOK_M + 20) continue;
+    if (!isPlow(n) || Math.abs(n.x - ego.x) > look + 20 || Math.abs(n.y - ego.y) > look + 20) continue;
     const rel = plowRelation(ego, n);
-    if (!rel?.lane || rel.gap_m > PLOW_LOOK_M || rel.clear_m > keep || !world.sees(ego, n)) continue;
+    if (!rel?.lane || rel.gap_m > look || rel.clear_m > keep || !world.sees(ego, n)) continue;
     if (best && Math.abs(rel.ahead_m) >= Math.abs(best.rel.ahead_m)) continue;
-    const holds = rel.lane === "same" || (rel.lane === "left" && !turningLeft(n));
+    const holds = rel.lane === "same" || (rel.lane === "left" && !turningLeft(n)) || (rel.lane === "right" && !sight && rel.gap_m >= 0);
     best = { plow: n, rel, keep, holds, passing: rel.lane === "right" && rel.gap_m < 0 };
   }
   return best;
@@ -97,5 +99,6 @@ export function plowNotice(world) {
   if (passing) return { key: `${plow.id}:passing`, wait: false, text: `PASSING THE SNOW PLOW · BACK IN ONLY ${keep} M AHEAD OF IT` };
   if (!holds || rel.gap_m < -1) return null;
   if (rel.lane === "left") return { key: `${plow.id}:right`, wait: true, text: `SNOW PLOW · NEVER PASS ON THE RIGHT · STAY ${keep} M BACK` };
+  if (rel.lane === "right") return { key: `${plow.id}:sight`, wait: true, text: `SNOW PLOW · CAN'T SEE TO PASS · STAY ${keep} M BACK` };
   return { key: `${plow.id}:behind`, wait: rel.gap_m < keep, text: `SNOW PLOW AHEAD · STAY ${keep} M BACK` };
 }

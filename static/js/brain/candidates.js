@@ -319,8 +319,10 @@ export function simulateAll(candidates, snap, world) {
   // where the car waits behind a double-parked van it cannot go round yet (still ahead of it)
   const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > 0.3 ? snap.double_parked.stop_s_route : null;
   // a snow plow the car must stay back of, still ahead of it (sim/snow-plow.js): no candidate takes the
-  // car's front past its rear while the car is in a lane to its right
+  // car's front past its rear while the car is in a lane to its right (or, with the plow on its right
+  // in poor sight, at all)
   const plow = snap.snow_plow?.holds && snap.snow_plow.gap_m >= 0 ? snap.snow_plow : null;
+  const anySide = plow?.lane === "right";
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
@@ -384,7 +386,7 @@ export function simulateAll(candidates, snap, world) {
         // (and here: 1.5 m past where it waits still leaves room to pull out round the van)
         if (vanStop !== null && s + FRONT > vanStop + 1.5) passesVan = true;
         // (its rear where it will be by then, going on at its speed)
-        if (plow && s + FRONT > plow.s_rear_route + plow.speed * t + 0.5 && lateral + route.frameMove(startS, s) - plow.lateral_route > SAME_LANE_M) passesPlow = true;
+        if (plow && s + FRONT > plow.s_rear_route + plow.speed * t + 0.5 && (anySide || lateral + route.frameMove(startS, s) - plow.lateral_route > SAME_LANE_M)) passesPlow = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -456,7 +458,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesPlow && c.law.kind !== "hard_brake") reject = "passes_plow_on_right";
     // (ending up closer to a snow plow it must stay back of than the stay-back distance, and closer
     // than now: in its lane or a lane to its right, still behind it, the plow going on at its speed)
-    else if (plow && c.law.kind !== "hard_brake" && lateral + route.frameMove(startS, s) - plow.lateral_route > -SAME_LANE_M
+    else if (plow && c.law.kind !== "hard_brake" && (anySide || lateral + route.frameMove(startS, s) - plow.lateral_route > -SAME_LANE_M)
       && plow.s_rear_route + plow.speed * HORIZON_S - (s + FRONT) < Math.min(plow.keep_back_m, plow.gap_m - PLOW_CLOSING_M)) reject = "follows_plow_too_close";
     else if (passesHold && c.law.kind !== "hard_brake") reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";

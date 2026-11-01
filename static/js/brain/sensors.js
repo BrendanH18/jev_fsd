@@ -283,7 +283,7 @@ export function buildSnapshot(world, executing = null) {
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     snap.work_zone = workZone(world, p, frontS, road);
     snap.double_parked = doubleParked(world, p, frontS, lane, executing);
-    snap.snow_plow = snowPlow(world, p, frontS, lane, visibleNpcs, road.limit || 11.2);
+    snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -881,32 +881,34 @@ function doubleParked(world, p, frontS, lane, executing) {
 }
 
 // A snow plow the car can see going its way (sim/snow-plow.js), in its lane or a lane beside it, from
-// PLOW_LOOK_M ahead of it until the car's rear is the stay-back distance past its front: the nearest.
+// PLOW_LOOK_M (or the stay-back distance, where that is further) ahead of it until the car's rear is
+// the stay-back distance past its front: the nearest.
 // `lane` is where it is from the car: "same", "left" (the lane to the car's left) or "right";
 // `gap_m` from the car's front to its rear (negative once beside it), `clear_m` from its front to the
 // car's rear (positive once the car is wholly past it), `s_rear_route` and `lateral_route` where it is
 // along and across the route (right of the route's line, in the frame at the car); `keep_back_m` the
 // distance to stay back from it. `holds`: the car must stay back of it, in its lane or in the lane to
-// the car's left (never passing it on the right), unless it is turning left; `may_pass`: the car may
+// the car's left (never passing it on the right), unless it is turning left, or, short of it, in the lane
+// to its right when the car cannot see as far as it ever does (no passing it at all); `may_pass`: the car may
 // pass it on the left now: in the car's lane, with a lane to the car's left going its way, and the
 // car seeing as far as it ever does (nothing hiding the road ahead); `passing`: the car is beside it
 // or past it on its left. Or null.
-function snowPlow(world, p, frontS, lane, visibleNpcs, limit) {
-  const { route, ego } = world, keep = stayBack(limit);
+function snowPlow(world, p, frontS, lane, limit) {
+  const { route, ego } = world, keep = stayBack(limit), look = Math.max(PLOW_LOOK_M, keep), sight = world.visibility.range >= PASS_SIGHT_M;
   let best = null;
-  for (const n of visibleNpcs) {
-    if (!isPlow(n)) continue;
+  for (const n of world.npcs) {
+    if (!isPlow(n) || Math.hypot(n.x - ego.x, n.y - ego.y) > look + 20 || !world.sees(ego, n)) continue;
     const q = route.project(n.x, n.y, p.index);
     if (!q || q.distance > NEXT_LANE_M + 4 || Math.abs(wrap(n.psi - q.heading)) > Math.PI / 4) continue;
     const across = q.lateral + route.frameMove(p.s, q.s), side = across - lane.center;
     const where = Math.abs(side) < SAME_LANE_M ? "same" : side < 0 && side > -NEXT_LANE_M ? "left" : side > 0 && side < NEXT_LANE_M ? "right" : null;
     const rear = q.s - n.spec.rearOverhang, gap = rear - frontS, clear = p.s - ego.spec.rearOverhang - (rear + n.spec.length);
-    if (!where || gap > PLOW_LOOK_M || clear > keep) continue;
+    if (!where || gap > look || clear > keep) continue;
     if (best && Math.abs(gap) >= Math.abs(best.gap_m)) continue;
     const turning = turningLeft(n);
     best = { id: n.id, kind: PLOW_NAME, lane: where, gap_m: gap, clear_m: clear, speed: Math.max(0, n.v), s_rear_route: rear, lateral_route: across, keep_back_m: keep, turning_left: turning,
-      holds: (where === "same" || (where === "left" && !turning)) && clear < 0,
-      may_pass: where === "same" && !!route.laneSpan(p.s, lane.delta - 1) && world.visibility.range >= PASS_SIGHT_M,
+      holds: (where === "same" || (where === "left" && !turning) || (where === "right" && !sight && gap >= 0)) && clear < 0,
+      may_pass: where === "same" && !!route.laneSpan(p.s, lane.delta - 1) && sight,
       passing: where === "right" && gap < 0 };
   }
   return best;

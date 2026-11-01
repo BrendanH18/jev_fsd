@@ -778,6 +778,8 @@ export class NpcFleet {
       // a snow plow ahead in the lane to its left (sim/snow-plow.js): never passed on the right
       const forPlow = this.plows.length ? this.plowHold(n, path, front, offset) : null;
       if (forPlow && forPlow.gap < gap) { gap = forPlow.gap; leadV = forPlow.plow.v; leader = forPlow.plow; }
+      // (and stays back the distance the law asks of it, less the room it leaves anyway)
+      if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
       let stopAt = null;
       for (const e of path.edges) {
@@ -1183,16 +1185,18 @@ export class NpcFleet {
 
   // A snow plow ahead of driver `n` going its way, in the lane to the left of the line it keeps to
   // (`offset`, right of its path), and not turning left: the driver stays behind it rather than pass it
-  // on the right. { plow, gap (front to its rear) }, or null.
+  // on the right; and in poor sight one in the lane to its right too: no passing it at all.
+  // { plow, gap (front to its rear) }, or null.
   plowHold(n, path, front, offset) {
     if (isPlow(n) || n.kind === "bike" || n.transit?.tram || n.pull) return null;
+    const sight = this.world.visibility.range >= PASS_SIGHT_M;
     let best = null;
     for (const o of this.plows) {
       if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5 || turningLeft(o) || Math.abs(wrap(o.psi - n.psi)) > Math.PI / 4) continue;
       const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
       if (!p || p.s <= path.s + 0.5 || p.s > path.s + LOOK_M) continue;
       const lat = p.lateral - offset;
-      if (lat > -SAME_LANE_M || lat < -NEXT_LANE_M) continue;
+      if (!(lat < -SAME_LANE_M && lat > -NEXT_LANE_M) && !(!sight && lat > SAME_LANE_M && lat < NEXT_LANE_M)) continue;
       const gap = p.s - front - o.spec.rearOverhang;
       if (gap > -1 && (!best || gap < best.gap)) best = { plow: o, gap: Math.max(0.05, gap) };
     }

@@ -95,7 +95,7 @@ async function closedLoop({ world, fleet }, plow, { limit = 60, settle = 20 } = 
     const rel = plowRelation(world.ego, plow);
     if (!rel) continue;
     if (rel.ahead_m <= 0 && level === null) level = rel.right_m;
-    if (level === null && world.t > settle && rel.lane !== "right") minGap = Math.min(minGap, rel.gap_m);
+    if (level === null && world.t > settle) minGap = Math.min(minGap, rel.gap_m);
     if (level !== null && backIn === null && Math.abs(rel.right_m) < 1) backIn = rel.clear_m;
   }
   autopilot.setEnabled(false);
@@ -167,6 +167,21 @@ await test("traffic stays behind a plow in the lane to its left, never passes on
     let level = false;
     for (let i = 0; i < 60 * 30; i++) { step({ world, fleet, autopilot: idle }); if (plowRelation(car, plow)?.ahead_m <= 0) level = true; }
     assert.ok(!level, `${w}: the car in the curb lane stays behind`);
+  }
+  // (followers settle the stay-back distance behind it, in its lane or the lane to its right; in falling
+  // snow, one in the lane to its left stays behind it too)
+  for (const [lane, own] of [[1, 1], [0, 1], [1, 0]]) {
+    const { world, fleet } = william({ weather: "snow", s: 20 });
+    const plow = fleet.addPlow(WPG.lane(EDGE, lane), 90, PLOW_MPS, [[NEXT, lane]]);
+    const car = npc(world, fleet, { lane: own, s: 50, v: 6, id: "follower" });
+    let gap = Infinity, level = false;
+    for (let i = 0; i < 60 * 40; i++) {
+      step({ world, fleet, autopilot: idle });
+      const r = plowRelation(car, plow);
+      if (r?.ahead_m <= 0) level = true;
+      if (i > 60 * 20 && r) gap = Math.min(gap, r.gap_m);
+    }
+    assert.ok(!level && gap > STAY_BACK_M - 1, `plow in lane ${lane}, car in lane ${own}: ${gap.toFixed(1)} m back`);
   }
   // (a car eager to pass, behind a plow in its own lane: in the left lane it never moves right to pass;
   // in the curb lane it moves out to the left, but only with a clear view ahead)
@@ -243,13 +258,25 @@ await test("closed loop: Rules passes a curb-lane plow on the left in clear weat
   assert.ok(r.backIn !== null && r.backIn >= STAY_BACK_M, `back in ${r.backIn?.toFixed(1)} m ahead of it`);
   assert.equal(pass.world.violations.plow_right_passes, 0);
   assert.ok(!pass.world.events.some((e) => e.type === "cut_in_front_of_plow"));
-  for (const [w, lane] of [["snow", 1], ["rain", 1], ["dry", 0], ["snow", 0]]) {
-    const ctx = william({ weather: w, s: 15 });
+  // (and in the left lane, with the plow in the curb lane on its right, in falling snow: no passing it
+  // at all)
+  for (const [w, lane, own = 1] of [["snow", 1], ["rain", 1], ["dry", 0], ["snow", 0], ["snow", 1, 0]]) {
+    const ctx = william({ weather: w, lane: own, s: 15 });
     const p = ctx.fleet.addPlow(WPG.lane(EDGE, lane), 60, PLOW_MPS, [[NEXT, lane]]);
     const q = await closedLoop(ctx, p, { limit: 50 });
-    assert.equal(q.level, null, `${w}, plow in lane ${lane}: stays behind`);
-    assert.ok(q.minGap > STAY_BACK_M - 1.5, `${w}, plow in lane ${lane}: at least ${q.minGap.toFixed(1)} m back`);
+    assert.equal(q.level, null, `${w}, car in lane ${own}, plow in lane ${lane}: stays behind`);
+    assert.ok(q.minGap > STAY_BACK_M - 1.5, `${w}, car in lane ${own}, plow in lane ${lane}: at least ${q.minGap.toFixed(1)} m back`);
   }
+  // (above 80 km/h, as far back as it can see, toward 100 m)
+  const fast = ["e481", "e343"].map((id) => [id, WPG.edges.get(id).limit]);
+  for (const [id] of fast) WPG.edges.get(id).limit = 90 / 3.6;
+  try {
+    const ctx = william({ weather: "dry", s: 15 });
+    const p = ctx.fleet.addPlow(WPG.lane(EDGE, 1), 150, PLOW_MPS, [[NEXT, 1]]);
+    const q = await closedLoop(ctx, p, { limit: 60, settle: 25 });
+    assert.equal(q.level, null, "stays behind");
+    assert.ok(q.minGap > 70, `above 80 km/h, ${q.minGap.toFixed(1)} m back`);
+  } finally { for (const [id, limit] of fast) WPG.edges.get(id).limit = limit; }
   setWeather("dry");
 });
 

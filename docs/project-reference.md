@@ -508,13 +508,15 @@ be passed only in a lane clear of every part of it (a wing can reach 3 m to its 
 stays that far behind a plow going its way in its lane, and behind one in the lane to its left too: it
 never draws level with one on its right. It passes one only on the left, through a lane going its way
 (never across the centre line), and only seeing as far as it ever does (80 m: in falling snow, fog, rain
-or after dark it stays behind), and it moves back in front of it only once its rear is the stay-back
-distance ahead of the plow's front. A plow signalling a left turn may be passed on the right, as any
-vehicle turning left. Traffic keeps to the same rules (never passing one on the right, holding back
-behind one in the lane to its left, passing on the left only with a clear view, never changing lanes in
-front of one closer than the stay-back distance) but follows at its own gap. The car's sensing reports
+or after dark it stays behind, even one in the lane to its right), and it moves back in front of it only
+once its rear is the stay-back distance ahead of the plow's front. A plow signalling a left turn may be
+passed on the right, as any vehicle turning left. The 100 m is further than the car ever sees, so there
+it keeps back as far as it can see (about 75 m). Traffic keeps to the same rules (following the
+stay-back distance behind one, never passing one on the right, holding back behind one in the lane to
+its left, and in poor sight behind one in the lane to its right, passing on the left only with a clear
+view, never changing lanes in front of one closer than the stay-back distance). The car's sensing reports
 `snow_plow` for the nearest one it can see going its way in its lane or one beside it, from 60 m ahead
-until the car is the stay-back distance past it: its lane from the car, gap, speed, whether the car must
+(or the stay-back distance, where further) until the car is the stay-back distance past it: its lane from the car, gap, speed, whether the car must
 stay back of it (`holds`), may pass it on the left now (`may_pass`) or is passing it (`passing`). The
 target speed keeps the car back: no faster than the plow at the stay-back distance, down to standing
 still at a third of it, and beside one on its right it drops back behind it. The car's lane options
@@ -530,7 +532,8 @@ it (`passed plow on the right`), and notes moving back in front of one passed on
 stay-back distance (less 3 m) ahead of it. Coaching counts time moving closer than 20 m behind one it
 must stay back of (`plow_close_s`), passes on the right and cut-ins, with tips, only for a drive a plow
 worked in. The HUD says "SNOW PLOW AHEAD · STAY 30 M BACK", "SNOW PLOW · NEVER PASS ON THE RIGHT · STAY
-30 M BACK" or "PASSING THE SNOW PLOW · BACK IN ONLY 30 M AHEAD OF IT", and AI eyes outline the plow in
+30 M BACK", "SNOW PLOW · CAN'T SEE TO PASS · STAY 30 M BACK" or "PASSING THE SNOW PLOW · BACK IN ONLY 30 M
+AHEAD OF IT", and AI eyes outline the plow in
 amber. In a free drive one plow at a time works the primary, secondary and tertiary streets while it
 snows, put down out of the car's sight 150 to 450 m away and taken off once out of sight 500 m away,
 another coming 30 to 90 s later; when the snow stops no more come (`?plows=0` takes them off). The wing

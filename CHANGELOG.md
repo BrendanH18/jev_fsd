@@ -10,9 +10,10 @@
   the snow and debris are plowed to. The driven car now stays that far behind a plow in its lane, and
   behind one in the lane to its left as well, never drawing level with one on its right. It passes one
   only on the left, through a lane going its way, never across the centre line, and only when it can see
-  as far as it ever does (so never in falling snow, fog, rain or after dark), and moves back in only once
-  it is the stay-back distance ahead of it. A plow signalling a left turn may be passed on the right.
-  Traffic keeps to the same rules at its own following gap.
+  as far as it ever does (so never in falling snow, fog, rain or after dark, from whichever lane), and
+  moves back in only once it is the stay-back distance ahead of it. A plow signalling a left turn may be
+  passed on the right. The 100 m is further than the car ever sees, so there it keeps back as far as it
+  can see. Traffic keeps to the same rules, the stay-back distance included.
 - The driven car's sensing reports `snow_plow` (its lane from the car, the gap, its speed, whether the car
   must stay back of it, may pass it on the left, or is passing it). The target speed keeps the car back,
   the lane options offer a pass only on the left and only when it may, and no lane change puts the car in
@@ -24,7 +25,7 @@
   on the right`) once a plow has worked in it, and notes moving back in front of one too soon. Coaching
   counts time too close behind one (`plow_close_s`), passes on the right and cut-ins, with tips, only for
   drives a plow worked in. The HUD says "SNOW PLOW AHEAD · STAY 30 M BACK", "SNOW PLOW · NEVER PASS ON THE
-  RIGHT · STAY 30 M BACK" and "PASSING THE SNOW PLOW · BACK IN ONLY 30 M AHEAD OF IT"; AI eyes outline the
+  RIGHT · STAY 30 M BACK", "SNOW PLOW · CAN'T SEE TO PASS · STAY 30 M BACK" and "PASSING THE SNOW PLOW · BACK IN ONLY 30 M AHEAD OF IT"; AI eyes outline the
   plow in amber.
 - In a free drive in snow one plow at a time works the primary, secondary and tertiary streets, put down
   out of sight 150 to 450 m from the car and taken off once out of sight 500 m away (`?plows=0` takes them
