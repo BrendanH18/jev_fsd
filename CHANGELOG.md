@@ -15,13 +15,17 @@
   leave room to move back in ahead of the cyclist. It starts only when nobody coming the other way
   (along the street, or turning into the oncoming lane at the junction ahead) would reach the end of the
   pass within the time it takes plus 2 s, and the driven car must also be able to see that far along the
-  oncoming lane, so by night or in fog it stays behind. Once across it carries on; still behind the
+  oncoming lane (or to the end of the street). For this, by clear daylight, it looks along the street out
+  to 250 m (`PASS_SIGHT_M`, `sim/visibility.js`), past the 80 m it sees everything else in; buildings and,
+  with hidden hazards on, other vehicles still block the view. By night and in rain, snow or fog it stays
+  behind. Once across it carries on; still behind the
   cyclist, it falls back in if the way stops being clear. Only the first driver behind a cyclist passes
   it at a time. A cyclist riding the empty parking lane is passed in the lane, as before.
 - The driven car's sensing reports `cyclist_pass` (the cyclist, the gap, the minimum passing distance,
   whether a pass is on and why not, the way, who is ahead of the car behind it, whether it is going). The
-  candidates are `pass_cyclist`, which goes round, and `follow_cyclist`, which stays 8 m behind; once the
-  way is clear, or the car has started round, every lane candidate carries the way round. Candidates that
+  candidates are `pass_cyclist`, which goes round, and `follow_cyclist`, which stays 8 m behind; only
+  `pass_cyclist` carries the way round, and once the car has started round the only candidates are
+  carrying on round, dropping back in behind while still behind the cyclist, and braking hard. Candidates that
   would pass a cyclist closer than the minimum passing distance are rejected as
   `passes_cyclist_without_room` (1.5 m above 50 km/h, the metre otherwise), and ones that would have
   the car, across the centre line passing a cyclist, meet an oncoming vehicle as
