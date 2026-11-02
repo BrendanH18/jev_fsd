@@ -9,7 +9,9 @@ export class CautiousAgent {
     ranked.sort((a, b) => a.cost - b.cost);
     // an emergency vehicle is coming: pull over and stop, whatever it costs in lane position
     // parking at the destination, or pulling out of a space, once on offer: carry on with it
-    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "park" || c.id === "pull_out") || ranked[0]?.candidate;
+    // passing a cyclist through the oncoming lane, once the way is clear: at the pass speed, so as to
+    // spend no longer in that lane than the pass was judged clear for
+    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "park" || c.id === "pull_out") || eligible.find(c => c.id === "pass_cyclist") || ranked[0]?.candidate;
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
     // pulling up to park stops where the car reverses in)
     return { motion: candidate?.sim.end_speed < 0.3 && !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) ? "stop" : "drive", candidateId: candidate?.id ?? null,

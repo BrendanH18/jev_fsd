@@ -31,6 +31,7 @@ import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
 import { parkNotice } from "./sim/parallel-park.js";
 import { STEP_OUT_COUNT, hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
+import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -170,7 +171,11 @@ export async function boot() {
     // between them, and the autopilot keeps to a speed it can stop from beside them (`?hazards=0`
     // turns that off)
     const hazards = params.get("hazards") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures });
+    // and on two-way streets with one lane each way, everyone passes a cyclist riding in the lane
+    // through the oncoming lane once it is clear, with the minimum passing distance (`?cyclistpass=0`
+    // turns that off: everyone stays behind)
+    const passCyclists = params.get("cyclistpass") !== "0";
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -635,7 +640,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -672,6 +677,7 @@ export async function boot() {
           else if (ev.type === "stop_sign") hud.badge(ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : ev.dark ? "NO STOP AT A DARK SIGNAL" : "RAN A STOP SIGN", "alert", 1500);
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
           else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
+          else if (ev.type === "close_pass") hud.badge("PASSED A CYCLIST TOO CLOSE", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
@@ -792,6 +798,11 @@ export async function boot() {
     const trafficLine = trafficNotice(world, autopilot.snap);
     if (trafficLine && trafficLine.key !== announcedTraffic) { announcedTraffic = trafficLine.key; hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500); }
     if (!trafficLine) announcedTraffic = null;
+    // a cyclist riding in the lane ahead, on a street with one lane each way: stay behind, and why, or
+    // the way is clear to pass with the minimum passing distance (said again as that changes)
+    const cyclistLine = cyclistNotice(world);
+    if (cyclistLine && cyclistLine.key !== announcedCyclist) { announcedCyclist = cyclistLine.key; hud.badge(cyclistLine.text, cyclistLine.wait ? "safety" : "", 2500); }
+    if (!cyclistLine) announcedCyclist = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once

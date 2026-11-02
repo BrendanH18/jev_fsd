@@ -29,6 +29,9 @@ import { TRY_START_M } from "../sim/parallel-park.js";
 import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
 import { laneSight } from "../sim/hidden-traffic.js";
 import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_LOOK_M, PLOW_NAME, SAME_LANE_M, isPlow, stayBack, turningLeft } from "../sim/snow-plow.js";
+import { FOLLOW_M as CYCLIST_FOLLOW_M, LEAD_M as CYCLIST_LEAD_M, LOOK_M as CYCLIST_LOOK_M, MIN_EASE_M, PASS_DECEL as CYCLIST_PASS_DECEL, RETURN_M as CYCLIST_RETURN_M,
+  isCyclistPass, passId, passStreet, planPass, queuedBehind, ridingIn, sightFor as cyclistSight, wayClear as cyclistWayClear } from "../sim/cyclist-pass.js";
+import { onStreet } from "../sim/double-parked.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
 // Passing a snow plow, the car's route ahead must be in view as far as it looks for that (the 60 m of
@@ -162,7 +165,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, lane_closure: null, double_parked: null, snow_plow: null, parking: null, blind_spot: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, lane_closure: null, double_parked: null, snow_plow: null, cyclist_pass: null, parking: null, blind_spot: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -289,6 +292,7 @@ export function buildSnapshot(world, executing = null) {
     snap.lane_closure = laneClosure(world, p, frontS, road, lane);
     snap.double_parked = doubleParked(world, p, frontS, lane, executing);
     snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
+    snap.cyclist_pass = cyclistPass(world, p, lane, executing);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -304,7 +308,8 @@ export function buildSnapshot(world, executing = null) {
       && Math.abs(a.lateral - lane.from_center) <= 1.7 && a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
     // (going round a work zone's closed stretch, or a double-parked van, along the way the car will
     // go: see workZone and doubleParked)
-    const detour = snap.work_zone?.detour || snap.lane_closure?.detour || snap.double_parked?.detour || null;
+    // (and round a cyclist, through the oncoming lane: see cyclistPass)
+    const detour = snap.work_zone?.detour || snap.lane_closure?.detour || snap.double_parked?.detour || snap.cyclist_pass?.detour || null;
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
     const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
     const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center, frame)
@@ -312,7 +317,9 @@ export function buildSnapshot(world, executing = null) {
       .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6))
       // (a double-parked van the car waits behind, short of where it waits, is a stop, not a car to
       // follow: see doubleParked)
-      .filter((a) => !(vanStop && a.vehicle.id === snap.double_parked.van_id));
+      .filter((a) => !(vanStop && a.vehicle.id === snap.double_parked.van_id))
+      // (nor is a cyclist the car is going round, or about to: see cyclistPass)
+      .filter((a) => !(snap.cyclist_pass?.go && a.vehicle.id === snap.cyclist_pass.cyclist_id));
     if (ahead.length) {
       const lead = ahead[0];
       const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
@@ -356,6 +363,8 @@ export function buildSnapshot(world, executing = null) {
   if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
   // (and coming up to a double-parked van, and round it)
   if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
+  // (and going round a cyclist, at the pass speed)
+  if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
   // sim/hidden-hazards.js)
   snap.blind_spot = blindSpot(world, ego, road);
@@ -948,6 +957,78 @@ function doubleParked(world, p, frontS, lane, executing) {
   return null;
 }
 
+// A cyclist riding in the car's lane ahead, on a two-way street with one lane each way, that the car
+// could pass only through the oncoming lane (sim/cyclist-pass.js, `World` option `passCyclists`): the
+// nearest one it can see within CYCLIST_LOOK_M on the street it is on, or the one it is passing, until
+// it is past the end of the way round. `possible`/`why` say whether a pass is on at all (planPass);
+// `way` whether the oncoming lane is clear, as far as the car can see; `queued` someone between the car
+// and the cyclist; `too_close` the car is too close behind it to pull out with room (it drops back);
+// `going` the car has started round it (it is executing a law that goes round it and has moved across,
+// or drawn level); `go` it goes round now (going round, unless the way has stopped being clear while it
+// is still behind the cyclist; or the pass on, the way clear and nobody between). Then `detour` is the
+// way round in route arc lengths (sim/controller.js detourAt), re-anchored on the cyclist as it moves:
+// where it starts kept from the law going round, and once the car is past it, all of it. `follow_mps`
+// is the speed to stay CYCLIST_FOLLOW_M behind it at. Or null.
+function cyclistPass(world, p, lane, executing) {
+  if (!world.passCyclists) return null;
+  const { ego, route, map } = world, FRONT = ego.spec.length - ego.spec.rearOverhang;
+  const i = route.edgeIndexAt(p.s), e = map.edges.get(route.edges[i]);
+  if (!e || !passStreet(map, e.id)) return null;
+  const on = onStreet(e, ego);
+  if (!on?.same) return null;
+  const front = on.s + FRONT, el = map.lane(e.id, 0), base = route.edgeStarts[i + 1] - e.length;
+  // (along the route: where the edge puts it, as projected onto the route's own line, rear axle)
+  const ref = (x) => {
+    const est = base + x, q = pointAt(el.pts, el.cum, Math.max(0, Math.min(el.length, x * el.length / e.length))), r = projectPoint(route.pts, route.cum, q);
+    return (r && r.distance < 1.5 && Math.abs(r.s - est) < 15 ? r.s : est) - FRONT;
+  };
+  const exec = isCyclistPass(executing?.law?.detour) ? executing.law.detour : null;
+  let bike = null, bon = null, best = Infinity;
+  for (const b of world.npcs) {
+    if (b.kind !== "bike" || Math.abs(b.x - ego.x) > CYCLIST_LOOK_M + 30 || Math.abs(b.y - ego.y) > CYCLIST_LOOK_M + 30 || !world.sees(ego, b)) continue;
+    const q = ridingIn(e, b);
+    if (!q) continue;
+    const bs = b.spec, g = q.s - bs.rearOverhang - front, mine = exec?.id === passId(b);
+    // (ahead of the car; or, the one it is passing, beside it or behind it)
+    if (mine ? g < -(bs.length + ego.spec.length + CYCLIST_RETURN_M + 25) || g > CYCLIST_LOOK_M : g < -0.5 || g > CYCLIST_LOOK_M) continue;
+    if ((mine ? -Infinity : g) < best) { best = mine ? -Infinity : g; bike = b; bon = q; }
+  }
+  if (!bike) return null;
+  // (what is coming the other way, as far as the car can see: further than the traffic it follows)
+  const others = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M + 10).filter((o) => o !== ego && o.kind !== "pedestrian");
+  const plan = planPass(world, e, { front, v: ego.v, spec: ego.spec, bike, on: bon, others });
+  if (!plan) return null;
+  const id = passId(bike), lc = e.lane_offsets?.[0] ?? e.lane_width / 2;
+  const behind = front < plan.bike_rear - 0.5, past = front - ego.spec.length > plan.bike_front + CYCLIST_RETURN_M - 0.5;
+  const going = exec?.id === id && (on.lateral < lc - 0.3 || !behind);
+  // (past it, and past the end of the way round: done)
+  if (going && past && p.s > exec.to) return null;
+  if (!going && !behind) return null;
+  const way = plan.possible ? cyclistWayClear(world, plan, others, cyclistSight(world, plan)) : null;
+  const queued = going ? null : queuedBehind(e, front, plan, ego, others);
+  const tooClose = !going && plan.possible && plan.full - front < MIN_EASE_M;
+  const go = going ? !behind || (plan.possible && way.clear) : plan.possible && way.clear && !queued && !tooClose;
+  let detour = null;
+  if (go && going && past) detour = exec;
+  else if (go) {
+    const from = going ? exec.from : ref(plan.from), full = Math.max(from + 1, ref(plan.full)), back = Math.max(full, ref(plan.back));
+    detour = { id, from, full, back, to: back + plan.ease_m, shift: plan.shift };
+  }
+  const bs = bike.spec;
+  return { id, cyclist_id: bike.id, kind: "cyclist", gap_m: plan.gap_m, beside: !behind, speed: plan.bike_speed, min_pass_m: plan.min_pass_m, shift_m: plan.shift, limit_mps: plan.pass_mps,
+    clearance_m: Math.abs(bon.lateral - on.lateral) - (bs.width + ego.spec.width) / 2, centre_line_route: (lane?.center ?? 0) - lc,
+    possible: plan.possible, why: plan.why, way: way ? { clear: way.clear, sees_far_enough: way.sees_far_enough, need_s: way.need_s, oncoming: way.oncoming ? { id: way.oncoming.vehicle.id, eta_s: way.oncoming.eta_s } : null } : null,
+    queued: queued ? queued.id : null, too_close: tooClose, going, go, follow_gap_m: CYCLIST_FOLLOW_M,
+    follow_mps: Math.max(0, plan.bike_speed + Math.max(-plan.bike_speed, Math.min(2, (plan.gap_m - CYCLIST_FOLLOW_M) / 3))), detour };
+}
+
+// The speed to go round a cyclist at (see cyclistPass): the pass speed, or, short of being across, the
+// speed from which the car slows to it gently by then.
+function cyclistPassSpeed(cp) {
+  const room = cp.beside ? 0 : Math.max(0, cp.gap_m - CYCLIST_LEAD_M);
+  return Math.sqrt(cp.limit_mps * cp.limit_mps + 2 * CYCLIST_PASS_DECEL * room);
+}
+
 // A snow plow the car can see going its way (sim/snow-plow.js), in its lane or a lane beside it, from
 // PLOW_LOOK_M (or the stay-back distance, where that is further) ahead of it until the car's rear is
 // the stay-back distance past its front: the nearest.
@@ -1369,6 +1450,10 @@ export function desiredSpeed(snap) {
     const vf = Math.min(lead + Math.min(2, safe / 3), stopSpeedFor(room, decel));
     if (vf < v) { v = vf; reasons.push("car ahead"); }
   }
+  // a cyclist the car cannot pass yet (sim/cyclist-pass.js): stay CYCLIST_FOLLOW_M behind it
+  const cp = snap.cyclist_pass;
+  if (cp && !cp.go && !cp.beside && cp.follow_mps < v) { v = cp.follow_mps; reasons.push(cp.possible && cp.way && !cp.way.clear ? "cyclist ahead: oncoming traffic, staying behind" : "cyclist ahead: staying behind"); }
+  else if (cp?.go && cyclistPassSpeed(cp) <= v + 0.05) reasons.push(cp.going ? "passing a cyclist" : "cyclist ahead: way clear to pass");
   const i = snap.intersection;
   // (a car just past a signal's line, short of CLEARING_M, still stops for it, unless it is turning
   // right on red)
@@ -1574,6 +1659,7 @@ export function hazardFlags(snap) {
   if (snap.lane_closure) f.push("lane closure");
   if (snap.double_parked) f.push("double-parked van");
   if (snap.snow_plow) f.push("snow plow");
+  if (snap.cyclist_pass) f.push("cyclist ahead");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

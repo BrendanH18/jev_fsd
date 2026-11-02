@@ -29,6 +29,7 @@ import { Outages, controlAt } from "./outage.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
+import { egoPassing, minPassM } from "./cyclist-pass.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -167,6 +168,13 @@ const AUDIT_CUT_SLACK_M = 3;
 const AUDIT_EARLY_M = 5;
 const AUDIT_LET_IN_PAST_M = 2;
 const AUDIT_MERGE_MOVING_MPS = 1;
+// Passing cyclists (sim/cyclist-pass.js), with `passCyclists` on. A pass is the car's body going from
+// wholly behind a cyclist going its way (within 30 m) to wholly ahead of it; it is a close pass when,
+// beside it, the gap between their bodies was ever less than the minimum passing distance on the
+// street (1 m up to 50 km/h, 1.5 m above) less AUDIT_PASS_SLACK_M. And, passing one with its centre left
+// of the centre line, the car fails to yield as round a double-parked van (AUDIT_MEET_M): once a pass.
+const AUDIT_PASS_SLACK_M = 0.1;
+const AUDIT_PASS_NEAR_M = 30;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
@@ -180,7 +188,9 @@ export class World {
   // `hazards`, road vehicles also hide other vehicles and cyclists, and the car turns left, gives way
   // and turns right on red only once it can see the lanes it must give way to (sim/hidden-traffic.js).
   // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0 } = {}) {
+  // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
+  // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -228,6 +238,12 @@ export class World {
     this.parkedIn = null;
     this.kerbContact = false;
     this.hazards = !!hazards;
+    // passing cyclists through the oncoming lane (sim/cyclist-pass.js): whether anyone does; the
+    // cyclists the car has come up behind, and how close it has been beside each since; and the one it
+    // is passing now, and whether it failed to yield to oncoming traffic then
+    this.passCyclists = !!passCyclists;
+    this.bikePasses = new Map();
+    this.cyclistPass = null;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -350,6 +366,7 @@ export class World {
     this.vanPass = null;
     this.plowPass.clear();
     this.mergeCall = null; this.mergeWait = null; this.mergeLetIn = null;
+    this.bikePasses?.clear(); this.cyclistPass = null;
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -572,6 +589,7 @@ export class World {
     this.auditVans();
     this.auditPlows();
     this.auditClosures();
+    if (this.passCyclists) this.auditCyclistPasses(road);
     this.auditKerb();
     leftSpace(this);
   }
@@ -689,6 +707,49 @@ export class World {
       }
     }
     rec.lane = here.lane;
+  }
+
+  // The cyclist the car is passing now, through the oncoming lane (sim/cyclist-pass.js egoPassing), or null.
+  passingCyclist() { return egoPassing(this); }
+
+  // Passing a cyclist closer than the minimum passing distance, and crossing into the way of oncoming
+  // traffic while passing one (see AUDIT_PASS_SLACK_M).
+  auditCyclistPasses(road) {
+    const ego = this.ego, eb = ego.obb(), min = minPassM(road?.limit ?? 11.2);
+    for (const n of this.npcs) {
+      if (n.kind !== "bike") continue;
+      if (Math.abs(n.x - ego.x) > AUDIT_PASS_NEAR_M || Math.abs(n.y - ego.y) > AUDIT_PASS_NEAR_M || Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 4) { this.bikePasses.delete(n.id); continue; }
+      const b = n.obb(), c = Math.cos(b.heading), s = Math.sin(b.heading), dx = eb.center[0] - b.center[0], dy = eb.center[1] - b.center[1];
+      const ahead = dx * c + dy * s, gap = Math.abs(dx * s - dy * c) - eb.halfWidth - b.halfWidth, reach = eb.halfLength + b.halfLength;
+      if (ahead < -reach) { this.bikePasses.set(n.id, { min: Infinity }); continue; }
+      const rec = this.bikePasses.get(n.id);
+      if (!rec) continue;
+      if (ahead <= reach) { rec.min = Math.min(rec.min, gap); continue; }
+      this.bikePasses.delete(n.id);
+      if (rec.min < min - AUDIT_PASS_SLACK_M) {
+        this.violations.close_passes = (this.violations.close_passes || 0) + 1;
+        this.events.push({ type: "close_pass", with: n.id, clearance_m: Math.round(Math.max(0, rec.min) * 100) / 100, min_m: min });
+      }
+    }
+    const passing = egoPassing(this);
+    if (!passing) { this.cyclistPass = null; return; }
+    const { bike, e, front, across } = passing;
+    if (this.cyclistPass?.id !== bike.id) this.cyclistPass = { id: bike.id, counted: false };
+    if (this.cyclistPass.counted || !across) return;
+    for (const n of this.npcs) {
+      if (n.rail || n === bike || Math.abs(n.x - ego.x) > 60 || Math.abs(n.y - ego.y) > 60) continue;
+      const q = projectPoint(e.pts, e.cum, [n.x, n.y], null);
+      if (!q || q.s < 0.5 || q.s > e.length - 0.5 || q.lateral > AUDIT_MEET_SIDE_M || q.lateral < e.asphalt[0] - 1 || Math.abs(wrap(n.psi - q.heading)) < Math.PI * 3 / 4) continue;
+      const gap = q.s - ((n.spec || CAR).length - (n.spec || CAR).rearOverhang) - front;
+      if (gap < -1) continue;
+      const closing = Math.max(0, ego.v) + Math.max(0, n.v);
+      if (gap < AUDIT_MEET_M || (closing > 0.5 && gap / closing < AUDIT_MEET_S)) {
+        this.cyclistPass.counted = true;
+        this.violations.failed_to_yield++;
+        this.events.push({ type: "failed_to_yield", to: "oncoming traffic", with: n.id, cyclist_pass: true, cyclist: bike.id });
+        return;
+      }
+    }
   }
 
   // Going past a flagger's STOP paddle once the stop was owed (see AUDIT_FLAGGER_PAST_M).

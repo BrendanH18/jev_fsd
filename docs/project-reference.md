@@ -591,6 +591,67 @@ Brantford allows an early merge in light traffic where it slows nobody; here eve
 the merge point. Emergency vehicles are not routed round closures. The seeded benchmark and the other
 challenges have none.
 
+Passing cyclists with room (`static/js/sim/cyclist-pass.js`, `World` option `passCyclists`: on in free
+drives unless `?cyclistpass=0`, and in the "Give them room" challenge). On a two-way street with one lane
+each way, a cyclist riding in the travel lane leaves no room to pass within it, so going by means moving
+into the oncoming lane. BC's minimum passing distance regulation (Motor Vehicle Act, 2024) asks for 1 m
+where the limit is 50 km/h or less and 1.5 m above, as Québec's Highway Safety Code (s. 341) does, and
+Ontario's Highway Traffic Act (s. 148(6.1)) asks for 1 m; every province's handbook adds that a driver
+crosses the centre line to pass only when the oncoming lane is clear for long enough, and not approaching
+a junction, a crosswalk or a level crossing. The pass (`planPass`, along the cyclist's street, the
+driver's front) aims the driver's side the minimum passing distance plus 0.25 m from the cyclist's, which
+on a 3.2 m lane puts the car's centre about on the centre line (never past the far side of the oncoming
+lane: `no_room`). It eases over across 2.5 s of travel at the pass speed (at least 12 m) to be across by
+`full`, where the driver's front is 2 m short of the cyclist's rear wheel, stays across until `back`, where
+its rear is 5 m past the cyclist's front, and eases back in by `to`, passing at the cyclist's speed plus
+20 km/h, up to the street's limit, pulling away at 1.5 m/s^2. Because the cyclist moves, the marks are
+where the driver gets to them at that speed; the driven car works them out again at every decision from
+where the cyclist is then, keeping only where it started over (and, once past the cyclist, all of them),
+so they hold however fast it actually goes. A pass is not on when it would gain less than 2.5 m/s on the
+cyclist (`too_fast`), would not be over 5 m short of the junction ahead (its stop line, or the near side
+of the crossing street), 10 m short of a marked crosswalk or 30 m short of a level crossing, would go past
+a work zone, a lane closure, a double-parked van, a school bus with its reds on or a streetcar standing on
+the street, or would leave no room (6 m) to move back in behind whoever rides or drives ahead of the
+cyclist. The way is clear (`wayClear`) when nobody coming the other way, along the street or coming up to
+the junction ahead with its indicator (or none) pointing into the oncoming lane (as round a
+double-parked van), would reach the end of the pass sooner than 2 s after the driver's front is there;
+the driven car must also see along the oncoming lane as far as anyone at the street's limit would come in
+that time, or as far as it ever sees (80 m less 10), so by night or in fog it stays behind. Only the first
+driver behind a cyclist passes it: one ahead of it, between it and the cyclist or passing it and not yet
+5 m past the cyclist's front, makes it wait (`queuedBehind`). Once across a driver carries on; still
+behind the cyclist, it falls back in behind it if the way stops being clear (traffic looks again 2 s
+later). Traffic (sim/npc.js) decides once its front is within 25 m of the cyclist and it is where the
+pass would start easing over, moves across at 0.2 m/s for every m/s it drives (0.6 to 1.4 m/s), and
+keeps the cyclist as the one it follows until it is within 0.15 m of the minimum passing distance clear of
+it; buses, school buses, streetcars, plows and cyclists do not pass. A cyclist riding the empty parking lane
+leaves room in the lane, and is passed there as before. The driven car's sensing reports `cyclist_pass`
+for the nearest cyclist it can see riding in its lane ahead within 50 m, or the one it is passing, until
+it is past the end of the way round: the gap, the cyclist's speed, the minimum passing distance, whether a
+pass is on and why not, the way, who is ahead of it, whether it is too close behind to pull out (less than
+8 m to where it would be across: it drops back), whether it has started round (it is executing a law that
+goes round and has moved across, or drawn level), whether it goes (`go`), the detour, and the speed to
+stay 8 m behind at. While it cannot go, the cyclist is followed and the target speed stays 8 m behind it;
+once it goes the cyclist is not followed, the car keeps to the pass speed, and every lane and hard-brake
+candidate carries the detour. Rules gets `pass_cyclist` (at the pass speed) and `follow_cyclist` (8 m
+behind, in the lane): starting a pass costs 1.5, so the car passes only for a clear gain, and staying
+behind one it cannot pass gains 1. The cautious agent takes `pass_cyclist` when it is offered. Candidates
+are rejected that would pass a cyclist closer than the minimum passing distance
+(`passes_cyclist_without_room`, in place of the metre of `passes_cyclist_too_close` that holds with the
+option off), or that, going round a cyclist with the car's far side across the centre line, would meet a
+vehicle coming the other way less than 8 m front to front or 2 s away (`crosses_into_oncoming_traffic`).
+Decision models and LLMs get `cyclist_pass`, a situation line (in place of the plain "cyclist ahead"
+one), a motion criterion and a prompt line. The audit counts passing a cyclist closer than the minimum
+passing distance (the car's body going from wholly behind a cyclist going its way to wholly ahead of it,
+less than the distance, less 0.1 m, from it while alongside) as `close_passes`, which the metrics report
+and fail a drive on (`passed a cyclist too close`), and, passing one with its centre left of the centre
+line, meeting an oncoming vehicle as round a double-parked van as a failure to yield (`cyclist_pass`),
+both only with the option on. Coaching counts them (`close_passes`, `cyclist_cutoffs`) with tips, and
+passing is not driving the wrong way. The HUD says "CYCLIST AHEAD · ONCOMING TRAFFIC · STAY BEHIND",
+"CYCLIST AHEAD · CAN'T SEE FAR ENOUGH · STAY BEHIND", "CYCLIST AHEAD · WAIT YOUR TURN BEHIND", "CYCLIST
+AHEAD · WAY CLEAR · PASS WITH 1 M" (or 1.5 M), "PASSING A CYCLIST · 1 M CLEAR · BACK IN WELL AHEAD OF
+THEM" or, where a pass is not on, why ("CYCLIST AHEAD · JUNCTION AHEAD · STAY BEHIND", say), and AI eyes
+outline the cyclist in amber. The seeded benchmark and the other challenges have it off.
+
 Parallel parking at the destination (`static/js/sim/parallel-park.js`, BC Motor Vehicle Act s. 189(1) and
 s. 190(1)): in a free drive (`World` option `park`; `?park=0` turns it off) the autopilot looks for a space
 in the parking lane on its right once the destination is within 150 m. A space is a stretch of the right
@@ -866,7 +927,7 @@ determine sensing; a vehicle in traffic hides a pedestrian behind it, and so, wi
 standing at the kerb; with them on, road vehicles also hide other vehicles and cyclists (cars parked in a parking lane do not). Trees occlude nothing, and individual street lamps do not extend
 detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car changes lanes only to pass and
 then returns, and to get into the lane for a turn; two or more lanes from its route's lane, it keeps room for one lane change per lane. Where its route makes a U-turn at a dead end, it stops and turns round with a three-point turn (more legs where it is tight), letting its bumpers reach no more than 0.2 m over the kerb and keeping clear of parked cars and scenery; it does not turn round anywhere else, and the router uses U-turns only at dead ends. Where a street's lanes change at the junction
-before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Turning left or making a U-turn at a signal, a stop sign or a junction without either, the car yields to the oncoming traffic it can see, waiting at the line or inside the junction, and it takes an oncoming car's left indicator at its word when that car is in its leftmost lane within 40 m of the junction (anywhere else, it may be a lane change; a car pulling out from the curb is waited for whatever it signals). It turns right on red after a full stop (except on the island of Montréal, judged from the map's centre against a coarse outline of the island), but only where it can see along the street to its left from the line: at a red light it does not creep forward to look, so at a corner a building hides it waits for the green, as it does in fog, rain, snow and after dark. Signs banning a right on red at a particular junction are not read from the map, and left turns on red from one one-way street onto another are not made. At a two-way stop, once its stop is made, the car gives way to traffic on the through road from both sides; at a junction without a sign or signal it gives way to traffic from the right, or to the larger road where a smaller one meets it (road classes from OpenStreetMap: primary and secondary, then tertiary, then the rest). OpenStreetMap misses some stop signs, so a few junctions that have one on the street are treated as having none, and a T-junction follows the same rules as a crossroads. Where a building hides a street it gives way to, the car slows, creeps forward to look and goes once stopped at the point it looks from (0.3 m short of the crossing road's asphalt) if nothing it can see is coming, even if a building still hides part of the street; in fog and after dark it looks only as far as it can see. Traffic gives way by the same rules but does not look: it knows where everyone is. The audit counts pulling out in front of a vehicle with the right of way that is due at the junction within 2 s as a failure to yield, seen or not, if it was already on its way when the car crossed its line. Traffic does not overtake cyclists, parking uses forward pull-ins, and pedestrians do not cross
+before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Turning left or making a U-turn at a signal, a stop sign or a junction without either, the car yields to the oncoming traffic it can see, waiting at the line or inside the junction, and it takes an oncoming car's left indicator at its word when that car is in its leftmost lane within 40 m of the junction (anywhere else, it may be a lane change; a car pulling out from the curb is waited for whatever it signals). It turns right on red after a full stop (except on the island of Montréal, judged from the map's centre against a coarse outline of the island), but only where it can see along the street to its left from the line: at a red light it does not creep forward to look, so at a corner a building hides it waits for the green, as it does in fog, rain, snow and after dark. Signs banning a right on red at a particular junction are not read from the map, and left turns on red from one one-way street onto another are not made. At a two-way stop, once its stop is made, the car gives way to traffic on the through road from both sides; at a junction without a sign or signal it gives way to traffic from the right, or to the larger road where a smaller one meets it (road classes from OpenStreetMap: primary and secondary, then tertiary, then the rest). OpenStreetMap misses some stop signs, so a few junctions that have one on the street are treated as having none, and a T-junction follows the same rules as a crossroads. Where a building hides a street it gives way to, the car slows, creeps forward to look and goes once stopped at the point it looks from (0.3 m short of the crossing road's asphalt) if nothing it can see is coming, even if a building still hides part of the street; in fog and after dark it looks only as far as it can see. Traffic gives way by the same rules but does not look: it knows where everyone is. The audit counts pulling out in front of a vehicle with the right of way that is due at the junction within 2 s as a failure to yield, seen or not, if it was already on its way when the car crossed its line. Traffic does not overtake cyclists in the lane: on a street with one lane each way it stays behind one riding in the lane unless passing cyclists is on (`passCyclists`, free drives and the "Give them room" challenge), when it passes through the oncoming lane once that is clear (sim/cyclist-pass.js); parking uses forward pull-ins, and pedestrians do not cross
 against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information. No post or trunk stands in a lane or on the asphalt: where map topology would put one there (a slip road leaving a main road at a shallow angle, or a street continuing wider past a junction), it moves outward, a signal pole to the stop line's curb if the far side has no room, and otherwise is left out (across the twelve maps: 4 of 1,127 signal poles, 27 of 13,358 lamp posts, 11 street-sign and 2 stop-sign posts, and 4 trees).
 Low curbs remain traversable, and scenery beyond the playable map is decorative with simplified geography.
 
