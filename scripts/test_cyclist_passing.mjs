@@ -19,6 +19,7 @@ const { curbOffset } = await import("../static/js/sim/roadside.js");
 const { AIM_M, LEAD_M, MARGIN_S, RETURN_M, cyclistNotice, egoPassing, isCyclistPass, minPassM, passStreet, planPass, ridingIn, sightFor, wayClear } = await import("../static/js/sim/cyclist-pass.js");
 const { onStreet } = await import("../static/js/sim/double-parked.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
+const { PASS_SIGHT_M } = await import("../static/js/sim/visibility.js");
 const { DriveMetrics, failures } = await import("../static/js/bench/metrics.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
@@ -53,9 +54,9 @@ const EDGE = "e127", OPP = "e128", NEXT = "e129", W10 = KITS.edges.get(EDGE), LA
 const IN_LANE = W10.lane_width / 2 - 0.75;   // (where a cyclist rides in the lane: sim/npc.js curbside)
 
 // West 10th, both kerbs lined with parked cars (so a cyclist rides out in the lane), and `pass` or not.
-function street({ pass = true, line = true, seed = 3 } = {}) {
+function street({ pass = true, line = true, seed = 3, hazards = false } = {}) {
   setWeather("dry");
-  const world = new World(KITS, { seed, parked: 0, pedestrians: 0, passCyclists: pass });
+  const world = new World(KITS, { seed, parked: 0, pedestrians: 0, passCyclists: pass, hazards });
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 });
   if (line) for (const id of [EDGE, OPP]) {
     const e = KITS.edges.get(id), lat = curbOffset(e, CAR);
@@ -372,6 +373,16 @@ await test("sensing and candidates: behind the cyclist while the way is not clea
   const back = buildSnapshot(world, { law });
   assert.ok(back.cyclist_pass.going && !back.cyclist_pass.go && !back.cyclist_pass.detour, "falls back in behind");
   assert.ok(sampleCandidates(back, world).some((c) => c.id === "follow_cyclist"));
+});
+
+await test("the long look along the street still stops at a vehicle in the way, with hidden traffic on, as far as it reaches; with no reach, nothing changes", () => {
+  const { world, fleet } = street({ hazards: true });
+  drive(world, { front: 20, v: 4.5 });
+  const target = car(world, fleet, { front: 150, v: 0, id: "far" });
+  assert.ok(world.sees(world.ego, target, PASS_SIGHT_M) && !world.sees(world.ego, target), "seen 130 m off only on the long look");
+  const blocker = car(world, fleet, { front: 70, v: 0, id: "blocker" });
+  assert.ok(!world.sees(world.ego, target, PASS_SIGHT_M), "hidden behind the car 50 m ahead");
+  assert.ok(world.sees(world.ego, blocker, PASS_SIGHT_M) && world.sees(world.ego, blocker), "which it sees either way");
 });
 
 await test("closed loop: Rules waits behind the cyclist for the oncoming cars, then passes it 1 m clear and moves back in ahead of it; the HUD says so; nothing is counted", async () => {

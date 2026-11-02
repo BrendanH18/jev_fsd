@@ -290,7 +290,7 @@ export class World {
   sees(observer, o, reach = 0) {
     if (!this.visibility.sees(observer, o, reach)) return false;
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
-    return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o));
+    return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
   }
 
   // Middle of a long residential edge near the map center, facing along it.
