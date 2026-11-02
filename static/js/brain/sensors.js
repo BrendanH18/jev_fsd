@@ -1009,7 +1009,9 @@ function cyclistPass(world, p, lane, executing) {
   const tooClose = !going && plan.possible && plan.full - front < MIN_EASE_M;
   const go = going ? !behind || (plan.possible && way.clear) : plan.possible && way.clear && !queued && !tooClose;
   let detour = null;
-  if (go && going && past) detour = exec;
+  // (past it, or abreast of a cyclist that has sped up so the pass no longer works out: keep the marks
+  // the car is going round by)
+  if (go && going && (past || !Number.isFinite(plan.back))) detour = exec;
   else if (go) {
     const from = going ? exec.from : ref(plan.from), full = Math.max(from + 1, ref(plan.full)), back = Math.max(full, ref(plan.back));
     detour = { id, from, full, back, to: back + plan.ease_m, shift: plan.shift };

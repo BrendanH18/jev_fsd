@@ -364,6 +364,12 @@ await test("sensing and candidates: behind the cyclist while the way is not clea
     `going round, it carries on round at the pass speed or brakes: ${ac.map((c) => c.id).join(" ")}`);
   simulateAll(ac, abreast, world);
   assert.ok(ac.some((c) => c.reject === "crosses_into_oncoming_traffic" || c.reject === "collision"), "meeting it is ruled out");
+  // (abreast of it, the cyclist speeds up so the pass no longer works out: it keeps the marks it is going by)
+  const v0 = b.v;
+  b.v = 6.3;
+  const faster = buildSnapshot(world, { law }).cyclist_pass;
+  b.v = v0;
+  assert.ok(faster.going && faster.go && faster.why === "too_fast" && faster.detour === law.detour && ["from", "full", "back", "to"].every((k) => Number.isFinite(faster.detour[k])), "keeps the way round it started");
   // (still behind it, moved half across: it falls back in)
   fleet.vehicles.splice(fleet.vehicles.indexOf(late2), 1);
   drive(world, { front: 35, v: 6 });
