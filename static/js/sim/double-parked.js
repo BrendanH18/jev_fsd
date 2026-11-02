@@ -114,7 +114,7 @@ function at(e, s, lat) {
 // centre line), same (heading the way of `e`), opposite (heading against it) }, or null when it is
 // not on the street. (One just past its far end, coming into it from the junction there, is on it,
 // at its end.)
-function onStreet(e, n) {
+export function onStreet(e, n) {
   const p = projectPoint(e.pts, e.cum, [n.x, n.y], null);
   if (!p || p.s < 0.5 || p.distance > Math.abs(p.lateral) + END_REACH_M || p.lateral < e.asphalt[0] - ON_STREET_M || p.lateral > e.asphalt[1] + ON_STREET_M) return null;
   const d = wrap(n.psi - p.heading);
@@ -137,7 +137,7 @@ export function passTime(d, v, driver = null) {
 // standing still beyond it. Along the street, by where it is; at the junction ahead, by its indicator:
 // one coming up to the junction whose indicator (or none, going straight on) points into the
 // oncoming lane.
-function arrival(map, d, n, by = 0) {
+export function arrival(map, d, n, by = 0) {
   const e = map.edges.get(d.edge), ns = n.spec || CAR, fr = ns.length - ns.rearOverhang;
   const on = onStreet(e, n);
   if (on) {

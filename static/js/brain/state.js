@@ -9,6 +9,7 @@ import { CLEARING_M, waitsItsTurn } from "./sensors.js";
 import { FOLLOW_M } from "../sim/emergency.js";
 import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
 import { STEP_OUT_M } from "../sim/hidden-hazards.js";
+import { isCyclistPass } from "../sim/cyclist-pass.js";
 
 export const DEFAULT_STYLE = "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly";
 const PREAMBLE = "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`.";
@@ -170,6 +171,14 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(d.queued ? { waiting_ahead: d.queued } : {}), pass_at: r1(d.limit_mps),
       ...(d.wait ? { stop: true, wait_in_m: r1(Math.max(0, d.bumper_to_stop_m)) } : { go_round: true }) };
   }
+  if (snap.cyclist_pass) {
+    const c = snap.cyclist_pass, w = c.way;
+    state.cyclist_pass = { id: c.cyclist_id, ...(c.gap_m > 0 ? { gap_m: r1(c.gap_m) } : { beside_car: true }), speed: r1(c.speed), min_passing_distance_m: c.min_pass_m,
+      pass: c.going ? (c.go ? "car is passing" : "falling back in behind: the way is no longer clear") : !c.possible ? `not here: ${CYCLIST_NOT_HERE[c.why]}` : c.queued ? "wait in turn" : c.too_close ? "drop back first" : w.clear ? "clear" : !w.sees_far_enough ? "cannot see far enough" : "oncoming traffic",
+      ...(w?.oncoming && !c.go ? { oncoming: { id: w.oncoming.id, arrives_in_s: r1(w.oncoming.eta_s) }, needs_s: r1(w.need_s) } : {}),
+      ...(c.queued ? { waiting_ahead: c.queued } : {}), pass_at: r1(c.limit_mps),
+      ...(c.go ? { go_round: true } : { stay_behind: true, follow_gap_m: c.follow_gap_m }) };
+  }
   if (snap.snow_plow) {
     const p = snap.snow_plow;
     state.snow_plow = { id: p.id, kind: p.kind, lights: "blue and amber, flashing", lane: p.lane === "same" ? "the car's lane" : `a lane to the car's ${p.lane}`,
@@ -208,6 +217,12 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   return state;
 }
 
+// Why a cyclist cannot be passed here (sim/cyclist-pass.js planPass), for models.
+const CYCLIST_NOT_HERE = { too_fast: "it rides too near the limit to get by quickly", no_room: "there is no room for the car between it and the far side of the oncoming lane",
+  junction: "the pass would not be over before the junction ahead", crosswalk: "a marked crosswalk is ahead", level_crossing: "a level crossing is ahead", work_zone: "a work zone is on the street",
+  lane_closure: "a lane is closed on the street", double_parked: "a van is double-parked on the street", school_bus: "a school bus is stopped with its red lights flashing",
+  streetcar: "a streetcar is stopped ahead", no_room_ahead: "there is no room to move back in ahead of it" };
+
 function outcomeLabel(c, snap) {
   if (c.id === "stop_at_line" && snap.intersection) return `clear, stops ${Math.max(0, r1(snap.intersection.bumper_to_line_m - c.sim.progress_m))} m before the line`;
   if (c.id === "stop_at_destination") return "clear, reaches the destination";
@@ -230,7 +245,9 @@ function outcomeLabel(c, snap) {
   if (c.id === "pull_over" && snap.emergency) return snap.emergency.bumper_to_stop_m - c.sim.progress_m > 0.3
     ? `clear, pulls over to the right and stops ${Math.max(0, r1(snap.emergency.bumper_to_stop_m - c.sim.progress_m))} m before its stop` : "clear, pulls over to the right and stops";
   if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
+  if (c.id === "follow_cyclist" && snap.cyclist_pass) return `clear, stays behind the cyclist, ${snap.cyclist_pass.follow_gap_m} m back`;
   if (!c.sim.stays_on_road) return c.sim.off_road_fraction > 0.5 ? "leaves the road" : "touches the road edge";
+  if (snap.cyclist_pass && isCyclistPass(c.law.detour) && c.law.kind === "lane") return `clear, ${snap.cyclist_pass.going ? "carries on round" : "goes round"} the cyclist through the oncoming lane, at least ${snap.cyclist_pass.min_pass_m} m clear of it, and back into the lane ahead of it`;
   if (c.change?.offer === "move_over" && snap.roadside_stop) return `clear, moves over into the ${c.change.dir} lane, away from the stopped ${snap.roadside_stop.name}${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
   if (c.change) return `clear, ${c.change.offer === "pass" || c.change.prepare ? "moves into" : "moves back into"} the ${c.change.dir} lane${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
   if (!c.sim.stays_in_lane) return "clear, drifts out of lane";
@@ -321,12 +338,13 @@ export function situationClauses(snap) {
   if (snap.lane_closure) out.push(closureClause(snap.lane_closure));
   if (snap.double_parked) out.push(vanClause(snap));
   if (snap.snow_plow) out.push(plowClause(snap.snow_plow));
+  if (snap.cyclist_pass) out.push(cyclistClause(snap.cyclist_pass));
   if (snap.roadside_stop) out.push(roadsideClause(snap));
   if (snap.blind_spot) out.push(blindClause(snap.blind_spot));
   if (snap.emergency_ahead) out.push(`${/^[aeiou]/.test(snap.emergency_ahead.kind) ? "An" : "A"} ${snap.emergency_ahead.kind} with its siren on is ${Math.round(snap.emergency_ahead.gap_m)} m ahead, going the car's way: do not follow it within ${FOLLOW_M} m; \`car.target_speed\` already keeps the car back.`);
   if (snap.following) {
     const label = gapLabel(snap.following.gap_m, snap.following.closing_mps);
-    if (snap.following.kind === "cyclist" && snap.following.gap_m < 30) out.push("A cyclist is riding ahead in the lane: stay behind it at a safe gap; passing needs at least 1 m of space, and the candidates that would pass too close have already been removed.");
+    if (snap.following.kind === "cyclist" && snap.following.gap_m < 30 && !snap.cyclist_pass) out.push("A cyclist is riding ahead in the lane: stay behind it at a safe gap; passing needs at least 1 m of space, and the candidates that would pass too close have already been removed.");
     else if (label === "dangerous" || label === "short") out.push(`The ${snap.following.kind === "parked car" ? "parked car" : "car"} ahead is close; keep a safe gap.`);
   }
   if (snap.parking) out.push(parkingClause(snap.parking));
@@ -484,6 +502,24 @@ function vanClause(snap) {
   return `${lead} The oncoming lane is clear for the whole way round now: go round it at no more than ${kmh} km/h (\`car.target_speed\` already does).${round}`;
 }
 
+// A cyclist riding in the car's lane ahead, on a two-way street with one lane each way
+// (sim/cyclist-pass.js).
+function cyclistClause(c) {
+  const w = c.way, room = `${c.min_pass_m} m`, kmh = Math.round(c.limit_mps * 3.6);
+  const lead = `A cyclist (\`${c.cyclist_id}\`) is riding in the car's lane ${c.gap_m > 0 ? `${Math.round(c.gap_m)} m ahead` : "beside the car"}, at ${Math.round(c.speed * 3.6)} km/h. With one lane each way there is no room to pass it within the lane: passing means moving into the oncoming lane, at least ${room} clear of the cyclist (the minimum passing distance where the limit is ${c.min_pass_m === 1 ? "50 km/h or less" : "over 50 km/h"}), and only when the oncoming lane is clear for the whole pass and back. Never squeeze past it in the lane.`;
+  if (c.going && c.go) return `${lead} The car is passing it: carry on round at up to ${kmh} km/h, and back into the lane only well ahead of it; the car's candidates already do.`;
+  const behind = ` Stay behind it, ${c.follow_gap_m} m back (\`follow_cyclist\`).`;
+  if (c.going) return `${lead} The car had started round it, but the oncoming lane is no longer clear: fall back in behind it.${behind}`;
+  if (!c.possible) return `${lead} It cannot be passed here: ${CYCLIST_NOT_HERE[c.why]}.${behind}`;
+  if (c.queued) return `${lead} \`${c.queued}\` is behind it, ahead of the car: wait in turn.${behind}`;
+  if (c.too_close) return `${lead} The car is too close behind it to pull out with room: drop back first.${behind}`;
+  if (!w.clear) {
+    const why = w.oncoming ? `\`${w.oncoming.id}\`, coming the other way, would get there in ${Math.round(w.oncoming.eta_s)} s, and the pass takes ${Math.round(w.need_s)} s` : "the car cannot see far enough along the oncoming lane to know it is clear";
+    return `${lead} It is not clear now: ${why}.${behind}`;
+  }
+  return `${lead} The oncoming lane is clear for the whole pass now: pass it (\`pass_cyclist\`), at up to ${kmh} km/h, ${room} clear; the car's candidates take it round through the oncoming lane and back into its own lane ahead of the cyclist.`;
+}
+
 function crossingClause(snap) {
   const x = snap.level_crossing, t = x.train, w = Math.max(0, Math.round(x.bumper_to_stop_m));
   const where = `Level crossing \`${x.id}\` (a ${x.kind === "tram" ? "streetcar line" : "railway"}, crossbucks only), ${x.on_tracks ? "under the car: it is on the tracks" : `${Math.round(Math.max(0, x.to_rail_m))} m ahead`}.`;
@@ -512,7 +548,7 @@ function parkingClause(p) {
 }
 
 export function needsMotionQuestion(snap) {
-  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.parking
+  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.cyclist_pass || snap.parking
     || snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) || snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) || snap.stuck || (snap.nav && snap.nav.remaining_m < 30));
 }
 
@@ -563,7 +599,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       type: "choice",
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
-        drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}`,
+        drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${snap.cyclist_pass ? " Staying behind a cyclist (`follow_cyclist`), at its speed, and passing it (`pass_cyclist`) are driving too." : ""}`,
         stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
       },
     };

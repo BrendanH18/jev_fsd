@@ -26,7 +26,9 @@ the one lane left, cuts the power to a signal now and then, so everyone takes tu
 at an all-way stop, double-parks delivery vans in the lane, so drivers wait for the oncoming lane to clear
 before going round them, sends a snow plow down the main streets while it snows, which everyone stays
 30 m behind and never passes on the right, closes a lane for a road crew on two-lane streets, where
-everyone uses both lanes to the merge point and then takes turns, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. At the
+everyone uses both lanes to the merge point and then takes turns, has everyone pass a cyclist riding out
+in the lane of a street with one lane each way only once the oncoming lane is clear, leaving at least
+1 m (1.5 m above 50 km/h), parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. At the
 end of a drive the AI driver parallel parks in a space near the destination, and pulls out of it again
 to start the next one. Cars parked at the kerb hide the sidewalk behind them, now and then someone steps
 out from between two of them, and the AI driver keeps to a speed it can stop from beside them. Then
@@ -67,7 +69,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Twenty-nine hand-built scenarios test the situations real drivers get wrong:
+Thirty hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -100,6 +102,7 @@ Twenty-nine hand-built scenarios test the situations real drivers get wrong:
 | **Blind left** | Vancouver, afternoon | A left turn on a green on West 4th Avenue, with a delivery van waiting in the junction opposite to turn left: the lane beside it is hidden behind it, and a car is coming straight through in it. Wait at the edge of the cross street until you can see that lane is clear |
 | **Behind the plow** | Winnipeg, afternoon, snow | A city plow is clearing the left lane of William Avenue at 18 km/h, blue and amber lamps flashing, and the right lane beside it is wide open: stay 30 m behind it all the way, and never go by it on the right |
 | **Take turns** | Calgary, afternoon | The right lane of 14 Avenue SW is closed for a road crew, the left lane is backed up to the cones, and two cars wait at the merge ahead of you: stay in your lane to the merge point, then take your turn, one car from each lane |
+| **Give them room** | Vancouver, afternoon | A cyclist rides out in your lane on the West 10th Avenue bikeway, the kerbs lined with parked cars, one lane each way, and two cars are coming the other way: stay behind until they are by, then pass with at least 1 m and move back in well ahead |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

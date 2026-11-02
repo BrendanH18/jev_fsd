@@ -14,11 +14,16 @@ import { planTurnaround } from "../sim/turnaround.js";
 import { TRY_START_M, planParking, planPullOut } from "../sim/parallel-park.js";
 import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
+import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
 const LANE_TOL = 1.2;
 const CYCLIST_CLEARANCE_M = 1.0;
+// Passing a cyclist through the oncoming lane (sim/cyclist-pass.js): no manoeuvre that goes round one
+// may have the car, its far side across the centre line, meet a vehicle coming the other way in its way
+// closer than this front to front, or this soon at the speed they close at (as the audit counts it).
+const MEET_M = 8, MEET_S = 2, MEET_SIDE_M = 0.5;
 const QUEUE_GAP_M = 2.5;
 const LANE_RETURN_MARGIN_M = 8;
 // Inside the stay-back distance behind a snow plow, a manoeuvre may not end up closer to it than now,
@@ -76,7 +81,10 @@ export function sampleCandidates(snap, world) {
   // brain/sensors.js workZone; and round a double-parked van, through the oncoming lane, once the way
   // round is clear or the car has started round it: see doubleParked)
   // (and, in a lane that is closed ahead, across into the open lane at the merge point: see laneClosure)
+  // (round a cyclist, through the oncoming lane, only `pass_cyclist` goes, at the pass speed the way
+  // round was worked out for, and `hard_brake` keeps to it: see cyclistPass)
   const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.lane_closure?.detour ? { detour: snap.lane_closure.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour } : {};
+  const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
   const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
   // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
@@ -227,6 +235,18 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "wait_behind_van", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(dp.stop_s_route - FRONT) }),
         steer: "hold lane", speed: dp.queued ? "stop behind the car waiting at the double-parked van" : "stop behind the double-parked van and wait for the oncoming lane to clear" });
     }
+    // A cyclist riding in the lane ahead that the car can pass only through the oncoming lane
+    // (sim/cyclist-pass.js): go round it at the pass speed, once the way is clear (or carry on round it);
+    // or, still behind it, stay behind it at the following gap, in the lane.
+    const cp = snap.cyclist_pass;
+    if (cp?.go) {
+      out.push({ id: "pass_cyclist", laneUntil, laneTarget: cp.limit_mps, law: { ...inLane({ kind: "lane", vTarget: cp.limit_mps }), ...passing },
+        steer: cp.going ? "carry on round the cyclist, then back into the lane ahead of it" : `pull out round the cyclist, ${cp.min_pass_m} m clear of it`, speed: speedLabel(cp.limit_mps, v, limit) });
+    }
+    if (cp && !cp.beside) {
+      const behind = inLane({ kind: "lane", vTarget: Math.round(Math.min(limit, cp.follow_mps) * 10) / 10 });
+      out.push({ id: "follow_cyclist", laneUntil, law: behind, steer: "hold lane, behind the cyclist", speed: `stay ${cp.follow_gap_m} m behind the cyclist` });
+    }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({ id: "stop_for_pedestrian", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.pedestrian.s_route - FRONT - CROSSWALK_STOP_M) }),
         steer: "hold lane", speed: snap.pedestrian.mid_block ? "stop short of the crossing pedestrian" : "stop before the crosswalk" });
@@ -282,9 +302,12 @@ export function sampleCandidates(snap, world) {
   }
   // Keep required stopping options when a busy street supplies many lateral alternatives, and lane
   // changes ahead of small nudges.
-  const priority = (c) => c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || c.law.kind === "park" ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
-  const list = dedupe(out).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
-  list.push({ id: "hard_brake", law: inLane({ kind: "hard_brake", offset: nudge }), steer: "hold lane", speed: "brake hard" });
+  const priority = (c) => c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || c.law.kind === "park" || c.id === "pass_cyclist" || c.id === "follow_cyclist" ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
+  // (once round a cyclist has begun, the car carries on round it at the pass speed or, still behind it,
+  // drops back in behind it: nothing else would get it by in the time the way round was clear for)
+  const going = snap.cyclist_pass?.going ? out.filter((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist") : out;
+  const list = dedupe(going).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
+  list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   return list;
 }
 
@@ -346,12 +369,17 @@ export function simulateAll(candidates, snap, world) {
   const turnAt = snap.nav?.turn_round_in_m > 0.3 ? startS + snap.nav.turn_round_in_m : null;
   // where the car stops to reverse into a space, until it starts (likewise)
   const parkAt = snap.parking?.mode === "in" && !world.parking ? snap.parking.stop_s_route : null;
+  // passing a cyclist leaves at least the minimum passing distance where the option is on (1.5 m above
+  // 50 km/h: sim/cyclist-pass.js), and BC's metre otherwise
+  // (the one the pass is planned for, where there is one: the street's own limit, not a school zone's)
+  const cp = snap.cyclist_pass;
+  const cyclistClearance = world.passCyclists ? (cp?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit)) : CYCLIST_CLEARANCE_M;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -432,8 +460,16 @@ export function simulateAll(candidates, snap, world) {
             if (gap < minGap) minGap = gap;
           }
           if (Math.abs(ahead) < box.halfLength + ob.halfLength + 1) minClearance = Math.min(minClearance, Math.max(0, side - box.halfWidth - ob.halfWidth));
-          // passing a cyclist needs a metre of space (BC's minimum passing distance)
-          if (o.n.kind === "bike" && Math.abs(ahead) < box.halfLength + ob.halfLength && side - box.halfWidth - ob.halfWidth < CYCLIST_CLEARANCE_M) closePass = true;
+          // passing a cyclist needs the minimum passing distance: a metre (and with passing cyclists on,
+          // 1.5 m above 50 km/h)
+          if (o.n.kind === "bike" && Math.abs(ahead) < box.halfLength + ob.halfLength && side - box.halfWidth - ob.halfWidth < cyclistClearance) closePass = true;
+          // going round a cyclist with its far side across the centre line, meeting a vehicle coming the
+          // other way in its way (sim/cyclist-pass.js)
+          if (cp && isCyclistPass(law.detour) && lateral - box.halfWidth < cp.centre_line_route && ahead > 0 && Math.abs(wrap(o.n.psi - car.psi)) > Math.PI * 3 / 4
+            && side < box.halfWidth + ob.halfWidth + MEET_SIDE_M) {
+            const gap = ahead - box.halfLength - ob.halfLength, closing = Math.max(0, car.v) + Math.max(0, o.n.v);
+            if (gap < MEET_M || (closing > 0.5 && gap / closing < MEET_S)) meets = true;
+          }
           if (!collision && obbOverlap(box, ob, 0.3)) collision = { id: o.n.id, t: Math.round(t * 10) / 10, kind: Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4 ? "rear_end" : "crossing" };
         }
       }
@@ -461,7 +497,8 @@ export function simulateAll(candidates, snap, world) {
     else if (c.change && (c.change.too_late || lateLeaving)) reject = "lane_change_too_late";
     else if (laneEnds) reject = "must_return_to_route_lane";
     else if (snap.visibility && car.v > snap.visibility.safe_speed_mps + 0.5 && car.v >= snap.ego.v - 0.5 && c.law.kind !== "hard_brake") reject = "visibility_stopping_distance";
-    else if (closePass && c.law.kind !== "hard_brake") reject = "passes_cyclist_too_close";
+    else if (closePass && c.law.kind !== "hard_brake") reject = world.passCyclists ? "passes_cyclist_without_room" : "passes_cyclist_too_close";
+    else if (meets && c.law.kind !== "hard_brake") reject = "crosses_into_oncoming_traffic";
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
     else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" || control.stop_completed ? "fails_to_yield" : "runs_stop";
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";

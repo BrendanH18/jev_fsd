@@ -4,6 +4,9 @@ import { current as weather } from "./weather.js";
 
 const CELL = 25;
 export const DAYLIGHT_RANGE_M = 80;   // the farthest the car sees anything, in clear daylight
+// Looking along a straight street for oncoming traffic before passing a cyclist through the oncoming
+// lane (sim/cyclist-pass.js), by day in clear weather only, the car sees this far: `reach` below.
+export const PASS_SIGHT_M = 250;
 const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
 
 function inside(p, pts) {
@@ -59,9 +62,15 @@ export class Visibility {
     return Math.min(weather.visibility, DAYLIGHT_RANGE_M - this.night * (58 - 23 * beam));
   }
 
-  canSee(observer, x, y) {
+  // How far `observer` sees towards (x, y), looking out to `reach` (see PASS_SIGHT_M) where that is
+  // given: by day in clear weather only; otherwise as ever.
+  reachAt(observer, x, y, reach = 0) {
+    return reach && !this.night && weather.visibility >= DAYLIGHT_RANGE_M ? Math.max(reach, DAYLIGHT_RANGE_M) : this.rangeAt(observer, x, y);
+  }
+
+  canSee(observer, x, y, reach = 0) {
     const d = Math.hypot(x - observer.x, y - observer.y);
-    if (d > this.rangeAt(observer, x, y)) return false;
+    if (d > this.reachAt(observer, x, y, reach)) return false;
     return !this.occluded([observer.x, observer.y], [x, y]);
   }
 
@@ -83,10 +92,10 @@ export class Visibility {
     return false;
   }
 
-  sees(observer, object) {
+  sees(observer, object, reach = 0) {
     const box = object.obb();
     // A visible nose still counts when the center is behind a corner.
     const dx = Math.cos(box.heading) * box.halfLength, dy = Math.sin(box.heading) * box.halfLength;
-    return [[0, 0], [dx, dy], [-dx, -dy]].some(([x, y]) => this.canSee(observer, box.center[0] + x, box.center[1] + y));
+    return [[0, 0], [dx, dy], [-dx, -dy]].some(([x, y]) => this.canSee(observer, box.center[0] + x, box.center[1] + y, reach));
   }
 }

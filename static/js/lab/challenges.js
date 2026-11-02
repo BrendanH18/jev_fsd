@@ -21,6 +21,7 @@ import { legalStretches, straight as straightKerb } from "../sim/parallel-park.j
 import { QUIET, STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { PLOW_MPS } from "../sim/snow-plow.js";
 import { LC_LIMIT_MPS, SPAN_M as LC_SPAN_M, laneClosureSites } from "../sim/lane-closure.js";
+import { passStreet } from "../sim/cyclist-pass.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -82,6 +83,8 @@ export const CHALLENGES = [
     description: "It's snowing on William Avenue, two lanes each way. A city plow is clearing the left lane just ahead of you at 18 km/h, its blue and amber lamps flashing, and the right lane beside it is wide open.", lesson: "Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h): that is Manitoba's law, and other provinces' handbooks say the same. Never pass one on the right, the side its blade throws snow and debris, and don't pass one at all when blowing snow hides the road ahead. Pass only on the left, where you can see the way is clear, and move back in well ahead of it." },
   { id: "zipper", title: "Take turns", map: "calgary", weather: "dry", time: "afternoon", seed: 29042, icon: "⋈", difficulty: "Courtesy", hazard: "lane-closure", street: "14 Avenue SW",
     description: "A road crew has closed the right lane of 14 Avenue SW, one-way with two lanes. The left lane is backed up to the cones, two cars in your lane are waiting at the merge, and the lane ahead of you is otherwise empty.", lesson: "Where a lane is closed, zipper merge: in slow traffic, stay in your lane right up to the merge point, then take turns, one vehicle from each lane. Manitoba's driver's handbook teaches it, and Ontario cities and the Alberta Motor Association ask drivers to merge this way. Merging early makes the queue longer, and following the car ahead in out of turn forces the driver whose turn it is to brake. Wait for your turn, then go." },
+  { id: "cyclist-pass", title: "Give them room", map: "kitsilano", weather: "dry", time: "afternoon", seed: 30042, icon: "⇉", difficulty: "Patience", hazard: "cyclist-pass", passCyclists: true, street: "West 10th Avenue",
+    description: "A cyclist is riding the West 10th Avenue bikeway ahead of you, out in your lane: the kerb is lined with parked cars, and there's one lane each way. Two cars are coming the other way.", lesson: "Pass a cyclist with at least 1 m of room where the limit is 50 km/h or less, and 1.5 m above: that is BC's minimum passing distance law, and Québec and Ontario have one too. With one lane each way, that means moving into the oncoming lane, so stay well back until it is clear for the whole pass, then go by and move back in well ahead of them. Never squeeze past in the lane." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -228,6 +231,36 @@ function zipperSites(map, street) {
     zipSiteCache.set(map, sites);
   }
   const sites = zipSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
+// Give them room: passing a cyclist (sim/cyclist-pass.js) on a straight block of a two-way bike route
+// with one lane each way and a parking lane on the right, at least CP_BLOCK_M long, with no marked
+// crosswalk or level crossing, that carries straight on along the same street (on the challenge's
+// `street`, where it has one). Both kerbs are lined with cars CP_PARKED_GAP_M apart wherever one may
+// park, so the cyclist rides out in the lane. The car starts from a standstill, its front CP_START_M
+// along the block; the cyclist rides CP_AHEAD_M ahead of it at CP_BIKE_MPS; and CP_CARS cars,
+// CP_CAR_GAP_M apart, come down the oncoming lane at the street's limit, the first CP_ONCOMING_M ahead
+// of the car: in sight from the start, and in the way of a pass straight away. Once they are by, the
+// way is clear. The route ends CP_PAST_M along the next block.
+const CP_START_M = 20, CP_AHEAD_M = 14, CP_BIKE_MPS = 4.2, CP_CARS = 2, CP_CAR_GAP_M = 12, CP_ONCOMING_M = 50, CP_PAST_M = 80, CP_PARKED_GAP_M = 1.6, CP_BLOCK_M = 160;
+const cyclistSiteCache = new WeakMap();
+function cyclistPassSites(map, street) {
+  if (!cyclistSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang;
+    for (const e of map.edges.values()) {
+      const ps = passStreet(map, e.id);
+      if (!ps || !e.bike || !e.parking?.[1] || e.length < CP_BLOCK_M || ps.crosswalks.length || ps.rails.length || !straightKerb(e, 0, e.length)) continue;
+      const next = map.successors(e.id).find(id => id !== ps.opposite && map.edges.get(id).name === e.name && Math.abs(map.turnAngle(e.id, id)) < 0.2 && passStreet(map, id) && map.edges.get(id).length > CP_PAST_M + 10);
+      if (!next) continue;
+      const lane = map.lane(e.id, 0), ahead = map.lane(next, 0);
+      sites.push({ lane, ahead, startS: (CP_START_M - front) * lane.length / e.length, goalS: CP_PAST_M * ahead.length / map.edges.get(next).length,
+        cyclist: { edge: e.id, next, rear: CP_START_M + CP_AHEAD_M } });
+    }
+    sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    cyclistSiteCache.set(map, sites);
+  }
+  const sites = cyclistSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
   return on.length ? on : sites;
 }
 
@@ -878,23 +911,26 @@ export function challengeScenario(map, challenge) {
   const zips = challenge.hazard === "lane-closure" ? zipperSites(map, challenge.street) : null;
   if (zips && !zips.length) throw new Error("This map has no straight block with two lanes going one way, a limit above 30 km/h and room for a lane closure with a queue.");
   const zip = zips ? zips[Math.floor(random() * zips.length)] : null;
-  const start = zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const cycs = challenge.hazard === "cyclist-pass" ? cyclistPassSites(map, challenge.street) : null;
+  if (cycs && !cycs.length) throw new Error("This map has no long straight block of a two-way bike route with one lane each way and a parking lane, that carries straight on.");
+  const cyc = cycs ? cycs[Math.floor(random() * cycs.length)] : null;
+  const start = cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge;
-  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
+  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge || cyc?.ahead.edge;
+  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : cyc ? cyc.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   // (through the signal, along the queue past it)
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
   // (past a double-parked van, along its street only)
-  for (let i = 0; i < 12 && !van && !park && !step && !plow && !zip && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && !van && !park && !step && !plow && !zip && !cyc && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -904,7 +940,7 @@ export function challengeScenario(map, challenge) {
     chain.push(lane); seen.add(id); length += lane.length;
   }
   // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
-  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : zip ? zip.goalS : last.length - 10;
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : zip ? zip.goalS : cyc ? cyc.goalS : last.length - 10;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
@@ -928,6 +964,7 @@ export function challengeScenario(map, challenge) {
     ...(step ? { stepOut: step.stepOut } : {}),
     ...(plow ? { snowPlow: plow.plow } : {}),
     ...(zip ? { laneClosure: zip.closure } : {}),
+    ...(cyc ? { cyclistPass: cyc.cyclist } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -975,6 +1012,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.blindLeft) Object.assign(world.challenge, placeBlindLeft(world, fleet, scenario.blindLeft));
   if (scenario.snowPlow) Object.assign(world.challenge, placePlow(world, fleet, scenario.snowPlow, scenario.start));
   if (scenario.laneClosure) Object.assign(world.challenge, placeZipper(world, fleet, scenario.laneClosure, challenge.seed));
+  if (scenario.cyclistPass) Object.assign(world.challenge, placeCyclistPass(world, fleet, scenario.cyclistPass, challenge.seed));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -1494,6 +1532,41 @@ function placeStepOut(world, { edge, at }, seed) {
   ped.frozen = 1e6;
   world.crowd.list.push(ped);
   return { pedestrianId: ped.id, at: from };
+}
+// Give them room: both kerbs of the block lined with parked cars (see cyclistPassSites), staying put; the
+// cyclist out in the lane, riding straight on; and the cars coming the other way, already moving.
+function placeCyclistPass(world, fleet, { edge, next, rear }, seed) {
+  const map = world.map, random = rng(seed), e = map.edges.get(edge), o = map.edges.get(passStreet(map, edge).opposite);
+  const colors = [0x8d9299, 0x2b3a55, 0xeeeeea, 0x1a1c20, 0x6b7f5e, 0x9b1e1e, 0xc4c8cc];
+  let n = 0;
+  for (const side of [e, o]) {
+    const lat = curbOffset(side, CAR);
+    for (const [lo, hi] of legalStretches(map, side)) {
+      for (let r = lo + 0.5; r + CAR.length <= hi - 0.5; r += CAR.length + CP_PARKED_GAP_M) {
+        const s = r + CAR.rearOverhang, p = pointAt(side.pts, side.cum, s), h = headingAt(side.pts, side.cum, s), k = n++;
+        const car = new Vehicle(p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, h, 0);
+        Object.assign(car, { id: `challenge_parked_${k + 1}`, color: colors[Math.floor(random() * colors.length)], style: k % 6, curb: "right", edge: side.id, stay: true });
+        world.parked.add(car);
+      }
+    }
+  }
+  const lane = map.lane(edge, 0), side = e.lane_width / 2 - 0.75, s = (rear + BIKE.rearOverhang) * lane.length / e.length;
+  const p = pointAt(lane.pts, lane.cum, s), psi = headingAt(lane.pts, lane.cum, s);
+  const bike = new Vehicle(p[0] + Math.sin(psi) * side, p[1] - Math.cos(psi) * side, psi, CP_BIKE_MPS, BIKE);
+  Object.assign(bike, { id: "challenge_cyclist", kind: "bike", color: 0x2f855a, v0: CP_BIKE_MPS, side, strip: false, driver: { aMax: 0.9, b: 2, s0: 2, T: 1.5, react: 0.6, lcRate: 0 },
+    stopMem: new StopMemory(), path: new NpcPath(map, fleet.random, { bike: true }), frozen: 0, waiting: 0 });
+  bike.path.start(edge, 0, s, [[next, 0]]); fleet.vehicles.push(bike);
+  const ol = map.lane(o.id, 0), ids = [], front = CAR.length - CAR.rearOverhang;
+  for (let i = 0; i < CP_CARS; i++) {
+    // (rear axles, in the oncoming edge's own `s`: the first one's front CP_ONCOMING_M ahead of the car's)
+    const so = (o.length - (CP_START_M + CP_ONCOMING_M + i * CP_CAR_GAP_M) + front) * ol.length / o.length;
+    const q = pointAt(ol.pts, ol.cum, so), car = new Vehicle(q[0], q[1], headingAt(ol.pts, ol.cum, so), o.limit);
+    Object.assign(car, { id: `challenge_oncoming_${i + 1}`, color: [0x9b1e1e, 0xb0b5b9][i % 2], v0: o.limit, driver: { aMax: 1.4, b: 2, s0: 2, T: 1.3, react: 0.5 + random() * 0.3, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+    car.path.start(o.id, 0, so);
+    fleet.vehicles.push(car); ids.push(car.id);
+  }
+  return { cyclistId: bike.id, cyclistCarIds: ids, at: [bike.x, bike.y] };
 }
 function placeCyclist(world, fleet, { edge, s, then }) {
   const map = world.map, e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), side = stripOffset(e, lane.idx);

@@ -11,7 +11,9 @@
 // double-parked in its lane a driver waits until the oncoming lane is clear, then goes round it through
 // that lane (sim/double-parked.js). Where a road crew closes one of two lanes, drivers zipper merge: both
 // lanes up to the merge point, then one from each in turn (sim/lane-closure.js). While it snows, plows clear the main streets; nobody passes one on
-// the right, and only with a clear view ahead on the left (sim/snow-plow.js).
+// the right, and only with a clear view ahead on the left (sim/snow-plow.js). With `passCyclists` on, on a
+// two-way street with one lane each way a driver behind a cyclist riding in the lane passes it through
+// the oncoming lane, the minimum passing distance clear, once that lane is clear (sim/cyclist-pass.js).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -37,6 +39,8 @@ import { WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, marksOn, paddl
 import { DECIDE_M, PASS_DECEL, PASS_MPS, VAN_LOOK_M, queuedAhead, wayRound } from "./double-parked.js";
 import { AHEAD_M as LC_AHEAD_M, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, OWED_DECEL as LC_OWED_DECEL, THROUGH_M, canStop as canStopForMerge, detourOf as closureDetour } from "./lane-closure.js";
 import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
+import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass, queuedBehind, ridingIn, wayClear as cyclistWayClear } from "./cyclist-pass.js";
+import { onStreet } from "./double-parked.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -44,6 +48,10 @@ const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
 // round it (sim/double-parked.js).
 const WAIT_SLACK_M = 1.5;
 const UNSIGNED_NEAR_M = 15;
+// Passing a cyclist (sim/cyclist-pass.js): a driver moves across at this lateral speed per m/s it
+// drives, between these; one that falls back in behind it waits this long before it looks again; and
+// the cyclist stays the one it follows until it is this much short of the minimum passing distance clear.
+const CP_SIDE_PER_MPS = 0.2, CP_SIDE_MPS = [0.6, 1.4], CP_RETRY_S = 2, CP_LEAD_SLACK_M = 0.15;
 // A driver too close to its line to stop there when the lights at its signal go out (within
 // DARK_CAUGHT_S of it) goes on through, for DARK_GO_S.
 const DARK_CAUGHT_S = 0.5, DARK_GO_S = 10;
@@ -701,7 +709,13 @@ export class NpcFleet {
       if (!dp && n.vanGo) n.vanGo = null;
       const dpShift = dp?.go ? detourAt(dp.detour, path.s + lookahead(n.v)) : 0;
       const lzShift = lz?.detour ? detourAt(lz.detour, path.s + lookahead(n.v)) : 0;
+      // a cyclist riding in its lane ahead on a two-way street with one lane each way: round it through
+      // the oncoming lane once that is clear, the minimum passing distance clear of it (sim/cyclist-pass.js)
+      // (one that has started and is now held up by something else eases back in)
+      const passes = world.passCyclists && n.kind !== "bike" && !n.transit && !n.school && !isPlow(n) && !n.pull;
+      const cyc = passes && (n.cyc || (!yielding && !dp && !lz && !wz)) ? this.cyclistPass(n, edge, all, dt, !!(yielding || dp || lz || wz)) : null;
       let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.transit ? n.transit.shift : 0) + (n.nudge || 0) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) + wzShift + dpShift + lzShift;
+      if (cyc) offset += n.cpShift;
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -723,7 +737,8 @@ export class NpcFleet {
         if (lz?.detour && o === lz.zone.closure) continue;
         // (nor round a double-parked van)
         if (dp?.go && o === dp.van) continue;
-        const os = o.spec || CAR, reach = (spec.width + os.width) / 2 + LEADER_MARGIN_M;
+        // (a cyclist it is passing, until it is the minimum passing distance clear of it, near enough)
+        const os = o.spec || CAR, reach = (spec.width + os.width) / 2 + (cyc && o === cyc.bike ? cyc.min - CP_LEAD_SLACK_M : LEADER_MARGIN_M);
         // in the way on the current lane, or on the target lane of a lane change: closer to the
         // path than the two half-widths plus a margin
         // (easing past a bus at its stop, `nudge`, the line it keeps to moves over with it; going
@@ -733,7 +748,7 @@ export class NpcFleet {
           if (lz?.detour) lat -= detourAt(lz.detour, at) - lzShift;
           // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
           const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
-          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0)) <= reach;
+          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0)) <= reach;
         };
         const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
         if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral, p.s)) {
@@ -1535,6 +1550,61 @@ export class NpcFleet {
         detour: d ? { from: at(d.from), full: at(d.full), back: at(d.back), to: at(d.to), shift: d.shift } : null };
     }
     return null;
+  }
+
+  // Passing a cyclist riding in the driver's lane ahead, on a two-way street with one lane each way
+  // (sim/cyclist-pass.js). Once its front is within DECIDE_M of the cyclist's rear, with nobody between
+  // them, it starts over if the pass is on, it is where the pass would start easing over, and the way is
+  // clear (as this driver pulls away), and then
+  // eases across to the plan's shift and back in once its rear is RETURN_M past the cyclist's front; the
+  // cyclist stays the one it follows until it is clear of it. Still behind the cyclist, it falls back
+  // in behind it if the way stops being clear, and looks again CP_RETRY_S later. `n.cyc` is the pass
+  // ({ id, phase: "out" | "back", shift, min }), `n.cpShift` how far across it is now. Returns { bike,
+  // min (the minimum passing distance) } while it is passing or easing back, or null.
+  cyclistPass(n, pe, all, dt, held = false) {
+    const world = this.world, map = this.map;
+    if (n.cycWait > 0) n.cycWait -= dt;
+    const e = map.edges.get(pe.id), street = passStreet(map, pe.id), on = street ? onStreet(e, n) : null;
+    const front = on ? on.s + n.spec.length - n.spec.rearOverhang : 0, D = n.driver || IDM;
+    const self = { accel: D.aMax, react: D.react || 0, vmax: n.v0 * weather.speed };
+    let rec = n.cyc, bike = null, bon = null;
+    if (rec) {
+      bike = all.find((v) => v.id === rec.id) || null;
+      if (!bike) { n.cyc = null; n.cpShift = 0; return null; }
+      bon = bike && on?.same ? ridingIn(e, bike) : null;
+    } else {
+      if (!on?.same || n.cycWait > 0 || held) return null;
+      let best = Infinity;
+      for (const b of all) {
+        if (b.kind !== "bike" || Math.abs(b.x - n.x) > CP_DECIDE_M + 10 || Math.abs(b.y - n.y) > CP_DECIDE_M + 10) continue;
+        const q = ridingIn(e, b), g = q ? q.s - (b.spec || BIKE).rearOverhang - front : Infinity;
+        if (g > -0.5 && g < CP_DECIDE_M && g < best) { best = g; bike = b; bon = q; }
+      }
+      if (!bike) return null;
+      const others = all.filter((x) => x !== n), plan = planPass(world, e, { front, v: n.v, spec: n.spec, bike, on: bon, driver: self, others });
+      // (and only once it is where it would start over: no sooner into the oncoming lane than it needs)
+      if (!plan?.possible || plan.from > front + 2 || queuedBehind(e, front, plan, n, all) || !cyclistWayClear(world, plan, others).clear) return null;
+      rec = n.cyc = { id: bike.id, phase: "out", shift: plan.shift, min: plan.min_pass_m };
+      n.cpShift = n.cpShift || 0;
+    }
+    if (rec.phase === "out") {
+      const bs = bike.spec || BIKE, bRear = bon ? bon.s - bs.rearOverhang : 0;
+      if (!bon || (held && front < bRear - 0.5)) rec.phase = "back";
+      else {
+        if (on.s - n.spec.rearOverhang > bRear + bs.length + CP_RETURN_M) rec.phase = "back";
+        else if (front < bRear - 0.5) {
+          // (still behind it: if the way is no longer clear, it falls back in behind)
+          const others = all.filter((x) => x !== n), plan = planPass(world, e, { front, v: n.v, spec: n.spec, bike, on: bon, driver: self, others });
+          if (!plan?.possible || !cyclistWayClear(world, plan, others).clear) { rec.phase = "back"; n.cycWait = CP_RETRY_S; }
+          else rec.shift = plan.shift;
+        }
+      }
+    }
+    const target = rec.phase === "out" ? rec.shift : 0;
+    const rate = Math.max(CP_SIDE_MPS[0], Math.min(CP_SIDE_MPS[1], CP_SIDE_PER_MPS * n.v)) * dt;
+    n.cpShift += Math.max(-rate, Math.min(rate, target - n.cpShift));
+    if (rec.phase === "back" && Math.abs(n.cpShift) < 0.02) { n.cyc = null; n.cpShift = 0; return null; }
+    return { bike, min: rec.min };
   }
 
   // A van double-parked in the driver's lane ahead on its path, within VAN_LOOK_M (sim/double-parked.js),

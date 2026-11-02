@@ -60,9 +60,10 @@ function hiderOf(observer, x, y, bodies) {
 }
 
 // True when every line from `observer` to vehicle or cyclist `o` passes through another road vehicle.
-export function hiddenVehicle(world, observer, o) {
+// (`reach`: as far as the observer is looking, where that is further: see sim/visibility.js PASS_SIGHT_M)
+export function hiddenVehicle(world, observer, o, reach = 0) {
   const d = Math.hypot(o.x - observer.x, o.y - observer.y);
-  if (d < 1 || d > HIDE_RANGE_M) return false;
+  if (d < 1 || d > Math.max(HIDE_RANGE_M, reach + 10)) return false;
   const box = o.obb();
   const bodies = blockersNear(world, observer, box.center[0], box.center[1], o);
   if (!bodies.length) return false;

@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+- Passing cyclists with room (`static/js/sim/cyclist-pass.js`). On a two-way street with one lane each
+  way, traffic and the driven car used to trail a cyclist riding in the lane for as long as it rode
+  there. Now they go round it through the oncoming lane when that is clear, leaving the minimum passing
+  distance: 1 m where the limit is 50 km/h or less and 1.5 m above (BC's minimum passing distance
+  regulation, 2024; Québec's Highway Safety Code s. 341; Ontario's Highway Traffic Act s. 148(6.1) sets
+  1 m). The pass eases over to be across by the time the driver's front is 2 m short of the cyclist's
+  rear wheel, stays across until its rear is 5 m past the cyclist's front, and eases back in, at the
+  cyclist's speed plus 20 km/h up to the limit; it must gain at least 2.5 m/s on the cyclist, end 5 m
+  short of the junction ahead, 10 m short of a marked crosswalk and 30 m short of a level crossing, pass
+  no work zone, lane closure, double-parked van, school bus with its reds on or stopped streetcar, and
+  leave room to move back in ahead of the cyclist. It starts only when nobody coming the other way
+  (along the street, or turning into the oncoming lane at the junction ahead) would reach the end of the
+  pass within the time it takes plus 2 s, and the driven car must also be able to see that far along the
+  oncoming lane (or to the end of the street). For this, by clear daylight, it looks along the street out
+  to 250 m (`PASS_SIGHT_M`, `sim/visibility.js`), past the 80 m it sees everything else in; buildings and,
+  with hidden hazards on, other vehicles still block the view. By night and in rain, snow or fog it stays
+  behind. Once across it carries on; still behind the
+  cyclist, it falls back in if the way stops being clear. Only the first driver behind a cyclist passes
+  it at a time. A cyclist riding the empty parking lane is passed in the lane, as before.
+- The driven car's sensing reports `cyclist_pass` (the cyclist, the gap, the minimum passing distance,
+  whether a pass is on and why not, the way, who is ahead of the car behind it, whether it is going). The
+  candidates are `pass_cyclist`, which goes round, and `follow_cyclist`, which stays 8 m behind; only
+  `pass_cyclist` carries the way round, and once the car has started round the only candidates are
+  carrying on round, dropping back in behind while still behind the cyclist, and braking hard. Candidates that
+  would pass a cyclist closer than the minimum passing distance are rejected as
+  `passes_cyclist_without_room` (1.5 m above 50 km/h, the metre otherwise), and ones that would have
+  the car, across the centre line passing a cyclist, meet an oncoming vehicle as
+  `crosses_into_oncoming_traffic`. Rules passes when the way is clear, for a modest cost, and follows
+  otherwise; the cautious agent takes `pass_cyclist` when it is offered, so as not to pass slowly.
+  Decision models and LLMs get `cyclist_pass`, a situation line, a motion criterion and a prompt line.
+- The audit counts passing a cyclist closer than the minimum passing distance as `close_passes`, which
+  fails a drive (`passed a cyclist too close`), and crossing into the way of oncoming traffic while
+  passing one as a failure to yield. Coaching counts both (`close_passes`, `cyclist_cutoffs`), with
+  tips, and passing is not driving the wrong way. The HUD says "CYCLIST AHEAD · ONCOMING TRAFFIC · STAY
+  BEHIND", "CYCLIST AHEAD · CAN'T SEE FAR ENOUGH · STAY BEHIND", "CYCLIST AHEAD · WAY CLEAR · PASS WITH
+  1 M", "PASSING A CYCLIST · 1 M CLEAR · BACK IN WELL AHEAD OF THEM" and, where a pass is not on, why (a
+  junction or crosswalk ahead, say); AI eyes outline the cyclist in amber.
+- It is on in free drives (`?cyclistpass=0` turns it off) and in the new challenge only (`World` option
+  `passCyclists`); with it off nothing is computed, and the metrics have no `close_passes`.
+- New challenge, "Give them room" (Vancouver, the West 10th Avenue bikeway in Kitsilano, 30 km/h): a
+  cyclist rides out in the lane ahead, both kerbs lined with parked cars, and two cars come the other way.
+  Rules and the cautious agent stay behind until they are by, then pass 1.25 m clear at closest and move back in
+  ahead of the cyclist.
+- New checks in `scripts/test_cyclist_passing.mjs`. The seeded benchmark and the other twenty-nine
+  challenges play out exactly as before.
+
 - Lane closures and the zipper merge (`static/js/sim/lane-closure.js`, `render/lane-closure.js`). A road
   crew closes the curb lane of a straight block with two lanes going its way, with cones angled across it
   from the merge point, its truck and flashing arrow board, two workers, a "right lane closed ahead" sign
