@@ -336,9 +336,19 @@ await test("sensing and candidates: behind the cyclist while the way is not clea
   // (a squeeze past in the lane, 1.2 m clear: allowed by the metre without the option, not by 1.5 m above 50 km/h)
   drive(world, { front: 40, v: 6 });
   const squeeze = () => ({ id: "squeeze", law: { kind: "lane", offset: -(1.2 + (BIKE.width + CAR.width) / 2 - IN_LANE), vTarget: 8 } });
+  // (with no pass planned, by the road's limit; with one, by the distance it was planned for, from the
+  // street's own limit, not a school zone's)
   const fast = buildSnapshot(world); fast.road = { ...fast.road, limit: 60 / 3.6 };
+  const planned = fast.cyclist_pass;
+  fast.cyclist_pass = null;
   const s1 = squeeze(); simulateAll([s1], fast, world);
   assert.equal(s1.reject, "passes_cyclist_without_room", "1.5 m above 50 km/h");
+  fast.cyclist_pass = { ...planned, min_pass_m: 1.5 };
+  const s3 = squeeze(); simulateAll([s3], fast, world);
+  assert.equal(s3.reject, "passes_cyclist_without_room", "planned for 1.5 m");
+  const slow = buildSnapshot(world); slow.road = { ...slow.road, limit: 60 / 3.6 };
+  const s4 = squeeze(); simulateAll([s4], slow, world);
+  assert.ok(slow.cyclist_pass?.min_pass_m === 1 && s4.reject !== "passes_cyclist_without_room", `planned for 1 m on a 30 km/h street: ${s4.reject}`);
   world.passCyclists = false;
   const off = buildSnapshot(world), s2 = squeeze(); simulateAll([s2], off, world);
   world.passCyclists = true;

@@ -371,8 +371,9 @@ export function simulateAll(candidates, snap, world) {
   const parkAt = snap.parking?.mode === "in" && !world.parking ? snap.parking.stop_s_route : null;
   // passing a cyclist leaves at least the minimum passing distance where the option is on (1.5 m above
   // 50 km/h: sim/cyclist-pass.js), and BC's metre otherwise
-  const cyclistClearance = world.passCyclists ? minPassM(snap.road?.limit ?? snap.limit) : CYCLIST_CLEARANCE_M;
+  // (the one the pass is planned for, where there is one: the street's own limit, not a school zone's)
   const cp = snap.cyclist_pass;
+  const cyclistClearance = world.passCyclists ? (cp?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit)) : CYCLIST_CLEARANCE_M;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
