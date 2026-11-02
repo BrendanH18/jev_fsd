@@ -286,8 +286,9 @@ export class World {
     return this.hazards && hideable(o) && this.visibility.sees(observer, o) && hiddenVehicle(this, observer, o);
   }
 
-  sees(observer, o) {
-    if (!this.visibility.sees(observer, o)) return false;
+  // (`reach`: looking further along a street by clear daylight, see sim/visibility.js PASS_SIGHT_M)
+  sees(observer, o, reach = 0) {
+    if (!this.visibility.sees(observer, o, reach)) return false;
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
     return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o));
   }

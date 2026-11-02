@@ -81,9 +81,10 @@ export function sampleCandidates(snap, world) {
   // brain/sensors.js workZone; and round a double-parked van, through the oncoming lane, once the way
   // round is clear or the car has started round it: see doubleParked)
   // (and, in a lane that is closed ahead, across into the open lane at the merge point: see laneClosure)
-  // (and round a cyclist, through the oncoming lane, once the way is clear or the car has started round
-  // it: see cyclistPass)
-  const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.lane_closure?.detour ? { detour: snap.lane_closure.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour } : snap.cyclist_pass?.detour ? { detour: snap.cyclist_pass.detour } : {};
+  // (round a cyclist, through the oncoming lane, only `pass_cyclist` goes, at the pass speed the way
+  // round was worked out for, and `hard_brake` keeps to it: see cyclistPass)
+  const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.lane_closure?.detour ? { detour: snap.lane_closure.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour } : {};
+  const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
   const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
   // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
@@ -239,12 +240,11 @@ export function sampleCandidates(snap, world) {
     // or, still behind it, stay behind it at the following gap, in the lane.
     const cp = snap.cyclist_pass;
     if (cp?.go) {
-      out.push({ id: "pass_cyclist", laneUntil, laneTarget: cp.limit_mps, law: inLane({ kind: "lane", vTarget: cp.limit_mps }),
+      out.push({ id: "pass_cyclist", laneUntil, laneTarget: cp.limit_mps, law: { ...inLane({ kind: "lane", vTarget: cp.limit_mps }), ...passing },
         steer: cp.going ? "carry on round the cyclist, then back into the lane ahead of it" : `pull out round the cyclist, ${cp.min_pass_m} m clear of it`, speed: speedLabel(cp.limit_mps, v, limit) });
     }
     if (cp && !cp.beside) {
       const behind = inLane({ kind: "lane", vTarget: Math.round(Math.min(limit, cp.follow_mps) * 10) / 10 });
-      if (isCyclistPass(behind.detour)) delete behind.detour;
       out.push({ id: "follow_cyclist", laneUntil, law: behind, steer: "hold lane, behind the cyclist", speed: `stay ${cp.follow_gap_m} m behind the cyclist` });
     }
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
@@ -303,8 +303,11 @@ export function sampleCandidates(snap, world) {
   // Keep required stopping options when a busy street supplies many lateral alternatives, and lane
   // changes ahead of small nudges.
   const priority = (c) => c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || c.law.kind === "park" || c.id === "pass_cyclist" || c.id === "follow_cyclist" ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
-  const list = dedupe(out).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
-  list.push({ id: "hard_brake", law: inLane({ kind: "hard_brake", offset: nudge }), steer: "hold lane", speed: "brake hard" });
+  // (once round a cyclist has begun, the car carries on round it at the pass speed or, still behind it,
+  // drops back in behind it: nothing else would get it by in the time the way round was clear for)
+  const going = snap.cyclist_pass?.going ? out.filter((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist") : out;
+  const list = dedupe(going).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
+  list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   return list;
 }
 

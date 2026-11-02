@@ -29,8 +29,10 @@
 // into the oncoming lane at the junction ahead (as round a double-parked van: sim/double-parked.js
 // arrival), would reach the end of the pass sooner than MARGIN_S after the driver has its front there;
 // and, for the driven car, it can see along the oncoming lane
-// that far (or as far as it ever sees, DAYLIGHT_RANGE_M less SIGHT_SLACK_M, so by night or in fog it
-// stays behind). Only the first driver behind the cyclist passes it (queuedBehind). Once a driver has
+// that far, or to the end of the street. Looking along the street for this, by clear daylight, it sees
+// out to PASS_SIGHT_M (sim/visibility.js), past the DAYLIGHT_RANGE_M it sees everything else in;
+// further than it can see now, less SIGHT_SLACK_M, it cannot tell, and stays behind, so it always does
+// by night and in rain, snow or fog. Only the first driver behind the cyclist passes it (queuedBehind). Once a driver has
 // started over it carries on, unless the way stops being clear while it is still behind the cyclist:
 // then it falls back in behind it.
 //
@@ -42,7 +44,7 @@
 
 import { CAR, BIKE } from "./vehicle.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
-import { DAYLIGHT_RANGE_M } from "./visibility.js";
+import { DAYLIGHT_RANGE_M, PASS_SIGHT_M } from "./visibility.js";
 import { arrival, isVan, onStreet, oppositeOf } from "./double-parked.js";
 import { railIndex } from "./rail.js";
 import { redsOn } from "./school-bus.js";
@@ -193,18 +195,30 @@ export function wayClear(world, plan, others, sight = null) {
     const eta = arrival(map, d, n, by);
     if (eta !== null && eta < by && (!first || eta < first.eta_s)) first = { vehicle: n, eta_s: eta };
   }
-  // (as far along the oncoming lane as anyone at the street's limit would come in that time)
-  const seen = !sight || sight(Math.min(e.length - 1, plan.to + (e.limit || 11.2) * by, plan.front + DAYLIGHT_RANGE_M - SIGHT_SLACK_M));
+  // (as far along the oncoming lane as anyone at the street's limit would come in that time, or to the
+  // street's end; further than the car can ever see, it cannot tell, and stays behind)
+  const need = Math.min(e.length - 1, plan.to + (e.limit || 11.2) * by);
+  const seen = !sight || (need <= plan.front + sight.reach - SIGHT_SLACK_M && sight(need));
   return { clear: !first && seen, need_s: plan.need_s, oncoming: first, sees_far_enough: seen };
 }
 
 // What `observer` (the driven car) can see along the oncoming lane by pass `plan`: sight(s), as for wayClear.
+// It looks out to PASS_SIGHT_M by clear daylight (sim/visibility.js); `sight.reach` is how far that is now.
 export function sightFor(world, plan, observer = world.ego) {
   const map = world.map, e = map.edges.get(plan.edge), o = map.edges.get(plan.opposite), lat = -(o.lane_offsets?.[0] ?? o.lane_width / 2);
-  return (s) => {
+  const sight = (s) => {
     const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-    return world.visibility.canSee(observer, p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat);
+    return world.visibility.canSee(observer, p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, PASS_SIGHT_M);
   };
+  sight.reach = world.visibility.reachAt(observer, observer.x, observer.y, PASS_SIGHT_M);
+  return sight;
+}
+
+// What `observer` (the driven car) can see that may be in the way of a pass: everything but pedestrians,
+// looking out to PASS_SIGHT_M by clear daylight.
+export function passOthers(world, observer = world.ego) {
+  const reach = world.visibility.reachAt(observer, observer.x, observer.y, PASS_SIGHT_M);
+  return world.obstaclesNear(observer.x, observer.y, reach + 10).filter((n) => n !== observer && n.kind !== "pedestrian" && world.sees(observer, n, PASS_SIGHT_M));
 }
 
 // Someone ahead of a driver whose front is `front` along edge `e`, between it and the cyclist of pass
@@ -261,7 +275,7 @@ export function egoView(world) {
     best = { bike: b, e, bon, front, gap };
   }
   if (!best) return null;
-  const others = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M + 10).filter((n) => n !== ego && n.kind !== "pedestrian");
+  const others = passOthers(world);
   const plan = planPass(world, best.e, { front: best.front, v: ego.v, spec: ego.spec, bike: best.bike, on: best.bon, others });
   if (!plan) return null;
   const way = plan.possible ? wayClear(world, plan, others, sightFor(world, plan)) : null;

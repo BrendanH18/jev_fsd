@@ -616,7 +616,11 @@ cyclist. The way is clear (`wayClear`) when nobody coming the other way, along t
 the junction ahead with its indicator (or none) pointing into the oncoming lane (as round a
 double-parked van), would reach the end of the pass sooner than 2 s after the driver's front is there;
 the driven car must also see along the oncoming lane as far as anyone at the street's limit would come in
-that time, or as far as it ever sees (80 m less 10), so by night or in fog it stays behind. Only the first
+that time, or to the end of the street. Looking along the street for this, by clear daylight, it sees
+oncoming traffic out to 250 m (`PASS_SIGHT_M`, sim/visibility.js; buildings and, with hidden hazards on,
+other vehicles still block the view), past the 80 m it sees everything else in; when what it must see
+is further than it can see now, less 10 m, it cannot tell, and stays behind, so it always does by night
+and in rain, snow or fog. Only the first
 driver behind a cyclist passes it: one ahead of it, between it and the cyclist or passing it and not yet
 5 m past the cyclist's front, makes it wait (`queuedBehind`). Once across a driver carries on; still
 behind the cyclist, it falls back in behind it if the way stops being clear (traffic looks again 2 s
@@ -631,8 +635,11 @@ pass is on and why not, the way, who is ahead of it, whether it is too close beh
 8 m to where it would be across: it drops back), whether it has started round (it is executing a law that
 goes round and has moved across, or drawn level), whether it goes (`go`), the detour, and the speed to
 stay 8 m behind at. While it cannot go, the cyclist is followed and the target speed stays 8 m behind it;
-once it goes the cyclist is not followed, the car keeps to the pass speed, and every lane and hard-brake
-candidate carries the detour. Rules gets `pass_cyclist` (at the pass speed) and `follow_cyclist` (8 m
+once it goes the cyclist is not followed, the car keeps to the pass speed, and only `pass_cyclist`
+carries the detour (and `hard_brake`, once it has started round). Once it has started round, the only
+candidates are carrying on round (`pass_cyclist`), dropping back in behind while still behind the cyclist
+(`follow_cyclist`) and braking hard, so it never sits in the oncoming lane slower than the pass was worked
+out for. Rules gets `pass_cyclist` (at the pass speed) and `follow_cyclist` (8 m
 behind, in the lane): starting a pass costs 1.5, so the car passes only for a clear gain, and staying
 behind one it cannot pass gains 1. The cautious agent takes `pass_cyclist` when it is offered. Candidates
 are rejected that would pass a cyclist closer than the minimum passing distance

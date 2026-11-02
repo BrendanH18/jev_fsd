@@ -30,7 +30,7 @@ import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
 import { laneSight } from "../sim/hidden-traffic.js";
 import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_LOOK_M, PLOW_NAME, SAME_LANE_M, isPlow, stayBack, turningLeft } from "../sim/snow-plow.js";
 import { FOLLOW_M as CYCLIST_FOLLOW_M, LEAD_M as CYCLIST_LEAD_M, LOOK_M as CYCLIST_LOOK_M, MIN_EASE_M, PASS_DECEL as CYCLIST_PASS_DECEL, RETURN_M as CYCLIST_RETURN_M,
-  isCyclistPass, passId, passStreet, planPass, queuedBehind, ridingIn, sightFor as cyclistSight, wayClear as cyclistWayClear } from "../sim/cyclist-pass.js";
+  isCyclistPass, passId, passOthers, passStreet, planPass, queuedBehind, ridingIn, sightFor as cyclistSight, wayClear as cyclistWayClear } from "../sim/cyclist-pass.js";
 import { onStreet } from "../sim/double-parked.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
@@ -995,7 +995,7 @@ function cyclistPass(world, p, lane, executing) {
   }
   if (!bike) return null;
   // (what is coming the other way, as far as the car can see: further than the traffic it follows)
-  const others = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M + 10).filter((o) => o !== ego && o.kind !== "pedestrian");
+  const others = passOthers(world);
   const plan = planPass(world, e, { front, v: ego.v, spec: ego.spec, bike, on: bon, others });
   if (!plan) return null;
   const id = passId(bike), lc = e.lane_offsets?.[0] ?? e.lane_width / 2;

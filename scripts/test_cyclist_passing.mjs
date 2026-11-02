@@ -288,7 +288,7 @@ await test("traffic: only the first driver behind the cyclist passes it; the nex
   assert.ok(minGap >= 0.95, `${minGap.toFixed(2)} m clear`);
 });
 
-await test("sensing and candidates: behind the cyclist while the way is not clear it follows, then every manoeuvre goes round; by night or in fog it stays behind; near the junction no pass is on; abreast it carries on, behind it falls back in", () => {
+await test("sensing and candidates: behind the cyclist while the way is not clear it follows, then only pass_cyclist goes round; it sees an oncoming car out to 250 m by clear daylight; by night or in fog it stays behind; near the junction no pass is on; abreast it carries on, behind it falls back in", () => {
   const { world, fleet } = street();
   const b = cyclist(world, fleet, { rear: 45 });
   drive(world, { front: 33, v: 4.5 });
@@ -309,8 +309,18 @@ await test("sensing and candidates: behind the cyclist while the way is not clea
   cands = sampleCandidates(snap, world);
   const pass = cands.find((c) => c.id === "pass_cyclist");
   assert.ok(pass && pass.laneTarget === g.limit_mps);
-  assert.ok(cands.filter((c) => (c.law.kind === "lane" || c.law.kind === "hard_brake") && c.id !== "follow_cyclist").every((c) => c.law.detour === g.detour), "round the cyclist, whatever it does");
+  assert.ok(pass.law.detour === g.detour && cands.filter((c) => c.id !== "pass_cyclist").every((c) => !isCyclistPass(c.law.detour)), "only pass_cyclist goes round, at the pass speed");
   assert.ok(!cands.find((c) => c.id === "follow_cyclist").law.detour, "or stay behind it");
+  // (an oncoming car beyond the 80 m the car sees everything else in, but on the long look along the
+  // street by clear daylight: the way is not clear; in rain the car cannot see far enough)
+  const far = car(world, fleet, { front: 125, v: 8.3, id: "far", oncoming: true });
+  const farSnap = buildSnapshot(world);
+  assert.ok(!farSnap.cyclist_pass.go && farSnap.cyclist_pass.way.oncoming?.id === "far", "sees it coming");
+  fleet.vehicles.splice(fleet.vehicles.indexOf(far), 1);
+  setWeather("rain");
+  const rain = buildSnapshot(world).cyclist_pass;
+  setWeather("dry");
+  assert.ok(rain && !rain.go && !rain.way.sees_far_enough, "in rain");
   const { eligible } = simulateAll(cands, snap, world);
   assert.ok(eligible.some((c) => c.id === "pass_cyclist"), "going round is clear");
   // (by night, or in fog, it cannot see far enough along the oncoming lane: it stays behind)
@@ -349,6 +359,8 @@ await test("sensing and candidates: behind the cyclist while the way is not clea
   const abreast = buildSnapshot(world, { law });
   assert.ok(abreast.cyclist_pass.going && abreast.cyclist_pass.go && abreast.cyclist_pass.detour, "committed");
   const ac = sampleCandidates(abreast, world);
+  assert.ok(ac.every((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist" || c.id === "hard_brake") && ac.find((c) => c.id === "hard_brake").law.detour === abreast.cyclist_pass.detour,
+    `going round, it carries on round at the pass speed or brakes: ${ac.map((c) => c.id).join(" ")}`);
   simulateAll(ac, abreast, world);
   assert.ok(ac.some((c) => c.reject === "crosses_into_oncoming_traffic" || c.reject === "collision"), "meeting it is ruled out");
   // (still behind it, moved half across: it falls back in)
