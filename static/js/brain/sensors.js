@@ -22,6 +22,7 @@ import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../s
 import { STOP_M as STREETCAR_STOP_M, IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, canStopFor as canStopForStreetcar, doorsOpen, holdFromRear, isStreetcar, stoppingAt, streetcarHold, streetcarRelation } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { CALM_EARLY_M, calmingAhead, slowsFor } from "../sim/traffic-calming.js";
+import { TRUCK_NAME, isTruck } from "../sim/collection-truck.js";
 import { HEAR_M, HOLD_M as RAIL_HOLD_M, canStopFor as canStopForTrain, crossingsAhead, railIndex, roomBlocker, trainAt, waitsAt } from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
@@ -327,7 +328,7 @@ export function buildSnapshot(world, executing = null) {
       const lead = ahead[0];
       const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
       snap.following = { id: lead.vehicle.id, gap_m: gap, speed: lead.vehicle.v, closing_mps: ego.v - lead.vehicle.v, vehicle: lead.vehicle, s: lead.s,
-        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isVan(lead.vehicle) ? "double-parked van" : isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car" };
+        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isTruck(lead.vehicle) ? TRUCK_NAME : isVan(lead.vehicle) ? "double-parked van" : isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car" };
     }
     const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
     if (behind.length) {
@@ -959,7 +960,7 @@ function doubleParked(world, p, frontS, lane, executing) {
     const across = p.lateral - (lane?.center ?? 0) < -0.3;
     const going = executing?.law?.detour?.id === d.id && (across || frontS > stop + 0.5);
     const go = going || (way.clear && !queued);
-    return { id: d.id, van_id: d.van.id, kind: VAN_NAME, gap_m: rear - frontS, beside: frontS > rear, stop_s_route: stop, bumper_to_stop_m: stop - frontS,
+    return { id: d.id, van_id: d.van.id, kind: d.name || VAN_NAME, ...(d.truck ? { truck: true, crew_in_road: way.crew ? way.crew.id : null } : {}), gap_m: rear - frontS, beside: frontS > rear, stop_s_route: stop, bumper_to_stop_m: stop - frontS,
       way: { clear: way.clear, sees_far_enough: way.sees_far_enough, need_s: way.need_s, oncoming: way.oncoming ? { id: way.oncoming.vehicle.id, eta_s: way.oncoming.eta_s } : null },
       queued: queued ? queued.id : null, going_round: going, go, wait: !go, limit_mps: PASS_MPS,
       detour: go ? { id: d.id, from: toRoute(d.detour.from), full: toRoute(d.detour.full), back: toRoute(d.detour.back), to, shift: d.detour.shift } : null };
@@ -1582,8 +1583,9 @@ export function desiredSpeed(snap) {
   if (dp?.wait && dp.bumper_to_stop_m > -1) {
     const room = dp.bumper_to_stop_m;
     const vv = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
-    if (vv < v) { v = vv; reasons.push(dp.queued ? "waiting in turn behind a double-parked van" : "double-parked van: wait for the way round to clear"); }
-  } else if (dp?.go && vanSpeed(dp) <= v + 0.05) reasons.push("going round a double-parked van");
+    const what = dp.truck ? "a garbage truck" : "a double-parked van";
+    if (vv < v) { v = vv; reasons.push(dp.queued ? `waiting in turn behind ${what}` : dp.crew_in_road ? "garbage truck: wait while its crew is in the road" : `${what.slice(2)}: wait for the way round to clear`); }
+  } else if (dp?.go && vanSpeed(dp) <= v + 0.05) reasons.push(`going round ${dp.truck ? "a garbage truck" : "a double-parked van"}`);
   // a signal it could not clear for traffic past the junction: wait at the line
   const jb = snap.junction_box;
   if (jb) {

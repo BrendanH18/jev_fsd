@@ -5,7 +5,9 @@
 // Quiet residential blocks may jaywalk after looking both ways (they yield; drivers still avoid them).
 // Children get off school buses and walk home, some crossing in front of the bus (sim/school-bus.js).
 // Riders get off streetcars and walk across the lane beside them to the curb, and walk out to them
-// from the curb to get on (sim/streetcar.js). At a scramble crossing everyone crosses on the all-walk,
+// from the curb to get on (sim/streetcar.js). A garbage truck's crew walks from its rear step to the
+// bins at the kerb and back, one now and then crossing behind it to the far kerb (sim/collection-truck.js).
+// At a scramble crossing everyone crosses on the all-walk,
 // and now and then someone goes straight across the junction to the corner opposite (sim/signals.js).
 
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
@@ -39,6 +41,8 @@ const YIELD_AHEAD_M = 3.0;         // a pedestrian still this far short of the c
 const MARKED_DECEL = 2.5;
 const MARKED_REACT_S = 1.0;
 const MARKED_P = 0.5;
+// A garbage truck's crew steps into the street when nothing moving would reach them within this.
+const WORKER_GAP_S = 4;
 // At a scramble crossing, this share of those at a corner cross diagonally, to the corner opposite.
 const DIAGONAL_P = 0.35;
 
@@ -299,6 +303,7 @@ export class Crowd {
     for (const ped of this.list) {
       if (ped.frozen > 0) { ped.frozen -= dt; ped.v = 0; continue; }   // knocked down
       if (ped.held) { ped.v = 0; continue; }                            // (waiting for a challenge to start)
+      if (ped.pause > 0) { ped.pause -= dt; ped.v = 0; continue; }     // (a garbage crew at the bins, or climbing on)
       if (!ped.path.length && ped.home) { home = ped.gone = true; continue; }
       if (!ped.path.length) {
         if (ped.then) { this.walkAlong(ped, ped.then.st, ped.then.side, ped.then.s, ped.then.dir); ped.then = null; }
@@ -324,6 +329,7 @@ export class Crowd {
         ped.x = wp.p[0]; ped.y = wp.p[1];
         ped.path.shift();
         if (wp.cross) ped.crossing = null;
+        if (wp.wait) ped.pause = wp.wait;
         continue;
       }
       ped.psi = Math.atan2(dy, dx);
@@ -366,6 +372,9 @@ export class Crowd {
       const car = this.world.npcs.find((v) => v.id === cross.streetcar);
       return doorsOpen(car) ? this.canStopFor(cross) : !cross.boarding && this.clearFor(cross, JAYWALK_GAP_S, 70);
     }
+    // (a garbage truck's crew crosses behind it once nothing moving would reach them within
+    // WORKER_GAP_S: sim/collection-truck.js)
+    if (cross.worker) return this.clearFor(cross, WORKER_GAP_S, 60);
     if (cross.school) return redsOn(this.world.npcs.find((v) => v.id === cross.school)) ? this.canStopFor(cross) : this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.jaywalk) return this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.marked) return this.canStopFor(cross);

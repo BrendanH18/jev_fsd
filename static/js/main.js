@@ -33,6 +33,8 @@ import { STEP_OUT_COUNT, hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
 import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { calmingNotice } from "./sim/traffic-calming.js";
+import { TRUCK_COUNT, isTruck } from "./sim/collection-truck.js";
+import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
 import { buildCalming, rideOver } from "./render/traffic-calming.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
@@ -192,7 +194,10 @@ export async function boot() {
     const trains = params.get("trains") !== "0";
     // and, while it snows, a snow plow clears the main streets (`?plows=0` takes them off)
     const plows = params.get("plows") !== "0" ? PLOW_COUNT : 0;
-    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, streetcars, trains, schoolBuses, plows });
+    // and, by day, a garbage truck works the quiet streets, its crew emptying the bins (`?collection=0`
+    // takes it off)
+    const collection = params.get("collection") !== "0" ? TRUCK_COUNT : 0;
+    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, streetcars, trains, schoolBuses, plows, collection });
     autopilot = new Autopilot(world, callbacks);
   }
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
@@ -221,7 +226,7 @@ export async function boot() {
     for (const n of fleet.vehicles) {
       ids.add(n.id);
       if (npcMeshes.has(n.id)) continue;
-      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isStreetcar(n) ? createStreetcarMesh(n.id, n.headsign || n.ref || "") : isTrain(n) ? createTrainMesh(n.id) : isSchoolBus(n) ? createSchoolBusMesh(n.id) : isPlow(n) ? createPlowMesh(n) : n.kind === "delivery_van" ? createVanMesh(n) : createCarMesh(n.color, n.id, n.style ?? null);
+      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isStreetcar(n) ? createStreetcarMesh(n.id, n.headsign || n.ref || "") : isTrain(n) ? createTrainMesh(n.id) : isSchoolBus(n) ? createSchoolBusMesh(n.id) : isPlow(n) ? createPlowMesh(n) : isTruck(n) ? createTruckMesh(n) : n.kind === "delivery_van" ? createVanMesh(n) : createCarMesh(n.color, n.id, n.style ?? null);
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
@@ -732,13 +737,14 @@ export async function boot() {
     if (world.calming) rideOver(map, egoMesh, renderEgo);
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id), pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
-      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
+      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : isTruck(n) ? syncTruck : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
       if (world.calming && n.kind !== "bike" && !isTrain(n)) rideOver(map, npcMeshes.get(n.id), pose);
     }
     for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
     for (const z of world.workZones.zones) syncWorkZone(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
     for (const z of world.laneClosures.zones) syncLaneClosure(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
-    for (const d of world.doubleParked.vans) syncVan(parkedMeshes.get(d.van.id), d.van, dt, world.t);
+    // (a garbage truck at a stop is in traffic, and drawn there: sim/collection-truck.js)
+    for (const d of world.doubleParked.vans) if (!d.truck) syncVan(parkedMeshes.get(d.van.id), d.van, dt, world.t);
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
     const evs = fleet.vehicles.filter(isEmergency);
     const call = evs.length ? nearestCall(world.ego, evs) : null;
@@ -845,7 +851,7 @@ export async function boot() {
       const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
       syncPerson(pedMesh(p), next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha), view.camera, world.weather === "rain");
     }
-    for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_") || id.startsWith("rider_") || id.startsWith("stepout_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
+    for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_") || id.startsWith("rider_") || id.startsWith("stepout_") || id.startsWith("crew_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision, autopilot.executing));
     weatherView.update(dt);

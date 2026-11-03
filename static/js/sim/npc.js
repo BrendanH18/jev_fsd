@@ -32,6 +32,7 @@ import { EMERGENCY_SPECS, EV_JUNCTION_MPS, EV_LIMIT_FACTOR, EV_MAX_MPS, EV_PASS_
 import { BUS_DWELL_S, BUS_SIGNAL_M, BUS_TAPER_M, busMayPullOut, busStopFront, busYield, canStopFor, curbShift, isBus } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
 import { pathCalmLimit } from "./traffic-calming.js";
+import { CollectionTrucks } from "./collection-truck.js";
 import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import { DEPART_S, DOORS_DELAY_S, DWELL_MAX_S, DWELL_S, RIDER_EVERY_S, RIDERS_OFF, RIDERS_ON, canStopFor as canStopForStreetcar, doorsOpen, isStreetcar, streetcarHold } from "./streetcar.js";
 import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex, stepTrain, trainState } from "./rail.js";
@@ -341,7 +342,8 @@ function closureLimit(lz, front) {
 
 export class NpcFleet {
   // `plows`: how many snow plows work the main streets at a time while it snows (sim/snow-plow.js).
-  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0, plows = 0 } = {}) {
+  // `collection`: how many garbage trucks work the quiet streets at a time, by day (sim/collection-truck.js).
+  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0, plows = 0, collection = 0 } = {}) {
     this.world = world;
     this.map = world.map;
     this.random = rng(seed);
@@ -398,6 +400,10 @@ export class NpcFleet {
     this.plowTarget = plows;
     this.nextPlow = world.t;
     this.plows = [];
+    // (and garbage trucks theirs, put down on the first steps by day; nothing is drawn from it unless a
+    // truck works)
+    const trucks = rng(seed * 141650939 + 43);
+    this.collection = new CollectionTrucks(this, { count: collection, random: trucks, makePath: () => new NpcPath(this.map, trucks) });
     world.npcs = this.vehicles;
   }
 
@@ -617,9 +623,12 @@ export class NpcFleet {
     if (this.trains.length || this.trainTarget) this.manageTrains();
     if (world.doubleParked?.vans.length) this.driveOffVans();
     if (this.plows.length || this.plowTarget) this.managePlows();
+    if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
     const all = [world.ego, ...this.vehicles];
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
+      // a garbage truck standing at a stop while its crew empties the bins (sim/collection-truck.js)
+      if (n.collect?.phase === "work" && this.collection.work(n, dt)) { n.a = 0; continue; }
       // a train on its track (sim/rail.js), braking for anything in its way that it can see
       if (isTrain(n)) {
         stepTrain(n, railIndex(this.map).tracks.get(n.rail.track), dt, [...all, ...world.crowd.list], (cab, o) => world.visibility.sees(cab, o), this.rails);
@@ -689,6 +698,8 @@ export class NpcFleet {
       const stand = n.transit ? (n.transit.tram ? this.streetcarPlan(n, front, dt) : this.busPlan(n, edge, front, dt, proj.lateral)) : null;
       // a school bus slowing to a stop, standing there with its reds flashing, and moving off
       const schoolStop = n.school ? this.schoolPlan(n, front, dt) : null;
+      // a garbage truck slowing to a stop on its round (sim/collection-truck.js)
+      const truckStop = n.collect ? this.collection.plan(n, front, dt) : null;
       // a cyclist rides the right-hand side of the lane, clear of the car doors, or the empty parking
       // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
       const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
@@ -916,6 +927,7 @@ export class NpcFleet {
       const forSchool = this.schoolBuses.length && !isEmergencyVehicle(n) ? this.yieldToSchoolBus(n, front) : null;
       const schoolAt = Math.min(schoolStop ?? Infinity, forSchool ?? Infinity);
       if (schoolAt < gap) { gap = Math.max(0.05, schoolAt); leadV = 0; }
+      if (truckStop !== null && (truckStop === "work" ? 0.05 : truckStop) < gap) { gap = Math.max(0.05, truckStop === "work" ? 0.05 : truckStop); leadV = 0; }
       // not passing a streetcar with its doors open on the side its riders use (sim/streetcar.js)
       const forStreetcar = this.streetcars.length && !isEmergencyVehicle(n) && !n.transit?.tram ? this.yieldToStreetcar(n, front) : null;
       if (forStreetcar !== null && forStreetcar < gap) { gap = Math.max(0.05, forStreetcar); leadV = 0; }
