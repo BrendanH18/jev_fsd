@@ -299,6 +299,24 @@ await test("a replay restored before a truck's first stop collects into the live
   assert.ok(world.doubleParked.vans.some((d) => d.van.id === live.id));
 });
 
+await test("a truck is never retired to make room for a car pulling out, nor sent to park at the kerb", () => {
+  setWeather("dry");
+  const world = new World(KITS, { seed: 4, pedestrians: 0 });
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5, collection: 1 });
+  fleet.collection.target = 0;
+  world.placeOnLane(KITS.lane("e129", 0), 20);
+  const truck = standing(fleet, SITE.lo + 5);
+  // (a car pulls out far from the truck: with no other traffic, the truck is the only one it could replace)
+  const car = world.parked.list.filter((c) => !c.stay && Math.hypot(c.x - truck.x, c.y - truck.y) > 40).find((c) => fleet.startPullOut(c));
+  assert.ok(car, "a car pulled out");
+  assert.equal(fleet.vehicles.some((v) => v.id === truck.id), true);
+  // (driving on along a street with free kerb space ahead, it is never sent to park)
+  fleet.collection.add(LANE, 5, TRUCK_MPS, [], { path: new NpcPath(KITS, rng(3)) });
+  for (const c of [...world.parked.list]) if ((c.edge === SITE.edge || c.edge === SITE.opposite) && !c.stay) world.parked.remove(c);
+  for (let i = 0; i < 20; i++) fleet.maybePark();
+  assert.equal(fleet.collection.trucks.some((t) => t.parking), false);
+});
+
 await test("Collection day: Rules and the cautious agent wait for the crew and the oncoming cars, then go round slowly", async () => {
   assert.ok(CH);
   for (const brain of ["rules", "cautious"]) {
