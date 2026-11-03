@@ -2,7 +2,7 @@
 
 import { Vehicle, CAR } from "./vehicle.js";
 import { headingAt, projectPoint } from "../map/mapdata.js";
-import { approachPhase, movementSignal, phaseOf, StopMemory } from "./signals.js";
+import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopMemory } from "./signals.js";
 import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
@@ -192,14 +192,16 @@ export class World {
   // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
   // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
   // `calming`: traffic and the driven car slow for speed humps, tables, cushions and bumps, and the audit
-  // counts hard hits (sim/traffic-calming.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false } = {}) {
+  // counts hard hits (sim/traffic-calming.js). `scrambles`: signals with a scramble crossing run their
+  // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
+    this.scrambles = setScrambles(scrambles);
     this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
     this.t = 0;
     this.tick = 0;
@@ -528,8 +530,10 @@ export class World {
           const arrow = shows === "arrow" || shows === "arrow_yellow";
           const state = arrow ? "green" : movementSignal(shows, "straight");
           // after a full stop, where turning right on red is allowed, which way it turns decides
-          const pending = state === "red" && this.map.rightOnRed && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
-          if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light" }); }
+          // (never at a scramble crossing: sim/signals.js)
+          const scramble = isScramble(inter);
+          const pending = state === "red" && this.map.rightOnRed && !scramble && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
+          if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) }); }
           this.arrowCheck = arrow && inter ? { id: control.id, centre: [inter.x, inter.y], approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
             stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed } : null;
           // the approach's heading and, on a route, the street it turns into (without one, the

@@ -3,7 +3,7 @@
 
 import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
-import { advanceHolds, approachPhase, movementSignal, protectedLeft, STOP_ZONE_M } from "../sim/signals.js";
+import { advanceHolds, approachPhase, isScramble, movementSignal, protectedLeft, scrambleState, STOP_ZONE_M } from "../sim/signals.js";
 import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
@@ -261,8 +261,10 @@ export function buildSnapshot(world, executing = null) {
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
         entered, turn: c.turn || "straight",
         oncoming,
-        right_on_red: control.type === "signal" && map.rightOnRed && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
+        // (never at a scramble crossing, sim/signals.js: `scramble` says so)
+        right_on_red: control.type === "signal" && map.rightOnRed && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
           ? rightOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
+        ...(control.type === "signal" && isScramble(inter) && !dark ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } } : {}),
         stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
         ...(dark ? { dark: true } : {}),

@@ -23,6 +23,7 @@ import { PLOW_MPS } from "../sim/snow-plow.js";
 import { LC_LIMIT_MPS, SPAN_M as LC_SPAN_M, laneClosureSites } from "../sim/lane-closure.js";
 import { passStreet } from "../sim/cyclist-pass.js";
 import { DEVICES } from "../sim/traffic-calming.js";
+import { sidewalkOffset } from "../map/streets.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -88,6 +89,8 @@ export const CHALLENGES = [
     description: "A cyclist is riding the West 10th Avenue bikeway ahead of you, out in your lane: the kerb is lined with parked cars, and there's one lane each way. Two cars are coming the other way.", lesson: "Pass a cyclist with at least 1 m of room where the limit is 50 km/h or less, and 1.5 m above: that is BC's minimum passing distance law, and Québec and Ontario have one too. With one lane each way, that means moving into the oncoming lane, so stay well back until it is clear for the whole pass, then go by and move back in well ahead of them. Never squeeze past in the lane." },
   { id: "speed-humps", title: "Over the humps", map: "ottawa", weather: "dry", time: "afternoon", seed: 31042, icon: "⌒", difficulty: "Control", hazard: "speed-humps", calming: true, street: "Gloucester Street",
     description: "Gloucester Street is a one-way residential street in Centretown with a 50 km/h limit and a speed hump across each block. You set off from the start of a block, with a clear run of 80 m up to the first.", lesson: "Speed humps are built to be crossed at about 30 km/h, speed tables at about 40 and speed bumps at a crawl: faster, they jolt the car and everyone in it, and can unsettle it. Slow down before you reach one, not on it, cross at an even speed, and pick up speed again only once your rear wheels are over. Then slow again for the next one." },
+  { id: "scramble", title: "All walk", map: "victoria", weather: "dry", time: "afternoon", seed: 32042, icon: "✕", difficulty: "Patience", hazard: "scramble", scrambles: true, street: "Wharf Street",
+    description: "You're turning right from Wharf Street onto Government Street, by the Empress, where the signal has a scramble crossing: every light turns red together while people cross every way, diagonally too. Your light turns red as you arrive.", lesson: "At a scramble crossing there is no turning right on red: the red stays red for everyone while people cross the junction every way at once, so wait at the line for your own green. When it comes, anyone still crossing, a slow walker finishing the diagonal say, still has the right of way: let them reach the kerb before you turn." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -299,6 +302,45 @@ function humpSites(map, street) {
   const sites = humpSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street), pick = on.length ? on : sites;
   // (two blocks with a device each, where there are)
   return pick.some((s) => s.ahead) ? pick.filter((s) => s.ahead) : pick;
+}
+
+// All walk: a right turn at a scramble crossing (sim/signals.js) where right turns on red are allowed
+// elsewhere on the map, from an approach of the challenge's `street` (where it has one) reached
+// straight on from the block before it, with no sign or signal there, and whose light (with the
+// scramble running) is red from SCR_RED_S[0] to past the end of the all-walk, which starts within
+// SCR_RED_S: the car, setting off SCR_START_M short of the line, arrives on red, and waits through
+// the scramble. Two people stand at the corner opposite the one the car turns round
+// (SCR_CORNER_M of its route through the junction): on the walk, one crosses diagonally to it at an
+// even pace, the other at SCR_SLOW_MPS, still crossing as the car's light turns green.
+const SCR_START_M = 75, SCR_RED_S = [12, 45], SCR_SLOW_MPS = 0.45;
+const scrambleSiteCache = new WeakMap();
+function scrambleSites(map, street) {
+  if (!scrambleSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang;
+    for (const id of map.rightOnRed ? map.scrambles || [] : []) {
+      const inter = map.intersections.get(id), plan = inter.scramblePlan;
+      for (const a of inter.approaches) {
+        const e = map.edges.get(a.edge), right = map.successors(e.id).find((x) => map.classifyTurn(map.turnAngle(e.id, x)) === "right");
+        if (!right) continue;
+        const before = (map.inn.get(e.from) || []).map((x) => map.edges.get(x)).find((p) => p.name === e.name && !p.control && Math.abs(map.turnAngle(p.id, e.id)) < 0.2);
+        const reach = (before?.length || 0) + e.control.s_line;
+        if (!before || reach < SCR_START_M + front - 1) continue;
+        // (the light as it shows with the scramble running: the plan's own phases)
+        const c = plan.cycle, at = (t) => ((t + (inter.offset_s || 0)) % c + c) % c, inA = (u, g) => { const d = u - plan[g].start; return d >= 0 && d < plan[g].green + plan[g].yellow; };
+        const walkAt = [...Array(Math.round((SCR_RED_S[1] - SCR_RED_S[0]) * 2) + 1).keys()].map((k) => SCR_RED_S[0] + k / 2).find((t) => at(t) >= plan.scramble.start && at(t) < plan.scramble.start + 0.5);
+        if (walkAt === undefined) continue;
+        let red = true;
+        for (let t = SCR_RED_S[0]; t <= walkAt + plan.scramble.walk + plan.scramble.flash && red; t += 0.5) red = !inA(at(t), a.group);
+        if (!red) continue;
+        const lane = map.lane(before.id, before.lanes - 1), approach = map.lane(e.id, e.lanes - 1), turn = map.lane(right, map.edges.get(right).lanes - 1);
+        sites.push({ lane, approach, turn, startS: Math.max(2, (reach - SCR_START_M - front) * lane.length / before.length), scramble: { signal: id, edge: e.id, right } });
+      }
+    }
+    sites.sort((a, b) => String(a.approach.edge).localeCompare(String(b.approach.edge)));
+    scrambleSiteCache.set(map, sites);
+  }
+  const sites = scrambleSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
 }
 
 const plowSiteCache = new WeakMap();
@@ -951,16 +993,21 @@ export function challengeScenario(map, challenge) {
   const cycs = challenge.hazard === "cyclist-pass" ? cyclistPassSites(map, challenge.street) : null;
   if (cycs && !cycs.length) throw new Error("This map has no long straight block of a two-way bike route with one lane each way and a parking lane, that carries straight on.");
   const cyc = cycs ? cycs[Math.floor(random() * cycs.length)] : null;
+  const scrs = challenge.hazard === "scramble" ? scrambleSites(map, challenge.street) : null;
+  if (scrs && !scrs.length) throw new Error("This map has no scramble crossing with a right turn, where right turns on red are allowed elsewhere and the car would arrive on a red that lasts through the all-walk.");
+  const scr = scrs ? scrs[Math.floor(random() * scrs.length)] : null;
   const humps = challenge.hazard === "speed-humps" ? humpSites(map, challenge.street) : null;
   if (humps && !humps.length) throw new Error("This map has no block with a speed hump at least 75 m along it, a limit of 40 km/h or more and no school or playground zone.");
   const hump = humps ? humps[Math.floor(random() * humps.length)] : null;
-  const start = hump?.lane || cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const start = scr?.lane || hump?.lane || cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : hump ? hump.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : hump ? hump.startS : scr ? scr.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
+  // (on into the scramble crossing's approach, and right round the corner)
+  if (scr) for (const l of [scr.approach, scr.turn]) { chain.push(l); seen.add(l.edge); length += l.length; }
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
@@ -1005,6 +1052,7 @@ export function challengeScenario(map, challenge) {
     ...(plow ? { snowPlow: plow.plow } : {}),
     ...(zip ? { laneClosure: zip.closure } : {}),
     ...(cyc ? { cyclistPass: cyc.cyclist } : {}),
+    ...(scr ? { scramble: scr.scramble } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -1053,6 +1101,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.snowPlow) Object.assign(world.challenge, placePlow(world, fleet, scenario.snowPlow, scenario.start));
   if (scenario.laneClosure) Object.assign(world.challenge, placeZipper(world, fleet, scenario.laneClosure, challenge.seed));
   if (scenario.cyclistPass) Object.assign(world.challenge, placeCyclistPass(world, fleet, scenario.cyclistPass, challenge.seed));
+  if (scenario.scramble) Object.assign(world.challenge, placeScramble(world, scenario.scramble, challenge.seed));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -1573,6 +1622,32 @@ function placeStepOut(world, { edge, at }, seed) {
   world.crowd.list.push(ped);
   return { pedestrianId: ped.id, at: from };
 }
+// All walk: the two people at the corner opposite the one the car turns round (see scrambleSites), who
+// cross diagonally to it on the walk, one of them slowly; and then on along the sidewalk, and away.
+function placeScramble(world, { signal }, seed) {
+  const map = world.map, random = rng(seed), inter = map.intersections.get(signal), route = world.route;
+  const node = [...map.junctionNodes(inter)].find((n) => world.crowd.legsAt.get(n)?.list.length >= 3), legs = node && world.crowd.legsAt.get(node);
+  if (!legs || !route) return {};
+  // (the corner the car turns round: the crosswalk end nearest its path a little into the junction)
+  const c = route.controls.find((k) => k.control.id === signal), turnAt = route.pointAt(Math.min(route.length, c.sJunction ?? c.sRoute + 8));
+  const d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  const ends = legs.list.flatMap((l) => [1, -1].map((side) => ({ leg: l, side, p: l.ends[side] })));
+  const near = ends.reduce((a, b) => d(b.p, turnAt) < d(a.p, turnAt) ? b : a);
+  const far = ends.filter((x) => x.leg !== near.leg).reduce((a, b) => d(b.p, near.p) > d(a.p, near.p) ? b : a);
+  // (then 12 m along the sidewalk there, away from the junction)
+  const e = near.leg.st.edge, L = e.cum.at(-1), s0 = Math.max(2, Math.min(L - 2, near.leg.s + (near.leg.out ? 12 : -12)));
+  const q = pointAt(e.pts, e.cum, s0), h = headingAt(e.pts, e.cum, s0), lat = sidewalkOffset(e, near.side), away = [q[0] + Math.sin(h) * lat, q[1] - Math.cos(h) * lat];
+  const ids = [];
+  for (const [i, speed] of [1.3, SCR_SLOW_MPS].entries()) {
+    const from = [far.p[0] + (i ? 0.5 : -0.5), far.p[1]];
+    const ped = new Pedestrian({ id: `challenge_walker_${i + 1}`, x: from[0], y: from[1], psi: Math.atan2(near.p[1] - from[1], near.p[0] - from[0]), v: 0, speed, home: true,
+      path: [{ p: near.p, cross: { node, leg: near.leg, from, to: near.p, diagonal: true } }, { p: away }], crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), at: null });
+    world.crowd.list.push(ped);
+    ids.push(ped.id);
+  }
+  return { walkerIds: ids, signalId: signal, at: [inter.x, inter.y] };
+}
+
 // Give them room: both kerbs of the block lined with parked cars (see cyclistPassSites), staying put; the
 // cyclist out in the lane, riding straight on; and the cars coming the other way, already moving.
 function placeCyclistPass(world, fleet, { edge, next, rear }, seed) {

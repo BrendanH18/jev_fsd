@@ -5,11 +5,12 @@
 // Quiet residential blocks may jaywalk after looking both ways (they yield; drivers still avoid them).
 // Children get off school buses and walk home, some crossing in front of the bus (sim/school-bus.js).
 // Riders get off streetcars and walk across the lane beside them to the curb, and walk out to them
-// from the curb to get on (sim/streetcar.js).
+// from the curb to get on (sim/streetcar.js). At a scramble crossing everyone crosses on the all-walk,
+// and now and then someone goes straight across the junction to the corner opposite (sim/signals.js).
 
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
-import { pedPhase } from "./signals.js";
+import { isScramble, pedPhase } from "./signals.js";
 import { rng } from "../common.js";
 import { CROSS_AHEAD_M, redsOn } from "./school-bus.js";
 import { doorPoints, doorsOpen } from "./streetcar.js";
@@ -38,6 +39,8 @@ const YIELD_AHEAD_M = 3.0;         // a pedestrian still this far short of the c
 const MARKED_DECEL = 2.5;
 const MARKED_REACT_S = 1.0;
 const MARKED_P = 0.5;
+// At a scramble crossing, this share of those at a corner cross diagonally, to the corner opposite.
+const DIAGONAL_P = 0.35;
 
 export class Crowd {
   constructor(world, { count = PEDESTRIANS, seed = 1 } = {}) {
@@ -253,6 +256,19 @@ export class Crowd {
     for (const l of others) for (const sd of [1, -1]) {
       const d = dist(l.ends[sd], from);
       if (!corner || d < corner.d) corner = { leg: l, side: sd, d };
+    }
+    // at a scramble crossing, now and then straight across the junction to the farthest corner, on the
+    // all-walk (only there is anything drawn for it)
+    if (info.junction && isScramble(info.inter) && others.length >= 2 && this.random() < DIAGONAL_P) {
+      let far = null;
+      for (const l of others) for (const sd of [1, -1]) {
+        const d = dist(l.ends[sd], from);
+        if (!far || d > far.d) far = { leg: l, side: sd, d };
+      }
+      const to = far.leg.ends[far.side];
+      ped.path = [{ p: to, cross: { node, leg: far.leg, from, to, diagonal: true } }];
+      ped.then = { st: far.leg.st, side: far.side, s: far.leg.s, dir: far.leg.out ? 1 : -1 };
+      return;
     }
     const r = this.random();
     const moves = [];

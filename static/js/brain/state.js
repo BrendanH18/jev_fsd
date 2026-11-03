@@ -100,6 +100,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
         : { stopped_at_line: false, ...(p.waiting.length ? { waiting_at_junction: p.waiting } : {}) };
     }
     if (i.advance) state.intersection.advance = { light: i.advance.light, ...(i.advance.protected ? { protected_left: true } : {}) };
+    if (i.scramble) state.intersection.scramble = { all_walk: i.scramble.phase !== "dont", ...(i.scramble.phase === "dont" ? { all_walk_in_s: i.scramble.walk_in_s } : { ends_in_s: i.scramble.ends_in_s }), right_on_red: false };
     if (i.right_on_red) {
       const r = i.right_on_red, w = r.wait_for;
       state.intersection.right_on_red = { allowed: true, stop_completed: r.stop_completed, clear: r.clear, ...(w ? { wait_for: w.id || w.kind } : {}) };
@@ -272,6 +273,7 @@ export function situationClauses(snap) {
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
     if (i.advance) out.push(advanceClause(i));
+    if (i.scramble) out.push(scrambleClause(i));
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
@@ -432,6 +434,13 @@ function advanceClause(i) {
 }
 
 // A red light where the car turns right and a right turn on red is allowed after a full stop.
+// A scramble crossing (sim/signals.js): an all-walk phase, and no right turn on red.
+function scrambleClause(i) {
+  const sc = i.scramble, right = i.turn === "right";
+  if (sc.phase !== "dont") return `This junction is a scramble crossing, and its all-walk is on: every light is red, and people are crossing every way, diagonally too, for the next ${Math.round(sc.ends_in_s)} s. Wait at the line until the car's own light turns green, and then let anyone still crossing clear the car's path.`;
+  return `This junction is a scramble crossing: every light turns red together while people cross every way${right ? ", and there is no right turn on red here: wait at the line for the green, even to turn right" : ", and nobody walks alongside a green"}.`;
+}
+
 function rightOnRedClause(i, m, atLine) {
   const r = i.right_on_red, w = r.wait_for;
   if (r.go) return r.entered ? "The car is turning right on the red light: complete the turn." : "The car has stopped fully at the red light and turns right here, where a right turn on red is allowed. Nothing it must yield to is in the way: it may turn now, or keep waiting for the green.";

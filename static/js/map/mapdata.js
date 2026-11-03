@@ -167,6 +167,10 @@ export class MapData {
     // signal timing is worked out here from the streets meeting at each junction (see signals.js)
     this.intersections = new Map(pack.intersections.map((i) => [i.id, { ...i }]));
     for (const inter of this.intersections.values()) inter.plan = timingPlan(inter, this);
+    // and, at scramble crossings (jev/osm/scrambles.py), with an all-walk phase as well, for worlds that
+    // run them (sim/signals.js setScrambles)
+    this.scrambles = new Set((pack.scrambles?.scrambles || []).map((x) => x.signal).filter((id) => this.intersections.has(id)));
+    for (const id of this.scrambles) { const inter = this.intersections.get(id); inter.scramblePlan = timingPlan(inter, this, { scramble: true }); }
     this.stops = new Map(pack.stops.map((s) => [s.id, s]));
     this.yields = new Map((pack.yields || []).map((y) => [y.id, y]));
     this.roundabouts = new Map((pack.roundabouts || []).map((r) => [r.id, r]));

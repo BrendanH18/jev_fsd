@@ -58,6 +58,8 @@ export class DriveScore {
     this.cyclists = !!world.passCyclists; this.closePasses = 0; this.cyclistCutoffs = 0;
     // (crossing a speed hump, table, cushion or bump much too fast: sim/traffic-calming.js)
     this.humpHits = 0; this.calmed = false;
+    // (turning right on red at a scramble crossing, which the audit counts as a red light: sim/signals.js)
+    this.scrambleReds = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -168,6 +170,7 @@ export class DriveScore {
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
+      if (ev.type === "red_light" && ev.scramble) this.scrambleReds++;
       if (ev.type === "hump_hit") { this.humpHits++; this.incident("hump_hit", `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`, { device: ev.device, kmh: ev.kmh }); }
       if (ev.type === "close_pass") { this.closePasses++; this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
       if (ev.type === "failed_to_yield" && ev.cyclist_pass) this.cyclistCutoffs++;
@@ -284,6 +287,7 @@ export class DriveScore {
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
     if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
     if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
+    if (this.scrambleReds) tips.push("At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.");
     if (this.humpHits) tips.push("Slow right down for speed humps: 30 km/h for a hump or a cushion, 40 for a speed table and a crawl for a bump. Brake before it, not on it, and keep to that speed until the rear wheels are over.");
     if (this.harsh + this.jerk + this.cornering > 2) tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
     if (this.offRoad + this.wrongWay > 0.5 || this.resets) tips.push("Keep to your lane and plan turns before reaching the junction.");

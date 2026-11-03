@@ -18,7 +18,7 @@
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
-import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
+import { advanceHolds, approachPhase, isScramble, movementSignal, StopMemory } from "./signals.js";
 import { controlAt } from "./outage.js";
 import { rng } from "../common.js";
 import { wrap } from "./world.js";
@@ -2100,9 +2100,10 @@ export class NpcFleet {
     const edge = this.map.edges.get(e.id);
     if (!next || e.lane !== edge.lanes - 1 || this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right") return false;
     if (n.stopMem.update(e.control, bumperToLine, n.v, dt) !== "completed") return false;
-    // (not across the protected left turns of an advance green opposite)
+    // (not across the protected left turns of an advance green opposite, and never at a scramble
+    // crossing: sim/signals.js)
     const inter = this.map.intersections.get(e.control.id);
-    if (inter && advanceHolds(inter, e.id, this.world.t)) return false;
+    if (inter && (advanceHolds(inter, e.id, this.world.t) || isScramble(inter))) return false;
     if (this.boxBusy(n, e) || this.crossComing(n, e.to, RTOR_EXTRA_GAP_S)) return false;
     const crowd = this.world.crowd;
     return !kerbConflict(path.pts, path.cum, front - 2, front + 30, crowd, crowd.list, this.world.t, RTOR_WALK_S);
