@@ -1670,7 +1670,7 @@ function placeStepOut(world, { edge, at }, seed) {
 // cross diagonally to it on the walk, one of them slowly; and then on along the sidewalk, and away.
 function placeScramble(world, { signal }, seed) {
   const map = world.map, random = rng(seed), inter = map.intersections.get(signal), route = world.route;
-  const node = [...map.junctionNodes(inter)].find((n) => world.crowd.legsAt.get(n)?.list.length >= 3), legs = node && world.crowd.legsAt.get(node);
+  const node = [...map.junctionNodes(inter)].find((n) => world.crowd.legsAt.get(n)?.inter === inter && world.crowd.legsAt.get(n).list.length >= 3), legs = node && world.crowd.legsAt.get(node);
   if (!legs || !route) return {};
   // (the corner the car turns round: the crosswalk end nearest its path a little into the junction)
   const c = route.controls.find((k) => k.control.id === signal), turnAt = route.pointAt(Math.min(route.length, c.sJunction ?? c.sRoute + 8));

@@ -190,7 +190,8 @@ export function buildScrambleMarkings(map, crowd) {
     const inter = map.intersections.get(id);
     for (const node of map.junctionNodes(inter)) {
       const info = crowd?.legsAt?.get(node);
-      if (!info || info.list.length < 3) continue;
+      // (only this signal's own junction: junctionNodes also names where its approaches start)
+      if (!info || info.list.length < 3 || info.inter !== inter) continue;
       for (const here of info.list) for (const side of [1, -1]) {
         const from = here.ends[side];
         let far = null;

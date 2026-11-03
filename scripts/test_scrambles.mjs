@@ -175,7 +175,7 @@ await test("traffic waits for the green at a scramble instead of turning right o
 await test("at a scramble some people at a corner cross diagonally, on the all-walk; off, nobody does", () => {
   for (const scrambles of [true, false]) {
     const world = new World(VIC, { seed: 7, parked: 0, pedestrians: 0, scrambles });
-    const node = [...VIC.junctionNodes(inter)].find((n) => world.crowd.legsAt.get(n)?.list.length >= 3);
+    const node = [...VIC.junctionNodes(inter)].find((n) => world.crowd.legsAt.get(n)?.inter === inter);
     const info = world.crowd.legsAt.get(node), leg = info.list[0];
     let diagonal = 0;
     for (let k = 0; k < 60; k++) {
