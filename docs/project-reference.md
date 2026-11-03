@@ -659,6 +659,88 @@ AHEAD · WAY CLEAR · PASS WITH 1 M" (or 1.5 M), "PASSING A CYCLIST · 1 M CLEAR
 THEM" or, where a pass is not on, why ("CYCLIST AHEAD · JUNCTION AHEAD · STAY BEHIND", say), and AI eyes
 outline the cyclist in amber. The seeded benchmark and the other challenges have it off.
 
+Collection day (`static/js/sim/collection-truck.js`, `NpcFleet` option `collection`: on in free drives
+unless `?collection=0`, from its own random stream; the "Collection day" challenge places a truck itself).
+By day and out of fog, one garbage truck (a rear-loader, 9.6 m long and 2.5 m wide) works the quiet streets:
+it is put down on a collection street 150 to 450 m from the car where the car cannot see it, and goes once
+it has worked 4 to 8 minutes, or is 450 m away, out of the car's sight. A collection street is a quiet
+(residential, unclassified or living) two-way street with one lane each way where a van could double-park
+(`vanSites`: straight, no crosswalk, bus or streetcar route or level crossing, clear of the junctions at
+each end), shortened for the truck's length. On one it drives at 15 km/h (30 km/h elsewhere), and every 24
+to 42 m it slows to a stop in its lane (never by a van, a work zone, a lane closure or a vehicle at the
+roadside), its hazards on and its beacons turning all the while. For the 8 to 14 s it stands there it is a
+record in `world.doubleParked` (`placeTruck`, `truck: true`, named "garbage truck"), so everyone treats it
+as a double-parked van (above): drivers wait with their front 10 m (`TRUCK_WAIT_M`) back of its rear, clear
+of the crew, and go round through the oncoming lane at 20 km/h once that is clear; and also only once no
+worker is out in the street (`crewInRoad`, in `wayRound`): left of the truck's left side short of the far
+kerb, more than 1.2 m behind its rear in its lane, or across the street with the crossing back still to
+make. The driven car counts only workers it can see. A worker (a pedestrian with `crew` set, in a hi-vis
+vest) gets down from the rear step to the bins at the right kerb and back; at 45% of stops another crosses
+behind the truck to the far kerb's bins and back, stepping into the street only once nothing moving would
+reach them within 4 s. Each pauses 3 to 5 s at the bins and climbs back on. Once the crew is back and nobody
+is beside the truck or going round it, it drives on. On a street with one lane each way nobody passes a
+truck on the move: it is traffic, followed as any other. The driven car's sensing reports it as
+`double_parked` with `truck` and `crew_in_road`; Rules waits behind it with `wait_behind_van`, and
+decision models and LLMs get the truck's own situation line and a prompt line. The audit counts the car's
+body, moving at more than 7 km/h, coming within 1.5 m of a worker as `crew_close_passes`, once a worker,
+which the metrics report and fail a drive on (`passed a garbage crew worker too close`), only once a truck
+has stopped to collect in the drive (`World.collectionSeen`); going round into the way of oncoming traffic
+is a failure to yield, as for a van. Coaching counts close passes (`crew_close_passes`) with a tip. The HUD
+says "GARBAGE TRUCK · CREW IN THE ROAD · WAIT BEHIND IT", "GARBAGE TRUCK · ONCOMING TRAFFIC · WAIT BEHIND
+IT", "GARBAGE TRUCK · WAY CLEAR · GO ROUND IT" and "GARBAGE TRUCK · GOING ROUND · SLOWLY, BACK INTO YOUR
+LANE PAST IT". Side-loading trucks with an arm and no crew in the street, trucks reversing into lanes,
+and bins standing in the street are not modelled. The seeded benchmark and the other challenges have none.
+
+Speed humps, tables, cushions and bumps (`static/js/sim/traffic-calming.js`, `World` option `calming`: on in
+free drives unless `?calming=0`, and in the "Over the humps" challenge). A layer beside each pack,
+`<key>.calming.v1.json` (`jev/osm/calming.py`), places every node tagged `traffic_calming` with `hump`,
+`table`, `cushion` or `bump` on the pack street whose centreline passes within 4 m of it, on both edges of a
+two-way street, merging two within 6 m on one street (a hump mapped once a lane); a table at a crossing is
+a raised crosswalk. Devices tagged on a whole way (as Kitsilano's bikeways' `traffic_calming=yes`) and
+islands, chokers and chicanes are left out. Each kind has the shape the Transportation Association of
+Canada's traffic calming guide gives it: a hump a cosine rise 3.7 m long and 80 mm high, crossed at
+30 km/h; a cushion the same, which a vehicle 2.3 m wide or more straddles; a table 6.7 m long with a flat
+top of 3 m, crossed at 40 km/h; and a bump 0.9 m long, at 15 km/h. Routes keep them in route arc length
+(`calmingMarks`, map/route.js). The driven car's sensing reports the next one along its route within 80 m
+whose far side is ahead of its rear (`traffic_calming`); `snap.limit` and the target speed come down to its
+speed (no faster than the weather allows anywhere else) by 8 m short of it, braking at 0.6 of the comfortable
+rate, and stay there until its rear is over, so no manoeuvre goes faster. Traffic slows to 10% over each
+device's speed by 6 m short of it, braking at 1 m/s^2, and keeps to that over it; cyclists ride over, and
+wide vehicles straddle cushions. The audit counts the car's front axle crossing a device more than 10 km/h
+over its speed as a hard hit (`hump_hits`), once a device a crossing; the metrics report it, and fail a
+drive on it (`took a speed hump too fast`), only once the car has crossed a device (`World.calmingSeen`).
+Coaching takes 8 points of smoothness a hit, with an incident and a tip. Decision models and LLMs get
+`traffic_calming`, a situation line and a prompt line; the HUD says "SPEED HUMP AHEAD · SLOW TO 30 KM/H"
+(or "TAKE IT AT", already slow enough) and then "SPEED HUMP · 30 KM/H" while over it. The devices are
+drawn rising across the street with their white triangles, depth-tested after the ground's markings, and
+the bodies of the car and of traffic rise and pitch over them, as the height under each axle has it
+(render only: the sim's cars stay on the road). Traffic circles were there already: OSM maps them as
+roundabouts. The seeded benchmark and the other challenges have it off.
+
+Scramble crossings (`static/js/sim/signals.js`, `World` option `scrambles`: on in free drives unless
+`?scramble=0`, and in the "All walk" challenge). A layer beside each pack, `<key>.scrambles.v1.json`
+(`jev/osm/scrambles.py`), marks a signal as a scramble crossing where a crossing node or footway within
+30 m of it says so (`crossing:scramble=yes`, `crossing=scramble`, or a note or description naming a scramble,
+an all-way walk or a Barnes dance), or where a footway tagged as a crossing runs diagonally across the
+junction (within 6 m of its centre, at least 25 degrees off every approach). Of the bundled maps only
+Victoria's has one, at Government Street, Wharf Street and Humboldt Street, by the Empress. `MapData` keeps a
+second plan for it, `scramblePlan`: the usual one with an all-walk added after the last group's clearance, a
+10 s walk and then a flashing hand long enough to cross the junction corner to corner at 1.2 m/s (at least
+7 s), then 2 s of all-red, every approach red throughout. `planOf` uses it only while scrambles are on
+(`setScrambles`, module state set by `new World()`, as the weather's grip is). The walk is exclusive: at a
+scramble `pedPhase` gives every group the all-walk, so nobody walks alongside a green and turning traffic
+has the crosswalks to itself; and, as Toronto signs its scrambles, there is no right turn on red there
+(`isScramble`): not for the driven car (`intersection.right_on_red` is not offered; `intersection.scramble`
+says whether the all-walk is on and for how long, or when it comes, and that there is no right on red), not
+for traffic (`NpcFleet.rightOnRed`), and the audit counts one as running the red light (its event has
+`scramble: true`), with a coaching tip. At a scramble a third of the people at a corner cross diagonally,
+straight to the farthest corner, on the all-walk; drivers yield to them in the junction as to anyone
+crossing. Decision models and LLMs get `intersection.scramble`, a situation line and a prompt line. The
+diagonal crosswalks are painted, the walk signals all show the walk together, and the HUD says "SCRAMBLE
+CROSSING · ALL WALK · EVERY LIGHT RED" and, at its red turning right, "SCRAMBLE CROSSING · NO RIGHT TURN ON
+RED". With scrambles off every signal runs and every pedestrian walks exactly as before; the seeded
+benchmark and the other challenges have it off.
+
 Parallel parking at the destination (`static/js/sim/parallel-park.js`, BC Motor Vehicle Act s. 189(1) and
 s. 190(1)): in a free drive (`World` option `park`; `?park=0` turns it off) the autopilot looks for a space
 in the parking lane on its right once the destination is within 150 m. A space is a stretch of the right

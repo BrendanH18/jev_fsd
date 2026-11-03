@@ -93,7 +93,7 @@ export class PerceptionView {
     const lz = snap.lane_closure;
     const closure = lz ? `${lz.closed_lane === "right" ? "Right" : "Left"} lane closed, zipper merge${lz.merged ? "" : ` in ${Math.round(Math.max(0, lz.bumper_to_merge_m))} m`}: ${lz.side === "closed" ? (lz.let_in ? "car's turn, merge" : lz.wait ? `wait at the merge${lz.wait_for ? ` for ${lz.wait_for}` : ""}` : "merge in turn") : lz.let_in_for ? `let ${lz.let_in_for} in` : "take turns"}` : null;
     const dp = snap.double_parked;
-    const van = dp ? `Double-parked van ${dp.gap_m > 0 ? `${Math.round(dp.gap_m)} m ahead` : "beside"}: ${dp.going_round ? "going round it" : dp.go ? `way round clear, go round at ${Math.round(dp.limit_mps * 3.6)} km/h` : dp.queued ? "wait in turn behind it" : `${dp.way.oncoming ? "oncoming traffic" : "can't see far enough"}, wait${dp.bumper_to_stop_m > 0.5 ? ` in ${Math.round(dp.bumper_to_stop_m)} m` : ""}`}` : null;
+    const van = dp ? `${dp.truck ? "Garbage truck" : "Double-parked van"} ${dp.gap_m > 0 ? `${Math.round(dp.gap_m)} m ahead` : "beside"}: ${dp.going_round ? "going round it" : dp.go ? `way round clear, go round at ${Math.round(dp.limit_mps * 3.6)} km/h` : dp.queued ? "wait in turn behind it" : `${dp.crew_in_road ? "crew in the road" : dp.way.oncoming ? "oncoming traffic" : "can't see far enough"}, wait${dp.bumper_to_stop_m > 0.5 ? ` in ${Math.round(dp.bumper_to_stop_m)} m` : ""}`}` : null;
     // cars parked at the kerb that hide the sidewalk (sim/blind-spot.js), with hidden hazards on
     const bs = snap.blind_spot;
     const blind = bs ? `Parked cars ${bs.from_m > 0 ? `${Math.round(bs.from_m)} m ahead` : "beside"} hide the sidewalk: ${Math.round(bs.limit_mps * 3.6)} km/h` : null;
@@ -109,7 +109,12 @@ export class PerceptionView {
     // a cyclist ahead the car can pass only through the oncoming lane (sim/cyclist-pass.js)
     const cp = snap.cyclist_pass;
     const cyclist = cp ? `Cyclist ${cp.gap_m > 0 ? `${Math.round(cp.gap_m)} m ahead` : "beside"}: ${cp.going && cp.go ? `passing, ${cp.min_pass_m} m clear` : cp.go ? `way clear, pass ${cp.min_pass_m} m clear` : !cp.possible ? "can't pass here, stay behind" : cp.way?.oncoming ? "oncoming traffic, stay behind" : cp.way && !cp.way.sees_far_enough ? "can't see far enough, stay behind" : "stay behind"}` : null;
-    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, cyclist, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    // a speed hump or the like ahead (sim/traffic-calming.js), and a scramble crossing (sim/signals.js)
+    const tc = snap.traffic_calming;
+    const calm = tc ? `${tc.name[0].toUpperCase()}${tc.name.slice(1)} ${tc.over ? "under the car" : `${Math.round(Math.max(0, tc.starts_in_m))} m ahead`}: ${Math.round(tc.speed_mps * 3.6)} km/h` : null;
+    const sc = snap.intersection?.scramble;
+    const scramble = sc ? `Scramble crossing: ${sc.phase === "dont" ? `all-walk in ${Math.round(sc.walk_in_s)} s, no right turn on red` : "all-walk on, every light red"}` : null;
+    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }
