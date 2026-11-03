@@ -21,6 +21,7 @@ import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
 import { STOP_M as STREETCAR_STOP_M, IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, canStopFor as canStopForStreetcar, doorsOpen, holdFromRear, isStreetcar, stoppingAt, streetcarHold, streetcarRelation } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
+import { CALM_EARLY_M, calmingAhead, slowsFor } from "../sim/traffic-calming.js";
 import { HEAR_M, HOLD_M as RAIL_HOLD_M, canStopFor as canStopForTrain, crossingsAhead, railIndex, roomBlocker, trainAt, waitsAt } from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { ADJACENT_M, APPROACH_M, ROADSIDE_LIGHTS, ROADSIDE_NAMES, SIDE_M as ROADSIDE_SIDE_M, endsOf, flashing, passLimit } from "../sim/roadside.js";
@@ -165,7 +166,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, roadside_stop: null, work_zone: null, lane_closure: null, double_parked: null, snow_plow: null, cyclist_pass: null, parking: null, blind_spot: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, traffic_calming: null, roadside_stop: null, work_zone: null, lane_closure: null, double_parked: null, snow_plow: null, cyclist_pass: null, parking: null, blind_spot: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -354,6 +355,11 @@ export function buildSnapshot(world, executing = null) {
   snap.traffic = snap.traffic.slice(0, 8);
   if (executing && executing.hazard) snap.current_path_hazard = executing.hazard;
   snap.speed_zone = speedZone(world, snap, FRONT);
+  // (and, with calming on, the next speed hump, table, cushion or bump along the route: sim/traffic-calming.js)
+  if (world.calming && snap.route && snap.routeProj) {
+    const c = calmingAhead(snap.route, snap.routeProj.s, FRONT, ego.spec.rearOverhang);
+    snap.traffic_calming = c && slowsFor(ego.spec, c) ? c : null;
+  }
   // (coming up to a vehicle stopped at the roadside with its lights flashing, and passing it, the
   // speed to be down to by then is the limit, so that no manoeuvre goes faster)
   if (snap.roadside_stop) snap.limit = Math.min(snap.limit, roadsideSpeed(snap.roadside_stop));
@@ -363,6 +369,8 @@ export function buildSnapshot(world, executing = null) {
   if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
   // (and coming up to a double-parked van, and round it)
   if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
+  // (and coming up to a speed hump or the like, and over it: sim/traffic-calming.js)
+  if (snap.traffic_calming) snap.limit = Math.min(snap.limit, calmingSpeed(snap.traffic_calming));
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -1429,6 +1437,13 @@ export function desiredSpeed(snap) {
     const vz = Math.sqrt(lim * lim + 2 * decel * 0.6 * Math.max(0, z.starts_in_m - 2));
     if (vz < v) { v = vz; reasons.push(`${ZONE_NAMES[z.kind]} ahead`); }
   }
+  // a speed hump, table, cushion or bump: down to the speed to cross it at by the time the front reaches
+  // it, gently, and no faster until the rear is over it (sim/traffic-calming.js)
+  const tc = snap.traffic_calming;
+  if (tc) {
+    const vc = calmingSpeed(tc);
+    if (vc < v + 0.05) { v = Math.min(v, vc); reasons.push(tc.over ? `over a ${tc.name}` : `${tc.name} ahead`); }
+  }
   // a vehicle stopped at the roadside with its lights flashing: down to the speed to pass it at a
   // little before APPROACH_M short of it, gently, and no faster until past it
   const rs = snap.roadside_stop;
@@ -1598,6 +1613,14 @@ export function desiredSpeed(snap) {
 
 // The speed to pass a vehicle stopped at the roadside at (see roadsideStop), or, short of it, the speed
 // from which the car slows to that comfortably by 5 m before APPROACH_M short of it.
+// The speed to cross a speed hump or the like at (see traffic_calming), and short of it, the speed
+// from which the car slows to it comfortably by CALM_EARLY_M before it; in poor weather, no faster than
+// the weather allows.
+function calmingSpeed(tc) {
+  const lim = tc.speed_mps * (weather.speed < 1 ? weather.speed : 1);
+  return tc.over ? lim : Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, tc.starts_in_m - CALM_EARLY_M));
+}
+
 function roadsideSpeed(rs, factor = 1) {
   const lim = rs.limit_mps * factor;
   return Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, rs.gap_m - APPROACH_M - 5));

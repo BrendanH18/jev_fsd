@@ -30,8 +30,10 @@ from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
 from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
+from jev.osm.calming import build_calming
 from jev.osm.crossings import build_crossings
 from jev.osm.rail import build_rail
+from jev.osm.scrambles import build_scrambles
 from jev.osm.transit import build_transit
 from jev.osm.zones import build_zones
 from jev.routing import Router
@@ -87,6 +89,14 @@ def load_map(bbox_text: str = "") -> dict:
         rail = build_rail(bbox, MAPS_DIR, entry["pack"], log=log)
         if rail:
             entry["pack"] = {**entry["pack"], "rail": rail}
+        # speed humps, tables, cushions and bumps, likewise
+        calming = build_calming(bbox, MAPS_DIR, entry["pack"], log=log)
+        if calming:
+            entry["pack"] = {**entry["pack"], "calming": calming}
+        # and the signals with an all-walk scramble phase, likewise
+        scrambles = build_scrambles(bbox, MAPS_DIR, entry["pack"], log=log)
+        if scrambles:
+            entry["pack"] = {**entry["pack"], "scrambles": scrambles}
         # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
         offset = map_identity(bbox).get("utc_offset")
         if offset is not None:

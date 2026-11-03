@@ -135,8 +135,8 @@ def crossings_from_osm(osm: OsmData, pack: dict) -> dict:
             "crossings": sorted(kept, key=lambda c: c["id"])}
 
 
-def _snap(edges: List[dict], p: Tuple[float, float]):
-    """The edge whose centreline passes nearest p, within SNAP_M: (edge, s along it, the point)."""
+def _snap(edges: List[dict], p: Tuple[float, float], snap_m: float = SNAP_M):
+    """The edge whose centreline passes nearest p, within `snap_m`: (edge, s along it, the point)."""
     best = None
     for e in edges:
         pts = e["pts"]
@@ -151,6 +151,6 @@ def _snap(edges: List[dict], p: Tuple[float, float]):
             t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / seg2))
             q = (a[0] + dx * t, a[1] + dy * t)
             d = math.hypot(p[0] - q[0], p[1] - q[1])
-            if d <= SNAP_M and (best is None or d < best[0]):
+            if d <= snap_m and (best is None or d < best[0]):
                 best = (d, e, (cum[i] + t * (cum[i + 1] - cum[i])) * scale, q)
     return None if best is None else best[1:]

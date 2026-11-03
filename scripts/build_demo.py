@@ -13,8 +13,10 @@ sys.path.insert(0, str(ROOT))
 from jev.config import MAPS_DIR, PRESET_BBOXES
 from jev.maps import catalog
 from jev.osm.pack import pack_path
+from jev.osm.calming import load_calming
 from jev.osm.crossings import load_crossings
 from jev.osm.rail import load_rail
+from jev.osm.scrambles import load_scrambles
 from jev.osm.transit import load_transit
 from jev.osm.zones import load_zones
 
@@ -56,6 +58,12 @@ def build(output: Path) -> None:
         rail = load_rail(PRESET_BBOXES[item["id"]], MAPS_DIR)
         if rail:
             pack["rail"] = rail
+        calming = load_calming(PRESET_BBOXES[item["id"]], MAPS_DIR)
+        if calming:
+            pack["calming"] = calming
+        scrambles = load_scrambles(PRESET_BBOXES[item["id"]], MAPS_DIR)
+        if scrambles:
+            pack["scrambles"] = scrambles
         pack["utc_offset"] = item["utc_offset"]
         (data / f"{item['id']}.json").write_text(json.dumps(pack, separators=(",", ":")))
     (data / "catalog.json").write_text(json.dumps(maps, separators=(",", ":")))

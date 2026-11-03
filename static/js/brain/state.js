@@ -59,6 +59,10 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.speed_zone = { kind: z.kind, ...(z.name ? { name: z.name } : {}), limit: r1(z.limit_mps), in_effect: ZONE_HOURS[z.kind],
       ...(z.in_zone ? { in_zone: true } : { starts_in_m: r1(Math.max(0, z.starts_in_m)) }), ...(z.ends_in_m !== null ? { ends_in_m: r1(z.ends_in_m) } : {}) };
   }
+  if (snap.traffic_calming) {
+    const c = snap.traffic_calming;
+    state.traffic_calming = { kind: c.name, speed: r1(c.speed_mps), ...(c.over ? { over: true } : { starts_in_m: r1(Math.max(0, c.starts_in_m)) }) };
+  }
   if (snap.lane && snap.lane.lanes > 1) {
     const l = snap.lane;
     state.lanes = { count: l.lanes, car_lane: laneName(l.index, l.lanes), route_lane: laneName(l.route_index, l.lanes) };
@@ -306,6 +310,12 @@ export function situationClauses(snap) {
     out.push(z.in_zone
       ? `The car is in a ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}): the limit is ${kmh} km/h${z.ends_in_m !== null ? ` for the next ${Math.round(z.ends_in_m)} m` : ""}, and children may step out from between parked cars. Keep to it; \`car.target_speed\` already does.`
       : `A ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}), starts ${Math.round(Math.max(0, z.starts_in_m))} m ahead: slow to ${kmh} km/h by its sign; \`car.target_speed\` already does.`);
+  }
+  if (snap.traffic_calming) {
+    const c = snap.traffic_calming, kmh = Math.round(c.speed_mps * 3.6);
+    out.push(c.over
+      ? `The car is going over a ${c.name}: keep to ${kmh} km/h until its rear wheels are over it (\`car.target_speed\` already does).`
+      : `A ${c.name} lies across the street ${Math.round(Math.max(0, c.starts_in_m))} m ahead: slow to ${kmh} km/h by the time the car reaches it, and keep to that over it; taken faster it jolts the car and everyone in it. \`car.target_speed\` already does.`);
   }
   if (snap.right_hook) out.push(rightHookClause(snap.right_hook));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));

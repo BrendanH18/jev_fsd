@@ -23,6 +23,7 @@ import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIn
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DoubleParked } from "./double-parked.js";
+import { HIT_OVER_MPS, deviceOf, slowsFor } from "./traffic-calming.js";
 import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
 import { EGO_ID, LET_IN_DECEL, OWED_DECEL as LC_OWED_DECEL, LaneClosures, THROUGH_M, canStop as canStopForMerge } from "./lane-closure.js";
 import { Outages, controlAt } from "./outage.js";
@@ -190,7 +191,9 @@ export class World {
   // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
   // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
   // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false } = {}) {
+  // `calming`: traffic and the driven car slow for speed humps, tables, cushions and bumps, and the audit
+  // counts hard hits (sim/traffic-calming.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -244,6 +247,11 @@ export class World {
     this.passCyclists = !!passCyclists;
     this.bikePasses = new Map();
     this.cyclistPass = null;
+    // speed humps and the like (sim/traffic-calming.js): whether anyone slows for them; whether the car
+    // has crossed one this drive; and, for each near it, how far ahead of its front axle it was last tick
+    this.calming = !!calming;
+    this.calmingSeen = false;
+    this.calmingAxle = new Map();
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -342,6 +350,7 @@ export class World {
     this.ego.vy = 0; this.ego.r = 0; this.ego.ax = 0; this.ego.latAccel = 0;
     this._previousStaticPose = poseOf(this.ego);
     this.staticContacts.clear();
+    this.calmingAxle?.clear();
     this._lastFront = null;
     this.lastRoad = null;
     this.lastSignal = null;
@@ -591,6 +600,7 @@ export class World {
     this.auditPlows();
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
+    if (this.calming) this.auditCalming();
     this.auditKerb();
     leftSpace(this);
   }
@@ -671,6 +681,30 @@ export class World {
       pass.ahead = rel.ahead_m;
       this.plowPass.set(n.id, pass);
     }
+  }
+
+  // Crossing a speed hump, table, cushion or bump with the front axle faster than its speed plus
+  // HIT_OVER_MPS is a hard hit (sim/traffic-calming.js): counted once a device a crossing, going
+  // forward over it.
+  auditCalming() {
+    const ego = this.ego, near = this.map.calmingGrid?.get(`${Math.floor(ego.x / 20)},${Math.floor(ego.y / 20)}`) || [];
+    const axle = ego.spec.wheelbase, seen = new Set();
+    for (const { device, h, w } of near) {
+      const dx = device.x - ego.x, dy = device.y - ego.y, c = Math.cos(ego.psi), sn = Math.sin(ego.psi);
+      const ahead = dx * c + dy * sn, across = Math.abs(dx * sn - dy * c);
+      // (on the street, going along it, not across it)
+      if (across > w + 1 || Math.abs(Math.cos(ego.psi - h)) < 0.7) continue;
+      seen.add(device.id);
+      const before = this.calmingAxle.get(device.id);
+      this.calmingAxle.set(device.id, ahead - axle);
+      if (before === undefined || !(before > 0 && ahead - axle <= 0) || ego.v <= 0) continue;
+      this.calmingSeen = true;
+      if (slowsFor(ego.spec, device) && ego.v > deviceOf(device).mps + HIT_OVER_MPS) {
+        this.violations.hump_hits = (this.violations.hump_hits || 0) + 1;
+        this.events.push({ type: "hump_hit", device: device.id, kind: device.kind, kmh: Math.round(ego.v * 36) / 10 });
+      }
+    }
+    for (const id of this.calmingAxle.keys()) if (!seen.has(id)) this.calmingAxle.delete(id);
   }
 
   // At a lane closure: merging out of turn, merging early, and not letting someone in (see AUDIT_EARLY_M).

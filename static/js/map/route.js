@@ -97,6 +97,20 @@ export class Route {
         }
       }
     }
+    // the speed humps, tables, cushions and bumps along it (sim/traffic-calming.js), in route arc length,
+    // in order: [{ at (its centre), half (half its length), device }]
+    this.calmingMarks = [];
+    if (map.calmingSpans?.size) {
+      const starts = this.laneEdgeStarts();
+      for (let i = 0; i < this.edges.length; i++) {
+        const back = i === 0 ? data.start_s || 0 : 0;
+        for (const span of map.calmingSpans.get(this.edges[i]) || []) {
+          const at = starts[i] + span.s - back;
+          if (at + span.half > 0 && at - span.half < this.length) this.calmingMarks.push({ at, half: span.half, device: span.device });
+        }
+      }
+      this.calmingMarks.sort((a, b) => a.at - b.at);
+    }
   }
 
   // Without a hint this tracks the ego (and remembers where it is); with one it projects anything

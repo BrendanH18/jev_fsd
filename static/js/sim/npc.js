@@ -31,6 +31,7 @@ import { EMERGENCY_SPECS, EV_JUNCTION_MPS, EV_LIMIT_FACTOR, EV_MAX_MPS, EV_PASS_
   FOLLOW_M, IN_WAY_M, closestOnPath, evOffset, isEmergency, isEmergencyVehicle, isJunction as junctionAt, leadsEmergency, nearestCall, planBehind, planCrossing, planOncoming, pullOverOffset, threadGap } from "./emergency.js";
 import { BUS_DWELL_S, BUS_SIGNAL_M, BUS_TAPER_M, busMayPullOut, busStopFront, busYield, canStopFor, curbShift, isBus } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
+import { pathCalmLimit } from "./traffic-calming.js";
 import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import { DEPART_S, DOORS_DELAY_S, DWELL_MAX_S, DWELL_S, RIDER_EVERY_S, RIDERS_OFF, RIDERS_ON, canStopFor as canStopForStreetcar, doorsOpen, isStreetcar, streetcarHold } from "./streetcar.js";
 import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex, stepTrain, trainState } from "./rail.js";
@@ -942,7 +943,9 @@ export class NpcFleet {
       const vCurve = curveSpeed(path, path.s);
       const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit), wz ? workZoneLimit(wz, front) : Infinity, dp ? vanLimit(dp, front) : Infinity, lz ? closureLimit(lz, front) : Infinity);
       // (a snow plow keeps to its clearing speed, whatever the weather)
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
+      // (and, with calming on, down to the speed to cross each speed hump at: sim/traffic-calming.js)
+      const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity, vCalm);
       const D = n.driver || IDM;
       let a;
       if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));

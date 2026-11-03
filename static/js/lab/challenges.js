@@ -22,6 +22,7 @@ import { QUIET, STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { PLOW_MPS } from "../sim/snow-plow.js";
 import { LC_LIMIT_MPS, SPAN_M as LC_SPAN_M, laneClosureSites } from "../sim/lane-closure.js";
 import { passStreet } from "../sim/cyclist-pass.js";
+import { DEVICES } from "../sim/traffic-calming.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -85,6 +86,8 @@ export const CHALLENGES = [
     description: "A road crew has closed the right lane of 14 Avenue SW, one-way with two lanes. The left lane is backed up to the cones, two cars in your lane are waiting at the merge, and the lane ahead of you is otherwise empty.", lesson: "Where a lane is closed, zipper merge: in slow traffic, stay in your lane right up to the merge point, then take turns, one vehicle from each lane. Manitoba's driver's handbook teaches it, and Ontario cities and the Alberta Motor Association ask drivers to merge this way. Merging early makes the queue longer, and following the car ahead in out of turn forces the driver whose turn it is to brake. Wait for your turn, then go." },
   { id: "cyclist-pass", title: "Give them room", map: "kitsilano", weather: "dry", time: "afternoon", seed: 30042, icon: "⇉", difficulty: "Patience", hazard: "cyclist-pass", passCyclists: true, street: "West 10th Avenue",
     description: "A cyclist is riding the West 10th Avenue bikeway ahead of you, out in your lane: the kerb is lined with parked cars, and there's one lane each way. Two cars are coming the other way.", lesson: "Pass a cyclist with at least 1 m of room where the limit is 50 km/h or less, and 1.5 m above: that is BC's minimum passing distance law, and Québec and Ontario have one too. With one lane each way, that means moving into the oncoming lane, so stay well back until it is clear for the whole pass, then go by and move back in well ahead of them. Never squeeze past in the lane." },
+  { id: "speed-humps", title: "Over the humps", map: "ottawa", weather: "dry", time: "afternoon", seed: 31042, icon: "⌒", difficulty: "Control", hazard: "speed-humps", calming: true, street: "Gloucester Street",
+    description: "Gloucester Street is a one-way residential street in Centretown with a 50 km/h limit and a speed hump across each block. You set off from the start of a block, with a clear run of 80 m up to the first.", lesson: "Speed humps are built to be crossed at about 30 km/h, speed tables at about 40 and speed bumps at a crawl: faster, they jolt the car and everyone in it, and can unsettle it. Slow down before you reach one, not on it, cross at an even speed, and pick up speed again only once your rear wheels are over. Then slow again for the next one." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -262,6 +265,40 @@ function cyclistPassSites(map, street) {
   }
   const sites = cyclistSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
   return on.length ? on : sites;
+}
+
+// Over the humps: a speed hump, cushion or table (sim/traffic-calming.js) at least HUMP_START_M along a
+// block of the challenge's `street` (where it has one) whose limit is at least HUMP_LIMIT_KMH, outside
+// any school or playground zone, with no sign or signal before it on the block: the car starts from a
+// standstill at the start of the block, with room to reach the limit before it, if it does not slow.
+// Where the street carries straight on past the next junction to another such block with a device of
+// its own, the route does too. It ends HUMP_PAST_M past the last device (short of its block's line).
+const HUMP_LIMIT_KMH = 40, HUMP_START_M = 75, HUMP_FROM_M = 4, HUMP_PAST_M = 50;
+const humpSiteCache = new WeakMap();
+function humpSites(map, street) {
+  if (!humpSiteCache.has(map)) {
+    const sites = [];
+    // (the first device a block has, of the kinds that rise across it: not a bump, under a metre long)
+    const firstOn = (e) => (map.calmingSpans?.get(e.id) || []).find((x) => DEVICES[x.device.kind].length > 2);
+    const calmBlock = (e) => e && !e.ring && e.limit * 3.6 >= HUMP_LIMIT_KMH - 0.5 && !map.zoneSpans.get(e.id)?.length;
+    for (const e of map.edges.values()) {
+      const first = calmBlock(e) && firstOn(e);
+      if (!first || first.s - first.half < HUMP_START_M) continue;
+      const lane = map.lane(e.id, e.lanes - 1);
+      let ahead = null, last = first, lastEdge = e;
+      const next = (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((n) => n.name === e.name && Math.abs(map.turnAngle(e.id, n.id)) < 0.2 && calmBlock(n) && firstOn(n));
+      if (next && firstOn(next).s + HUMP_PAST_M < (next.control?.s_line ?? next.length) - 5) { ahead = map.lane(next.id, Math.min(next.lanes - 1, e.lanes - 1)); last = firstOn(next); lastEdge = next; }
+      const goal = last.s + last.half + HUMP_PAST_M;
+      if (!lane || goal > (lastEdge.control?.s_line ?? lastEdge.length) - 5) continue;
+      const goalLane = ahead || lane;
+      sites.push({ lane, ahead, startS: HUMP_FROM_M * lane.length / e.length, goalS: goal * goalLane.length / lastEdge.length });
+    }
+    sites.sort((a, b) => (b.ahead ? 1 : 0) - (a.ahead ? 1 : 0) || String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    humpSiteCache.set(map, sites);
+  }
+  const sites = humpSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street), pick = on.length ? on : sites;
+  // (two blocks with a device each, where there are)
+  return pick.some((s) => s.ahead) ? pick.filter((s) => s.ahead) : pick;
 }
 
 const plowSiteCache = new WeakMap();
@@ -914,23 +951,26 @@ export function challengeScenario(map, challenge) {
   const cycs = challenge.hazard === "cyclist-pass" ? cyclistPassSites(map, challenge.street) : null;
   if (cycs && !cycs.length) throw new Error("This map has no long straight block of a two-way bike route with one lane each way and a parking lane, that carries straight on.");
   const cyc = cycs ? cycs[Math.floor(random() * cycs.length)] : null;
-  const start = cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const humps = challenge.hazard === "speed-humps" ? humpSites(map, challenge.street) : null;
+  if (humps && !humps.length) throw new Error("This map has no block with a speed hump at least 75 m along it, a limit of 40 km/h or more and no school or playground zone.");
+  const hump = humps ? humps[Math.floor(random() * humps.length)] : null;
+  const start = hump?.lane || cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : hump ? hump.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge || cyc?.ahead.edge;
-  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : cyc ? cyc.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
+  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge || cyc?.ahead.edge || hump?.ahead?.edge;
+  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : cyc ? cyc.ahead : hump ? hump.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   // (through the signal, along the queue past it)
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
   // (past a double-parked van, along its street only)
-  for (let i = 0; i < 12 && !van && !park && !step && !plow && !zip && !cyc && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && !van && !park && !step && !plow && !zip && !cyc && !hump && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -940,7 +980,7 @@ export function challengeScenario(map, challenge) {
     chain.push(lane); seen.add(id); length += lane.length;
   }
   // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
-  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : zip ? zip.goalS : cyc ? cyc.goalS : last.length - 10;
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : zip ? zip.goalS : cyc ? cyc.goalS : hump ? hump.goalS : last.length - 10;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
