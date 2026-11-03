@@ -59,6 +59,10 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.speed_zone = { kind: z.kind, ...(z.name ? { name: z.name } : {}), limit: r1(z.limit_mps), in_effect: ZONE_HOURS[z.kind],
       ...(z.in_zone ? { in_zone: true } : { starts_in_m: r1(Math.max(0, z.starts_in_m)) }), ...(z.ends_in_m !== null ? { ends_in_m: r1(z.ends_in_m) } : {}) };
   }
+  if (snap.traffic_calming) {
+    const c = snap.traffic_calming;
+    state.traffic_calming = { kind: c.name, speed: r1(c.speed_mps), ...(c.over ? { over: true } : { starts_in_m: r1(Math.max(0, c.starts_in_m)) }) };
+  }
   if (snap.lane && snap.lane.lanes > 1) {
     const l = snap.lane;
     state.lanes = { count: l.lanes, car_lane: laneName(l.index, l.lanes), route_lane: laneName(l.route_index, l.lanes) };
@@ -96,6 +100,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
         : { stopped_at_line: false, ...(p.waiting.length ? { waiting_at_junction: p.waiting } : {}) };
     }
     if (i.advance) state.intersection.advance = { light: i.advance.light, ...(i.advance.protected ? { protected_left: true } : {}) };
+    if (i.scramble) state.intersection.scramble = { all_walk: i.scramble.phase !== "dont", ...(i.scramble.phase === "dont" ? { all_walk_in_s: i.scramble.walk_in_s } : { ends_in_s: i.scramble.ends_in_s }), right_on_red: false };
     if (i.right_on_red) {
       const r = i.right_on_red, w = r.wait_for;
       state.intersection.right_on_red = { allowed: true, stop_completed: r.stop_completed, clear: r.clear, ...(w ? { wait_for: w.id || w.kind } : {}) };
@@ -165,8 +170,9 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   }
   if (snap.double_parked) {
     const d = snap.double_parked, w = d.way;
-    state.double_parked = { id: d.van_id, kind: d.kind, hazards: true, ...(d.gap_m > 0 ? { gap_m: r1(d.gap_m) } : { beside_car: true }),
-      way_round: d.going_round ? "car is going round" : w.clear ? "clear" : !w.sees_far_enough ? "cannot see far enough" : "oncoming traffic",
+    state.double_parked = { id: d.van_id, kind: d.kind, ...(d.truck ? { truck: true } : {}), hazards: true, ...(d.gap_m > 0 ? { gap_m: r1(d.gap_m) } : { beside_car: true }),
+      way_round: d.going_round ? "car is going round" : w.clear ? "clear" : d.crew_in_road ? "its crew is in the road" : !w.sees_far_enough ? "cannot see far enough" : "oncoming traffic",
+      ...(d.crew_in_road && !d.going_round ? { crew_in_road: d.crew_in_road } : {}),
       ...(w.oncoming && !d.going_round ? { oncoming: { id: w.oncoming.id, arrives_in_s: r1(w.oncoming.eta_s) }, needs_s: r1(w.need_s) } : {}),
       ...(d.queued ? { waiting_ahead: d.queued } : {}), pass_at: r1(d.limit_mps),
       ...(d.wait ? { stop: true, wait_in_m: r1(Math.max(0, d.bumper_to_stop_m)) } : { go_round: true }) };
@@ -268,6 +274,7 @@ export function situationClauses(snap) {
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
     if (i.advance) out.push(advanceClause(i));
+    if (i.scramble) out.push(scrambleClause(i));
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
@@ -306,6 +313,12 @@ export function situationClauses(snap) {
     out.push(z.in_zone
       ? `The car is in a ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}): the limit is ${kmh} km/h${z.ends_in_m !== null ? ` for the next ${Math.round(z.ends_in_m)} m` : ""}, and children may step out from between parked cars. Keep to it; \`car.target_speed\` already does.`
       : `A ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}), starts ${Math.round(Math.max(0, z.starts_in_m))} m ahead: slow to ${kmh} km/h by its sign; \`car.target_speed\` already does.`);
+  }
+  if (snap.traffic_calming) {
+    const c = snap.traffic_calming, kmh = Math.round(c.speed_mps * 3.6);
+    out.push(c.over
+      ? `The car is going over a ${c.name}: keep to ${kmh} km/h until its rear wheels are over it (\`car.target_speed\` already does).`
+      : `A ${c.name} lies across the street ${Math.round(Math.max(0, c.starts_in_m))} m ahead: slow to ${kmh} km/h by the time the car reaches it, and keep to that over it; taken faster it jolts the car and everyone in it. \`car.target_speed\` already does.`);
   }
   if (snap.right_hook) out.push(rightHookClause(snap.right_hook));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));
@@ -422,6 +435,13 @@ function advanceClause(i) {
 }
 
 // A red light where the car turns right and a right turn on red is allowed after a full stop.
+// A scramble crossing (sim/signals.js): an all-walk phase, and no right turn on red.
+function scrambleClause(i) {
+  const sc = i.scramble, right = i.turn === "right";
+  if (sc.phase !== "dont") return `This junction is a scramble crossing, and its all-walk is on: every light is red, and people are crossing every way, diagonally too, for the next ${Math.round(sc.ends_in_s)} s. Wait at the line until the car's own light turns green, and then let anyone still crossing clear the car's path.`;
+  return `This junction is a scramble crossing: every light turns red together while people cross every way${right ? ", and there is no right turn on red here: wait at the line for the green, even to turn right" : ", and nobody walks alongside a green"}.`;
+}
+
 function rightOnRedClause(i, m, atLine) {
   const r = i.right_on_red, w = r.wait_for;
   if (r.go) return r.entered ? "The car is turning right on the red light: complete the turn." : "The car has stopped fully at the red light and turns right here, where a right turn on red is allowed. Nothing it must yield to is in the way: it may turn now, or keep waiting for the green.";
@@ -490,14 +510,17 @@ function plowClause(p) {
 // A van double-parked in the car's lane ahead (sim/double-parked.js).
 function vanClause(snap) {
   const d = snap.double_parked, w = d.way, at = Math.max(0, Math.round(d.bumper_to_stop_m)), kmh = Math.round(d.limit_mps * 3.6);
-  const lead = `A ${d.kind} (\`${d.van_id}\`) is double-parked in the car's lane ${d.gap_m > 0 ? `${Math.round(d.gap_m)} m ahead` : "beside the car"}, its hazard lights flashing. The only way past is round it through the oncoming lane, and oncoming traffic has the right of way: go round only when the oncoming lane is clear for the whole way round and back.`;
-  const round = " The car's candidates then take it round the van through the oncoming lane and back into its own lane past it.";
+  const where = d.gap_m > 0 ? `${Math.round(d.gap_m)} m ahead` : "beside the car", it = d.truck ? "the truck" : "the van";
+  const lead = d.truck
+    ? `A ${d.kind} (\`${d.van_id}\`) is stopped in the car's lane ${where}, its hazard lights flashing, while its crew empties the bins: they walk between its rear and the kerbs, now and then across the street behind it. The only way past is round it through the oncoming lane, and oncoming traffic has the right of way: go round only when the oncoming lane is clear for the whole way round and back, and none of the crew is out in the street.`
+    : `A ${d.kind} (\`${d.van_id}\`) is double-parked in the car's lane ${where}, its hazard lights flashing. The only way past is round it through the oncoming lane, and oncoming traffic has the right of way: go round only when the oncoming lane is clear for the whole way round and back.`;
+  const round = ` The car's candidates then take it round ${it} through the oncoming lane and back into its own lane past it.`;
   if (d.going_round) return `${lead} The car has started round it: carry on round at no more than ${kmh} km/h (\`car.target_speed\` already does), and back into its own lane past it.`;
-  const stop = at < 2 ? "Hold still where the car is." : `Slow down and stop ${at} m ahead, back far enough to pull out round it (\`wait_behind_van\`).`;
+  const stop = at < 2 ? "Hold still where the car is." : `Slow down and stop ${at} m ahead, back far enough to pull out round it${d.truck ? " and clear of the crew at its rear" : ""} (\`wait_behind_van\`).`;
   if (d.queued) return `${lead} \`${d.queued}\` is waiting behind it ahead of the car: wait in turn behind it. ${stop}`;
   if (!w.clear) {
-    const why = w.oncoming ? `\`${w.oncoming.id}\`, coming the other way, would get there in ${Math.round(w.oncoming.eta_s)} s, and the car needs ${Math.round(w.need_s)} s to get round` : "the car cannot see far enough along the oncoming lane to know it is clear";
-    return `${lead} It is not clear now: ${why}. Wait behind the van until it is. ${stop}${round}`;
+    const why = d.crew_in_road ? `\`${d.crew_in_road}\`, one of its crew, is out in the street` : w.oncoming ? `\`${w.oncoming.id}\`, coming the other way, would get there in ${Math.round(w.oncoming.eta_s)} s, and the car needs ${Math.round(w.need_s)} s to get round` : "the car cannot see far enough along the oncoming lane to know it is clear";
+    return `${lead} It is not clear now: ${why}. Wait behind ${it} until it is. ${stop}${round}`;
   }
   return `${lead} The oncoming lane is clear for the whole way round now: go round it at no more than ${kmh} km/h (\`car.target_speed\` already does).${round}`;
 }

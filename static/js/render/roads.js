@@ -181,6 +181,34 @@ export function buildRoads(map) {
 
 
 
+// The diagonal crosswalks of scramble crossings (sim/signals.js), painted only where the world runs
+// them: from each corner where people wait (the crowd's crosswalk ends, sim/pedestrians.js) straight
+// across the junction to the farthest one, as continental bars 3 m long across the way they walk.
+export function buildScrambleMarkings(map, crowd) {
+  const group = new THREE.Group(), white = new GeoBuilder(), done = new Set();
+  for (const id of map.scrambles || []) {
+    const inter = map.intersections.get(id);
+    for (const node of map.junctionNodes(inter)) {
+      const info = crowd?.legsAt?.get(node);
+      // (only this signal's own junction: junctionNodes also names where its approaches start)
+      if (!info || info.list.length < 3 || info.inter !== inter) continue;
+      for (const here of info.list) for (const side of [1, -1]) {
+        const from = here.ends[side];
+        let far = null;
+        for (const l of info.list) if (l !== here) for (const sd of [1, -1]) { const d = Math.hypot(l.ends[sd][0] - from[0], l.ends[sd][1] - from[1]); if (!far || d > far.d) far = { to: l.ends[sd], d }; }
+        if (!far) continue;
+        const key = [from, far.to].map((p) => p.map((v) => v.toFixed(1)).join(",")).sort().join("|");
+        if (done.has(key)) continue;
+        done.add(key);
+        const h = Math.atan2(far.to[1] - from[1], far.to[0] - from[0]), across = h + Math.PI / 2;
+        for (let u = 1.2; u < far.d - 1.0; u += 1.2) white.rect(from[0] + Math.cos(h) * u, from[1] + Math.sin(h) * u, across, 3.0, 0.55);
+      }
+    }
+  }
+  add(group, white, wetReflective(snowable(new THREE.MeshStandardMaterial({ color: 0xe6e6df, roughness: 0.6 }), "paint"), 0.7), LAYER.marking);
+  return group;
+}
+
 function add(group, builder, material, order) {
   if (builder.empty) return;
   const mesh = new THREE.Mesh(builder.toGeometry(), material);

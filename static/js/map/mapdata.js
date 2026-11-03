@@ -4,6 +4,7 @@
 
 import { advanceStyle, timingPlan } from "../sim/signals.js";
 import { zoneAt, zoneSpans } from "../sim/speed-zones.js";
+import { calmingSpans } from "../sim/traffic-calming.js";
 
 const CELL = 50;
 const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
@@ -166,6 +167,10 @@ export class MapData {
     // signal timing is worked out here from the streets meeting at each junction (see signals.js)
     this.intersections = new Map(pack.intersections.map((i) => [i.id, { ...i }]));
     for (const inter of this.intersections.values()) inter.plan = timingPlan(inter, this);
+    // and, at scramble crossings (jev/osm/scrambles.py), with an all-walk phase as well, for worlds that
+    // run them (sim/signals.js setScrambles)
+    this.scrambles = new Set((pack.scrambles?.scrambles || []).map((x) => x.signal).filter((id) => this.intersections.has(id)));
+    for (const id of this.scrambles) { const inter = this.intersections.get(id); inter.scramblePlan = timingPlan(inter, this, { scramble: true }); }
     this.stops = new Map(pack.stops.map((s) => [s.id, s]));
     this.yields = new Map((pack.yields || []).map((y) => [y.id, y]));
     this.roundabouts = new Map((pack.roundabouts || []).map((r) => [r.id, r]));
@@ -178,6 +183,21 @@ export class MapData {
     // school and playground zones (jev/osm/zones.py), each edge's stretches of them in order
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
+    // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in
+    // order, and by 20 m cell for the renderer's ride over them: { device, h (the street's heading),
+    // w (half the asphalt's width) }
+    this.calming = (pack.calming?.devices || []).filter((d) => (d.at || []).some((a) => this.edges.has(a.edge)));
+    this.calmingSpans = calmingSpans(this.calming, this.edges);
+    this.calmingGrid = new Map();
+    for (const device of this.calming) {
+      const a = device.at.find((x) => this.edges.has(x.edge)), e = this.edges.get(a.edge);
+      const item = { device, h: headingAt(e.pts, e.cum, a.s * e.cum[e.cum.length - 1] / Math.max(1e-6, e.length)), w: Math.max(-e.asphalt[0], e.asphalt[1]) + 0.3 };
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const key = `${Math.floor(device.x / 20) + i},${Math.floor(device.y / 20) + j}`;
+        if (!this.calmingGrid.has(key)) this.calmingGrid.set(key, []);
+        this.calmingGrid.get(key).push(item);
+      }
+    }
     // the city's offset from UTC in hours (daylight time), when the server knows it
     this.utcOffset = Number.isFinite(pack.utc_offset) ? pack.utc_offset : null;
     this.grid = new Map();

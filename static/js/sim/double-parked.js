@@ -37,6 +37,7 @@ import { rng } from "../common.js";
 import { railIndex } from "./rail.js";
 import { DAYLIGHT_RANGE_M } from "./visibility.js";
 import { current as weather } from "./weather.js";
+import { crewInRoad } from "./collection-truck.js";
 
 export const VAN_NAME = "delivery van";
 export const WAIT_M = 7;
@@ -165,8 +166,13 @@ export function arrival(map, d, n, by = 0) {
 // past its front, less SIGHT_SLACK_M): { clear, need_s (until its front is at the end of the way
 // round), oncoming: { vehicle, eta_s } (the first one coming that leaves too little time),
 // sees_far_enough }. `driver`: as for passTime.
+//
+// Round a garbage truck at a stop (sim/collection-truck.js), the way is not clear either while one of its
+// crew is out in the street beside the way round (`crew`): for the driven car (with `sight`), one it
+// can see.
 export function wayRound(world, d, frontS, v, others, sight = null, driver = null) {
   const map = world.map, e = map.edges.get(d.edge), need = passTime(d.detour.to - frontS, v, driver), by = need + MARGIN_S;
+  const crew = d.truck ? crewInRoad(world, d, sight ? world.ego : null) : null;
   let first = null;
   for (const n of others) {
     if (n.parked || isVan(n) || n.rail || n.kind === "pedestrian" || n.kind === "door") continue;
@@ -176,7 +182,7 @@ export function wayRound(world, d, frontS, v, others, sight = null, driver = nul
   }
   // (as far along the oncoming lane as anyone at the street's limit would come in that time)
   const seen = !sight || sight(Math.min(e.length - 1, d.detour.to + (e.limit || 11.2) * by, frontS + DAYLIGHT_RANGE_M - SIGHT_SLACK_M));
-  return { clear: !first && seen, need_s: need, oncoming: first, sees_far_enough: seen };
+  return { clear: !first && seen && !crew, need_s: need, oncoming: first, sees_far_enough: seen, ...(d.truck ? { crew } : {}) };
 }
 
 // Someone waiting behind van `d` ahead of a driver whose front is `frontS` along its street: in the
@@ -221,7 +227,8 @@ export class DoubleParked {
   busy(d) {
     const world = this.world, e = world.map.edges.get(d.edge), lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
     for (const n of [world.ego, ...(world.npcs || [])]) {
-      if (n.rail || Math.abs(n.x - d.x) > 50 || Math.abs(n.y - d.y) > 50) continue;
+      // (a garbage truck's own record: not the truck itself, sim/collection-truck.js)
+      if (n === d.van || n.rail || Math.abs(n.x - d.x) > 50 || Math.abs(n.y - d.y) > 50) continue;
       const on = onStreet(e, n);
       if (!on) continue;
       const ns = n.spec || CAR, lo = on.s - (on.opposite ? ns.length - ns.rearOverhang : ns.rearOverhang), hi = on.s + (on.opposite ? ns.rearOverhang : ns.length - ns.rearOverhang);
@@ -279,6 +286,35 @@ export class DoubleParked {
     }
     this.vans.push(d);
     return d;
+  }
+
+  // Garbage truck `truck` (sim/collection-truck.js), stopped in the lane of edge `edge` with its rear
+  // `rear` metres along it, as a record like a van's (it is not put among the parked cars: it is
+  // traffic, and stays so): drivers wait `wait` metres behind its rear, clear of its crew. `held`, so
+  // that it leaves when the truck does (release).
+  placeTruck(truck, { edge, rear, wait, name }) {
+    const world = this.world, map = world.map, e = map.edges.get(edge), o = oppositeOf(map, e), spec = truck.spec;
+    const laneC = e.lane_offsets?.[0] ?? e.lane_width / 2, oLane = o ? (o.lane_offsets?.[0] ?? o.lane_width / 2) : laneC;
+    const front = rear + spec.length, [cx, cy] = at(e, rear + spec.length / 2, laneC), id = `stop_${truck.id}_${++this.made}`;
+    const d = {
+      id, van: truck, edge, opposite: o?.id ?? null, rear, front, x: cx, y: cy, heading: headingAt(e.pts, e.cum, rear + spec.length / 2),
+      detour: { id, from: rear - LEAD_M, full: rear - 1, back: front + 2, to: front + RETURN_M, shift: -(laneC + oLane) },
+      wait: rear - wait, left: Infinity, held: true, leaving: false, stayed: [], truck: true, name,
+    };
+    for (const c of world.parked.list) {
+      if (c.stay || (c.edge !== e.id && c.edge !== o?.id)) continue;
+      const p = projectPoint(e.pts, e.cum, [c.x, c.y], null);
+      if (p && p.s > d.detour.from - HELD_M && p.s < d.detour.to + HELD_M) { c.stay = true; d.stayed.push(c); }
+    }
+    this.vans.push(d);
+    return d;
+  }
+
+  // A truck's record, once it drives on (its vehicle stays in traffic).
+  release(d) {
+    for (const c of d.stayed) c.stay = false;
+    const i = this.vans.indexOf(d);
+    if (i >= 0) this.vans.splice(i, 1);
   }
 
   retire(d) {
@@ -354,11 +390,12 @@ const NOTICE_M = 60;
 export function vanNotice(world) {
   const view = world.doubleParked?.egoView();
   if (!view || !view.seen || view.front < view.van.rear - NOTICE_M) return null;
-  const { van, way, queued, going } = view;
-  if (going) return { key: `${van.id}:going`, wait: false, text: "DOUBLE-PARKED VAN · GOING ROUND · BACK INTO YOUR LANE PAST IT" };
+  const { van, way, queued, going } = view, name = van.truck ? "GARBAGE TRUCK" : "DOUBLE-PARKED VAN";
+  if (going) return { key: `${van.id}:going`, wait: false, text: `${name} · GOING ROUND · ${van.truck ? "SLOWLY, " : ""}BACK INTO YOUR LANE PAST IT` };
   if (view.front > van.front) return null;
-  if (queued) return { key: `${van.id}:queued`, wait: true, text: "DOUBLE-PARKED VAN · WAIT YOUR TURN BEHIND IT" };
+  if (queued) return { key: `${van.id}:queued`, wait: true, text: `${name} · WAIT YOUR TURN BEHIND IT` };
+  if (way.crew) return { key: `${van.id}:wait:crew`, wait: true, text: `${name} · CREW IN THE ROAD · WAIT BEHIND IT` };
   if (!way.clear) return { key: `${van.id}:wait:${way.sees_far_enough ? "traffic" : "sight"}`, wait: true,
-    text: way.sees_far_enough ? "DOUBLE-PARKED VAN · ONCOMING TRAFFIC · WAIT BEHIND IT" : "DOUBLE-PARKED VAN · CAN'T SEE PAST · WAIT BEHIND IT" };
-  return { key: `${van.id}:clear`, wait: false, text: "DOUBLE-PARKED VAN · WAY CLEAR · GO ROUND IT" };
+    text: way.sees_far_enough ? `${name} · ONCOMING TRAFFIC · WAIT BEHIND IT` : `${name} · CAN'T SEE PAST · WAIT BEHIND IT` };
+  return { key: `${van.id}:clear`, wait: false, text: `${name} · WAY CLEAR · GO ROUND IT` };
 }

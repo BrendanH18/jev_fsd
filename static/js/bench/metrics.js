@@ -87,6 +87,10 @@ export class DriveMetrics {
       ...(world.closuresSeen ? { merge_cut_ins: v.merge_cut_ins || 0 } : {}),
       // (only for a drive in which traffic passes cyclists: sim/cyclist-pass.js)
       ...(world.passCyclists ? { close_passes: v.close_passes || 0 } : {}),
+      // (only for a drive that crossed a speed hump with calming on: sim/traffic-calming.js)
+      ...(world.calmingSeen ? { hump_hits: v.hump_hits || 0 } : {}),
+      // (only for a drive a garbage truck stopped to collect in: sim/collection-truck.js)
+      ...(world.collectionSeen ? { crew_close_passes: v.crew_close_passes || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -130,6 +134,8 @@ export function failures(m) {
   if (m.plow_right_passes) f.push("passed plow on the right");
   if (m.merge_cut_ins) f.push("merged out of turn");
   if (m.close_passes) f.push("passed a cyclist too close");
+  if (m.hump_hits) f.push("took a speed hump too fast");
+  if (m.crew_close_passes) f.push("passed a garbage crew worker too close");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

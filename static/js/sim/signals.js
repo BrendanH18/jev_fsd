@@ -14,9 +14,26 @@
 // the left turn goes (as BC's Motor Vehicle Act s. 130 has it). The pedestrians walking alongside
 // that group start their walk once the clearance is over: the turn would cut across them.
 
+//
+// Scramble crossings (jev/osm/scrambles.py): where OSM says a signal has an all-walk phase, the cycle
+// grows to fit one after the last group's clearance: every vehicle approach shows red while people
+// cross every way, diagonally too, for SCRAMBLE_WALK_S of walk and then a flashing hand long enough to
+// cross the junction from corner to corner at 1.2 m/s, then SCRAMBLE_CLEAR_S of all-red. The walk is
+// exclusive: nobody walks alongside a green (the hand shows), so turning traffic has the crosswalks to
+// itself, and, as Toronto signs its scrambles, there is no right turn on red there. Opt-in, like the
+// weather's grip: the World option `scrambles` (setScrambles) picks each junction's plan; with it off,
+// every signal runs as before.
 // A full stop anywhere within this many meters before the line counts as stopping at the sign.
 export const STOP_ZONE_M = 6.0;
 export const WALK_S = 7;
+export const SCRAMBLE_WALK_S = 10;
+export const SCRAMBLE_CLEAR_S = 2;
+const SCRAMBLE_CORNER_M = 6;   // (corner to corner is the diagonal across the junction's streets, plus this)
+let scramblesOn = false;
+// Whether scramble junctions run their all-walk phase (World option `scrambles`).
+export function setScrambles(on) { scramblesOn = !!on; return scramblesOn; }
+// Whether `intersection` runs a scramble now.
+export const isScramble = (intersection) => scramblesOn && !!intersection?.scramblePlan;
 const PED_SPEED = 1.2;
 const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
 const MAJOR = new Set(["primary", "secondary"]);
@@ -66,7 +83,8 @@ function advanceFor(inter, map) {
 }
 
 // Build the plan from the approaches' streets. `map` is the MapData (edges with limits and widths).
-export function timingPlan(inter, map) {
+// With `scramble`, the plan has an all-walk phase at the end of its cycle (see SCRAMBLE_WALK_S).
+export function timingPlan(inter, map, { scramble = false } = {}) {
   const groups = { A: { speed: 0, weight: 0, width: 0, arterial: false }, B: { speed: 0, weight: 0, width: 0, arterial: false } };
   for (const a of inter.approaches) {
     const e = map.edges.get(a.edge);
@@ -98,10 +116,16 @@ export function timingPlan(inter, map) {
   const gA2 = round(gA + (advance?.group === "A" ? extra : 0)), gB2 = round(gB + (advance?.group === "B" ? extra : 0));
   const A = { start: 0, green: gA2, yellow: pA.yellow, allRed: pA.allRed };
   const B = { start: round(gA2 + pA.yellow + pA.allRed), green: gB2, yellow: pB.yellow, allRed: pB.allRed };
-  return { cycle: cycle + extra, A, B, ...(advance ? { advance } : {}) };
+  const plan = { cycle: cycle + extra, A, B, ...(advance ? { advance } : {}) };
+  if (!scramble) return plan;
+  const flash = round(Math.max(WALK_S, (Math.hypot(groups.A.width, groups.B.width) + SCRAMBLE_CORNER_M) / PED_SPEED));
+  plan.scramble = { start: plan.cycle, walk: SCRAMBLE_WALK_S, flash, allRed: SCRAMBLE_CLEAR_S };
+  plan.cycle = round(plan.cycle + SCRAMBLE_WALK_S + flash + SCRAMBLE_CLEAR_S);
+  return plan;
 }
 
 function planOf(intersection) {
+  if (scramblesOn && intersection.scramblePlan) return intersection.scramblePlan;
   // maps loaded without a plan fall back to the old fixed 48 s cycle
   return intersection.plan || {
     cycle: intersection.cycle_s || 48,
@@ -124,12 +148,17 @@ export function phaseOf(intersection, t) {
 
 // The pedestrian signal for people walking alongside `group`'s traffic: "walk", "flash" (the
 // flashing hand: finish crossing, do not start), or "dont".
+// At a scramble every crossing, diagonals too, shows the all-walk phase, whatever the group.
 export function pedPhase(intersection, group, t) {
   const plan = planOf(intersection);
   const p = plan[group];
   if (!p) return "dont";
   const c = plan.cycle;
   const u = ((t + (intersection.offset_s || 0)) % c + c) % c;
+  if (plan.scramble) {
+    const d = u - plan.scramble.start;
+    return d >= 0 && d < plan.scramble.walk ? "walk" : d >= 0 && d < plan.scramble.walk + plan.scramble.flash ? "flash" : "dont";
+  }
   // (alongside a group led by an advance green, the walk waits for it and its clearance)
   const adv = plan.advance?.group === group ? plan.advance.length + plan.advance.clear : 0;
   const d = ((u - p.start) % c + c) % c;
@@ -180,6 +209,17 @@ export function movementSignal(state, turn) {
 }
 // Whether the movement goes protected: a left turn under an advance green, oncoming traffic held.
 export const protectedLeft = (state, turn) => (state === "advance" || state === "arrow") && isLeft(turn);
+
+// A scramble's all-walk phase at `t`: { phase ("walk", "flash" or "dont"), walk_in_s (until the next
+// walk starts; 0 during it), ends_in_s (until the walk and its flashing hand are over, during them) },
+// or null where there is none.
+export function scrambleState(intersection, t) {
+  if (!isScramble(intersection)) return null;
+  const plan = planOf(intersection), sc = plan.scramble, c = plan.cycle;
+  const u = ((t + (intersection.offset_s || 0)) % c + c) % c, d = ((u - sc.start) % c + c) % c;
+  const phase = d < sc.walk ? "walk" : d < sc.walk + sc.flash ? "flash" : "dont";
+  return { phase, walk_in_s: phase === "walk" ? 0 : Math.round((c - d) * 10) / 10, ...(phase !== "dont" ? { ends_in_s: Math.round((sc.walk + sc.flash - d) * 10) / 10 } : {}) };
+}
 
 // Seconds until the given group next turns green (0 when green now). With an approach (`edgeId`) and
 // a movement, until that movement does: behind an advance green held by another approach, or going
@@ -247,4 +287,23 @@ export function advanceNotice(world) {
   if (!inter?.plan?.advance || world.outages?.isDark(inter.id) || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
   const shows = approachPhase(inter, c.edge, world.t), text = NOTICES[shows]?.[isLeft(c.turn) ? 0 : 1];
   return text ? { key: `${inter.id}:${shows}`, text, protected: protectedLeft(shows, c.turn) } : null;
+}
+
+// What the HUD tells the driver about a scramble crossing its route takes it through next, within
+// NOTICE_M and in sight: during the all-walk, that every light is red and people cross every way; on
+// its red, turning right, that there is no right turn on red. { key, text }, or null.
+export function scrambleNotice(world) {
+  const { route, ego, map } = world;
+  if (!route || !map.scrambles?.size) return null;
+  const p = route.project(ego.x, ego.y, route.hint);
+  if (!p || p.distance > 4) return null;
+  const front = p.s + ego.spec.length - ego.spec.rearOverhang;
+  const c = route.controls.find((k) => k.control.type === "signal" && k.sRoute > front - 1);
+  const inter = c && c.sRoute - front <= NOTICE_M ? map.intersections.get(c.control.id) : null;
+  if (!isScramble(inter) || world.outages?.isDark(inter.id) || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
+  const sc = scrambleState(inter, world.t);
+  if (sc.phase !== "dont") return { key: `${inter.id}:${sc.phase}`, text: "SCRAMBLE CROSSING · ALL WALK · EVERY LIGHT RED" };
+  const shows = movementSignal(approachPhase(inter, c.edge, world.t), c.turn || "straight");
+  if (shows === "red" && c.turn === "right") return { key: `${inter.id}:red:right`, text: "SCRAMBLE CROSSING · NO RIGHT TURN ON RED" };
+  return null;
 }

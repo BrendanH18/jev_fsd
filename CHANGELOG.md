@@ -2,6 +2,68 @@
 
 ## Unreleased
 
+- Speed humps, tables, cushions and bumps (`static/js/sim/traffic-calming.js`). A new layer beside each
+  map pack, `<key>.calming.v1.json` (`jev/osm/calming.py`, built from the raw OSM download by
+  `scripts/fetch_map.py ... --calming`), places every node tagged `traffic_calming=hump`, `table`,
+  `cushion` or `bump` on the streets it lies across: 168 across eight of the twelve maps (65 in Ottawa,
+  30 in Kitsilano). Devices tagged on a whole way, islands, chokers and chicanes are left out. Each kind
+  takes the shape the Transportation Association of Canada's traffic calming guide gives it, and the
+  speed to cross it at: a hump 3.7 m long, crossed at 30 km/h; a cushion like it, which wide vehicles
+  (buses, fire trucks) straddle; a flat-topped table 6.7 m long, at 40 km/h (a raised crosswalk when it
+  carries one); and a bump under a metre long, at 15 km/h. The driven car's sensing reports the next one
+  along its route (`traffic_calming`); its target speed and limit come down to the device's speed by
+  8 m short of it, gently, and stay there until its rear wheels are over. Traffic slows for them too;
+  cyclists ride over. The cars' bodies rise and pitch over them (render only), and the devices are drawn
+  with their white triangles. Crossing one with the front axle more than 10 km/h too fast is a hard hit
+  (`hump_hits`), which costs smoothness in the coaching score and fails a drive. The HUD says "SPEED HUMP
+  AHEAD · SLOW TO 30 KM/H". Decision models and LLMs get `traffic_calming`, a situation line and a prompt
+  line. It is on in free drives (`?calming=0` turns it off) and in the new challenge only (`World`
+  option `calming`); with it off nothing slows for a device and the metrics have no `hump_hits`.
+- New challenge, "Over the humps" (Ottawa, Gloucester Street in Centretown, 50 km/h): a clear run of
+  80 m from a standstill to the first speed hump, then a second on the next block. Rules and the cautious
+  agent cross both at about 30 km/h; without calming the car takes them at 50.
+- Scramble crossings (`static/js/sim/signals.js`). A new layer, `<key>.scrambles.v1.json`
+  (`jev/osm/scrambles.py`), marks a signal as a scramble where OSM says so (`crossing:scramble=yes`,
+  `crossing=scramble`, a crossing's note naming a scramble or an all-way walk, or a crossing footway
+  running diagonally across the junction). One of the bundled maps has one: Government Street at Wharf
+  and Humboldt streets in Victoria, by the Empress. There the cycle grows by an all-walk phase after the
+  last group's clearance: every approach shows red while people cross every way, diagonally too, for a
+  10 s walk and a flashing hand long enough to cross corner to corner, then 2 s of all-red. Nobody
+  walks alongside a green, and, as Toronto signs its scrambles, there is no right turn on red: not for
+  the driven car (`intersection.right_on_red` is not offered, and `intersection.scramble` says why), not
+  for traffic, and the audit counts one as a red light (`scramble: true` on the event), with a coaching
+  tip. A third of the people at a corner there cross diagonally. The diagonal crosswalks are painted,
+  and the HUD says "SCRAMBLE CROSSING · ALL WALK · EVERY LIGHT RED" and "SCRAMBLE CROSSING · NO RIGHT
+  TURN ON RED". It is on in free drives (`?scramble=0` turns it off) and in the new challenge only
+  (`World` option `scrambles`, module state like the weather's grip); with it off every signal runs as
+  before.
+- New challenge, "All walk" (Victoria, Wharf Street to Government Street, by the Empress): the car's
+  light turns red as it arrives to turn right. It waits through the all-walk while two people cross the
+  junction diagonally, one of them slowly, and on its green lets the slow walker reach the kerb before
+  it turns. With the scramble off, Rules turns right on red at once.
+- Collection day (`static/js/sim/collection-truck.js`). By day a garbage truck (a rear-loader) works the
+  quiet two-way streets with one lane each way, stopping every 24 to 42 m in its lane for 8 to 14 s while
+  a worker takes the bins at the kerb, and now and then (45% of stops) another crosses behind it to the
+  far kerb's bins and back, once nothing moving would reach them within 4 s. Standing at a stop, the
+  truck is a double-parked record (`world.doubleParked`, `truck: true`): everyone waits 10 m behind its
+  rear, clear of the crew, and goes round through the oncoming lane only once that is clear for the whole
+  way round and no worker is out in the street: beside the way round, behind the truck off its step, or
+  across the street still to cross back. The driven car counts only workers it can see. Between stops
+  the truck drives on at 15 km/h on collection streets and 30 km/h elsewhere, and traffic follows it.
+  The driven car's sensing reports it as `double_parked` with `truck` and `crew_in_road`; decision
+  models and LLMs are told why to wait. The audit counts passing a worker closer than 1.5 m at more than
+  7 km/h as `crew_close_passes`, which fails a drive; coaching has a tip. The HUD says "GARBAGE TRUCK ·
+  CREW IN THE ROAD · WAIT BEHIND IT", and the truck's beacons turn and its hazards flash at a stop. It is
+  on in free drives (`?collection=0` takes it off; `NpcFleet` option `collection`, its own random
+  stream), and the metrics have `crew_close_passes` only once a truck has stopped to collect.
+- New challenge, "Collection day" (Vancouver, West 5th Avenue in Kitsilano): a truck stands ahead in the
+  car's lane as one of its crew crosses behind it to the far kerb and two cars come the other way. Rules
+  and the cautious agent wait well back until the worker is back and the cars are by, then go round at
+  20 km/h.
+- New checks in `scripts/test_traffic_calming.mjs`, `scripts/test_scrambles.mjs`,
+  `scripts/test_collection_trucks.mjs`, `tests/test_calming.py` and `tests/test_scrambles.py`. The
+  seeded benchmark and the other thirty challenges play out exactly as before.
+
 - Passing cyclists with room (`static/js/sim/cyclist-pass.js`). On a two-way street with one lane each
   way, traffic and the driven car used to trail a cyclist riding in the lane for as long as it rode
   there. Now they go round it through the oncoming lane when that is clear, leaving the minimum passing

@@ -124,6 +124,14 @@ export const SNOW_PLOW = {
   power: 250000, cdA: 7.5, crr: 0.01, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
 };
 
+// A rear-loading garbage truck on a single-axle chassis (sim/collection-truck.js): its packer body
+// overhangs the rear axle by the length of its hopper, where the crew works.
+export const COLLECTION_TRUCK = {
+  ...CAR, kind: "collection_truck", wheelbase: 5.0, length: 9.6, width: 2.5, rearOverhang: 2.9, maxSteer: 40 * Math.PI / 180,
+  maxAccel: 1.2, maxSpeed: 25, mass: 15000, yawInertia: 100000, cgToFront: 2.4, cgHeight: 1.3, track: 2.0,
+  power: 200000, cdA: 7.0, crr: 0.01, brakeFront: 0.6, driveFront: 0, accelLag: 0.45,
+};
+
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
 export const ROAD = { mu: 0.9 };
 export const G = 9.81;

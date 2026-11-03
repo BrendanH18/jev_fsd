@@ -28,7 +28,10 @@ before going round them, sends a snow plow down the main streets while it snows,
 30 m behind and never passes on the right, closes a lane for a road crew on two-lane streets, where
 everyone uses both lanes to the merge point and then takes turns, has everyone pass a cyclist riding out
 in the lane of a street with one lane each way only once the oncoming lane is clear, leaving at least
-1 m (1.5 m above 50 km/h), parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. At the
+1 m (1.5 m above 50 km/h), sends a garbage truck along the quiet streets on collection day, which
+everyone waits well back of while its crew is out and goes round slowly once they are back, slows
+everyone for the speed humps, tables, cushions and bumps mapped in OpenStreetMap, runs the all-walk
+phase of scramble crossings, with no right turn on red there, parks tow trucks and police cars at the curb with their lights flashing for everyone to slow down and move over for, and now and then sends an ambulance or fire truck answering a call that everyone must pull over for. At the
 end of a drive the AI driver parallel parks in a space near the destination, and pulls out of it again
 to start the next one. Cars parked at the kerb hide the sidewalk behind them, now and then someone steps
 out from between two of them, and the AI driver keeps to a speed it can stop from beside them. Then
@@ -69,7 +72,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Thirty hand-built scenarios test the situations real drivers get wrong:
+Thirty-three hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -103,6 +106,9 @@ Thirty hand-built scenarios test the situations real drivers get wrong:
 | **Behind the plow** | Winnipeg, afternoon, snow | A city plow is clearing the left lane of William Avenue at 18 km/h, blue and amber lamps flashing, and the right lane beside it is wide open: stay 30 m behind it all the way, and never go by it on the right |
 | **Take turns** | Calgary, afternoon | The right lane of 14 Avenue SW is closed for a road crew, the left lane is backed up to the cones, and two cars wait at the merge ahead of you: stay in your lane to the merge point, then take your turn, one car from each lane |
 | **Give them room** | Vancouver, afternoon | A cyclist rides out in your lane on the West 10th Avenue bikeway, the kerbs lined with parked cars, one lane each way, and two cars are coming the other way: stay behind until they are by, then pass with at least 1 m and move back in well ahead |
+| **Over the humps** | Ottawa, afternoon | Gloucester Street is a 50 km/h one-way with a speed hump across each block, and you set off with a clear run of 80 m to the first: slow to 30 km/h before each hump, cross at an even speed, and pick up again only once your rear wheels are over |
+| **All walk** | Victoria, afternoon | You're turning right from Wharf Street onto Government Street, by the Empress, where the signal has a scramble crossing, and it turns red as you arrive: no right on red here, so wait through the all-walk, then let a slow walker finish the diagonal before you turn |
+| **Collection day** | Vancouver, afternoon | A garbage truck stands in your lane on West 5th Avenue as one of its crew crosses behind it to the bins on the far side, and two cars come the other way: wait well back until the crew is back and the oncoming lane is clear, then go round slowly |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

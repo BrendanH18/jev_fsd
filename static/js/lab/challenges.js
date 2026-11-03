@@ -1,6 +1,6 @@
 import { routeFromLanes } from "../demo/routing.js";
 import { pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
-import { Vehicle, BIKE, BUS, CAR, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
+import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
 import { isJunction } from "../sim/emergency.js";
 import { BUS_YIELD_LIMIT_MPS, busStopFront, curbShift } from "../sim/bus.js";
@@ -22,6 +22,9 @@ import { QUIET, STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { PLOW_MPS } from "../sim/snow-plow.js";
 import { LC_LIMIT_MPS, SPAN_M as LC_SPAN_M, laneClosureSites } from "../sim/lane-closure.js";
 import { passStreet } from "../sim/cyclist-pass.js";
+import { DEVICES } from "../sim/traffic-calming.js";
+import { truckSites } from "../sim/collection-truck.js";
+import { sidewalkOffset } from "../map/streets.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
@@ -85,6 +88,12 @@ export const CHALLENGES = [
     description: "A road crew has closed the right lane of 14 Avenue SW, one-way with two lanes. The left lane is backed up to the cones, two cars in your lane are waiting at the merge, and the lane ahead of you is otherwise empty.", lesson: "Where a lane is closed, zipper merge: in slow traffic, stay in your lane right up to the merge point, then take turns, one vehicle from each lane. Manitoba's driver's handbook teaches it, and Ontario cities and the Alberta Motor Association ask drivers to merge this way. Merging early makes the queue longer, and following the car ahead in out of turn forces the driver whose turn it is to brake. Wait for your turn, then go." },
   { id: "cyclist-pass", title: "Give them room", map: "kitsilano", weather: "dry", time: "afternoon", seed: 30042, icon: "⇉", difficulty: "Patience", hazard: "cyclist-pass", passCyclists: true, street: "West 10th Avenue",
     description: "A cyclist is riding the West 10th Avenue bikeway ahead of you, out in your lane: the kerb is lined with parked cars, and there's one lane each way. Two cars are coming the other way.", lesson: "Pass a cyclist with at least 1 m of room where the limit is 50 km/h or less, and 1.5 m above: that is BC's minimum passing distance law, and Québec and Ontario have one too. With one lane each way, that means moving into the oncoming lane, so stay well back until it is clear for the whole pass, then go by and move back in well ahead of them. Never squeeze past in the lane." },
+  { id: "speed-humps", title: "Over the humps", map: "ottawa", weather: "dry", time: "afternoon", seed: 31042, icon: "⌒", difficulty: "Control", hazard: "speed-humps", calming: true, street: "Gloucester Street",
+    description: "Gloucester Street is a one-way residential street in Centretown with a 50 km/h limit and a speed hump across each block. You set off from the start of a block, with a clear run of 80 m up to the first.", lesson: "Speed humps are built to be crossed at about 30 km/h, speed tables at about 40 and speed bumps at a crawl: faster, they jolt the car and everyone in it, and can unsettle it. Slow down before you reach one, not on it, cross at an even speed, and pick up speed again only once your rear wheels are over. Then slow again for the next one." },
+  { id: "scramble", title: "All walk", map: "victoria", weather: "dry", time: "afternoon", seed: 32042, icon: "✕", difficulty: "Patience", hazard: "scramble", scrambles: true, street: "Wharf Street",
+    description: "You're turning right from Wharf Street onto Government Street, by the Empress, where the signal has a scramble crossing: every light turns red together while people cross every way, diagonally too. Your light turns red as you arrive.", lesson: "At a scramble crossing there is no turning right on red: the red stays red for everyone while people cross the junction every way at once, so wait at the line for your own green. When it comes, anyone still crossing, a slow walker finishing the diagonal say, still has the right of way: let them reach the kerb before you turn." },
+  { id: "collection", title: "Collection day", map: "kitsilano", weather: "dry", time: "afternoon", seed: 33042, icon: "♻", difficulty: "Patience", hazard: "collection",
+    description: "It's collection day. A garbage truck is stopped in your lane ahead, beside the parked cars, its crew emptying the bins at the kerb, and there's one lane each way. As you come up behind it, one of the crew heads across the street behind the truck to the bins on the far side.", lesson: "Stop well back from a garbage truck at work: its crew works at its rear, walking between it and the kerbs and across the street behind it, and they are often out of sight behind the truck. Go round only when the crew is back at the kerb or on the truck and the oncoming lane is clear for the whole way round, and go round slowly, with room to spare. On the move, stay behind it: it is about to stop again." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -261,6 +270,106 @@ function cyclistPassSites(map, street) {
     cyclistSiteCache.set(map, sites);
   }
   const sites = cyclistSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
+// Over the humps: a speed hump, cushion or table (sim/traffic-calming.js) at least HUMP_START_M along a
+// block of the challenge's `street` (where it has one) whose limit is at least HUMP_LIMIT_KMH, outside
+// any school or playground zone, with no sign or signal before it on the block: the car starts from a
+// standstill at the start of the block, with room to reach the limit before it, if it does not slow.
+// Where the street carries straight on past the next junction to another such block with a device of
+// its own, the route does too. It ends HUMP_PAST_M past the last device (short of its block's line).
+const HUMP_LIMIT_KMH = 40, HUMP_START_M = 75, HUMP_FROM_M = 4, HUMP_PAST_M = 50;
+const humpSiteCache = new WeakMap();
+function humpSites(map, street) {
+  if (!humpSiteCache.has(map)) {
+    const sites = [];
+    // (the first device a block has, of the kinds that rise across it: not a bump, under a metre long)
+    const firstOn = (e) => (map.calmingSpans?.get(e.id) || []).find((x) => DEVICES[x.device.kind].length > 2);
+    const calmBlock = (e) => e && !e.ring && e.limit * 3.6 >= HUMP_LIMIT_KMH - 0.5 && !map.zoneSpans.get(e.id)?.length;
+    for (const e of map.edges.values()) {
+      const first = calmBlock(e) && firstOn(e);
+      if (!first || first.s - first.half < HUMP_START_M) continue;
+      const lane = map.lane(e.id, e.lanes - 1);
+      let ahead = null, last = first, lastEdge = e;
+      const next = (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((n) => n.name === e.name && Math.abs(map.turnAngle(e.id, n.id)) < 0.2 && calmBlock(n) && firstOn(n));
+      if (next && firstOn(next).s + HUMP_PAST_M < (next.control?.s_line ?? next.length) - 5) { ahead = map.lane(next.id, Math.min(next.lanes - 1, e.lanes - 1)); last = firstOn(next); lastEdge = next; }
+      const goal = last.s + last.half + HUMP_PAST_M;
+      if (!lane || goal > (lastEdge.control?.s_line ?? lastEdge.length) - 5) continue;
+      const goalLane = ahead || lane;
+      sites.push({ lane, ahead, startS: HUMP_FROM_M * lane.length / e.length, goalS: goal * goalLane.length / lastEdge.length });
+    }
+    sites.sort((a, b) => (b.ahead ? 1 : 0) - (a.ahead ? 1 : 0) || String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    humpSiteCache.set(map, sites);
+  }
+  const sites = humpSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street), pick = on.length ? on : sites;
+  // (two blocks with a device each, where there are)
+  return pick.some((s) => s.ahead) ? pick.filter((s) => s.ahead) : pick;
+}
+
+// All walk: a right turn at a scramble crossing (sim/signals.js) where right turns on red are allowed
+// elsewhere on the map, from an approach of the challenge's `street` (where it has one) reached
+// straight on from the block before it, with no sign or signal there, and whose light (with the
+// scramble running) is red from SCR_RED_S[0] to past the end of the all-walk, which starts within
+// SCR_RED_S: the car, setting off SCR_START_M short of the line, arrives on red, and waits through
+// the scramble. Two people stand at the corner opposite the one the car turns round
+// (SCR_CORNER_M of its route through the junction): on the walk, one crosses diagonally to it at an
+// even pace, the other at SCR_SLOW_MPS, still crossing as the car's light turns green.
+const SCR_START_M = 75, SCR_RED_S = [12, 45], SCR_SLOW_MPS = 0.45;
+const scrambleSiteCache = new WeakMap();
+function scrambleSites(map, street) {
+  if (!scrambleSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang;
+    for (const id of map.rightOnRed ? map.scrambles || [] : []) {
+      const inter = map.intersections.get(id), plan = inter.scramblePlan;
+      for (const a of inter.approaches) {
+        const e = map.edges.get(a.edge), right = map.successors(e.id).find((x) => map.classifyTurn(map.turnAngle(e.id, x)) === "right");
+        if (!right) continue;
+        const before = (map.inn.get(e.from) || []).map((x) => map.edges.get(x)).find((p) => p.name === e.name && !p.control && Math.abs(map.turnAngle(p.id, e.id)) < 0.2);
+        const reach = (before?.length || 0) + e.control.s_line;
+        if (!before || reach < SCR_START_M + front - 1) continue;
+        // (the light as it shows with the scramble running: the plan's own phases)
+        const c = plan.cycle, at = (t) => ((t + (inter.offset_s || 0)) % c + c) % c, inA = (u, g) => { const d = u - plan[g].start; return d >= 0 && d < plan[g].green + plan[g].yellow; };
+        const walkAt = [...Array(Math.round((SCR_RED_S[1] - SCR_RED_S[0]) * 2) + 1).keys()].map((k) => SCR_RED_S[0] + k / 2).find((t) => at(t) >= plan.scramble.start && at(t) < plan.scramble.start + 0.5);
+        if (walkAt === undefined) continue;
+        let red = true;
+        for (let t = SCR_RED_S[0]; t <= walkAt + plan.scramble.walk + plan.scramble.flash && red; t += 0.5) red = !inA(at(t), a.group);
+        if (!red) continue;
+        const lane = map.lane(before.id, before.lanes - 1), approach = map.lane(e.id, e.lanes - 1), turn = map.lane(right, map.edges.get(right).lanes - 1);
+        sites.push({ lane, approach, turn, startS: Math.max(2, (reach - SCR_START_M - front) * lane.length / before.length), scramble: { signal: id, edge: e.id, right } });
+      }
+    }
+    sites.sort((a, b) => String(a.approach.edge).localeCompare(String(b.approach.edge)));
+    scrambleSiteCache.set(map, sites);
+  }
+  const sites = scrambleSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
+  return on.length ? on : sites;
+}
+
+// Collection day: a garbage truck (sim/collection-truck.js) stopped at a collection stop in the car's
+// lane, on a block of the challenge's `street` (where it has one) with a parking lane, its rear at
+// least TR_START_M plus the car's front along it; the car starts from a standstill TR_START_M short of
+// the truck's rear. Its crew stands ready at its rear until the car's front is TR_TRIGGER_M from the
+// truck: then one goes to the bins at the right kerb, and one across the street behind it to the far
+// kerb and back, as TR_CARS cars, TR_CAR_GAP_M apart, come down the oncoming lane at the street's
+// limit, the first from TR_ONCOMING_M past the truck's front. The truck stays until the car is past
+// it. The route ends TR_PAST_M past the truck, on its street.
+const TR_START_M = 60, TR_TRIGGER_M = 38, TR_CARS = 2, TR_CAR_GAP_M = 16, TR_ONCOMING_M = 75, TR_PAST_M = 45, TR_PARKED = 4;
+const truckSiteCache = new WeakMap();
+function collectionSites(map, street) {
+  if (!truckSiteCache.has(map)) {
+    const sites = [], front = CAR.length - CAR.rearOverhang;
+    for (const site of truckSites(map).sites) {
+      const e = map.edges.get(site.edge), lane = map.lane(site.edge, 0);
+      const rear = Math.min(site.hi, Math.max(site.lo, TR_START_M + front + 4)), end = rear + COLLECTION_TRUCK.length;
+      const startS = (rear - TR_START_M - front) * lane.length / e.length;
+      if (startS < 2 || !e.parking?.[1] || e.length - end < TR_ONCOMING_M + (TR_CARS - 1) * TR_CAR_GAP_M + 6 || end + TR_PAST_M > (e.control?.s_line ?? e.length) - 3) continue;
+      sites.push({ lane, startS, goalS: (end + TR_PAST_M) * lane.length / e.length, truck: { edge: site.edge, rear } });
+    }
+    sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+    truckSiteCache.set(map, sites);
+  }
+  const sites = truckSiteCache.get(map), on = sites.filter((s) => s.lane.edgeRef.name === street);
   return on.length ? on : sites;
 }
 
@@ -914,23 +1023,34 @@ export function challengeScenario(map, challenge) {
   const cycs = challenge.hazard === "cyclist-pass" ? cyclistPassSites(map, challenge.street) : null;
   if (cycs && !cycs.length) throw new Error("This map has no long straight block of a two-way bike route with one lane each way and a parking lane, that carries straight on.");
   const cyc = cycs ? cycs[Math.floor(random() * cycs.length)] : null;
-  const start = cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const trucks = challenge.hazard === "collection" ? collectionSites(map, challenge.street) : null;
+  if (trucks && !trucks.length) throw new Error("This map has no straight block of a quiet two-way street with one lane each way and a parking lane, long enough for a garbage truck to stop on.");
+  const truck = trucks ? trucks[Math.floor(random() * trucks.length)] : null;
+  const scrs = challenge.hazard === "scramble" ? scrambleSites(map, challenge.street) : null;
+  if (scrs && !scrs.length) throw new Error("This map has no scramble crossing with a right turn, where right turns on red are allowed elsewhere and the car would arrive on a red that lasts through the all-walk.");
+  const scr = scrs ? scrs[Math.floor(random() * scrs.length)] : null;
+  const humps = challenge.hazard === "speed-humps" ? humpSites(map, challenge.street) : null;
+  if (humps && !humps.length) throw new Error("This map has no block with a speed hump at least 75 m along it, a limit of 40 km/h or more and no school or playground zone.");
+  const hump = humps ? humps[Math.floor(random() * humps.length)] : null;
+  const start = truck?.lane || scr?.lane || hump?.lane || cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
   const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
-    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : Math.max(8, Math.min(20, start.length * 0.15));
+    : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : hump ? hump.startS : scr ? scr.startS : truck ? truck.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
+  // (on into the scramble crossing's approach, and right round the corner)
+  if (scr) for (const l of [scr.approach, scr.turn]) { chain.push(l); seen.add(l.edge); length += l.length; }
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge || cyc?.ahead.edge;
-  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : cyc ? cyc.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
+  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge || cyc?.ahead.edge || hump?.ahead?.edge;
+  if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : cyc ? cyc.ahead : hump ? hump.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   // (through the signal, along the queue past it)
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
   // (past a box, only as far as the street after the queue: the queue moves off ahead of the car)
   // (past a double-parked van, along its street only)
-  for (let i = 0; i < 12 && !van && !park && !step && !plow && !zip && !cyc && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
+  for (let i = 0; i < 12 && !van && !park && !step && !plow && !zip && !cyc && !hump && !truck && length < (box ? BOX_ROUTE_M : arrow ? ARROW_ROUTE_M : 260); i++) {
     const previous = chain.at(-1);
     const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
     successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
@@ -940,7 +1060,7 @@ export function challengeScenario(map, challenge) {
     chain.push(lane); seen.add(id); length += lane.length;
   }
   // (past an arrow, ARROW_ROUTE_M in all, the destination on the last street short of its end)
-  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : zip ? zip.goalS : cyc ? cyc.goalS : last.length - 10;
+  const last = chain.at(-1), goalS = arrow ? Math.min(last.length - 10, Math.max(10, last.length - (length - ARROW_ROUTE_M))) : van ? van.goalS : park ? park.goalS : step ? step.goalS : plow ? plow.goalS : zip ? zip.goalS : cyc ? cyc.goalS : hump ? hump.goalS : truck ? truck.goalS : last.length - 10;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
   return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
@@ -965,6 +1085,8 @@ export function challengeScenario(map, challenge) {
     ...(plow ? { snowPlow: plow.plow } : {}),
     ...(zip ? { laneClosure: zip.closure } : {}),
     ...(cyc ? { cyclistPass: cyc.cyclist } : {}),
+    ...(scr ? { scramble: scr.scramble } : {}),
+    ...(truck ? { collection: truck.truck } : {}),
     ...(tram ? { streetcar: tram.streetcar } : {}),
     ...(track ? { levelCrossing: { crossing: track.crossing, queue: track.queue } } : {}),
     ...(box ? { junctionBox: { signal: box.signal, group: box.group, queue: box.queue } } : {}),
@@ -1013,6 +1135,8 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.snowPlow) Object.assign(world.challenge, placePlow(world, fleet, scenario.snowPlow, scenario.start));
   if (scenario.laneClosure) Object.assign(world.challenge, placeZipper(world, fleet, scenario.laneClosure, challenge.seed));
   if (scenario.cyclistPass) Object.assign(world.challenge, placeCyclistPass(world, fleet, scenario.cyclistPass, challenge.seed));
+  if (scenario.scramble) Object.assign(world.challenge, placeScramble(world, scenario.scramble, challenge.seed));
+  if (scenario.collection) Object.assign(world.challenge, placeTruck(world, fleet, scenario.collection, challenge.seed));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -1044,6 +1168,7 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "level-crossing" ? local.ahead < TRACKS_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "work-zone" ? local.ahead < WZ_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "double-parked" ? local.ahead < VAN_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
+    : state.hazard === "collection" ? local.ahead < TR_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "parking" ? local.ahead < PARK_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     : state.hazard === "step-out" ? local.ahead < STEP_OUT_M + world.ego.spec.length - world.ego.spec.rearOverhang
     // (the arrow comes on, and the cars beside the car turn)
@@ -1086,6 +1211,8 @@ export function stepChallenge(world, fleet) {
     for (const id of state.zoneCarIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
     // (the cars coming the other way past the double-parked van set off down the oncoming lane)
     for (const id of state.vanCarIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) { car.frozen = 0; car.v = car.v0; } }
+    // (the garbage crew goes to the bins, one across the street)
+    for (const p of world.crowd.list) if (p.crew && p.truck === state.truckId) p.held = false;
     // (the car behind sets off up the street)
     for (const id of state.followerIds || []) { const car = fleet.vehicles.find(v => v.id === id); if (car) car.frozen = 0; }
   }
@@ -1138,6 +1265,12 @@ export function stepChallenge(world, fleet) {
   // (the tow truck's operator stands in the lane a moment before stepping back)
   if (ped && state.hazard === "roadside" && state.triggered && !state.paused && ped.path.length === 1) { state.paused = true; ped.frozen = OPERATOR_PAUSE_S; }
   if (ped && !ped.path.length) { ped.frozen = 1e6; ped.v = 0; }
+  // (the garbage truck drives on once the car is past it: sim/collection-truck.js)
+  const truck = state.truckId && fleet.vehicles.find(v => v.id === state.truckId);
+  if (truck?.collect.held && truck.collect.record) {
+    const d = truck.collect.record, e = world.map.edges.get(d.edge), q = projectPoint(e.pts, e.cum, [world.ego.x, world.ego.y], null);
+    if (q && q.s - world.ego.spec.rearOverhang > d.front + 3) truck.collect.held = false;
+  }
 }
 
 // With the car 45 m from its stop line, two cars 20 m apart (1.8 s at 11 m/s, too short a gap to
@@ -1533,6 +1666,61 @@ function placeStepOut(world, { edge, at }, seed) {
   world.crowd.list.push(ped);
   return { pedestrianId: ped.id, at: from };
 }
+// All walk: the two people at the corner opposite the one the car turns round (see scrambleSites), who
+// cross diagonally to it on the walk, one of them slowly; and then on along the sidewalk, and away.
+function placeScramble(world, { signal }, seed) {
+  const map = world.map, random = rng(seed), inter = map.intersections.get(signal), route = world.route;
+  const node = [...map.junctionNodes(inter)].find((n) => world.crowd.legsAt.get(n)?.inter === inter && world.crowd.legsAt.get(n).list.length >= 3), legs = node && world.crowd.legsAt.get(node);
+  if (!legs || !route) return {};
+  // (the corner the car turns round: the crosswalk end nearest its path a little into the junction)
+  const c = route.controls.find((k) => k.control.id === signal), turnAt = route.pointAt(Math.min(route.length, c.sJunction ?? c.sRoute + 8));
+  const d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  const ends = legs.list.flatMap((l) => [1, -1].map((side) => ({ leg: l, side, p: l.ends[side] })));
+  const near = ends.reduce((a, b) => d(b.p, turnAt) < d(a.p, turnAt) ? b : a);
+  const far = ends.filter((x) => x.leg !== near.leg).reduce((a, b) => d(b.p, near.p) > d(a.p, near.p) ? b : a);
+  // (then 12 m along the sidewalk there, away from the junction)
+  const e = near.leg.st.edge, L = e.cum.at(-1), s0 = Math.max(2, Math.min(L - 2, near.leg.s + (near.leg.out ? 12 : -12)));
+  const q = pointAt(e.pts, e.cum, s0), h = headingAt(e.pts, e.cum, s0), lat = sidewalkOffset(e, near.side), away = [q[0] + Math.sin(h) * lat, q[1] - Math.cos(h) * lat];
+  const ids = [];
+  for (const [i, speed] of [1.3, SCR_SLOW_MPS].entries()) {
+    const from = [far.p[0] + (i ? 0.5 : -0.5), far.p[1]];
+    const ped = new Pedestrian({ id: `challenge_walker_${i + 1}`, x: from[0], y: from[1], psi: Math.atan2(near.p[1] - from[1], near.p[0] - from[0]), v: 0, speed, home: true,
+      path: [{ p: near.p, cross: { node, leg: near.leg, from, to: near.p, diagonal: true } }, { p: away }], crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), at: null });
+    world.crowd.list.push(ped);
+    ids.push(ped.id);
+  }
+  return { walkerIds: ids, signalId: signal, at: [inter.x, inter.y] };
+}
+
+// Collection day: the garbage truck at its stop (see collectionSites), held there until the car is past
+// it, with cars parked at the kerb beside and behind it, its crew ready at its rear (one to cross), and
+// the oncoming cars, released with the crew.
+function placeTruck(world, fleet, { edge, rear }, seed) {
+  const map = world.map, random = rng(seed), e = map.edges.get(edge), lane = map.lane(edge, 0), ids = [];
+  const truck = fleet.collection.add(lane, (rear + COLLECTION_TRUCK.rearOverhang) * lane.length / e.length, 0, [], { color: 0x2f6b3a, path: new NpcPath(map, random) });
+  truck.collect.held = true;
+  truck.collect.stop = { edge, rear };
+  fleet.collection.arrive(truck, { cross: true });
+  for (const p of truck.collect.crew) p.held = true;
+  const lat = curbOffset(e, CAR);
+  for (let i = 0; i < TR_PARKED; i++) {
+    const s = rear - 13 + i * 6.5 + CAR.rearOverhang, p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+    const car = new Vehicle(p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, h, 0);
+    Object.assign(car, { id: `challenge_parked_${i + 1}`, color: [0x2b3a55, 0x8d9299, 0x9b1e1e, 0x1a1c20][i % 4], style: [0, 3, 1, 5][i % 4], curb: "right", edge, stay: true });
+    world.parked.add(car);
+  }
+  const d = truck.collect.record, o = map.edges.get(d.opposite), ol = map.lane(o.id, 0);
+  for (let i = 0; i < TR_CARS; i++) {
+    const s = (o.length - (d.front + TR_ONCOMING_M + i * TR_CAR_GAP_M) + (CAR.length - CAR.rearOverhang)) * ol.length / o.length;
+    const p = pointAt(ol.pts, ol.cum, s), car = new Vehicle(p[0], p[1], headingAt(ol.pts, ol.cum, s), 0);
+    Object.assign(car, { id: `challenge_oncoming_${i + 1}`, color: [0x9b1e1e, 0xb0b5b9][i % 2], v0: o.limit, driver: { aMax: 1.4, b: 2, s0: 2, T: 1.3, react: 0.5 + random() * 0.3, lcRate: 0 },
+      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 1e6, waiting: 0 });
+    car.path.start(o.id, 0, s);
+    fleet.vehicles.push(car); ids.push(car.id);
+  }
+  return { truckId: truck.id, vanCarIds: ids, at: pointAt(e.pts, e.cum, rear) };
+}
+
 // Give them room: both kerbs of the block lined with parked cars (see cyclistPassSites), staying put; the
 // cyclist out in the lane, riding straight on; and the cars coming the other way, already moving.
 function placeCyclistPass(world, fleet, { edge, next, rear }, seed) {

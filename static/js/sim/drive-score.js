@@ -56,6 +56,12 @@ export class DriveScore {
     // (with traffic passing cyclists, sim/cyclist-pass.js: passing one closer than the minimum passing
     // distance, and into the way of oncoming traffic; reported only for such a drive)
     this.cyclists = !!world.passCyclists; this.closePasses = 0; this.cyclistCutoffs = 0;
+    // (crossing a speed hump, table, cushion or bump much too fast: sim/traffic-calming.js)
+    this.humpHits = 0; this.calmed = false;
+    // (turning right on red at a scramble crossing, which the audit counts as a red light: sim/signals.js)
+    this.scrambleReds = 0;
+    // (passing a garbage truck's crew too close: sim/collection-truck.js; reported once a truck collected)
+    this.crewPasses = 0; this.collected = false;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
@@ -156,6 +162,8 @@ export class DriveScore {
       this.plowClose += dt;
       if (this.plowCounted !== plow.plow.id) { this.plowCounted = plow.plow.id; this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id }); }
     }
+    if (world.calmingSeen) this.calmed = true;
+    if (world.collectionSeen) this.collected = true;
     for (const ev of world.events || []) {
       if (ev.type === "passed_plow_on_right") { this.plowRightPasses++; this.incident("plow_right_pass", "Passed a snow plow on the right", { plow: ev.plow }); }
       if (ev.type === "merged_out_of_turn") { this.mergeCutIns++; this.incident("merge_cut_in", "Merged out of turn: forced in ahead of the car whose turn it was", { zone: ev.zone, cut: ev.cut }); }
@@ -165,6 +173,9 @@ export class DriveScore {
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
+      if (ev.type === "red_light" && ev.scramble) this.scrambleReds++;
+      if (ev.type === "crew_close_pass") { this.crewPasses++; this.incident("crew_close_pass", "Passed a garbage crew worker too close", { worker: ev.worker, clearance_m: ev.clearance_m, kmh: ev.kmh }); }
+      if (ev.type === "hump_hit") { this.humpHits++; this.incident("hump_hit", `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`, { device: ev.device, kmh: ev.kmh }); }
       if (ev.type === "close_pass") { this.closePasses++; this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
       if (ev.type === "failed_to_yield" && ev.cyclist_pass) this.cyclistCutoffs++;
       if (ev.type === "failed_to_yield" && ev.unseen) { this.hiddenCutoffs++; this.incident("hidden_cutoff", "Pulled out in front of a vehicle hidden behind another", { with: ev.with }); }
@@ -245,9 +256,9 @@ export class DriveScore {
     const collisions = delta("collisions"), atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
-      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6)),
+      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20)),
       legality: Math.round(clamp(100 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20)),
-      comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8)),
+      comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
     let score = Math.round(Object.entries(SCORE_WEIGHTS).reduce((sum, [key, weight]) => sum + categories[key] * weight, 0));
@@ -280,6 +291,9 @@ export class DriveScore {
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
     if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
     if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
+    if (this.crewPasses) tips.push("Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.");
+    if (this.scrambleReds) tips.push("At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.");
+    if (this.humpHits) tips.push("Slow right down for speed humps: 30 km/h for a hump or a cushion, 40 for a speed table and a crawl for a bump. Brake before it, not on it, and keep to that speed until the rear wheels are over.");
     if (this.harsh + this.jerk + this.cornering > 2) tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
     if (this.offRoad + this.wrongWay > 0.5 || this.resets) tips.push("Keep to your lane and plan turns before reaching the junction.");
     if (!qualified) tips.push("Drive at least 100 m and 10 seconds to receive a grade.");
@@ -295,6 +309,8 @@ export class DriveScore {
       ...(this.plows ? { plow_close_s: round(this.plowClose), plow_right_passes: this.plowRightPasses, plow_cut_ins: this.plowCutIns } : {}),
       ...(this.closures ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges } : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
+      ...(this.calmed ? { hump_hits: this.humpHits } : {}),
+      ...(this.collected ? { crew_close_passes: this.crewPasses } : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
       coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Download and build the map pack for a bounding box ahead of time, with its bus routes and stops
 (jev/osm/transit.py), marked crosswalks (jev/osm/crossings.py), school and playground zones
-(jev/osm/zones.py) and railway level crossings (jev/osm/rail.py), and print its statistics.
+(jev/osm/zones.py), railway level crossings (jev/osm/rail.py), speed humps and the like
+(jev/osm/calming.py) and scramble crossings (jev/osm/scrambles.py), and print its statistics.
 
     uv run scripts/fetch_map.py                                   # the configured/default bbox
     uv run scripts/fetch_map.py -123.1120,49.2570,-123.0940,49.2680   # W,S,E,N
@@ -13,6 +14,8 @@
     uv run scripts/fetch_map.py ... --zones                       # rebuild only the zones, from the raw OSM
                                                                   # (downloaded if it is not cached)
     uv run scripts/fetch_map.py ... --rail                        # rebuild only the level crossings, likewise
+    uv run scripts/fetch_map.py ... --calming                     # rebuild only the speed humps and the
+                                                                  # scramble crossings, likewise
 """
 
 from __future__ import annotations
@@ -25,8 +28,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from jev.config import MAPS_DIR, Settings, parse_bbox  # noqa: E402
 from jev.osm import fetch  # noqa: E402
 from jev.osm.pack import build_pack, pack_path  # noqa: E402
+from jev.osm.calming import build_calming, calming_path  # noqa: E402
 from jev.osm.crossings import build_crossings, crossings_path  # noqa: E402
 from jev.osm.rail import build_rail, rail_path  # noqa: E402
+from jev.osm.scrambles import build_scrambles, scrambles_path  # noqa: E402
 from jev.osm.transit import build_transit, transit_path  # noqa: E402
 from jev.osm.zones import build_zones, zones_path  # noqa: E402
 
@@ -40,18 +45,21 @@ def main(argv: list) -> int:
         return 2
     print("bbox W,S,E,N = %s" % ",".join("%.5f" % v for v in bbox))
     try:
-        only = "--transit" in argv or "--zones" in argv or "--rail" in argv
+        calm = "--calming" in argv
+        only = "--transit" in argv or "--zones" in argv or "--rail" in argv or calm
         pack = build_pack(bbox, MAPS_DIR, force=force and not only, log=print)
         if "--transit" in argv:
             # (the pack stays as it is: only its bus routes, crosswalks, zones and level crossings are rebuilt,
             # from today's OSM)
             fetch.fetch_osm_xml(bbox, MAPS_DIR, force=True, log=print)
-        elif "--zones" in argv or "--rail" in argv:
+        elif "--zones" in argv or "--rail" in argv or calm:
             fetch.fetch_osm_xml(bbox, MAPS_DIR, log=print)
         transit = build_transit(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
         crossings = build_crossings(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
-        zones = build_zones(bbox, MAPS_DIR, pack, force=force or (only and "--rail" not in argv), log=print)
-        rail = build_rail(bbox, MAPS_DIR, pack, force=force or (only and "--zones" not in argv), log=print)
+        zones = build_zones(bbox, MAPS_DIR, pack, force=force or (only and "--rail" not in argv and not calm), log=print)
+        rail = build_rail(bbox, MAPS_DIR, pack, force=force or (only and "--zones" not in argv and not calm), log=print)
+        calming = build_calming(bbox, MAPS_DIR, pack, force=force or calm, log=print)
+        scrambles = build_scrambles(bbox, MAPS_DIR, pack, force=force or calm, log=print)
     except fetch.FetchError as err:
         print("FAILED: %s" % err)
         return 1
@@ -63,6 +71,10 @@ def main(argv: list) -> int:
         print("zones: %s (%d school and playground zones)" % (zones_path(MAPS_DIR, bbox), len(zones["zones"])))
     if rail:
         print("rail: %s (%d tracks, %d level crossings)" % (rail_path(MAPS_DIR, bbox), len(rail["tracks"]), len(rail["crossings"])))
+    if calming:
+        print("calming: %s (%d speed humps, tables, cushions and bumps)" % (calming_path(MAPS_DIR, bbox), len(calming["devices"])))
+    if scrambles:
+        print("scrambles: %s (%d scramble crossings)" % (scrambles_path(MAPS_DIR, bbox), len(scrambles["scrambles"])))
     print("pack: %s" % pack_path(MAPS_DIR, bbox))
     print("edges %d, lanes %d, signalled intersections %d, stop signs %d, buildings %d" % (
         len(pack["edges"]), len(pack["lanes"]), len(pack["intersections"]), len(pack["stops"]), len(pack["buildings"])))

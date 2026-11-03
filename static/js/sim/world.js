@@ -2,11 +2,11 @@
 
 import { Vehicle, CAR } from "./vehicle.js";
 import { headingAt, projectPoint } from "../map/mapdata.js";
-import { approachPhase, movementSignal, phaseOf, StopMemory } from "./signals.js";
+import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopMemory } from "./signals.js";
 import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
-import { Crowd, PEDESTRIANS } from "./pedestrians.js";
+import { Crowd, PED, PEDESTRIANS } from "./pedestrians.js";
 import { Visibility } from "./visibility.js";
 import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
@@ -23,6 +23,8 @@ import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIn
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { SPAN_M as WZ_SPAN_M, WorkZones, canStopFor as canStopForFlagger, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DoubleParked } from "./double-parked.js";
+import { HIT_OVER_MPS, deviceOf, slowsFor } from "./traffic-calming.js";
+import { CREW_CLEAR_M, CREW_PASS_MPS, crewNear } from "./collection-truck.js";
 import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
 import { EGO_ID, LET_IN_DECEL, OWED_DECEL as LC_OWED_DECEL, LaneClosures, THROUGH_M, canStop as canStopForMerge } from "./lane-closure.js";
 import { Outages, controlAt } from "./outage.js";
@@ -190,13 +192,17 @@ export class World {
   // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
   // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
   // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false } = {}) {
+  // `calming`: traffic and the driven car slow for speed humps, tables, cushions and bumps, and the audit
+  // counts hard hits (sim/traffic-calming.js). `scrambles`: signals with a scramble crossing run their
+  // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
+    this.scrambles = setScrambles(scrambles);
     this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
     this.t = 0;
     this.tick = 0;
@@ -244,6 +250,15 @@ export class World {
     this.passCyclists = !!passCyclists;
     this.bikePasses = new Map();
     this.cyclistPass = null;
+    // speed humps and the like (sim/traffic-calming.js): whether anyone slows for them; whether the car
+    // has crossed one this drive; and, for each near it, how far ahead of its front axle it was last tick
+    this.calming = !!calming;
+    this.calmingSeen = false;
+    this.calmingAxle = new Map();
+    // garbage trucks (sim/collection-truck.js): whether one has stopped to collect this drive, and the
+    // crew the car has passed too close (each counted once)
+    this.collectionSeen = false;
+    this.crewPassed = new Set();
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -342,6 +357,7 @@ export class World {
     this.ego.vy = 0; this.ego.r = 0; this.ego.ax = 0; this.ego.latAccel = 0;
     this._previousStaticPose = poseOf(this.ego);
     this.staticContacts.clear();
+    this.calmingAxle?.clear();
     this._lastFront = null;
     this.lastRoad = null;
     this.lastSignal = null;
@@ -519,8 +535,10 @@ export class World {
           const arrow = shows === "arrow" || shows === "arrow_yellow";
           const state = arrow ? "green" : movementSignal(shows, "straight");
           // after a full stop, where turning right on red is allowed, which way it turns decides
-          const pending = state === "red" && this.map.rightOnRed && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
-          if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light" }); }
+          // (never at a scramble crossing: sim/signals.js)
+          const scramble = isScramble(inter);
+          const pending = state === "red" && this.map.rightOnRed && !scramble && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
+          if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) }); }
           this.arrowCheck = arrow && inter ? { id: control.id, centre: [inter.x, inter.y], approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
             stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed } : null;
           // the approach's heading and, on a route, the street it turns into (without one, the
@@ -591,6 +609,8 @@ export class World {
     this.auditPlows();
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
+    if (this.calming) this.auditCalming();
+    if (this.collectionSeen) this.auditCrew();
     this.auditKerb();
     leftSpace(this);
   }
@@ -670,6 +690,47 @@ export class World {
       }
       pass.ahead = rel.ahead_m;
       this.plowPass.set(n.id, pass);
+    }
+  }
+
+  // Crossing a speed hump, table, cushion or bump with the front axle faster than its speed plus
+  // HIT_OVER_MPS is a hard hit (sim/traffic-calming.js): counted once a device a crossing, going
+  // forward over it.
+  auditCalming() {
+    const ego = this.ego, near = this.map.calmingGrid?.get(`${Math.floor(ego.x / 20)},${Math.floor(ego.y / 20)}`) || [];
+    const axle = ego.spec.wheelbase, seen = new Set();
+    for (const { device, h, w } of near) {
+      const dx = device.x - ego.x, dy = device.y - ego.y, c = Math.cos(ego.psi), sn = Math.sin(ego.psi);
+      const ahead = dx * c + dy * sn, across = Math.abs(dx * sn - dy * c);
+      // (on the street, going along it, not across it)
+      if (across > w + 1 || Math.abs(Math.cos(ego.psi - h)) < 0.7) continue;
+      seen.add(device.id);
+      const before = this.calmingAxle.get(device.id);
+      this.calmingAxle.set(device.id, ahead - axle);
+      if (before === undefined || !(before > 0 && ahead - axle <= 0) || ego.v <= 0) continue;
+      this.calmingSeen = true;
+      if (slowsFor(ego.spec, device) && ego.v > deviceOf(device).mps + HIT_OVER_MPS) {
+        this.violations.hump_hits = (this.violations.hump_hits || 0) + 1;
+        this.events.push({ type: "hump_hit", device: device.id, kind: device.kind, kmh: Math.round(ego.v * 36) / 10 });
+      }
+    }
+    for (const id of this.calmingAxle.keys()) if (!seen.has(id)) this.calmingAxle.delete(id);
+  }
+
+  // Passing a garbage truck's crew (sim/collection-truck.js): the car's body, moving at more than
+  // CREW_PASS_MPS, coming closer than CREW_CLEAR_M to a worker counts once a worker.
+  auditCrew() {
+    const ego = this.ego;
+    if (ego.v <= CREW_PASS_MPS) return;
+    const front = ego.spec.length - ego.spec.rearOverhang, rear = ego.spec.rearOverhang, half = ego.spec.width / 2;
+    for (const p of crewNear(this, ego.x, ego.y, 12)) {
+      if (this.crewPassed.has(p.id) || p.frozen > 0) continue;
+      const l = ego.toLocal(p.x, p.y), dx = Math.max(0, -rear - l.ahead, l.ahead - front), dy = Math.max(0, Math.abs(l.right) - half);
+      const clear = Math.hypot(dx, dy) - PED.width / 2;
+      if (clear >= CREW_CLEAR_M) continue;
+      this.crewPassed.add(p.id);
+      this.violations.crew_close_passes = (this.violations.crew_close_passes || 0) + 1;
+      this.events.push({ type: "crew_close_pass", worker: p.id, truck: p.truck, clearance_m: Math.round(Math.max(0, clear) * 10) / 10, kmh: Math.round(ego.v * 36) / 10 });
     }
   }
 

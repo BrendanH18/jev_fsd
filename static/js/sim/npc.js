@@ -18,7 +18,7 @@
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
-import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
+import { advanceHolds, approachPhase, isScramble, movementSignal, StopMemory } from "./signals.js";
 import { controlAt } from "./outage.js";
 import { rng } from "../common.js";
 import { wrap } from "./world.js";
@@ -31,6 +31,8 @@ import { EMERGENCY_SPECS, EV_JUNCTION_MPS, EV_LIMIT_FACTOR, EV_MAX_MPS, EV_PASS_
   FOLLOW_M, IN_WAY_M, closestOnPath, evOffset, isEmergency, isEmergencyVehicle, isJunction as junctionAt, leadsEmergency, nearestCall, planBehind, planCrossing, planOncoming, pullOverOffset, threadGap } from "./emergency.js";
 import { BUS_DWELL_S, BUS_SIGNAL_M, BUS_TAPER_M, busMayPullOut, busStopFront, busYield, canStopFor, curbShift, isBus } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
+import { pathCalmLimit } from "./traffic-calming.js";
+import { CollectionTrucks, isTruck } from "./collection-truck.js";
 import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import { DEPART_S, DOORS_DELAY_S, DWELL_MAX_S, DWELL_S, RIDER_EVERY_S, RIDERS_OFF, RIDERS_ON, canStopFor as canStopForStreetcar, doorsOpen, isStreetcar, streetcarHold } from "./streetcar.js";
 import { AWAY_S, canStopFor as canStopForTrain, crossingHold, isTrain, railIndex, stepTrain, trainState } from "./rail.js";
@@ -193,7 +195,7 @@ const STREETCAR_DECEL = 1.1;
 const MAX_TRAINS = 1;
 const TRAIN_COLOR = 0x7a1d1d;
 // (a bus, school bus, streetcar or train: long, so looked for all along its body)
-const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o) || isTrain(o) || isPlow(o);
+const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o) || isTrain(o) || isPlow(o) || isTruck(o);
 
 // How far ahead of a cyclist's front wheel any part of another vehicle's body is in its way, or
 // null: within its own body (and 0.05 m) moving straight on as it is heading for the next 2 m, or
@@ -340,7 +342,8 @@ function closureLimit(lz, front) {
 
 export class NpcFleet {
   // `plows`: how many snow plows work the main streets at a time while it snows (sim/snow-plow.js).
-  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0, plows = 0 } = {}) {
+  // `collection`: how many garbage trucks work the quiet streets at a time, by day (sim/collection-truck.js).
+  constructor(world, { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, streetcars = false, trains = false, schoolBuses = 0, plows = 0, collection = 0 } = {}) {
     this.world = world;
     this.map = world.map;
     this.random = rng(seed);
@@ -397,6 +400,10 @@ export class NpcFleet {
     this.plowTarget = plows;
     this.nextPlow = world.t;
     this.plows = [];
+    // (and garbage trucks theirs, put down on the first steps by day; nothing is drawn from it unless a
+    // truck works)
+    const trucks = rng(seed * 141650939 + 43);
+    this.collection = new CollectionTrucks(this, { count: collection, random: trucks, makePath: (map, random) => new NpcPath(map, random) });
     world.npcs = this.vehicles;
   }
 
@@ -616,9 +623,12 @@ export class NpcFleet {
     if (this.trains.length || this.trainTarget) this.manageTrains();
     if (world.doubleParked?.vans.length) this.driveOffVans();
     if (this.plows.length || this.plowTarget) this.managePlows();
+    if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
     const all = [world.ego, ...this.vehicles];
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
+      // a garbage truck standing at a stop while its crew empties the bins (sim/collection-truck.js)
+      if (n.collect?.phase === "work" && this.collection.work(n, dt)) { n.a = 0; continue; }
       // a train on its track (sim/rail.js), braking for anything in its way that it can see
       if (isTrain(n)) {
         stepTrain(n, railIndex(this.map).tracks.get(n.rail.track), dt, [...all, ...world.crowd.list], (cab, o) => world.visibility.sees(cab, o), this.rails);
@@ -688,6 +698,8 @@ export class NpcFleet {
       const stand = n.transit ? (n.transit.tram ? this.streetcarPlan(n, front, dt) : this.busPlan(n, edge, front, dt, proj.lateral)) : null;
       // a school bus slowing to a stop, standing there with its reds flashing, and moving off
       const schoolStop = n.school ? this.schoolPlan(n, front, dt) : null;
+      // a garbage truck slowing to a stop on its round (sim/collection-truck.js)
+      const truckStop = n.collect ? this.collection.plan(n, front, dt) : null;
       // a cyclist rides the right-hand side of the lane, clear of the car doors, or the empty parking
       // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
       const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
@@ -915,6 +927,7 @@ export class NpcFleet {
       const forSchool = this.schoolBuses.length && !isEmergencyVehicle(n) ? this.yieldToSchoolBus(n, front) : null;
       const schoolAt = Math.min(schoolStop ?? Infinity, forSchool ?? Infinity);
       if (schoolAt < gap) { gap = Math.max(0.05, schoolAt); leadV = 0; }
+      if (truckStop !== null && (truckStop === "work" ? 0.05 : truckStop) < gap) { gap = Math.max(0.05, truckStop === "work" ? 0.05 : truckStop); leadV = 0; }
       // not passing a streetcar with its doors open on the side its riders use (sim/streetcar.js)
       const forStreetcar = this.streetcars.length && !isEmergencyVehicle(n) && !n.transit?.tram ? this.yieldToStreetcar(n, front) : null;
       if (forStreetcar !== null && forStreetcar < gap) { gap = Math.max(0.05, forStreetcar); leadV = 0; }
@@ -942,7 +955,9 @@ export class NpcFleet {
       const vCurve = curveSpeed(path, path.s);
       const limit = Math.min(edge.limit, this.zoneLimit(path, front), n.kind === "bike" ? Infinity : this.roadsideLimit(n, edge.limit), wz ? workZoneLimit(wz, front) : Infinity, dp ? vanLimit(dp, front) : Infinity, lz ? closureLimit(lz, front) : Infinity);
       // (a snow plow keeps to its clearing speed, whatever the weather)
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity);
+      // (and, with calming on, down to the speed to cross each speed hump at: sim/traffic-calming.js)
+      const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity, vCalm);
       const D = n.driver || IDM;
       let a;
       if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
@@ -1794,7 +1809,7 @@ export class NpcFleet {
   // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
   maybePark() {
     for (const n of this.vehicles) {
-      if (n.kind === "bike" || n.transit || n.school || n.rail || isPlow(n) || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      if (n.kind === "bike" || n.transit || n.school || n.rail || isPlow(n) || n.collect || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
       const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
       const e = this.map.edges.get(edge.id);
       const choices = this.world.parked.slots.filter((slot) => {
@@ -2097,9 +2112,10 @@ export class NpcFleet {
     const edge = this.map.edges.get(e.id);
     if (!next || e.lane !== edge.lanes - 1 || this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right") return false;
     if (n.stopMem.update(e.control, bumperToLine, n.v, dt) !== "completed") return false;
-    // (not across the protected left turns of an advance green opposite)
+    // (not across the protected left turns of an advance green opposite, and never at a scramble
+    // crossing: sim/signals.js)
     const inter = this.map.intersections.get(e.control.id);
-    if (inter && advanceHolds(inter, e.id, this.world.t)) return false;
+    if (inter && (advanceHolds(inter, e.id, this.world.t) || isScramble(inter))) return false;
     if (this.boxBusy(n, e) || this.crossComing(n, e.to, RTOR_EXTRA_GAP_S)) return false;
     const crowd = this.world.crowd;
     return !kerbConflict(path.pts, path.cum, front - 2, front + 30, crowd, crowd.list, this.world.t, RTOR_WALK_S);

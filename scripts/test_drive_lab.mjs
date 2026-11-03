@@ -15,7 +15,7 @@ const { validAgentChoice, registerAgent } = await import("../static/js/brain/reg
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
 const names = { kitsilano: "623b012bc8b5", mount_pleasant: "7165f1c807a8", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438", edmonton: "3e794edbefcb", winnipeg: "19bb885c9cae", halifax: "49db0d437c8c" };
-// (with its bus routes, crosswalks, school and playground zones and level crossings, as the server and the demo serve it)
+// (with its bus routes, crosswalks, school and playground zones, level crossings, speed humps and scramble crossings, as the server and the demo serve it)
 const load = id => {
   const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url)));
   const transit = new URL(`../data/maps/${names[id]}.transit.v1.json`, import.meta.url);
@@ -26,6 +26,11 @@ const load = id => {
   if (fs.existsSync(zones)) pack.zones = JSON.parse(fs.readFileSync(zones));
   const rail = new URL(`../data/maps/${names[id]}.rail.v1.json`, import.meta.url);
   if (fs.existsSync(rail)) pack.rail = JSON.parse(fs.readFileSync(rail));
+  // (and speed humps and the like, and scramble crossings)
+  for (const name of ["calming", "scrambles"]) {
+    const url = new URL(`../data/maps/${names[id]}.${name}.v1.json`, import.meta.url);
+    if (fs.existsSync(url)) pack[name] = JSON.parse(fs.readFileSync(url));
+  }
   return new MapData(pack);
 };
 let assertions = 0;
