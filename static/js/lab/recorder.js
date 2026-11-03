@@ -48,7 +48,7 @@ export class DriveRecorder {
     for (const cw of world.crowd.marked) shared.add(cw);
     for (const info of world.crowd.legsAt.values()) { shared.add(info); for (const leg of info.list) shared.add(leg); }
     for (const route of [world.route, autopilot.snap?.route]) if (route) {
-      for (const key of ["pts", "cum", "edges", "turns", "controls", "edgeStarts", "limitMarks", "zoneMarks"]) shared.add(route[key]);
+      for (const key of ["pts", "cum", "edges", "turns", "controls", "edgeStarts", "limitMarks", "zoneMarks", "calmingMarks"]) shared.add(route[key]);
     }
     return shared;
   }
@@ -83,6 +83,7 @@ export class DriveRecorder {
       Object.assign(object, state[key]);
     }
     target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world;
+    if (target.fleet.collection) { target.fleet.collection.world = target.world; target.fleet.collection.fleet = target.fleet; }
     target.world.npcs = target.fleet.vehicles;
     Object.assign(target.autopilot, callbacks, { world: target.world, inFlight: null, firing: null, rerouting: false, epoch: epoch + 1 });
     target.world.paused = true;

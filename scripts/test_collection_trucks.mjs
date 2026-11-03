@@ -26,6 +26,7 @@ const { toJevState, situationClauses } = await import("../static/js/brain/state.
 const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
+const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
@@ -275,6 +276,27 @@ await test("in a free drive a truck turns up out of sight by day, works its roun
   const df = new NpcFleet(dark, { count: 0, bikes: 0, seed: 11, collection: 1 });
   for (let i = 0; i < 60 * 30; i++) step({ world: dark, fleet: df, autopilot: idle });
   assert.equal(df.collection.made, 0);
+});
+
+await test("a replay restored before a truck's first stop collects into the live world, and its trucks take the same turns", () => {
+  const { world, fleet, ctx } = street();
+  const autopilot = { enabled: false, step() {}, brains: null, onDecision: null, onEvent: null, totals: { cost: 0, tokens: 0, calls: 0 }, epoch: 0, bumpEpoch() { this.epoch++; } };
+  const recorder = new DriveRecorder({ seconds: 30 }), context = () => ({ world, fleet, autopilot, drive: null, clock: {} });
+  const truck = fleet.collection.add(LANE, (SITE.lo - 30) * LANE.length / E.length, TRUCK_MPS, [], { path: new NpcPath(KITS, rng(3)) });
+  recorder.record(context(), true);
+  // (a truck put down from the trucks' own stream: the turns it picks)
+  const turns = () => { const t = fleet.collection.add(KITS.lane("e129", 0), 30); t.path.extend(); const ids = t.path.edges.map((e) => e.id).join(","); fleet.collection.remove(t); return ids; };
+  const before = turns();
+  for (let i = 0; i < 60 * 5; i++) step(ctx);
+  recorder.restore(0, { world, fleet, autopilot, clock: {}, setDrive() {} });
+  world.paused = false;
+  assert.equal(fleet.collection.world === world && fleet.collection.fleet === fleet, true);
+  assert.equal(turns(), before);
+  const live = fleet.vehicles.find((v) => v.id === truck.id);
+  for (let i = 0; i < 60 * 60 && live.collect.phase !== "work"; i++) step(ctx);
+  assert.equal(live.collect.phase, "work");
+  assert.equal(world.collectionSeen, true);
+  assert.ok(world.doubleParked.vans.some((d) => d.van.id === live.id));
 });
 
 await test("Collection day: Rules and the cautious agent wait for the crew and the oncoming cars, then go round slowly", async () => {

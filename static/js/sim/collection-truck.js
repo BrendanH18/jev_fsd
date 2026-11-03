@@ -102,7 +102,8 @@ export function crewNear(world, x, y, r) {
 }
 
 export class CollectionTrucks {
-  // `makePath`: a new NpcPath for a truck (sim/npc.js), from the trucks' own stream.
+  // `makePath(map, random)`: a new NpcPath for a truck (sim/npc.js), from the trucks' own stream (passed
+  // in, not captured, so that a replay's restored stream is the one used).
   constructor(fleet, { count = 0, random = null, makePath } = {}) {
     this.fleet = fleet;
     this.makePath = makePath;
@@ -123,7 +124,7 @@ export class CollectionTrucks {
     Object.assign(truck, { id: `truck_${n}`, kind: "collection_truck", color: color ?? TRUCK_COLORS[(n - 1) % TRUCK_COLORS.length], v0: TRUCK_MPS, beacons: true,
       driver: { aMax: 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0,
       collect: { phase: "drive", odo: 0, every: this.every(), stop: null, t: 0, dwell: 0, record: null, crew: [], shift: SHIFT_S[0] + (this.random ? this.random() : 0) * (SHIFT_S[1] - SHIFT_S[0]), worked: 0 } });
-    truck.path = path || this.makePath();
+    truck.path = path || this.makePath(this.world.map, this.random);
     truck.path.start(lane.edge, lane.idx, s, planned);
     this.fleet.vehicles.push(truck);
     this.trucks.push(truck);

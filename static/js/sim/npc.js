@@ -403,7 +403,7 @@ export class NpcFleet {
     // (and garbage trucks theirs, put down on the first steps by day; nothing is drawn from it unless a
     // truck works)
     const trucks = rng(seed * 141650939 + 43);
-    this.collection = new CollectionTrucks(this, { count: collection, random: trucks, makePath: () => new NpcPath(this.map, trucks) });
+    this.collection = new CollectionTrucks(this, { count: collection, random: trucks, makePath: (map, random) => new NpcPath(map, random) });
     world.npcs = this.vehicles;
   }
 
