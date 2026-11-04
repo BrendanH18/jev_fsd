@@ -12,6 +12,7 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from . import geometry as g
+from .osm.restrictions import banned
 
 TURN_PENALTY_S = {"straight": 0.0, "right": 2.0, "left": 4.0, "uturn": 20.0}
 SHARP_TURN_DEG = 130.0
@@ -128,7 +129,7 @@ class Router:
     # Search
 
     def astar(self, start_edge: str, start_s: float, goal_edge: str, goal_s: float,
-              extra_cost: Optional[Dict[str, float]] = None) -> Optional[Tuple[List[str], float]]:
+              extra_cost: Optional[Dict[str, float]] = None, restrictions=False, hour=15.5, weekday=0) -> Optional[Tuple[List[str], float]]:
         """(edge sequence, cost) from start to goal, or None. Cost is travel time plus turn penalties."""
         extra_cost = extra_cost or {}
         goal_pt = g.point_at(self.edges[goal_edge]["pts"], goal_s, self._cum[goal_edge])
@@ -163,6 +164,8 @@ class Router:
                     node = parent[node]
                 return list(reversed(path)), best_g[cur]
             for nxt in self.successors(cur):
+                if restrictions and banned(self.pack.get("restrictions", {}).get("restrictions", []), cur, nxt, hour, weekday):
+                    continue
                 if nxt in closed:
                     continue
                 cost = best_g[cur] + self.turn_penalty(cur, nxt)
@@ -176,7 +179,7 @@ class Router:
                     counter += 1
         return None
 
-    def routes(self, start: dict, goal: dict, k: int = 1) -> List[dict]:
+    def routes(self, start: dict, goal: dict, k: int = 1, restrictions=False, hour=15.5, weekday=0) -> List[dict]:
         """`start` = {x, y, heading?}, `goal` = {x, y}. Up to k distinct routes, best first."""
         s = self.snap(start["x"], start["y"], start.get("heading"))
         goals = self.snap_all(goal["x"], goal["y"])
@@ -185,7 +188,7 @@ class Router:
         # pick the goal lane (direction) that is cheapest to reach
         t, first = None, None
         for cand in goals:
-            res = self.astar(s["edge"], s["s"], cand["edge"], cand["s"])
+            res = self.astar(s["edge"], s["s"], cand["edge"], cand["s"], restrictions=restrictions, hour=hour, weekday=weekday)
             if res and (first is None or res[1] < first[1]):
                 t, first = cand, res
         if t is None:
@@ -193,7 +196,7 @@ class Router:
         found: List[List[str]] = []
         extra: Dict[str, float] = {}
         for i in range(k):
-            res = first if i == 0 else self.astar(s["edge"], s["s"], t["edge"], t["s"], extra_cost=extra)
+            res = first if i == 0 else self.astar(s["edge"], s["s"], t["edge"], t["s"], extra_cost=extra, restrictions=restrictions, hour=hour, weekday=weekday)
             if res is None:
                 break
             path = res[0]

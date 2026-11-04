@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- School crossing guards at marked mid-block crosswalks in school zones while the zone is in effect.
+  Small groups of children gather; the guard waits for a safe stopping gap, raises a round red STOP
+  paddle, walks them across and returns to the curb. Traffic and cyclists wait until everyone is off
+  the whole roadway. Sensing, Rules, the cautious agent and model wording handle the stop; the audit,
+  metrics and coaching count `guard_violations` only after a guard has stood out in the drive.
+  Guards and children are pedestrians, with a render-only hi-vis vest and paddle. Opt-in `World`
+  option `guards`, on in free drives unless `?guards=0`; no work or random draws when off.
+- New challenge, "Stop for the guard" (`crossing-guard`): Rue Berri beside École
+  Louis-Hippolyte-Lafontaine in Montréal, morning. Stop for three children and wait for the guard
+  to return to the curb before proceeding.
+- Ontario pedestrian crossovers: the driven car, Rules, cautious agent and traffic wait until every
+  pedestrian reaches the far curb across the whole roadway. Toronto and Ottawa crossings v2 layers
+  add three explicitly tagged OSM PXOs without changing the street packs or legacy crosswalks.
+  Free drives enable `World.pxo` unless `?pxo=0`; other challenges keep it off. Amber beacons and
+  X signs identify them. Leaving early is `pxo_early_goes`, reported only after a PXO is used.
+- New challenge, "Wait for the far curb" (`pxo-far-curb`): Metcalfe Street, Ottawa. A slow walker
+  leaves the inner lane clear while still crossing the rest of this one-way street.
+- Bus-only lanes: a new layer beside each pack, `<key>.buslanes.v1.json` (`jev/osm/bus_lanes.py`,
+  `scripts/fetch_map.py ... --buslanes`), with 89 reserved lanes across five maps and their posted
+  hours. Traffic and the driven car stay out of one while it is in effect, except in the last 50 m
+  before a right turn or to park or pull out at the curb; buses use it. Lanes are drawn red with BUS
+  ONLY markings. The audit counts `bus_lane_driving` (metres in the lane the car is actually in),
+  reported only once a bus lane has been in effect. Opt-in `World` option `busLanes`, on in free
+  drives unless `?buslanes=0`.
+- New challenge, "Buses only" (`bus-lanes`): Main Street, Mount Pleasant, 8:00. Keep out of the bus
+  lane, then move into it in the last 50 m before the right turn.
+- Added opt-in OSM via-node turn restrictions, conditional weekday/time signs, legal routing and traffic choices, prohibited-turn scoring, and the “No left turn” Bathurst Street challenge. Layers cover all twelve preset maps; unsupported via-way and condition syntax is recorded explicitly.
+
 - Speed humps, tables, cushions and bumps (`static/js/sim/traffic-calming.js`). A new layer beside each
   map pack, `<key>.calming.v1.json` (`jev/osm/calming.py`, built from the raw OSM download by
   `scripts/fetch_map.py ... --calming`), places every node tagged `traffic_calming=hump`, `table`,

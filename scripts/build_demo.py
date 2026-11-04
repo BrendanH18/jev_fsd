@@ -13,6 +13,8 @@ sys.path.insert(0, str(ROOT))
 from jev.config import MAPS_DIR, PRESET_BBOXES
 from jev.maps import catalog
 from jev.osm.pack import pack_path
+from jev.osm.bus_lanes import load_buslanes
+from jev.osm.restrictions import load_restrictions
 from jev.osm.calming import load_calming
 from jev.osm.crossings import load_crossings
 from jev.osm.rail import load_rail
@@ -58,6 +60,12 @@ def build(output: Path) -> None:
         rail = load_rail(PRESET_BBOXES[item["id"]], MAPS_DIR)
         if rail:
             pack["rail"] = rail
+        buslanes = load_buslanes(PRESET_BBOXES[item["id"]], MAPS_DIR)
+        if buslanes:
+            pack["buslanes"] = buslanes
+        restrictions = load_restrictions(PRESET_BBOXES[item["id"]], MAPS_DIR)
+        if restrictions:
+            pack["restrictions"] = restrictions
         calming = load_calming(PRESET_BBOXES[item["id"]], MAPS_DIR)
         if calming:
             pack["calming"] = calming

@@ -140,6 +140,7 @@ export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
 export class MapData {
   constructor(pack) {
     this.pack = pack;
+    this.restrictions = pack.restrictions?.restrictions || [];
     this.bbox = pack.bbox;
     this.routingBbox = pack.routing_bbox || pack.bbox;
     this.rightOnRed = rightOnRedAllowed(this.routingBbox);
@@ -177,10 +178,12 @@ export class MapData {
     // bus routes and their stops (jev/osm/transit.py), when the map has them
     this.transit = pack.transit || null;
     // marked crosswalks between junctions (jev/osm/crossings.py), when the map has them
-    this.crosswalks = (pack.crossings?.crossings || []).filter((c) => this.edges.has(c.edge));
+    this.crosswalks = (pack.crossings?.crossings || []).filter((c) => !c.pxo && this.edges.has(c.edge));
+    this.pxos = (pack.crossings?.crossings || []).filter((c) => c.pxo && this.edges.has(c.edge));
     // railway tracks and their level crossings with the streets (jev/osm/rail.py; sim/rail.js)
     this.rail = pack.rail || null;
     // school and playground zones (jev/osm/zones.py), each edge's stretches of them in order
+    this.buslanes = pack.buslanes?.lanes || [];
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
     // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in

@@ -1,7 +1,8 @@
 // A simulation-time clock. Pausing the world pauses daylight too; changing the rate
 // keeps the current time rather than jumping back to the start of the drive.
 export class WorldClock {
-  constructor(hour = 15.5, rate = 0) {
+  constructor(hour = 15.5, rate = 0, weekday = 0) {
+    this.weekday = Number.isInteger(weekday) ? ((weekday % 7) + 7) % 7 : 0;
     this.hour = normalizeHour(hour);
     this.rate = validRate(rate);
     this.lastTime = null;
@@ -10,7 +11,9 @@ export class WorldClock {
   update(simTime) {
     if (!Number.isFinite(simTime)) return this.hour;
     if (this.lastTime !== null) {
-      this.hour = normalizeHour(this.hour + Math.max(0, simTime - this.lastTime) * this.rate / 3600);
+      const next = this.hour + Math.max(0, simTime - this.lastTime) * this.rate / 3600;
+      this.weekday = (this.weekday + Math.floor(next / 24)) % 7;
+      this.hour = normalizeHour(next);
     }
     this.lastTime = simTime;
     return this.hour;

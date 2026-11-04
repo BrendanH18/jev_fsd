@@ -72,7 +72,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Thirty-three hand-built scenarios test the situations real drivers get wrong:
+Thirty-seven hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -109,6 +109,10 @@ Thirty-three hand-built scenarios test the situations real drivers get wrong:
 | **Over the humps** | Ottawa, afternoon | Gloucester Street is a 50 km/h one-way with a speed hump across each block, and you set off with a clear run of 80 m to the first: slow to 30 km/h before each hump, cross at an even speed, and pick up again only once your rear wheels are over |
 | **All walk** | Victoria, afternoon | You're turning right from Wharf Street onto Government Street, by the Empress, where the signal has a scramble crossing, and it turns red as you arrive: no right on red here, so wait through the all-walk, then let a slow walker finish the diagonal before you turn |
 | **Collection day** | Vancouver, afternoon | A garbage truck stands in your lane on West 5th Avenue as one of its crew crosses behind it to the bins on the far side, and two cars come the other way: wait well back until the crew is back and the oncoming lane is clear, then go round slowly |
+| **Stop for the guard** | Montréal, morning | A school crossing guard on Rue Berri raises the STOP paddle and walks three children across: stop short of the crosswalk and wait until the guard and every child are off the whole roadway |
+| **Wait for the far curb** | Ottawa, afternoon | Metcalfe Street’s Ontario pedestrian crossover: stay stopped until everyone reaches the far curb across the whole roadway, even after your lane clears. |
+| **Buses only** | Vancouver, morning | Main Street's curb lane is bus-only from 7:00 to 9:30 on weekdays, and you turn right at the end of the block: keep out of the bus lane, then move into it in the last 50 m before the turn |
+| **No left turn** | Toronto, morning | A real OSM no-left-turn sign on Bathurst Street blocks the shortest way to the destination: take a legal detour around the block |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign
@@ -343,3 +347,8 @@ the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Rendering by
 [JevPilot](https://github.com/standardagents/jevpilot).
 
 Released under the [MIT License](LICENSE).
+
+Free drives also respect mapped bus-only lanes and their operating hours, with
+BUS ONLY/diamond markings. Try **Buses only** in Drive Lab to practise entering
+the reserved curb lane only within the final 50 m before a right turn.
+Free drives honour OpenStreetMap turn restrictions, including supported weekday/time conditions (`?restrictions=0` disables them). Try “No left turn” on Bathurst Street in Toronto in Drive Lab.

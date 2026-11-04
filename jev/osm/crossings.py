@@ -16,8 +16,9 @@ that is (`x`, `y`), with how it is painted (`zebra`: bars along the traffic, as 
 unspecified markings are; `lines`: two lines across it, as lines, dots and dashes are) and whether it
 has a refuge island.
 
-The file is separate from the pack (`<key>.crossings.v1.json`), so adding it leaves the streets as
-they were.
+The v2 sidecar adds Ontario `pxo` and `beacons` fields. Explicit PXOs are retained near junctions
+and edge ends too; unlike ordinary mid-block crosswalks they have a distinct whole-road rule.
+Legacy v1 layers remain readable. The street pack is unchanged.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ from .graph import is_drivable
 from .parse import OsmData, parse_xml
 from .project import Projection
 
-CROSSINGS_VERSION = "1"
+CROSSINGS_VERSION = "2"
 SNAP_M = 3.0
 JUNCTION_M = 16.0
 MERGE_M = 8.0
@@ -52,6 +53,8 @@ def crossings_path(maps_dir: Path, bbox: Bbox) -> Path:
 
 def load_crossings(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     path = crossings_path(maps_dir, bbox)
+    if not path.is_file():
+        path = maps_dir / ("%s.crossings.v1.json" % fetch.cache_key(bbox))
     return json.loads(path.read_text()) if path.is_file() else None
 
 
@@ -60,8 +63,10 @@ def build_crossings(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
     """The cached crossings for a bbox, built from its raw OSM download if that is on disk (it is
     never downloaded here). None when there is neither."""
     path = crossings_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
+    if not force:
+        cached = load_crossings(bbox, maps_dir)
+        if cached is not None:
+            return cached
     xml_path = fetch.cache_path(maps_dir, bbox)
     if not xml_path.is_file():
         return None
@@ -84,6 +89,22 @@ def markings(tags: dict) -> Optional[str]:
     if marks:
         return "lines" if marks[0] in LINES else "zebra"
     return "zebra" if kind in MARKED else None
+
+
+def is_pxo(tags: dict, origin: dict) -> bool:
+    """Conservative Ontario-only identification: explicit PXO or marked, signed amber beacon.
+
+    An uncontrolled crossing alone is insufficient. Traffic signals are never PXOs.
+    The bounds cover the bundled Toronto/Ottawa neighbourhoods, not all Ontario.
+    """
+    lat, lon = origin.get("lat", 0), origin.get("lon", 0)
+    ontario = (43.5 <= lat <= 44 and -79.7 <= lon <= -79) or (45.1 <= lat <= 45.6 and -76 <= lon <= -75.3)
+    if not ontario or markings(tags) is None:
+        return False
+    ref = tags.get("crossing_ref", "").lower()
+    return ref == "pxo" or ref.startswith("pxo:") or (
+        tags.get("crossing:signed") == "yes" and tags.get("crossing:signals") == "no"
+        and tags.get("flashing_lights") in ("button", "yes", "always"))
 
 
 def crossings_from_osm(osm: OsmData, pack: dict) -> dict:
@@ -113,21 +134,23 @@ def crossings_from_osm(osm: OsmData, pack: dict) -> dict:
         mark = markings(tags)
         if mark is None:
             continue
+        pxo = is_pxo(tags, origin)
         p = proj.to_xy(lat, lon)
-        if any(math.hypot(p[0] - q[0], p[1] - q[1]) < JUNCTION_M for q in junctions):
+        if not pxo and any(math.hypot(p[0] - q[0], p[1] - q[1]) < JUNCTION_M for q in junctions):
             continue
-        if any(math.hypot(p[0] - q[0], p[1] - q[1]) < END_M for q in ends):
+        if not pxo and any(math.hypot(p[0] - q[0], p[1] - q[1]) < END_M for q in ends):
             continue
         snap = _snap(edges, p)
         if snap is None:
             continue
         e, s, q = snap
-        if s < END_M or s > e["length"] - END_M:
+        if not pxo and (s < END_M or s > e["length"] - END_M):
             continue
         twin = {e["id"]} | {o["id"] for o in edges if o["from"] == e["to"] and o["to"] == e["from"]}
         if any(c["street"] & twin and math.hypot(c["x"] - q[0], c["y"] - q[1]) < MERGE_M for c in kept):
             continue
         kept.append({"id": "x%d" % nid, "edge": e["id"], "s": g.r1(s), "x": g.r2(q[0]), "y": g.r2(q[1]),
+                     **({"pxo": True, "beacons": tags.get("flashing_lights") in ("button", "yes", "always")} if pxo else {}),
                      "markings": mark, "island": tags.get("crossing:island") == "yes", "street": twin})
     for c in kept:
         c.pop("street")

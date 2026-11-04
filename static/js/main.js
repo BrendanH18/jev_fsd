@@ -1,3 +1,6 @@
+import { buildPxos } from "./render/pxo.js";
+let pxoRendering = null;
+import { buildRestrictions } from "./render/turn-restrictions.js";
 // Bootstrap: load the map, build the scene, wire the UI, run the loop.
 
 import { api, $, h } from "./common.js";
@@ -35,7 +38,10 @@ import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { calmingNotice } from "./sim/traffic-calming.js";
 import { TRUCK_COUNT, isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
+import { buildBusLanes } from "./render/bus-lanes.js";
 import { buildCalming, rideOver } from "./render/traffic-calming.js";
+import { guardNotice } from "./sim/crossing-guard.js";
+import { addGuardSign, syncGuardSign } from "./render/crossing-guard.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -107,7 +113,7 @@ export async function boot() {
   try { savedQuality = localStorage.getItem("jev-fsd-quality"); } catch { /* preferences are optional */ }
   const quality = params.get("quality") || savedQuality || "high";
   let hour = parseHour(params.get("time"));
-  const clock = new WorldClock(hour, options.clockRate);
+  const clock = new WorldClock(hour, options.clockRate, Number(params.get("weekday") || 0));
   const view = new SceneView($("#view"), map.extent, { quality });
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
@@ -184,7 +190,10 @@ export async function boot() {
     // and signals with a scramble crossing run their all-walk phase, with no right turn on red
     // (`?scramble=0` runs them as any other signal)
     const scrambles = params.get("scramble") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles });
+    // and, while a school zone is in effect, crossing guards walk children across the marked crosswalks
+    // in it, and everyone stops for their STOP sign (`?guards=0` takes them off)
+    const guards = params.get("guards") !== "0";
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -201,7 +210,11 @@ export async function boot() {
     autopilot = new Autopilot(world, callbacks);
   }
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
+  if (world.busLanes) view.scene.add(buildBusLanes(map));
+  if (world.restrictions) view.scene.add(buildRestrictions(map));
   if (world.calming) view.scene.add(buildCalming(map));
+  pxoRendering = world.pxo ? buildPxos(world) : null;
+  if (pxoRendering) view.scene.add(pxoRendering.group);
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
   // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
@@ -212,7 +225,7 @@ export async function boot() {
   // (a mesh per person, by id: children get off school buses and go home)
   const pedMeshes = new Map();
   const pedMesh = (p) => {
-    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker }); view.scene.add(m); pedMeshes.set(p.id, m); }
+    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker }); if (p.crossingGuard) addGuardSign(m); view.scene.add(m); pedMeshes.set(p.id, m); }
     return pedMeshes.get(p.id);
   };
   world.crowd.list.forEach(pedMesh);
@@ -264,7 +277,7 @@ export async function boot() {
   };
   // school and playground zones go by the time of day (sim/speed-zones.js); a benchmark replay, as
   // the benchmark itself, drives none
-  function syncClock() { if (!replay) world.setClock(mapClock(hour, map)); }
+  function syncClock() { if (!replay) world.setClock({ ...mapClock(hour, map), ...(world.restrictions || world.busLanes ? { weekday: clock.weekday } : {}) }); }
   clock.update(world.t);
   function rememberConditions() {
     const next = new URL(location.href);
@@ -539,7 +552,18 @@ export async function boot() {
     },
   });
 
-  function applyRoute(data, pt, title) {
+  // Routes from elsewhere (explorer and scenic drives) are routed again to obey turn restrictions;
+  // a newer destination picked meanwhile wins. Resolves false when no drive started.
+  let routeGeneration = 0;
+  async function applyRoute(data, pt, title, checked = false) {
+    const generation = ++routeGeneration;
+    if (world.restrictions && !checked) {
+      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
+      if (generation !== routeGeneration) return false;
+      if (!res.routes.length) { hud.badge("No legal route to this destination", "safety", 2200); return false; }
+      data = res.routes[0];
+    }
+
     if (challenge) challengeModified = true;
     world.destination = pt;
     world.route = new Route(data, map, world.ego.spec);
@@ -548,6 +572,7 @@ export async function boot() {
     hud.badge(`route: ${world.route.summary}`, "", 2200);
     if (!autopilot.enabled) toggleAutopilot();
     startDrive(title || `Drive to ${map.nearestLane(...pt)?.lane.edgeRef.name || "your destination"}`, world.route);
+    return true;
   }
 
   let pausedBeforeLab = false;
@@ -573,7 +598,7 @@ export async function boot() {
     onScenic: async driver => {
       const { drives } = await api("/api/drives", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi } });
       if (!drives.length) throw new Error("Try another position or city in Explore cities.");
-      setHour("golden"); selectBrain("rules"); applyRoute(drives[0].route, drives[0].destination, drives[0].title);
+      setHour("golden"); selectBrain("rules"); if (!(await applyRoute(drives[0].route, drives[0].destination, drives[0].title))) return;
       if (driver === "manual") { autopilot.setEnabled(false); hud.setAutopilot(false); drive.driver = "manual"; }
       world.paused = false;
     },
@@ -609,10 +634,12 @@ export async function boot() {
 
   async function setDestination(pt) {
     if (lab?.reviewing) lab.live();
+    const generation = ++routeGeneration;  // (a destination picked after this one, whose route comes back first, wins)
     try {
-      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1 });
+      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
+      if (generation !== routeGeneration) return;
       if (!res.routes.length) { hud.badge("no route to that point", "safety", 1500); return; }
-      applyRoute(res.routes[0], res.routes[0].polyline.at(-1));
+      await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
     } catch (err) {
       hud.badge(`routing failed: ${err.message}`, "safety", 2000);
     }
@@ -656,7 +683,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedGuard = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -694,6 +721,7 @@ export async function boot() {
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
           else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
           else if (ev.type === "close_pass") hud.badge("PASSED A CYCLIST TOO CLOSE", "alert", 1500);
+          else if (ev.type === "passed_crossing_guard") hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
@@ -735,6 +763,7 @@ export async function boot() {
     syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
     // (riding over speed humps and the like: render/traffic-calming.js)
     if (world.calming) rideOver(map, egoMesh, renderEgo);
+    pxoRendering?.update();
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id), pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
       (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : isTruck(n) ? syncTruck : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
@@ -831,6 +860,11 @@ export async function boot() {
     const scrambleLine = scrambleNotice(world);
     if (scrambleLine && scrambleLine.key !== announcedScramble) { announcedScramble = scrambleLine.key; hud.badge(scrambleLine.text, "safety", 2500); }
     if (!scrambleLine) announcedScramble = null;
+    // a school crossing guard ahead: children waiting to cross, or the STOP sign up until everyone is
+    // across (said once each time)
+    const guardLine = guardNotice(world);
+    if (guardLine && guardLine.key !== announcedGuard) { announcedGuard = guardLine.key; hud.badge(guardLine.text, guardLine.stop ? "safety" : "", 2500); }
+    if (!guardLine) announcedGuard = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once
@@ -850,6 +884,7 @@ export async function boot() {
       here.add(p.id);
       const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
       syncPerson(pedMesh(p), next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha), view.camera, world.weather === "rain");
+      if (p.crossingGuard) syncGuardSign(pedMesh(p), p);
     }
     for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_") || id.startsWith("rider_") || id.startsWith("stepout_") || id.startsWith("crew_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
     overlays.tick(world.t);

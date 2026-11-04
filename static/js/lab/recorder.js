@@ -67,7 +67,7 @@ export class DriveRecorder {
     this.markers = this.markers.filter(m => m.t >= this.frames[0].t);
   }
   mark(t, type) {
-    if (["collision", "red_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "safety"].includes(type)) this.markers.push({ t, type });
+    if (["collision", "red_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "safety"].includes(type)) this.markers.push({ t, type });
   }
   restore(index, target) {
     const frame = this.frames[Math.max(0, Math.min(this.frames.length - 1, Math.round(index)))];
@@ -82,9 +82,10 @@ export class DriveRecorder {
       for (const field of Object.keys(object)) if (!(field in state[key])) delete object[field];
       Object.assign(object, state[key]);
     }
-    target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world;
+    target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world; target.world.crossingGuards.world = target.world;
     if (target.fleet.collection) { target.fleet.collection.world = target.world; target.fleet.collection.fleet = target.fleet; }
     target.world.npcs = target.fleet.vehicles;
+    for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;
     Object.assign(target.autopilot, callbacks, { world: target.world, inFlight: null, firing: null, rerouting: false, epoch: epoch + 1 });
     target.world.paused = true;
     target.world.visibility.setNight(frame.night);

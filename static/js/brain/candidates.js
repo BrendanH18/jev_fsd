@@ -152,6 +152,11 @@ export function sampleCandidates(snap, world) {
         law: inLane({ kind: "lane", vTarget: creep ? (zone ? PEEK_MPS : Math.min(limit, Math.max(target, PEEK_MPS))) : approach, stopAtRoute: stopAt(give.hold_s_route - FRONT - (creep ? 0.3 : 0.5)) }),
         steer: "hold lane", speed: creep ? "creep forward to see along the crossing street, and stop there" : "stop and give way to crossing traffic" });
     }
+    if (snap.turn_restriction?.banned) {
+      const at = Math.min(snap.routeProj.s + snap.turn_restriction.distance_m - FRONT - 8, snap.intersection && !snap.intersection.entered ? snap.intersection.s_line_route - FRONT - 0.5 : Infinity);
+      out.push({ id: "stop_for_turn_restriction", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(at) }),
+        steer: "hold lane", speed: "stop before the prohibited turn while navigation finds a legal detour" });
+    }
     // Turning left with oncoming traffic coming: wait short of its path, at the line or in the junction.
     const oncoming = snap.intersection?.oncoming;
     if (oncoming && oncoming.bumper_to_yield_m > 0.3) {
@@ -216,6 +221,14 @@ export function sampleCandidates(snap, world) {
     if (wz?.wait && wz.bumper_to_stop_m > 0.3) {
       out.push({ id: "stop_for_flagger", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(wz.stop_s_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "stop at the line for the flagger's STOP paddle" });
+    }
+    // A school crossing guard holding up the STOP sign at a crosswalk ahead, or anyone still in the road
+    // there (sim/crossing-guard.js): stop short of the crosswalk, and stay stopped until the guard and
+    // every child are off the road.
+    const cg = snap.crossing_guard;
+    if (cg?.wait && cg.bumper_to_stop_m > 0.3) {
+      out.push({ id: "stop_for_crossing_guard", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(cg.stop_s_route - FRONT - 0.5) }),
+        steer: "hold lane", speed: "stop short of the crosswalk for the crossing guard's STOP sign" });
     }
     // A lane closed ahead (sim/lane-closure.js): in the closed lane, wait at the merge point for the car's
     // turn; in the open lane, stop short of it to let in the one whose turn it is.
@@ -351,6 +364,9 @@ export function simulateAll(candidates, snap, world) {
   const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the car stops for a flagger showing STOP
   const flaggerStop = snap.work_zone?.wait ? snap.work_zone.stop_s_route : null;
+  // where the car stops for a school crossing guard's STOP sign (or, already past that, where it is now:
+  // it holds still while the sign is up or anyone is in the road)
+  const guardStop = snap.crossing_guard?.wait ? Math.max(snap.crossing_guard.stop_s_route, startS + FRONT) : null;
   // at a lane closure: where the car waits for its turn at the merge point, or stops to let one in; and
   // the lane changes the zipper rules out (sim/lane-closure.js)
   const lz = snap.lane_closure;
@@ -379,7 +395,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -428,6 +444,8 @@ export function simulateAll(candidates, snap, world) {
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
         // (and here: 1.5 m past the line is still 4.5 m short of the one-lane section)
         if (flaggerStop !== null && s + FRONT > flaggerStop + 1.5) passesFlagger = true;
+        // (and here: 1.5 m past where it stops is still 3.5 m short of the crosswalk's centre)
+        if (guardStop !== null && s + FRONT > guardStop + 1.5) passesGuard = true;
         // (and here: 1.5 m past where it waits still leaves room to pull out round the van)
         if (vanStop !== null && s + FRONT > vanStop + 1.5) passesVan = true;
         // (and here: a metre past the merge point has not gone through it, sim/lane-closure.js THROUGH_M; 1.5 m past
@@ -491,8 +509,14 @@ export function simulateAll(candidates, snap, world) {
     // which only leaves the car fewer lanes to cross.
     const laneEnds = Number.isFinite(c.laneUntil) && (route && snap.onRoute) && c.law.kind !== "hard_brake" && c.change?.offer !== "return"
       && s + FRONT + Math.max(1, Math.abs(c.law.lane || 0)) * laneChangeLength(car.v) + LANE_RETURN_MARGIN_M > c.laneUntil;
+    // (in a bus lane while it is in effect, the car may still stop where it has to: for a person, a
+    // guard, a train, or at a line it must stop at; not at a line it could drive through)
+    // (at the line, giving way where there is no sign or signal, too: the case Rules stops at the line for)
+    const obliged = c.law.stopAtRoute != null && c.id !== "stop_at_destination"
+      && (c.id !== "stop_at_line" || !!mustStop || !!(control?.give_way?.wait_for && control.give_way.hold_s_route === control.s_line_route));
     let reject = null;
     if (collision) reject = "collision";
+    else if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(c.law.laneIdx) && !c.change && c.law.vTarget > 0.1 && !obliged && c.law.kind !== "hard_brake") reject = "bus_lane_driving";
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
     else if (c.change && (c.change.too_late || lateLeaving)) reject = "lane_change_too_late";
     else if (laneEnds) reject = "must_return_to_route_lane";
@@ -512,6 +536,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesRail && c.law.kind !== "hard_brake") reject = snap.level_crossing.wait === "train" ? "crosses_in_front_of_train" : "no_room_past_tracks";
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if (passesFlagger && c.law.kind !== "hard_brake") reject = "runs_flagger_stop";
+    else if (passesGuard && c.law.kind !== "hard_brake") reject = "passes_crossing_guard";
     else if (passesVan && c.law.kind !== "hard_brake") reject = "no_room_to_go_round";
     else if (passesMerge && c.law.kind !== "hard_brake") reject = "merges_out_of_turn";
     else if (passesLetIn && c.law.kind !== "hard_brake") reject = "takes_merge_turn";

@@ -47,9 +47,9 @@ export class PerceptionView {
       // lights, a streetcar stopping or with its doors open, a train coming at a level crossing ahead,
       // the vehicle that leaves no room past a junction ahead, one stopped at the roadside with its
       // lights flashing, a work zone's closed stretch on the car's way, a van double-parked in the
-      // car's lane, a snow plow at work, or a cyclist the car can pass only through the oncoming lane:
-      // amber too)
-      const color = isEmergency(object) ? [1, 0.3, 0.9] : visible && (busSignalling(object) || object.id === snap.crosswalk_stop?.id || object.id === snap.school_bus?.id || object.id === snap.streetcar?.id || object.id === snap.level_crossing?.train?.id || object.id === snap.junction_box?.blocker.id || object.id === snap.roadside_stop?.id || object.id === snap.work_zone?.closure_id || object.id === snap.lane_closure?.closure_id || object.id === snap.lane_closure?.wait_for || object.id === snap.lane_closure?.let_in_for || object.id === snap.double_parked?.van_id || object.id === snap.snow_plow?.id || object.id === snap.cyclist_pass?.cyclist_id) ? [1, 0.7, 0.15] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
+      // car's lane, a snow plow at work, a cyclist the car can pass only through the oncoming lane, or a
+      // school crossing guard: amber too)
+      const color = isEmergency(object) ? [1, 0.3, 0.9] : visible && (busSignalling(object) || object.id === snap.crosswalk_stop?.id || object.id === snap.school_bus?.id || object.id === snap.streetcar?.id || object.id === snap.level_crossing?.train?.id || object.id === snap.junction_box?.blocker.id || object.id === snap.roadside_stop?.id || object.id === snap.work_zone?.closure_id || object.id === snap.lane_closure?.closure_id || object.id === snap.lane_closure?.wait_for || object.id === snap.lane_closure?.let_in_for || object.id === snap.double_parked?.van_id || object.id === snap.snow_plow?.id || object.id === snap.cyclist_pass?.cyclist_id || object.id === snap.crossing_guard?.guard_id) ? [1, 0.7, 0.15] : visible ? [0.34, 0.9, 0.66] : [0.96, 0.39, 0.42];
       for (let i = 0; i < 4; i++) add(boxes, boxColors, corners[i], corners[(i + 1) % 4], color);
     }
     // school and playground zones in effect nearby: their side of the street outlined in yellow-green
@@ -72,7 +72,7 @@ export class PerceptionView {
     }
     const reasons = { collision: "Predicted collision", visibility_stopping_distance: "Beyond stopping sight", passes_cyclist_too_close: "Too close to cyclist", passes_cyclist_without_room: "Cyclist: less than the passing distance", crosses_into_oncoming_traffic: "Oncoming traffic",
       off_road: "Leaves the road", runs_red: "Red light", fails_to_yield: "Must yield", runs_stop: "Missed stop", fails_to_yield_to_pedestrian: "Person crossing",
-      fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", fails_to_yield_to_bus: "Bus pulling out", passes_car_stopped_at_crosswalk: "Car stopped at crosswalk", passes_stopped_school_bus: "School bus stopped", passes_streetcar_doors: "Streetcar doors open", crosses_in_front_of_train: "Train coming", no_room_past_tracks: "No room past the tracks", blocks_junction: "No room past the junction", runs_flagger_stop: "Flagger showing STOP", no_room_to_go_round: "Too close to pull out round the van", passes_plow_on_right: "Snow plow: never pass on the right", enters_unseen_junction: "Cannot see yet",
+      fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", fails_to_yield_to_bus: "Bus pulling out", passes_car_stopped_at_crosswalk: "Car stopped at crosswalk", passes_stopped_school_bus: "School bus stopped", passes_streetcar_doors: "Streetcar doors open", crosses_in_front_of_train: "Train coming", no_room_past_tracks: "No room past the tracks", blocks_junction: "No room past the junction", runs_flagger_stop: "Flagger showing STOP", passes_crossing_guard: "Crossing guard: STOP", no_room_to_go_round: "Too close to pull out round the van", passes_plow_on_right: "Snow plow: never pass on the right", enters_unseen_junction: "Cannot see yet",
       passes_turn_round_point: "Turns round here" };
     const e = snap.emergency;
     const emergency = e ? `${e.kind[0].toUpperCase()}${e.kind.slice(1)} ${e.from === "behind" ? "behind" : e.from === "ahead" ? "ahead" : `from the ${e.from}`}, ${Math.round(e.distance_m)} m${e.seen ? "" : ", heard not seen"}: ${e.lead ? "stuck behind the car, driving on ahead" : `pull over ${e.offset_m.toFixed(1)} m, stop in ${Math.max(0, Math.round(e.bumper_to_stop_m))} m${e.clearing ? " past the junction" : ""}`}` : null;
@@ -114,7 +114,10 @@ export class PerceptionView {
     const calm = tc ? `${tc.name[0].toUpperCase()}${tc.name.slice(1)} ${tc.over ? "under the car" : `${Math.round(Math.max(0, tc.starts_in_m))} m ahead`}: ${Math.round(tc.speed_mps * 3.6)} km/h` : null;
     const sc = snap.intersection?.scramble;
     const scramble = sc ? `Scramble crossing: ${sc.phase === "dont" ? `all-walk in ${Math.round(sc.walk_in_s)} s, no right turn on red` : "all-walk on, every light red"}` : null;
-    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    // a school crossing guard at a crosswalk ahead (sim/crossing-guard.js)
+    const cg = snap.crossing_guard;
+    const guard = cg ? `Crossing guard ${Math.round(Math.max(0, cg.bumper_to_crosswalk_m))} m ahead: ${cg.wait ? `STOP${cg.in_road.length ? `, ${cg.in_road.length} in the road` : ""}, wait in ${Math.max(0, Math.round(cg.bumper_to_stop_m))} m` : cg.paddle === "up" || cg.in_road.length ? "STOP sign up, too close to stop" : cg.ready ? `${cg.waiting} waiting to cross, ready to stop` : "nobody crossing"}` : null;
+    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, guard, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }
