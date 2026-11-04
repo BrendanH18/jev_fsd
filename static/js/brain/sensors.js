@@ -1,3 +1,4 @@
+import { turnRestrictionAhead } from "../sim/turn-restrictions.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
 
@@ -399,6 +400,7 @@ export function buildSnapshot(world, executing = null) {
   if (snap.blind_spot) snap.limit = Math.min(snap.limit, blindApproach(snap.blind_spot.limit_mps, snap.blind_spot.from_m));
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.parking = parkingState(world, snap, executing);
+  if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
   return snap;
@@ -1472,6 +1474,10 @@ export function desiredSpeed(snap) {
   let v = snap.limit;
   const reasons = [];
   if (weather.speed < 1) { v = snap.limit * weather.speed; reasons.push(weather.label); }
+  if (snap.turn_restriction?.banned) {
+    v = Math.min(v, Math.sqrt(2 * decel * Math.max(0, snap.turn_restriction.distance_m - FRONT - 8)));
+    reasons.push("prohibited turn; replan route");
+  }
   if (snap.visibility) {
     const visibleSpeed = snap.visibility.safe_speed_mps ?? visibilitySpeed(snap.visibility.range_m, FRONT);
     if (visibleSpeed < v) { v = visibleSpeed; reasons.push("limited visibility"); }

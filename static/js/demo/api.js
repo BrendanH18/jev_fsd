@@ -47,7 +47,7 @@ export async function demoApi(path, body, { signal } = {}) {
   if (url.pathname === "/api/status") return { version: "0.3.0-demo", configured: false, demo: true, npcs: 16,
     map: { ...item, label: `${item.name}, ${item.city}`, synthetic: false, name: pack.name }, spend: { usd: 0 } };
   if (url.pathname === "/api/map") return pack;
-  if (url.pathname === "/api/route") { const route = browserRoute(map, body.from, body.to); return { routes: route ? [route] : [] }; }
+  if (url.pathname === "/api/route") { const route = browserRoute(map, body.from, body.to, body); return { routes: route ? [route] : [] }; }
   if (url.pathname === "/api/drives") return { drives: browserDrives(map, body.from) };
   throw new Error("This action needs the local app. The public demo uses the free Rules driver.");
 }

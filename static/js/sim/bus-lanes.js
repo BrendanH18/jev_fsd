@@ -4,7 +4,7 @@ export const BUS_TURN_M = 50;
 export function busLaneActive(lane, clock) {
   if (!clock || !Number.isFinite(clock.hour)) return false;
   if (!lane.hours) return true;
-  const minute = clock.hour * 60, day = clock.day ?? 0; // drive clocks default to Monday
+  const minute = clock.hour * 60, day = clock.weekday ?? 0; // (Monday = 0; drive clocks default to Monday)
   return lane.hours.some(w => w.start <= w.end
     ? w.days.includes(day) && minute >= w.start && minute < w.end
     : (w.days.includes(day) && minute >= w.start) || (w.days.includes((day + 6) % 7) && minute < w.end));

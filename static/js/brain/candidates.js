@@ -152,6 +152,11 @@ export function sampleCandidates(snap, world) {
         law: inLane({ kind: "lane", vTarget: creep ? (zone ? PEEK_MPS : Math.min(limit, Math.max(target, PEEK_MPS))) : approach, stopAtRoute: stopAt(give.hold_s_route - FRONT - (creep ? 0.3 : 0.5)) }),
         steer: "hold lane", speed: creep ? "creep forward to see along the crossing street, and stop there" : "stop and give way to crossing traffic" });
     }
+    if (snap.turn_restriction?.banned) {
+      const at = Math.min(snap.routeProj.s + snap.turn_restriction.distance_m - FRONT - 8, snap.intersection && !snap.intersection.entered ? snap.intersection.s_line_route - FRONT - 0.5 : Infinity);
+      out.push({ id: "stop_for_turn_restriction", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(at) }),
+        steer: "hold lane", speed: "stop before the prohibited turn while navigation finds a legal detour" });
+    }
     // Turning left with oncoming traffic coming: wait short of its path, at the line or in the junction.
     const oncoming = snap.intersection?.oncoming;
     if (oncoming && oncoming.bumper_to_yield_m > 0.3) {

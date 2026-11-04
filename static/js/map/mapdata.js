@@ -140,6 +140,7 @@ export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
 export class MapData {
   constructor(pack) {
     this.pack = pack;
+    this.restrictions = pack.restrictions?.restrictions || [];
     this.bbox = pack.bbox;
     this.routingBbox = pack.routing_bbox || pack.bbox;
     this.rightOnRed = rightOnRedAllowed(this.routingBbox);

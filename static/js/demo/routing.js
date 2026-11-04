@@ -1,3 +1,4 @@
+import { turnBanned } from "../sim/turn-restrictions.js";
 // Browser routing for the public demo. Uses the same directed lane graph and turn geometry.
 import { joinLanes, pointAt, headingAt, cumulative, projectPoint } from "../map/mapdata.js";
 
@@ -27,7 +28,7 @@ export function routeFromLanes(map, chain, startS = 0, goalS = null) {
     goal_s: goalS ?? chain.at(-1).length, summary: `${Math.round(length)} m · ${turns.length} turns` };
 }
 
-export function browserRoute(map, from, to) {
+export function browserRoute(map, from, to, { restrictions = false, hour = 15.5, weekday = 0 } = {}) {
   const start = map.nearestLane(from.x, from.y, from.heading ?? null, 100);
   const goal = map.nearestLane(to.x, to.y, null, 150);
   if (!start || !goal) return null;
@@ -40,6 +41,7 @@ export function browserRoute(map, from, to) {
     pending.delete(current);
     if (current === goal.lane.edge && current !== start.lane.edge) { found = true; break; }
     for (const next of map.successors(current)) {
+      if (restrictions && turnBanned(map, current, next, { hour, weekday })) continue;
       const turn = Math.abs(map.turnAngle(current, next));
       if (turn > 130 * Math.PI / 180) continue;
       const edge = map.edges.get(next);

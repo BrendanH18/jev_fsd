@@ -19,6 +19,7 @@
   X signs identify them. Leaving early is `pxo_early_goes`, reported only after a PXO is used.
 - New challenge, "Wait for the far curb" (`pxo-far-curb`): Metcalfe Street, Ottawa. A slow walker
   leaves the inner lane clear while still crossing the rest of this one-way street.
+- Added opt-in OSM via-node turn restrictions, conditional weekday/time signs, legal routing and traffic choices, prohibited-turn scoring, and the “No left turn” Bathurst Street challenge. Layers cover all twelve preset maps; unsupported via-way and condition syntax is recorded explicitly.
 
 - Speed humps, tables, cushions and bumps (`static/js/sim/traffic-calming.js`). A new layer beside each
   map pack, `<key>.calming.v1.json` (`jev/osm/calming.py`, built from the raw OSM download by

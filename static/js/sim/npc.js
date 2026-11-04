@@ -1,3 +1,4 @@
+import { turnBanned } from "./turn-restrictions.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
 // parked up ahead of the ego signals, waits for a gap, and pulls out into the lane. Buses drive
@@ -228,7 +229,7 @@ export function stripOffset(e, laneIdx) {
 
 export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
-  constructor(map, random, { bike = false } = {}) { this.map = map; this.random = random; this.bike = bike; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
+  constructor(map, random, { bike = false, world = null } = {}) { this.restrictionWorld = world; this.map = map; this.random = random; this.bike = bike; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
   start(edgeId, laneIdx, s, planned = []) {
     this.edges = [];
     this.pts = []; this.cum = [0]; this.length = 0;
@@ -274,7 +275,7 @@ export class NpcPath {
     // bounded: joining a very short lane after a rounded corner can add almost no length
     for (let guard = 0; guard < 24 && this.length - this.s < LOOK_M * 2.5; guard++) {
       const last = this.edges[this.edges.length - 1];
-      const succ = this.map.successors(last.id);
+      const succ = this.map.successors(last.id).filter(id => !this.restrictionWorld?.restrictions || this.bike || !turnBanned(this.map, last.id, id, this.restrictionWorld.clock));
       if (!succ.length) return false;
       // no U-turns, nor turns so sharp they double back (the tip of a traffic island)
       const noU = succ.filter((e) => Math.abs(this.map.turnAngle(last.id, e)) < SHARP_TURN);
@@ -418,7 +419,7 @@ export class NpcFleet {
     // (and garbage trucks theirs, put down on the first steps by day; nothing is drawn from it unless a
     // truck works)
     const trucks = rng(seed * 141650939 + 43);
-    this.collection = new CollectionTrucks(this, { count: collection, random: trucks, makePath: (map, random) => new NpcPath(map, random) });
+    this.collection = new CollectionTrucks(this, { count: collection, random: trucks, makePath: (map, random) => new NpcPath(map, random, { world: this.world }) });
     world.npcs = this.vehicles;
   }
 
@@ -486,7 +487,7 @@ export class NpcFleet {
     const p = pointAt(lane.pts, lane.cum, s), bus = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, SCHOOL_BUS);
     Object.assign(bus, { id: `school_bus_${++this.schoolCount}`, kind: "school_bus", color: SCHOOL_COLOR, v0: 14,
       driver: { aMax: 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.9, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
-    bus.path = new NpcPath(this.map, this.school);
+    bus.path = new NpcPath(this.map, this.school, { world: this.world });
     bus.path.start(lane.edge, lane.idx, s, planned);
     bus.school = { phase: "drive", lights: null, arm: false, doors: false, stop: null, t: 0, red: 0, held: false, odo: 0, every: this.schoolEvery(), stops: 0, toDrop: 0, dropAt: 0 };
     this.vehicles.push(bus);
@@ -530,7 +531,7 @@ export class NpcFleet {
       const v = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), Math.min(8, e.limit * 0.6), spec);
       Object.assign(v, { id: tram ? `streetcar_${++this.streetcarCount}` : `bus_${++this.busCount}`, kind: spec.kind, color: tram ? STREETCAR_COLOR : BUS_COLORS[0], ref: route.ref, headsign: route.name,
         v0: 15, driver: { aMax: tram ? 1.1 : 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.9, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
-      v.path = new NpcPath(map, random);
+      v.path = new NpcPath(map, random, { world: this.world });
       if (this.world.busLanes && !tram) v.path.busLanePolicy = { clock: this.world.clock, bus: true };
       this.startRun(v, run.edges, k, lane.idx, s, tram);
       // the route's stops still ahead, as where its front stops along each street (see busStopFront)
@@ -607,7 +608,7 @@ export class NpcFleet {
       const v = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), 0);
       v.id = `car_${this.vehicles.length + 1}`;
       v.color = PALETTE[this.vehicles.length % PALETTE.length];
-      v.path = new NpcPath(this.map, this.random);
+      v.path = new NpcPath(this.map, this.random, { world: this.world });
       if (this.world.busLanes) v.path.busLanePolicy = { clock: this.world.clock };
       v.path.start(lane.edge, lane.idx, s);
       v.v0 = lane.edgeRef.limit * (0.85 + this.random() * 0.2);
@@ -679,6 +680,15 @@ export class NpcFleet {
       let proj = projectPoint(path.pts, path.cum, [n.x, n.y], null);
       path.s = proj.s;
       if (proj.distance > 6) { this.recoverPath(n); proj = projectPoint(path.pts, path.cum, [n.x, n.y], null); path.s = proj.s; }
+      if (this.world.restrictions && !path.bike && !n.transit) {
+        path.restrictionWorld = this.world;
+        const cur = path.currentEdge(), next = path.edges[path.edges.indexOf(cur) + 1];
+        if (next && turnBanned(this.map, cur.id, next.id, this.world.clock) && cur.sEnd - path.s > 12) {
+          const lane = this.map.lane(cur.id, cur.lane), at = projectPoint(lane.pts, lane.cum, [n.x, n.y]).s;
+          path.start(cur.id, cur.lane, at);
+          proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
+        }
+      }
       path.extend();
       path.trim();
       const edge = path.currentEdge();
@@ -1034,7 +1044,7 @@ export class NpcFleet {
       Object.assign(v, { id: `${k}_${++this.dispatched}`, kind: k, siren: true, color: k === "ambulance" ? 0xf2f2ee : 0xb3121b, side, age: 0, relation: plan.relation,
         v0: Math.min(EV_MAX_MPS, lane.edgeRef.limit * EV_LIMIT_FACTOR), driver: { aMax: spec.maxAccel * 0.85, b: 3.0, s0: 3.0, T: 0.9, react: 0.3, lcRate: 0 },
         stopMem: new StopMemory(), frozen: 0, waiting: 0, blockedBy: null, blockedFor: 0 });
-      v.path = new NpcPath(map, this.sirens);
+      v.path = new NpcPath(map, this.sirens, { world: this.world });
       v.path.start(lane.edge, lane.idx, plan.s, plan.planned);
       this.vehicles.push(v);
       this.evs = this.vehicles.filter(isEmergency);
@@ -1252,7 +1262,7 @@ export class NpcFleet {
     const p = pointAt(lane.pts, lane.cum, s), plow = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, SNOW_PLOW);
     Object.assign(plow, { id: `plow_${++this.plowCount}`, kind: "snow_plow", color: PLOW_COLOR, v0: PLOW_MPS, beacons: true,
       driver: { aMax: 1.0, b: 1.8, T: 1.8, s0: 3.0, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
-    plow.path = new NpcPath(this.map, this.plowStream);
+    plow.path = new NpcPath(this.map, this.plowStream, { world: this.world });
     plow.path.start(lane.edge, lane.idx, s, planned);
     this.vehicles.push(plow);
     this.plows = this.vehicles.filter(isPlow);
@@ -1926,7 +1936,7 @@ export class NpcFleet {
     v.id = `car_p${++this.pulled}`;
     v.color = car.color;
     v.style = car.style;
-    v.path = new NpcPath(map, this.random);
+    v.path = new NpcPath(map, this.random, { world: this.world });
     v.path.start(e.id, laneIdx, proj.s);
     v.v0 = e.limit * (0.85 + this.events() * 0.2);
     v.driver = driverProfile(this.events);

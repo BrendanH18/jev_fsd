@@ -156,7 +156,11 @@ export class Autopilot {
     // off route for a while: ask the server for fresh routes from here (turning round, the car
     // faces away from its route for a while on purpose)
     if (!snap.onRoute && !snap.turnaround) this.offRouteFor += dt; else this.offRouteFor = 0;
-    if (this.offRouteFor > 3 && !this.rerouting) this.reroute();
+    const illegalRoute = snap.turn_restriction?.banned && world.t >= (this.restrictionReplanAt ?? -Infinity);
+    if ((this.offRouteFor > 3 || illegalRoute) && !this.rerouting) {
+      if (illegalRoute) this.restrictionReplanAt = world.t + 5;
+      this.reroute();
+    }
 
     const s = snap.routeProj ? snap.routeProj.s : 0;
     const brake = safetyBrake(world, snap, this.executing);
@@ -340,7 +344,7 @@ export class Autopilot {
     const epoch = this.epoch;
     this.rerouting = true;
     try {
-      const res = await api("/api/route", { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3 });
+      const res = await api("/api/route", { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
       if (epoch !== this.epoch) return;
       if (res.routes.length) {
         if (res.routes.length === 1 || this.brainName === "rules") {

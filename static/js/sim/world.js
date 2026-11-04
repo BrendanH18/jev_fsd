@@ -1,3 +1,4 @@
+import { auditRestrictions } from "./turn-restrictions.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
 import { auditBusLanes } from "./bus-lanes.js";
@@ -208,7 +209,7 @@ export class World {
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false } = {}) {
     this.map = map;
     this.pxo = !!pxo && ontarioMap(map);
     this.pxoSeen = false;
@@ -270,6 +271,9 @@ export class World {
     // has crossed one this drive; and, for each near it, how far ahead of its front axle it was last tick
     this.busLanes = !!busLanes;
     this.busLanesSeen = false;
+    this.restrictions = !!restrictions;
+    this.restrictionsSeen = false;
+    this.restrictionEdge = null;
     this.calming = !!calming;
     this.calmingSeen = false;
     this.calmingAxle = new Map();
@@ -380,6 +384,7 @@ export class World {
     this.staticContacts.clear();
     this.calmingAxle?.clear();
     this.pxoLines?.clear();
+    this.restrictionEdge = null;
     this._lastFront = null;
     this.lastRoad = null;
     this.lastSignal = null;
@@ -442,7 +447,7 @@ export class World {
     return !!hit;
   }
 
-  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(Number.isInteger(clock.day) ? { day: clock.day } : {}) } : null; }
+  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}) } : null; }
 
   // Where the ego is relative to the road network (cached per tick). `limit` is the street's, or a
   // school or playground zone's while it is in effect there (`zone`).
@@ -634,6 +639,7 @@ export class World {
     if (this.passCyclists) this.auditCyclistPasses(road);
     if (this.busLanes) auditBusLanes(this, dt);
     if (this.pxo) auditPxo(this);
+    if (this.restrictions) auditRestrictions(this);
     if (this.calming) this.auditCalming();
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();

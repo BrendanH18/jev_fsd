@@ -59,6 +59,7 @@ export class DriveScore {
     // (crossing a speed hump, table, cushion or bump much too fast: sim/traffic-calming.js)
     this.busLanesSeen = false;
     this.pxoUsed = false; this.pxoEarlyGoes = 0;
+    this.illegalTurns = 0; this.restricted = false;
     this.humpHits = 0; this.calmed = false;
     // (turning right on red at a scramble crossing, which the audit counts as a red light: sim/signals.js)
     this.scrambleReds = 0;
@@ -172,6 +173,7 @@ export class DriveScore {
     }
     if (world.busLanesSeen) this.busLanesSeen = true;
     if (world.pxoSeen) this.pxoUsed = true;
+    if (world.restrictionsSeen) { this.restricted = true; this.illegalTurns = (world.violations.illegal_turns || 0) - (this.baseline.illegal_turns || 0); }
     if (world.calmingSeen) this.calmed = true;
     if (world.collectionSeen) this.collected = true;
     for (const ev of world.events || []) {
@@ -186,6 +188,7 @@ export class DriveScore {
       if (ev.type === "red_light" && ev.scramble) this.scrambleReds++;
       if (ev.type === "pxo_early_go") { this.pxoEarlyGoes++; this.incident("pxo_early_go", "Left a pedestrian crossover before everyone reached the far curb"); }
       if (ev.type === "crew_close_pass") { this.crewPasses++; this.incident("crew_close_pass", "Passed a garbage crew worker too close", { worker: ev.worker, clearance_m: ev.clearance_m, kmh: ev.kmh }); }
+      if (ev.type === "illegal_turn") this.incident("illegal_turn", "Made a prohibited turn", { from: ev.from, to: ev.to });
       if (ev.type === "hump_hit") { this.humpHits++; this.incident("hump_hit", `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`, { device: ev.device, kmh: ev.kmh }); }
       if (ev.type === "close_pass") { this.closePasses++; this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
       if (ev.type === "failed_to_yield" && ev.cyclist_pass) this.cyclistCutoffs++;
@@ -270,7 +273,7 @@ export class DriveScore {
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
       safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20)),
-      legality: Math.round(clamp(100 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25)),
+      legality: Math.round(clamp(100 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
@@ -309,6 +312,7 @@ export class DriveScore {
     if (this.crewPasses) tips.push("Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.");
     if (this.scrambleReds) tips.push("At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.");
     if (delta("bus_lane_driving") > 1) tips.push("Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.");
+    if (this.illegalTurns) tips.push("Obey turn restriction signs while their posted hours apply; follow a legal route around the block.");
     if (this.humpHits) tips.push("Slow right down for speed humps: 30 km/h for a hump or a cushion, 40 for a speed table and a crawl for a bump. Brake before it, not on it, and keep to that speed until the rear wheels are over.");
     if (this.harsh + this.jerk + this.cornering > 2) tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
     if (this.offRoad + this.wrongWay > 0.5 || this.resets) tips.push("Keep to your lane and plan turns before reaching the junction.");
@@ -327,6 +331,7 @@ export class DriveScore {
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
       ...(this.pxoUsed ? { pxo_early_goes: this.pxoEarlyGoes } : {}),
+      ...(this.restricted ? { illegal_turns: this.illegalTurns } : {}),
       ...(this.calmed ? { hump_hits: this.humpHits } : {}),
       ...(this.collected ? { crew_close_passes: this.crewPasses } : {}),
       ...(this.guards ? { guard_violations: this.guardViolations } : {}),

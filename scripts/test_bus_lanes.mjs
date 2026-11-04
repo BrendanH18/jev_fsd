@@ -16,9 +16,9 @@ for(const layer of ['transit','crossings','zones','rail','calming','scrambles','
 const map=new MapData(pack), c=CHALLENGES.find(c=>c.id==='bus-lanes');
 assert.equal(map.buslanes.length>0,true);
 const timed={hours:[{days:[0,1,2,3,4],start:420,end:540}],allowed:['bus']};
-assert.equal(busLaneActive(timed,{hour:8,day:0}),true);
-assert.equal(busLaneActive(timed,{hour:9,day:0}),false);
-assert.equal(busLaneActive(timed,{hour:8,day:6}),false);
+assert.equal(busLaneActive(timed,{hour:8,weekday:0}),true);
+assert.equal(busLaneActive(timed,{hour:9,weekday:0}),false);
+assert.equal(busLaneActive(timed,{hour:8,weekday:6}),false);
 assert.equal(busLaneActive(timed,null),false);
 const e=map.edges.get(map.buslanes[0].edge), r=map.buslanes[0];
 assert.equal(legalBusLane(map,e.id,r.lane,{hour:8},'straight',20),false);

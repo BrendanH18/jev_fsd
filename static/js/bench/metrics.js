@@ -90,6 +90,7 @@ export class DriveMetrics {
       // (only for a drive that crossed a speed hump with calming on: sim/traffic-calming.js)
       ...(world.busLanesSeen ? { bus_lane_driving: v.bus_lane_driving || 0 } : {}),
       ...(world.pxoSeen ? { pxo_early_goes: v.pxo_early_goes || 0 } : {}),
+      ...(world.restrictionsSeen ? { illegal_turns: v.illegal_turns || 0 } : {}),
       ...(world.calmingSeen ? { hump_hits: v.hump_hits || 0 } : {}),
       // (only for a drive a garbage truck stopped to collect in: sim/collection-truck.js)
       ...(world.collectionSeen ? { crew_close_passes: v.crew_close_passes || 0 } : {}),
@@ -139,6 +140,7 @@ export function failures(m) {
   if (m.merge_cut_ins) f.push("merged out of turn");
   if (m.close_passes) f.push("passed a cyclist too close");
   if (m.bus_lane_driving > 1) f.push("drove in a reserved bus lane");
+  if (m.illegal_turns) f.push("made a prohibited turn");
   if (m.hump_hits) f.push("took a speed hump too fast");
   if (m.pxo_early_goes) f.push("left a pedestrian crossover before the far curb");
   if (m.crew_close_passes) f.push("passed a garbage crew worker too close");
