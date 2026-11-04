@@ -509,9 +509,12 @@ export function simulateAll(candidates, snap, world) {
     // which only leaves the car fewer lanes to cross.
     const laneEnds = Number.isFinite(c.laneUntil) && (route && snap.onRoute) && c.law.kind !== "hard_brake" && c.change?.offer !== "return"
       && s + FRONT + Math.max(1, Math.abs(c.law.lane || 0)) * laneChangeLength(car.v) + LANE_RETURN_MARGIN_M > c.laneUntil;
+    // (in a bus lane while it is in effect, the car may still stop where it has to: for a person, a
+    // guard, a train, or at a line it must stop at; not at a line it could drive through)
+    const obliged = c.law.stopAtRoute != null && c.id !== "stop_at_destination" && (c.id !== "stop_at_line" || !!mustStop);
     let reject = null;
     if (collision) reject = "collision";
-    else if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(c.law.laneIdx) && !c.change && c.law.vTarget > 0.1 && c.law.stopAtRoute == null && c.law.kind !== "hard_brake") reject = "bus_lane_driving";
+    else if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(c.law.laneIdx) && !c.change && c.law.vTarget > 0.1 && !obliged && c.law.kind !== "hard_brake") reject = "bus_lane_driving";
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
     else if (c.change && (c.change.too_late || lateLeaving)) reject = "lane_change_too_late";
     else if (laneEnds) reject = "must_return_to_route_lane";
