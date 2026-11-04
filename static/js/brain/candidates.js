@@ -511,7 +511,9 @@ export function simulateAll(candidates, snap, world) {
       && s + FRONT + Math.max(1, Math.abs(c.law.lane || 0)) * laneChangeLength(car.v) + LANE_RETURN_MARGIN_M > c.laneUntil;
     // (in a bus lane while it is in effect, the car may still stop where it has to: for a person, a
     // guard, a train, or at a line it must stop at; not at a line it could drive through)
-    const obliged = c.law.stopAtRoute != null && c.id !== "stop_at_destination" && (c.id !== "stop_at_line" || !!mustStop);
+    // (at the line, giving way where there is no sign or signal, too: the case Rules stops at the line for)
+    const obliged = c.law.stopAtRoute != null && c.id !== "stop_at_destination"
+      && (c.id !== "stop_at_line" || !!mustStop || !!(control?.give_way?.wait_for && control.give_way.hold_s_route === control.s_line_route));
     let reject = null;
     if (collision) reject = "collision";
     else if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(c.law.laneIdx) && !c.change && c.law.vTarget > 0.1 && !obliged && c.law.kind !== "hard_brake") reject = "bus_lane_driving";
