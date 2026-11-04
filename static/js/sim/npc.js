@@ -879,6 +879,7 @@ export class NpcFleet {
         }
         break;
       }
+      // crowd.pxo keeps a PXO occupied until the far curb, in every lane (sim/pxo.js).
       const cw = crosswalkConflict(path.pts, path.cum, front - 2, front + 35, world.crowd, spec.width / 2 + 0.9 + (n.kind === "bike" ? Math.abs(n.side) : 0));
       if (cw) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
       // a cyclist that cannot move back into the lane yet waits where the parking lane ends
@@ -1132,6 +1133,7 @@ export class NpcFleet {
       if (toLine > -1 && (this.boxBusy(n, c) || this.crossComing(n, c.to, -2.5))) stopAt = Math.max(0, toLine);
       break;
     }
+    // crowd.pxo keeps a PXO occupied until the far curb, in every lane (sim/pxo.js).
     const cw = crosswalkConflict(path.pts, path.cum, front - 2, front + 35, world.crowd, spec.width / 2 + 0.9 + Math.abs(offset));
     if (cw) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
     // (and short of a level crossing for a train coming: sim/rail.js)

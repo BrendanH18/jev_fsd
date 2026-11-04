@@ -1,3 +1,5 @@
+import { buildPxos } from "./render/pxo.js";
+let pxoRendering = null;
 // Bootstrap: load the map, build the scene, wire the UI, run the loop.
 
 import { api, $, h } from "./common.js";
@@ -190,7 +192,7 @@ export async function boot() {
     // and, while a school zone is in effect, crossing guards walk children across the marked crosswalks
     // in it, and everyone stops for their STOP sign (`?guards=0` takes them off)
     const guards = params.get("guards") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, busLanes: params.get("buslanes") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -209,6 +211,8 @@ export async function boot() {
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
   if (world.busLanes) view.scene.add(buildBusLanes(map));
   if (world.calming) view.scene.add(buildCalming(map));
+  pxoRendering = world.pxo ? buildPxos(world) : null;
+  if (pxoRendering) view.scene.add(pxoRendering.group);
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
   // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
@@ -743,6 +747,7 @@ export async function boot() {
     syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
     // (riding over speed humps and the like: render/traffic-calming.js)
     if (world.calming) rideOver(map, egoMesh, renderEgo);
+    pxoRendering?.update();
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find(v => v.id === n.id), pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
       (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : isTruck(n) ? syncTruck : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);

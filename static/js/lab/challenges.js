@@ -29,6 +29,8 @@ import { sidewalkOffset } from "../map/streets.js";
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = [
+  { id: "pxo-far-curb", title: "Wait for the far curb", map: "ottawa", weather: "dry", time: "afternoon", seed: 35042, icon: "✕", difficulty: "Patience", hazard: "pxo", pxo: true, street: "Metcalfe Street",
+    description: "A person crosses Metcalfe Street at a signed pedestrian crossover. Your lane clears before the whole road does.", lesson: "At an Ontario PXO, stay stopped until everyone reaches the far curb across the whole roadway." },
   { id: "door-zone", title: "The door zone", map: "kitsilano", weather: "dry", time: "afternoon", seed: 1042, icon: "↔", difficulty: "Anticipation", hazard: "door",
     description: "A cyclist. A parked car. One opening door. Leave room before you need it.", lesson: "Look for curb activity and give the cyclist room." },
   { id: "fog-junction", title: "Into the unknown", map: "victoria", weather: "fog", time: "morning", seed: 2042, icon: "◌", difficulty: "Visibility", hazard: "signal",
@@ -978,6 +980,16 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 
 export function challengeScenario(map, challenge) {
   if (challenge.busLanes) return busLaneScenario(map, challenge);
+  if (challenge.hazard === "pxo") {
+    const cw = map.pxos.find(c => c.id === "x2317854682");
+    if (!cw) throw new Error("Metcalfe Street PXO is missing from the crossings v2 layer.");
+    const e = map.edges.get(cw.edge), lane = map.lane(e.id, 0);
+    const at = projectPoint(lane.pts, lane.cum, [cw.x, cw.y]).s;
+    const startS = Math.max(3, at - 55), p = pointAt(lane.pts, lane.cum, startS);
+    const route = routeFromLanes(map, [lane], startS, Math.min(lane.length - 2, at + 10));
+    return { id: challenge.id, start: { edge: lane.edge, lane: lane.idx, s: startS, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, startS) },
+      route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, pxoCrossing: cw.id };
+  }
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
     : challenge.hazard === "signal" ? l.edgeRef.control?.type === "signal"
@@ -1174,6 +1186,18 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.snowPlow) Object.assign(world.challenge, placePlow(world, fleet, scenario.snowPlow, scenario.start));
   if (scenario.laneClosure) Object.assign(world.challenge, placeZipper(world, fleet, scenario.laneClosure, challenge.seed));
   if (scenario.cyclistPass) Object.assign(world.challenge, placeCyclistPass(world, fleet, scenario.cyclistPass, challenge.seed));
+  if (scenario.pxoCrossing) {
+    const cw = world.crowd.marked.find(c => c.id === scenario.pxoCrossing);
+    const start = world.ego, near = Math.hypot(start.x - cw.ends[1][0], start.y - cw.ends[1][1]) < Math.hypot(start.x - cw.ends[-1][0], start.y - cw.ends[-1][1]) ? 1 : -1;
+    // The walker starts at the far (left) sidewalk of this one-way street;
+    // lane 0 is beside that sidewalk and clears before the rest of the roadway.
+    const from = cw.ends[near], to = cw.ends[-near];
+    const cross = { node: null, marked: cw.id, from, to };
+    const ped = new Pedestrian({ id: "challenge_pxo_walker", x: from[0], y: from[1], psi: Math.atan2(to[1] - from[1], to[0] - from[0]), v: 0, speed: 0.65, home: true,
+      path: [{ p: to, cross }], crossing: cross, waiting: 0, phase: 0, look: 0 });
+    world.crowd.list.push(ped);
+    Object.assign(world.challenge, { pedestrianId: ped.id, at: from, triggered: true });
+  }
   if (scenario.scramble) Object.assign(world.challenge, placeScramble(world, scenario.scramble, challenge.seed));
   if (scenario.collection) Object.assign(world.challenge, placeTruck(world, fleet, scenario.collection, challenge.seed));
   if (scenario.crossingGuard) Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));

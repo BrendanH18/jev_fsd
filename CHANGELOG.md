@@ -12,6 +12,13 @@
 - New challenge, "Stop for the guard" (`crossing-guard`): Rue Berri beside École
   Louis-Hippolyte-Lafontaine in Montréal, morning. Stop for three children and wait for the guard
   to return to the curb before proceeding.
+- Ontario pedestrian crossovers: the driven car, Rules, cautious agent and traffic wait until every
+  pedestrian reaches the far curb across the whole roadway. Toronto and Ottawa crossings v2 layers
+  add three explicitly tagged OSM PXOs without changing the street packs or legacy crosswalks.
+  Free drives enable `World.pxo` unless `?pxo=0`; other challenges keep it off. Amber beacons and
+  X signs identify them. Leaving early is `pxo_early_goes`, reported only after a PXO is used.
+- New challenge, "Wait for the far curb" (`pxo-far-curb`): Metcalfe Street, Ottawa. A slow walker
+  leaves the inner lane clear while still crossing the rest of this one-way street.
 
 - Speed humps, tables, cushions and bumps (`static/js/sim/traffic-calming.js`). A new layer beside each
   map pack, `<key>.calming.v1.json` (`jev/osm/calming.py`, built from the raw OSM download by

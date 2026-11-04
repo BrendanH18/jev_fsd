@@ -47,6 +47,13 @@ def main(argv: list) -> int:
         return 2
     print("bbox W,S,E,N = %s" % ",".join("%.5f" % v for v in bbox))
     try:
+        if "--crossings" in argv:
+            # Rebuild only the sidecar; never rebuild the street pack or other layers.
+            pack = build_pack(bbox, MAPS_DIR, log=print)
+            fetch.fetch_osm_xml(bbox, MAPS_DIR, force=force, log=print)
+            crossings = build_crossings(bbox, MAPS_DIR, pack, force=True, log=print)
+            print("crossings: %s (%d crosswalks)" % (crossings_path(MAPS_DIR, bbox), len(crossings["crossings"])))
+            return 0
         calm = "--calming" in argv
         busonly = "--buslanes" in argv
         only = "--transit" in argv or "--zones" in argv or "--rail" in argv or calm or busonly

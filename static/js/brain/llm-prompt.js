@@ -30,7 +30,7 @@ The input is JSON:
 
 How to choose \`candidate\`:
 - Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal it can stop for comfortably, a stop sign whose stop is not completed, an all-way stop where it is not the car's turn, or a roundabout yield line with ring traffic.
-- Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car.
+- Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car. At an Ontario pedestrian crossover (PXO), remain stopped until every pedestrian reaches the far curb across the whole roadway, even after the car’s lane clears.
 - Choose \`stop_for_oncoming\` when \`situation\` says the car is turning left and oncoming traffic has the right of way.
 - Choose \`stop_for_cyclist\` when \`situation\` says the car is turning right and a cyclist on its right has the right of way.
 - Choose \`pull_over\` when \`situation\` says an emergency vehicle is coming and the car must give way to it, and keep choosing it until it has passed.

@@ -58,6 +58,7 @@ export class DriveScore {
     this.cyclists = !!world.passCyclists; this.closePasses = 0; this.cyclistCutoffs = 0;
     // (crossing a speed hump, table, cushion or bump much too fast: sim/traffic-calming.js)
     this.busLanesSeen = false;
+    this.pxoUsed = false; this.pxoEarlyGoes = 0;
     this.humpHits = 0; this.calmed = false;
     // (turning right on red at a scramble crossing, which the audit counts as a red light: sim/signals.js)
     this.scrambleReds = 0;
@@ -170,6 +171,7 @@ export class DriveScore {
       if (this.plowCounted !== plow.plow.id) { this.plowCounted = plow.plow.id; this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id }); }
     }
     if (world.busLanesSeen) this.busLanesSeen = true;
+    if (world.pxoSeen) this.pxoUsed = true;
     if (world.calmingSeen) this.calmed = true;
     if (world.collectionSeen) this.collected = true;
     for (const ev of world.events || []) {
@@ -182,6 +184,7 @@ export class DriveScore {
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
       if (ev.type === "red_light" && ev.scramble) this.scrambleReds++;
+      if (ev.type === "pxo_early_go") { this.pxoEarlyGoes++; this.incident("pxo_early_go", "Left a pedestrian crossover before everyone reached the far curb"); }
       if (ev.type === "crew_close_pass") { this.crewPasses++; this.incident("crew_close_pass", "Passed a garbage crew worker too close", { worker: ev.worker, clearance_m: ev.clearance_m, kmh: ev.kmh }); }
       if (ev.type === "hump_hit") { this.humpHits++; this.incident("hump_hit", `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`, { device: ev.device, kmh: ev.kmh }); }
       if (ev.type === "close_pass") { this.closePasses++; this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
@@ -266,7 +269,7 @@ export class DriveScore {
     const collisions = delta("collisions"), atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
-      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20)),
+      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20)),
       legality: Math.round(clamp(100 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
@@ -302,6 +305,7 @@ export class DriveScore {
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
     if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
     if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
+    if (this.pxoEarlyGoes) tips.push("At an Ontario pedestrian crossover, stay stopped until everyone has reached the far curb across the whole roadway.");
     if (this.crewPasses) tips.push("Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.");
     if (this.scrambleReds) tips.push("At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.");
     if (delta("bus_lane_driving") > 1) tips.push("Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.");
@@ -322,6 +326,7 @@ export class DriveScore {
       ...(this.closures ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges } : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
+      ...(this.pxoUsed ? { pxo_early_goes: this.pxoEarlyGoes } : {}),
       ...(this.calmed ? { hump_hits: this.humpHits } : {}),
       ...(this.collected ? { crew_close_passes: this.crewPasses } : {}),
       ...(this.guards ? { guard_violations: this.guardViolations } : {}),
