@@ -14,6 +14,7 @@
     uv run scripts/fetch_map.py ... --zones                       # rebuild only the zones, from the raw OSM
                                                                   # (downloaded if it is not cached)
     uv run scripts/fetch_map.py ... --rail                        # rebuild only the level crossings, likewise
+    uv run scripts/fetch_map.py ... --restrictions                # refetch OSM and rebuild only turn restrictions
     uv run scripts/fetch_map.py ... --calming                     # rebuild only the speed humps and the
                                                                   # scramble crossings, likewise
 """
@@ -26,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jev.config import MAPS_DIR, Settings, parse_bbox  # noqa: E402
+from jev.osm.restrictions import build_restrictions
 from jev.osm import fetch  # noqa: E402
 from jev.osm.pack import build_pack, pack_path  # noqa: E402
 from jev.osm.calming import build_calming, calming_path  # noqa: E402
@@ -44,6 +46,11 @@ def main(argv: list) -> int:
         print("Bounding box must be W,S,E,N in degrees or a preset name.")
         return 2
     print("bbox W,S,E,N = %s" % ",".join("%.5f" % v for v in bbox))
+    if "--restrictions" in argv:
+        pack = build_pack(bbox, MAPS_DIR, log=print)
+        fetch.fetch_osm_xml(bbox, MAPS_DIR, force=True, log=print)
+        build_restrictions(bbox, MAPS_DIR, pack, force=True, log=print)
+        return 0
     try:
         calm = "--calming" in argv
         only = "--transit" in argv or "--zones" in argv or "--rail" in argv or calm

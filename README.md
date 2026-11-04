@@ -106,6 +106,7 @@ Thirty-three hand-built scenarios test the situations real drivers get wrong:
 | **Behind the plow** | Winnipeg, afternoon, snow | A city plow is clearing the left lane of William Avenue at 18 km/h, blue and amber lamps flashing, and the right lane beside it is wide open: stay 30 m behind it all the way, and never go by it on the right |
 | **Take turns** | Calgary, afternoon | The right lane of 14 Avenue SW is closed for a road crew, the left lane is backed up to the cones, and two cars wait at the merge ahead of you: stay in your lane to the merge point, then take your turn, one car from each lane |
 | **Give them room** | Vancouver, afternoon | A cyclist rides out in your lane on the West 10th Avenue bikeway, the kerbs lined with parked cars, one lane each way, and two cars are coming the other way: stay behind until they are by, then pass with at least 1 m and move back in well ahead |
+| **No left turn** | Toronto, morning | A real OSM no-left-turn sign on Bathurst Street blocks the shortest way to the destination: take a legal detour around the block |
 | **Over the humps** | Ottawa, afternoon | Gloucester Street is a 50 km/h one-way with a speed hump across each block, and you set off with a clear run of 80 m to the first: slow to 30 km/h before each hump, cross at an even speed, and pick up again only once your rear wheels are over |
 | **All walk** | Victoria, afternoon | You're turning right from Wharf Street onto Government Street, by the Empress, where the signal has a scramble crossing, and it turns red as you arrive: no right on red here, so wait through the all-walk, then let a slow walker finish the diagonal before you turn |
 | **Collection day** | Vancouver, afternoon | A garbage truck stands in your lane on West 5th Avenue as one of its crew crosses behind it to the bins on the far side, and two cars come the other way: wait well back until the crew is back and the oncoming lane is clear, then go round slowly |
@@ -343,3 +344,5 @@ the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Rendering by
 [JevPilot](https://github.com/standardagents/jevpilot).
 
 Released under the [MIT License](LICENSE).
+
+Free drives honour OpenStreetMap turn restrictions, including supported weekday/time conditions (`?restrictions=0` disables them). Try “No left turn” on Bathurst Street in Toronto in Drive Lab.

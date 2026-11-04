@@ -55,7 +55,7 @@ def overpass_query(bbox: Bbox) -> str:
         "(.a;.zw;)->.a;"
         ".a out body;.a >;out body qt;"
         "(node[\"amenity\"=\"school\"];node[\"leisure\"=\"playground\"];node[\"railway\"~\"^(tram_stop|halt|station)$\"];);out body qt;"
-        ".z out body;"
+        ".z out body;rel[\"type\"=\"restriction\"];out body;"
         "rel[\"route\"~\"^(bus|trolleybus|tram)$\"];out body;" % (s, w, n, e)
     )
 

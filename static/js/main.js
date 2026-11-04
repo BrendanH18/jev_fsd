@@ -1,3 +1,4 @@
+import { buildRestrictions } from "./render/turn-restrictions.js";
 // Bootstrap: load the map, build the scene, wire the UI, run the loop.
 
 import { api, $, h } from "./common.js";
@@ -107,7 +108,7 @@ export async function boot() {
   try { savedQuality = localStorage.getItem("jev-fsd-quality"); } catch { /* preferences are optional */ }
   const quality = params.get("quality") || savedQuality || "high";
   let hour = parseHour(params.get("time"));
-  const clock = new WorldClock(hour, options.clockRate);
+  const clock = new WorldClock(hour, options.clockRate, Number(params.get("weekday") || 0));
   const view = new SceneView($("#view"), map.extent, { quality });
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
@@ -184,7 +185,7 @@ export async function boot() {
     // and signals with a scramble crossing run their all-walk phase, with no right turn on red
     // (`?scramble=0` runs them as any other signal)
     const scrambles = params.get("scramble") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, restrictions: params.get("restrictions") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -201,6 +202,7 @@ export async function boot() {
     autopilot = new Autopilot(world, callbacks);
   }
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
+  if (world.restrictions) view.scene.add(buildRestrictions(map));
   if (world.calming) view.scene.add(buildCalming(map));
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
@@ -264,7 +266,7 @@ export async function boot() {
   };
   // school and playground zones go by the time of day (sim/speed-zones.js); a benchmark replay, as
   // the benchmark itself, drives none
-  function syncClock() { if (!replay) world.setClock(mapClock(hour, map)); }
+  function syncClock() { if (!replay) world.setClock({ ...mapClock(hour, map), ...(world.restrictions ? { weekday: clock.weekday } : {}) }); }
   clock.update(world.t);
   function rememberConditions() {
     const next = new URL(location.href);
@@ -539,7 +541,13 @@ export async function boot() {
     },
   });
 
-  function applyRoute(data, pt, title) {
+  async function applyRoute(data, pt, title) {
+    if (world.restrictions) {
+      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 });
+      if (!res.routes.length) { hud.badge("No legal route to this destination", "safety", 2200); return; }
+      data = res.routes[0];
+    }
+
     if (challenge) challengeModified = true;
     world.destination = pt;
     world.route = new Route(data, map, world.ego.spec);
@@ -573,7 +581,7 @@ export async function boot() {
     onScenic: async driver => {
       const { drives } = await api("/api/drives", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi } });
       if (!drives.length) throw new Error("Try another position or city in Explore cities.");
-      setHour("golden"); selectBrain("rules"); applyRoute(drives[0].route, drives[0].destination, drives[0].title);
+      setHour("golden"); selectBrain("rules"); await applyRoute(drives[0].route, drives[0].destination, drives[0].title);
       if (driver === "manual") { autopilot.setEnabled(false); hud.setAutopilot(false); drive.driver = "manual"; }
       world.paused = false;
     },
@@ -610,9 +618,9 @@ export async function boot() {
   async function setDestination(pt) {
     if (lab?.reviewing) lab.live();
     try {
-      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1 });
+      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
       if (!res.routes.length) { hud.badge("no route to that point", "safety", 1500); return; }
-      applyRoute(res.routes[0], res.routes[0].polyline.at(-1));
+      await applyRoute(res.routes[0], res.routes[0].polyline.at(-1));
     } catch (err) {
       hud.badge(`routing failed: ${err.message}`, "safety", 2000);
     }

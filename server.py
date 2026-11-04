@@ -36,6 +36,7 @@ from jev.osm.rail import build_rail
 from jev.osm.scrambles import build_scrambles
 from jev.osm.transit import build_transit
 from jev.osm.zones import build_zones
+from jev.osm.restrictions import build_restrictions
 from jev.routing import Router
 from jev.maps import catalog, map_identity
 from jev.drives import suggested_drives
@@ -97,6 +98,9 @@ def load_map(bbox_text: str = "") -> dict:
         scrambles = build_scrambles(bbox, MAPS_DIR, entry["pack"], log=log)
         if scrambles:
             entry["pack"] = {**entry["pack"], "scrambles": scrambles}
+        restriction_layer = build_restrictions(bbox, MAPS_DIR, entry["pack"], log=log)
+        if restriction_layer:
+            entry["pack"] = {**entry["pack"], "restrictions": restriction_layer}
         # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
         offset = map_identity(bbox).get("utc_offset")
         if offset is not None:
@@ -161,7 +165,7 @@ def api_route(body, _query):
         raise BadRequest("from {x, y, heading?} and to {x, y} are required")
     k = max(1, min(int(body.get("k") or 1), 3))
     started = time.perf_counter()
-    routes = entry["router"].routes(start, goal, k=k)
+    routes = entry["router"].routes(start, goal, k=k, restrictions=bool(body.get("restrictions")), hour=float(body.get("hour", 15.5)), weekday=int(body.get("weekday", 0)))
     return {"routes": routes, "compute_ms": round((time.perf_counter() - started) * 1000, 1)}
 
 

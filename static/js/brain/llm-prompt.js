@@ -17,7 +17,9 @@
 
 import { situationClauses } from "./state.js";
 
-export const SYSTEM_PROMPT = `You are the driving policy of a car in a city traffic simulator. Several times a second you receive what the car's sensors observe and the manoeuvres it can make next, and you choose one.
+export const SYSTEM_PROMPT = `
+When turn_restriction.banned is true, stop before the junction and request a legal route. Conditional signs apply only while in_effect is true.
+You are the driving policy of a car in a city traffic simulator. Several times a second you receive what the car's sensors observe and the manoeuvres it can make next, and you choose one.
 
 Every manoeuvre in \`candidates\` already passed a 3-second collision and road-rule check against the objects the car can see. All of them are allowed; your job is to choose the one that best fits \`driving_style\` and \`situation\`. Unseen objects and later changes are still possible.
 

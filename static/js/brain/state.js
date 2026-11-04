@@ -59,6 +59,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.speed_zone = { kind: z.kind, ...(z.name ? { name: z.name } : {}), limit: r1(z.limit_mps), in_effect: ZONE_HOURS[z.kind],
       ...(z.in_zone ? { in_zone: true } : { starts_in_m: r1(Math.max(0, z.starts_in_m)) }), ...(z.ends_in_m !== null ? { ends_in_m: r1(z.ends_in_m) } : {}) };
   }
+  if (snap.turn_restriction) state.turn_restriction = snap.turn_restriction;
   if (snap.traffic_calming) {
     const c = snap.traffic_calming;
     state.traffic_calming = { kind: c.name, speed: r1(c.speed_mps), ...(c.over ? { over: true } : { starts_in_m: r1(Math.max(0, c.starts_in_m)) }) };
@@ -308,6 +309,7 @@ export function situationClauses(snap) {
     const where = p.mid_block ? "mid-block, outside a crosswalk" : "in the crosswalk";
     out.push(p.bumper_to_crosswalk_m < STOP_ZONE_M ? `A pedestrian is crossing ${where} right in front of the car: hold still until they have cleared the car's path.` : `A pedestrian is crossing ${where} ${m} m ahead: slow down and stop short of them until they have cleared the car's path.`);
   }
+  if (snap.turn_restriction?.banned) out.push("The planned turn is prohibited now: stop before the junction and follow a legal detour.");
   if (snap.speed_zone) {
     const z = snap.speed_zone, kmh = Math.round(z.limit_mps * 3.6), where = z.name ? ` by ${z.name}` : "";
     out.push(z.in_zone

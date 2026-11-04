@@ -1,5 +1,5 @@
-import { routeFromLanes } from "../demo/routing.js";
-import { pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
+import { browserRoute, routeFromLanes } from "../demo/routing.js";
+import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
 import { NpcPath, stripOffset } from "../sim/npc.js";
 import { isJunction } from "../sim/emergency.js";
@@ -88,6 +88,7 @@ export const CHALLENGES = [
     description: "A road crew has closed the right lane of 14 Avenue SW, one-way with two lanes. The left lane is backed up to the cones, two cars in your lane are waiting at the merge, and the lane ahead of you is otherwise empty.", lesson: "Where a lane is closed, zipper merge: in slow traffic, stay in your lane right up to the merge point, then take turns, one vehicle from each lane. Manitoba's driver's handbook teaches it, and Ontario cities and the Alberta Motor Association ask drivers to merge this way. Merging early makes the queue longer, and following the car ahead in out of turn forces the driver whose turn it is to brake. Wait for your turn, then go." },
   { id: "cyclist-pass", title: "Give them room", map: "kitsilano", weather: "dry", time: "afternoon", seed: 30042, icon: "⇉", difficulty: "Patience", hazard: "cyclist-pass", passCyclists: true, street: "West 10th Avenue",
     description: "A cyclist is riding the West 10th Avenue bikeway ahead of you, out in your lane: the kerb is lined with parked cars, and there's one lane each way. Two cars are coming the other way.", lesson: "Pass a cyclist with at least 1 m of room where the limit is 50 km/h or less, and 1.5 m above: that is BC's minimum passing distance law, and Québec and Ontario have one too. With one lane each way, that means moving into the oncoming lane, so stay well back until it is clear for the whole pass, then go by and move back in well ahead of them. Never squeeze past in the lane." },
+  { id: "no-left-turn", title: "No left turn", map: "toronto", weather: "dry", time: "morning", seed: 31050, icon: "↰", difficulty: "Navigation", hazard: "turn-restriction", restrictions: true, street: "Bathurst Street", description: "A signed left turn is prohibited. Take a legal route around the block.", lesson: "Follow the signed turn restriction while it applies. Take the legal detour even when the prohibited turn would be shorter; never turn across the sign just to follow a destination." },
   { id: "speed-humps", title: "Over the humps", map: "ottawa", weather: "dry", time: "afternoon", seed: 31042, icon: "⌒", difficulty: "Control", hazard: "speed-humps", calming: true, street: "Gloucester Street",
     description: "Gloucester Street is a one-way residential street in Centretown with a 50 km/h limit and a speed hump across each block. You set off from the start of a block, with a clear run of 80 m up to the first.", lesson: "Speed humps are built to be crossed at about 30 km/h, speed tables at about 40 and speed bumps at a crawl: faster, they jolt the car and everyone in it, and can unsettle it. Slow down before you reach one, not on it, cross at an even speed, and pick up speed again only once your rear wheels are over. Then slow again for the next one." },
   { id: "scramble", title: "All walk", map: "victoria", weather: "dry", time: "afternoon", seed: 32042, icon: "✕", difficulty: "Patience", hazard: "scramble", scrambles: true, street: "Wharf Street",
@@ -943,6 +944,20 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.hazard === "turn-restriction") {
+    for (const r of map.restrictions.filter(r => r.kind === "no_left_turn" && !r.condition)) {
+      const e = map.edges.get(r.from), out = map.edges.get(r.to[0]);
+      const lane = map.lane(e.id, 0), goalLane = map.lane(out.id, 0);
+      if (lane.length < 50 || goalLane.length < 25) continue;
+      const s = Math.max(5, lane.length - 65), p = pointAt(lane.pts, lane.cum, s), goal = pointAt(goalLane.pts, goalLane.cum, Math.min(40, goalLane.length - 5));
+      const from = { x: p[0], y: p[1], heading: headingAt(lane.pts, lane.cum, s) }, to = { x: goal[0], y: goal[1] };
+      const direct = browserRoute(map, from, to), route = browserRoute(map, from, to, { restrictions: true, hour: 9 });
+      if (!route || !direct || !direct.edges.some((id,i) => id === r.from && direct.edges[i+1] === r.to[0])) continue;
+      return { id: challenge.id, start: { edge: lane.edge, lane: lane.idx, s }, route, goal, traffic_seed: challenge.seed, tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: route.edges.filter(id => map.edges.get(id).control?.type === "signal").length, stops: route.edges.filter(id => map.edges.get(id).control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length }, restriction: r.id, street: e.name };
+    }
+    throw new Error("No real prohibited left turn with a legal detour on this map");
+  }
+
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
     : challenge.hazard === "signal" ? l.edgeRef.control?.type === "signal"
