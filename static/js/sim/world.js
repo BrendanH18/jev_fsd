@@ -32,6 +32,7 @@ import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
+import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -177,6 +178,14 @@ const AUDIT_MERGE_MOVING_MPS = 1;
 // of the centre line, the car fails to yield as round a double-parked van (AUDIT_MEET_M): once a pass.
 const AUDIT_PASS_SLACK_M = 0.1;
 const AUDIT_PASS_NEAR_M = 30;
+// Stopping for a school crossing guard's STOP sign (sim/crossing-guard.js, Ontario HTA s. 176), with
+// `guards` on: the car heading across the crosswalk owes a stop if, when the sign rose (or on first
+// approach for a later arrival), it could stop with its front 5 m short of the crosswalk's
+// centre braking at up to 3.5 m/s^2 (standing still, it can). It drives past the guard if, owing it,
+// its front goes more than AUDIT_GUARD_PAST_M past that point at more than 1 m/s while the sign is
+// still up or anyone is still in the road. Counted once each time the sign goes up.
+const AUDIT_GUARD_PAST_M = 2;
+const AUDIT_GUARD_MOVING_MPS = 1;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
@@ -195,7 +204,9 @@ export class World {
   // `calming`: traffic and the driven car slow for speed humps, tables, cushions and bumps, and the audit
   // counts hard hits (sim/traffic-calming.js). `scrambles`: signals with a scramble crossing run their
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false } = {}) {
+  // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
+  // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -267,6 +278,8 @@ export class World {
     this.plowsSeen = false;        // whether a snow plow has worked the streets this drive (sim/snow-plow.js)
     this.mergeCall = null;         // the lane closure the car is at, and what it owes and has counted there
     this.closuresSeen = false;     // whether a lane closure has stood this drive (sim/lane-closure.js)
+    this.guardsSeen = false;       // whether a crossing guard has held up the STOP sign this drive (sim/crossing-guard.js)
+    this.guardCalls = new Map();   // "<post id>:<stop>" -> { owed, counted }: a crossing guard's sign up
     this.events = [];  // transient per-step events for the UI
     this.lastRoad = null;
     this.lastSignal = null;
@@ -279,6 +292,7 @@ export class World {
     this.doubleParked = new DoubleParked(this, { count: vans, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
+    this.crossingGuards = new CrossingGuards(this, { enabled: guards, seed });
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -384,6 +398,7 @@ export class World {
     this.plowPass.clear();
     this.mergeCall = null; this.mergeWait = null; this.mergeLetIn = null;
     this.bikePasses?.clear(); this.cyclistPass = null;
+    this.guardCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -611,6 +626,7 @@ export class World {
     if (this.passCyclists) this.auditCyclistPasses(road);
     if (this.calming) this.auditCalming();
     if (this.collectionSeen) this.auditCrew();
+    if (this.crossingGuards.enabled) this.auditGuards();
     this.auditKerb();
     leftSpace(this);
   }
@@ -812,6 +828,28 @@ export class World {
         return;
       }
     }
+  }
+
+  // Driving past a school crossing guard's STOP sign once the stop was owed (see AUDIT_GUARD_PAST_M).
+  auditGuards() {
+    const g = this.crossingGuards, ego = this.ego;
+    for (const post of g.posts) {
+      if (!post.onDuty || Math.abs(post.mid[0] - ego.x) > 60 || Math.abs(post.mid[1] - ego.y) > 60) continue;
+      const holding = post.paddleUp || g.inRoad(post).length > 0;
+      if (!holding) continue;
+      const d = frontToCentre(post.cw, ego);
+      if (d === null || d < -2) continue;
+      const key = guardKey(post);
+      let rec = this.guardCalls.get(key);
+      // (the manager remembers whether the car could stop when the sign rose)
+      if (!rec && this.sees(ego, post.guard)) this.guardCalls.set(key, rec = { owed: g.owes(post, ego, d - GUARD_STOP_M), counted: false });
+      if (rec?.owed && !rec.counted && d < GUARD_STOP_M - AUDIT_GUARD_PAST_M && ego.v > AUDIT_GUARD_MOVING_MPS) {
+        rec.counted = true;
+        this.violations.guard_violations = (this.violations.guard_violations || 0) + 1;
+        this.events.push({ type: "passed_crossing_guard", guard: post.id, crosswalk: post.cw.id, in_road: g.inRoad(post).length });
+      }
+    }
+    if (this.guardCalls.size > 20) for (const key of [...this.guardCalls.keys()].slice(0, 10)) this.guardCalls.delete(key);
   }
 
   // Going past a flagger's STOP paddle once the stop was owed (see AUDIT_FLAGGER_PAST_M).

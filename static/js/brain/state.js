@@ -185,6 +185,12 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(c.queued ? { waiting_ahead: c.queued } : {}), pass_at: r1(c.limit_mps),
       ...(c.go ? { go_round: true } : { stay_behind: true, follow_gap_m: c.follow_gap_m }) };
   }
+  if (snap.crossing_guard) {
+    const g = snap.crossing_guard;
+    state.crossing_guard = { id: g.guard_id, crosswalk: g.crosswalk_id, ...(g.school ? { school: g.school } : {}), stop_sign: g.paddle === "up" ? "held up" : "down",
+      ...(g.in_road.length ? { in_road: g.in_road } : {}), ...(g.waiting ? { children_waiting: g.waiting } : {}), crosswalk_m: r1(Math.max(0, g.bumper_to_crosswalk_m)),
+      ...(g.wait ? { stop: true, wait_in_m: r1(Math.max(0, g.bumper_to_stop_m)) } : {}) };
+  }
   if (snap.snow_plow) {
     const p = snap.snow_plow;
     state.snow_plow = { id: p.id, kind: p.kind, lights: "blue and amber, flashing", lane: p.lane === "same" ? "the car's lane" : `a lane to the car's ${p.lane}`,
@@ -244,6 +250,7 @@ function outcomeLabel(c, snap) {
   if (c.id === "wait_behind_van" && snap.double_parked) return `clear, stops ${Math.max(0, r1(snap.double_parked.bumper_to_stop_m - c.sim.progress_m))} m short of where the car waits behind the double-parked van`;
   if (c.id === "wait_to_merge" && snap.lane_closure) return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of the merge point, to wait for the car's turn`;
   if (c.id === "let_merge_in" && snap.lane_closure) return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of where it lets \`${snap.lane_closure.let_in_for}\` in`;
+  if (c.id === "stop_for_crossing_guard" && snap.crossing_guard) return `clear, stops ${Math.max(0, r1(snap.crossing_guard.bumper_to_stop_m - c.sim.progress_m))} m short of where the car waits for the crossing guard, short of the crosswalk`;
   if (c.id === "stop_for_flagger" && snap.work_zone) return `clear, stops ${Math.max(0, r1(snap.work_zone.bumper_to_stop_m - c.sim.progress_m))} m short of the flagger, at the line`;
   if (c.id === "stop_before_tracks" && snap.level_crossing) return `clear, stops ${Math.max(0, r1(snap.level_crossing.bumper_to_stop_m - c.sim.progress_m))} m short of the level crossing, 7 m back from the nearest rail`;
   if (c.id === "stop_for_school_bus" && snap.school_bus) return `clear, stops ${Math.max(0, r1(snap.school_bus.bumper_to_stop_m - c.sim.progress_m))} m short of the school bus`;
@@ -347,6 +354,7 @@ export function situationClauses(snap) {
     const b = snap.junction_box, w = Math.max(0, Math.round(b.bumper_to_stop_m));
     out.push(`Traffic past the signal ahead (\`${b.id}\`${b.signal ? `, ${b.signal} for the car` : ""}) is stopped, \`${b.blocker.id}\` ${Math.round(Math.max(0, b.room_m))} m past the junction, and leaves no room for the car beyond it (it needs ${Math.round(b.need_m)} m). Even on a green, never enter a junction the car cannot clear: it would block the cross street when the light changes. Wait at the line until there is room: ${w < 2 ? "hold still where the car is." : `stop ${w} m ahead (\`wait_short_of_junction\`).`}`);
   }
+  if (snap.crossing_guard) out.push(guardClause(snap.crossing_guard));
   if (snap.work_zone) out.push(workZoneClause(snap));
   if (snap.lane_closure) out.push(closureClause(snap.lane_closure));
   if (snap.double_parked) out.push(vanClause(snap));
@@ -469,6 +477,17 @@ function blindClause(b) {
   return `Cars parked along the ${b.side} ${where}, ${r1(b.gap_m)} m from the car's side, hide the sidewalk${b.why === "quiet street" ? " on this quiet street" : ` in this ${b.why}`}: someone could step out from between them, unseen until they do. Keep to ${kmh} km/h beside them, a speed from which the car can stop for someone who steps out ${STEP_OUT_M} m ahead (\`car.target_speed\` already does).`;
 }
 
+// A school crossing guard at a crosswalk on the route ahead (sim/crossing-guard.js).
+function guardClause(g) {
+  const at = Math.max(0, Math.round(g.bumper_to_crosswalk_m)), w = Math.max(0, Math.round(g.bumper_to_stop_m));
+  const lead = `A school crossing guard (\`${g.guard_id}\`) works the marked crosswalk ${at < 2 ? "in front of the car" : `${at} m ahead`}${g.school ? `, by ${g.school}` : ""}.`;
+  const who = g.in_road.length ? ` ${g.in_road.length === 1 ? "One person is" : `${g.in_road.length} people are`} still in the road (${g.in_road.map((id) => `\`${id}\``).join(", ")}).` : "";
+  if (g.wait) return `${lead} The guard ${g.paddle === "up" ? "is holding up the STOP sign" : "has lowered the STOP sign"}, walking children across.${who} Traffic both ways must stop short of the crosswalk and stay stopped until the guard and every child are off the road, not just out of the car's lane: ${w < 2 ? "hold still where the car is." : `slow down and stop ${w} m ahead (\`stop_for_crossing_guard\`).`}`;
+  if (g.paddle === "up" || g.in_road.length) return `${lead} The guard is holding up the STOP sign, but the car was too close to stop for it when it went up: go on slowly, giving way to anyone in its path.${who}`;
+  if (g.ready) return `${lead} ${g.waiting === 1 ? "A child is" : `${g.waiting} children are`} waiting at the curb with the guard, who will step out with the STOP sign once traffic can stop: slow down, ready to stop short of the crosswalk; \`car.target_speed\` already does.`;
+  return `${lead} Nobody is crossing now: go on with care.`;
+}
+
 // A work zone with a flagger on the route ahead (sim/work-zone.js).
 function workZoneClause(snap) {
   const w = snap.work_zone, at = Math.max(0, Math.round(w.bumper_to_stop_m)), kmh = Math.round(w.limit_mps * 3.6);
@@ -571,7 +590,7 @@ function parkingClause(p) {
 }
 
 export function needsMotionQuestion(snap) {
-  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.cyclist_pass || snap.parking
+  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.crossing_guard?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.cyclist_pass || snap.parking
     || snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) || snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) || snap.stuck || (snap.nav && snap.nav.remaining_m < 30));
 }
 
@@ -609,6 +628,8 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const boxWait = snap.junction_box ? ", when traffic past the junction ahead leaves no room for the car and it has stopped at the line (`junction_box.wait_in_m` under 2), even on a green" : "";
     // And waiting at a work zone's flagger showing STOP.
     const flaggerWait = snap.work_zone?.wait ? ", when a work zone's flagger shows STOP to the car and it has stopped at the line (`work_zone.wait_in_m` under 2)" : "";
+    // And waiting for a school crossing guard and the children with them.
+    const guardWait = snap.crossing_guard?.wait ? ", when a school crossing guard holds up the STOP sign, or the guard or a child is still in the road, and the car has stopped short of the crosswalk (`crossing_guard.wait_in_m` under 2)" : "";
     // And waiting at a lane closure's merge point for the car's turn, or letting one in there.
     const mergeWait = snap.lane_closure?.wait ? ", when a lane closure's merge point is ahead in the car's lane, it is not the car's turn and it has stopped there (`lane_closure.wait_in_m` under 2)"
       : snap.lane_closure?.let_in_for ? ", when the car is letting a car at a lane closure's merge point in and has stopped for it (`lane_closure.wait_in_m` under 2)" : "";
@@ -623,7 +644,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${snap.cyclist_pass ? " Staying behind a cyclist (`follow_cyclist`), at its speed, and passing it (`pass_cyclist`) are driving too." : ""}`,
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${guardWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
       },
     };
   } else {

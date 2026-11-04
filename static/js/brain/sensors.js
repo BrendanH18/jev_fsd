@@ -41,6 +41,7 @@ const PARK_STOP_DECEL = 1.2;
 const PASS_CLEAR_M = 60;
 import { EGO_ID, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, THROUGH_M as LC_THROUGH_M, OWED_DECEL as LC_OWED_DECEL, canStop as canStopForMerge, detourOf as closureDetour, isLaneClosure } from "../sim/lane-closure.js";
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
+import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -167,7 +168,7 @@ export function buildSnapshot(world, executing = null) {
   const snap = {
     t: world.t, tick: world.tick,
     ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, traffic_calming: null, roadside_stop: null, work_zone: null, lane_closure: null, double_parked: null, snow_plow: null, cyclist_pass: null, parking: null, blind_spot: null,
+    road, route, routeProj: null, onRoute: false, nav: null, intersection: null, control_line_m: null, following: null, pedestrian: null, right_hook: null, emergency: null, emergency_ahead: null, bus: null, crosswalk_stop: null, school_bus: null, streetcar: null, level_crossing: null, junction_box: null, speed_zone: null, traffic_calming: null, roadside_stop: null, work_zone: null, lane_closure: null, double_parked: null, snow_plow: null, cyclist_pass: null, crossing_guard: null, parking: null, blind_spot: null,
     rear_follower: null, traffic: [], current_path_hazard: null, lane: null, stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
     limit: road.limit || 11.2,
     observed: visible, visibility: { range_m: world.visibility.range, safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT), building_occlusion: true },
@@ -297,6 +298,7 @@ export function buildSnapshot(world, executing = null) {
     snap.double_parked = doubleParked(world, p, frontS, lane, executing);
     snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
     snap.cyclist_pass = cyclistPass(world, p, lane, executing);
+    snap.crossing_guard = crossingGuard(world, frontS);
     // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
     // Once moving past the line the car has committed and carries on.
     const rtor = snap.intersection?.right_on_red;
@@ -861,6 +863,39 @@ function workZone(world, p, frontS, road) {
     return { id: z.id, side, paddle: shows, stop_s_route: line, bumper_to_stop_m: line - frontS, wait: shows === "stop" && !!world.flaggerYields.get(key) && frontS < from - 0.5,
       one_lane: { from_s: from, to_s: to }, in_one_lane: frontS > from, closure_id: z.closure.id, limit_mps: Math.min(road.limit || 11.2, WZ_LIMIT_MPS),
       detour: d ? { from: toRoute(d.from), full: toRoute(d.full), back: toRoute(d.back), to: toRoute(d.to), shift: d.shift } : null };
+  }
+  return null;
+}
+
+// A school crossing guard at a marked crosswalk on the car's route ahead (sim/crossing-guard.js), with
+// `guards` on, from when the car can see the guard, within GUARD_LOOK_M, until its front is 2 m past the
+// crosswalk's centre. `paddle` is "up" from when the guard steps out with the STOP sign until the guard
+// is back on the sidewalk; `in_road` who is still on the roadway (the guard and children); `waiting`
+// the children at the curb; `stop_s_route` where the front stops, GUARD_STOP_M short of the crosswalk's
+// centre; `wait` whether the car must stop there now: the sign is up, or anyone is still in the road,
+// and when the sign rose (or on first approach for a later arrival) it could stop at the owed rate, or was
+// standing still (a car too close to stop by then goes on, giving way to anyone in its path); `ready`
+// while children wait at the curb and the sign is down: the guard may step out. Or null.
+function crossingGuard(world, frontS) {
+  const g = world.crossingGuards;
+  if (!g?.enabled || !g.posts.length) return null;
+  const { ego, route } = world;
+  for (const { cw, s } of crosswalksAlong(route, world.crowd)) {
+    if (s + 2 < frontS) continue;
+    if (s - frontS > GUARD_LOOK_M) break;
+    const post = g.at(cw.id);
+    if (!post) continue;
+    const guard = post.guard, stop = s - GUARD_STOP_M;
+    const inRoad = g.inRoad(post), up = post.paddleUp || inRoad.length > 0;
+    const visible = world.sees(ego, guard);
+    // Once observed, a raised sign remains binding if traffic temporarily hides the guard.
+    if (!visible && !(up && post.egoSawStop)) continue;
+    if (visible && up) post.egoSawStop = true;
+    const owed = up && g.owes(post, ego, stop - frontS);
+    const waiting = g.waiting(post).length;
+    return { id: post.id, guard_id: guard.id, crosswalk_id: cw.id, ...(post.zone?.name ? { school: post.zone.name } : {}), paddle: post.paddleUp ? "up" : "down", phase: post.phase,
+      in_road: inRoad.map((p) => p.id), waiting, crosswalk_s_route: s, bumper_to_crosswalk_m: s - frontS, stop_s_route: stop, bumper_to_stop_m: stop - frontS,
+      wait: up && owed, ready: !up && waiting > 0 };
   }
   return null;
 }
@@ -1549,6 +1584,14 @@ export function desiredSpeed(snap) {
     const vs = sb.lights === "red" ? (room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel)) : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
     if (vs < v) { v = vs; reasons.push(sb.lights === "red" ? "school bus stopped, red lights flashing" : "school bus about to stop"); }
   }
+  // a school crossing guard holding up the STOP sign, or anyone still in the road: stop short of the
+  // crosswalk; with children waiting at the curb, slow down, ready to
+  const cg = snap.crossing_guard;
+  if (cg && (cg.wait || (cg.ready && cg.bumper_to_stop_m > 0))) {
+    const room = cg.bumper_to_stop_m;
+    const vg = cg.wait ? (room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel)) : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
+    if (vg < v) { v = vg; reasons.push(cg.wait ? "crossing guard holding up STOP" : "children waiting to cross with a crossing guard"); }
+  }
   // a streetcar with its doors open: stop behind them; slowing for its stop, slow down, ready to
   const sc = snap.streetcar;
   if (sc) {
@@ -1689,6 +1732,7 @@ export function hazardFlags(snap) {
   if (snap.double_parked) f.push("double-parked van");
   if (snap.snow_plow) f.push("snow plow");
   if (snap.cyclist_pass) f.push("cyclist ahead");
+  if (snap.crossing_guard) f.push("crossing guard");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

@@ -36,6 +36,8 @@ import { calmingNotice } from "./sim/traffic-calming.js";
 import { TRUCK_COUNT, isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
 import { buildCalming, rideOver } from "./render/traffic-calming.js";
+import { guardNotice } from "./sim/crossing-guard.js";
+import { addGuardSign, syncGuardSign } from "./render/crossing-guard.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -184,7 +186,10 @@ export async function boot() {
     // and signals with a scramble crossing run their all-walk phase, with no right turn on red
     // (`?scramble=0` runs them as any other signal)
     const scrambles = params.get("scramble") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles });
+    // and, while a school zone is in effect, crossing guards walk children across the marked crosswalks
+    // in it, and everyone stops for their STOP sign (`?guards=0` takes them off)
+    const guards = params.get("guards") !== "0";
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -212,7 +217,7 @@ export async function boot() {
   // (a mesh per person, by id: children get off school buses and go home)
   const pedMeshes = new Map();
   const pedMesh = (p) => {
-    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker }); view.scene.add(m); pedMeshes.set(p.id, m); }
+    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker }); if (p.crossingGuard) addGuardSign(m); view.scene.add(m); pedMeshes.set(p.id, m); }
     return pedMeshes.get(p.id);
   };
   world.crowd.list.forEach(pedMesh);
@@ -656,7 +661,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedGuard = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -694,6 +699,7 @@ export async function boot() {
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
           else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
           else if (ev.type === "close_pass") hud.badge("PASSED A CYCLIST TOO CLOSE", "alert", 1500);
+          else if (ev.type === "passed_crossing_guard") hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
@@ -831,6 +837,11 @@ export async function boot() {
     const scrambleLine = scrambleNotice(world);
     if (scrambleLine && scrambleLine.key !== announcedScramble) { announcedScramble = scrambleLine.key; hud.badge(scrambleLine.text, "safety", 2500); }
     if (!scrambleLine) announcedScramble = null;
+    // a school crossing guard ahead: children waiting to cross, or the STOP sign up until everyone is
+    // across (said once each time)
+    const guardLine = guardNotice(world);
+    if (guardLine && guardLine.key !== announcedGuard) { announcedGuard = guardLine.key; hud.badge(guardLine.text, guardLine.stop ? "safety" : "", 2500); }
+    if (!guardLine) announcedGuard = null;
     const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once
@@ -850,6 +861,7 @@ export async function boot() {
       here.add(p.id);
       const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
       syncPerson(pedMesh(p), next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha), view.camera, world.weather === "rain");
+      if (p.crossingGuard) syncGuardSign(pedMesh(p), p);
     }
     for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_") || id.startsWith("rider_") || id.startsWith("stepout_") || id.startsWith("crew_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
     overlays.tick(world.t);
