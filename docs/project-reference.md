@@ -1151,15 +1151,17 @@ Released under the [MIT License](../LICENSE).
 `--buslanes` rebuilds only this layer without changing street packs. Lane lists,
 counts, busway sides and conditional hours map onto existing directed edge/lane
 indices. Weekday/time windows are minutes since midnight; unknown schedules are
-retained and conservatively active. The simulator has no calendar: Monday is the
-default, with an optional `clock.day` (Monday=0). No clock means inactive.
+retained and conservatively active. The day comes from the world clock's `weekday`
+(Monday = 0, the default; `?weekday=` in free drives, and the app clock moves it on at
+midnight), as for turn restrictions. No clock means inactive.
 
 `World.busLanes` enables `sim/bus-lanes.js`, sensing `bus_lane`, route lane choice,
 NPC lane choice and gap-checked lane changes, candidate filtering and both local
 agents. Cars may enter a reserved lane in the final **50 m** before a right turn,
 or during the actual curb parking/pull-out manoeuvre. Buses retain access;
 explicit taxi/bicycle permissions are kept in the layer. The audit measures
-`bus_lane_driving` in metres; more than 1 m fails the drive (tolerance for lane
+`bus_lane_driving` in metres, in the lane the car is actually in, with or without a
+route (the route only grants the right-turn approach); more than 1 m fails the drive (tolerance for lane
 projection at joins). It is reported only after an active lane is encountered.
 Red surfaces and BUS ONLY/diamond paint follow fixed ground render ordering.
 No random stream is drawn with the option off. Focused check:
