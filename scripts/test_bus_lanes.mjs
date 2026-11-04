@@ -49,6 +49,12 @@ assert.equal(ctx.world.violations.bus_lane_driving, 5);
 ctx.world.placeOnLane(buslane, buslane.length - 30); ctx.world.ego.v = 5;
 auditBusLanes(ctx.world, 1);
 assert.equal(ctx.world.violations.bus_lane_driving, 5);
+// (driven by hand, with no route: the lane the car is in still counts, and there is no turn to excuse it)
+const route = ctx.world.route; ctx.world.route = null; ctx.world.busLanesSeen = false;
+auditBusLanes(ctx.world, 1);
+assert.equal(ctx.world.busLanesSeen, true);
+assert.equal(ctx.world.violations.bus_lane_driving, 10);
+ctx.world.route = route;
 ctx.world.busLanes=false; delete ctx.world.route.busLanePolicy;
 assert.equal('bus_lane' in buildSnapshot(ctx.world),false);
 assert.equal(failures({bus_lane_driving:2}).includes('drove in a reserved bus lane'),true);

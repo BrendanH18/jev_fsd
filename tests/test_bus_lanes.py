@@ -40,3 +40,9 @@ class BusLaneTests(unittest.TestCase):
     def test_busway_side(self):
         self.assertEqual(self.build({'busway:left':'lane'}),[])
         self.assertEqual(len(self.build({'busway:left':'lane'},False)),1)
+
+    def test_count_does_not_override_lane_lists(self):
+        # (lanes:bus counts both ways on a two-way street; the lane lists say which lane)
+        for forward in (True, False):
+            self.assertEqual([l['lane'] for l in self.build({'lanes:bus': '2', 'bus:lanes:forward': 'yes|designated', 'bus:lanes:backward': 'yes|designated'}, forward)], [1])
+            self.assertEqual([l['lane'] for l in self.build({'lanes:bus': '2'}, forward)], [1])

@@ -116,11 +116,14 @@ def buslanes_from_osm(osm, pack):
         for key in ('lanes:bus', 'lanes:psv'):
             chosen = key + ':' + direction if key + ':' + direction in tags or key + ':' + direction + ':conditional' in tags else key
             val = tags.get(chosen + ':conditional', tags.get(chosen, ''))
-            if not edge.get('oneway') and chosen == key and direction == 'backward':
-                val = ''
             val = val.split('@')[0].strip()
+            if any(k.startswith(('bus:lanes', 'psv:lanes')) for k, _ in reserved.values()):
+                val = ''  # an explicit lane list says which lanes; a bare count does not
             if val and val.isdigit():
-                for i in range(max(0, n-int(val)), n):
+                count = int(val)
+                if not edge.get('oneway') and chosen == key:
+                    count //= 2  # an undirected count on a two-way street is both ways together
+                for i in range(max(0, n-count), n):
                     reserved[i] = (chosen, tags.get(chosen + ':conditional', val))
         for side in ('right', 'left', ''):
             key = 'busway' + (':' + side if side else '')
