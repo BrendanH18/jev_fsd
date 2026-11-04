@@ -987,7 +987,9 @@ export function challengeScenario(map, challenge) {
     const e = map.edges.get(cw.edge), lane = map.lane(e.id, 0);
     const at = projectPoint(lane.pts, lane.cum, [cw.x, cw.y]).s;
     const startS = Math.max(3, at - 55), p = pointAt(lane.pts, lane.cum, startS);
-    const route = routeFromLanes(map, [lane], startS, Math.min(lane.length - 2, at + 10));
+    // (on past it, onto the street straight ahead, so the drive is long enough to score)
+    const next = map.successors(e.id).map(id => map.edges.get(id)).sort((a, b) => Math.abs(map.turnAngle(e.id, a.id)) - Math.abs(map.turnAngle(e.id, b.id)))[0];
+    const route = next ? routeFromLanes(map, [lane, map.lane(next.id, 0)], startS, Math.min(next.length - 2, 50)) : routeFromLanes(map, [lane], startS, Math.min(lane.length - 2, at + 10));
     return { id: challenge.id, start: { edge: lane.edge, lane: lane.idx, s: startS, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, startS) },
       route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, pxoCrossing: cw.id };
   }
