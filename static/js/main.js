@@ -552,10 +552,15 @@ export async function boot() {
     },
   });
 
-  async function applyRoute(data, pt, title) {
-    if (world.restrictions) {
+  // Routes from elsewhere (explorer and scenic drives) are routed again to obey turn restrictions;
+  // a newer destination picked meanwhile wins. Resolves false when no drive started.
+  let routeGeneration = 0;
+  async function applyRoute(data, pt, title, checked = false) {
+    const generation = ++routeGeneration;
+    if (world.restrictions && !checked) {
       const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
-      if (!res.routes.length) { hud.badge("No legal route to this destination", "safety", 2200); return; }
+      if (generation !== routeGeneration) return false;
+      if (!res.routes.length) { hud.badge("No legal route to this destination", "safety", 2200); return false; }
       data = res.routes[0];
     }
 
@@ -567,6 +572,7 @@ export async function boot() {
     hud.badge(`route: ${world.route.summary}`, "", 2200);
     if (!autopilot.enabled) toggleAutopilot();
     startDrive(title || `Drive to ${map.nearestLane(...pt)?.lane.edgeRef.name || "your destination"}`, world.route);
+    return true;
   }
 
   let pausedBeforeLab = false;
@@ -592,7 +598,7 @@ export async function boot() {
     onScenic: async driver => {
       const { drives } = await api("/api/drives", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi } });
       if (!drives.length) throw new Error("Try another position or city in Explore cities.");
-      setHour("golden"); selectBrain("rules"); await applyRoute(drives[0].route, drives[0].destination, drives[0].title);
+      setHour("golden"); selectBrain("rules"); if (!(await applyRoute(drives[0].route, drives[0].destination, drives[0].title))) return;
       if (driver === "manual") { autopilot.setEnabled(false); hud.setAutopilot(false); drive.driver = "manual"; }
       world.paused = false;
     },
@@ -631,7 +637,7 @@ export async function boot() {
     try {
       const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
       if (!res.routes.length) { hud.badge("no route to that point", "safety", 1500); return; }
-      await applyRoute(res.routes[0], res.routes[0].polyline.at(-1));
+      await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
     } catch (err) {
       hud.badge(`routing failed: ${err.message}`, "safety", 2000);
     }

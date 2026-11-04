@@ -258,6 +258,8 @@ export class NpcPath {
       const desired = turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);
       if (!legalBusLane(this.map, next, desired, this.busLanePolicy.clock, "straight", Infinity, false, this.bike ? "bicycle" : "car")) {
         for (let k = desired - 1; k >= 0; k--) if (legalBusLane(this.map, next, k, this.busLanePolicy.clock, "straight", Infinity, false, this.bike ? "bicycle" : "car")) return k;
+        // (a bus lane on the left, as on some one-way streets: the nearest lane to its right)
+        for (let k = desired + 1; k < edge.lanes; k++) if (legalBusLane(this.map, next, k, this.busLanePolicy.clock, "straight", Infinity, false, this.bike ? "bicycle" : "car")) return k;
       }
     }
     return this.bike ? edge.lanes - 1 : turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);

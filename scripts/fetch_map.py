@@ -48,12 +48,12 @@ def main(argv: list) -> int:
         print("Bounding box must be W,S,E,N in degrees or a preset name.")
         return 2
     print("bbox W,S,E,N = %s" % ",".join("%.5f" % v for v in bbox))
-    if "--restrictions" in argv:
-        pack = build_pack(bbox, MAPS_DIR, log=print)
-        fetch.fetch_osm_xml(bbox, MAPS_DIR, force=True, log=print)
-        build_restrictions(bbox, MAPS_DIR, pack, force=True, log=print)
-        return 0
     try:
+        if "--restrictions" in argv:
+            pack = build_pack(bbox, MAPS_DIR, log=print)
+            fetch.fetch_osm_xml(bbox, MAPS_DIR, force=True, log=print)
+            build_restrictions(bbox, MAPS_DIR, pack, force=True, log=print)
+            return 0
         if "--crossings" in argv:
             # Rebuild only the sidecar; never rebuild the street pack or other layers.
             pack = build_pack(bbox, MAPS_DIR, log=print)

@@ -17,7 +17,7 @@ const { DriveScore } = await import('../static/js/sim/drive-score.js');
 const root = new URL('../data/maps/', import.meta.url);
 function load(key, version = 2) {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
-  for (const layer of ['transit','crossings','zones','rail','calming','scrambles']) {
+  for (const layer of ['transit','crossings','zones','rail','calming','scrambles','buslanes','restrictions']) {
     const p = new URL(`${key}.${layer}.v${layer === 'crossings' ? version : 1}.json`, root);
     if (fs.existsSync(p)) pack[layer] = JSON.parse(fs.readFileSync(p));
   }

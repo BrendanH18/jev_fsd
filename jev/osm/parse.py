@@ -14,8 +14,8 @@ TRANSIT_ROUTES = ("bus", "trolleybus", "tram")
 
 class OsmData:
     """nodes: id -> (lat, lon, tags). ways: list of {id, nodes: [node ids], tags}. relations: list of
-    {id, members: [(type, ref, role)], tags}, only bus, trolleybus and tram routes and multipolygons that
-    are schools or playgrounds."""
+    {id, members: [(type, ref, role)], tags}, only bus, trolleybus and tram routes, turn restrictions
+    (type=restriction), and multipolygons that are schools or playgrounds."""
 
     def __init__(self):
         self.nodes: Dict[int, tuple] = {}

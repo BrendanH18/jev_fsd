@@ -19,6 +19,15 @@
   X signs identify them. Leaving early is `pxo_early_goes`, reported only after a PXO is used.
 - New challenge, "Wait for the far curb" (`pxo-far-curb`): Metcalfe Street, Ottawa. A slow walker
   leaves the inner lane clear while still crossing the rest of this one-way street.
+- Bus-only lanes: a new layer beside each pack, `<key>.buslanes.v1.json` (`jev/osm/bus_lanes.py`,
+  `scripts/fetch_map.py ... --buslanes`), with 89 reserved lanes across five maps and their posted
+  hours. Traffic and the driven car stay out of one while it is in effect, except in the last 50 m
+  before a right turn or to park or pull out at the curb; buses use it. Lanes are drawn red with BUS
+  ONLY markings. The audit counts `bus_lane_driving` (metres in the lane the car is actually in),
+  reported only once a bus lane has been in effect. Opt-in `World` option `busLanes`, on in free
+  drives unless `?buslanes=0`.
+- New challenge, "Buses only" (`bus-lanes`): Main Street, Mount Pleasant, 8:00. Keep out of the bus
+  lane, then move into it in the last 50 m before the right turn.
 - Added opt-in OSM via-node turn restrictions, conditional weekday/time signs, legal routing and traffic choices, prohibited-turn scoring, and the “No left turn” Bathurst Street challenge. Layers cover all twelve preset maps; unsupported via-way and condition syntax is recorded explicitly.
 
 - Speed humps, tables, cushions and bumps (`static/js/sim/traffic-calming.js`). A new layer beside each
@@ -1359,11 +1368,3 @@ dry, rain, fog, and snow.
 ## 0.1.0
 
 First release: the simulator, the Jev and Rules drivers, the decision panel, and the benchmark.
-
-### Bus-only lanes
-
-- Added reserved-lane layers for all twelve Canadian presets, including conditional hours.
-- Free drives enable bus lanes (`?buslanes=0` disables them): cars stay out until
-  the last 50 m before a right turn or an actual curb parking manoeuvre; buses use them.
-- Added BUS ONLY/diamond paint, red lane surfaces, audited illegal metres and
-  the “Buses only” Main Street challenge in Mount Pleasant.
