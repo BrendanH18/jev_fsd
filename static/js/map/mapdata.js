@@ -181,6 +181,7 @@ export class MapData {
     // railway tracks and their level crossings with the streets (jev/osm/rail.py; sim/rail.js)
     this.rail = pack.rail || null;
     // school and playground zones (jev/osm/zones.py), each edge's stretches of them in order
+    this.buslanes = pack.buslanes?.lanes || [];
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
     // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in

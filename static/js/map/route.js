@@ -4,6 +4,7 @@
 
 import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js";
 import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
+import { legalBusLane, routeBusLane } from "../sim/bus-lanes.js";
 import { CAR } from "../sim/vehicle.js";
 import { PEEK_SHORT_M } from "../sim/priority.js";
 
@@ -284,6 +285,20 @@ export class Route {
       if (sh.at <= s || sh.chain !== chain) continue;
       if (sh.at - s > PREPARE_LANE_M) break;
       idx = sh.to;
+    }
+    if (this.busLanePolicy) {
+      const b = routeBusLane(this, s, this.busLanePolicy.clock, this.busLanePolicy.curb);
+      if (b && !legalBusLane(this.map, b.edge, idx, this.busLanePolicy.clock, b.turn, b.remaining, this.busLanePolicy.curb)) {
+        const legal = info.offsets.map((_, k) => k).filter(k => legalBusLane(this.map, b.edge, k, this.busLanePolicy.clock, b.turn, b.remaining, this.busLanePolicy.curb));
+        if (legal.length) idx = legal.reduce((a,k) => Math.abs(k-idx) < Math.abs(a-idx) ? k : a);
+      }
+      // Prepare in the general lane before a straight continuation becomes reserved.
+      const starts = this.laneEdgeStarts();
+      for (let j = i + 1; j < this.edges.length && starts[j] - s < PREPARE_LANE_M && this.sameLanes(j - 1); j++) {
+        if (!legalBusLane(this.map, this.edges[j], idx, this.busLanePolicy.clock)) {
+          for (let k = idx - 1; k >= 0; k--) if (legalBusLane(this.map, this.edges[j], k, this.busLanePolicy.clock)) { idx = k; break; }
+        }
+      }
     }
     return { lanes: info.lanes, idx, lineIdx: info.idx, offsets: info.offsets, ring: info.ring, chain, ahead: idx !== info.idx, center: this.laneOffsetAt(s, idx) };
   }

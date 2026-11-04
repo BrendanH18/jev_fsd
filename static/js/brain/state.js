@@ -59,6 +59,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.speed_zone = { kind: z.kind, ...(z.name ? { name: z.name } : {}), limit: r1(z.limit_mps), in_effect: ZONE_HOURS[z.kind],
       ...(z.in_zone ? { in_zone: true } : { starts_in_m: r1(Math.max(0, z.starts_in_m)) }), ...(z.ends_in_m !== null ? { ends_in_m: r1(z.ends_in_m) } : {}) };
   }
+  if (snap.bus_lane) state.bus_lane = snap.bus_lane;
   if (snap.traffic_calming) {
     const c = snap.traffic_calming;
     state.traffic_calming = { kind: c.name, speed: r1(c.speed_mps), ...(c.over ? { over: true } : { starts_in_m: r1(Math.max(0, c.starts_in_m)) }) };
@@ -314,6 +315,7 @@ export function situationClauses(snap) {
       ? `The car is in a ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}): the limit is ${kmh} km/h${z.ends_in_m !== null ? ` for the next ${Math.round(z.ends_in_m)} m` : ""}, and children may step out from between parked cars. Keep to it; \`car.target_speed\` already does.`
       : `A ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}), starts ${Math.round(Math.max(0, z.starts_in_m))} m ahead: slow to ${kmh} km/h by its sign; \`car.target_speed\` already does.`);
   }
+  if (snap.bus_lane?.in_effect) out.push(`Bus-only lane: stay out except within the final 50 m before a right turn or to park/pull out at the curb.`);
   if (snap.traffic_calming) {
     const c = snap.traffic_calming, kmh = Math.round(c.speed_mps * 3.6);
     out.push(c.over

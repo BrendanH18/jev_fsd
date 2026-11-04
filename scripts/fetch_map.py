@@ -14,6 +14,7 @@
     uv run scripts/fetch_map.py ... --zones                       # rebuild only the zones, from the raw OSM
                                                                   # (downloaded if it is not cached)
     uv run scripts/fetch_map.py ... --rail                        # rebuild only the level crossings, likewise
+    uv run scripts/fetch_map.py ... --buslanes                    # rebuild only the bus-lane layer
     uv run scripts/fetch_map.py ... --calming                     # rebuild only the speed humps and the
                                                                   # scramble crossings, likewise
 """
@@ -28,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from jev.config import MAPS_DIR, Settings, parse_bbox  # noqa: E402
 from jev.osm import fetch  # noqa: E402
 from jev.osm.pack import build_pack, pack_path  # noqa: E402
+from jev.osm.bus_lanes import build_buslanes, buslanes_path
 from jev.osm.calming import build_calming, calming_path  # noqa: E402
 from jev.osm.crossings import build_crossings, crossings_path  # noqa: E402
 from jev.osm.rail import build_rail, rail_path  # noqa: E402
@@ -46,23 +48,27 @@ def main(argv: list) -> int:
     print("bbox W,S,E,N = %s" % ",".join("%.5f" % v for v in bbox))
     try:
         calm = "--calming" in argv
-        only = "--transit" in argv or "--zones" in argv or "--rail" in argv or calm
+        busonly = "--buslanes" in argv
+        only = "--transit" in argv or "--zones" in argv or "--rail" in argv or calm or busonly
         pack = build_pack(bbox, MAPS_DIR, force=force and not only, log=print)
         if "--transit" in argv:
             # (the pack stays as it is: only its bus routes, crosswalks, zones and level crossings are rebuilt,
             # from today's OSM)
             fetch.fetch_osm_xml(bbox, MAPS_DIR, force=True, log=print)
-        elif "--zones" in argv or "--rail" in argv or calm:
+        elif "--zones" in argv or "--rail" in argv or calm or busonly:
             fetch.fetch_osm_xml(bbox, MAPS_DIR, log=print)
+        buslanes = build_buslanes(bbox, MAPS_DIR, pack, force=force or busonly, log=print)
         transit = build_transit(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
         crossings = build_crossings(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
-        zones = build_zones(bbox, MAPS_DIR, pack, force=force or (only and "--rail" not in argv and not calm), log=print)
-        rail = build_rail(bbox, MAPS_DIR, pack, force=force or (only and "--zones" not in argv and not calm), log=print)
+        zones = build_zones(bbox, MAPS_DIR, pack, force=force or (only and "--rail" not in argv and not calm and not busonly), log=print)
+        rail = build_rail(bbox, MAPS_DIR, pack, force=force or (only and "--zones" not in argv and not calm and not busonly), log=print)
         calming = build_calming(bbox, MAPS_DIR, pack, force=force or calm, log=print)
         scrambles = build_scrambles(bbox, MAPS_DIR, pack, force=force or calm, log=print)
     except fetch.FetchError as err:
         print("FAILED: %s" % err)
         return 1
+    if buslanes:
+        print("buslanes: %s (%d lanes)" % (buslanes_path(MAPS_DIR, bbox), len(buslanes["lanes"])))
     if transit:
         print("transit: %s (%d routes, %d stops)" % (transit_path(MAPS_DIR, bbox), len(transit["routes"]), len(transit["stops"])))
     if crossings:

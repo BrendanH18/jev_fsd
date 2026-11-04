@@ -1112,3 +1112,23 @@ a baseline comparison when a change affects driving.
 - Inspired by [JevPilot](https://github.com/standardagents/jevpilot).
 
 Released under the [MIT License](../LICENSE).
+
+## Bus-only lanes
+
+`jev/osm/bus_lanes.py` builds `<key>.buslanes.v1.json` from the raw ways;
+`--buslanes` rebuilds only this layer without changing street packs. Lane lists,
+counts, busway sides and conditional hours map onto existing directed edge/lane
+indices. Weekday/time windows are minutes since midnight; unknown schedules are
+retained and conservatively active. The simulator has no calendar: Monday is the
+default, with an optional `clock.day` (Monday=0). No clock means inactive.
+
+`World.busLanes` enables `sim/bus-lanes.js`, sensing `bus_lane`, route lane choice,
+NPC lane choice and gap-checked lane changes, candidate filtering and both local
+agents. Cars may enter a reserved lane in the final **50 m** before a right turn,
+or during the actual curb parking/pull-out manoeuvre. Buses retain access;
+explicit taxi/bicycle permissions are kept in the layer. The audit measures
+`bus_lane_driving` in metres; more than 1 m fails the drive (tolerance for lane
+projection at joins). It is reported only after an active lane is encountered.
+Red surfaces and BUS ONLY/diamond paint follow fixed ground render ordering.
+No random stream is drawn with the option off. Focused check:
+`node --experimental-default-type=module scripts/test_bus_lanes.mjs`.

@@ -343,3 +343,7 @@ the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Rendering by
 [JevPilot](https://github.com/standardagents/jevpilot).
 
 Released under the [MIT License](LICENSE).
+
+Free drives also respect mapped bus-only lanes and their operating hours, with
+BUS ONLY/diamond markings. Try **Buses only** in Drive Lab to practise entering
+the reserved curb lane only within the final 50 m before a right turn.

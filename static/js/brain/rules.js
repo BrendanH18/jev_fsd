@@ -48,9 +48,12 @@ export class RulesBrain {
     let best = null;
     for (const c of eligible) {
       const s = c.sim;
+      // Prefer leaving an active reserved lane as soon as the gap allows.
+
       // a lane change is judged against the speed the car could keep in the new lane
       const vWant = Math.min(c.laneTarget ?? vDesired, snap.limit, c.law.lane ? vTurnLane : Infinity);
       let cost = -1.0 * s.progress_m + 2.0 * Math.abs(s.lane_err_end) + 0.05 * Math.abs(s.heading_err_deg) + 0.8 * Math.abs(s.end_speed - vWant);
+      if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) cost -= 20;
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
       if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !i.right_on_red?.go) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;

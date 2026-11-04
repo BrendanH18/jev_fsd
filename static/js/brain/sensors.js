@@ -1,6 +1,7 @@
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
 
+import { routeBusLane, legalBusLane } from "../sim/bus-lanes.js";
 import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
 import { advanceHolds, approachPhase, isScramble, movementSignal, protectedLeft, scrambleState, STOP_ZONE_M } from "../sim/signals.js";
@@ -281,6 +282,11 @@ export function buildSnapshot(world, executing = null) {
     const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, { list: world.crowd.list.filter((p) => visible.includes(p)) });
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
     const vehicles = visible.filter((o) => o.kind !== "pedestrian");
+    if (world.busLanes) {
+      route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
+      const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
+      if (b) snap.bus_lane = { edge: b.edge, lanes: b.lanes.map(l => l.lane), in_effect: b.active, entering_allowed: b.entering_allowed, approach_m: b.approach_m, block_end_in_m: b.remaining };
+    }
     const lane = snap.lane = laneState(route, p, executing && executing.law);
     snap.right_hook = rightHook(world, p, frontS, lane);
     snap.emergency = emergencyYield(world, p, frontS, lane, visible);
@@ -1406,6 +1412,10 @@ function laneOptions(snap, world) {
     // (a snow plow, only on the left and only when the car may pass it: sim/snow-plow.js)
     else side.offer = slowAhead && !(f.id === sp?.id && (dir === "right" || !sp.may_pass)) && side.target_v > f.speed + 2 && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M) ? "pass"
       : moveOver && dir === "left" && (side.until_s ?? route.length) > rs.s_front_route + MOVE_OVER_PAST_M && !inJunction(CHANGE_JUNCTION_M) ? "move_over" : null;
+    if (world.busLanes) {
+      const b = routeBusLane(route, s, world.clock, route.busLanePolicy?.curb);
+      if (b && !legalBusLane(world.map, b.edge, lane.route_index + delta, world.clock, b.turn, b.remaining, route.busLanePolicy?.curb)) side.offer = null;
+    }
     lane.sides[dir] = side;
   }
 }

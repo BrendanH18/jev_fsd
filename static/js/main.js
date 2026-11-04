@@ -35,6 +35,7 @@ import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { calmingNotice } from "./sim/traffic-calming.js";
 import { TRUCK_COUNT, isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
+import { buildBusLanes } from "./render/bus-lanes.js";
 import { buildCalming, rideOver } from "./render/traffic-calming.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
@@ -184,7 +185,7 @@ export async function boot() {
     // and signals with a scramble crossing run their all-walk phase, with no right turn on red
     // (`?scramble=0` runs them as any other signal)
     const scrambles = params.get("scramble") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, busLanes: params.get("buslanes") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -201,6 +202,7 @@ export async function boot() {
     autopilot = new Autopilot(world, callbacks);
   }
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
+  if (world.busLanes) view.scene.add(buildBusLanes(map));
   if (world.calming) view.scene.add(buildCalming(map));
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));

@@ -157,3 +157,12 @@ with the bus routes, and `uv run scripts/fetch_map.py <preset> --rail` rebuilds 
 To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
 data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep
 using `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.
+
+Bus-only lanes are a separate `<key>.buslanes.v1.json` layer, built with
+`uv run scripts/fetch_map.py <preset> --buslanes`. Raw OSM is downloaded if absent;
+only the layer is committed. Existing pack endpoints and centreline geometry map
+way tags onto lanes, without rebuilding packs. All twelve presets have layers;
+five contain mapped reserved lanes. Conditional schedules are retained, including
+weekday and multiple time windows; unsupported schedules stay reserved. Busway
+opposite lanes that have no corresponding directed pack edge cannot be added by
+a layer. Map data © OpenStreetMap contributors.
