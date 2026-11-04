@@ -18,9 +18,9 @@ const { CautiousAgent } = await import('../static/js/agents/cautious.js');
 let checks = 0;
 function test(name, fn) { fn(); checks++; console.log('✓ '+name); }
 const pack = JSON.parse(fs.readFileSync(new URL('../data/maps/4a96d42cb3f2.v6.pack.json', import.meta.url)));
-for (const name of ['transit','crossings','zones','rail','calming','scrambles','restrictions']) {
-  const file = new URL(`../data/maps/4a96d42cb3f2.${name}.v1.json`, import.meta.url);
-  if (fs.existsSync(file)) pack[name] = JSON.parse(fs.readFileSync(file));
+for (const name of ['transit','crossings','zones','rail','calming','scrambles','buslanes','restrictions']) {
+  const file = [2, 1].map(v => new URL(`../data/maps/4a96d42cb3f2.${name}.v${v}.json`, import.meta.url)).find(u => fs.existsSync(u));
+  if (file) pack[name] = JSON.parse(fs.readFileSync(file));
 }
 const map = new MapData(pack), ch = CHALLENGES.find(c => c.id === 'no-left-turn'), scenario = challengeScenario(map, ch);
 const fromLane = map.lane(scenario.start.edge, scenario.start.lane);
