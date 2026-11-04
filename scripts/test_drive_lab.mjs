@@ -20,8 +20,9 @@ const load = id => {
   const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url)));
   const transit = new URL(`../data/maps/${names[id]}.transit.v1.json`, import.meta.url);
   if (fs.existsSync(transit)) pack.transit = JSON.parse(fs.readFileSync(transit));
-  const crossings = new URL(`../data/maps/${names[id]}.crossings.v1.json`, import.meta.url);
-  if (fs.existsSync(crossings)) pack.crossings = JSON.parse(fs.readFileSync(crossings));
+  // (crossings v2, with Ontario's pedestrian crossovers, where a map has it)
+  const crossings = [2, 1].map(v => new URL(`../data/maps/${names[id]}.crossings.v${v}.json`, import.meta.url)).find(u => fs.existsSync(u));
+  if (crossings) pack.crossings = JSON.parse(fs.readFileSync(crossings));
   const zones = new URL(`../data/maps/${names[id]}.zones.v1.json`, import.meta.url);
   if (fs.existsSync(zones)) pack.zones = JSON.parse(fs.readFileSync(zones));
   const rail = new URL(`../data/maps/${names[id]}.rail.v1.json`, import.meta.url);
