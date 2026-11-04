@@ -27,6 +27,7 @@ export class RulesBrain {
       if (i.give_way?.wait_for && i.give_way.bumper_to_hold_m < 1.5) stop = true;
     }
     if (snap.following && snap.following.gap_m < 3 && snap.following.speed < 0.5) stop = true;
+    if (snap.pxo?.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;

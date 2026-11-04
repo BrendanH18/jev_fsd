@@ -1,3 +1,4 @@
+import { pxoPedestrian } from "./pxo.js";
 // Pedestrians walk sidewalks and cross at junctions; drivers yield to crossings in their path.
 // Signal crossings only during walk; unmarked corners when no vehicle arrives within a few seconds.
 // Marked crosswalks between junctions (jev/osm/crossings.py): people walking past one often cross
@@ -73,12 +74,14 @@ export class Crowd {
     this.streetIndex = streets;
     // marked crosswalks between junctions, on the street they cross (`s` along its base edge)
     this.marked = [];
-    for (const c of map.crosswalks || []) {
+    this.pxo = !!this.world.pxo;
+    for (const c of [...(map.crosswalks || []), ...(this.pxo ? map.pxos || [] : [])]) {
+      if (c.pxo && !this.pxo) continue;
       const e0 = map.edges.get(c.edge);
       const st = e0 && streets.get([e0.from, e0.to].sort().join("|") + "|" + Math.round(e0.length));
       if (!st) continue;
       const e = st.edge, s = projectPoint(e.pts, e.cum, [c.x, c.y]).s;
-      const cw = { id: c.id, st, s, markings: c.markings, ends: { 1: offsetPoint(e, s, sidewalkOffset(e, 1)), [-1]: offsetPoint(e, s, sidewalkOffset(e, -1)) } };
+      const cw = { id: c.id, ...(c.pxo ? { pxo: true, beacons: c.beacons } : {}), st, s, markings: c.markings, ends: { 1: offsetPoint(e, s, sidewalkOffset(e, 1)), [-1]: offsetPoint(e, s, sidewalkOffset(e, -1)) } };
       (st.crosswalks ||= []).push(cw);
       this.marked.push(cw);
     }
@@ -102,6 +105,10 @@ export class Crowd {
         const e = l.st.edge, L = e.cum[e.cum.length - 1];
         const d = Math.min(L / 2, list.length >= 3 ? half + CROSS_BEYOND_CURB_M : 0.5);
         l.s = l.out ? d : L - d;                 // position along the base edge
+        if (this.pxo) {
+          const pxo = this.marked.find(c => c.pxo && c.st === l.st && Math.abs(c.s - l.s) < 16);
+          if (pxo) { l.s = pxo.s; l.pxo = pxo.id; }
+        }
         l.ends = {};
         for (const side of [1, -1]) l.ends[side] = offsetPoint(e, l.s, sidewalkOffset(e, side));
         l.group = inter ? groupOf(inter, headingAt(e.pts, e.cum, l.s)) : null;
@@ -311,6 +318,7 @@ export class Crowd {
         continue;
       }
       const wp = ped.path[0];
+      if (this.pxo && wp.cross?.leg?.pxo && !wp.cross.diagonal) wp.cross.marked = wp.cross.leg.pxo;
       if (wp.cross && !ped.crossing) {
         // at the curb: wait for the walk phase or a safe gap
         if (!this.mayCross(wp.cross, t)) { ped.v = 0; ped.waiting += dt; continue; }
@@ -444,7 +452,7 @@ export function crosswalkConflict(pts, cum, sFrom, sTo, crowd, laneHalf = 1.8) {
     const len = dist(c.from, c.to);
     const along = ((ped.x - c.from[0]) * (c.to[0] - c.from[0]) + (ped.y - c.from[1]) * (c.to[1] - c.from[1])) / len;
     const toPath = hit.u * len - along;   // > 0: still approaching the path
-    if (toPath < -laneHalf) continue;       // already past the car's lane
+    if (toPath < -laneHalf && !pxoPedestrian(crowd, ped)) continue;       // already past the car's lane
     if (toPath > laneHalf + YIELD_AHEAD_M + len) continue;
     best = { s: hit.s, ped, toPath };
   }

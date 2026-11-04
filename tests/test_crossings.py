@@ -109,7 +109,7 @@ class CrossingTests(unittest.TestCase):
             built = build_crossings(bbox, maps, pack)
             self.assertEqual(len(built["crossings"]), 1)
             self.assertEqual(load_crossings(bbox, maps), built)
-            self.assertEqual(json.loads(crossings_path(maps, bbox).read_text())["crossings_version"], "1")
+            self.assertEqual(json.loads(crossings_path(maps, bbox).read_text())["crossings_version"], "2")
 
     def test_every_bundled_map_has_its_crossings_on_its_own_edges(self):
         total = 0

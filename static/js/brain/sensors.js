@@ -8,6 +8,7 @@ import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
+import { pxoAhead } from "../sim/pxo.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
 import { headingAt, pointAt, projectPoint } from "../map/mapdata.js";
@@ -286,6 +287,14 @@ export function buildSnapshot(world, executing = null) {
     snap.emergency = emergencyYield(world, p, frontS, lane, visible);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
     snap.bus = busPullingOut(world, frontS, visible);
+    if (world.pxo) {
+      const pxo = pxoAhead(world, frontS);
+      if (pxo) {
+        snap.pxo = pxo;
+        const d = pxo.bumper_to_crosswalk_m;
+        if (!snap.pedestrian || d < snap.pedestrian.bumper_to_crosswalk_m) snap.pedestrian = { id: pxo.pedestrian_ids[0], bumper_to_crosswalk_m: d, s_route: pxo.stop_s_route + 2, to_path_m: 0, speed: 0 };
+      }
+    }
     snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
     snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
     snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);

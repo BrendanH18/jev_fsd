@@ -1,5 +1,6 @@
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
+import { auditPxo, ontarioMap } from "./pxo.js";
 import { Vehicle, CAR } from "./vehicle.js";
 import { headingAt, projectPoint } from "../map/mapdata.js";
 import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopMemory } from "./signals.js";
@@ -195,8 +196,11 @@ export class World {
   // `calming`: traffic and the driven car slow for speed humps, tables, cushions and bumps, and the audit
   // counts hard hits (sim/traffic-calming.js). `scrambles`: signals with a scramble crossing run their
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, pxo = false } = {}) {
     this.map = map;
+    this.pxo = !!pxo && ontarioMap(map);
+    this.pxoSeen = false;
+    this.pxoLines = new Map();
     this.seed = seed;
     this.visibility = new Visibility(map);
     this.staticObstacles = new StaticObstacles(map);
@@ -358,6 +362,7 @@ export class World {
     this._previousStaticPose = poseOf(this.ego);
     this.staticContacts.clear();
     this.calmingAxle?.clear();
+    this.pxoLines?.clear();
     this._lastFront = null;
     this.lastRoad = null;
     this.lastSignal = null;
@@ -609,6 +614,7 @@ export class World {
     this.auditPlows();
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
+    if (this.pxo) auditPxo(this);
     if (this.calming) this.auditCalming();
     if (this.collectionSeen) this.auditCrew();
     this.auditKerb();

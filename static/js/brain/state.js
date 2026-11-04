@@ -115,6 +115,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     const f = snap.following;
     state.following = { id: f.id, ...(f.kind !== "car" ? { kind: f.kind } : {}), gap_m: r1(f.gap_m), gap: gapLabel(f.gap_m, f.closing_mps), speed: r1(f.speed), closing_mps: r1(f.closing_mps) };
   }
+  if (snap.pxo) state.pxo = { crossing: snap.pxo.id, occupied: true, wait_until: "everyone reaches the far curb across the whole roadway" };
   if (snap.pedestrian) {
     const p = snap.pedestrian;
     state.pedestrian = { crossing_m: r1(Math.max(0, p.bumper_to_crosswalk_m)), distance: distLabel(p.bumper_to_crosswalk_m - 2), in_path: p.to_path_m < 1.8, yield: true, ...(p.mid_block ? { mid_block: true } : {}) };
@@ -303,7 +304,7 @@ export function situationClauses(snap) {
     else if (i.cross_traffic_moving) out.push(atLine ? "The car is at a roundabout's yield line and a car in the roundabout has the right of way: hold still until it has passed." : `A roundabout is ${m} m ahead and a car in it has the right of way: slow down and stop at the yield line if it has not passed.`);
     else out.push(`A roundabout is ${m} m ahead and no approaching ring traffic is visible: check sight lines and enter cautiously, go counter-clockwise${exit}.`);
   }
-  if (snap.pedestrian) {
+  if (snap.pedestrian && !snap.pxo) {
     const p = snap.pedestrian, m = Math.max(0, Math.round(p.bumper_to_crosswalk_m));
     const where = p.mid_block ? "mid-block, outside a crosswalk" : "in the crosswalk";
     out.push(p.bumper_to_crosswalk_m < STOP_ZONE_M ? `A pedestrian is crossing ${where} right in front of the car: hold still until they have cleared the car's path.` : `A pedestrian is crossing ${where} ${m} m ahead: slow down and stop short of them until they have cleared the car's path.`);
@@ -349,6 +350,7 @@ export function situationClauses(snap) {
   }
   if (snap.work_zone) out.push(workZoneClause(snap));
   if (snap.lane_closure) out.push(closureClause(snap.lane_closure));
+  if (snap.pxo) out.push(`An Ontario pedestrian crossover (PXO), with amber warning beacons rather than a traffic signal, is ${Math.max(0, Math.round(snap.pxo.bumper_to_crosswalk_m))} m ahead. Stop 2 m short of its centre (stop_for_pedestrian), and stay stopped until EVERY pedestrian has crossed the WHOLE roadway and reached the far curb, even after your lane clears. The beacons alone do not decide when to go.`);
   if (snap.double_parked) out.push(vanClause(snap));
   if (snap.snow_plow) out.push(plowClause(snap.snow_plow));
   if (snap.cyclist_pass) out.push(cyclistClause(snap.cyclist_pass));
