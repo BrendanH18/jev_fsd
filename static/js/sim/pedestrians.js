@@ -9,6 +9,9 @@
 // bins at the kerb and back, one now and then crossing behind it to the far kerb (sim/collection-truck.js).
 // At a scramble crossing everyone crosses on the all-walk,
 // and now and then someone goes straight across the junction to the corner opposite (sim/signals.js).
+// School crossing guards walk children across marked
+// crosswalks in school zones; the crowd leaves them to their post until a child is across
+// (sim/crossing-guard.js).
 
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
@@ -304,6 +307,7 @@ export class Crowd {
       if (ped.frozen > 0) { ped.frozen -= dt; ped.v = 0; continue; }   // knocked down
       if (ped.held) { ped.v = 0; continue; }                            // (waiting for a challenge to start)
       if (ped.pause > 0) { ped.pause -= dt; ped.v = 0; continue; }     // (a garbage crew at the bins, or climbing on)
+      if (ped.guard) continue;                                          // (a crossing guard and the children with them: sim/crossing-guard.js)
       if (!ped.path.length && ped.home) { home = ped.gone = true; continue; }
       if (!ped.path.length) {
         if (ped.then) { this.walkAlong(ped, ped.then.st, ped.then.side, ped.then.s, ped.then.dir); ped.then = null; }

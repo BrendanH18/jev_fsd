@@ -14,6 +14,7 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   world.outages.step(dt);
   world.doubleParked.step(dt);
   world.stepOuts.step(dt);
+  world.crossingGuards.step(dt);
   fleet.step(dt);
   world.crowd.step(dt);
   world.t += dt;

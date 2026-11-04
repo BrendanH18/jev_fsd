@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- School crossing guards at marked mid-block crosswalks in school zones while the zone is in effect.
+  Small groups of children gather; the guard waits for a safe stopping gap, raises a round red STOP
+  paddle, walks them across and returns to the curb. Traffic and cyclists wait until everyone is off
+  the whole roadway. Sensing, Rules, the cautious agent and model wording handle the stop; the audit,
+  metrics and coaching count `guard_violations` only after a guard has stood out in the drive.
+  Guards and children are pedestrians, with a render-only hi-vis vest and paddle. Opt-in `World`
+  option `guards`, on in free drives unless `?guards=0`; no work or random draws when off.
+- New challenge, "Stop for the guard" (`crossing-guard`): Rue Berri beside École
+  Louis-Hippolyte-Lafontaine in Montréal, morning. Stop for three children and wait for the guard
+  to return to the curb before proceeding.
+
 - Speed humps, tables, cushions and bumps (`static/js/sim/traffic-calming.js`). A new layer beside each
   map pack, `<key>.calming.v1.json` (`jev/osm/calming.py`, built from the raw OSM download by
   `scripts/fetch_map.py ... --calming`), places every node tagged `traffic_calming=hump`, `table`,

@@ -14,6 +14,8 @@
 // the right, and only with a clear view ahead on the left (sim/snow-plow.js). With `passCyclists` on, on a
 // two-way street with one lane each way a driver behind a cyclist riding in the lane passes it through
 // the oncoming lane, the minimum passing distance clear, once that lane is clear (sim/cyclist-pass.js).
+// With `guards` on, everyone stops short of a school crosswalk while its crossing guard holds up the
+// STOP sign, until the guard and every child are off the road (sim/crossing-guard.js).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -43,6 +45,7 @@ import { AHEAD_M as LC_AHEAD_M, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL,
 import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
 import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass, queuedBehind, ridingIn, wayClear as cyclistWayClear } from "./cyclist-pass.js";
 import { onStreet } from "./double-parked.js";
+import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -950,6 +953,10 @@ export class NpcFleet {
       // short of it while letting someone in (sim/lane-closure.js)
       const forMerge = lz ? this.mergeHold(n, lz, path, front) : null;
       if (forMerge && forMerge.gap < gap) { gap = Math.max(0.05, forMerge.gap); leadV = forMerge.v; }
+      // at a school crosswalk: short of it while a crossing guard holds up the STOP sign, or anyone is
+      // still in the road there, once it could stop (sim/crossing-guard.js; cyclists too)
+      const forGuard = world.crossingGuards?.active ? this.guardHold(n, path, front) : null;
+      if (forGuard !== null && forGuard < gap) { gap = Math.max(0.05, forGuard); leadV = 0; }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -1721,6 +1728,19 @@ export class NpcFleet {
     const rear = lc.mergerRear(z), q = rear && projectPoint(path.pts, path.cum, [rear.x, rear.y], null);
     if (q && q.s > path.s && (!hold || q.s - front - 2 < hold.gap)) hold = { gap: Math.max(0, q.s - front - 2), v: rear.v };
     return hold;
+  }
+
+  // Where a driver stops for a school crossing guard's STOP sign, as metres from its front, or null:
+  // GUARD_STOP_M short of the crosswalk's centre, once it could stop there braking at the owed rate when
+  // the sign went up (and from then on while it is up, or anyone is still in the road); a driver too
+  // close to stop goes on, giving way to anyone crossing in its path as usual.
+  guardHold(n, path, front) {
+    const hit = this.world.crossingGuards.holdAhead(path.pts, path.cum, front - GUARD_STOP_M, front + GUARD_LOOK_M);
+    if (!hit) { n.guardStop = null; return null; }
+    const toStop = hit.s - GUARD_STOP_M - front;
+    if (!this.world.crossingGuards.owes(hit.post, n, toStop)) return null;
+    n.guardStop = hit.key;
+    return Math.max(0.05, toStop - 0.5);
   }
 
   flaggerHold(n, wz, front) {
