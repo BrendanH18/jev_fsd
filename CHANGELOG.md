@@ -1351,3 +1351,11 @@ dry, rain, fog, and snow.
 ## 0.1.0
 
 First release: the simulator, the Jev and Rules drivers, the decision panel, and the benchmark.
+
+### Bus-only lanes
+
+- Added reserved-lane layers for all twelve Canadian presets, including conditional hours.
+- Free drives enable bus lanes (`?buslanes=0` disables them): cars stay out until
+  the last 50 m before a right turn or an actual curb parking manoeuvre; buses use them.
+- Added BUS ONLY/diamond paint, red lane surfaces, audited illegal metres and
+  the “Buses only” Main Street challenge in Mount Pleasant.

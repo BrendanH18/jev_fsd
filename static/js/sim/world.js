@@ -1,5 +1,6 @@
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
+import { auditBusLanes } from "./bus-lanes.js";
 import { Vehicle, CAR } from "./vehicle.js";
 import { headingAt, projectPoint } from "../map/mapdata.js";
 import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopMemory } from "./signals.js";
@@ -206,7 +207,7 @@ export class World {
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false } = {}) {
     this.map = map;
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -263,6 +264,8 @@ export class World {
     this.cyclistPass = null;
     // speed humps and the like (sim/traffic-calming.js): whether anyone slows for them; whether the car
     // has crossed one this drive; and, for each near it, how far ahead of its front axle it was last tick
+    this.busLanes = !!busLanes;
+    this.busLanesSeen = false;
     this.calming = !!calming;
     this.calmingSeen = false;
     this.calmingAxle = new Map();
@@ -434,7 +437,7 @@ export class World {
     return !!hit;
   }
 
-  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg } : null; }
+  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(Number.isInteger(clock.day) ? { day: clock.day } : {}) } : null; }
 
   // Where the ego is relative to the road network (cached per tick). `limit` is the street's, or a
   // school or playground zone's while it is in effect there (`zone`).
@@ -624,6 +627,7 @@ export class World {
     this.auditPlows();
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
+    if (this.busLanes) auditBusLanes(this, dt);
     if (this.calming) this.auditCalming();
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();

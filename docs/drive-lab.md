@@ -94,3 +94,7 @@ stateful adapters need their own reset/replay strategy. Rules uses only the rest
 Each city now has a distinct procedural facade palette; non-Vancouver cities also have
 stylized silhouettes outside the map. These are decorative city cues, not geographically
 surveyed landmarks. Playable roads, building footprints and collision geometry retain OSM data.
+
+**Buses only** (`bus-lanes`, Mount Pleasant, Main Street, 08:00): keep out of the
+active bus lane, then merge into it within 50 m of the final right turn. Rules and
+the cautious starter share the lane restrictions and normal merge gap checks.

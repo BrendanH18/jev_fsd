@@ -15,6 +15,7 @@
 // more than 3 m/s^2, stops there until it has pulled out. One that cannot, or is already beside it,
 // carries on, and the bus waits for it. On a faster road the bus waits for a gap instead.
 
+import { busLaneActive } from "./bus-lanes.js";
 import { BUS, CAR } from "./vehicle.js";
 import { isJunction } from "./emergency.js";
 
@@ -141,4 +142,10 @@ function wrap(a) {
   while (a > Math.PI) a -= 2 * Math.PI;
   while (a <= -Math.PI) a += 2 * Math.PI;
   return a;
+}
+
+// Prefer a mapped reserved lane while it operates; outside its hours use the
+// normal curb lane. Stops still use the existing curb approach and gap checks.
+export function busTravelLane(map, edge, clock) {
+  return (map.buslanes || []).find(l => l.edge === edge.id && busLaneActive(l, clock))?.lane ?? edge.lanes - 1;
 }
