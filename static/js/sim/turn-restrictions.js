@@ -12,7 +12,9 @@ export function turnBanned(map, from, to, clock) {
 }
 export function turnRestrictionAhead(world, s) {
   if (!world.restrictions || !world.route) return null;
+  // (the first banned turn within reach, so a nearer turn that is allowed does not hide it)
   const route = world.route;
+  let first = null;
   for (let i = 0; i < route.edges.length - 1; i++) {
     const records = (world.map.restrictions || []).filter(r => r.from === route.edges[i]);
     if (!records.length) continue;
@@ -20,9 +22,11 @@ export function turnRestrictionAhead(world, s) {
     const at = route.laneEdgeStarts()[i + 1];
     const distance = at - s;
     if (distance < -3 || distance > 100) continue;
-    return { from: edge.id, to: route.edges[i+1], distance_m: distance, kinds: records.map(r => r.kind), in_effect: records.some(r => restrictionActive(r, world.clock)), banned: turnBanned(world.map, edge.id, route.edges[i+1], world.clock) };
+    const hit = { from: edge.id, to: route.edges[i+1], distance_m: distance, kinds: records.map(r => r.kind), in_effect: records.some(r => restrictionActive(r, world.clock)), banned: turnBanned(world.map, edge.id, route.edges[i+1], world.clock) };
+    if (hit.banned) return hit;
+    first ||= hit;
   }
-  return null;
+  return first;
 }
 // Observe actual lane transitions, independent of the planned route (manual driving included).
 export function auditRestrictions(world) {

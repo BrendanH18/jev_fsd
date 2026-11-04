@@ -634,8 +634,10 @@ export async function boot() {
 
   async function setDestination(pt) {
     if (lab?.reviewing) lab.live();
+    const generation = ++routeGeneration;  // (a destination picked after this one, whose route comes back first, wins)
     try {
       const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
+      if (generation !== routeGeneration) return;
       if (!res.routes.length) { hud.badge("no route to that point", "safety", 1500); return; }
       await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
     } catch (err) {

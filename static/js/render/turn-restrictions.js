@@ -1,12 +1,30 @@
 import * as THREE from 'three';
 import { pointAt, headingAt } from '../map/mapdata.js';
-// Render-only regulatory signs, raised above the ground.
+// Render-only regulatory signs, raised above the ground. A ban that applies only at certain times has a
+// plate under it with its hours and days, as on the street ("7:00-9:00 MON-FRI").
+const STEP = 1.3;  // (signs on one approach stack this far apart, room for an hours plate under each)
+const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const clockText = (m) => `${Math.floor(m / 60) % 24}:${String(m % 60).padStart(2, '0')}`;
+function hoursText(c) {
+  const d = [...c.days].sort((a, b) => a - b), run = d.every((x, i) => !i || x === d[i - 1] + 1);
+  const days = d.length === 7 ? '' : d.length === 1 ? DAYS[d[0]] : run ? `${DAYS[d[0]]}-${DAYS[d.at(-1)]}` : d.map(x => DAYS[x]).join(' ');
+  return `${clockText(c.start)}-${clockText(c.end)}${days ? ' ' + days : ''}`;
+}
+function hoursPlate(condition) {
+  const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 80;
+  const c = canvas.getContext('2d'); c.fillStyle = 'white'; c.fillRect(0, 0, 256, 80);
+  c.strokeStyle = 'black'; c.lineWidth = 4; c.strokeRect(3, 3, 250, 74);
+  c.fillStyle = 'black'; c.font = 'bold 30px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(hoursText(condition), 128, 42, 236);
+  return new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.28), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), side: THREE.DoubleSide }));
+}
 export function buildRestrictions(map) {
   // (one sign for each kind of restriction on an approach, stacked up its pole)
   const group = new THREE.Group(), drawn = new Set(), stacked = new Map();
   for (const r of map.restrictions) {
-    if (drawn.has(`${r.from}:${r.kind}`)) continue;
-    drawn.add(`${r.from}:${r.kind}`);
+    const key = `${r.from}:${r.kind}:${r.condition ? hoursText(r.condition) : ''}`;
+    if (drawn.has(key)) continue;
+    drawn.add(key);
     const level = stacked.get(r.from) || 0; stacked.set(r.from, level + 1);
     const e = map.edges.get(r.from), s = Math.max(0, e.length - 15);
     const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
@@ -18,11 +36,16 @@ export function buildRestrictions(map) {
     if (r.kind.startsWith('no_')) { c.strokeStyle = '#d11920'; c.lineWidth = 11; c.beginPath(); c.moveTo(18,110); c.lineTo(110,18); c.stroke(); }
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9,0.9), new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(canvas), side:THREE.DoubleSide}));
     const right = (e.asphalt?.[1] || e.width/2) + 0.8;
-    sign.position.set(p[0]+Math.sin(h)*right,2.6+level,-p[1]+Math.cos(h)*right); sign.rotation.y = h + Math.PI/2;
-    const tall = level ? 1 : 2.6;  // (each sign above the first carries the pole up another metre)
+    sign.position.set(p[0]+Math.sin(h)*right,2.6+level*STEP,-p[1]+Math.cos(h)*right); sign.rotation.y = h + Math.PI/2;
+    const tall = level ? STEP : 2.6;  // (each sign above the first carries the pole up another STEP)
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,tall,6),new THREE.MeshStandardMaterial({color:0x999999}));
     pole.position.copy(sign.position); pole.position.y = sign.position.y - tall / 2;
     group.add(sign,pole);
+    if (r.condition) {
+      const plate = hoursPlate(r.condition);
+      plate.position.copy(sign.position); plate.position.y -= 0.6; plate.rotation.y = sign.rotation.y;
+      group.add(plate);
+    }
   }
   return group;
 }
