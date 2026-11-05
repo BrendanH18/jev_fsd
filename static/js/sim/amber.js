@@ -3,7 +3,7 @@
 // decision interval and actuator lag, then brake at the current grip's comfortable rate.
 // Drivers and the independent line-crossing audit use the same latched observation.
 import { comfort } from "./vehicle.js";
-import { phaseOf } from "./signals.js";
+import { phaseOf, secondsToGreen } from "./signals.js";
 
 export const AMBER_REACTION_S = 0.4;
 export const AMBER_SPEED_SLACK_MPS = 0.5;
@@ -18,13 +18,15 @@ export function amberStoppingDistance(vehicle) {
 // Maps live on vehicles, so normal checkpoints preserve them without global module state.
 export function observeAmber(vehicle, key, signal, distance, intersection, shows, t) {
   if (signal !== "yellow") {
-    // A stopped/stopping driver keeps the same smooth profile through red, until green.
+    // Keep the smooth profile only through this amber's following red, even if
+    // the driver leaves and returns without observing the intervening green.
     const stopping = vehicle.amberChoices?.get(key);
-    if (signal === "red" && stopping?.stop) return stopping;
+    if (signal === "red" && stopping?.stop && t < stopping.stop_until) return stopping;
     if (signal !== "unknown") vehicle.amberChoices?.delete(key);
     return null;
   }
-  const cycleStart = Math.round((t - phaseOf(intersection, t).u) * 1000);
+  const phases = phaseOf(intersection, t);
+  const cycleStart = Math.round((t - phases.u) * 1000);
   const phase = `${cycleStart}:${shows}`;
   vehicle.amberChoices ||= new Map();
   let choice = vehicle.amberChoices.get(key);
@@ -34,8 +36,12 @@ export function observeAmber(vehicle, key, signal, distance, intersection, shows
   if (!choice || choice.phase !== phase) {
     const stopping = amberStoppingDistance(vehicle);
     const speed = Math.max(0, vehicle.v);
+    const arrow = shows === "arrow_yellow" ? intersection.plan.advance : null;
+    const group = arrow ? arrow.group : phases.A === "yellow" ? "A" : "B";
+    const untilGreen = secondsToGreen(intersection, group, t, arrow?.edge ?? null, arrow ? "left" : "straight");
     const room = Math.max(0.5, distance - 0.5 - speed * (AMBER_REACTION_S + (vehicle.spec.accelLag || 0)));
     choice = { phase, stop: (speed < 0.2 && distance >= 0) || distance >= stopping, speed_mps: speed, distance_m: distance, stopping_distance_m: stopping,
+      stop_until: t + untilGreen,
       reaction_s: AMBER_REACTION_S + (vehicle.spec.accelLag || 0),
       stop_decel: Math.min(comfort().decel, Math.max(0.3, speed * speed / (2 * room))) };
     vehicle.amberChoices.set(key, choice);

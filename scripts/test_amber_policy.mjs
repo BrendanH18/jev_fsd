@@ -142,6 +142,27 @@ await test("a driver already across the line clears the junction when red follow
   assert.equal(d.choice.motion, "drive");
   assert.equal(w.violations.red_lights_run, 0);
 });
+await test("red profiles survive the following red across a cycle boundary, then expire before a later visit", () => {
+  const w = setup(50); buildSnapshot(w);
+  w.t = inter.plan.A.green + inter.plan.A.yellow + 0.01;
+  assert.equal(buildSnapshot(w).intersection.amber.stop, true);
+  w.t += inter.plan.cycle;
+  assert.equal(buildSnapshot(w).intersection.amber, null, "a later red is not the observed amber's red");
+  const vehicle = new Vehicle(0, 0, 0, 10), b = inter.plan.B;
+  const observed = observeAmber(vehicle, "b:sig", "yellow", 50, inter, "yellow", b.start + b.green + 0.01);
+  assert.equal(observeAmber(vehicle, "b:sig", "red", 20, inter, "red", inter.plan.cycle + 0.01).stop, observed.stop,
+    "B's following red spans the global cycle boundary");
+  assert.equal(observeAmber(vehicle, "b:sig", "red", 50, inter, "red", inter.plan.cycle * 2 + 0.01), null);
+  const original = inter.plan.advance;
+  inter.plan.advance = { edge: "w_in", group: "A", length: 8, clear: 4, style: "arrow" };
+  try {
+    const car = new Vehicle(0, 0, 0, 10);
+    observeAmber(car, "w_in:sig:arrow", "yellow", 50, inter, "arrow_yellow", 8.01);
+    assert.equal(observeAmber(car, "w_in:sig:arrow", "red", 20, inter, "red", 11.01).stop, true);
+    assert.equal(observeAmber(car, "w_in:sig:arrow", "red", 50, inter, "red", inter.plan.A.green + inter.plan.A.yellow + 0.01), null,
+      "a later solid-red visit must not reuse an earlier amber arrow");
+  } finally { if (original) inter.plan.advance = original; else delete inter.plan.advance; }
+});
 await test("ordinary NPCs share the latched stop decision and clearing speed ceiling", () => {
   for (const distance of [50, 10]) {
     const w = setup(distance), fleet = new NpcFleet(w, { count: 0, bikes: 0 });
@@ -153,8 +174,11 @@ await test("ordinary NPCs share the latched stop decision and clearing speed cei
     for (let k = 0; k < 180; k++) {
       stepWorld({ world: w, fleet, autopilot: { enabled: false } }, 1 / 60, w.t * 1000);
       const choice = n.amberChoices?.get("w_in:sig");
-      if (choice) { observed = true; assert.equal(choice.stop, distance === 50); fastest = Math.max(fastest, n.v); }
-      if (n.path.s + FRONT >= LINE) { crossed = true; break; }
+      if (choice) {
+        observed = true; assert.equal(choice.stop, distance === 50);
+        if (n.path.s - n.spec.rearOverhang <= ARM + map.crossingHalfWidth("w_in")) fastest = Math.max(fastest, n.v);
+      }
+      if (n.path.s + FRONT >= LINE) crossed = true;
     }
     assert.equal(observed, true);
     assert.equal(crossed, distance === 10);
