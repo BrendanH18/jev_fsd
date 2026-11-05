@@ -883,7 +883,9 @@ export class NpcFleet {
       // force until the rear is beyond the junction's crossing street.
       if (world.amberLights) for (const e of path.edges) {
         const choice = e.control && n.amberChoices?.get(`${e.id}:${e.control.id}`);
-        if (choice && !choice.stop && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id)) amberCap = Math.min(amberCap, choice.speed_mps);
+        if (!choice || choice.stop || world.t >= choice.stop_until) continue;
+        const lineS = e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
+        if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id)) amberCap = Math.min(amberCap, choice.speed_mps);
       }
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;

@@ -114,7 +114,7 @@
     }
   },
   "challenge_checks": "11 checks: both lessons and both drivers in dry/snow; smooth amber decisions; replay",
-  "policy_checks": 15,
+  "policy_checks": 16,
   "browser_unit_tests": 153,
   "python_tests": 238,
   "live_jev_new_cases": {
@@ -140,6 +140,7 @@
     "Rules and cautious release the retained amber stop preference once the shared right-on-red or left-on-red policy permits departure.",
     "Retained stop profiles expire at the next green, preserving red phases across cycle boundaries and rejecting stale observations on later visits.",
     "NPCs keep their latched amber speed ceiling until their rear clears the crossing street.",
-    "Ego sensing and pending/executing candidate laws retain the clearing ceiling through a subsequent red until the rear clears the crossing street."
+    "Ego sensing and pending/executing candidate laws retain the clearing ceiling through a subsequent red until the rear clears the crossing street.",
+    "The NPC carried ceiling applies only after entry and before its observation expires; stale choices cannot slow a later green approach."
   ]
 }

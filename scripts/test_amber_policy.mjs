@@ -175,6 +175,18 @@ await test("red profiles survive the following red across a cycle boundary, then
       "a later solid-red visit must not reuse an earlier amber arrow");
   } finally { if (original) inter.plan.advance = original; else delete inter.plan.advance; }
 });
+await test("NPC clearing caps do not affect a later approach, before entry or after expiry", () => {
+  for (const time of [yellowAt + 0.1, inter.plan.cycle * 2 + 15]) {
+    const w = setup(100, 12), fleet = new NpcFleet(w, { count: 0, bikes: 0 });
+    const n = new Vehicle(w.ego.x, w.ego.y, w.ego.psi, 10);
+    observeAmber(n, "w_in:sig", "yellow", 10, inter, "yellow", yellowAt);
+    n.v = 12; w.t = time; w.ego.x = w.ego.y = 1e5; w.route = null;
+    Object.assign(n, { id: "returning_amber", v0: 13.9, side: 0, stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
+    n.path.start("w_in", 0, LINE - FRONT - 100, [["e_out", 0]]); fleet.vehicles.push(n);
+    for (let k = 0; k < 30; k++) stepWorld({ world: w, fleet, autopilot: { enabled: false } }, 1 / 60, w.t * 1000);
+    assert.equal(n.v > 12, true, "a previous visit's ceiling must not brake the approach");
+  }
+});
 await test("ordinary NPCs share the latched stop decision and clearing speed ceiling", () => {
   for (const distance of [50, 10]) {
     const w = setup(distance), fleet = new NpcFleet(w, { count: 0, bikes: 0 });
