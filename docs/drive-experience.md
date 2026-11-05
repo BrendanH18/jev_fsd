@@ -148,3 +148,19 @@ With amber decisions enabled, ignoring a safe amber stop or speeding up to beat 
 once an amber has been observed. The replay marks the violation and the coach explains
 whether to stop safely or continue cautiously without accelerating. Red-light entry is
 still scored separately. See [the paired lessons](drive-lab.md#paired-amber-light-lessons).
+
+
+### Leave space to react
+
+Free drives and the **Brakes ahead** / **Make room** lessons use grip-aware following
+room. The coach and AI eyes show the current bumper gap and the target for speed and
+conditions. Rain and snow increase the target. A newly encountered car moving sideways into the gap
+gets a five-second recovery window before close-following deductions begin, once per
+leader per drive. The coach still warns immediately when a collision is approaching.
+
+With this option on, `close_following_s` measures time more than one metre below the
+shared target while moving above 2 m/s, outside that recovery window; `danger_s` does not
+charge the same leader's temporary TTC deficit during recovery. Other hazards, collisions
+and comfort penalties still count. Reports include `following_policy` and
+`following_recovery_s`. The old scoring formula remains for drives with the option off.
+Use `?followingdistance=0` to disable it in free drives.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Leave more following room for speed, poor grip and braking response. Free drives share
+  gap targets across AI drivers, traffic and coaching; AI eyes explains actual and desired
+  bumper gaps. A new close leader gets five seconds to rebuild space before following
+  deductions begin. `?followingdistance=0` preserves the previous policy.
+- Two new Kitsilano challenges: **Brakes ahead**, a hard-braking lead car in rain on West 6th
+  Avenue, and **Make room**, a moving car merging into your gap on West 4th Avenue.
+
 - Overnight flashing signals in free drives (`?nightflash=0` disables them): from 23:00 to
   05:00, signals joining clearly different road classes flash amber on the main street and red
   on the side street. Amber means slow and yield to people and traffic already crossing; red

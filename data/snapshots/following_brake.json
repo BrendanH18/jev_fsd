@@ -1,0 +1,118 @@
+{
+  "name": "following_brake",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 10,
+      "limit": 13.9,
+      "speed_vs_limit": "under",
+      "target_speed": 0,
+      "target_reason": "rain, limited visibility, leave braking room ahead",
+      "speed_vs_target": "above target"
+    },
+    "visibility": {
+      "range_m": 55,
+      "clear_path_m": 55,
+      "safe_speed_mps": 10.5,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 180,
+      "remaining_m": 180,
+      "destination": {
+        "right": 0,
+        "ahead": 180
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "Test Street",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0,
+      "conditions": "rain, wet road"
+    },
+    "following": {
+      "id": "leader",
+      "gap_m": 22,
+      "gap": "short",
+      "speed": 0,
+      "closing_mps": 10,
+      "target_gap_m": 43.2,
+      "safe_speed_mps": 0,
+      "target_headway_s": 2.6
+    },
+    "traffic": [
+      {
+        "id": "leader",
+        "right": 0,
+        "ahead": 26.5,
+        "speed": 0,
+        "heading": "same",
+        "moving": false
+      }
+    ],
+    "candidates": [
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 5.3,
+        "max_lateral_accel": 0,
+        "progress_m": 11.3,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 4.3,
+        "max_lateral_accel": 0,
+        "progress_m": 13.3,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ],
+    "rejected": {
+      "collision": 8
+    }
+  },
+  "questions": {
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Leave braking room behind the leader: the current gap is 22 m and the target for this speed and grip is 43.2 m. Ease off to rebuild a short gap; do not accelerate to close it. Brake harder if needed to avoid a collision. Conditions: rain, wet road. Grip is reduced, so `car.target_speed` sits below the limit and braking needs more room. Objects beyond 55 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "keep_lane_stop": "hold lane, stop, +11.3 m, clear",
+        "hard_brake": "hold lane, brake hard, +13.3 m, clear"
+      }
+    }
+  },
+  "local": {
+    "motion": {
+      "type": "choice",
+      "choice": "drive",
+      "probabilities": {
+        "drive": 1
+      },
+      "confidence": 1,
+      "local": true
+    }
+  },
+  "expect": {
+    "vector_in": [
+      "keep_lane_stop",
+      "hard_brake"
+    ]
+  }
+}

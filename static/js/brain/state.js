@@ -122,6 +122,8 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   if (snap.following) {
     const f = snap.following;
     state.following = { id: f.id, ...(f.kind !== "car" ? { kind: f.kind } : {}), gap_m: r1(f.gap_m), gap: gapLabel(f.gap_m, f.closing_mps), speed: r1(f.speed), closing_mps: r1(f.closing_mps) };
+    if (f.policy) Object.assign(state.following, { target_gap_m: r1(f.policy.target_gap_m), safe_speed_mps: r1(f.policy.safe_speed_mps),
+      target_headway_s: r1(f.policy.headway_s), gap: state.following.gap === "dangerous" ? "dangerous" : f.gap_m < f.policy.target_gap_m - 1 ? "short" : "comfortable" });
   }
   if (snap.headlights) state.headlights = { ...snap.headlights };
   if (snap.pxo) state.pxo = { crossing: snap.pxo.id, occupied: true, wait_until: "everyone reaches the far curb across the whole roadway" };
@@ -395,6 +397,7 @@ export function situationClauses(snap) {
   if (snap.emergency_ahead) out.push(`${/^[aeiou]/.test(snap.emergency_ahead.kind) ? "An" : "A"} ${snap.emergency_ahead.kind} with its siren on is ${Math.round(snap.emergency_ahead.gap_m)} m ahead, going the car's way: do not follow it within ${FOLLOW_M} m; \`car.target_speed\` already keeps the car back.`);
   if (snap.following) {
     const label = gapLabel(snap.following.gap_m, snap.following.closing_mps);
+    if (snap.following.policy) out.push(`Leave braking room behind the leader: the current gap is ${r1(snap.following.gap_m)} m and the target for this speed and grip is ${r1(snap.following.policy.target_gap_m)} m. Ease off to rebuild a short gap; do not accelerate to close it. Brake harder if needed to avoid a collision.`);
     if (snap.following.kind === "cyclist" && snap.following.gap_m < 30 && !snap.cyclist_pass) out.push("A cyclist is riding ahead in the lane: stay behind it at a safe gap; passing needs at least 1 m of space, and the candidates that would pass too close have already been removed.");
     else if (label === "dangerous" || label === "short") out.push(`The ${snap.following.kind === "parked car" ? "parked car" : "car"} ahead is close; keep a safe gap.`);
   }

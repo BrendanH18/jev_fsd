@@ -1,4 +1,5 @@
 import { observeAmber } from "../sim/amber.js";
+import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
 import { turnRestrictionAhead } from "../sim/turn-restrictions.js";
@@ -375,6 +376,7 @@ export function buildSnapshot(world, executing = null) {
       const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
       snap.following = { id: lead.vehicle.id, gap_m: gap, speed: lead.vehicle.v, closing_mps: ego.v - lead.vehicle.v, vehicle: lead.vehicle, s: lead.s,
         kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isTruck(lead.vehicle) ? TRUCK_NAME : isVan(lead.vehicle) ? "double-parked van" : isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car" };
+      if (world.followingDistance) snap.following.policy = followingPolicy(ego, snap.following);
     }
     const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
     if (behind.length) {
@@ -1563,7 +1565,9 @@ function laneOptions(snap, world) {
       && !(sp && side.rear?.id === sp.id && side.rear.gap_m < sp.keep_back_m);
     // (in a lane with a snow plow on its right, the car need not stay back of it: sim/snow-plow.js)
     const plowThere = sp && sp.lateral_route - span.offset > SAME_LANE_M ? null : sp;
-    side.target_v = desiredSpeed({ ...snap, snow_plow: plowThere, following: side.leader ? { gap_m: side.leader.gap_m, speed: side.leader.speed } : null }).v;
+    const sideFollowing = side.leader ? { gap_m: side.leader.gap_m, speed: side.leader.speed } : null;
+    if (sideFollowing && world.followingDistance) sideFollowing.policy = followingPolicy(world.ego, sideFollowing);
+    side.target_v = desiredSpeed({ ...snap, snow_plow: plowThere, following: sideFollowing }).v;
     const room = (side.until_s ?? route.length) - (s + FRONT);
     if (lane.shift) side.offer = delta === lane.from_delta && !inJunction(CHANGE_JUNCTION_M) ? "abort" : null;
     else if (Math.abs(delta) < Math.abs(lane.delta)) side.offer = inJunction(CHANGE_JUNCTION_M) ? null : "return";
@@ -1639,8 +1643,8 @@ export function desiredSpeed(snap) {
     const f = snap.following, lead = Math.max(0, f.speed);
     const safe = Math.max(0, f.gap_m - 4);
     const room = Math.max(0, f.gap_m - 3 + lead * lead / (2 * 4));
-    const vf = Math.min(lead + Math.min(2, safe / 3), stopSpeedFor(room, decel));
-    if (vf < v) { v = vf; reasons.push("car ahead"); }
+    const vf = f.policy?.safe_speed_mps ?? Math.min(lead + Math.min(2, safe / 3), stopSpeedFor(room, decel));
+    if (vf < v) { v = vf; reasons.push(f.policy ? "leave braking room ahead" : "car ahead"); }
   }
   // a cyclist the car cannot pass yet (sim/cyclist-pass.js): stay CYCLIST_FOLLOW_M behind it
   const cp = snap.cyclist_pass;

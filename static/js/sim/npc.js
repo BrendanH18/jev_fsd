@@ -1,3 +1,4 @@
+import { followingPolicy } from "./following.js";
 import { observeAmber } from "./amber.js";
 import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -1033,7 +1034,9 @@ export class NpcFleet {
       // (a snow plow keeps to its clearing speed, whatever the weather)
       // (and, with calming on, down to the speed to cross each speed hump at: sim/traffic-calming.js)
       const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, n.pull ? 5 : Infinity, vCalm);
+      const vFollow = this.world.followingDistance && n.lead && n.kind !== "bike"
+        ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps : Infinity;
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, n.pull ? 5 : Infinity, vCalm, vFollow);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

@@ -63,6 +63,9 @@ export class EvaluationTrace {
     if (!this.glareRecorded && world.highBeamsSeen && world.violations.glare_seconds > 0.8) {
       this.event("glare", "Failed to dip high beams", world.t); this.glareRecorded = true;
     }
+    if (score.followingEnabled && score.closeFollowing >= 1 && !this.followingRecorded) {
+      this.event("following_gap", "Following gap remained short after time to react", world.t); this.followingRecorded = true;
+    }
     if (score.hardBrakes > this.hardBrakes) this.event("hard_brake", "Hard braking", world.t, { count: score.hardBrakes - this.hardBrakes });
     this.hardBrakes = score.hardBrakes;
     if (!this.offRoadRecorded && world.violations.off_road_s >= 1) {

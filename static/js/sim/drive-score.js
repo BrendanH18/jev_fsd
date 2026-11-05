@@ -2,6 +2,7 @@
 // time, so pauses, frame rate and the decision API cannot change the score.
 import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
 import { egoPlow } from "./snow-plow.js";
+import { followingPolicy } from "./following.js";
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
 export const SPEED_GRACE_MPS = 5 / 3.6;
@@ -10,6 +11,7 @@ const round = (n, digits = 1) => Math.round(n * 10 ** digits) / 10 ** digits;
 // Closer than the stay-back distance less this, moving, behind a snow plow the car must stay back of,
 // is following it too closely (sim/snow-plow.js).
 const PLOW_CLOSE_SLACK_M = 10;
+const FOLLOWING_RECOVERY_S = 5;
 const COUNTERS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield" };
 
 export class DriveScore {
@@ -74,6 +76,11 @@ export class DriveScore {
     // distance, and cutting one off; reported only for a drive one rode near the car in)
     this.contraflow = false; this.contraflowMeets = 0; this.contraflowCutoffs = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
+    this.followingEnabled = !!world.followingDistance;
+    this.followingState = null; this.followingMessage = null;
+    this.followingMet = new Set();
+    this.followingNearby = new Map(); this.followingPose = null;
+    this.followingRecovery = 0;
     this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
     this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
     this.brakingCounted = false; this.lastGap = Infinity; this.lastTtc = Infinity;
@@ -233,7 +240,8 @@ export class DriveScore {
       : speeding ? "Ease off. You’re above the speed limit."
       : Math.abs(ego.latAccel || 0) > 3 ? "Slow down before the bend."
       : this.lastTtc < 1.5 ? "Brake gently now. The gap is closing."
-      : this.lastGap / Math.max(speed, 0.1) < 1.2 ? "Leave more space to the vehicle ahead."
+      : this.followingEnabled && this.followingMessage ? this.followingMessage
+      : !this.followingEnabled && this.lastGap / Math.max(speed, 0.1) < 1.2 ? "Leave more space to the vehicle ahead."
       : "Look ahead. Keep your inputs smooth.";
 
     this.sample += dt;
@@ -257,25 +265,57 @@ export class DriveScore {
     this.lastV = ego.v;
     // Use physical gaps, including objects outside the driver's observation. This evaluates the
     // drive, not what the model believed it could see. At most ten local queries per second.
-    let gap = Infinity, ttc = Infinity;
-    if (speed > 2) for (const other of world.obstaclesNear(ego.x, ego.y, 35)) {
+    let gap = Infinity, ttc = Infinity, leader = null, dangerWith = null;
+    const nextNearby = this.followingEnabled ? new Map() : null, pose = this.followingPose;
+    const egoSideMove = pose ? Math.abs((ego.x - pose.x) * Math.sin(pose.psi) - (ego.y - pose.y) * Math.cos(pose.psi)) : 0;
+    if (speed > 2) for (const other of world.obstaclesNear(ego.x, ego.y, this.followingEnabled ? Math.max(60, speed * 6 + 20) : 35)) {
       const [x, y] = other.center || [other.x, other.y];
       const rel = ego.toLocal(x, y);
-      if (rel.ahead <= 0 || Math.abs(rel.right) > (ego.spec?.width || 1.9) / 2 + 0.45 + (other.spec?.width || other.width || 1.8) / 2) continue;
+      const corridor = (ego.spec?.width || 1.9) / 2 + 0.45 + (other.spec?.width || other.width || 1.8) / 2;
+      if (nextNearby && other.spec) nextNearby.set(other.id, { x, y, right: rel.right });
+      if (rel.ahead <= 0 || Math.abs(rel.right) > corridor) continue;
       const front = ego.spec ? ego.spec.length - ego.spec.rearOverhang : 3.6;
       const g = rel.ahead - front - (other.spec?.length || other.length || 0.6) / 2;
       if (g <= 0) continue; // physical overlaps belong to collision auditing
       gap = Math.min(gap, g);
       const forwardSpeed = (other.v || 0) * Math.cos((other.psi || 0) - ego.psi);
-      if (speed - forwardSpeed > 0.5) ttc = Math.min(ttc, g / (speed - forwardSpeed));
+      if (speed - forwardSpeed > 0.5 && g / (speed - forwardSpeed) < ttc) { ttc = g / (speed - forwardSpeed); dangerWith = other; }
+      if (this.followingEnabled && other.spec && other.kind !== "pedestrian" && Math.cos((other.psi || 0) - ego.psi) > Math.SQRT1_2
+        && (!leader || g < leader.gap_m)) {
+        const previous = this.followingNearby.get(other.id);
+        const otherSideMove = previous && pose ? Math.abs((x - previous.x) * Math.sin(pose.psi) - (y - previous.y) * Math.cos(pose.psi)) : 0;
+        leader = { id: other.id, gap_m: g, speed: Math.max(0, forwardSpeed), vehicle: other,
+          entered: !!previous && Math.abs(previous.right) > corridor && otherSideMove > egoSideMove + 0.005 };
+      }
     }
     this.minGap = Math.min(this.minGap, gap);
     this.lastGap = gap; this.lastTtc = ttc;
-    if (gap / Math.max(speed, 0.1) < 1.2) this.closeFollowing += h;
-    if (ttc < 1.5) this.danger += h;
+    let recovering = false;
+    if (this.followingEnabled) {
+      this.followingMessage = null;
+      if (leader) {
+        const policy = followingPolicy(ego, leader), short = leader.gap_m < policy.target_gap_m - 1;
+        const previous = this.followingState;
+        if (previous?.id !== leader.id) {
+          // A new leader can take away a gap the driver had already left. Allow a bounded
+          // response window, not a permanent exemption for continuing to tailgate it.
+          this.followingState = { id: leader.id, until: this.elapsed + (leader.entered && short && !this.followingMet.has(leader.id) ? FOLLOWING_RECOVERY_S : 0) };
+          this.followingMet.add(leader.id);
+          if (this.followingState.until > this.elapsed) this.incident("following_recovery", "A vehicle entered the following gap: ease off and rebuild space", { gap_m: round(leader.gap_m), target_gap_m: round(policy.target_gap_m) });
+        }
+        recovering = short && this.elapsed < this.followingState.until;
+        if (recovering) this.followingRecovery += h;
+        else if (short) this.closeFollowing += h;
+        this.followingMessage = `${recovering ? "Rebuild space" : short ? "Ease off" : "Keep space"}: ${Math.round(leader.gap_m)} m gap, ${Math.round(policy.target_gap_m)} m target for speed and grip.`;
+      } else this.followingState = null;
+      this.followingNearby = nextNearby;
+      this.followingPose = { x: ego.x, y: ego.y, psi: ego.psi };
+    } else if (gap / Math.max(speed, 0.1) < 1.2) this.closeFollowing += h;
+    if (ttc < 1.5 && !(recovering && dangerWith === leader?.vehicle)) this.danger += h;
     if (!offRoad && !wrongWay && !speeding) {
       if (ttc < 1.5) this.coach = "Brake gently now. The gap is closing.";
-      else if (gap / Math.max(speed, 0.1) < 1.2) this.coach = "Leave more space to the vehicle ahead.";
+      else if (this.followingMessage) this.coach = this.followingMessage;
+      else if (!this.followingEnabled && gap / Math.max(speed, 0.1) < 1.2) this.coach = "Leave more space to the vehicle ahead.";
     }
   }
 
@@ -321,7 +361,9 @@ export class DriveScore {
     if (this.workZoneSpeeding > 0.5) tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
     if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
-    if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
+    if (this.closeFollowing > 1 || this.danger > 0.5) tips.push(this.followingEnabled
+      ? "Leave room for reaction and braking, with more space on slippery roads. If someone merges into your gap, ease off to rebuild it; brake firmly if needed to avoid a collision."
+      : "Aim for at least a two-second following gap when conditions allow.");
     if (this.glareSeconds > 0.8) tips.push("Dip high beams for oncoming and leading vehicles, fog and snow.");
     if (this.pxoEarlyGoes) tips.push("At an Ontario pedestrian crossover, stay stopped until everyone has reached the far curb across the whole roadway.");
     if (this.crewPasses) tips.push("Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.");
@@ -340,6 +382,7 @@ export class DriveScore {
       collisions, at_fault: atFault, red_lights: reds, stop_signs: stops, failed_to_yield: yields,
       speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, van_cutoffs: this.vanCutoffs, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
       close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
+      ...(this.followingEnabled ? { following_policy: "grip-and-response-v1", following_recovery_s: round(this.followingRecovery) } : {}),
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
       ...(this.plows ? { plow_close_s: round(this.plowClose), plow_right_passes: this.plowRightPasses, plow_cut_ins: this.plowCutIns } : {}),
       ...(this.closures ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges } : {}),
