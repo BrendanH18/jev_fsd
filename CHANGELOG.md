@@ -10,6 +10,25 @@
 - New Lab challenge, **After midnight** (seed 39042): Morris Street at Barrington Street,
   Halifax, 01:00. Stop at flashing red, then cross when the main street is clear.
 
+- Contraflow cyclists: a new layer beside each pack, `<key>.contraflow.v1.json`
+  (`jev/osm/contraflow.py`, `scripts/fetch_map.py ... --contraflow`), maps the one-way streets
+  cyclists may ride both ways (`oneway:bicycle=no`, `cycleway=opposite`, `opposite_lane`,
+  `cycleway:left=lane` with `cycleway:left:oneway=-1`, and the like) onto the packs' one-way
+  edges: 145 edges across nine maps, with a painted contraflow lane or just a shared street.
+  Cyclists ride against the traffic at the driver's left, at cyclist speeds, from their own random
+  stream, stopping for the signs and signals that face their way. Traffic and the driven car look
+  both ways: they wait short of the junction for one coming out of a street they turn or go
+  straight into, wait for one crossing their way as for oncoming traffic, and move over for one
+  coming the other way, stopping where that leaves less than the minimum passing distance. Sensing
+  reports `contraflow_cyclist`, with the new `yield_to_contraflow_cyclist` candidate and the
+  `fails_to_yield_to_contraflow_cyclist` and `passes_contraflow_cyclist_too_close` rejections;
+  Rules, the cautious agent and the model wording handle it. Cutting one off is a failure to yield;
+  that and meeting one too close are `contraflow_conflicts`, reported only once one has ridden
+  near the car. Contraflow lanes, sharrows and ONE WAY / EXCEPT BICYCLES signs (SENS UNIQUE /
+  EXCEPTÉ VÉLOS in Québec) are drawn. Opt-in `World` option `contraflow`, on in free drives unless
+  `?contraflow=0`; nothing is computed or drawn from a random stream with it off.
+- New challenge, "Both ways" (`contraflow`): turning right from Rue Drolet into Rue Villeneuve Est
+  in the Plateau, Montréal, while a cyclist comes out of it in its contraflow lane.
 - School crossing guards at marked mid-block crosswalks in school zones while the zone is in effect.
   Small groups of children gather; the guard waits for a safe stopping gap, raises a round red STOP
   paddle, walks them across and returns to the curb. Traffic and cyclists wait until everyone is off

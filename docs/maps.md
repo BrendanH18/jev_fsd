@@ -166,3 +166,16 @@ five contain mapped reserved lanes. Conditional schedules are retained, includin
 weekday and multiple time windows; unsupported schedules stay reserved. Busway
 opposite lanes that have no corresponding directed pack edge cannot be added by
 a layer. Map data © OpenStreetMap contributors.
+
+One-way streets cyclists may ride both ways are a separate `<key>.contraflow.v1.json` layer
+(`jev/osm/contraflow.py`), built with `uv run scripts/fetch_map.py <preset> --contraflow` from the
+raw OSM download (fetched if absent; only the layer is committed). It maps `oneway:bicycle=no`,
+`cycleway=opposite`/`opposite_lane`/`opposite_track`, `bicycle:backward=yes` and side lanes or tracks
+running against the traffic (`cycleway:left=lane` with `cycleway:left:oneway=-1` or `no`, and so on)
+onto the packs' one-way edges, by both endpoint node IDs or, failing that, by name and centreline.
+Each record says whether there is a painted lane or track (`kind`) or just a shared street, and on
+which side of the traffic it runs (`side`, almost always the driver's left). All twelve presets have
+layers; nine have contraflow streets: Montréal 38 edges, Québec City 25, Ottawa 24, Edmonton 18, Mount
+Pleasant 15, Winnipeg 10, Toronto 6, Victoria 5 and Halifax 4. Kitsilano, Calgary and Saskatoon have
+none. Separately mapped cycle tracks (`highway=cycleway`) are not in the street packs and are not
+added.

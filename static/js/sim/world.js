@@ -36,6 +36,7 @@ import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
+import { ContraflowRiders, auditContraflow } from "./contraflow.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -210,7 +211,9 @@ export class World {
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false } = {}) {
+  // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
+  // both ways for them (sim/contraflow.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false } = {}) {
     this.map = map;
     this.pxo = !!pxo && ontarioMap(map);
     this.pxoSeen = false;
@@ -308,6 +311,11 @@ export class World {
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     this.crossingGuards = new CrossingGuards(this, { enabled: guards, seed });
+    // contraflow cyclists (sim/contraflow.js): whether they ride, whether one has ridden near the car this
+    // drive, and the ones the car has met or cut off
+    this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
+    this.contraflowSeen = false;
+    this.contraflowCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -315,7 +323,9 @@ export class World {
   obstaclesNear(x, y, r) {
     // (a vehicle by its reference point, its rear axle: a long one's front is up to its length away)
     const out = this.npcs.filter((n) => { const m = r + Math.max(5, n.spec?.length || 0); return Math.abs(n.x - x) < m && Math.abs(n.y - y) < m; });
-    return out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
+    const all = out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
+    // (and contraflow cyclists, with that option on: sim/contraflow.js)
+    return this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
@@ -418,6 +428,7 @@ export class World {
     this.mergeCall = null; this.mergeWait = null; this.mergeLetIn = null;
     this.bikePasses?.clear(); this.cyclistPass = null;
     this.guardCalls?.clear();
+    this.contraflowCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -650,6 +661,7 @@ export class World {
     if (this.calming) this.auditCalming();
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();
+    if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
     this.auditKerb();
     leftSpace(this);
   }

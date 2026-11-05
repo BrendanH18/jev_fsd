@@ -31,6 +31,8 @@ export class RulesBrain {
     if (snap.pxo?.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
+    // (a cyclist riding against the one-way, at the point the car waits for it: sim/contraflow.js)
+    if (snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 1.5) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 1.5) stop = true;
     if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;

@@ -96,6 +96,7 @@ export class DeadlockDetector {
       || (snap && snap.junction_box && snap.junction_box.bumper_to_stop_m < 8)
       || (snap && snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 8)
       || (snap && snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 8)
+      || (snap && snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 8)
       || (snap && snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8)
       || (snap && snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 8)
       // (behind a cyclist that has stopped, at the gap it keeps to one it cannot pass yet)

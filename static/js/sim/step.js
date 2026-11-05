@@ -16,6 +16,8 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   world.stepOuts.step(dt);
   world.crossingGuards.step(dt);
   fleet.step(dt);
+  // (contraflow cyclists, with that option on: sim/contraflow.js)
+  if (world.contraflow.enabled) world.contraflow.step(dt);
   world.crowd.step(dt);
   world.t += dt;
   world.tick++;

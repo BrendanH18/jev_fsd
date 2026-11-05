@@ -184,6 +184,9 @@ export class MapData {
     this.rail = pack.rail || null;
     // school and playground zones (jev/osm/zones.py), each edge's stretches of them in order
     this.buslanes = pack.buslanes?.lanes || [];
+    // one-way streets cyclists may ride both ways (jev/osm/contraflow.py; sim/contraflow.js), by edge:
+    // { edge, kind: "lane" | "track" | "shared", side }
+    this.contraflow = new Map((pack.contraflow?.edges || []).filter((c) => this.edges.has(c.edge) && this.edges.get(c.edge).oneway).map((c) => [c.edge, c]));
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
     // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in
