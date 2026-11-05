@@ -388,3 +388,22 @@ function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   assert.equal(failed, 1);
   console.log("✓ the audit counts a car that stands in its lane while the vehicle gets past it");
 }
+
+{
+  // a contraflow cyclist (sim/contraflow.js) riding on along an ordinary street is in its way too
+  const { world, fleet } = setup({ front: -120, v: 0 });
+  Object.assign(world.ego, { x: 0, y: -150, psi: -Math.PI / 2 });
+  const lane = world.map.lane("w_in", 0), p = pointAt(lane.pts, lane.cum, 10);
+  const { AMBULANCE, BIKE } = await import("../static/js/sim/vehicle.js");
+  const amb = new Vehicle(p[0], 0, 0, 13, AMBULANCE);
+  Object.assign(amb, { id: "ambulance_t", kind: "ambulance", siren: true, side: -HALF, age: 0, v0: 15, driver: { aMax: 2.2, b: 3, s0: 3, T: 0.9, react: 0.3, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0, blockedBy: null, blockedFor: 0 });
+  amb.path = new NpcPath(world.map, fleet.random);
+  amb.path.start("w_in", 0, 10, [["e_out", 0]]);
+  fleet.vehicles.push(amb);
+  const rider = Object.assign(new Vehicle(amb.x + 50, 0, 0, 0, BIKE), { id: "contra_t", kind: "bike", contra: true });
+  world.contraflow.riders.push(rider);
+  let touched = false;
+  for (let k = 0; k < 12 * 60; k++) { fleet.step(1 / 60); world.t += 1 / 60; if (obbOverlap(amb.obb(), rider.obb(), 0)) touched = true; }
+  assert.equal(touched, false, "the ambulance never touches the cyclist");
+  console.log("✓ an ambulance keeps clear of a contraflow cyclist in its way");
+}

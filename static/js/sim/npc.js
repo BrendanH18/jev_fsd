@@ -666,7 +666,7 @@ export class NpcFleet {
         stepTrain(n, railIndex(this.map).tracks.get(n.rail.track), dt, [...all, ...world.crowd.list], (cab, o) => world.visibility.sees(cab, o), this.rails);
         continue;
       }
-      if (isEmergencyVehicle(n)) { this.emergencyStep(n, dt, all); continue; }
+      if (isEmergencyVehicle(n)) { this.emergencyStep(n, dt, riders.length ? all.concat(riders) : all); continue; }
       if (n.pull && n.pull.wait > 0) {
         n.signal = n.pull.lat > 0 ? "left" : "right";
         if (this.pullClear(n)) n.pull.wait -= dt;

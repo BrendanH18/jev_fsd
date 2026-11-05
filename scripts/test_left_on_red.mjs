@@ -30,21 +30,23 @@ const right = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hyp
 const names = { w: "West Street", e: "West Street", n: "North Street", s: "North Street" };
 const groups = { w: "A", e: "A", n: "B", s: "B" };
 // (`arms` sets the angle of each arm, degrees counter-clockwise from east; `buildings` are footprints)
-function junction({ arms = { w: 180, e: 0, n: 90, s: -90 }, buildings = [] } = {}) {
+// (`westLanes: 2` gives the car's one-way approach two lanes: lane 0 on the left, lane 1 on the right)
+function junction({ arms = { w: 180, e: 0, n: 90, s: -90 }, buildings = [], westLanes = 1 } = {}) {
   const ends = { c: [0, 0] }, edges = [], lanes = [];
   for (const [arm, deg] of Object.entries(arms)) ends[arm] = [ARM * Math.cos(deg * Math.PI / 180), ARM * Math.sin(deg * Math.PI / 180)].map((v) => Math.round(v * 1e6) / 1e6);
   for (const [id, from, to, control, arm] of Object.keys(arms).flatMap((arm) => [[`${arm}_in`, arm, "c", true, arm], [`${arm}_out`, "c", arm, false, arm]])) {
     const pts = [ends[from], ends[to]], [rx, ry] = right(...pts);
-    edges.push({ id, from, to, pts, length: ARM, lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: [-3.2, 3.2], parking: [0, 0],
+    const offsets = id === "w_in" && westLanes === 2 ? [-HALF, HALF] : [HALF];
+    edges.push({ id, from, to, pts, length: ARM, lanes: offsets.length, lane_width: 3.2, lane_offsets: offsets, asphalt: [-3.2, 3.2], parking: [0, 0],
       cls: "secondary", limit: 13.9, oneway: false, name: names[arm], ...(control ? { control: { type: "signal", id: "sig", s_line: LINE, group: groups[arm] } } : {}) });
-    lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
+    offsets.forEach((o, idx) => lanes.push({ edge: id, idx, pts: pts.map(([x, y]) => [x + rx * o, y + ry * o]) }));
   }
   const map = new MapData({ bbox: [-75.71, 45.40, -75.68, 45.42], extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20], edges, lanes,
     nodes: Object.entries(ends).map(([id, [x, y]]) => ({ id, x, y })),
     intersections: [{ id: "sig", x: 0, y: 0, offset_s: 0, vertices: ["c"], approaches: Object.keys(arms).map((a) => ({ edge: `${a}_in`, group: groups[a], s_line: LINE })) }],
     stops: [], buildings });
-  const routeData = (exit, dir) => {
-    const polyline = resample(joinLanes(map.lane("w_in", 0).pts, map.lane(exit, 0).pts));
+  const routeData = (exit, dir, from = westLanes === 2 ? 1 : 0) => {
+    const polyline = resample(joinLanes(map.lane("w_in", from).pts, map.lane(exit, 0).pts));
     return { id: `to_${exit}`, polyline, edges: ["w_in", exit], turns: dir ? [{ at_m: ARM, dir, street: names[exit[0]] }] : [], start_s: 0, goal_s: 120 };
   };
   return { map, routeData };
@@ -75,11 +77,11 @@ function car(id, x, y, psi, v = 0, extra = {}) {
 // from the left: southbound on North Street, `y` m north of the centre
 const fromLeft = (y, v = 11, extra = {}) => car("cross", -HALF, y, -Math.PI / 2, v, extra);
 const AT_LINE = -8 - 0.8 - FRONT;   // rear axle with the front bumper 0.8 m short of the line
-function setup({ x = AT_LINE, v = 0, npcs = [], route = LEFT, weather = "dry", t = RED, on = map, stopped = false } = {}) {
+function setup({ x = AT_LINE, y = -HALF, v = 0, npcs = [], route = LEFT, weather = "dry", t = RED, on = map, stopped = false } = {}) {
   setWeather(weather);
   const world = new World(on, { parked: 0, pedestrians: 0, weather, leftOnRed: true });
   world.t = t;
-  Object.assign(world.ego, { x, y: -HALF, psi: 0, v });
+  Object.assign(world.ego, { x, y, psi: 0, v });
   world.route = route ? new Route(route, on) : null;
   world.destination = world.route ? world.route.endPoint() : null;
   world.npcs = npcs;
@@ -184,6 +186,19 @@ const manual=setup({stopped:true}), manualPath=manual.route;
 manual.route=null; manual.destination=null;
 driveThrough(manual,manualPath,{seconds:10});
 assert.equal(manual.violations.red_lights_run,0,"manual legal left");
+// From a two-lane one-way approach, only the leftmost lane may turn left on red.
+{
+ const two = junction({ westLanes: 2 });
+ two.map.edges.get("w_in").oneway = true; two.map.edges.get("n_out").oneway = true;
+ // (the wider approach lengthens its green: its own red, with the street from the left on green)
+ const red2 = two.map.intersections.get("sig").plan.B.start + 1;
+ assert.equal(phaseOf(two.map.intersections.get("sig"), red2).A, "red");
+ for (const [label, lane, y, expected] of [["leftmost lane", 0, HALF, 0], ["right-hand lane", 1, -HALF, 1]]) {
+  const w = setup({ stopped: true, on: two.map, route: two.routeData("n_out", "left", lane), y, t: red2 });
+  driveThrough(w, w.route, { seconds: 10 });
+  assert.equal(w.violations.red_lights_run, expected, `left on red from the ${label}`);
+ }
+}
 // Scrambles are excluded even when the red is not currently in its all-walk phase.
 const { setScrambles } = await import("../static/js/sim/signals.js");
 const inter=map.intersections.get("sig");

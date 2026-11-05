@@ -18,6 +18,7 @@ const { buildLlmPrompt } = await import('../static/js/brain/llm-prompt.js');
 const { llmDecision } = await import('../static/js/brain/llm.js');
 const { decisionResult } = await import('../static/js/brain/jev.js');
 const { DriveRecorder } = await import('../static/js/lab/recorder.js');
+const { Autopilot } = await import('../static/js/brain/brain.js');
 const pack = JSON.parse(fs.readFileSync(new URL('../data/maps/ca5573a8d934.v6.pack.json', import.meta.url)));
 for (const name of ['transit','crossings','zones','rail','calming','scrambles','buslanes','restrictions','contraflow']) {
  const file = [2,1].map(v=>new URL(`../data/maps/ca5573a8d934.${name}.v${v}.json`,import.meta.url)).find(u=>fs.existsSync(u));
@@ -44,6 +45,10 @@ test('a contraflow cyclist coming the other way is traffic to dip for, in sensin
  // (as sensing asks: brain/sensors.js)
  assert.equal(headlights(w,w.ego,undefined,25).high_allowed,false);
  auditHighBeams(w,1);assert.equal(w.violations.glare_seconds,1);
+});
+test('taking over from the autopilot dips the high beams',()=>{
+ const w=open(world());const ap=new Autopilot(w);ap.setEnabled(true);w.ego.highBeam=true;
+ ap.setEnabled(false);assert.equal(w.ego.highBeam,false);
 });
 test('weather, daylight, streetlights and building occlusion',()=>{
  const w=open(world());assert.equal(headlights(w).high_allowed,true);

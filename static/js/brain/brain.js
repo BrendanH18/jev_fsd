@@ -75,6 +75,8 @@ export class Autopilot {
     if (!on && (this.world.park || this.world.parking)) this.parker.clear(this.world);
     if (!on) {
       this.world.stuckFor = 0;
+      // (the driver takes over on low beams: nothing chooses the beam while they drive, sim/high-beams.js)
+      if (this.world.highBeams) this.world.ego.highBeam = false;
       // (switched off twice, the one set aside is kept)
       if (this.world.turnaround) this.pausedTurnaround = this.world.turnaround;
       this.world.turnaround = null;

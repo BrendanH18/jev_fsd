@@ -591,7 +591,9 @@ export class World {
           // (never at a scramble crossing: sim/signals.js)
           const scramble = isScramble(inter);
           // The legacy rightOnRed record below also validates enabled one-way left turns.
-          const leftPending = this.leftOnRed && (this.map.out.get(edge.to) || []).some(id => leftOnRedAllowed(this, edge.id, id));
+          // (and only from the leftmost lane, lane 0, as for traffic: sim/npc.js `rightOnRed`)
+          const egoLane = this.leftOnRed ? this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 8)?.lane : null;
+          const leftPending = this.leftOnRed && egoLane?.edge === edge.id && egoLane.idx === 0 && (this.map.out.get(edge.to) || []).some(id => leftOnRedAllowed(this, edge.id, id));
           const pending = state === "red" && (this.map.rightOnRed || leftPending) && !scramble && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
           if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) }); }
           this.arrowCheck = arrow && inter ? { id: control.id, centre: [inter.x, inter.y], approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
