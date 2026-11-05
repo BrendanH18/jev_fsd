@@ -1,3 +1,4 @@
+import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
 import { setNightFlash, flashState } from "./night-flash.js";
 import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -216,8 +217,9 @@ export class World {
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false } = {}) {
     this.map = map;
+    this.amberLights = !!amberLights; this.amberLightsSeen = false;
     this.highBeams = !!highBeams; this.highBeamsSeen = false;
     this.pxo = !!pxo && ontarioMap(map);
     this.pxoSeen = false;
@@ -581,8 +583,23 @@ export class World {
       if (this.nightFlash && Math.abs(past) < 60 && (control.night_flash || (control.type === "signal" && flashState(this.map.intersections.get(control.id), control.group, this)))) this.nightFlashSeen = true;
       const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
+      // Observe independently of the selected manoeuvre, before auditing the real line crossing.
+      const amberInter = this.amberLights && control.type === "signal" ? this.map.intersections.get(control.id) : null;
+      const amberShows = amberInter ? approachPhase(amberInter, edge.id, this.t) : null;
+      // A manual takeover can keep navigation for a different turn. Observe the
+      // physical arrow independently; auditArrow judges the actual exit.
+      const amberArrow = amberShows === "arrow_yellow";
+      const amberSignal = amberInter ? movementSignal(amberShows, amberArrow ? "left" : rc?.turn || "straight") : null;
+      const amber = amberInter && this.visibility.canSee(this.ego, amberInter.x, amberInter.y)
+        ? observeAmber(this.ego, `${edge.id}:${control.id}${amberArrow ? ":arrow" : ""}`, amberSignal, -past, amberInter, amberShows, this.t) : null;
+      if (amber && !crossed) this.amberLightsSeen = true;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
         if (control.type === "signal") {
+          const amberViolation = amberSignal === "yellow" && amber && (amber.stop ? "safe_stop" : amber.max_speed_mps > amber.speed_mps + AMBER_SPEED_SLACK_MPS ? "sped_up" : null);
+          if (amberViolation && amberShows !== "arrow_yellow") {
+            this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
+            this.events.push({ type: "amber_light", reason: amberViolation });
+          }
           const inter = this.map.intersections.get(control.id);
           const shows = inter?.plan?.advance ? approachPhase(inter, rc ? rc.edge : edge.id, this.t) : this.phase(control.id)[control.group];
           // under a left arrow (green or turning yellow), which way it turns decides: judged once
@@ -601,6 +618,7 @@ export class World {
           const signed = this.redTurnSigns ? { bannedExits: redTurnExits(this, edge.id) } : {};
           if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) }); }
           this.arrowCheck = arrow && inter ? { id: control.id, centre: [inter.x, inter.y], approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
+            ...(amberShows === "arrow_yellow" && amberViolation ? { amberViolation } : {}),
             ...signed, stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed } : null;
           // the approach's heading and, on a route, the street it turns into (without one, the
           // street the car is heading into is the way it faces)
@@ -941,7 +959,14 @@ export class World {
     this.arrowCheck = null;
     const turned = wrap(ego.psi - a.approach);
     const exit = a.bannedExits?.length ? this.map.nearestLane(ego.x, ego.y, ego.psi, 8)?.lane.edge : null;
-    if (turned > Math.PI / 4 || (a.stopped && turned < -Math.PI / 4 && !a.bannedExits?.includes(exit))) return;
+    if (turned > Math.PI / 4) {
+      if (a.amberViolation) {
+        this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
+        this.events.push({ type: "amber_light", reason: a.amberViolation });
+      }
+      return;
+    }
+    if (a.stopped && turned < -Math.PI / 4 && !a.bannedExits?.includes(exit)) return;
     this.violations.red_lights_run++;
     this.events.push({ type: "red_light", arrow: true });
   }

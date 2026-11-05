@@ -1,3 +1,4 @@
+import { observeAmber } from "./amber.js";
 import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
 import { redTurnBanned } from "./red-turn-signs.js";
@@ -877,7 +878,15 @@ export class NpcFleet {
       // (and stays back the distance the law asks of it, less the room it leaves anyway)
       if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
-      let stopAt = null, flashCap = Infinity;
+      let stopAt = null, flashCap = Infinity, amberCap = Infinity;
+      // Entry-stop checks stop at the line; an amber clearing speed stays in
+      // force until the rear is beyond the junction's crossing street.
+      if (world.amberLights) for (const e of path.edges) {
+        const choice = e.control && n.amberChoices?.get(`${e.id}:${e.control.id}`);
+        if (!choice || choice.stop || world.t >= choice.stop_until) continue;
+        const lineS = e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
+        if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id)) amberCap = Math.min(amberCap, choice.speed_mps);
+      }
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
         // (a signal whose lights are out is an all-way stop: sim/outage.js)
@@ -891,7 +900,9 @@ export class NpcFleet {
           const after = path.edges[path.edges.indexOf(e) + 1];
           const st = movementSignal(approachPhase(this.map.intersections.get(e.control.id), e.id, world.t), after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight");
           if (st === "flashing_amber") { flashCap = NIGHT_CAUTION_MPS; if (this.boxBusy(n, e)) stopAt = Math.max(0, bumperToLine); }
-          const canStop = bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
+          const amber = world.amberLights ? observeAmber(n, `${e.id}:${ctl.id}`, st, bumperToLine, this.map.intersections.get(ctl.id), approachPhase(this.map.intersections.get(ctl.id), e.id, world.t), world.t) : null;
+          const canStop = amber ? amber.stop : bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
+          if (amber && !amber.stop) amberCap = Math.min(amberCap, amber.speed_mps);
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
           else if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
         } else if (ctl.type === "yield") {
@@ -1022,10 +1033,11 @@ export class NpcFleet {
       // (a snow plow keeps to its clearing speed, whatever the weather)
       // (and, with calming on, down to the speed to cross each speed hump at: sim/traffic-calming.js)
       const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, n.pull ? 5 : Infinity, vCalm);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, n.pull ? 5 : Infinity, vCalm);
       const D = n.driver || IDM;
       let a;
-      if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
+      if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
+      else if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
       else {
         const dv = n.v - leadV;
         // on a slippery road drivers leave more room and brake more gently

@@ -88,6 +88,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(i.dark ? { lights_out: true } : {}),
       ...(i.control === "yield" ? { roundabout: true, ring_traffic: i.cross_traffic_moving } : { cross_traffic_moving: i.cross_traffic_moving }),
     };
+    if (i.amber) state.intersection.amber = { stop: i.amber.stop, speed_at_observation_mps: r1(i.amber.speed_mps), distance_at_observation_m: r1(i.amber.distance_m), stopping_distance_m: r1(i.amber.stopping_distance_m) };
     if (i.control === "uncontrolled") state.intersection.right_of_way = RIGHT_OF_WAY[i.rule];
     if ((i.control === "signal" || i.control === "stop" || i.control === "uncontrolled") && (i.turn === "left" || i.turn === "uturn" || i.right_on_red)) state.intersection.turn = i.turn;
     if (i.give_way) {
@@ -293,12 +294,15 @@ export function situationClauses(snap) {
   const atLine = i && i.bumper_to_line_m < STOP_ZONE_M;
   if (i && i.control === "signal") {
     if (i.signal === "flashing_amber") out.push("Flashing amber: proceed cautiously at no more than 20 km/h, yielding to pedestrians and vehicles already in the junction.");
-    else if (i.bumper_to_line_m < -CLEARING_M && i.signal !== "green") out.push(`The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`);
+    else if ((i.clear_entered || i.bumper_to_line_m < -CLEARING_M) && i.signal !== "green") out.push(`The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`);
     else if (i.signal === "unknown") out.push(`The signal phase ${m} m ahead is not visible: approach cautiously and stop at the line unless a permitted phase becomes visible.`);
     else if (i.signal === "red" && i.left_on_red) out.push(turnOnRedClause(i, m, atLine, true));
     else if (i.signal === "red" && i.right_on_red) out.push(turnOnRedClause(i, m, atLine));
     else if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
-    else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
+    else if (i.signal === "yellow") out.push(i.amber
+      ? i.amber.stop ? `The signal ${m} m ahead is yellow. A safe stop was possible when amber was first observed: stop before the line and wait for green.`
+        : `The signal ${m} m ahead is yellow. The car was too close for a safe stop when amber was first observed: continue carefully if the path is clear, without speeding up above ${r1(i.amber.speed_mps)} m/s. Amber never overrides pedestrians, oncoming traffic or a blocked exit; red does not grant a new entry.`
+      : `The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
     if (i.advance) out.push(advanceClause(i));
     if (i.no_turn_on_red) out.push("A sign prohibits this turn on red. Wait at the line while the signal for this turn is red, even if the cross street is empty; the sign does not prohibit turning on green.");
@@ -481,7 +485,7 @@ function advanceClause(i) {
   if (a.light === "held") return "The approach opposite has an advance green: its left turns cross in front of the car, and oncoming traffic there is protected. The car's light stays red until the advance is over.";
   if (a.light === "flashing_green") return a.protected ? "The light is a flashing green, an advance green: oncoming traffic is held on red, so the car's left turn is protected and need not wait for it." : "The light is a flashing green, an advance green: the car may go; oncoming traffic is held on red.";
   if (a.light === "left_arrow") return a.protected ? "A green left arrow shows: the car's left turn is protected, and oncoming traffic is held on red." : `A green left arrow shows, for left turns only. The car ${way}, so its light is red: do not go with the cars turning left beside it, and wait for its own green.`;
-  return left ? "The left arrow has turned yellow: the protected turn is ending. Stop before the line if that is comfortable; once the arrow goes out, oncoming traffic has the green and the car must yield to it." : `The left arrow beside the car is turning yellow, but it is for left turns only. The car ${way}, and its light is still red.`;
+  return left ? i.amber ? "The left arrow has turned yellow: the protected turn is ending. Follow the amber stop decision above; once the arrow goes out, yield to oncoming traffic." : "The left arrow has turned yellow: the protected turn is ending. Stop before the line if that is comfortable; once the arrow goes out, oncoming traffic has the green and the car must yield to it." : `The left arrow beside the car is turning yellow, but it is for left turns only. The car ${way}, and its light is still red.`;
 }
 
 // A red light where the car turns right and a right turn on red is allowed after a full stop.

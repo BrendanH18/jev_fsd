@@ -16,11 +16,12 @@ export class RulesBrain {
   decideSync(snap, eligible) {
     // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
     const i = snap.intersection;
+    const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     const v = snap.ego.v;
     let stop = !!snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12;
     if (i) {
       const brakeDist = v * v / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
-      if (i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go) && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
+      if (i.control === "signal" && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go) && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
       if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) stop = true;
       if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) stop = true;
       if (waitsItsTurn(i) && i.bumper_to_line_m < 1.5) stop = true;
@@ -62,7 +63,8 @@ export class RulesBrain {
       if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index) && c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) cost -= 20;
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
-      if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
+      if (c.id === "stop_at_line" && amberStop && !snap.emergency) cost -= 12;
+      if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_turn_restriction") cost -= 30;
@@ -96,7 +98,7 @@ export class RulesBrain {
       if (best === null || cost < best.cost) best = { c, cost };
     }
     // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
-    const motion = stop && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park" ? "stop" : "drive";
+    const motion = stop && !(amberStop && best?.c.id === "stop_at_line") && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park" ? "stop" : "drive";
     return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
   }
 

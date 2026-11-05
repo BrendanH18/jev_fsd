@@ -34,7 +34,8 @@ The input is JSON:
 - \`observed.lanes\` appears on streets with several lanes in the car's direction: the lane the car is in, the lane its route uses, the gaps in the lanes beside it, and \`return_within_m\` while the car is outside its route's lane.
 
 How to choose \`candidate\`:
-- Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal it can stop for comfortably, a stop sign whose stop is not completed, an all-way stop where it is not the car's turn, or a roundabout yield line with ring traffic.
+- On yellow with \`intersection.amber.stop=false\`, continue only with a clear path and never speed up above \`intersection.amber.speed_at_observation_mps\`. Red still requires stopping before entry.
+- Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal whose \`intersection.amber.stop\` is true (or, without that field, one it can stop for safely), a stop sign whose stop is not completed, an all-way stop where it is not the car's turn, or a roundabout yield line with ring traffic.
 - Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car. At an Ontario pedestrian crossover (PXO), remain stopped until every pedestrian reaches the far curb across the whole roadway, even after the car’s lane clears.
 - Choose \`stop_for_oncoming\` when \`situation\` says the car is turning left and oncoming traffic has the right of way.
 - Choose \`stop_for_cyclist\` when \`situation\` says the car is turning right and a cyclist on its right has the right of way.

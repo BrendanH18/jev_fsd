@@ -1,3 +1,4 @@
+import { observeAmber } from "../sim/amber.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
 import { turnRestrictionAhead } from "../sim/turn-restrictions.js";
@@ -211,6 +212,14 @@ export function buildSnapshot(world, executing = null) {
     // it starts
     if (turns.length && turns[0].dir === "uturn" && turns[0].at_m > p.s && !world.turnaround) snap.nav.turn_round_in_m = turnaroundStopS(route, turns[0]) - p.s;
     const frontS = p.s + FRONT;
+    // Keep a legal amber entry's speed ceiling until the rear clears the
+    // crossing street, even after the ordinary control-look window moves on.
+    if (world.amberLights) for (const c of route.controls) {
+      const choice = ego.amberChoices?.get(`${c.edge}:${c.control.id}`);
+      const clearAt = (c.sJunction ?? c.sRoute + 8) + map.crossingHalfWidth(c.edge);
+      if (choice && !choice.stop && world.t < choice.stop_until && frontS >= c.sRoute && p.s - ego.spec.rearOverhang <= clearAt
+        && (!snap.amber_clear || choice.speed_mps < snap.amber_clear.speed_mps)) snap.amber_clear = choice;
+    }
     for (let k = 0; k < route.controls.length; k++) {
       const c = route.controls[k], next = route.controls[k + 1];
       // (a signal whose lights are out is an all-way stop, once the car can see that they are:
@@ -273,8 +282,9 @@ export function buildSnapshot(world, executing = null) {
       const redTurnBan = control.type === "signal" && routeRedTurnBanned(world, c);
       snap.intersection = {
         id: control.id, control: control.type, signal, group: control.group || null, advance,
+        ...(world.amberLights && control.type === "signal" && inter ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) } : {}),
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
-        entered, turn: c.turn || "straight",
+        entered, ...(world.amberLights && entered && control.type === "signal" ? { clear_entered: true } : {}), turn: c.turn || "straight",
         oncoming,
         // (never at a scramble crossing, sim/signals.js: `scramble` says so)
         right_on_red: control.type === "signal" && map.rightOnRed && !redTurnBan && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
@@ -1639,10 +1649,16 @@ export function desiredSpeed(snap) {
   const i = snap.intersection;
   // (a car just past a signal's line, short of CLEARING_M, still stops for it, unless it is turning
   // right or left on red)
-  if (i && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.control === "stop" && !i.stop_completed))) {
+  if (i && !i.clear_entered && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.control === "stop" && !i.stop_completed))) {
     // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line
-    const vs = i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
+    const vs = i.amber?.stop ? stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5 - Math.max(0, snap.ego.v) * i.amber.reaction_s), i.amber.stop_decel)
+      : i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
     if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
+  }
+  const amber = snap.amber_clear || i?.amber;
+  if (amber && !amber.stop) {
+    v = Math.min(v, amber.speed_mps);
+    reasons.push("too close to stop safely for amber: do not speed up");
   }
   if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) { v = 0; reasons.push("cross traffic"); }
   if (waitsItsTurn(i)) { v = 0; reasons.push("waiting its turn"); }

@@ -139,3 +139,12 @@ and in fog or snow. NPC cars dip too, and briefly flash if your lights glare the
 More than 0.8 seconds of glare fails a Lab drive and lowers the coaching score.
 Use `?highbeams=0` to disable this feature. The simulator uses Ontario's distances;
 see the provincial rule distinction and sources in [project reference](project-reference.md#high-beams-simhigh-beamsjs).
+
+
+### Respond to amber
+
+With amber decisions enabled, ignoring a safe amber stop or speeding up to beat it costs
+25 road-rules points and caps the total at 69. The report records `amber_lights_run` only
+once an amber has been observed. The replay marks the violation and the coach explains
+whether to stop safely or continue cautiously without accelerating. Red-light entry is
+still scored separately. See [the paired lessons](drive-lab.md#paired-amber-light-lessons).
