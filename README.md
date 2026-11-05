@@ -72,7 +72,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Thirty-seven hand-built scenarios test the situations real drivers get wrong:
+Thirty-eight hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -83,6 +83,7 @@ Thirty-seven hand-built scenarios test the situations real drivers get wrong:
 | **Joining the flow** | Kitsilano | A car pulling out of a parking spot |
 | **Around the corner** | Kitsilano | Someone stepping out from behind a building |
 | **The unprotected left** | Ottawa, afternoon | A left turn on a green with oncoming cars close together |
+| **Left on red** | Calgary, afternoon | A full stop before turning from one-way 14 Avenue SW onto one-way 5 Street SW, yielding to two cars from the right |
 | **Right on red** | Calgary, afternoon | A right turn at a red light, with cars coming from the left on their green |
 | **Four-way stop** | Toronto, afternoon | Taking your turn at an all-way stop, with cars arriving just before and after you |
 | **The blind corner** | Vancouver, afternoon | A two-way stop where a building hides the through road: stop, creep forward to look, and wait for both sides |

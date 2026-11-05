@@ -101,6 +101,7 @@ export const CHALLENGES = [
     description: "A person crosses Metcalfe Street at a signed pedestrian crossover. Your lane clears before the whole road does.", lesson: "At an Ontario PXO, stay stopped until everyone reaches the far curb across the whole roadway." },
   { id: "bus-lanes", title: "Buses only", map: "mount_pleasant", weather: "dry", time: "08:00", seed: 36042, icon: "◇", difficulty: "Judgement", hazard: "bus-lanes", busLanes: true, street: "Main Street", description: "Keep out of the reserved lane, then enter in the final 50 m to turn right.", lesson: "Keep the bus lane clear until the right-turn approach, then signal and merge safely." },
   { id: "no-left-turn", title: "No left turn", map: "toronto", weather: "dry", time: "morning", seed: 37042, icon: "↰", difficulty: "Navigation", hazard: "turn-restriction", restrictions: true, street: "Bathurst Street", description: "A signed left turn is prohibited. Take a legal route around the block.", lesson: "Follow the signed turn restriction while it applies. Take the legal detour even when the prohibited turn would be shorter; never turn across the sign just to follow a destination." },
+  { id: "left-on-red", title: "Left on red", map: "calgary", weather: "dry", time: "afternoon", seed: 38042, icon: "↰", difficulty: "Judgement", hazard: "left-on-red", leftOnRed: true, street: "14 Avenue SW", description: "Turn left from one-way 14 Avenue SW onto one-way 5 Street SW. Your light is red; two cars come from the right on their green.", lesson: "Stop fully at the line, then yield to pedestrians and traffic from the right. When clear, turn left from the leftmost lane onto the one-way street. Never do this in Québec, at a scramble, or where a sign forbids it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1007,6 +1008,14 @@ export function challengeScenario(map, challenge) {
     throw new Error("No real prohibited left turn with a legal detour on this map");
   }
 
+  if (challenge.hazard === "left-on-red") {
+    // Real Beltline one-way pair. installChallenge starts it in the red phase.
+    const lane = map.lane("e594", 0), exit = map.lane("e593", 0);
+    const startS = lane.edgeRef.control.s_line - 65;
+    const route = routeFromLanes(map, [lane, exit], startS, exit.length - 12);
+    return { id: challenge.id, start: { edge: lane.edge, lane: 0, s: startS }, route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, oncoming: { edge: "e140", then: "e593" },
+      tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 1, stops: 0, lefts: 1, rights: 0 } };
+  }
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
     : challenge.hazard === "signal" ? l.edgeRef.control?.type === "signal"
@@ -1170,6 +1179,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? scenario.child?.s ?? (scenario.oncoming || scenario.blindLeft || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
+  if (challenge.hazard === "left-on-red") world.t = 23; // sig13: B red, A green; no shared signal plan mutation
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
   if (["door", "pull"].includes(challenge.hazard)) {
     const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);

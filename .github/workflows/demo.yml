@@ -26,6 +26,7 @@ jobs:
         run: uv run --locked scripts/verify_jev.py --offline
       - name: Node checks
         run: |
+          # Includes test_left_on_red.mjs and the neighbouring signal checks.
           for f in scripts/test_*.mjs; do
             echo "::group::$f"
             node --experimental-default-type=module "$f"

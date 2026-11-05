@@ -135,7 +135,7 @@ export function trafficNotice(world, snap) {
   if (i.oncoming && i.oncoming.id === null) return { key: `left:${i.id}`, text: `${name(i.oncoming.view.hidden_by)} HIDES THE ONCOMING LANE · WAIT UNTIL YOU CAN SEE`, wait: true };
   const g = i.give_way;
   if (g?.hidden_by && !g.go) return { key: `give:${i.id}`, text: `${name(g.hidden_by)} HIDES THE CROSS STREET · ${g.waiting_to_see ? "WAIT UNTIL YOU CAN SEE" : "CREEP UP AND LOOK"}`, wait: !!g.waiting_to_see };
-  const w = i.right_on_red?.wait_for;
-  if (w?.hidden_by) return { key: `rtor:${i.id}`, text: `${name(w.hidden_by)} HIDES TRAFFIC FROM THE LEFT · WAIT`, wait: true };
+  const w = i.left_on_red?.wait_for || i.right_on_red?.wait_for;
+  if (w?.hidden_by) return { key: `rtor:${i.id}`, text: `${name(w.hidden_by)} HIDES TRAFFIC FROM THE ${i.left_on_red ? "RIGHT" : "LEFT"} · WAIT`, wait: true };
   return null;
 }

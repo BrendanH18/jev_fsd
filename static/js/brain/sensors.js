@@ -1,3 +1,4 @@
+import { leftOnRedExit } from "../sim/left-on-red.js";
 import { turnRestrictionAhead } from "../sim/turn-restrictions.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
@@ -268,8 +269,10 @@ export function buildSnapshot(world, executing = null) {
         oncoming,
         // (never at a scramble crossing, sim/signals.js: `scramble` says so)
         right_on_red: control.type === "signal" && map.rightOnRed && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
-          ? rightOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
+          ? turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
         ...(control.type === "signal" && isScramble(inter) && !dark ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } } : {}),
+        ...(world.leftOnRed && control.type === "signal" && signal === "red" && c.turn === "left" && inter && !isScramble(inter) && bumperToLine > -CLEARING_M && leftOnRedExit(world, c)
+          ? { left_on_red: turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") } : {}),
         stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
         ...(dark ? { dark: true } : {}),
@@ -315,10 +318,12 @@ export function buildSnapshot(world, executing = null) {
     snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
     snap.cyclist_pass = cyclistPass(world, p, lane, executing);
     snap.crossing_guard = crossingGuard(world, frontS);
-    // A right turn on red is made from the curb lane, and waits for a pedestrian crossing ahead too.
+    // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
-    const rtor = snap.intersection?.right_on_red;
-    if (rtor && !rtor.wait_for && (lane.index !== lane.lanes - 1 || lane.shift)) rtor.wait_for = { kind: "lane" };
+    const ltor = snap.intersection?.left_on_red;
+    if (ltor) world.leftOnRedSeen = true;
+    const rtor = ltor || snap.intersection?.right_on_red;
+    if (rtor && !rtor.wait_for && (lane.index !== (ltor ? 0 : lane.lanes - 1) || lane.shift)) rtor.wait_for = { kind: "lane" };
     if (rtor && snap.pedestrian && !rtor.wait_for && snap.pedestrian.s_route < snap.intersection.s_line_route + RTOR_PAST_M) rtor.wait_for = { kind: "pedestrian", id: snap.pedestrian.id };
     if (rtor) { rtor.clear = !rtor.wait_for; rtor.go = rtor.stop_completed && (rtor.clear || (rtor.entered && ego.v > 1.5)); }
     // Ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed.
@@ -1241,7 +1246,7 @@ function etaOf(world, n, distance) {
 // moves across the car's nose to its right: heading a right turn's worth (as classifyTurn reads
 // it) off the way the car came in, or close to the street it turns into (at a skewed junction the
 // street from the left need not run straight on into it).
-function rightOnRed(world, c, inter, frontS, visible, held = false) {
+function turnOnRed(world, c, inter, frontS, visible, held = false) {
   const { ego, route, map } = world;
   // traffic from the left is looked for as far as the car can see, beyond TRAFFIC_RADIUS_M
   const visibleNpcs = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M).filter((o) => world.npcs.includes(o));
@@ -1250,7 +1255,7 @@ function rightOnRed(world, c, inter, frontS, visible, held = false) {
   const centre = [inter.x, inter.y];
   const sCentre = c.sJunction ?? c.sRoute + 8;
   const exit = route.headingAt(Math.min(route.length, sCentre + 15)), inward = route.headingAt(c.sRoute);
-  const fromLeft = (h) => Math.abs(wrap(h - exit)) <= RTOR_CONE || map.classifyTurn(wrap(h - inward)) === "right";
+  const fromCrossStreet = (h) => Math.abs(wrap(h - exit)) <= RTOR_CONE || map.classifyTurn(wrap(h - inward)) === (c.turn === "left" ? "left" : "right");
   const need = clearTime(ego.v, Math.max(0, sCentre - frontS) + ego.spec.length) + RTOR_MARGIN_S;
   out.need_s = need;
   // (an advance green opposite sends protected left turns into the street the car turns into)
@@ -1264,7 +1269,7 @@ function rightOnRed(world, c, inter, frontS, visible, held = false) {
       if ((Math.abs(n.v) > 0.5 || (n.v > 0.05 && n.a > 0.3)) && Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 6 && (!along || beforeCentre)) { out.wait_for = { kind: "junction", id: n.id }; return out; }
       continue;
     }
-    if (d > RTOR_LOOK_M || (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) || !fromLeft(n.psi)) continue;
+    if (d > RTOR_LOOK_M || (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) || !fromCrossStreet(n.psi)) continue;
     if ((dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6) < 0.3) continue;
     // stopping short of the junction (for its own light, say)
     if (n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
@@ -1279,7 +1284,7 @@ function rightOnRed(world, c, inter, frontS, visible, held = false) {
   if (!entered) {
     for (const a of inter.approaches) {
       const e = map.edges.get(a.edge);
-      if (!e || e.id === c.edge || !fromLeft(map.headingIn(e.id))) continue;
+      if (!e || e.id === c.edge || !fromCrossStreet(map.headingIn(e.id))) continue;
       const far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * need;
       const at = (back) => alongApproach(map, e, back);
       const reach = DAYLIGHT_RANGE_M - 1;
@@ -1536,8 +1541,8 @@ export function desiredSpeed(snap) {
   else if (cp?.go && cyclistPassSpeed(cp) <= v + 0.05) reasons.push(cp.going ? "passing a cyclist" : "cyclist ahead: way clear to pass");
   const i = snap.intersection;
   // (a car just past a signal's line, short of CLEARING_M, still stops for it, unless it is turning
-  // right on red)
-  if (i && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown") && !i.right_on_red?.go) || (i.control === "stop" && !i.stop_completed))) {
+  // right or left on red)
+  if (i && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.control === "stop" && !i.stop_completed))) {
     // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line
     const vs = i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
     if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }

@@ -57,6 +57,7 @@ test("agent validation rejects ineligible manoeuvres and malformed motions", () 
   assert.throws(() => registerAgent({ id: "rules", label: "Overwrite", create: () => ({}) }));
 });
 
+let arenaHistoryChars = 0;
 for (const challenge of CHALLENGES) {
   const map = load(challenge.map), a = challengeScenario(map, challenge), b = challengeScenario(map, challenge);
   test(`${challenge.id}: stable route and matching control type`, () => {
@@ -93,10 +94,16 @@ for (const challenge of CHALLENGES) {
       assert.ok(result.decisions_trace.length); assert.ok(result.events.some(e => e.type === "arrived"));
       assert.ok(result.events.some(e => e.type === "hazard"));
       assert.equal(result.hard_brakes, result.events.filter(e => e.type === "hard_brake").length);
-      validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] })));
+      const saved = validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] })));
+      arenaHistoryChars += JSON.stringify(saved.results[0]).length + 1;
     });
   }
 }
+
+// Two complete arena evaluations (all challenges with both drivers), counted as UTF-16.
+const arenaHistoryBytes = arenaHistoryChars * 2 * 2;
+test("two complete arena runs fit the history cap", () => assert.ok(arenaHistoryBytes < 9 * 1024 * 1024));
+console.log(`Arena history (${CHALLENGES.length} challenges): ${(arenaHistoryBytes / (9 * 1024 * 1024) * 100).toFixed(2)}% of 9 MB`);
 
 {
   // Pulling out: the bus stands at its stop with its doors open until the car comes up, then

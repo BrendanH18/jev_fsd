@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Opt-in left turns on red from one-way streets onto one-way streets for the driven car and traffic.
+  Full stop, pedestrian and traffic gaps, leftmost lane, provincial eligibility, signed turn bans and
+  scramble exclusions share the right-on-red checks. Free drives enable it unless `?leftonred=0`;
+  other challenges and benchmarks leave it off.
+- New Lab challenge, “Left on red” (seed 38042): 14 Avenue SW onto 5 Street SW, Calgary.
+
 - School crossing guards at marked mid-block crosswalks in school zones while the zone is in effect.
   Small groups of children gather; the guard waits for a safe stopping gap, raises a round red STOP
   paddle, walks them across and returns to the curb. Traffic and cyclists wait until everyone is off
