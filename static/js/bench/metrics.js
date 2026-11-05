@@ -96,6 +96,8 @@ export class DriveMetrics {
       ...(world.collectionSeen ? { crew_close_passes: v.crew_close_passes || 0 } : {}),
       // (only for a drive a school crossing guard held up the STOP sign in: sim/crossing-guard.js)
       ...(world.guardsSeen ? { guard_violations: v.guard_violations || 0 } : {}),
+      // (only for a drive a contraflow cyclist rode near the car in: sim/contraflow.js)
+      ...(world.contraflowSeen ? { contraflow_conflicts: v.contraflow_conflicts || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -145,6 +147,7 @@ export function failures(m) {
   if (m.pxo_early_goes) f.push("left a pedestrian crossover before the far curb");
   if (m.crew_close_passes) f.push("passed a garbage crew worker too close");
   if (m.guard_violations) f.push("drove past a crossing guard's stop sign");
+  if (m.contraflow_conflicts) f.push("cut off or squeezed a contraflow cyclist");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

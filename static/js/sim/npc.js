@@ -17,6 +17,10 @@ import { turnBanned } from "./turn-restrictions.js";
 // the oncoming lane, the minimum passing distance clear, once that lane is clear (sim/cyclist-pass.js).
 // With `guards` on, everyone stops short of a school crosswalk while its crossing guard holds up the
 // STOP sign, until the guard and every child are off the road (sim/crossing-guard.js).
+// With `contraflow` on, drivers look both ways for cyclists riding against a one-way street that allows
+// it: they wait short of the junction for one coming out of the street they turn into, wait for one as
+// for oncoming traffic, and move over for one coming the other way along it, stopping where that leaves
+// less than the minimum passing distance until it has gone by (sim/contraflow.js).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -48,6 +52,7 @@ import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_
 import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass, queuedBehind, ridingIn, wayClear as cyclistWayClear } from "./cyclist-pass.js";
 import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
+import { trafficYield as contraflowYield } from "./contraflow.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -146,6 +151,8 @@ const HOOK_MARGIN_S = 1.5;
 const HOOK_TURN_MPS = 6;
 const BODY_LOOK_M = 8;
 const BODY_AHEAD_M = 2;
+// How fast a driver moves over for a contraflow cyclist coming the other way (sim/contraflow.js).
+const CF_SHIFT_MPS = 0.7;
 // Giving way to an emergency vehicle (sim/emergency.js): a driver eases over at up to 0.8 m/s and
 // stops within its stopping distance braking at 1.5 m/s^2 (3.5 m/s^2 for one coming toward it or
 // across its way; at least 4 m on), short of the next junction
@@ -646,6 +653,8 @@ export class NpcFleet {
     if (this.plows.length || this.plowTarget) this.managePlows();
     if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
     const all = [world.ego, ...this.vehicles];
+    // (contraflow cyclists, with that option on: sim/contraflow.js)
+    const riders = world.contraflow?.riders || [];
     for (const n of [...this.vehicles]) {
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
       // a garbage truck standing at a stop while its crew empties the bins (sim/collection-truck.js)
@@ -759,6 +768,13 @@ export class NpcFleet {
       const cyc = passes && (n.cyc || (!yielding && !dp && !lz && !wz)) ? this.cyclistPass(n, edge, all, dt, !!(yielding || dp || lz || wz)) : null;
       let offset = (n.kind === "bike" ? n.side : keepRight) + n.evShift + (n.transit ? n.transit.shift : 0) + (n.nudge || 0) + (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) + wzShift + dpShift + lzShift;
       if (cyc) offset += n.cpShift;
+      // a contraflow cyclist (sim/contraflow.js): move over to the right for one coming the other way,
+      // and wait where it must for one to go by, or out of a street it turns into
+      const cf = riders.length && n.kind !== "bike" && !n.transit?.tram ? contraflowYield(world, n, front) : null;
+      if (cf || n.cfShift) {
+        n.cfShift = (n.cfShift || 0) + Math.max(-CF_SHIFT_MPS * dt, Math.min(CF_SHIFT_MPS * dt, (cf?.shift || 0) - (n.cfShift || 0)));
+        offset += n.cfShift;
+      }
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -771,8 +787,10 @@ export class NpcFleet {
       // Leader: nearest vehicle ahead on our path within LOOK_M (parked cars only when they
       // stick into the lane).
       let gap = Infinity, leadV = n.v0, leader = null;
-      for (const o of all.concat(world.parked.near(n.x, n.y, LOOK_M), world.parked.doorsNear(n.x, n.y, LOOK_M))) {
+      for (const o of all.concat(world.parked.near(n.x, n.y, LOOK_M), world.parked.doorsNear(n.x, n.y, LOOK_M), riders)) {
         if (o === n) continue;
+        // (a contraflow cyclist coming the other way is met, not followed: see contraflowYield)
+        if (o.contra && Math.abs(wrap(o.psi - n.psi)) > Math.PI * 2 / 3) continue;
         if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
         // (going round a work zone's closed stretch, not up to it)
         if (wz?.detour && o === wz.zone.closure) continue;
@@ -812,7 +830,7 @@ export class NpcFleet {
       // it, say), not only for one whose middle is in its path, along the way it will actually ride:
       // moving across, it lags the line it steers for
       if (n.kind === "bike") {
-        for (const o of all.concat(world.parked.near(n.x, n.y, BODY_LOOK_M + 6), world.parked.doorsNear(n.x, n.y, BODY_LOOK_M + 6))) {
+        for (const o of all.concat(world.parked.near(n.x, n.y, BODY_LOOK_M + 6), world.parked.doorsNear(n.x, n.y, BODY_LOOK_M + 6), riders)) {
           if (o === n || Math.abs(o.x - n.x) > BODY_LOOK_M + 6 || Math.abs(o.y - n.y) > BODY_LOOK_M + 6) continue;
           const g = bodyOnPath(n, o, front, proj.lateral, offset);
           if (g !== null && g < gap) { gap = g; leadV = Math.max(0, o.v * Math.cos(o.psi - n.psi)); leader = o; }
@@ -824,7 +842,7 @@ export class NpcFleet {
       // by its side as it turned would wait for it in turn)
       if (n.transit || n.school) {
         const body = n.obb(), reach = spec.length + BUS_BODY_LOOK_M + 6, nose = spec.length - spec.rearOverhang - 1;
-        const close = all.concat(world.parked.near(n.x, n.y, reach)).filter((o) => o !== n && Math.abs(o.x - n.x) < reach && Math.abs(o.y - n.y) < reach && !obbOverlap(body, o.obb(), 0.05)
+        const close = all.concat(world.parked.near(n.x, n.y, reach), riders).filter((o) => o !== n && Math.abs(o.x - n.x) < reach && Math.abs(o.y - n.y) < reach && !obbOverlap(body, o.obb(), 0.05)
           && !(n.school && n.toLocal(o.x, o.y).ahead < nose));
         for (let d = 0.5; close.length && d <= BUS_BODY_LOOK_M && d < gap; d += 0.5) {
           const mid = Math.min(path.length, path.s + spec.length / 2 - spec.rearOverhang + d), [x, y] = path.offsetPointAt(mid, offset);
@@ -986,6 +1004,11 @@ export class NpcFleet {
       // still in the road there, once it could stop (sim/crossing-guard.js; cyclists too)
       const forGuard = world.crossingGuards?.active ? this.guardHold(n, path, front) : null;
       if (forGuard !== null && forGuard < gap) { gap = Math.max(0.05, forGuard); leadV = 0; }
+      // for a contraflow cyclist, where it must wait (once it could stop there: otherwise it carries on)
+      if (cf?.hold != null) {
+        const g = cf.hold - front;
+        if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
+      }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);

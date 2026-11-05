@@ -1,4 +1,5 @@
 import { busLaneScenario } from "./bus-lane-challenge.js";
+import { contraflowScenario, placeContraflowRider } from "./contraflow-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -101,6 +102,8 @@ export const CHALLENGES = [
     description: "A person crosses Metcalfe Street at a signed pedestrian crossover. Your lane clears before the whole road does.", lesson: "At an Ontario PXO, stay stopped until everyone reaches the far curb across the whole roadway." },
   { id: "bus-lanes", title: "Buses only", map: "mount_pleasant", weather: "dry", time: "08:00", seed: 36042, icon: "◇", difficulty: "Judgement", hazard: "bus-lanes", busLanes: true, street: "Main Street", description: "Keep out of the reserved lane, then enter in the final 50 m to turn right.", lesson: "Keep the bus lane clear until the right-turn approach, then signal and merge safely." },
   { id: "no-left-turn", title: "No left turn", map: "toronto", weather: "dry", time: "morning", seed: 37042, icon: "↰", difficulty: "Navigation", hazard: "turn-restriction", restrictions: true, street: "Bathurst Street", description: "A signed left turn is prohibited. Take a legal route around the block.", lesson: "Follow the signed turn restriction while it applies. Take the legal detour even when the prohibited turn would be shorter; never turn across the sign just to follow a destination." },
+  { id: "contraflow", title: "Both ways", map: "montreal", weather: "dry", time: "afternoon", seed: 40042, icon: "⇄", difficulty: "Anticipation", hazard: "contraflow", contraflow: true, street: "Rue Villeneuve Est",
+    description: "You turn right from Rue Drolet into Rue Villeneuve Est, in the Plateau: one-way for cars, but with a painted lane for cyclists riding the other way. One is coming out of it toward the junction.", lesson: "On a one-way street signed EXCEPT BICYCLES (in Québec, EXCEPTÉ VÉLOS), cyclists ride both ways, against the traffic on the driver's left. Look both ways before turning in, and let a cyclist coming out clear the junction first: at a junction without a sign, one coming from your right has the right of way anyway. Driving along such a street, keep right for a cyclist coming the other way, and stop to let them by where there isn't room to leave them at least 1 m." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -981,6 +984,7 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 
 export function challengeScenario(map, challenge) {
   if (challenge.busLanes) return busLaneScenario(map, challenge);
+  if (challenge.hazard === "contraflow") return contraflowScenario(map, challenge);
   if (challenge.hazard === "pxo") {
     const cw = map.pxos.find(c => c.id === "x2317854682");
     if (!cw) throw new Error("Metcalfe Street PXO is missing from the crossings v2 layer.");
@@ -1218,6 +1222,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.scramble) Object.assign(world.challenge, placeScramble(world, scenario.scramble, challenge.seed));
   if (scenario.collection) Object.assign(world.challenge, placeTruck(world, fleet, scenario.collection, challenge.seed));
   if (scenario.crossingGuard) Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));
+  if (scenario.contraflow) Object.assign(world.challenge, placeContraflowRider(world, scenario.contraflow));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
