@@ -1,3 +1,4 @@
+import { beamChoice } from "../sim/high-beams.js";
 // A brain made of plain code. It proves the harness works without any model and is the fallback
 // when a model call fails or times out. Zero latency, zero cost.
 
@@ -93,7 +94,7 @@ export class RulesBrain {
     }
     // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
     const motion = stop && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park" ? "stop" : "drive";
-    return { motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
+    return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
   }
 
   async decide(snap, eligible) { return this.decideSync(snap, eligible); }

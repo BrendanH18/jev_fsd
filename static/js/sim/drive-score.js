@@ -16,6 +16,7 @@ export class DriveScore {
   constructor(world, { title = "Free drive", map = "", driver = "manual", route = null } = {}) {
     this.title = title; this.map = map; this.driver = driver; this.route = route;
     this.baseline = { ...world.violations }; this.lastCounters = { ...world.violations };
+    this.glareSeconds = 0; this.highBeamsSeen = false;
     this.elapsed = 0; this.distance = 0; this.moving = 0; this.speeding = 0;
     // (of which in a school or playground zone in effect, and the zone it was last counted in)
     this.zoneSpeeding = 0; this.zoneCounted = null;
@@ -172,6 +173,8 @@ export class DriveScore {
       if (this.plowCounted !== plow.plow.id) { this.plowCounted = plow.plow.id; this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id }); }
     }
     if (world.busLanesSeen) this.busLanesSeen = true;
+    if (world.highBeamsSeen) { this.highBeamsSeen = true; this.glareSeconds = Math.max(0, (world.violations.glare_seconds || 0) - (this.baseline.glare_seconds || 0)); }
+    if (this.glareSeconds > 0.8 && !this.glareRecorded) { this.glareRecorded = true; this.incident("glare", "Failed to dip high beams"); }
     if (world.pxoSeen) this.pxoUsed = true;
     if (world.restrictionsSeen) { this.restricted = true; this.illegalTurns = (world.violations.illegal_turns || 0) - (this.baseline.illegal_turns || 0); }
     if (world.calmingSeen) this.calmed = true;
@@ -272,7 +275,7 @@ export class DriveScore {
     const collisions = delta("collisions"), atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
-      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20)),
+      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20 - this.glareSeconds * 5)),
       legality: Math.round(clamp(100 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
@@ -308,6 +311,7 @@ export class DriveScore {
     if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
     if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
     if (this.closeFollowing > 1 || this.danger > 0.5) tips.push("Aim for at least a two-second following gap when conditions allow.");
+    if (this.glareSeconds > 0.8) tips.push("Dip high beams for oncoming and leading vehicles, fog and snow.");
     if (this.pxoEarlyGoes) tips.push("At an Ontario pedestrian crossover, stay stopped until everyone has reached the far curb across the whole roadway.");
     if (this.crewPasses) tips.push("Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.");
     if (this.scrambleReds) tips.push("At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.");
@@ -330,6 +334,7 @@ export class DriveScore {
       ...(this.closures ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges } : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
+      ...(this.highBeamsSeen ? { glare_seconds: round(this.glareSeconds, 2) } : {}),
       ...(this.pxoUsed ? { pxo_early_goes: this.pxoEarlyGoes } : {}),
       ...(this.restricted ? { illegal_turns: this.illegalTurns } : {}),
       ...(this.calmed ? { hump_hits: this.humpHits } : {}),

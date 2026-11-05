@@ -68,9 +68,15 @@ export class Visibility {
     return reach && !this.night && weather.visibility >= DAYLIGHT_RANGE_M ? Math.max(reach, DAYLIGHT_RANGE_M) : this.rangeAt(observer, x, y);
   }
 
-  canSee(observer, x, y, reach = 0) {
+  canSee(observer, x, y, reach = 0, high = false) {
     const d = Math.hypot(x - observer.x, y - observer.y);
-    if (d > this.reachAt(observer, x, y, reach)) return false;
+    let range = this.reachAt(observer, x, y, reach);
+    if (high) {
+      const forward = (x - observer.x) * Math.cos(observer.psi) + (y - observer.y) * Math.sin(observer.psi);
+      const side = Math.abs((x - observer.x) * Math.sin(observer.psi) - (y - observer.y) * Math.cos(observer.psi));
+      if (forward > 0 && side < forward * 0.4) range = Math.min(weather.visibility, DAYLIGHT_RANGE_M);
+    }
+    if (d > range) return false;
     return !this.occluded([observer.x, observer.y], [x, y]);
   }
 
@@ -92,10 +98,10 @@ export class Visibility {
     return false;
   }
 
-  sees(observer, object, reach = 0) {
+  sees(observer, object, reach = 0, high = false) {
     const box = object.obb();
     // A visible nose still counts when the center is behind a corner.
     const dx = Math.cos(box.heading) * box.halfLength, dy = Math.sin(box.heading) * box.halfLength;
-    return [[0, 0], [dx, dy], [-dx, -dy]].some(([x, y]) => this.canSee(observer, box.center[0] + x, box.center[1] + y, reach));
+    return [[0, 0], [dx, dy], [-dx, -dy]].some(([x, y]) => this.canSee(observer, box.center[0] + x, box.center[1] + y, reach, high));
   }
 }

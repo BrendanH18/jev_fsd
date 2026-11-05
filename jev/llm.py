@@ -278,6 +278,11 @@ def parse_answer(content: str, expect: dict) -> Tuple[Optional[dict], Optional[s
             return None, ("no candidate in the reply" if value is None else
                           "candidate %s is not an eligible manoeuvre" % _quote(value, 60))
         answer["candidate"] = candidate
+    if expect.get("headlights"):
+        # Optional actuation: omitted/invalid beam choices fall back to Rules in the browser.
+        beam = _match(fields.get("headlights"), expect["headlights"])
+        if beam:
+            answer["headlights"] = beam
     if expect.get("route"):
         route = _match(next((fields[k] for k in _ROUTE_KEYS if k in fields), None), expect["route"])
         if route:
@@ -293,7 +298,7 @@ def response_format_for(kind: str, expect: dict) -> Optional[dict]:
     if kind != "json_schema":
         return None
     properties: Dict[str, Any] = {}
-    for field in ("motion", "candidate", "route"):
+    for field in ("motion", "candidate", "route", "headlights"):
         if expect.get(field):
             properties[field] = {"type": "string", "enum": list(expect[field])}
     return {"type": "json_schema", "json_schema": {"name": "driving_decision", "strict": True, "schema": {
@@ -431,7 +436,7 @@ def validate_request(body: dict) -> dict:
     if not isinstance(expect_in, dict):
         raise InvalidLlmRequest("expect must say which choices the model may make")
     expect: Dict[str, List[str]] = {}
-    for field in ("motion", "candidate", "route"):
+    for field in ("motion", "candidate", "route", "headlights"):
         values = expect_in.get(field)
         if values is None:
             continue
@@ -442,7 +447,7 @@ def validate_request(body: dict) -> dict:
             raise InvalidLlmRequest("expect.motion may only contain %s" % ", ".join(MOTIONS))
         expect[field] = values
     if not expect:
-        raise InvalidLlmRequest("expect needs at least one of motion, candidate or route")
+        raise InvalidLlmRequest("expect needs at least one of motion, candidate, route or headlights")
     tick, epoch = body.get("tick", 0), body.get("epoch", 0)
     if not isinstance(tick, int) or not isinstance(epoch, int):
         raise InvalidLlmRequest("tick and epoch must be integers")

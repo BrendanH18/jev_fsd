@@ -15,6 +15,11 @@ GOOD = {
 
 
 class ValidateTests(unittest.TestCase):
+    def test_optional_headlight_actuation_question(self):
+        req = validate_request(dict(GOOD, questions={"headlights": {
+            "type": "choice", "instructions": "Choose the beam", "criteria": {"high": "clear dark street", "low": "dip"}}}))
+        self.assertIn("headlights", req["questions"])
+
     def test_good_request(self):
         req = validate_request(GOOD)
         self.assertEqual(req["tick"], 5)

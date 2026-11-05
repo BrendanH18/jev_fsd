@@ -117,6 +117,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     const f = snap.following;
     state.following = { id: f.id, ...(f.kind !== "car" ? { kind: f.kind } : {}), gap_m: r1(f.gap_m), gap: gapLabel(f.gap_m, f.closing_mps), speed: r1(f.speed), closing_mps: r1(f.closing_mps) };
   }
+  if (snap.headlights) state.headlights = { ...snap.headlights };
   if (snap.pxo) state.pxo = { crossing: snap.pxo.id, occupied: true, wait_until: "everyone reaches the far curb across the whole roadway" };
   if (snap.pedestrian) {
     const p = snap.pedestrian;
@@ -606,6 +607,9 @@ export function buildQuestions(snap, eligible, meta = {}) {
   const pre = clauses ? `${PREAMBLE} ${clauses}` : PREAMBLE;
   const questions = {};
   const local = {};
+  if (snap.headlights) questions.headlights = { type: "choice", instructions: "Which headlight beam should the car use now?", criteria: {
+    high: "Use high only when headlights.high_allowed is true: a dark unlit street, no fog or snow, no oncoming vehicle within 150 m and no leading vehicle within 60 m. The observation includes a safety margin for the next decision.",
+    low: "Use low when headlights.high_allowed is false: daylight, a lit street, fog or snow, or another road user within the dip distance." } };
   if (needsMotionQuestion(snap)) {
     // Waiting to turn left across oncoming traffic is a reason to hold still only while it applies,
     // so the criteria for every other situation read exactly as before.

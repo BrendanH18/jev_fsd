@@ -41,6 +41,7 @@ export function llmDecision(answer, request, meta, trace = null) {
   const answers = { ...local };
   if (answer.motion) answers.motion = pick(answer.motion);
   if (answer.candidate) answers.vector = pick(answer.candidate);
+  if (answer.headlights) answers.headlights = pick(answer.headlights);
   if (answer.route) answers.route = pick(answer.route);
   if (answer.reason) meta = { ...meta, reason: answer.reason };
   return {

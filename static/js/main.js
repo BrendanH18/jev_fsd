@@ -1,3 +1,4 @@
+import { npcHighBeam } from "./sim/high-beams.js";
 import { buildPxos } from "./render/pxo.js";
 let pxoRendering = null;
 import { buildRestrictions } from "./render/turn-restrictions.js";
@@ -193,7 +194,7 @@ export async function boot() {
     // and, while a school zone is in effect, crossing guards walk children across the marked crosswalks
     // in it, and everyone stops for their STOP sign (`?guards=0` takes them off)
     const guards = params.get("guards") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", highBeams: params.get("highbeams") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -760,12 +761,15 @@ export async function boot() {
       if (world.t - manualSignal.t > 12 || (turned && Math.abs(world.ego.delta) < 0.08)) { world.ego.signal = null; manualSignal = null; }
     }
     const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
+    if (world.highBeams) renderEgo.highBeam = !!world.ego.highBeam;
+    beamIndicator.hidden = !world.highBeams || !world.ego.highBeam;
     syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
     // (riding over speed humps and the like: render/traffic-calming.js)
     if (world.calming) rideOver(map, egoMesh, renderEgo);
     pxoRendering?.update();
     for (const n of fleet.vehicles) {
-      const next = replayNext?.fleet.vehicles.find(v => v.id === n.id), pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
+      const next = replayNext?.fleet.vehicles.find(v => v.id === n.id), pose = { ...(next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha)) };
+      if (world.highBeams) pose.highBeam = npcHighBeam(world, n);
       (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : isTruck(n) ? syncTruck : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
       if (world.calming && n.kind !== "bike" && !isTrain(n)) rideOver(map, npcMeshes.get(n.id), pose);
     }
@@ -890,6 +894,7 @@ export async function boot() {
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision, autopilot.executing));
     weatherView.update(dt);
+    roads.streetLights.setOutage?.(!!world.streetLightsOut);
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
     view.render(dt);
@@ -933,3 +938,8 @@ function readReplay() {
   if (!new URLSearchParams(location.search).has("replay")) return null;
   try { return JSON.parse(localStorage.getItem("jev-fsd-replay")); } catch { return null; }
 }
+
+const beamIndicator = document.createElement("div");
+beamIndicator.textContent = "≋ HIGH BEAM"; beamIndicator.hidden = true;
+beamIndicator.style.cssText = "position:fixed;right:24px;bottom:100px;color:#59aaff;background:#102341;padding:6px 10px;border-radius:6px;z-index:20;font:600 13px sans-serif;pointer-events:none";
+document.body.append(beamIndicator);

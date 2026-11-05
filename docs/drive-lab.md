@@ -5,10 +5,11 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Thirty-seven authored challenges
+## Thirty-eight authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
+| Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
 | The door zone | Vancouver, Kitsilano | A cyclist and a parked car's opening street-side door |
 | Into the unknown | Victoria, Old Town | A signal-controlled junction with 28 m fog visibility |
 | Rain check | Montréal, Le Plateau | A scripted crossing on a wet street after dark |
