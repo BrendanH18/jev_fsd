@@ -1,6 +1,7 @@
 import { setNightFlash, flashState } from "./night-flash.js";
 import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
+import { redTurnExits } from "./red-turn-signs.js";
 import { auditRestrictions } from "./turn-restrictions.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
@@ -215,7 +216,7 @@ export class World {
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false } = {}) {
     this.map = map;
     this.highBeams = !!highBeams; this.highBeamsSeen = false;
     this.pxo = !!pxo && ontarioMap(map);
@@ -282,6 +283,7 @@ export class World {
     this.busLanes = !!busLanes;
     this.busLanesSeen = false;
     this.leftOnRed = !!leftOnRed;
+    this.redTurnSigns = !!redTurnSigns;
     this.leftOnRedSeen = false;
     this.restrictions = !!restrictions;
     this.restrictionsSeen = false;
@@ -595,16 +597,18 @@ export class World {
           const egoLane = this.leftOnRed ? this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 8)?.lane : null;
           const leftPending = this.leftOnRed && egoLane?.edge === edge.id && egoLane.idx === 0 && (this.map.out.get(edge.to) || []).some(id => leftOnRedAllowed(this, edge.id, id));
           const pending = state === "red" && (this.map.rightOnRed || leftPending) && !scramble && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
+          // Preserve the signs in effect at entry: a schedule changing mid-turn cannot pardon it.
+          const signed = this.redTurnSigns ? { bannedExits: redTurnExits(this, edge.id) } : {};
           if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) }); }
           this.arrowCheck = arrow && inter ? { id: control.id, centre: [inter.x, inter.y], approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
-            stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed } : null;
+            ...signed, stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed } : null;
           // the approach's heading and, on a route, the street it turns into (without one, the
           // street the car is heading into is the way it faces)
           if (inter) {
             const exit = rc && rc.sJunction !== null ? this.route.headingAt(Math.min(this.route.length, rc.sJunction + 15)) : null;
             const approach = rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id);
             this.lastSignal = { centre: [inter.x, inter.y], nodes: this.map.junctionNodes(inter), approaches: new Set(inter.approaches.map((a) => a.edge)), facing: approach + Math.PI, exit, counted: false,
-              ...(pending ? { rightOnRed: { ...(leftPending ? { leftAllowed: true } : {}), edge: edge.id, approach, exit: exit ?? approach - Math.PI / 2, turned: false } } : {}) };
+              ...(pending ? { rightOnRed: { ...signed, ...(leftPending ? { leftAllowed: true, ...(this.redTurnSigns ? { leftExits: (this.map.out.get(edge.to) || []).filter(id => leftOnRedAllowed(this, edge.id, id)) } : {}) } : {}), edge: edge.id, approach, exit: exit ?? approach - Math.PI / 2, turned: false } } : {}) };
           }
         } else if (control.type === "stop" && !this.egoStop.completed) {
           this.violations.stop_signs_run++;
@@ -936,7 +940,8 @@ export class World {
     if (!a.inside || d < AUDIT_ARROW_OUT_M) return;
     this.arrowCheck = null;
     const turned = wrap(ego.psi - a.approach);
-    if (turned > Math.PI / 4 || (a.stopped && turned < -Math.PI / 4)) return;
+    const exit = a.bannedExits?.length ? this.map.nearestLane(ego.x, ego.y, ego.psi, 8)?.lane.edge : null;
+    if (turned > Math.PI / 4 || (a.stopped && turned < -Math.PI / 4 && !a.bannedExits?.includes(exit))) return;
     this.violations.red_lights_run++;
     this.events.push({ type: "red_light", arrow: true });
   }
@@ -1197,8 +1202,8 @@ export class World {
       const past = (fx - jx) * Math.cos(rtor.approach) + (fy - jy) * Math.sin(rtor.approach);
       const at = this.map.nearestLane(fx, fy, this.ego.psi, 8), on = at?.lane.edgeRef;
       if (on && on.id !== rtor.edge && on.id !== rtor.via?.id && Math.abs(wrap(at.heading - this.ego.psi)) <= Math.PI / 3) {
-        const legalLeft = rtor.leftAllowed && leftOnRedAllowed(this, rtor.edge, on.id);
-        const legalRight = this.map.rightOnRed && this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right";
+        const legalLeft = rtor.leftAllowed && (rtor.leftExits ? rtor.leftExits.includes(on.id) : leftOnRedAllowed(this, rtor.edge, on.id));
+        const legalRight = this.map.rightOnRed && !rtor.bannedExits?.includes(on.id) && this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right";
         if ((legalRight || legalLeft) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) {
           rtor.via = on;
           if (legalLeft) { rtor.exit = this.map.headingOut(on.id); this.leftOnRedSeen = true; }

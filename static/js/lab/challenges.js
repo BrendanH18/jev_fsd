@@ -1,6 +1,8 @@
 import { flashMain } from "../sim/night-flash.js";
 import { busLaneScenario } from "./bus-lane-challenge.js";
 import { contraflowScenario, placeContraflowRider } from "./contraflow-challenge.js";
+import { roundaboutScenario, placeRoundaboutTraffic } from "./roundabout-challenge.js";
+import { redTurnScenario, installRedTurn } from "./red-turn-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -110,6 +112,10 @@ export const CHALLENGES = [
   { id: "dip-your-lights", title: "Dip your lights", map: "saskatoon", weather: "dry", time: "night", seed: 41042, icon: "☼", difficulty: "Courtesy", hazard: "high-beams", highBeams: true,
     description: "The streetlights are out on 13th Street East. Use high beams on the empty stretch, dip for an approaching car and the slower car ahead.", lesson: "High beams help you see; dip within 150 m oncoming and 60 m following, and in fog or snow." },
   { id: "left-on-red", title: "Left on red", map: "calgary", weather: "dry", time: "afternoon", seed: 38042, icon: "↰", difficulty: "Judgement", hazard: "left-on-red", leftOnRed: true, street: "14 Avenue SW", description: "Turn left from one-way 14 Avenue SW onto one-way 5 Street SW. Your light is red; two cars come from the right on their green.", lesson: "Stop fully at the line, then yield to pedestrians and traffic from the right. When clear, turn left from the leftmost lane onto the one-way street. Never do this in Québec, at a scramble, or where a sign forbids it." },
+  { id: "roundabout-gap", title: "Find your gap", map: "halifax", weather: "dry", time: "afternoon", seed: 42042, icon: "⟳", difficulty: "Judgement", hazard: "roundabout", street: "Cunard Street",
+    description: "Three cars circulate through the North Park roundabout as you approach on Cunard Street. Your route takes the third exit onto North Park Street.", lesson: "Slow down and yield to traffic already in the roundabout. Wait outside the ring until there is a safe gap, then circulate counter-clockwise and take the third exit." },
+  { id: "wait-for-green", title: "Wait for green", map: "toronto", weather: "dry", time: "afternoon", seed: 43042, icon: "⊘", difficulty: "Judgement", hazard: "red-turn-sign", redTurnSigns: true, street: "Harbord Street",
+    description: "Turn right from Harbord Street onto Spadina Avenue. The cross street is empty, but the mapped sign prohibits this turn on red.", lesson: "A no-turn-on-red sign still applies after a full stop and with no traffic coming. Wait for the green for your turn, then yield to anyone crossing before turning. The sign does not require a detour." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1006,6 +1012,7 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
     const lane = map.lane("e549", 0), startS = 80, goalS = 650;
     const p = pointAt(lane.pts, lane.cum, startS), route = routeFromLanes(map, [lane], startS, goalS);
@@ -1016,6 +1023,7 @@ export function challengeScenario(map, challenge) {
   }
   if (challenge.busLanes) return busLaneScenario(map, challenge);
   if (challenge.hazard === "contraflow") return contraflowScenario(map, challenge);
+  if (challenge.hazard === "roundabout") return roundaboutScenario(map, challenge);
   if (challenge.hazard === "pxo") {
     const cw = map.pxos.find(c => c.id === "x2317854682");
     if (!cw) throw new Error("Metcalfe Street PXO is missing from the crossings v2 layer.");
@@ -1219,6 +1227,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
   if (challenge.hazard === "left-on-red") world.t = 23; // sig13: B red, A green; no shared signal plan mutation
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
+  if (scenario.redTurnSign) installRedTurn(world, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
@@ -1278,6 +1287,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.collection) Object.assign(world.challenge, placeTruck(world, fleet, scenario.collection, challenge.seed));
   if (scenario.crossingGuard) Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));
   if (scenario.contraflow) Object.assign(world.challenge, placeContraflowRider(world, scenario.contraflow));
+  if (scenario.roundabout) Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {

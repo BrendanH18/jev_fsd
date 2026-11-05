@@ -1,5 +1,6 @@
 // Deliberately limited to the bundled Canadian map regions. Unknown regions fail closed.
 import { turnBanned } from "./turn-restrictions.js";
+import { redTurnBanned } from "./red-turn-signs.js";
 // Centres of the supported packs must lie in these reviewed city regions. A new map needs
 // its jurisdiction checked before adding it; never guess a province across the Ottawa River.
 const REGIONS = [
@@ -24,6 +25,7 @@ export function leftOnRedAllowed(world, from, to) {
   if (!world.leftOnRed || !leftOnRedRegion(world.map.routingBbox)) return false;
   const map = world.map, a = map.edges.get(from), b = map.edges.get(to);
   return !!(a?.oneway && b?.oneway && !a.control?.no_left_on_red && !a.no_left_on_red
+    && !redTurnBanned(world, from, to)
     && !turnBanned(map, from, to, world.clock)
     && map.classifyTurn(map.turnAngle(from, to)) === "left");
 }

@@ -12,6 +12,7 @@ import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
+import { routeRedTurnBanned } from "../sim/red-turn-signs.js";
 import { headlights } from "../sim/high-beams.js";
 import { pxoAhead } from "../sim/pxo.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
@@ -269,14 +270,16 @@ export function buildSnapshot(world, executing = null) {
       // or nothing it gives way to is coming and it can see) does not hide a control further on:
       // a signal just beyond it, say.
       if (control.type === "uncontrolled" && (!giveWay || giveWay.go) && !oncoming && next && next.sRoute - frontS <= LOOK_AHEAD_CONTROL_M) continue;
+      const redTurnBan = control.type === "signal" && routeRedTurnBanned(world, c);
       snap.intersection = {
         id: control.id, control: control.type, signal, group: control.group || null, advance,
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
         entered, turn: c.turn || "straight",
         oncoming,
         // (never at a scramble crossing, sim/signals.js: `scramble` says so)
-        right_on_red: control.type === "signal" && map.rightOnRed && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
+        right_on_red: control.type === "signal" && map.rightOnRed && !redTurnBan && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
           ? turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
+        ...(redTurnBan ? { no_turn_on_red: true } : {}),
         ...(control.type === "signal" && isScramble(inter) && !dark && !seenFlash ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } } : {}),
         ...(world.leftOnRed && control.type === "signal" && signal === "red" && c.turn === "left" && inter && !isScramble(inter) && bumperToLine > -CLEARING_M && leftOnRedExit(world, c)
           ? { left_on_red: turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") } : {}),

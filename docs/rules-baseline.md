@@ -1,4 +1,19 @@
-# Rules benchmark baseline — 2026-10-31 (power cuts, unchanged)
+# Rules benchmark check — 2026-11-05 (roundabout priority and red-turn signs)
+
+The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4)
+passes on both base `e5b95ac` and this change. Every result field matches except timing
+measurements. Both have zero collisions, red lights, stop-sign violations, failures to yield
+or deadlocks, 0.2 seconds off road and seven safety brakes. The base was an untouched
+`git archive e5b95ac` under `data/runs/`, with its own server; both ran through
+`scripts/bench_node.mjs`. No extra dependencies were installed.
+
+The newest committed historical run, `data/runs/20261022-092538-rules.json`, also passes all
+12 routes with no collisions or rule violations. Its detailed values predate subsequent
+simulation changes and are not used as an exact V8 comparison. This check covers the dry
+Kitsilano suite, not the earlier 70-route, all-weather matrix below. New challenge and
+replay behavior is covered by the focused scripts and the full Drive Lab checks.
+
+## Earlier record: 2026-10-31 (power cuts, unchanged)
 
 Rules passes **70 of 70 routes in V8**, exactly as on main: all 15 seeded suites match main at
 `7749aec` route for route, in every result field but wall-clock time and decision latency, with no

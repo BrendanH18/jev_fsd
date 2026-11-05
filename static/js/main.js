@@ -200,7 +200,7 @@ export async function boot() {
     // and, on one-way streets that allow it, cyclists ride against the traffic, and everyone looks both
     // ways for them (`?contraflow=0` takes them off)
     const contraflow = params.get("contraflow") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -218,7 +218,7 @@ export async function boot() {
   }
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
   if (world.busLanes) view.scene.add(buildBusLanes(map));
-  if (world.restrictions) view.scene.add(buildRestrictions(map));
+  if (world.restrictions || world.redTurnSigns) view.scene.add(buildRestrictions(map, [...(world.restrictions ? map.restrictions : []), ...(world.redTurnSigns ? map.redTurns : [])]));
   if (world.calming) view.scene.add(buildCalming(map));
   // and the contraflow lanes, sharrows and signs of one-way streets cyclists ride both ways, where the
   // world has them ride (sim/contraflow.js)
@@ -288,7 +288,7 @@ export async function boot() {
   };
   // school and playground zones go by the time of day (sim/speed-zones.js); a benchmark replay, as
   // the benchmark itself, drives none
-  function syncClock() { if (!replay) world.setClock({ ...mapClock(hour, map), ...(world.restrictions || world.busLanes ? { weekday: clock.weekday } : {}) }); }
+  function syncClock() { if (!replay) world.setClock({ ...mapClock(hour, map), ...(world.restrictions || world.busLanes || world.redTurnSigns ? { weekday: clock.weekday } : {}) }); }
   clock.update(world.t);
   function rememberConditions() {
     const next = new URL(location.href);

@@ -1048,7 +1048,7 @@ determine sensing; a vehicle in traffic hides a pedestrian behind it, and so, wi
 standing at the kerb; with them on, road vehicles also hide other vehicles and cyclists (cars parked in a parking lane do not). Trees occlude nothing, and individual street lamps do not extend
 detection range. Scenery collision checks use polygon exteriors and circular trunk/post cross-sections; courtyard holes and crash damage are not modeled. The driven car changes lanes only to pass and
 then returns, and to get into the lane for a turn; two or more lanes from its route's lane, it keeps room for one lane change per lane. Where its route makes a U-turn at a dead end, it stops and turns round with a three-point turn (more legs where it is tight), letting its bumpers reach no more than 0.2 m over the kerb and keeping clear of parked cars and scenery; it does not turn round anywhere else, and the router uses U-turns only at dead ends. Where a street's lanes change at the junction
-before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Turning left or making a U-turn at a signal, a stop sign or a junction without either, the car yields to the oncoming traffic it can see, waiting at the line or inside the junction, and it takes an oncoming car's left indicator at its word when that car is in its leftmost lane within 40 m of the junction (anywhere else, it may be a lane change; a car pulling out from the curb is waited for whatever it signals). It turns right on red after a full stop (except on the island of Montréal, judged from the map's centre against a coarse outline of the island), but only where it can see along the street to its left from the line: at a red light it does not creep forward to look, so at a corner a building hides it waits for the green, as it does in fog, rain, snow and after dark. Signs banning a right on red at a particular junction are not read from the map, and left turns on red from one one-way street onto another are not made. At a two-way stop, once its stop is made, the car gives way to traffic on the through road from both sides; at a junction without a sign or signal it gives way to traffic from the right, or to the larger road where a smaller one meets it (road classes from OpenStreetMap: primary and secondary, then tertiary, then the rest). OpenStreetMap misses some stop signs, so a few junctions that have one on the street are treated as having none, and a T-junction follows the same rules as a crossroads. Where a building hides a street it gives way to, the car slows, creeps forward to look and goes once stopped at the point it looks from (0.3 m short of the crossing road's asphalt) if nothing it can see is coming, even if a building still hides part of the street; in fog and after dark it looks only as far as it can see. Traffic gives way by the same rules but does not look: it knows where everyone is. The audit counts pulling out in front of a vehicle with the right of way that is due at the junction within 2 s as a failure to yield, seen or not, if it was already on its way when the car crossed its line. Traffic does not overtake cyclists in the lane: on a street with one lane each way it stays behind one riding in the lane unless passing cyclists is on (`passCyclists`, free drives and the "Give them room" challenge), when it passes through the oncoming lane once that is clear (sim/cyclist-pass.js); parking uses forward pull-ins, and pedestrians do not cross
+before a turn (a turn bay, say), the car still moves into the turn lane inside that junction. Turning left or making a U-turn at a signal, a stop sign or a junction without either, the car yields to the oncoming traffic it can see, waiting at the line or inside the junction, and it takes an oncoming car's left indicator at its word when that car is in its leftmost lane within 40 m of the junction (anywhere else, it may be a lane change; a car pulling out from the curb is waited for whatever it signals). It turns right on red after a full stop (except on the island of Montréal, judged from the map's centre against a coarse outline of the island), but only where it can see along the street to its left from the line: at a red light it does not creep forward to look, so at a corner a building hides it waits for the green, as it does in fog, rain, snow and after dark. Mapped red-turn bans apply with `redTurnSigns` on (see below); only supported relation tags are read, so the map is not a complete roadside-sign inventory. With `leftOnRed` on, one-way-to-one-way lefts on red are supported in the reviewed map regions outside Québec (see below). At a two-way stop, once its stop is made, the car gives way to traffic on the through road from both sides; at a junction without a sign or signal it gives way to traffic from the right, or to the larger road where a smaller one meets it (road classes from OpenStreetMap: primary and secondary, then tertiary, then the rest). OpenStreetMap misses some stop signs, so a few junctions that have one on the street are treated as having none, and a T-junction follows the same rules as a crossroads. Where a building hides a street it gives way to, the car slows, creeps forward to look and goes once stopped at the point it looks from (0.3 m short of the crossing road's asphalt) if nothing it can see is coming, even if a building still hides part of the street; in fog and after dark it looks only as far as it can see. Traffic gives way by the same rules but does not look: it knows where everyone is. The audit counts pulling out in front of a vehicle with the right of way that is due at the junction within 2 s as a failure to yield, seen or not, if it was already on its way when the car crossed its line. Traffic does not overtake cyclists in the lane: on a street with one lane each way it stays behind one riding in the lane unless passing cyclists is on (`passCyclists`, free drives and the "Give them room" challenge), when it passes through the oncoming lane once that is clear (sim/cyclist-pass.js); parking uses forward pull-ins, and pedestrians do not cross
 against signals. Street-name and speed-limit posts block the car; their labels do not add sensing information. No post or trunk stands in a lane or on the asphalt: where map topology would put one there (a slip road leaving a main road at a shallow angle, or a street continuing wider past a junction), it moves outward, a signal pole to the stop line's curb if the far side has no room, and otherwise is left out (across the twelve maps: 4 of 1,127 signal poles, 27 of 13,358 lamp posts, 11 street-sign and 2 stop-sign posts, and 4 trees).
 Low curbs remain traversable, and scenery beyond the playable map is decorative with simplified geography.
 
@@ -1428,5 +1428,49 @@ The saved Jev requests `data/snapshots/left_on_red_clear.json` and
 `left_on_red_traffic.json` cover driving after a full stop and waiting for traffic
 from the right; run them with `uv run scripts/verify_jev.py data/snapshots/left_on_red_*.json`.
 `scripts/test_drive_lab.mjs` also measures two complete saved arena evaluations
-(all challenges with Rules and cautious) and checks the 9 MB cap: 56.1% with
-41 challenges, measured 2026-11-05.
+(all challenges with Rules and cautious) and checks the 9 MB cap: 58.7% with
+43 challenges, measured 2026-11-05.
+
+
+## Roundabout challenge and red-turn signs
+
+**Find your gap** (`roundabout-gap`, seed 42042) uses Halifax's North Park roundabout:
+Cunard Street approach `e300`, circulating along the ring, then the third exit onto North Park Street (`e358`). Three cars already in the ring use ordinary NPC paths and
+vehicle physics. The car waits outside the ring for a gap, then follows its planned exit.
+The challenge changes no shared map state; fleet and driver state survive normal replay
+checkpoints. Circulating NPCs keep priority over waiting entries; the generic junction-box
+yield check excludes ring edges, while following and collision checks still apply.
+`scripts/test_roundabout_challenge.mjs` checks yielding, the exit, both local
+drivers and deterministic replay.
+
+**Wait for green** (`wait-for-green`, seed 43042) turns right from Harbord Street `e355`
+onto Spadina Avenue `e179` in Toronto, at the real sign in
+[OSM relation 3726713](https://www.openstreetmap.org/relation/3726713).
+The cross street is empty; the car must hold at red and make the same turn on green.
+Its start time selects a long red interval without changing the shared signal plan.
+
+`World.redTurnSigns` defaults off. Free drives enable it unless `?redturnsigns=0`;
+only Wait for green enables it among the challenges. `MapData.redTurns` loads the
+optional `red_turns` array in the existing restrictions v1 sidecar. The seven mapped
+Toronto records were rebuilt for this change; its 21 ordinary restrictions are unchanged.
+Other cities' layers remain unchanged. There is no pack version bump or new layer loader.
+
+`jev/osm/restrictions.py` supports the two relation forms documented by
+[OpenStreetMap](https://wiki.openstreetmap.org/wiki/No_turn_on_red):
+`type=restriction` with `restriction=no_right_turn_on_red` or `no_left_turn_on_red`, and
+`type=restriction:on_red` with `restriction:on_red=no_right_turn` or `no_left_turn`.
+Motorcar exemptions and precedence, simple weekday/time conditions, overnight intervals,
+and conditional `none` use the existing restriction parser. Via-way and unsupported
+conditional syntax are reported in `skipped`; node-based tag alternatives are not inferred.
+Rebuild a city's sidecar with `uv run scripts/fetch_map.py <preset> --restrictions`.
+
+Red-only bans stay out of ordinary `restrictions`, so Python and browser routes can still
+use the turn. The shared `sim/red-turn-signs.js` policy prevents both right- and left-on-red
+exceptions for the ego and NPCs. Sensing reports `intersection.no_turn_on_red`; Jev and LLM
+situation text explains why an empty cross street is insufficient. The renderer adds an
+ON RED plate to the prohibited-turn sign, with schedule text for supported timed signs.
+The audit uses the exit actually driven, even without a route, and captures the signs in
+effect at entry so a schedule changing during the turn cannot alter the verdict. Violations
+reuse `red_lights_run`, replay markers and legality coaching; no metric key is added.
+Focused coverage: `tests/test_restrictions.py`, `scripts/test_red_turn_signs.mjs`, and
+`data/snapshots/no_turn_on_red.json` for live Jev verification.
