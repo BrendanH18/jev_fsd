@@ -114,7 +114,7 @@
     }
   },
   "challenge_checks": "11 checks: both lessons and both drivers in dry/snow; smooth amber decisions; replay",
-  "policy_checks": 12,
+  "policy_checks": 13,
   "browser_unit_tests": 153,
   "python_tests": 238,
   "live_jev_new_cases": {
@@ -136,6 +136,7 @@
   "node_test_scripts": 58,
   "review_fixes": [
     "Stationary/already-entered amber observations and zero desired speed remain finite in NPC control.",
-    "Physical amber arrows capture the stop obligation independently of navigation, including manual takeover with a retained route, and judge applicability using the actual exit."
+    "Physical amber arrows capture the stop obligation independently of navigation, including manual takeover with a retained route, and judge applicability using the actual exit.",
+    "Rules and cautious release the retained amber stop preference once the shared right-on-red or left-on-red policy permits departure."
   ]
 }

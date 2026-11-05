@@ -11,6 +11,8 @@ const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, situationClauses } = await import("../static/js/brain/state.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
+const { CautiousAgent } = await import("../static/js/agents/cautious.js");
+const { routeFromLanes } = await import("../static/js/demo/routing.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
 const { DriveMetrics, failures } = await import("../static/js/bench/metrics.js");
 const { cloneState, DriveRecorder } = await import("../static/js/lab/recorder.js");
@@ -200,6 +202,27 @@ await test("manual amber-arrow entries are judged by the actual exit", () => {
       assert.equal(w.violations.red_lights_run, redFails);
     }
   } finally { if (original) inter.plan.advance = original; else delete inter.plan.advance; }
+});
+await test("a completed amber stop permits an otherwise legal turn on the following red", () => {
+  const w = setup(50);
+  w.route = new Route(routeFromLanes(map, [map.lane("w_in", 0), map.lane("s_out", 0)], 0, 100), map);
+  assert.equal(buildSnapshot(w).intersection.amber.stop, true);
+  w.ego.x = -8 - FRONT - 0.5; w.ego.v = 0;
+  w.t = inter.plan.A.green + inter.plan.A.yellow + 0.01;
+  w.egoStop.update({ type: "signal", id: "sig" }, 0.5, 0, 1);
+  const d = decide(w);
+  assert.equal(d.snap.intersection.right_on_red.go, true);
+  assert.equal(d.snap.intersection.amber.stop, true, "keep the observation for replay and audit");
+  for (const field of ["right_on_red", "left_on_red"]) {
+    const permission = d.snap.intersection.right_on_red;
+    const i = { ...d.snap.intersection, right_on_red: null, [field]: permission };
+    for (const driver of [new RulesBrain(), new CautiousAgent()]) {
+      const choice = driver.decideSync({ ...d.snap, intersection: i }, d.eligible);
+      assert.equal(choice.motion, "drive");
+      assert.equal(choice.candidateId !== "stop_at_line", true);
+      assert.equal(d.eligible.find(c => c.id === choice.candidateId).sim.progress_m > 1, true);
+    }
+  }
 });
 console.log(`${checks} amber policy checks passed`);
 process.exit(0);
