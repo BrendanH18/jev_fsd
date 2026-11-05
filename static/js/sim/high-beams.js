@@ -21,7 +21,9 @@ export function beamRelation(car, other) {
     dy + Math.sin(other.psi) * end - Math.sin(car.psi) * front);
   return { kind, distance };
 }
-export function headlights(world, car = world.ego, others = world.npcs, margin = 0) {
+// (contraflow cyclists are vehicles too, though not in `world.npcs`: sim/contraflow.js)
+const roadUsers = world => world.contraflow?.riders.length ? world.npcs.concat(world.contraflow.riders) : world.npcs;
+export function headlights(world, car = world.ego, others = roadUsers(world), margin = 0) {
   let oncoming = Infinity, leading = Infinity;
   // Vehicle lamps remain visible beyond the unlit-object range. Buildings still block them.
   for (const n of others) {

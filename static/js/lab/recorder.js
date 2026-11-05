@@ -85,6 +85,7 @@ export class DriveRecorder {
     }
     setNightFlash(target.world);
     target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world; target.world.crossingGuards.world = target.world;
+    if (target.world.contraflow) target.world.contraflow.world = target.world;
     if (target.fleet.collection) { target.fleet.collection.world = target.world; target.fleet.collection.fleet = target.fleet; }
     target.world.npcs = target.fleet.vehicles;
     for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;

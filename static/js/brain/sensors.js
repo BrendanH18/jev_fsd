@@ -420,7 +420,7 @@ export function buildSnapshot(world, executing = null) {
   if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
-  if (world.highBeams) snap.headlights = headlights(world, world.ego, world.npcs, 25);
+  if (world.highBeams) snap.headlights = headlights(world, world.ego, undefined, 25);
   return snap;
 }
 

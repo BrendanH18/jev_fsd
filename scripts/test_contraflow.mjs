@@ -24,7 +24,8 @@ const { toJevState, situationClauses, buildQuestions } = await import("../static
 const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
 const { setupChallenge } = await import("../static/js/lab/evaluation.js");
-const { cloneState } = await import("../static/js/lab/recorder.js");
+const { cloneState, DriveRecorder } = await import("../static/js/lab/recorder.js");
+const { NIGHT_CAUTION_MPS } = await import("../static/js/sim/night-flash.js");
 const { Route } = await import("../static/js/map/route.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
 const { routeFromLanes } = await import("../static/js/demo/routing.js");
@@ -40,7 +41,7 @@ const load = (key) => {
   }
   return new MapData(pack);
 };
-const MTL = load("bb9df59633e0"), CGY = load("a53c5bcf6438");
+const MTL = load("bb9df59633e0"), CGY = load("a53c5bcf6438"), YEG = load("3e794edbefcb");
 const step = (ctx) => stepWorld(ctx, 1 / 60, ctx.world.t * 1000);
 const idle = { enabled: false, step() {} };
 const FRONT = CAR.length - CAR.rearOverhang;
@@ -330,6 +331,39 @@ await test("checkpoints keep the riders and their own stream", () => {
   assert.equal(copy.world.contraflow.riders.length, ctx.world.contraflow.riders.length);
   assert.equal(copy.world.contraflow.random(), ctx.world.contraflow.random());
   assert.equal(copy.world.contraflow.riders[0]?.id, ctx.world.contraflow.riders[0]?.id);
+});
+
+await test("restoring a recorder reconnects the riders' manager to the live world", () => {
+  const ctx = setupChallenge(MTL, CHALLENGES.find((c) => c.id === "contraflow"), { brain: "rules" });
+  const recorder = new DriveRecorder(), clock = {};
+  recorder.record({ ...ctx, clock, drive: null }, true);
+  recorder.restore(0, { ...ctx, clock, setDrive() {} });
+  assert.equal(ctx.world.contraflow.world === ctx.world, true);
+});
+
+await test("overnight, a cyclist coming up to a signal flashing amber keeps to the caution speed", () => {
+  // (Edmonton: the contraflow block e410 ends at a signal whose side it is on flashes amber, sim/night-flash.js)
+  setWeather("dry");
+  const w = new World(YEG, { seed: 3, parked: 0, pedestrians: 0, contraflow: true, nightFlash: true });
+  w.setClock({ hour: 1 });
+  const fleet = new NpcFleet(w, { count: 0, bikes: 0, seed: 5 });
+  w.parked.nextDoor = 1e9; fleet.nextPark = 1e9; fleet.nextPull = 1e9; w.contraflow.target = 0;
+  const ctx = { world: w, fleet, autopilot: idle };
+  const e = YEG.edges.get("e410"), c = contraControl(YEG, e);
+  assert.equal(movementSignal(approachPhase(YEG.intersections.get(c.id), c.ref, w.t), "straight"), "flashing_amber");
+  const n = w.contraflow.place({ edge: "e410", at: e.length - 80, v: 6.5, v0: 6.5 });
+  const lane = YEG.laneList.filter((l) => !YEG.contraflow.has(l.edge) && Math.hypot(l.pts[0][0] - n.x, l.pts[0][1] - n.y) > 40).sort((a, b) => Math.hypot(a.pts[0][0] - n.x, a.pts[0][1] - n.y) - Math.hypot(b.pts[0][0] - n.x, b.pts[0][1] - n.y))[0];
+  w.placeOnLane(lane, Math.min(5, lane.length / 2));
+  const line = n.path.segs[0].line;
+  let fastest = 0, crossed = false;
+  for (let k = 0; k < 60 * 30 && !crossed; k++) {
+    step(ctx);
+    const front = n.path.s + n.spec.length - n.spec.rearOverhang;
+    if (front > line) crossed = true;
+    else if (line - front < 20) fastest = Math.max(fastest, n.v);
+  }
+  assert.ok(crossed, "went through");
+  assert.ok(fastest <= NIGHT_CAUTION_MPS + 0.05, `${(fastest * 3.6).toFixed(1)} km/h in the last 20 m`);
 });
 
 await test("the challenge: Rules and the cautious agent wait short of the junction while the cyclist comes out, then turn in", async () => {

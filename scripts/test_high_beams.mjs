@@ -37,6 +37,14 @@ test('dip distance boundaries, headings, rear and adjacent traffic',()=>{
  n.x+=.01;assert.equal(headlights(w).high_allowed,true);n.x=-20;assert.equal(headlights(w).high_allowed,true);
  n.x=20;n.y=30;assert.equal(headlights(w).high_allowed,true);
 });
+test('a contraflow cyclist coming the other way is traffic to dip for, in sensing and in the audit',()=>{
+ const w=open(world());w.npcs=[];w.ego.highBeam=true;
+ const r=new Vehicle(80,0,Math.PI,5);r.kind='bike';r.contra=true;w.contraflow={riders:[r]};
+ assert.equal(headlights(w).high_allowed,false);
+ // (as sensing asks: brain/sensors.js)
+ assert.equal(headlights(w,w.ego,undefined,25).high_allowed,false);
+ auditHighBeams(w,1);assert.equal(w.violations.glare_seconds,1);
+});
 test('weather, daylight, streetlights and building occlusion',()=>{
  const w=open(world());assert.equal(headlights(w).high_allowed,true);
  for(const weather of ['snow','fog']){w.weather=weather;assert.equal(headlights(w).high_allowed,false);}
