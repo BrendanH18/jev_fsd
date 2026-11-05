@@ -34,6 +34,7 @@ export function buildStreetLights(map, group, streets, trimAt) {
   const lamps = sceneryFor(map).lamps;
   if (!lamps.length) return { lamps, lights: null };
 
+  const luminous = new THREE.Group(); group.add(luminous);
   const designs = { true: design(true), false: design(false) };
   const metal = new THREE.MeshStandardMaterial({ color: 0x5b6066, roughness: 0.5, metalness: 0.6 });
   const headMat = new THREE.MeshStandardMaterial({ color: 0x3c4046, roughness: 0.45, metalness: 0.5 });
@@ -50,7 +51,7 @@ export function buildStreetLights(map, group, streets, trimAt) {
       mesh.castShadow = shadow;
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
-      group.add(mesh);
+      (mat === lensMat ? luminous : group).add(mesh);
     };
     emit(d.pole, metal, true);
     emit(d.head, headMat, true);
@@ -65,8 +66,9 @@ export function buildStreetLights(map, group, streets, trimAt) {
   });
   pools.renderOrder = LAYER.pool;
   pools.computeBoundingSphere();
-  group.add(pools);
-  return { lamps, lights: new NearLights(group, lamps) };
+  luminous.add(pools);
+  const lights = new NearLights(luminous, lamps);
+  return { lamps, lights, setOutage: out => { luminous.visible = !out; } };
 }
 
 // A handful of real point lights, moved to the lamps nearest the camera.

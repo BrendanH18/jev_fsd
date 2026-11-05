@@ -300,6 +300,10 @@ export class Autopilot {
 
   apply(result, snap, candidates, request) {
     const world = this.world;
+    if (world.highBeams) {
+      const answer = result.headlights ?? result.answers?.headlights?.choice;
+      world.ego.highBeam = (answer === "high" || answer === "low" ? answer : (snap.headlights?.high_allowed ? "high" : "low")) === "high";
+    }
     let chosen = candidates.find((c) => c.id === result.candidateId) || null;
     if (result.motion === "stop") {
       const brakeCand = candidates.find((c) => c.id === "hard_brake");
@@ -333,7 +337,7 @@ export class Autopilot {
     this.totals.cost += result.meta.cost_usd || 0;
     this.lastDecision = {
       state: request.state, questions: request.questions, answers: result.answers, meta: result.meta, trace: result.trace,
-      candidates, chosenId: chosen ? chosen.id : null, motion: result.motion, flags: request.flags, at: performance.now(),
+      candidates, chosenId: chosen ? chosen.id : null, motion: result.motion, ...(world.highBeams ? { headlights: world.ego.highBeam ? "high" : "low" } : {}), flags: request.flags, at: performance.now(),
     };
     this.onDecision(this.lastDecision);
   }

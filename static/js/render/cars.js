@@ -340,7 +340,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
   add(geo.trim, shared.trim, false, "trim-and-interior");
   add(geo.chrome, shared.chrome, false, "brightwork");
   add(geo.plate, shared.plate, false, "plates");
-  add(geo.head, shared.head, false, "headlamp-lenses");
+  const head = add(geo.head, shared.head, false, "headlamp-lenses");
   add(geo.drl, shared.drl, false, "daytime-running-lights");
   add(geo.tail, tail, false, "rear-lamps");
   const blinkers = { left: new THREE.Mesh(geo.blinkL, shared.blink), right: new THREE.Mesh(geo.blinkR, shared.blink) };
@@ -361,7 +361,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
   blob.position.set((xr + xf) / 2, 0.02, 0);
   blob.renderOrder = 1;
   g.add(blob);
-  const pool = new THREE.Mesh(new THREE.PlaneGeometry(16, 7).rotateX(-Math.PI / 2), shared.pool);
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(16, 7).rotateX(-Math.PI / 2), shared.pool.clone());
   pool.position.set(xf + 8, 0.03, 0);
   pool.renderOrder = 2;
   pool.visible = false;
@@ -378,7 +378,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
     g.add(axle);
     wheels.push({ pivot: axle, wheel });
   }
-  g.userData = { wheels, spin: 0, tire: st.tire, tail, brake, blinkers, prevV: 0, brakeLevel: 0, pivot,
+  g.userData = { wheels, spin: 0, tire: st.tire, tail, head, brake, blinkers, prevV: 0, brakeLevel: 0, pivot,
     pitch: 0, roll: 0, pool, body, spec, style, modelId: model?.id || null, height,
     headlampPosition: { x: xf + 0.02, y: geo.noseY, z: geo.lampZ },
     hoodCamera: { x: st.glass[1][0] + 0.28, y: st.belt + 0.20 },
@@ -433,7 +433,19 @@ export function syncCar(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   u.blinkers.left.visible = on && vehicle.signal === "left";
   u.blinkers.right.visible = on && vehicle.signal === "right";
   u.pool.visible = lightsOn > 0.02;
-  if (u.headlights) for (const l of u.headlights) l.intensity = lightsOn * 60;
+  const high = !!vehicle.highBeam;
+  if (high) {
+    u.highHead ||= shared.head.clone();
+    u.highHead.emissiveIntensity = 0.35 + lightsOn * 14;
+    u.head.material = u.highHead;
+  } else u.head.material = shared.head;
+  u.pool.material.opacity = lightsOn * (high ? 0.9 : 0.55);
+  u.pool.scale.set(high ? 3 : 1, 1, high ? 1.4 : 1);
+  u.pool.position.x = u.headlampPosition.x + (high ? 24 : 8);
+  if (u.headlights) for (const l of u.headlights) {
+    l.intensity = lightsOn * (high ? 180 : 60); l.distance = high ? 125 : 70;
+    l.target.position.y = high ? 0.2 : -0.6;
+  }
   // brake lights: on while decelerating or held stopped; the tail lamps glow dimly at night
   if (dt > 0) {
     const decel = (u.prevV - vehicle.v) / dt;

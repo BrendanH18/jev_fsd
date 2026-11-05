@@ -9,7 +9,6 @@
   the same controls. Lamps blink and the HUD explains the rule. Outages still take precedence.
 - New Lab challenge, **After midnight** (seed 39042): Morris Street at Barrington Street,
   Halifax, 01:00. Stop at flashing red, then cross when the main street is clear.
-
 - Contraflow cyclists: a new layer beside each pack, `<key>.contraflow.v1.json`
   (`jev/osm/contraflow.py`, `scripts/fetch_map.py ... --contraflow`), maps the one-way streets
   cyclists may ride both ways (`oneway:bicycle=no`, `cycleway=opposite`, `opposite_lane`,
@@ -29,6 +28,14 @@
   `?contraflow=0`; nothing is computed or drawn from a random stream with it off.
 - New challenge, "Both ways" (`contraflow`): turning right from Rue Drolet into Rue Villeneuve Est
   in the Plateau, Montréal, while a cyclist comes out of it in its contraflow lane.
+- High-beam actuation in free drives (`?highbeams=0` disables it): local and model
+  drivers dip for traffic, fog, snow and lit streets. High beams extend forward
+  night visibility; longer beams, a blue HUD indicator and render-only NPC flashes
+  show the choice. Gated `glare_seconds` metrics fail above 0.8 s and affect coaching.
+- New Lab challenge, “Dip your lights” (Saskatoon, seed 41042): a streetlight outage,
+  an empty dark stretch, an oncoming car and a slower leader. Existing challenges
+  and seeded benchmarks leave the feature off.
+
 - School crossing guards at marked mid-block crosswalks in school zones while the zone is in effect.
   Small groups of children gather; the guard waits for a safe stopping gap, raises a round red STOP
   paddle, walks them across and returns to the curb. Traffic and cyclists wait until everyone is off

@@ -1,4 +1,5 @@
 import { setNightFlash, flashState } from "./night-flash.js";
+import { auditHighBeams, wellLit } from "./high-beams.js";
 import { auditRestrictions } from "./turn-restrictions.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
@@ -213,8 +214,9 @@ export class World {
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false } = {}) {
     this.map = map;
+    this.highBeams = !!highBeams; this.highBeamsSeen = false;
     this.pxo = !!pxo && ontarioMap(map);
     this.pxoSeen = false;
     this.pxoLines = new Map();
@@ -342,7 +344,8 @@ export class World {
 
   // (`reach`: looking further along a street by clear daylight, see sim/visibility.js PASS_SIGHT_M)
   sees(observer, o, reach = 0) {
-    if (!this.visibility.sees(observer, o, reach)) return false;
+    const enhanced = this.highBeams && observer === this.ego && observer.highBeam && this.visibility.night > 0.5 && this.weather !== "fog" && this.weather !== "snow" && !wellLit(this);
+    if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach))) return false;
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
     return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
   }
@@ -510,6 +513,7 @@ export class World {
   // contacts, where right of way decides and the sim does not judge it.
   audit(dt, road) {
     this.events.length = 0;
+    if (this.highBeams) auditHighBeams(this, dt);
     if (this.auditStatic(dt)) Object.assign(road, this.roadInfo());
     const egoBox = this.ego.obb();
     for (const n of this.obstaclesNear(this.ego.x, this.ego.y, 12)) {

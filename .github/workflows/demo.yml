@@ -25,6 +25,7 @@ jobs:
       - name: Offline Jev requests
         run: uv run --locked scripts/verify_jev.py --offline
       # Includes test_night_flash.mjs alongside the signal, outage and scramble checks.
+      # The glob includes test_high_beams.mjs and the arena history budget check.
       - name: Node checks
         run: |
           for f in scripts/test_*.mjs; do

@@ -103,6 +103,18 @@ class LlmTestCase(unittest.TestCase):
 
 
 class ParseTests(unittest.TestCase):
+    def test_optional_headlight_answer_and_structured_schema(self):
+        expect = dict(EXPECT, headlights=["high", "low"])
+        for beam in ("high", "low", "invalid", None):
+            reply = {"motion": "drive", "candidate": "keep_lane_target"}
+            if beam is not None:
+                reply["headlights"] = beam
+            answer, error = llm.parse_answer(json.dumps(reply), expect)
+            self.assertIsNone(error)
+            self.assertEqual(answer.get("headlights"), beam if beam in ("high", "low") else None)
+        schema = llm.response_format_for("json_schema", expect)
+        self.assertIn("headlights", json.dumps(schema))
+
     def test_lenient_forms(self):
         cases = [
             '{"motion": "drive", "candidate": "keep_lane_target"}',

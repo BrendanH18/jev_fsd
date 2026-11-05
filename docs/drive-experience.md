@@ -128,3 +128,14 @@ seconds with no collision, red-light, stop or yield violations and a score of 97
 brakes reduced smoothness to 85, and the arrival opened a saved report automatically. This is a
 single integration check, not a general driving-performance claim. High/ultra/high/low wet
 frames also passed with zero GL errors with the new signs in the scene.
+
+### Dim your high beams
+
+In free drives the car chooses its beam every decision cycle. On dark streets,
+high beams give a longer forward view of pedestrians and cyclists. A blue HIGH
+BEAM indicator appears on the HUD and the light reaches farther ahead. The car
+dips for oncoming traffic within 150 m, when following within 60 m, on lit streets,
+and in fog or snow. NPC cars dip too, and briefly flash if your lights glare them.
+More than 0.8 seconds of glare fails a Lab drive and lowers the coaching score.
+Use `?highbeams=0` to disable this feature. The simulator uses Ontario's distances;
+see the provincial rule distinction and sources in [project reference](project-reference.md#high-beams-simhigh-beamsjs).

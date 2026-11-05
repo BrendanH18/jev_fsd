@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict
 
-ALLOWED_QUESTIONS = {"motion", "vector", "route"}
+ALLOWED_QUESTIONS = {"motion", "vector", "route", "headlights"}
 MAX_STATE_BYTES = 24 * 1024
 MAX_CRITERIA = 32
 MAX_INSTRUCTIONS_CHARS = 2000

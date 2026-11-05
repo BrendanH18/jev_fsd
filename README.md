@@ -72,7 +72,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Thirty-seven hand-built scenarios test the situations real drivers get wrong:
+Thirty-eight hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|

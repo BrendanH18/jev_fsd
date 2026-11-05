@@ -107,6 +107,8 @@ export const CHALLENGES = [
   { id: "no-left-turn", title: "No left turn", map: "toronto", weather: "dry", time: "morning", seed: 37042, icon: "↰", difficulty: "Navigation", hazard: "turn-restriction", restrictions: true, street: "Bathurst Street", description: "A signed left turn is prohibited. Take a legal route around the block.", lesson: "Follow the signed turn restriction while it applies. Take the legal detour even when the prohibited turn would be shorter; never turn across the sign just to follow a destination." },
   { id: "contraflow", title: "Both ways", map: "montreal", weather: "dry", time: "afternoon", seed: 40042, icon: "⇄", difficulty: "Anticipation", hazard: "contraflow", contraflow: true, street: "Rue Villeneuve Est",
     description: "You turn right from Rue Drolet into Rue Villeneuve Est, in the Plateau: one-way for cars, but with a painted lane for cyclists riding the other way. One is coming out of it toward the junction.", lesson: "On a one-way street signed EXCEPT BICYCLES (in Québec, EXCEPTÉ VÉLOS), cyclists ride both ways, against the traffic on the driver's left. Look both ways before turning in, and let a cyclist coming out clear the junction first: at a junction without a sign, one coming from your right has the right of way anyway. Driving along such a street, keep right for a cyclist coming the other way, and stop to let them by where there isn't room to leave them at least 1 m." },
+  { id: "dip-your-lights", title: "Dip your lights", map: "saskatoon", weather: "dry", time: "night", seed: 41042, icon: "☼", difficulty: "Courtesy", hazard: "high-beams", highBeams: true,
+    description: "The streetlights are out on 13th Street East. Use high beams on the empty stretch, dip for an approaching car and the slower car ahead.", lesson: "High beams help you see; dip within 150 m oncoming and 60 m following, and in fog or snow." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1003,6 +1005,14 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.highBeams) {
+    const lane = map.lane("e549", 0), startS = 80, goalS = 650;
+    const p = pointAt(lane.pts, lane.cum, startS), route = routeFromLanes(map, [lane], startS, goalS);
+    const reverse = [...map.edges.values()].find(e => e.from === lane.edgeRef.to && e.to === lane.edgeRef.from);
+    return { id: challenge.id, start: { edge: lane.edge, lane: 0, s: startS, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, startS) },
+      route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, beamTraffic: { reverse: reverse.id },
+      tags: { length_m: Math.round(route.length), signals: 0, stops: 0, lefts: 0, rights: 0 } };
+  }
   if (challenge.busLanes) return busLaneScenario(map, challenge);
   if (challenge.hazard === "contraflow") return contraflowScenario(map, challenge);
   if (challenge.hazard === "pxo") {
@@ -1199,6 +1209,17 @@ export function installChallenge(world, fleet, challenge, scenario) {
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
+  if (scenario.beamTraffic) {
+    world.streetLightsOut = true;
+    for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
+      const l = world.map.lane(edge, 0), p = pointAt(l.pts, l.cum, s);
+      const car = new Vehicle(p[0], p[1], headingAt(l.pts, l.cum, s), v);
+      Object.assign(car, { id, color: 0x6b8199, v0: v, driver: { aMax: 1, b: 2, s0: 2, T: 1.5, react: 0.5, lcRate: 0 }, stopMem: new StopMemory(),
+        path: new NpcPath(world.map, fleet.random), frozen: 0, waiting: 0 });
+      car.path.start(edge, 0, s); fleet.vehicles.push(car);
+    }
+    world.challenge.triggered = true;
+  }
   if (["door", "pull"].includes(challenge.hazard)) {
     const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);
     const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);

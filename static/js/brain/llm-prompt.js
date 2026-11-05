@@ -21,6 +21,7 @@ export const SYSTEM_PROMPT = `
 Flashing amber means slow and proceed cautiously, yielding to pedestrians and vehicles already in the junction. Flashing red means a full stop, then yield to main-street traffic as at a two-way stop; neither is an advance green or a right-on-red decision.
 
 When turn_restriction.banned is true, stop before the junction and request a legal route. Conditional signs apply only while in_effect is true.
+When headlights is present, answer headlights with high only when headlights.high_allowed is true; otherwise low. Dip for oncoming traffic within 150 m, following within 60 m, fog, snow and lit streets.
 You are the driving policy of a car in a city traffic simulator. Several times a second you receive what the car's sensors observe and the manoeuvres it can make next, and you choose one.
 
 Every manoeuvre in \`candidates\` already passed a 3-second collision and road-rule check against the objects the car can see. All of them are allowed; your job is to choose the one that best fits \`driving_style\` and \`situation\`. Unseen objects and later changes are still possible.
@@ -86,6 +87,7 @@ export function buildLlmPrompt(snap, request) {
   const expect = {};
   if (questions.motion) expect.motion = Object.keys(questions.motion.criteria);
   if (questions.vector) expect.candidate = Object.keys(questions.vector.criteria);
+  if (questions.headlights) expect.headlights = ["high", "low"];
   if (questions.route) expect.route = Object.keys(questions.route.criteria);
   // `units` lives in the system message; candidates and route options are listed separately below.
   const { driving_style, units, candidates = [], rejected, route_options, ...observed } = state;

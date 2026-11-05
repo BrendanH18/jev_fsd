@@ -11,6 +11,7 @@ import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy } from "../sim/roundabout.js";
+import { headlights } from "../sim/high-beams.js";
 import { pxoAhead } from "../sim/pxo.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
@@ -414,6 +415,7 @@ export function buildSnapshot(world, executing = null) {
   if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
+  if (world.highBeams) snap.headlights = headlights(world, world.ego, world.npcs, 25);
   return snap;
 }
 
