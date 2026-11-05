@@ -1,3 +1,4 @@
+import { setNightFlash } from "../sim/night-flash.js";
 // In-memory checkpoints preserve prototypes, object identity, and seeded random streams.
 // Immutable map/render resources are shared; mutable driving state is copied.
 export function cloneState(value, shared = new Set(), seen = new Map()) {
@@ -82,6 +83,7 @@ export class DriveRecorder {
       for (const field of Object.keys(object)) if (!(field in state[key])) delete object[field];
       Object.assign(object, state[key]);
     }
+    setNightFlash(target.world);
     target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world; target.world.crossingGuards.world = target.world;
     if (target.fleet.collection) { target.fleet.collection.world = target.world; target.fleet.collection.fleet = target.fleet; }
     target.world.npcs = target.fleet.vehicles;

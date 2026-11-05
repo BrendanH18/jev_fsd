@@ -2,6 +2,7 @@
 export class CautiousAgent {
   constructor() { this.name = "cautious"; }
   decideSync(snap, eligible) {
+    // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.
     const target = snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12 ? 0 : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
     const ranked = eligible.map(candidate => ({ candidate, cost:
       Math.abs(candidate.sim.end_speed - target) * 2 + Math.abs(candidate.sim.lane_err_end) * 3

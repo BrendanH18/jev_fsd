@@ -1,3 +1,4 @@
+import { nightFlashNotice } from "./sim/night-flash.js";
 import { buildPxos } from "./render/pxo.js";
 let pxoRendering = null;
 import { buildRestrictions } from "./render/turn-restrictions.js";
@@ -193,7 +194,7 @@ export async function boot() {
     // and, while a school zone is in effect, crossing guards walk children across the marked crosswalks
     // in it, and everyone stops for their STOP sign (`?guards=0` takes them off)
     const guards = params.get("guards") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -683,7 +684,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedGuard = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedGuard = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -824,6 +825,9 @@ export async function boot() {
     if (closure && closure.key !== announcedClosure) { announcedClosure = closure.key; hud.badge(closure.text, closure.stop ? "safety" : "", 2500); }
     if (!closure) announcedClosure = null;
     // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
+    const nightNotice = nightFlashNotice(world);
+    if (nightNotice && nightNotice.key !== announcedNightFlash) { announcedNightFlash = nightNotice.key; hud.badge(nightNotice.text, "stop", 2500); }
+    if (!nightNotice) announcedNightFlash = null;
     const outage = outageNotice(world);
     if (outage && outage.key !== announcedOutage) { announcedOutage = outage.key; hud.badge(outage.text, outage.stop ? "safety" : "stop", 2500); }
     if (!outage) announcedOutage = null;

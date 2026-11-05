@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Overnight flashing signals in free drives (`?nightflash=0` disables them): from 23:00 to
+  05:00, signals joining clearly different road classes flash amber on the main street and red
+  on the side street. Amber means slow and yield to people and traffic already crossing; red
+  means a full stop, then yield to the main street. Traffic, cyclists, Rules and AI drivers obey
+  the same controls. Lamps blink and the HUD explains the rule. Outages still take precedence.
+- New Lab challenge, **After midnight** (seed 39042): Morris Street at Barrington Street,
+  Halifax, 01:00. Stop at flashing red, then cross when the main street is clear.
+
 - School crossing guards at marked mid-block crosswalks in school zones while the zone is in effect.
   Small groups of children gather; the guard waits for a safe stopping gap, raises a round red STOP
   paddle, walks them across and returns to the curb. Traffic and cyclists wait until everyone is off

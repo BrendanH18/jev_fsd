@@ -1,3 +1,4 @@
+import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
 import { turnBanned } from "./turn-restrictions.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
@@ -856,7 +857,7 @@ export class NpcFleet {
       // (and stays back the distance the law asks of it, less the room it leaves anyway)
       if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
-      let stopAt = null;
+      let stopAt = null, flashCap = Infinity;
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
         // (a signal whose lights are out is an all-way stop: sim/outage.js)
@@ -869,6 +870,7 @@ export class NpcFleet {
           // (the light for the way it goes: under a left arrow, only a left turn has a green)
           const after = path.edges[path.edges.indexOf(e) + 1];
           const st = movementSignal(approachPhase(this.map.intersections.get(e.control.id), e.id, world.t), after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight");
+          if (st === "flashing_amber") { flashCap = NIGHT_CAUTION_MPS; if (this.boxBusy(n, e)) stopAt = Math.max(0, bumperToLine); }
           const canStop = bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
           else if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
@@ -887,7 +889,7 @@ export class NpcFleet {
           // stopped: go when the junction is clear and, at a two-way stop, when nothing on the
           // through road would get there first; at an all-way stop, when it is its turn, and nothing
           // coming in on a street without a sign there (which does not stop) would get there first
-          else if (this.boxBusy(n, e) || (ctl.all_way ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id) : this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
+          else if (this.boxBusy(n, e) || (ctl.all_way ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id) : ctl.night_flash ? this.givesWay(n, e.id, e.sEnd - front) : this.crossComing(n, e.to))) stopAt = Math.max(0, bumperToLine);
         }
         break;
       }
@@ -993,7 +995,7 @@ export class NpcFleet {
       // (a snow plow keeps to its clearing speed, whatever the weather)
       // (and, with calming on, down to the speed to cross each speed hump at: sim/traffic-calming.js)
       const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, n.pull ? 5 : Infinity, vCalm);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, n.pull ? 5 : Infinity, vCalm);
       const D = n.driver || IDM;
       let a;
       if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
@@ -2212,7 +2214,9 @@ export class NpcFleet {
   // street (`edgeId`), coming in on another, would get there before it, or within 2 s after it
   // (in which case it could not clear the junction in time).
   givesWay(n, edgeId, toNode) {
-    const node = this.map.nodes.get(this.map.edges.get(edgeId).to);
+    const edge = this.map.edges.get(edgeId);
+    const ctl = controlAt(this.world, edge.control, edgeId);
+    const node = ctl?.night_flash ? this.map.intersections.get(ctl.junction) : this.map.nodes.get(edge.to);
     if (!node) return false;
     const mine = toNode / Math.max(1, n.v);
     for (const o of [this.world.ego, ...this.vehicles]) {
@@ -2221,7 +2225,7 @@ export class NpcFleet {
       const dx = node.x - o.x, dy = node.y - o.y, d = Math.hypot(dx, dy);
       if (d > 90 || d < 1 || (dx * Math.cos(o.psi) + dy * Math.sin(o.psi)) / d < 0.7) continue;
       const a = approachTo(this.map, o, node.id);
-      if (!a || !outranks(this.map, a.edge, edgeId)) continue;
+      if (!a || !outranks(this.map, a.edge, edgeId, this.world)) continue;
       const eta = Math.max(0, a.to_node_m) / o.v;
       if (eta < Math.min(GIVE_WAY_HORIZON_S, mine + GIVE_WAY_AFTER_S)) return true;
     }
@@ -2273,10 +2277,15 @@ export class NpcFleet {
   }
 
   boxBusy(n, e) {
-    const node = this.map.nodes.get(e.to);
+    const inter = this.world.nightFlash && e.control?.type === "signal" ? this.map.intersections.get(e.control.id) : null;
+    const night = inter && flashing(inter, this.world);
+    const node = night ? inter : this.map.nodes.get(e.to);
     if (!node) return false;
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n) continue;
+      // A side-street car waiting at its red (or peeking short of the roadway) is not in the box.
+      const a = night ? approachTo(this.map, o, inter.id) : null;
+      if (a && a.to_node_m > this.map.crossingHalfWidth(a.edge) + 0.1) continue;
       if (Math.hypot(o.x - node.x, o.y - node.y) > BOX_M) continue;
       const diff = Math.abs(wrap(o.psi - n.psi));
       if (diff > Math.PI / 6 && diff < Math.PI * 5 / 6) return true;

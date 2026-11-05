@@ -1252,3 +1252,36 @@ Challenge `no-left-turn`, “No left turn”, Toronto / Bathurst Street, uses OS
 124176 on approach e192. The direct shortest route makes its forbidden left; the challenge
 routes around it on real streets. Focused checks: `scripts/test_turn_restrictions.mjs` and
 `tests/test_restrictions.py`. Existing challenges and benchmark retain restrictions off.
+
+## Overnight flashing signals
+
+`sim/night-flash.js` implements opt-in `World.nightFlash`, enabled in free drives unless
+`?nightflash=0` and in the `after-midnight` challenge (Halifax, Morris at Barrington, seed 39042).
+It requires a clock: 23:00 <= hour or hour < 05:00. Selection draws no randomness and uses the
+pack's existing `roadRank`: primary/secondary and links = 3, tertiary and links = 2, others = 1.
+Every approach in one phase group must rank strictly above every approach in the other. Equal
+or overlapping ranks retain normal timing. This is a documented simulator policy, not municipal
+signal-program data. Disabled worlds do not select sites or consume random draws.
+
+Main-street `flashing_amber` supplies a 20 km/h caution ceiling (a simulation target, not a
+statutory speed limit): at 5.56 m/s it gives time to observe a junction and stop within a short
+visible distance. Grip and the existing safe-speed controller can require slower travel. Vehicles
+yield to pedestrians and vehicles already crossing. Side-street `flashing_red` becomes an
+approach-specific two-way stop through `controlAt`, `StopMemory` and `priority.js`; a stop on
+another approach does not count. The all-way arrival queue is not involved. Sensing reports the
+flashing state, suppresses countdowns, and shares stops, priority and caution with Rules, cautious,
+Jev and LLM drivers. An unseen signal remains unknown. The audit sets `World.nightFlashSeen` when
+met, counts missed red stops in `stop_signs_run`, and priority violations in `failed_to_yield`.
+No new metric keys appear in disabled benchmark results.
+
+Outages override flashing. Flashing overrides advance greens and scramble timing; there is no
+right-on-red question. Pedestrian heads are dark and pedestrians use gaps. Signal lamps blink
+at 1 Hz with a 50% duty cycle. Like `setScrambles`, `setNightFlash` selects module state for the
+current world; constructor and checkpoint restore reconnect it. `scripts/test_night_flash.mjs`
+is included by the CI Node-check glob.
+
+Legal basis: [BC Motor Vehicle Act s. 131(1)(a), (3)(a)](https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96318_05#section131).
+Flashing red requires stopping before the near crosswalk (or intersection if none), then waiting
+until safe. Flashing yellow allows entry only with caution and requires yielding to pedestrians
+in the junction or adjacent crosswalk. The simulator additionally holds amber traffic for vehicles
+already crossing; its 20 km/h target is a conservative implementation choice.
