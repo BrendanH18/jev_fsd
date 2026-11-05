@@ -15,7 +15,8 @@
   `cycleway:left=lane` with `cycleway:left:oneway=-1`, and the like) onto the packs' one-way
   edges: 145 edges across nine maps, with a painted contraflow lane or just a shared street.
   Cyclists ride against the traffic at the driver's left, at cyclist speeds, from their own random
-  stream, stopping for the signs and signals that face their way. Traffic and the driven car look
+  stream, stopping for the signs and signals that face their way (a signal flashing red overnight
+  as a stop sign). Traffic and the driven car look
   both ways: they wait short of the junction for one coming out of a street they turn or go
   straight into, wait for one crossing their way as for oncoming traffic, and move over for one
   coming the other way, stopping where that leaves less than the minimum passing distance. Sensing

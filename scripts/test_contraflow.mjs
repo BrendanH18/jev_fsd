@@ -175,6 +175,30 @@ await test("a cyclist coming out at a signal waits for its green", () => {
   assert.ok(crossed && !crossedOnRed, `crossed ${crossed}, on red ${crossedOnRed}`);
 });
 
+await test("overnight, a cyclist coming out at a signal flashing red stops at the line, as at a stop sign, before going on", () => {
+  // (Avenue Laurier Est's signal: the side street's light flashes red from 23:00 to 05:00, sim/night-flash.js)
+  setWeather("dry");
+  const w = new World(MTL, { seed: 3, parked: 0, pedestrians: 0, contraflow: true, nightFlash: true });
+  w.setClock({ hour: 1 });
+  const fleet = new NpcFleet(w, { count: 0, bikes: 0, seed: 5 });
+  w.parked.nextDoor = 1e9; fleet.nextPark = 1e9; fleet.nextPull = 1e9; w.contraflow.target = 0;
+  const ctx = { world: w, fleet, autopilot: idle };
+  const e = MTL.edges.get("e159"), c = contraControl(MTL, e), inter = MTL.intersections.get(c.id);
+  assert.equal(movementSignal(approachPhase(inter, c.ref, w.t), "straight"), "flashing_red");
+  const n = w.contraflow.place({ edge: "e159", at: e.length - 25, v: 4, v0: 4.5 });
+  egoNear(w, n.x, n.y);
+  const line = n.path.segs[0].line;
+  let stood = 0, wentOn = false;
+  for (let k = 0; k < 60 * 25 && !wentOn; k++) {
+    step(ctx);
+    const front = n.path.s + n.spec.length - n.spec.rearOverhang;
+    if (front < line + 0.5) { if (n.v < 0.2) stood += 1 / 60; }
+    else wentOn = true;
+  }
+  assert.ok(stood >= 0.7, `stood ${stood.toFixed(2)} s at the line`);
+  assert.ok(wentOn, "then went on");
+});
+
 await test("the driven car, turning into the street, waits short of the junction for one coming out, and no candidate goes on", () => {
   const ctx = world();
   // (in sight round the corner building)

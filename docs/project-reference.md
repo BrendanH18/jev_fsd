@@ -1306,7 +1306,8 @@ driver's left, then crosses or turns onto an ordinary street and rides with the 
 side. At the end of each block `contraControl` says what faces it: the signal of the approach on its
 street's axis, the stop sign its street's own traffic has from the other side (or a stop where the
 street ends at one that does not stop for it), `yield` (an uncontrolled junction; at an `equal` one,
-only to traffic from its right), or `major`. It stops for those, for people on crosswalks and for any
+only to traffic from its right), or `major`. A signal that is dark, or flashing red overnight
+(`sim/night-flash.js`), is a stop sign to it; flashing amber is a caution. It stops for those, for people on crosswalks and for any
 body in its way just ahead. Riders are `kind: "bike"` with `contra: true`; `world.obstaclesNear`,
 collisions, sight lines and the forward sims see them; `world.npcs` does not hold them.
 
