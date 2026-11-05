@@ -214,7 +214,7 @@ for(const bbox of [[-73.59,45.51,-73.57,45.53],[-71.24,46.8,-71.21,46.82]]) {
 }
 const challenge = CHALLENGES.find(c=>c.id==="left-on-red");
 const pack=JSON.parse(fs.readFileSync(new URL("../data/maps/a53c5bcf6438.v6.pack.json",import.meta.url)));
-for(const layer of ["transit","crossings","zones","rail","calming","scrambles","buslanes","restrictions"]) {
+for(const layer of ["transit","crossings","zones","rail","calming","scrambles","buslanes","restrictions","contraflow"]) {
  const path=[2,1].map(v=>new URL(`../data/maps/a53c5bcf6438.${layer}.v${v}.json`,import.meta.url)).find(p=>fs.existsSync(p));
  if(path)pack[layer]=JSON.parse(fs.readFileSync(path));
 }

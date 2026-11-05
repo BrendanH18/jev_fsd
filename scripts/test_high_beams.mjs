@@ -19,7 +19,7 @@ const { llmDecision } = await import('../static/js/brain/llm.js');
 const { decisionResult } = await import('../static/js/brain/jev.js');
 const { DriveRecorder } = await import('../static/js/lab/recorder.js');
 const pack = JSON.parse(fs.readFileSync(new URL('../data/maps/ca5573a8d934.v6.pack.json', import.meta.url)));
-for (const name of ['transit','crossings','zones','rail','calming','scrambles','buslanes','restrictions']) {
+for (const name of ['transit','crossings','zones','rail','calming','scrambles','buslanes','restrictions','contraflow']) {
  const file = [2,1].map(v=>new URL(`../data/maps/ca5573a8d934.${name}.v${v}.json`,import.meta.url)).find(u=>fs.existsSync(u));
  if(file) pack[name]=JSON.parse(fs.readFileSync(file));
 }
