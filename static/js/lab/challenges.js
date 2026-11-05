@@ -109,6 +109,7 @@ export const CHALLENGES = [
     description: "You turn right from Rue Drolet into Rue Villeneuve Est, in the Plateau: one-way for cars, but with a painted lane for cyclists riding the other way. One is coming out of it toward the junction.", lesson: "On a one-way street signed EXCEPT BICYCLES (in Québec, EXCEPTÉ VÉLOS), cyclists ride both ways, against the traffic on the driver's left. Look both ways before turning in, and let a cyclist coming out clear the junction first: at a junction without a sign, one coming from your right has the right of way anyway. Driving along such a street, keep right for a cyclist coming the other way, and stop to let them by where there isn't room to leave them at least 1 m." },
   { id: "dip-your-lights", title: "Dip your lights", map: "saskatoon", weather: "dry", time: "night", seed: 41042, icon: "☼", difficulty: "Courtesy", hazard: "high-beams", highBeams: true,
     description: "The streetlights are out on 13th Street East. Use high beams on the empty stretch, dip for an approaching car and the slower car ahead.", lesson: "High beams help you see; dip within 150 m oncoming and 60 m following, and in fog or snow." },
+  { id: "left-on-red", title: "Left on red", map: "calgary", weather: "dry", time: "afternoon", seed: 38042, icon: "↰", difficulty: "Judgement", hazard: "left-on-red", leftOnRed: true, street: "14 Avenue SW", description: "Turn left from one-way 14 Avenue SW onto one-way 5 Street SW. Your light is red; two cars come from the right on their green.", lesson: "Stop fully at the line, then yield to pedestrians and traffic from the right. When clear, turn left from the leftmost lane onto the one-way street. Never do this in Québec, at a scramble, or where a sign forbids it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1041,6 +1042,14 @@ export function challengeScenario(map, challenge) {
     throw new Error("No real prohibited left turn with a legal detour on this map");
   }
 
+  if (challenge.hazard === "left-on-red") {
+    // Real Beltline one-way pair. installChallenge starts it in the red phase.
+    const lane = map.lane("e594", 0), exit = map.lane("e593", 0);
+    const startS = lane.edgeRef.control.s_line - 65;
+    const route = routeFromLanes(map, [lane, exit], startS, exit.length - 12);
+    return { id: challenge.id, start: { edge: lane.edge, lane: 0, s: startS }, route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, oncoming: { edge: "e140", then: "e593" },
+      tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 1, stops: 0, lefts: 1, rights: 0 } };
+  }
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
     : challenge.hazard === "signal" ? l.edgeRef.control?.type === "signal"
@@ -1208,6 +1217,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? scenario.child?.s ?? (scenario.oncoming || scenario.blindLeft || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
+  if (challenge.hazard === "left-on-red") world.t = 23; // sig13: B red, A green; no shared signal plan mutation
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;

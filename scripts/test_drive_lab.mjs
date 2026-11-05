@@ -95,7 +95,8 @@ for (const challenge of CHALLENGES) {
       assert.ok(result.decisions_trace.length); assert.ok(result.events.some(e => e.type === "arrived"));
       assert.ok(result.events.some(e => e.type === "hazard"));
       assert.equal(result.hard_brakes, result.events.filter(e => e.type === "hard_brake").length);
-      validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] })));
+      // (and it survives being saved to the arena history)
+      assert.equal(validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] }))).results.length, 1);
     });
   }
 }

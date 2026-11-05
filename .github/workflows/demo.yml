@@ -28,6 +28,7 @@ jobs:
       # The glob includes test_high_beams.mjs and the arena history budget check.
       - name: Node checks
         run: |
+          # Includes test_left_on_red.mjs and the neighbouring signal checks.
           for f in scripts/test_*.mjs; do
             echo "::group::$f"
             node --experimental-default-type=module "$f"

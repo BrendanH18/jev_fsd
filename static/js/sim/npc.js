@@ -1,4 +1,5 @@
 import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
+import { leftOnRedAllowed } from "./left-on-red.js";
 import { turnBanned } from "./turn-restrictions.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
@@ -2183,14 +2184,14 @@ export class NpcFleet {
     n.lc = { dir, to, edge: edge.id, width: Math.abs(e.lane_offsets[to] - e.lane_offsets[edge.lane]), t: 0, T: 3.5 };
   }
 
-  // At a red light: whether this driver may turn right on red now. It turns right here from the
-  // curb lane, has stopped fully at the line, the junction is clear and nothing is coming that it
-  // must yield to.
+  // At a red light: a right turn from the curb lane, or an enabled legal left from the
+  // leftmost lane. Both require a full stop, a clear junction and a gap in crossing traffic.
   rightOnRed(n, e, bumperToLine, front, dt) {
-    if (!this.map.rightOnRed) return false;
+    if (!this.map.rightOnRed && !this.world.leftOnRed) return false;
     const path = n.path, i = path.edges.indexOf(e), next = path.edges[i + 1];
     const edge = this.map.edges.get(e.id);
-    if (!next || e.lane !== edge.lanes - 1 || this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right") return false;
+    const left = this.world.leftOnRed && next && leftOnRedAllowed(this.world, e.id, next.id);
+    if (!next || (left ? e.lane !== 0 : !this.map.rightOnRed || e.lane !== edge.lanes - 1 || this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right")) return false;
     if (n.stopMem.update(e.control, bumperToLine, n.v, dt) !== "completed") return false;
     // (not across the protected left turns of an advance green opposite, and never at a scramble
     // crossing: sim/signals.js)

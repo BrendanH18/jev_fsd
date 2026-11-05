@@ -200,7 +200,7 @@ export async function boot() {
     // and, on one-way streets that allow it, cyclists ride against the traffic, and everyone looks both
     // ways for them (`?contraflow=0` takes them off)
     const contraflow = params.get("contraflow") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -694,7 +694,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedGuard = null, announcedContraflow = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -884,6 +884,10 @@ export async function boot() {
     if (calmingLine && calmingLine.key !== announcedCalming) { announcedCalming = calmingLine.key; hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000); }
     if (!calmingLine) announcedCalming = null;
     // a scramble crossing ahead: every light red while people cross every way; no right turn on red
+    const leftRed = autopilot.snap?.intersection?.left_on_red;
+    const leftRedKey = leftRed ? `${autopilot.snap.intersection.id}:${leftRed.stop_completed}:${leftRed.clear}` : null;
+    if (leftRedKey && leftRedKey !== announcedLeftRed) hud.badge(leftRed.go ? "LEFT ON RED · CLEAR TO TURN" : !leftRed.stop_completed ? "LEFT ON RED · FULL STOP FIRST" : "LEFT ON RED · YIELD TO PEDESTRIANS AND TRAFFIC", "safety", 2500);
+    announcedLeftRed = leftRedKey;
     const scrambleLine = scrambleNotice(world);
     if (scrambleLine && scrambleLine.key !== announcedScramble) { announcedScramble = scrambleLine.key; hud.badge(scrambleLine.text, "safety", 2500); }
     if (!scrambleLine) announcedScramble = null;
