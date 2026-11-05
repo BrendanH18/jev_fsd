@@ -16,6 +16,7 @@ export class DriveScore {
   constructor(world, { title = "Free drive", map = "", driver = "manual", route = null } = {}) {
     this.title = title; this.map = map; this.driver = driver; this.route = route;
     this.baseline = { ...world.violations }; this.lastCounters = { ...world.violations };
+    this.amberLightsSeen = false;
     this.glareSeconds = 0; this.highBeamsSeen = false;
     this.elapsed = 0; this.distance = 0; this.moving = 0; this.speeding = 0;
     // (of which in a school or playground zone in effect, and the zone it was last counted in)
@@ -176,6 +177,7 @@ export class DriveScore {
       this.plowClose += dt;
       if (this.plowCounted !== plow.plow.id) { this.plowCounted = plow.plow.id; this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id }); }
     }
+    if (world.amberLightsSeen) this.amberLightsSeen = true;
     if (world.busLanesSeen) this.busLanesSeen = true;
     if (world.highBeamsSeen) { this.highBeamsSeen = true; this.glareSeconds = Math.max(0, (world.violations.glare_seconds || 0) - (this.baseline.glare_seconds || 0)); }
     if (this.glareSeconds > 0.8 && !this.glareRecorded) { this.glareRecorded = true; this.incident("glare", "Failed to dip high beams"); }
@@ -192,6 +194,7 @@ export class DriveScore {
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
+      if (ev.type === "amber_light") this.incident("amber_light", ev.reason === "sped_up" ? "Sped up to beat an amber light" : "Passed amber when a safe stop was possible");
       if (ev.type === "red_light" && ev.scramble) this.scrambleReds++;
       if (ev.type === "pxo_early_go") { this.pxoEarlyGoes++; this.incident("pxo_early_go", "Left a pedestrian crossover before everyone reached the far curb"); }
       if (ev.type === "crew_close_pass") { this.crewPasses++; this.incident("crew_close_pass", "Passed a garbage crew worker too close", { worker: ev.worker, clearance_m: ev.clearance_m, kmh: ev.kmh }); }
@@ -282,18 +285,19 @@ export class DriveScore {
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
       safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20 - this.glareSeconds * 5)),
-      legality: Math.round(clamp(100 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25 - this.contraflowMeets * 20)),
+      legality: Math.round(clamp(100 - delta("amber_lights_run") * 25 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25 - this.contraflowMeets * 20)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
     let score = Math.round(Object.entries(SCORE_WEIGHTS).reduce((sum, [key, weight]) => sum + categories[key] * weight, 0));
     // A collision or a red-light violation cannot be averaged into an excellent drive.
     if (collisions) score = Math.min(score, 59);
-    if (reds || yields) score = Math.min(score, 69);
+    if (reds || yields || delta("amber_lights_run")) score = Math.min(score, 69);
     const qualified = this.distance >= 100 && this.elapsed >= 10;
     const grade = !qualified ? "—" : score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "E";
     const tips = [];
     if (collisions) tips.push("Leave more stopping room and anticipate crossing traffic. Collision fault is reported separately.");
+    if (delta("amber_lights_run")) tips.push("When the light turns amber, stop if you can do so safely. If you are too close to stop safely, continue carefully without speeding up; keep yielding to people and traffic, and never enter on red.");
     if (reds || stops || yields) tips.push("Slow early for junctions. Stop fully and check crossings before entering.");
     if (this.zoneSpeeding > 1) tips.push("Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.");
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
@@ -341,6 +345,7 @@ export class DriveScore {
       ...(this.closures ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges } : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
+      ...(this.amberLightsSeen ? { amber_lights_run: delta("amber_lights_run") } : {}),
       ...(this.highBeamsSeen ? { glare_seconds: round(this.glareSeconds, 2) } : {}),
       ...(this.pxoUsed ? { pxo_early_goes: this.pxoEarlyGoes } : {}),
       ...(this.restricted ? { illegal_turns: this.illegalTurns } : {}),

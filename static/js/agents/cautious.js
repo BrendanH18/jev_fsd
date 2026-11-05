@@ -20,10 +20,10 @@ export class CautiousAgent {
     const inBusLane = snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index);
     const exitBusLane = inBusLane ? eligible.find(c => c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) : null;
     const pxoStop = snap.pxo?.bumper_to_crosswalk_m < 3.5;
-    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "stop_for_turn_restriction") || exitBusLane || (pxoStop && eligible.find(c => c.id === "stop_for_pedestrian")) || eligible.find(c => c.id === "park" || c.id === "pull_out") || eligible.find(c => c.id === "pass_cyclist") || eligible.find(c => c.id === "stop_for_crossing_guard") || (snap.contraflow_cyclist?.wait && eligible.find(c => c.id === "yield_to_contraflow_cyclist")) || ranked[0]?.candidate;
+    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "stop_for_turn_restriction") || exitBusLane || (pxoStop && eligible.find(c => c.id === "stop_for_pedestrian")) || eligible.find(c => c.id === "park" || c.id === "pull_out") || eligible.find(c => c.id === "pass_cyclist") || eligible.find(c => c.id === "stop_for_crossing_guard") || (snap.contraflow_cyclist?.wait && eligible.find(c => c.id === "yield_to_contraflow_cyclist")) || (snap.intersection?.amber?.stop && eligible.find(c => c.id === "stop_at_line")) || ranked[0]?.candidate;
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
     // pulling up to park stops where the car reverses in)
-    return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion: candidate?.sim.end_speed < 0.3 && !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) ? "stop" : "drive", candidateId: candidate?.id ?? null,
+    return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion: !(snap.intersection?.amber?.stop && candidate?.id === "stop_at_line") && candidate?.sim.end_speed < 0.3 && !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) ? "stop" : "drive", candidateId: candidate?.id ?? null,
       meta: { source: this.name, model: this.name, latency_ms: 0, input_tokens: 0, cost_usd: 0 } };
   }
   async decide(snap, eligible) { return this.decideSync(snap, eligible); }

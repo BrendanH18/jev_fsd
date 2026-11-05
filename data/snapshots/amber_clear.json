@@ -1,0 +1,262 @@
+{
+  "name": "amber_clear",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 12.2,
+      "limit": 13.9,
+      "speed_vs_limit": "under",
+      "target_speed": 11.9,
+      "target_reason": "too close to stop safely for amber: do not speed up",
+      "speed_vs_target": "at target"
+    },
+    "visibility": {
+      "range_m": 80,
+      "clear_path_m": 80,
+      "safe_speed_mps": 16.6,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 118.5,
+      "remaining_m": 118.5,
+      "destination": {
+        "right": -0.6,
+        "ahead": 118.5
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "West 4th Avenue",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0
+    },
+    "lanes": {
+      "count": 2,
+      "car_lane": "right",
+      "route_lane": "right",
+      "left": {
+        "gap_ok": true
+      }
+    },
+    "intersection": {
+      "control": "signal",
+      "signal": "yellow",
+      "bumper_to_line_m": 4.1,
+      "distance": "at",
+      "entered": false,
+      "cross_traffic_moving": false,
+      "amber": {
+        "stop": false,
+        "speed_at_observation_mps": 11.9,
+        "distance_at_observation_m": 12.1,
+        "stopping_distance_m": 36.4
+      }
+    },
+    "candidates": [
+      {
+        "id": "stop_at_line",
+        "steer": "hold lane",
+        "speed": "approach and stop at the line",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 7,
+        "max_lateral_accel": 0,
+        "progress_m": 13.8,
+        "lane": "centered",
+        "outcome": "clear, stops 0 m before the line"
+      },
+      {
+        "id": "keep_lane_limit",
+        "steer": "hold lane",
+        "speed": "limit 13.9",
+        "end_speed": 11.9,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 0.1,
+        "progress_m": 35.8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_hold",
+        "steer": "hold lane",
+        "speed": "keep 12.2",
+        "end_speed": 11.9,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 0.1,
+        "progress_m": 35.8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "slow to 11.9",
+        "end_speed": 11.9,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 0.1,
+        "progress_m": 35.8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_slow",
+        "steer": "hold lane",
+        "speed": "slow to 9.2",
+        "end_speed": 9.2,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 3.3,
+        "max_lateral_accel": 0,
+        "progress_m": 29.5,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_cautious",
+        "steer": "hold lane",
+        "speed": "slow to 8.9",
+        "end_speed": 8.9,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 3.6,
+        "max_lateral_accel": 0,
+        "progress_m": 28.8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 7,
+        "max_lateral_accel": 0,
+        "progress_m": 13.8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_hold",
+        "steer": "shift 0.5 m left",
+        "speed": "keep 12.2",
+        "end_speed": 11.9,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 1,
+        "progress_m": 35.8,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "slow to 11.9",
+        "end_speed": 11.9,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 1,
+        "progress_m": 35.8,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_hold",
+        "steer": "shift 0.5 m right",
+        "speed": "keep 12.2",
+        "end_speed": 11.9,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 1,
+        "progress_m": 35.8,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "slow to 11.9",
+        "end_speed": 11.9,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 1,
+        "progress_m": 35.8,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 7,
+        "max_lateral_accel": 0,
+        "progress_m": 13.2,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ]
+  },
+  "questions": {
+    "motion": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. The signal 4 m ahead is yellow. The car was too close for a safe stop when amber was first observed: continue carefully if the path is clear, without speeding up above 11.9 m/s. Amber never overrides pedestrians, oncoming traffic or a blocked exit; red does not grant a new entry. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Decide whether the car should keep moving or hold still right now.",
+      "criteria": {
+        "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
+        "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when the path directly ahead is blocked, or when the car has reached the destination."
+      }
+    },
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. The signal 4 m ahead is yellow. The car was too close for a safe stop when amber was first observed: continue carefully if the path is clear, without speeding up above 11.9 m/s. Amber never overrides pedestrians, oncoming traffic or a blocked exit; red does not grant a new entry. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "stop_at_line": "hold lane, approach and stop at the line, +13.8 m, clear, stops 0 m before the line",
+        "keep_lane_limit": "hold lane, limit 13.9, +35.8 m, clear",
+        "keep_lane_hold": "hold lane, keep 12.2, +35.8 m, clear",
+        "keep_lane_target": "hold lane, slow to 11.9, +35.8 m, clear",
+        "keep_lane_slow": "hold lane, slow to 9.2, +29.5 m, clear",
+        "keep_lane_cautious": "hold lane, slow to 8.9, +28.8 m, clear",
+        "keep_lane_stop": "hold lane, stop, +13.8 m, clear",
+        "left_0.5_hold": "shift 0.5 m left, keep 12.2, +35.8 m, clear",
+        "left_0.5_target": "shift 0.5 m left, slow to 11.9, +35.8 m, clear",
+        "right_0.5_hold": "shift 0.5 m right, keep 12.2, +35.8 m, clear",
+        "right_0.5_target": "shift 0.5 m right, slow to 11.9, +35.8 m, clear",
+        "hard_brake": "hold lane, brake hard, +13.2 m, clear"
+      }
+    }
+  },
+  "local": {},
+  "expect": {
+    "vector_in": [
+      "keep_lane_limit",
+      "keep_lane_hold",
+      "keep_lane_target",
+      "keep_lane_cautious",
+      "left_0.5_hold",
+      "left_0.5_target",
+      "right_0.5_hold",
+      "right_0.5_target"
+    ],
+    "motion": "drive",
+    "motion_min_p": 0.7
+  }
+}

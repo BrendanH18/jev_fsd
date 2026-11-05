@@ -96,7 +96,7 @@ export function curveProfileSpeed(route, s) {
 // The "law" a candidate or the autopilot executes between decisions. A lane law's vTarget is a
 // ceiling: the curve profile lowers it through turns, the way a real speed controller would.
 //   kind: "lane" (follow route with offset, target speed, and a stop at `stopAt`, braking at up to
-//         `stopDecel` if given) | "hard_brake" | "reverse" | "steer" (fixed angle)
+//         `stopDecel` if given; `stopReaction` reserves seconds of travel for response lag) | "hard_brake" | "reverse" | "steer" (fixed angle)
 //         | "turnaround" (a three-point turn at a U-turn, sim/turnaround.js; it needs `world`)
 //         | "park" (parallel parking at the destination, or pulling out again, sim/parallel-park.js;
 //         it needs `world`)
@@ -123,7 +123,7 @@ export function applyLaw(vehicle, law, route, s, dt, world = null) {
     default: {
       const stopAt = law.stopAt;
       let vTarget = Math.min(law.vTarget, curveProfileSpeed(route, s).v);
-      if (stopAt !== undefined && stopAt !== null) vTarget = Math.min(vTarget, stopSpeedFor(stopAt - (s - (law.s0 ?? s)), law.stopDecel ? Math.min(law.stopDecel, comfort().decel) : undefined));
+      if (stopAt !== undefined && stopAt !== null) vTarget = Math.min(vTarget, stopSpeedFor(stopAt - (s - (law.s0 ?? s)) - Math.max(0, vehicle.v) * (law.stopReaction || 0), law.stopDecel ? Math.min(law.stopDecel, comfort().decel) : undefined));
       return vehicle.step(dt, { steer: purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)), accel: speedControl(vehicle.v, vTarget) });
     }
   }

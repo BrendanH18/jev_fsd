@@ -87,7 +87,7 @@ export function sampleCandidates(snap, world) {
   const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.lane_closure?.detour ? { detour: snap.lane_closure.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour }
     : snap.contraflow_cyclist?.detour && !snap.cyclist_pass?.detour ? { detour: snap.contraflow_cyclist.detour } : {};
   const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
-  const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
+  const inLane = (law) => ({ ...law, ...(snap.intersection?.amber && !snap.intersection.amber.stop && law.vTarget != null ? { vTarget: Math.min(law.vTarget, snap.intersection.amber.speed_mps) } : {}), offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
   // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
   // lane beside it.
@@ -142,7 +142,7 @@ export function sampleCandidates(snap, world) {
     const queue = f ? f.s - (f.vehicle.spec || CAR).rearOverhang - FRONT - QUEUE_GAP_M : Infinity;
     const stopAt = (mark) => Math.min(mark, queue);
     if (snap.intersection && snap.intersection.bumper_to_line_m > 0.3) {
-      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
+      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, ...(snap.intersection.amber?.stop ? { stopDecel: snap.intersection.amber.stop_decel, stopReaction: snap.intersection.amber.reaction_s } : {}), stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "approach and stop at the line" });
     }
     // Giving way at a two-way stop or a junction without a sign: past the line, wait where the car
@@ -332,6 +332,7 @@ export function sampleCandidates(snap, world) {
   const going = snap.cyclist_pass?.going ? out.filter((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist") : out;
   const list = dedupe(going).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
   list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
+  for (const c of list) if (snap.intersection?.amber && !snap.intersection.amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, snap.intersection.amber.speed_mps);
   return list;
 }
 
@@ -351,8 +352,8 @@ export function simulateAll(candidates, snap, world) {
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
-  const mustStop = control && control.bumper_to_line_m > -CLEARING_M && (
-    (control.control === "signal" && ((control.signal === "red" && !(control.right_on_red?.go || control.left_on_red?.go)) || control.signal === "unknown" || (control.signal === "yellow" && control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2))) ||
+  const mustStop = control && !control.clear_entered && control.bumper_to_line_m > -CLEARING_M && (
+    (control.control === "signal" && ((control.signal === "red" && !(control.right_on_red?.go || control.left_on_red?.go)) || control.signal === "unknown" || (control.signal === "yellow" && (control.amber ? control.amber.stop : control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2)))) ||
     (control.control === "stop" && !control.stop_completed) || waitsItsTurn(control) ||
     (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;

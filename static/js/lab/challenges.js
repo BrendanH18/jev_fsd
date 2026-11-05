@@ -3,6 +3,7 @@ import { busLaneScenario } from "./bus-lane-challenge.js";
 import { contraflowScenario, placeContraflowRider } from "./contraflow-challenge.js";
 import { roundaboutScenario, placeRoundaboutTraffic } from "./roundabout-challenge.js";
 import { redTurnScenario, installRedTurn } from "./red-turn-challenge.js";
+import { amberScenario, installAmber } from "./amber-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -116,6 +117,10 @@ export const CHALLENGES = [
     description: "Three cars circulate through the North Park roundabout as you approach on Cunard Street. Your route takes the third exit onto North Park Street.", lesson: "Slow down and yield to traffic already in the roundabout. Wait outside the ring until there is a safe gap, then circulate counter-clockwise and take the third exit." },
   { id: "wait-for-green", title: "Wait for green", map: "toronto", weather: "dry", time: "afternoon", seed: 43042, icon: "⊘", difficulty: "Judgement", hazard: "red-turn-sign", redTurnSigns: true, street: "Harbord Street",
     description: "Turn right from Harbord Street onto Spadina Avenue. The cross street is empty, but the mapped sign prohibits this turn on red.", lesson: "A no-turn-on-red sign still applies after a full stop and with no traffic coming. Wait for the green for your turn, then yield to anyone crossing before turning. The sign does not require a detour." },
+  { id: "amber-stop", title: "Room to stop", map: "kitsilano", weather: "dry", time: "afternoon", seed: 44042, icon: "◉", difficulty: "Judgement", hazard: "amber", amberLights: true, street: "West 4th Avenue",
+    description: "The light turns amber on West 4th Avenue, with room to stop safely. Ease off, stop before the line, and wait for green.", lesson: "Amber means stop if you can do so safely. Decide when the light changes, allow for grip and braking response, and never speed up to beat it." },
+  { id: "amber-clear", title: "Keep going safely", map: "kitsilano", weather: "dry", time: "afternoon", seed: 45042, icon: "◉", difficulty: "Judgement", hazard: "amber", amberLights: true, street: "West 4th Avenue",
+    description: "The same light turns amber when you are too close to stop safely. Keep a steady speed and clear the junction cautiously.", lesson: "If a safe stop is no longer possible when amber appears, continue cautiously without speeding up. Yield to anyone in your path; an amber decision never permits entering on red." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1012,6 +1017,7 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
     const lane = map.lane("e549", 0), startS = 80, goalS = 650;
@@ -1228,6 +1234,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (challenge.hazard === "left-on-red") world.t = 23; // sig13: B red, A green; no shared signal plan mutation
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
   if (scenario.redTurnSign) installRedTurn(world, scenario);
+  if (scenario.amber) installAmber(world, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {

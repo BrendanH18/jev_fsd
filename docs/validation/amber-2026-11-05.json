@@ -1,0 +1,141 @@
+{
+  "date": "2026-11-05",
+  "base": "c7dc15507efae5924e2bd25db1b5739863c6ca63",
+  "engine": "macOS WKWebView; scripts/shot.swift",
+  "conditions": {
+    "map": "kitsilano",
+    "brain": "rules",
+    "count": 12,
+    "seed": 1,
+    "npcs": 40,
+    "weather": "dry",
+    "mode": "lockstep",
+    "save": false
+  },
+  "baseline_source": "git archive c7dc155, verified against fresh archive excluding runtime __pycache__",
+  "all_scenario_results_equal_excluding": [
+    "wall_ms"
+  ],
+  "before": {
+    "scenarios": 12,
+    "pass_rate": 1,
+    "arrived_rate": 1,
+    "km": 10.53,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 0,
+    "off_road_s": 0.2,
+    "safety_brakes": 10,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "violations_per_km": 0,
+    "avg_kmh": 23.16,
+    "min_gap_m": 1,
+    "min_ttc_s": 0.6,
+    "hard_brakes": 0,
+    "rms_jerk": 3.1,
+    "max_lat_accel": 5.3,
+    "lane_rms_m": 0.17,
+    "lane_changes": 3,
+    "speeding_s": 0,
+    "decisions": 5472,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0
+  },
+  "after": {
+    "scenarios": 12,
+    "pass_rate": 1,
+    "arrived_rate": 1,
+    "km": 10.53,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 0,
+    "off_road_s": 0.2,
+    "safety_brakes": 10,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "violations_per_km": 0,
+    "avg_kmh": 23.16,
+    "min_gap_m": 1,
+    "min_ttc_s": 0.6,
+    "hard_brakes": 0,
+    "rms_jerk": 3.1,
+    "max_lat_accel": 5.3,
+    "lane_rms_m": 0.17,
+    "lane_changes": 3,
+    "speeding_s": 0,
+    "decisions": 5472,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0
+  },
+  "previous_committed_baseline": "data/runs/20261022-092538-rules.json",
+  "previous_record_differences": {
+    "safety_brakes": {
+      "committed": 8,
+      "fresh_base": 10
+    },
+    "avg_kmh": {
+      "committed": 23.64,
+      "fresh_base": 23.16
+    },
+    "min_gap_m": {
+      "committed": 2.1,
+      "fresh_base": 1
+    },
+    "min_ttc_s": {
+      "committed": 1.1,
+      "fresh_base": 0.6
+    },
+    "rms_jerk": {
+      "committed": 3.02,
+      "fresh_base": 3.1
+    },
+    "max_lat_accel": {
+      "committed": 5.09,
+      "fresh_base": 5.3
+    },
+    "lane_rms_m": {
+      "committed": 0.18,
+      "fresh_base": 0.17
+    },
+    "lane_changes": {
+      "committed": 5,
+      "fresh_base": 3
+    },
+    "decisions": {
+      "committed": 5203,
+      "fresh_base": 5472
+    }
+  },
+  "challenge_checks": "11 checks: both lessons and both drivers in dry/snow; smooth amber decisions; replay",
+  "policy_checks": 12,
+  "browser_unit_tests": 153,
+  "python_tests": 238,
+  "live_jev_new_cases": {
+    "model": "jev-1.14.0",
+    "amber_stop": "PASS",
+    "amber_clear": "PASS"
+  },
+  "live_jev_note": "Full 25-case run had one unchanged crosswalk_approach probability at 0.69 against a 0.70 threshold; unchanged baseline payload passed a rerun at 0.74. Both new cases passed repeated live checks.",
+  "arena_history": {
+    "challenges": 45,
+    "drivers": [
+      "rules",
+      "cautious"
+    ],
+    "runs": 2,
+    "bytes": 5658226,
+    "cap_bytes": 9437184
+  },
+  "node_test_scripts": 58,
+  "review_fixes": [
+    "Stationary/already-entered amber observations and zero desired speed remain finite in NPC control.",
+    "Physical amber arrows capture the stop obligation independently of navigation, including manual takeover with a retained route, and judge applicability using the actual exit."
+  ]
+}

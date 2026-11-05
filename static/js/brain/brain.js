@@ -118,6 +118,10 @@ export class Autopilot {
     }
     const plan = world.parkAtGoal || world.parkedIn || world.parking ? this.parker.update(world, world.route.project(world.ego.x, world.ego.y).s, dt) : null;
     const snap = this.snap = buildSnapshot(world, this.executing);
+    // A model's pending response must not let the last green-light law accelerate through amber.
+    if (snap.intersection?.amber && !snap.intersection.amber.stop && this.executing?.law.vTarget != null) {
+      this.executing.law.vTarget = Math.min(this.executing.law.vTarget, snap.intersection.amber.speed_mps);
+    }
     const nav = snap.nav;
     // (a U-turn signals left, the way it turns, and so does turning round)
     world.ego.signal = snap.turnaround ? "left" : nav && nav.turn_in_m < 40 && (nav.next_turn === "left" || nav.next_turn === "right" || nav.next_turn === "uturn") ? (nav.next_turn === "uturn" ? "left" : nav.next_turn) : null;

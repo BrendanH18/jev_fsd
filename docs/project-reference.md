@@ -1474,3 +1474,37 @@ effect at entry so a schedule changing during the turn cannot alter the verdict.
 reuse `red_lights_run`, replay markers and legality coaching; no metric key is added.
 Focused coverage: `tests/test_restrictions.py`, `scripts/test_red_turn_signs.mjs`, and
 `data/snapshots/no_turn_on_red.json` for live Jev verification.
+
+
+## Amber-light decisions
+
+`sim/amber.js` provides `amberStoppingDistance` and `observeAmber` for opt-in
+`World.amberLights`. Free drives enable it unless `?amberlights=0`; only the paired
+**Room to stop** and **Keep going safely** challenges enable it in the lab. Other challenges
+and seeded benchmarks retain their existing amber handling and metric keys.
+
+A safe stop needs 0.5 m plus speed times the 0.4 s decision allowance and the vehicle's
+actuator lag, plus speed squared divided by twice `comfort().decel`. This is a conservative
+simulator model, not a statutory stopping distance. `ego.amberChoices` latches the decision
+per physical approach and displayed signal phase when the lamp first becomes visible.
+The stop branch uses a response-aware braking profile through amber and the following red;
+the clear branch caps speed at observation speed. A car whose bumper has already crossed
+the line clears the junction when red follows. Pedestrians, oncoming vehicles, blocked exits
+and other obstructions still take priority, and a new entry on red is still a violation.
+
+Sensing exposes `intersection.amber`; Jev/LLM state includes the stop choice, onset speed,
+onset distance and calculated stopping distance. Ordinary traffic shares the policy.
+The independent line-crossing audit counts ignoring an available safe stop, or accelerating
+more than 0.5 m/s above the observation speed before crossing on amber, as
+`amber_lights_run`. `World.amberLightsSeen` gates metrics. Each violation fails a drive,
+costs 25 road-rules points and caps the total score at 69, with a replay marker and coaching.
+Vehicle state carries the latched decisions through normal replay checkpoints.
+
+The paired lessons use Kitsilano's West 4th Avenue at Maple Street (`e163` → `e165`),
+with the real signal plan unmodified. Their dry defaults start at 36 km/h, one second before
+amber, with 65 m or 23 m to the line. The snow stop test starts at 7.2 km/h and 23 m so the
+amber remains visible within snow's shorter sight range. Focused checks:
+`scripts/test_amber_policy.mjs`, `scripts/test_amber_challenges.mjs`, and live model cases
+`data/snapshots/amber_stop.json` / `amber_clear.json`.
+
+Legal basis: [BC Motor Vehicle Act s.128(1)(a)](https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96318_05#section128).

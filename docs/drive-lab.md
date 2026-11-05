@@ -115,3 +115,26 @@ and yield to people and traffic already in the junction. See [BC Motor Vehicle A
 **Both ways** (`contraflow`, Montréal, Rue Drolet into Rue Villeneuve Est, seed 40042): give way to a
 cyclist coming out of a one-way street in its contraflow lane before turning in. Contraflow cyclists
 are on only for this challenge and free drives; the challenge places its one cyclist and no others.
+
+## Paired amber-light lessons
+
+**Room to stop** (`amber-stop`, seed 44042) and **Keep going safely** (`amber-clear`,
+seed 45042) use the same unchanged West 4th Avenue signal at Maple Street in Kitsilano.
+Both start already moving at 36 km/h, one second before amber. The first starts with its
+front 65 m short of the stop line; the second, 23 m short. The route carries straight
+through the junction and 100 m along the next block. Both local drivers stop and wait for
+green when a safe stop is available, and continue cautiously on amber when it is not.
+They do not speed up to catch the light. An obstruction still takes priority.
+
+The decision uses grip, speed and braking response at the first visible amber observation;
+it stays fixed for that amber phase and survives replay checkpoints. A manual driver who
+ignores an available safe stop or accelerates to beat amber fails the amber audit. Entering
+on red remains a red-light violation. The feature is enabled in these two lessons and in
+free drives (`?amberlights=0` disables it); other challenges and seeded benchmarks retain
+their previous behavior.
+
+The legal basis for the BC lessons is [BC Motor Vehicle Act s.128(1)(a)](https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96318_05#section128):
+stop for amber unless the stop cannot be made safely. The stopping-distance calculation
+is a conservative simulator policy, rather than a statutory distance or a claim about
+every province's laws. Focused dry/snow and replay coverage lives in
+`scripts/test_amber_challenges.mjs` and `scripts/test_amber_policy.mjs`.
