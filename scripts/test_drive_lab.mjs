@@ -57,6 +57,7 @@ test("agent validation rejects ineligible manoeuvres and malformed motions", () 
   assert.throws(() => registerAgent({ id: "rules", label: "Overwrite", create: () => ({}) }));
 });
 
+const historyResults = [];
 for (const challenge of CHALLENGES) {
   const map = load(challenge.map), a = challengeScenario(map, challenge), b = challengeScenario(map, challenge);
   test(`${challenge.id}: stable route and matching control type`, () => {
@@ -88,6 +89,7 @@ for (const challenge of CHALLENGES) {
   });
   for (const brain of ["rules", "cautious"]) {
     const result = await evaluateChallenge(map, challenge, { brain });
+    historyResults.push(result);
     test(`${challenge.id}: ${brain} completes a clean authored drive`, () => { assert.ok(result.pass, JSON.stringify(result.failures)); assert.ok(result.report.qualified); assert.equal(result.cost_usd, 0); });
     test(`${challenge.id}: ${brain} exports inspectable decision and event context`, () => {
       assert.ok(result.decisions_trace.length); assert.ok(result.events.some(e => e.type === "arrived"));
@@ -97,6 +99,12 @@ for (const challenge of CHALLENGES) {
     });
   }
 }
+
+// Two complete suites, both drivers, must fit the arena's persisted-history cap.
+const historyBytes = JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2,
+  created_at: new Date().toISOString(), results: [...historyResults, ...historyResults] }).length * 2;
+console.log(`Arena history: ${historyBytes} bytes, ${(historyBytes / (9 * 1024 * 1024) * 100).toFixed(1)}% for ${CHALLENGES.length} challenges`);
+assert.ok(historyBytes < 9 * 1024 * 1024, "Two complete arena suites exceed the history cap");
 
 {
   // Pulling out: the bus stands at its stop with its doors open until the car comes up, then

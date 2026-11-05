@@ -1,3 +1,4 @@
+import { flashState } from "./night-flash.js";
 // Right of way at a junction without a signal: a two-way stop, or streets meeting with no sign at
 // all (MapData.priorityOf). Each street leading into the junction holds the right of way at a level:
 // a stop sign is the lowest; a street without one ranks by its class (primary and secondary, then
@@ -21,20 +22,24 @@ const LOOK_AHEAD_M = 120;   // a vehicle's path is searched this far ahead for t
 
 // The level of the street `edgeId` leads in on, or null where it has a signal, a roundabout's
 // yield line or no junction at its end.
-export function levelOf(map, edgeId) {
+export function levelOf(map, edgeId, world = null) {
   const e = map.edges.get(edgeId);
   if (!e) return null;
+  if (world?.nightFlash && e.control?.type === "signal") {
+    const flash = flashState(map.intersections.get(e.control.id), e.control.group, world);
+    if (flash) return flash === "flashing_red" ? 0 : roadRank(e);
+  }
   if (e.control) return e.control.type === "stop" ? 0 : null;
   return map.priorityOf(edgeId) ? roadRank(e) : null;
 }
 
 // Whether traffic coming in on edge `b` has the right of way over traffic on edge `a`, both leading
 // into the same junction from directions that cross.
-export function outranks(map, b, a) {
+export function outranks(map, b, a, world = null) {
   if (a === b) return false;
   const rel = wrap(map.headingIn(b) - map.headingIn(a));
   if (Math.abs(rel) < Math.PI / 6 || Math.abs(rel) > Math.PI * 5 / 6) return false;
-  const la = levelOf(map, a), lb = levelOf(map, b);
+  const la = levelOf(map, a, world), lb = levelOf(map, b, world);
   if (la === null || lb === null) return false;
   return lb > la || (lb === la && rel > 0);
 }
@@ -44,6 +49,15 @@ export function outranks(map, b, a) {
 // driven car sees only where a vehicle is), else from the lane it is in. Null when it is not heading
 // there (it may already be inside the junction).
 export function approachTo(map, v, node, usePath = true) {
+  // A flashing signal may join several OSM nodes: inspect all its incoming approaches.
+  const inter = map.intersections?.get(node);
+  if (inter) {
+    for (const id of inter.vertices || []) {
+      const a = approachTo(map, v, id, usePath);
+      if (a && inter.approaches.some(b => b.edge === a.edge)) return a;
+    }
+    return null;
+  }
   const spec = v.spec || CAR, front = spec.length - spec.rearOverhang;
   const path = usePath && v.path?.edges ? v.path : null;
   if (path) {

@@ -384,7 +384,7 @@ function buildSignals(map, group) {
       for (const [head, state] of Object.entries(phases)) {
         if (head === "u") continue;
         const key = `${intersectionId}|${head}`;
-        const lit = state === "dark" ? [] : state === "advance" ? (blink ? ["green"] : []) : state === "arrow" ? ["red", "arrow_green"]
+        const lit = state === "dark" ? [] : state === "flashing_amber" ? (blink ? ["yellow"] : []) : state === "flashing_red" ? (blink ? ["red"] : []) : state === "advance" ? (blink ? ["green"] : []) : state === "arrow" ? ["red", "arrow_green"]
           : state === "arrow_yellow" ? ["red", "arrow_yellow"] : [state || "red"];
         const shown = lit.join(",");
         if (last.get(key) === shown) continue;

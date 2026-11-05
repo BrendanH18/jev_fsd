@@ -13,6 +13,7 @@ export class RulesBrain {
   constructor() { this.name = "rules"; }
 
   decideSync(snap, eligible) {
+    // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
     const i = snap.intersection;
     const v = snap.ego.v;
     let stop = !!snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12;

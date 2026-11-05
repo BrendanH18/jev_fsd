@@ -1,3 +1,4 @@
+import { setNightFlash, flashState } from "./night-flash.js";
 import { auditRestrictions } from "./turn-restrictions.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
@@ -209,7 +210,7 @@ export class World {
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false } = {}) {
     this.map = map;
     this.pxo = !!pxo && ontarioMap(map);
     this.pxoSeen = false;
@@ -220,6 +221,9 @@ export class World {
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
     this.scrambles = setScrambles(scrambles);
+    this.nightFlash = !!nightFlash;
+    this.nightFlashSeen = false;
+    setNightFlash(this);
     this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
     this.t = 0;
     this.tick = 0;
@@ -374,6 +378,8 @@ export class World {
   light(intersectionId, edgeId, turn = "straight") {
     if (this.outages?.isDark(intersectionId)) return "dark";
     const inter = this.map.intersections.get(intersectionId);
+    const flash = flashState(inter, this.map.edges.get(edgeId)?.control?.group, this);
+    if (flash) return flash;
     if (!inter?.plan?.advance) return this.phase(intersectionId)[this.map.edges.get(edgeId)?.control?.group];
     return movementSignal(approachPhase(inter, edgeId, this.t), turn);
   }
@@ -552,6 +558,7 @@ export class World {
       // sensors measure it (a lane polyline's length differs from the centerline's on a bend), else
       // along the lane
       const past = rc ? frontS - rc.sRoute : road.s + FRONT - control.s_line;
+      if (this.nightFlash && Math.abs(past) < 60 && (control.night_flash || (control.type === "signal" && flashState(this.map.intersections.get(control.id), control.group, this)))) this.nightFlashSeen = true;
       const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
@@ -596,12 +603,12 @@ export class World {
           this.lastSignal = { centre: [node.x, node.y], nodes: new Set([edge.to]), approaches: new Set(this.map.inn.get(edge.to) || []), facing: approach + Math.PI, exit, counted: false, manualStop: !turn };
         }
         // giving way: at a two-way stop, or where its street has no sign and is not the major road
-        const junction = this.map.nodes.get(edge.to);
+        const junction = control.night_flash ? this.map.intersections.get(control.junction) : this.map.nodes.get(edge.to);
         this.giveWay = junction && ((control.type === "stop" && !control.all_way) || (control.type === "uncontrolled" && control.rule !== "major"))
-          ? { node: edge.to, centre: [junction.x, junction.y], edge: edge.id, to: control.type === "stop" || control.rule === "minor" ? "through traffic" : "traffic from the right", counted: false,
+          ? { node: junction.id ?? edge.to, centre: [junction.x, junction.y], edge: edge.id, to: control.type === "stop" || control.rule === "minor" ? "through traffic" : "traffic from the right", counted: false,
             // the traffic on its way when the car crossed its line (not a car that pulls out from
             // the curb, or turns into the street, after that: it must give way itself)
-            coming: new Set(this.npcs.filter((n) => n.path?.pts && !n.pull && (approachTo(this.map, n, edge.to) || Math.hypot(n.x - junction.x, n.y - junction.y) < AUDIT_BOX_M))) } : null;
+            coming: new Set(this.npcs.filter((n) => n.path?.pts && !n.pull && (approachTo(this.map, n, junction.id ?? edge.to) || Math.hypot(n.x - junction.x, n.y - junction.y) < AUDIT_BOX_M))) } : null;
       }
       // (keyed on the stop itself: with or without a route, it is the same line)
       if (this.allWayCounted !== control.id) this.allWayCounted = null;
@@ -1129,9 +1136,9 @@ export class World {
       if (n.v < 1 || !n.path?.pts || !g.coming.has(n)) return false;
       // the street it comes in on, from its plan: on its way to the junction, or in it
       const a = approachTo(this.map, n, g.node);
-      const inside = !a && Math.hypot(n.x - jx, n.y - jy) < AUDIT_BOX_M ? n.path.edges.find((e) => e.to === g.node && e.sEnd > n.path.s - AUDIT_BOX_M) : null;
+      const inside = !a && Math.hypot(n.x - jx, n.y - jy) < AUDIT_BOX_M ? n.path.edges.find((e) => (e.to === g.node || this.map.intersections.get(g.node)?.approaches.some(a => a.edge === e.id)) && e.sEnd > n.path.s - AUDIT_BOX_M) : null;
       const from = a ? a.edge : inside?.id;
-      if (!from || !outranks(this.map, from, g.edge)) return false;
+      if (!from || !outranks(this.map, from, g.edge, this)) return false;
       if (a && a.to_node_m / n.v >= AUDIT_ONCOMING_S) return false;
       const p = frontOnPath(this.ego, n, fx, fy);
       return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S);

@@ -24,6 +24,7 @@ jobs:
         run: uv run --locked python -m unittest discover tests
       - name: Offline Jev requests
         run: uv run --locked scripts/verify_jev.py --offline
+      # Includes test_night_flash.mjs alongside the signal, outage and scramble checks.
       - name: Node checks
         run: |
           for f in scripts/test_*.mjs; do

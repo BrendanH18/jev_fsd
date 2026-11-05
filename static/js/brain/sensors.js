@@ -1,3 +1,4 @@
+import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { turnRestrictionAhead } from "../sim/turn-restrictions.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
@@ -212,7 +213,8 @@ export function buildSnapshot(world, executing = null) {
       const inter = c.control.type === "signal" ? map.intersections.get(c.control.id) : null;
       const junction = inter ? [inter.x, inter.y] : c.junction;
       const dark = !!inter && world.outages?.isDark(inter.id) && !!junction && world.visibility.canSee(ego, ...junction);
-      const control = dark ? darkControl(c.control, c.edge) : c.control;
+      const seenFlash = inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction) ? flashState(inter, c.control.group, world) : null;
+      const control = dark ? darkControl(c.control, c.edge) : seenFlash ? flashControl(world, c.control, c.edge) : c.control;
       const leftTurn = (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
       // already through this one (a left turn stays in view until the car is past oncoming traffic,
       // unless the next control is coming up)
@@ -224,7 +226,8 @@ export function buildSnapshot(world, executing = null) {
       // (the light for the way the car goes: under a left arrow only a left turn has a green; and
       // whether an advance green shows, or holds the car while the approach opposite has it)
       const shows = inter && !dark && junction && world.visibility.canSee(ego, ...junction) ? approachPhase(inter, c.edge, world.t) : null;
-      const signal = control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null;
+      if (seenFlash === "flashing_amber") snap.limit = Math.min(snap.limit, NIGHT_CAUTION_MPS);
+      const signal = seenFlash || (control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null);
       const advance = !shows ? null : ADVANCE_LIGHTS[shows] ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
         : shows === "red" && advanceHolds(inter, c.edge, world.t) ? { light: "held", protected: false } : null;
       let crossTraffic = false;
@@ -250,9 +253,10 @@ export function buildSnapshot(world, executing = null) {
       // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn;
       // without a sign or signal, always
       const turnNow = control.type === "stop" ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
-        : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow";
-      const giveWay = (control.type === "uncontrolled" && control.rule !== "major") || (control.type === "stop" && !control.all_way && stopCompleted)
-        ? giveWayAt(world, c, frontS) : null;
+        : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow" || signal === "flashing_amber";
+      // Amber gives way only to traffic already crossing; red reuses two-way-stop gap and sight checks.
+      const giveWay = seenFlash === "flashing_amber" ? giveWayAt(world, { ...c, control: { ...control, type: "uncontrolled", rule: "major" } }, frontS) : (control.type === "uncontrolled" && control.rule !== "major") || (control.type === "stop" && !control.all_way && stopCompleted)
+        ? giveWayAt(world, { ...c, control }, frontS) : null;
       // (a left turn under an advance green is protected: oncoming traffic is held on its red; and
       // inside the junction once the light has changed, the car clears it as soon as the traffic it can
       // see allows, without waiting to see along the oncoming lanes)
@@ -269,7 +273,7 @@ export function buildSnapshot(world, executing = null) {
         // (never at a scramble crossing, sim/signals.js: `scramble` says so)
         right_on_red: control.type === "signal" && map.rightOnRed && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
           ? rightOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
-        ...(control.type === "signal" && isScramble(inter) && !dark ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } } : {}),
+        ...(control.type === "signal" && isScramble(inter) && !dark && !seenFlash ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } } : {}),
         stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
         ...(dark ? { dark: true } : {}),
@@ -278,7 +282,7 @@ export function buildSnapshot(world, executing = null) {
         give_way: giveWay,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
         cross_traffic_moving: crossTraffic,
-        seconds_to_green: c.secondsToGreen && !dark ? c.secondsToGreen(world.t) : null,
+        seconds_to_green: c.secondsToGreen && !dark && !seenFlash ? c.secondsToGreen(world.t) : null,
       };
       break;
     }
@@ -1324,7 +1328,8 @@ function alongApproach(map, e, back) {
 // Only vehicles it can see count, and only where they are: not where they plan to go.
 function giveWayAt(world, c, frontS) {
   const { ego, route, map } = world;
-  const edge = map.edges.get(c.edge), node = edge.to, centre = c.junction;
+  const edge = map.edges.get(c.edge), flashInter = c.control.night_flash ? map.intersections.get(c.control.junction) : null;
+  const node = flashInter?.id ?? edge.to, centre = flashInter ? [flashInter.x, flashInter.y] : c.junction;
   const rule = c.control.type === "stop" ? "stop" : c.control.rule;
   const sCentre = c.sJunction ?? c.sRoute + 8;
   const half = map.crossingHalfWidth(c.edge);
@@ -1341,6 +1346,10 @@ function giveWayAt(world, c, frontS) {
     const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
     if (d > ONCOMING_LOOK_M || !world.sees(ego, n)) continue;
     const rel = wrap(n.psi - inward);
+    if (rule === "major" && world.nightFlash) {
+      const inter = map.intersections.get(c.control.id), a = inter ? approachTo(map, n, inter.id, false) : null;
+      if (a && a.to_node_m > map.crossingHalfWidth(a.edge) + 0.1) continue;
+    }
     if (d < JUNCTION_BOX_M) {
       // moving across the junction (not coming straight on toward the car, and heading the car's way
       // out of it only short of the centre: one just ahead of it, gone the same way, is a leader)
@@ -1356,15 +1365,15 @@ function giveWayAt(world, c, frontS) {
     // the street it is on (from the lane it is in, not where it plans to go); a vehicle between
     // streets has the right of way over a stop sign or a smaller road, and from the right
     const a = approachTo(map, n, node, false);
-    const first = a ? outranks(map, a.edge, c.edge) : rule !== "equal" || rel > 0;
-    if ((first && eta < need) || eta < IMMEDIATE_S) { out.wait_for = { kind: "vehicle", id: n.id, eta_s: eta }; break; }
+    const first = rule === "major" ? false : a ? outranks(map, a.edge, c.edge, world) : rule !== "equal" || rel > 0;
+    if ((first && eta < need) || (rule !== "major" && eta < IMMEDIATE_S)) { out.wait_for = { kind: "vehicle", id: n.id, eta_s: eta }; break; }
   }
   // stopped where it looks from, now or since it last stopped there
   const atPeek = (frontS >= peekS - PEEK_AT_M && Math.abs(ego.v) < 0.2) || world.egoPeek === c.control.id;
   if (!out.wait_for && c.sRoute - frontS < VIEW_CHECK_M) {
     out.view_clear = true;
-    for (const id of map.inn.get(node) || []) {
-      if (!outranks(map, id, c.edge)) continue;
+    for (const id of flashInter ? flashInter.approaches.map(a => a.edge) : map.inn.get(node) || []) {
+      if (!outranks(map, id, c.edge, world)) continue;
       const e = map.edges.get(id), far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * weather.speed * need;
       let last = 0, blocked = false;
       for (let back = JUNCTION_BOX_M / 2; ; back += VIEW_STEP_M) {

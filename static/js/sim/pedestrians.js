@@ -1,3 +1,4 @@
+import { flashing } from "./night-flash.js";
 import { pxoPedestrian } from "./pxo.js";
 // Pedestrians walk sidewalks and cross at junctions; drivers yield to crossings in their path.
 // Signal crossings only during walk; unmarked corners when no vehicle arrives within a few seconds.
@@ -392,7 +393,7 @@ export class Crowd {
     if (cross.marked) return this.canStopFor(cross);
     const info = this.legsAt.get(cross.node);
     // (with a signal's lights out, its walk signals are out too: cross on a gap, as where there is none)
-    if (info.inter && cross.leg.group && !this.world.outages?.isDark(info.inter.id)) {
+    if (info.inter && cross.leg.group && !this.world.outages?.isDark(info.inter.id) && !flashing(info.inter, this.world)) {
       // walk with the parallel traffic, and only step off on the walk signal
       return pedPhase(info.inter, cross.leg.group === "A" ? "B" : "A", t) === "walk";
     }

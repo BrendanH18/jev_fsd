@@ -277,7 +277,8 @@ export function situationClauses(snap) {
   const m = i ? Math.max(0, Math.round(i.bumper_to_line_m)) : 0;
   const atLine = i && i.bumper_to_line_m < STOP_ZONE_M;
   if (i && i.control === "signal") {
-    if (i.bumper_to_line_m < -CLEARING_M && i.signal !== "green") out.push(`The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`);
+    if (i.signal === "flashing_amber") out.push("Flashing amber: proceed cautiously at no more than 20 km/h, yielding to pedestrians and vehicles already in the junction.");
+    else if (i.bumper_to_line_m < -CLEARING_M && i.signal !== "green") out.push(`The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`);
     else if (i.signal === "unknown") out.push(`The signal phase ${m} m ahead is not visible: approach cautiously and stop at the line unless a permitted phase becomes visible.`);
     else if (i.signal === "red" && i.right_on_red) out.push(rightOnRedClause(i, m, atLine));
     else if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
@@ -288,6 +289,7 @@ export function situationClauses(snap) {
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
+    if (i.signal === "flashing_red") out.push("Flashing red: make a full stop, then yield to the main street until clear. This is a two-way stop, not an all-way stop.");
     if (i.dark) out.push(`The traffic lights at the junction ${i.entered ? "the car is in" : `${m} m ahead`} are out: treat it as an all-way stop. Every driver stops at the line, then goes in turn.`);
     if (!i.stop_completed) {
       if (!p) out.push(atLine ? "The car is at the stop line and the stop is not completed yet: hold still until it is." : `A stop sign is ${m} m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear.`);

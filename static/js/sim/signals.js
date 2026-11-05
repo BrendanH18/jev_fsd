@@ -1,3 +1,4 @@
+import { flashing, flashState } from "./night-flash.js";
 // Signal phases as f(t), plus per-vehicle stop-sign memory.
 // Timing: yellow = 1 s reaction time + speed / (2 × 3.05 m/s²), clamped to 3–5 s; all-red clears the box;
 // cycle 60 s arterial / 50 s else; green split by lane×speed with walk + 1.2 m/s crossing floor.
@@ -33,7 +34,7 @@ let scramblesOn = false;
 // Whether scramble junctions run their all-walk phase (World option `scrambles`).
 export function setScrambles(on) { scramblesOn = !!on; return scramblesOn; }
 // Whether `intersection` runs a scramble now.
-export const isScramble = (intersection) => scramblesOn && !!intersection?.scramblePlan;
+export const isScramble = (intersection) => scramblesOn && !!intersection?.scramblePlan && !flashing(intersection);
 const PED_SPEED = 1.2;
 const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
 const MAJOR = new Set(["primary", "secondary"]);
@@ -140,6 +141,8 @@ function stateIn(p, u) {
 }
 
 export function phaseOf(intersection, t) {
+  const main = flashing(intersection);
+  if (main) return { A: flashState(intersection, "A"), B: flashState(intersection, "B"), u: 0 };
   const plan = planOf(intersection);
   const c = plan.cycle;
   const u = ((t + (intersection.offset_s || 0)) % c + c) % c;
@@ -150,6 +153,7 @@ export function phaseOf(intersection, t) {
 // flashing hand: finish crossing, do not start), or "dont".
 // At a scramble every crossing, diagonals too, shows the all-walk phase, whatever the group.
 export function pedPhase(intersection, group, t) {
+  if (flashing(intersection)) return "dark";
   const plan = planOf(intersection);
   const p = plan[group];
   if (!p) return "dont";
@@ -175,6 +179,8 @@ export function pedPhase(intersection, group, t) {
 // through the clearance under a flashing green, and "red" for the rest of its group until the
 // clearance is over.
 export function approachPhase(intersection, edgeId, t) {
+  const flash = flashState(intersection, intersection.approaches?.find(a => a.edge === edgeId)?.group);
+  if (flash) return flash;
   const plan = planOf(intersection);
   const a = intersection.approaches?.find((x) => x.edge === edgeId);
   const group = a?.group;
@@ -192,6 +198,7 @@ export function approachPhase(intersection, edgeId, t) {
 // waits on its red: then a right turn on red from it would cut across the protected left turns
 // coming into the same street, and waits.
 export function advanceHolds(intersection, edgeId, t) {
+  if (flashing(intersection)) return false;
   const plan = planOf(intersection), adv = plan.advance;
   if (!adv || edgeId === adv.edge || intersection.approaches?.find((x) => x.edge === edgeId)?.group !== adv.group) return false;
   const c = plan.cycle, u = ((t + (intersection.offset_s || 0)) % c + c) % c;
@@ -214,6 +221,7 @@ export const protectedLeft = (state, turn) => (state === "advance" || state === 
 // walk starts; 0 during it), ends_in_s (until the walk and its flashing hand are over, during them) },
 // or null where there is none.
 export function scrambleState(intersection, t) {
+  if (flashing(intersection)) return null;
   if (!isScramble(intersection)) return null;
   const plan = planOf(intersection), sc = plan.scramble, c = plan.cycle;
   const u = ((t + (intersection.offset_s || 0)) % c + c) % c, d = ((u - sc.start) % c + c) % c;
@@ -225,6 +233,7 @@ export function scrambleState(intersection, t) {
 // a movement, until that movement does: behind an advance green held by another approach, or going
 // any way but left under an arrow, that is once the advance and its clearance are over.
 export function secondsToGreen(intersection, group, t, edgeId = null, turn = "straight") {
+  if (flashing(intersection)) return null;
   const plan = planOf(intersection);
   const p = plan[group];
   const c = plan.cycle;
@@ -284,7 +293,7 @@ export function advanceNotice(world) {
   const c = route.controls.find((k) => k.control.type === "signal" && k.sRoute > front - 1);
   const inter = c && c.sRoute - front <= NOTICE_M ? map.intersections.get(c.control.id) : null;
   // (not while its lights are out: sim/outage.js)
-  if (!inter?.plan?.advance || world.outages?.isDark(inter.id) || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
+  if (!inter?.plan?.advance || world.outages?.isDark(inter.id) || flashing(inter, world) || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
   const shows = approachPhase(inter, c.edge, world.t), text = NOTICES[shows]?.[isLeft(c.turn) ? 0 : 1];
   return text ? { key: `${inter.id}:${shows}`, text, protected: protectedLeft(shows, c.turn) } : null;
 }
@@ -300,7 +309,7 @@ export function scrambleNotice(world) {
   const front = p.s + ego.spec.length - ego.spec.rearOverhang;
   const c = route.controls.find((k) => k.control.type === "signal" && k.sRoute > front - 1);
   const inter = c && c.sRoute - front <= NOTICE_M ? map.intersections.get(c.control.id) : null;
-  if (!isScramble(inter) || world.outages?.isDark(inter.id) || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
+  if (!isScramble(inter) || world.outages?.isDark(inter.id) || flashing(inter, world) || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
   const sc = scrambleState(inter, world.t);
   if (sc.phase !== "dont") return { key: `${inter.id}:${sc.phase}`, text: "SCRAMBLE CROSSING · ALL WALK · EVERY LIGHT RED" };
   const shows = movementSignal(approachPhase(inter, c.edge, world.t), c.turn || "straight");
