@@ -139,8 +139,20 @@ await test("a driver already across the line clears the junction when red follow
   assert.equal(d.snap.intersection.entered, true);
   assert.equal(d.mustStop, false);
   assert.equal(d.snap.target.v > 5, true);
+  assert.equal(d.snap.target.v <= 10, true, "red does not lift a clearing ceiling");
+  assert.equal(d.candidates.every(c => c.law.vTarget == null || c.law.vTarget <= 10), true);
   assert.equal(d.choice.motion, "drive");
   assert.equal(w.violations.red_lights_run, 0);
+});
+await test("the ego clearing ceiling lasts until its rear leaves the crossing street", () => {
+  const w = setup(10); w.audit(1 / 60, w.roadInfo());
+  w.t = inter.plan.A.green + inter.plan.A.yellow + 0.01;
+  w.ego.x = -8 - FRONT + 14;
+  const inside = decide(w);
+  assert.equal(inside.snap.target.v <= 10, true, "keep the cap beyond the usual 12 m control window");
+  assert.equal(inside.candidates.every(c => c.law.vTarget == null || c.law.vTarget <= 10), true);
+  w.ego.x = -8 - FRONT + 22;
+  assert.equal(buildSnapshot(w).target.v > 10, true, "release the cap after the rear clears");
 });
 await test("red profiles survive the following red across a cycle boundary, then expire before a later visit", () => {
   const w = setup(50); buildSnapshot(w);

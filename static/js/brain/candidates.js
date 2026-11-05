@@ -87,7 +87,7 @@ export function sampleCandidates(snap, world) {
   const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.lane_closure?.detour ? { detour: snap.lane_closure.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour }
     : snap.contraflow_cyclist?.detour && !snap.cyclist_pass?.detour ? { detour: snap.contraflow_cyclist.detour } : {};
   const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
-  const inLane = (law) => ({ ...law, ...(snap.intersection?.amber && !snap.intersection.amber.stop && law.vTarget != null ? { vTarget: Math.min(law.vTarget, snap.intersection.amber.speed_mps) } : {}), offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
+  const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
   // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
   // lane beside it.
@@ -332,7 +332,8 @@ export function sampleCandidates(snap, world) {
   const going = snap.cyclist_pass?.going ? out.filter((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist") : out;
   const list = dedupe(going).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
   list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
-  for (const c of list) if (snap.intersection?.amber && !snap.intersection.amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, snap.intersection.amber.speed_mps);
+  const amber = snap.amber_clear || snap.intersection?.amber;
+  for (const c of list) if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);
   return list;
 }
 

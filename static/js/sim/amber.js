@@ -21,7 +21,7 @@ export function observeAmber(vehicle, key, signal, distance, intersection, shows
     // Keep the smooth profile only through this amber's following red, even if
     // the driver leaves and returns without observing the intervening green.
     const stopping = vehicle.amberChoices?.get(key);
-    if (signal === "red" && stopping?.stop && t < stopping.stop_until) return stopping;
+    if (signal === "red" && stopping && (stopping.stop || distance < 0) && t < stopping.stop_until) return stopping;
     if (signal !== "unknown") vehicle.amberChoices?.delete(key);
     return null;
   }

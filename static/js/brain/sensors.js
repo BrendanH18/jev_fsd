@@ -212,6 +212,14 @@ export function buildSnapshot(world, executing = null) {
     // it starts
     if (turns.length && turns[0].dir === "uturn" && turns[0].at_m > p.s && !world.turnaround) snap.nav.turn_round_in_m = turnaroundStopS(route, turns[0]) - p.s;
     const frontS = p.s + FRONT;
+    // Keep a legal amber entry's speed ceiling until the rear clears the
+    // crossing street, even after the ordinary control-look window moves on.
+    if (world.amberLights) for (const c of route.controls) {
+      const choice = ego.amberChoices?.get(`${c.edge}:${c.control.id}`);
+      const clearAt = (c.sJunction ?? c.sRoute + 8) + map.crossingHalfWidth(c.edge);
+      if (choice && !choice.stop && world.t < choice.stop_until && frontS >= c.sRoute && p.s - ego.spec.rearOverhang <= clearAt
+        && (!snap.amber_clear || choice.speed_mps < snap.amber_clear.speed_mps)) snap.amber_clear = choice;
+    }
     for (let k = 0; k < route.controls.length; k++) {
       const c = route.controls[k], next = route.controls[k + 1];
       // (a signal whose lights are out is an all-way stop, once the car can see that they are:
@@ -1647,8 +1655,9 @@ export function desiredSpeed(snap) {
       : i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
     if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
   }
-  if (i?.amber && !i.amber.stop) {
-    v = Math.min(v, i.amber.speed_mps);
+  const amber = snap.amber_clear || i?.amber;
+  if (amber && !amber.stop) {
+    v = Math.min(v, amber.speed_mps);
     reasons.push("too close to stop safely for amber: do not speed up");
   }
   if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) { v = 0; reasons.push("cross traffic"); }

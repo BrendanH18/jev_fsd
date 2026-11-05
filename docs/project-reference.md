@@ -1488,7 +1488,8 @@ actuator lag, plus speed squared divided by twice `comfort().decel`. This is a c
 simulator model, not a statutory stopping distance. `ego.amberChoices` latches the decision
 per physical approach and displayed signal phase when the lamp first becomes visible.
 The stop branch uses a response-aware braking profile through amber and the following red;
-the clear branch caps speed at observation speed. A car whose bumper has already crossed
+the clear branch caps speed at observation speed until the rear clears the crossing street,
+including when red follows the legal entry. A car whose bumper has already crossed
 the line clears the junction when red follows. Pedestrians, oncoming vehicles, blocked exits
 and other obstructions still take priority, and a new entry on red is still a violation.
 
