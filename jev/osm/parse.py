@@ -15,7 +15,7 @@ TRANSIT_ROUTES = ("bus", "trolleybus", "tram")
 class OsmData:
     """nodes: id -> (lat, lon, tags). ways: list of {id, nodes: [node ids], tags}. relations: list of
     {id, members: [(type, ref, role)], tags}, only bus, trolleybus and tram routes, turn restrictions
-    (type=restriction), and multipolygons that are schools or playgrounds."""
+    (type=restriction or restriction:on_red), and multipolygons that are schools or playgrounds."""
 
     def __init__(self):
         self.nodes: Dict[int, tuple] = {}
@@ -49,7 +49,7 @@ def parse_xml(source: Union[Path, str, bytes]) -> OsmData:
             data.add_way(int(el.get("id")), refs, tags)
         elif el.tag == "relation":
             tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
-            if tags.get("type") == "restriction" or (tags.get("type") == "route" and tags.get("route") in TRANSIT_ROUTES) or (
+            if tags.get("type") in ("restriction", "restriction:on_red") or (tags.get("type") == "route" and tags.get("route") in TRANSIT_ROUTES) or (
                     tags.get("type") == "multipolygon" and (tags.get("amenity") == "school" or tags.get("leisure") == "playground")):
                 members = [(m.get("type"), int(m.get("ref")), m.get("role") or "") for m in el.findall("member")]
                 data.add_relation(int(el.get("id")), members, tags)

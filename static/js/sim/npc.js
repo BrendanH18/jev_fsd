@@ -1,5 +1,6 @@
 import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
+import { redTurnBanned } from "./red-turn-signs.js";
 import { turnBanned } from "./turn-restrictions.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
@@ -946,7 +947,9 @@ export class NpcFleet {
         const next = path.edges.find((e) => e.sEnd > front);
         const toNode = next ? next.sEnd - front : Infinity;
         // (and, coming in on a street without a sign to an all-way stop, to one pulling away from its line)
-        if (next && !next.control && toNode > 5 && toNode < 25 && this.isJunction(next.to) && (this.boxBusy(n, next) || this.allWayLeaving(n, next.to))) {
+        // A ring's entry vertices are not crossing junctions: circulating traffic has priority.
+        // Its leader checks above still hold it behind any vehicle obstructing its own lane.
+        if (next && !next.control && !this.map.edges.get(next.id).ring && toNode > 5 && toNode < 25 && this.isJunction(next.to) && (this.boxBusy(n, next) || this.allWayLeaving(n, next.to))) {
           gap = Math.min(gap, Math.max(0.05, toNode - 6)); leadV = 0;
         }
         const rule = next && !next.control ? this.map.priorityOf(next.id) : null;
@@ -2191,6 +2194,7 @@ export class NpcFleet {
     const path = n.path, i = path.edges.indexOf(e), next = path.edges[i + 1];
     const edge = this.map.edges.get(e.id);
     const left = this.world.leftOnRed && next && leftOnRedAllowed(this.world, e.id, next.id);
+    if (next && redTurnBanned(this.world, e.id, next.id)) return false;
     if (!next || (left ? e.lane !== 0 : !this.map.rightOnRed || e.lane !== edge.lanes - 1 || this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right")) return false;
     if (n.stopMem.update(e.control, bumperToLine, n.v, dt) !== "completed") return false;
     // (not across the protected left turns of an advance green opposite, and never at a scramble

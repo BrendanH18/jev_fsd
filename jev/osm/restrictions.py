@@ -2,6 +2,7 @@
 
 Via-way relations and unsupported conditional syntax are recorded in `skipped`, never
 silently promoted to unconditional bans. Weekdays use Monday=0; times are local minutes.
+Red-only bans are kept in `red_turns`, never in the router's `restrictions` list.
 """
 import json
 import re
@@ -9,6 +10,8 @@ from . import fetch
 from .parse import parse_xml
 
 KINDS = {"no_left_turn", "no_right_turn", "no_u_turn", "no_straight_on", "only_left_turn", "only_right_turn", "only_straight_on"}
+RED_KINDS = {"no_left_turn_on_red", "no_right_turn_on_red"}
+ON_RED_KINDS = {"no_left_turn": "no_left_turn_on_red", "no_right_turn": "no_right_turn_on_red"}
 DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
 
@@ -58,12 +61,12 @@ def build_restrictions(bbox, maps_dir, pack, force=False, log=lambda _: None):
         return None
     layer = restrictions_from_osm(parse_xml(raw), pack)
     p.write_text(json.dumps(layer, separators=(',', ':')))
-    log('map: built %s (%d restrictions)' % (p.name, len(layer['restrictions'])))
+    log('map: built %s (%d restrictions, %d red-turn bans)' % (p.name, len(layer['restrictions']), len(layer.get('red_turns', []))))
     return layer
 
 
 def restrictions_from_osm(osm, pack):
-    records, skipped = [], []
+    records, red_turns, skipped = [], [], []
     # Packs deliberately omit OSM way IDs. Recover membership using both endpoint node IDs.
     way_nodes = {w['id']: set('n%d' % n for n in w['nodes']) for w in osm.ways}
     def on_way(edge, ids):
@@ -71,7 +74,7 @@ def restrictions_from_osm(osm, pack):
 
     for rel in osm.relations:
         tags = rel['tags']
-        if tags.get('type') != 'restriction':
+        if tags.get('type') not in ('restriction', 'restriction:on_red'):
             continue
         if set(re.split(r'[;,\s]+', tags.get('except', ''))) & {'motorcar', 'motor_vehicle', 'vehicle'}:
             continue
@@ -81,18 +84,23 @@ def restrictions_from_osm(osm, pack):
             continue
         sources = [ref for typ, ref, role in rel['members'] if typ == 'way' and role == 'from']
         targets = [ref for typ, ref, role in rel['members'] if typ == 'way' and role == 'to']
-        base = tags.get('restriction:motorcar', tags.get('restriction:motor_vehicle', tags.get('restriction', '')))
-        conditional = tags.get('restriction:motorcar:conditional', tags.get('restriction:motor_vehicle:conditional', tags.get('restriction:conditional', '')))
-        rules = [(base, None)] if base in KINDS else []
+        # Both documented relation forms name the same red-only movements:
+        # type=restriction + restriction=no_right_turn_on_red, or
+        # type=restriction:on_red + restriction:on_red=no_right_turn (likewise left).
+        prefix = tags['type']
+        values = ON_RED_KINDS if prefix == 'restriction:on_red' else {k: k for k in KINDS | RED_KINDS}
+        base = tags.get(prefix + ':motorcar', tags.get(prefix + ':motor_vehicle', tags.get(prefix, '')))
+        conditional = tags.get(prefix + ':motorcar:conditional', tags.get(prefix + ':motor_vehicle:conditional', tags.get(prefix + ':conditional', '')))
+        rules = [(values[base], None)] if base in values else []
         overrides = []
         if conditional:
             for clause in conditional.split(';'):
                 m = re.fullmatch(r'\s*(\w+)\s*@\s*\((.*)\)\s*', clause)
                 condition = parse_condition(m[2]) if m else None
-                if m and m[1] in KINDS | {'none'} and condition:
+                if m and (m[1] in values or m[1] == 'none') and condition:
                     overrides.append(condition)
                     if m[1] != 'none':
-                        rules.append((m[1], condition))
+                        rules.append((values[m[1]], condition))
                 else:
                     skipped.append({'id': rel['id'], 'reason': 'unsupported condition', 'value': clause})
         for kind, condition in rules:
@@ -103,5 +111,6 @@ def restrictions_from_osm(osm, pack):
                       (kind != 'no_u_turn' or e['to'] == edge['from']) and
                       (kind == 'no_u_turn' or e['to'] != edge['from'])]
                 if to:
-                    records.append({'id': 'r%s:%s:%d' % (rel['id'], edge['id'], len(records)), 'osm_relation': rel['id'], 'from': edge['id'], 'to': to, 'kind': kind, **({'condition': condition} if condition else ({'suppressed_conditions': overrides} if overrides else {}))})
-    return {'restrictions_version': '1', 'restrictions': records, 'skipped': skipped}
+                    dest = red_turns if kind in RED_KINDS else records
+                    dest.append({'id': '%s%s:%s:%d' % ('rr' if kind in RED_KINDS else 'r', rel['id'], edge['id'], len(dest)), 'osm_relation': rel['id'], 'from': edge['id'], 'to': to, 'kind': kind, **({'condition': condition} if condition else ({'suppressed_conditions': overrides} if overrides else {}))})
+    return {'restrictions_version': '1', 'restrictions': records, 'skipped': skipped, **({'red_turns': red_turns} if red_turns else {})}

@@ -28,22 +28,26 @@ function drawArrow(c, kind) {
   else if (kind.includes('right')) { c.moveTo(50, 108); c.lineTo(50, 62); c.lineTo(82, 62); c.stroke(); head(86, 62, 1, 0); }
   else { c.moveTo(64, 108); c.lineTo(64, 44); c.stroke(); head(64, 40, 0, -1); }
 }
-export function buildRestrictions(map) {
+export function buildRestrictions(map, records = map.restrictions) {
   // (one sign for each kind of restriction on an approach, stacked up its pole)
   const group = new THREE.Group(), drawn = new Set(), stacked = new Map();
-  for (const r of map.restrictions) {
+  for (const r of records) {
     const key = `${r.from}:${r.kind}:${r.condition ? hoursText(r.condition) : ''}`;
     if (drawn.has(key)) continue;
     drawn.add(key);
     const level = stacked.get(r.from) || 0; stacked.set(r.from, level + 1);
     const e = map.edges.get(r.from), s = Math.max(0, e.length - 15);
     const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
-    const c = canvas.getContext('2d'); c.fillStyle = 'white'; c.fillRect(0,0,128,128);
-    c.strokeStyle = 'black'; c.lineWidth = 4; c.strokeRect(3,3,122,122);
+    const onRed = r.kind.endsWith('_on_red');
+    const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = onRed ? 180 : 128;
+    const c = canvas.getContext('2d'); c.fillStyle = 'white'; c.fillRect(0,0,128,canvas.height);
+    c.strokeStyle = 'black'; c.lineWidth = 4; c.strokeRect(3,3,122,canvas.height - 6);
     drawArrow(c, r.kind);
     if (r.kind.startsWith('no_')) { c.strokeStyle = '#d11920'; c.lineWidth = 11; c.beginPath(); c.moveTo(18,110); c.lineTo(110,18); c.stroke(); }
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9,0.9), new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(canvas), side:THREE.DoubleSide}));
+    if (onRed) {
+      c.fillStyle = 'black'; c.font = 'bold 23px sans-serif'; c.textAlign = 'center'; c.fillText('ON RED', 64, 158, 116);
+    }
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9,onRed ? 1.27 : 0.9), new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(canvas), side:THREE.DoubleSide}));
     const right = (e.asphalt?.[1] || e.width/2) + 0.8;
     // (facing the traffic coming up to it, just in front of its pole)
     const x = p[0]+Math.sin(h)*right, z = -p[1]+Math.cos(h)*right;
@@ -54,7 +58,7 @@ export function buildRestrictions(map) {
     group.add(sign,pole);
     if (r.condition) {
       const plate = hoursPlate(r.condition);
-      plate.position.copy(sign.position); plate.position.y -= 0.6; plate.rotation.y = sign.rotation.y;
+      plate.position.copy(sign.position); plate.position.y -= onRed ? 0.8 : 0.6; plate.rotation.y = sign.rotation.y;
       group.add(plate);
     }
   }

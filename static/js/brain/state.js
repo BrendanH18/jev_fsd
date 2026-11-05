@@ -102,6 +102,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
         : { stopped_at_line: false, ...(p.waiting.length ? { waiting_at_junction: p.waiting } : {}) };
     }
     if (i.advance) state.intersection.advance = { light: i.advance.light, ...(i.advance.protected ? { protected_left: true } : {}) };
+    if (i.no_turn_on_red) state.intersection.no_turn_on_red = true;
     if (i.scramble) state.intersection.scramble = { all_walk: i.scramble.phase !== "dont", ...(i.scramble.phase === "dont" ? { all_walk_in_s: i.scramble.walk_in_s } : { ends_in_s: i.scramble.ends_in_s }), right_on_red: false };
     if (i.left_on_red) {
       const r = i.left_on_red;
@@ -300,6 +301,7 @@ export function situationClauses(snap) {
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
     if (i.advance) out.push(advanceClause(i));
+    if (i.no_turn_on_red) out.push("A sign prohibits this turn on red. Wait at the line while the signal for this turn is red, even if the cross street is empty; the sign does not prohibit turning on green.");
     if (i.scramble) out.push(scrambleClause(i));
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {

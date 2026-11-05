@@ -141,6 +141,7 @@ export class MapData {
   constructor(pack) {
     this.pack = pack;
     this.restrictions = pack.restrictions?.restrictions || [];
+    this.redTurns = pack.restrictions?.red_turns || [];
     this.bbox = pack.bbox;
     this.routingBbox = pack.routing_bbox || pack.bbox;
     this.rightOnRed = rightOnRedAllowed(this.routingBbox);
