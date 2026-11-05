@@ -12,7 +12,7 @@ const { buildSnapshot } = await import('../static/js/brain/sensors.js');
 const { failures } = await import('../static/js/bench/metrics.js');
 const key='7165f1c807a8';
 const pack=JSON.parse(fs.readFileSync(`data/maps/${key}.v6.pack.json`));
-for(const layer of ['transit','crossings','zones','rail','calming','scrambles','buslanes','restrictions']) { const file=[2,1].map(v=>`data/maps/${key}.${layer}.v${v}.json`).find(f=>fs.existsSync(f)); if(file) pack[layer]=JSON.parse(fs.readFileSync(file)); }
+for(const layer of ['transit','crossings','zones','rail','calming','scrambles','buslanes','restrictions','contraflow']) { const file=[2,1].map(v=>`data/maps/${key}.${layer}.v${v}.json`).find(f=>fs.existsSync(f)); if(file) pack[layer]=JSON.parse(fs.readFileSync(file)); }
 const map=new MapData(pack), c=CHALLENGES.find(c=>c.id==='bus-lanes');
 assert.equal(map.buslanes.length>0,true);
 const timed={hours:[{days:[0,1,2,3,4],start:420,end:540}],allowed:['bus']};

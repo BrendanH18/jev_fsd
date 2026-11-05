@@ -103,6 +103,10 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     }
     if (i.advance) state.intersection.advance = { light: i.advance.light, ...(i.advance.protected ? { protected_left: true } : {}) };
     if (i.scramble) state.intersection.scramble = { all_walk: i.scramble.phase !== "dont", ...(i.scramble.phase === "dont" ? { all_walk_in_s: i.scramble.walk_in_s } : { ends_in_s: i.scramble.ends_in_s }), right_on_red: false };
+    if (i.left_on_red) {
+      const r = i.left_on_red;
+      state.intersection.left_on_red = { allowed: true, stop_completed: r.stop_completed, clear: r.clear, ...(r.wait_for ? { wait_for: r.wait_for.id || r.wait_for.kind } : {}) };
+    }
     if (i.right_on_red) {
       const r = i.right_on_red, w = r.wait_for;
       state.intersection.right_on_red = { allowed: true, stop_completed: r.stop_completed, clear: r.clear, ...(w ? { wait_for: w.id || w.kind } : {}) };
@@ -117,6 +121,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     const f = snap.following;
     state.following = { id: f.id, ...(f.kind !== "car" ? { kind: f.kind } : {}), gap_m: r1(f.gap_m), gap: gapLabel(f.gap_m, f.closing_mps), speed: r1(f.speed), closing_mps: r1(f.closing_mps) };
   }
+  if (snap.headlights) state.headlights = { ...snap.headlights };
   if (snap.pxo) state.pxo = { crossing: snap.pxo.id, occupied: true, wait_until: "everyone reaches the far curb across the whole roadway" };
   if (snap.pedestrian) {
     const p = snap.pedestrian;
@@ -125,6 +130,14 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   if (snap.right_hook) {
     const h = snap.right_hook;
     state.cyclist_on_right = { id: h.id, arrives_in_s: r1(h.eta_s), needed_s: r1(h.need_s), wait_in_m: r1(Math.max(0, h.bumper_to_yield_m)), yield: true };
+  }
+  if (snap.contraflow_cyclist?.relation === "entering") state.contraflow_street = { street: snap.contraflow_cyclist.street, cyclists_may_come_against_the_traffic: true, can_see_into_it: false, target_speed: r1(snap.contraflow_cyclist.entry_limit_mps) };
+  else if (snap.contraflow_cyclist) {
+    const c = snap.contraflow_cyclist;
+    state.contraflow_cyclist = { id: c.cyclist_id, riding: "against the one-way, as cyclists may on this street", relation: CONTRAFLOW_RELATION[c.relation], ...(c.street ? { street: c.street } : {}),
+      lane: c.lane_kind === "shared" ? "no lane: it shares the street" : "a painted contraflow lane on the driver's left", gap_m: r1(c.gap_m), speed: r1(c.speed),
+      ...(c.wait ? { yield: true, wait_in_m: r1(Math.max(0, c.bumper_to_stop_m)), ...(c.eta_s !== null ? { arrives_in_s: r1(c.eta_s), needed_s: r1(c.need_s) } : {}) } : {}),
+      ...(c.shift_m > 0 ? { move_right_m: r1(c.shift_m) } : {}), min_passing_distance_m: c.min_pass_m };
   }
   if (snap.emergency) {
     const e = snap.emergency;
@@ -246,6 +259,7 @@ function outcomeLabel(c, snap) {
   if (c.law.kind === "park") return c.law.mode === "out" ? "clear, pulls out of the parking space into the lane" : "clear, parks the car in the space";
   if (c.id === "wait_to_park" && snap.parking) return snap.parking.stop_in_m > 0.3 ? `clear, stops ${Math.max(0, r1(snap.parking.stop_in_m - c.sim.progress_m))} m short of where the car reverses into the space` : "clear, holds still where the car reverses into the space";
   if (c.id === "stop_for_oncoming" && snap.intersection?.oncoming) return `clear, waits ${Math.max(0, r1(snap.intersection.oncoming.bumper_to_yield_m - c.sim.progress_m))} m short of oncoming traffic's path`;
+  if (c.id === "yield_to_contraflow_cyclist" && snap.contraflow_cyclist?.wait) return `clear, waits ${Math.max(0, r1(snap.contraflow_cyclist.bumper_to_stop_m - c.sim.progress_m))} m ahead for the cyclist riding against the one-way`;
   if (c.id === "stop_for_cyclist" && snap.right_hook) return `clear, waits ${Math.max(0, r1(snap.right_hook.bumper_to_yield_m - c.sim.progress_m))} m short of the cyclist's path`;
   if (c.id === "stop_at_crosswalk" && snap.crosswalk_stop) return `clear, stops ${Math.max(0, r1(snap.crosswalk_stop.bumper_to_stop_m - c.sim.progress_m))} m short of the crosswalk, beside the stopped ${snap.crosswalk_stop.kind}`;
   if (c.id === "stop_for_streetcar" && snap.streetcar) return `clear, stops ${Math.max(0, r1(snap.streetcar.bumper_to_stop_m - c.sim.progress_m))} m short of the streetcar's ${snap.streetcar.beside ? "rear doors" : "rear"}`;
@@ -277,9 +291,11 @@ export function situationClauses(snap) {
   const m = i ? Math.max(0, Math.round(i.bumper_to_line_m)) : 0;
   const atLine = i && i.bumper_to_line_m < STOP_ZONE_M;
   if (i && i.control === "signal") {
-    if (i.bumper_to_line_m < -CLEARING_M && i.signal !== "green") out.push(`The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`);
+    if (i.signal === "flashing_amber") out.push("Flashing amber: proceed cautiously at no more than 20 km/h, yielding to pedestrians and vehicles already in the junction.");
+    else if (i.bumper_to_line_m < -CLEARING_M && i.signal !== "green") out.push(`The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`);
     else if (i.signal === "unknown") out.push(`The signal phase ${m} m ahead is not visible: approach cautiously and stop at the line unless a permitted phase becomes visible.`);
-    else if (i.signal === "red" && i.right_on_red) out.push(rightOnRedClause(i, m, atLine));
+    else if (i.signal === "red" && i.left_on_red) out.push(turnOnRedClause(i, m, atLine, true));
+    else if (i.signal === "red" && i.right_on_red) out.push(turnOnRedClause(i, m, atLine));
     else if (i.signal === "red") out.push(atLine ? "The car is at the line and the signal is red: hold still until it turns green." : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`);
     else if (i.signal === "yellow") out.push(`The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
     else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
@@ -288,6 +304,7 @@ export function situationClauses(snap) {
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
+    if (i.signal === "flashing_red") out.push("Flashing red: make a full stop, then yield to the main street until clear. This is a two-way stop, not an all-way stop.");
     if (i.dark) out.push(`The traffic lights at the junction ${i.entered ? "the car is in" : `${m} m ahead`} are out: treat it as an all-way stop. Every driver stops at the line, then goes in turn.`);
     if (!i.stop_completed) {
       if (!p) out.push(atLine ? "The car is at the stop line and the stop is not completed yet: hold still until it is." : `A stop sign is ${m} m ahead: keep rolling toward it, come to a full stop at the line, then go when cross traffic is clear.`);
@@ -333,6 +350,7 @@ export function situationClauses(snap) {
       : `A ${c.name} lies across the street ${Math.round(Math.max(0, c.starts_in_m))} m ahead: slow to ${kmh} km/h by the time the car reaches it, and keep to that over it; taken faster it jolts the car and everyone in it. \`car.target_speed\` already does.`);
   }
   if (snap.right_hook) out.push(rightHookClause(snap.right_hook));
+  if (snap.contraflow_cyclist) out.push(contraflowClause(snap.contraflow_cyclist));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));
   if (snap.bus) {
     const b = snap.bus, w = Math.max(0, Math.round(b.bumper_to_stop_m));
@@ -427,6 +445,22 @@ function rightHookClause(h) {
   return `The car turns right ahead and cyclist \`${h.id}\` is coming up on its right, going its way: it reaches the corner in ${r1(h.eta_s)} s, too soon for the car to turn across its path (it needs ${r1(h.need_s)} s). A cyclist on the right going straight on has the right of way. ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_cyclist\`).`}`;
 }
 
+// How a contraflow cyclist (sim/contraflow.js) meets the car's way, for models.
+const CONTRAFLOW_RELATION = { turning_in: "coming out of the street the car is about to enter", oncoming: "coming the other way along the car's street",
+  turning_off: "coming the other way, across the car's way at the junction ahead", crossing: "coming out of its street, across the car's way" };
+
+// A cyclist riding against a one-way street that allows it (sim/contraflow.js).
+function contraflowClause(c) {
+  if (c.relation === "entering") return `The car is about to enter ${c.street || "a one-way street"} where cyclists may ride against the traffic, on the driver's left, and it cannot see into it yet: come up slowly, ready to stop short of the junction, and look both ways (\`car.target_speed\` already does).`;
+  const w = Math.max(0, Math.round(c.bumper_to_stop_m ?? 0)), where = c.street ? ` on ${c.street}` : "";
+  const lead = `Cyclist \`${c.cyclist_id}\` is riding against the one-way${where}, as cyclists may there (${c.lane_kind === "shared" ? "no lane: it shares the street" : "in a painted contraflow lane on the driver's left"}), ${Math.round(c.gap_m)} m away. Look both ways on such a street: a cyclist can come from the "wrong" way.`;
+  const hold = w < 2 ? "Hold still until it has gone by." : `Slow down and wait ${w} m ahead (\`yield_to_contraflow_cyclist\`) until it has gone by.`;
+  if (c.wait && c.relation === "turning_in") return `${lead} It is coming out of the street the car is about to enter: give way to it before entering, short of the junction. ${hold}`;
+  if (c.wait && c.relation === "oncoming") return `${lead} It is coming the other way along the car's street, and there is not room to pass it with the minimum passing distance (${c.min_pass_m} m) even moved over to the right: move over and stop, and let it go by. ${hold}`;
+  if (c.wait) return `${lead} Its way crosses the car's ${c.relation === "turning_off" ? "turn at the junction ahead, as oncoming traffic's would" : "way"}, and it would get there first (in ${r1(c.eta_s)} s; the car needs ${r1(c.need_s)} s to be clear): give way to it as to oncoming traffic. ${hold}`;
+  return `${lead} It is coming the other way: keep to the right, ${r1(c.shift_m)} m over (the car's candidates already do), leaving it at least ${c.min_pass_m} m as it goes by.`;
+}
+
 // An emergency vehicle with its lights and siren on calling on the car to give way.
 function emergencyClause(e) {
   const name = `${/^[aeiou]/.test(e.kind) ? "An" : "A"} ${e.kind}`;
@@ -456,12 +490,13 @@ function scrambleClause(i) {
   return `This junction is a scramble crossing: every light turns red together while people cross every way${right ? ", and there is no right turn on red here: wait at the line for the green, even to turn right" : ", and nobody walks alongside a green"}.`;
 }
 
-function rightOnRedClause(i, m, atLine) {
-  const r = i.right_on_red, w = r.wait_for;
-  if (r.go) return r.entered ? "The car is turning right on the red light: complete the turn." : "The car has stopped fully at the red light and turns right here, where a right turn on red is allowed. Nothing it must yield to is in the way: it may turn now, or keep waiting for the green.";
-  if (!r.stop_completed) return atLine ? "The car is at the line and the signal is red. It turns right here, and a right turn on red is allowed only after a full stop: hold still until the stop is completed." : `The signal ${m} m ahead is red and the car turns right there. A right turn on red is allowed only after a full stop: keep rolling toward the line and stop just before it.`;
-  const why = !w ? "" : w.kind === "pedestrian" ? `: \`${w.id}\` is crossing or about to cross` : w.kind === "view" ? `: ${w.hidden_by ? `\`${w.hidden_by}\` hides the street to its left, and ` : ""}the car cannot see far enough along ${w.hidden_by ? "it" : "the street to its left"} to know it is clear` : w.kind === "junction" ? `: \`${w.id}\` is crossing the junction` : w.kind === "lane" ? ": it can turn on red only from the curb lane" : w.kind === "advance" ? ": the approach opposite has an advance green, and its protected left turns come into the street the car turns into" : `: \`${w.id}\` is coming from the left and has the green`;
-  return `The car has stopped fully at the red light and turns right here. A right turn on red is allowed, but it must yield first${why}. Hold still at the line until it is clear or the light turns green.`;
+function turnOnRedClause(i, m, atLine, left = false) {
+  const r = left ? i.left_on_red : i.right_on_red, w = r.wait_for;
+  const turn = left ? "left" : "right", side = left ? "right" : "left", lane = left ? "leftmost lane" : "curb lane";
+  if (r.go) return r.entered ? `The car is turning ${turn} on the red light: complete the turn.` : `The car has stopped fully at the red light and turns ${turn} here, where a ${turn} turn on red is allowed. Nothing it must yield to is in the way: it may turn now, or keep waiting for the green.`;
+  if (!r.stop_completed) return atLine ? `The car is at the line and the signal is red. It turns ${turn} here, and a ${turn} turn on red is allowed only after a full stop: hold still until the stop is completed.` : `The signal ${m} m ahead is red and the car turns ${turn} there. A ${turn} turn on red is allowed only after a full stop: keep rolling toward the line and stop just before it.`;
+  const why = !w ? "" : w.kind === "pedestrian" ? `: \`${w.id}\` is crossing or about to cross` : w.kind === "view" ? `: ${w.hidden_by ? `\`${w.hidden_by}\` hides the street to its ${side}, and ` : ""}the car cannot see far enough along ${w.hidden_by ? "it" : `the street to its ${side}`} to know it is clear` : w.kind === "junction" ? `: \`${w.id}\` is crossing the junction` : w.kind === "lane" ? `: it can turn on red only from the ${lane}` : w.kind === "advance" ? ": the approach opposite has an advance green, and its protected left turns come into the street the car turns into" : `: \`${w.id}\` is coming from the ${side} and has the green`;
+  return `The car has stopped fully at the red light and turns ${turn} here. A ${turn} turn on red is allowed, but it must yield first${why}. Hold still at the line until it is clear or the light turns green.`;
 }
 
 // Slowing down and moving over for a vehicle stopped at the roadside with its lights flashing
@@ -596,7 +631,7 @@ function parkingClause(p) {
 }
 
 export function needsMotionQuestion(snap) {
-  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.crossing_guard?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.cyclist_pass || snap.parking
+  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.contraflow_cyclist?.wait || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.crossing_guard?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.cyclist_pass || snap.parking
     || snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) || snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) || snap.stuck || (snap.nav && snap.nav.remaining_m < 30));
 }
 
@@ -606,18 +641,23 @@ export function buildQuestions(snap, eligible, meta = {}) {
   const pre = clauses ? `${PREAMBLE} ${clauses}` : PREAMBLE;
   const questions = {};
   const local = {};
+  if (snap.headlights) questions.headlights = { type: "choice", instructions: "Which headlight beam should the car use now?", criteria: {
+    high: "Use high only when headlights.high_allowed is true: a dark unlit street, no fog or snow, no oncoming vehicle within 150 m and no leading vehicle within 60 m. The observation includes a safety margin for the next decision.",
+    low: "Use low when headlights.high_allowed is false: daylight, a lit street, fog or snow, or another road user within the dip distance." } };
   if (needsMotionQuestion(snap)) {
     // Waiting to turn left across oncoming traffic is a reason to hold still only while it applies,
     // so the criteria for every other situation read exactly as before.
     const waitLeft = snap.intersection?.oncoming ? ", when the car is turning left and has reached the point where it waits for oncoming traffic (`intersection.oncoming.wait_in_m` under 2)" : "";
     // A red light the car may turn right on is a reason to hold still only while the turn is not clear.
-    const redOk = snap.intersection?.right_on_red?.go ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)" : "";
+    const redOk = snap.intersection?.left_on_red?.go ? " (except when intersection.left_on_red.stop_completed and clear are both true: the car may turn left on red)" : snap.intersection?.right_on_red?.go ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)" : "";
     // Likewise waiting its turn at an all-way stop.
     const turnWait = waitsItsTurn(snap.intersection) ? ", when the car has stopped at an all-way stop and it is not its turn (`intersection.priority.your_turn` is false)" : "";
     // And giving way at a junction, once the car has reached the point where it waits.
     const giveWait = snap.intersection?.give_way?.wait_for ? ", when the car gives way at a junction and has reached the point where it waits (`intersection.give_way.stop_in_m` under 2)" : "";
     // And letting a cyclist on the right go by before turning right.
     const hookWait = snap.right_hook ? ", when the car turns right and has reached the point where it waits for a cyclist on its right (`cyclist_on_right.wait_in_m` under 2)" : "";
+    // And waiting for a cyclist riding against the one-way.
+    const contraWait = snap.contraflow_cyclist?.wait ? ", when a cyclist riding against a one-way street is coming and the car has reached the point where it waits for it (`contraflow_cyclist.wait_in_m` under 2)" : "";
     // And giving way to an emergency vehicle, once pulled over.
     const evWait = snap.emergency && !snap.emergency.lead ? ", when an emergency vehicle is coming and the car has pulled over where it stops for it (`emergency_vehicle.stop_in_m` under 2)" : "";
     // And letting a bus pull out from its stop.
@@ -650,7 +690,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${snap.cyclist_pass ? " Staying behind a cyclist (`follow_cyclist`), at its speed, and passing it (`pass_cyclist`) are driving too." : ""}`,
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${guardWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${contraWait}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${guardWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
       },
     };
   } else {

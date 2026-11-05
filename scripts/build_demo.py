@@ -16,6 +16,7 @@ from jev.osm.pack import pack_path
 from jev.osm.bus_lanes import load_buslanes
 from jev.osm.restrictions import load_restrictions
 from jev.osm.calming import load_calming
+from jev.osm.contraflow import load_contraflow
 from jev.osm.crossings import load_crossings
 from jev.osm.rail import load_rail
 from jev.osm.scrambles import load_scrambles
@@ -72,6 +73,9 @@ def build(output: Path) -> None:
         scrambles = load_scrambles(PRESET_BBOXES[item["id"]], MAPS_DIR)
         if scrambles:
             pack["scrambles"] = scrambles
+        contraflow = load_contraflow(PRESET_BBOXES[item["id"]], MAPS_DIR)
+        if contraflow:
+            pack["contraflow"] = contraflow
         pack["utc_offset"] = item["utc_offset"]
         (data / f"{item['id']}.json").write_text(json.dumps(pack, separators=(",", ":")))
     (data / "catalog.json").write_text(json.dumps(maps, separators=(",", ":")))

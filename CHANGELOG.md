@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+- Overnight flashing signals in free drives (`?nightflash=0` disables them): from 23:00 to
+  05:00, signals joining clearly different road classes flash amber on the main street and red
+  on the side street. Amber means slow and yield to people and traffic already crossing; red
+  means a full stop, then yield to the main street. Traffic, cyclists, Rules and AI drivers obey
+  the same controls. Lamps blink and the HUD explains the rule. Outages still take precedence.
+- New Lab challenge, **After midnight** (seed 39042): Morris Street at Barrington Street,
+  Halifax, 01:00. Stop at flashing red, then cross when the main street is clear.
+- Contraflow cyclists: a new layer beside each pack, `<key>.contraflow.v1.json`
+  (`jev/osm/contraflow.py`, `scripts/fetch_map.py ... --contraflow`), maps the one-way streets
+  cyclists may ride both ways (`oneway:bicycle=no`, `cycleway=opposite`, `opposite_lane`,
+  `cycleway:left=lane` with `cycleway:left:oneway=-1`, and the like) onto the packs' one-way
+  edges: 145 edges across nine maps, with a painted contraflow lane or just a shared street.
+  Cyclists ride against the traffic at the driver's left, at cyclist speeds, from their own random
+  stream, stopping for the signs and signals that face their way (a signal flashing red overnight
+  as a stop sign). Traffic and the driven car look
+  both ways: they wait short of the junction for one coming out of a street they turn or go
+  straight into, wait for one crossing their way as for oncoming traffic, and move over for one
+  coming the other way, stopping where that leaves less than the minimum passing distance. Sensing
+  reports `contraflow_cyclist`, with the new `yield_to_contraflow_cyclist` candidate and the
+  `fails_to_yield_to_contraflow_cyclist` and `passes_contraflow_cyclist_too_close` rejections;
+  Rules, the cautious agent and the model wording handle it. Cutting one off is a failure to yield;
+  that and meeting one too close are `contraflow_conflicts`, reported only once one has ridden
+  near the car. Contraflow lanes, sharrows and ONE WAY / EXCEPT BICYCLES signs (SENS UNIQUE /
+  EXCEPTÉ VÉLOS in Québec) are drawn. Opt-in `World` option `contraflow`, on in free drives unless
+  `?contraflow=0`; nothing is computed or drawn from a random stream with it off.
+- New challenge, "Both ways" (`contraflow`): turning right from Rue Drolet into Rue Villeneuve Est
+  in the Plateau, Montréal, while a cyclist comes out of it in its contraflow lane.
+- High-beam actuation in free drives (`?highbeams=0` disables it): local and model
+  drivers dip for traffic, fog, snow and lit streets. High beams extend forward
+  night visibility; longer beams, a blue HUD indicator and render-only NPC flashes
+  show the choice. Gated `glare_seconds` metrics fail above 0.8 s and affect coaching.
+- New Lab challenge, “Dip your lights” (Saskatoon, seed 41042): a streetlight outage,
+  an empty dark stretch, an oncoming car and a slower leader. Existing challenges
+  and seeded benchmarks leave the feature off.
+- Opt-in left turns on red from one-way streets onto one-way streets for the driven car and traffic.
+  Full stop, pedestrian and traffic gaps, leftmost lane, provincial eligibility, signed turn bans and
+  scramble exclusions share the right-on-red checks. Free drives enable it unless `?leftonred=0`;
+  other challenges and benchmarks leave it off.
+- New Lab challenge, “Left on red” (seed 38042): 14 Avenue SW onto 5 Street SW, Calgary.
+
 - School crossing guards at marked mid-block crosswalks in school zones while the zone is in effect.
   Small groups of children gather; the guard waits for a safe stopping gap, raises a round red STOP
   paddle, walks them across and returns to the curb. Traffic and cyclists wait until everyone is off

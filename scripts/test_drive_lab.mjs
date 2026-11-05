@@ -14,7 +14,7 @@ const { rng } = await import("../static/js/common.js");
 const { validAgentChoice, registerAgent } = await import("../static/js/brain/registry.js");
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
-const names = { kitsilano: "623b012bc8b5", mount_pleasant: "7165f1c807a8", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438", edmonton: "3e794edbefcb", winnipeg: "19bb885c9cae", halifax: "49db0d437c8c" };
+const names = { saskatoon: "ca5573a8d934", kitsilano: "623b012bc8b5", mount_pleasant: "7165f1c807a8", victoria: "d7454a9751b7", montreal: "bb9df59633e0", toronto: "4a96d42cb3f2", ottawa: "d25b07def0d2", calgary: "a53c5bcf6438", edmonton: "3e794edbefcb", winnipeg: "19bb885c9cae", halifax: "49db0d437c8c" };
 // (with its bus routes, crosswalks, school and playground zones, level crossings, speed humps and scramble crossings, as the server and the demo serve it)
 const load = id => {
   const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url)));
@@ -28,7 +28,7 @@ const load = id => {
   const rail = new URL(`../data/maps/${names[id]}.rail.v1.json`, import.meta.url);
   if (fs.existsSync(rail)) pack.rail = JSON.parse(fs.readFileSync(rail));
   // (and speed humps and the like, and scramble crossings)
-  for (const name of ["calming", "scrambles", "buslanes", "restrictions"]) {
+  for (const name of ["calming", "scrambles", "buslanes", "restrictions", "contraflow"]) {
     const url = new URL(`../data/maps/${names[id]}.${name}.v1.json`, import.meta.url);
     if (fs.existsSync(url)) pack[name] = JSON.parse(fs.readFileSync(url));
   }
@@ -57,6 +57,7 @@ test("agent validation rejects ineligible manoeuvres and malformed motions", () 
   assert.throws(() => registerAgent({ id: "rules", label: "Overwrite", create: () => ({}) }));
 });
 
+const arenaResults = [];
 for (const challenge of CHALLENGES) {
   const map = load(challenge.map), a = challengeScenario(map, challenge), b = challengeScenario(map, challenge);
   test(`${challenge.id}: stable route and matching control type`, () => {
@@ -88,15 +89,22 @@ for (const challenge of CHALLENGES) {
   });
   for (const brain of ["rules", "cautious"]) {
     const result = await evaluateChallenge(map, challenge, { brain });
+    arenaResults.push(result);
     test(`${challenge.id}: ${brain} completes a clean authored drive`, () => { assert.ok(result.pass, JSON.stringify(result.failures)); assert.ok(result.report.qualified); assert.equal(result.cost_usd, 0); });
     test(`${challenge.id}: ${brain} exports inspectable decision and event context`, () => {
       assert.ok(result.decisions_trace.length); assert.ok(result.events.some(e => e.type === "arrived"));
       assert.ok(result.events.some(e => e.type === "hazard"));
       assert.equal(result.hard_brakes, result.events.filter(e => e.type === "hard_brake").length);
-      validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] })));
+      // (and it survives being saved to the arena history)
+      assert.equal(validateEvaluation(JSON.parse(JSON.stringify({ schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: new Date().toISOString(), results: [result] }))).results.length, 1);
     });
   }
 }
+
+const arenaRun = { schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: "2026-11-05T00:00:00Z", status: "complete", results: arenaResults };
+const arenaBytes = JSON.stringify([arenaRun, arenaRun]).length * 2;
+test("two complete arena runs fit the history budget", () => assert.ok(arenaBytes < 9 * 1024 * 1024, String(arenaBytes)));
+console.log(`Arena history: ${arenaBytes} bytes, ${(arenaBytes / (9 * 1024 * 1024) * 100).toFixed(1)}% for ${CHALLENGES.length} challenges with two drivers, twice`);
 
 {
   // Pulling out: the bus stands at its stop with its doors open until the car comes up, then

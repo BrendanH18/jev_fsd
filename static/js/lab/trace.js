@@ -1,5 +1,5 @@
 const round = value => Math.round(value * 1000) / 1000;
-const AUDITS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield", plow_right_passes: "Passed a snow plow on the right", merge_cut_ins: "Merged out of turn at a lane closure", close_passes: "Passed a cyclist closer than the minimum passing distance", hump_hits: "Took a speed hump too fast", crew_close_passes: "Passed a garbage crew worker too close", guard_violations: "Drove past a school crossing guard's STOP sign", pxo_early_goes: "Left a pedestrian crossover before the far curb", illegal_turns: "Made a prohibited turn" };
+const AUDITS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield", plow_right_passes: "Passed a snow plow on the right", merge_cut_ins: "Merged out of turn at a lane closure", close_passes: "Passed a cyclist closer than the minimum passing distance", hump_hits: "Took a speed hump too fast", crew_close_passes: "Passed a garbage crew worker too close", guard_violations: "Drove past a school crossing guard's STOP sign", pxo_early_goes: "Left a pedestrian crossover before the far curb", illegal_turns: "Made a prohibited turn", contraflow_conflicts: "Cut off or squeezed a cyclist riding against the one-way" };
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and
 // source, and its fallback error and hazard flags when it has any. A run of such records with the same
@@ -7,10 +7,11 @@ export const MAX_TRACE_DECISIONS = 600;
 // many it stands for (`repeats`) and when the last was made (`until_s`). Most of a drive is the same
 // choice made again every few hundred milliseconds, so this keeps a run of every challenge small enough
 // for saved history (lab/history.js).
-const same = (a, b) => a.chosen_id === b.chosen_id && a.motion === b.motion && a.source === b.source
+const same = (a, b) => a.chosen_id === b.chosen_id && a.motion === b.motion && a.headlights === b.headlights && a.source === b.source
   && (a.error || null) === (b.error || null) && (a.flags || []).join("\n") === (b.flags || []).join("\n");
 export function compactDecision(d) {
   const out = { id: d.id, at_s: d.at_s, chosen_id: d.chosen_id, motion: d.motion, source: d.source };
+  if (d.headlights) out.headlights = d.headlights;
   if (d.error) out.error = d.error;
   if (d.flags?.length) out.flags = d.flags;
   if (d.repeats > 1) { out.repeats = d.repeats; out.until_s = d.until_s; }
@@ -38,7 +39,7 @@ export class EvaluationTrace {
     const observation = { ...(decision.state || {}) };
     // Candidate predictions are already represented below; duplicating them makes a default suite exceed localStorage.
     delete observation.candidates; delete observation.rejected;
-    const d = { id: this.nextId++, at_s: round(at), chosen_id: decision.chosenId, motion: decision.motion,
+    const d = { id: this.nextId++, at_s: round(at), chosen_id: decision.chosenId, motion: decision.motion, ...(decision.headlights ? { headlights: decision.headlights } : {}),
       source: decision.meta?.source || "unknown", error: decision.meta?.error || decision.meta?.fallback || null, context_recorded: false,
       flags: [...(decision.flags || [])], state: JSON.parse(JSON.stringify(observation)),
       candidates: (decision.candidates || []).map(c => ({ id: c.id, eligible: c.eligible, reject: c.reject || null,
@@ -58,6 +59,9 @@ export class EvaluationTrace {
       const count = (world.violations[key] || 0) - (this.audit[key] || 0);
       if (count > 0) this.event(key, message, world.t, { count });
       this.audit[key] = world.violations[key] || 0;
+    }
+    if (!this.glareRecorded && world.highBeamsSeen && world.violations.glare_seconds > 0.8) {
+      this.event("glare", "Failed to dip high beams", world.t); this.glareRecorded = true;
     }
     if (score.hardBrakes > this.hardBrakes) this.event("hard_brake", "Hard braking", world.t, { count: score.hardBrakes - this.hardBrakes });
     this.hardBrakes = score.hardBrakes;

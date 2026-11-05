@@ -1,3 +1,4 @@
+// Overnight signals are enabled only by the authored challenge flag.
 import { World } from "../sim/world.js";
 import { NpcFleet } from "../sim/npc.js";
 import { Route } from "../map/route.js";
@@ -16,8 +17,8 @@ import { parseHour } from "../sim/world-clock.js";
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
 export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
-  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, restrictions: !!challenge.restrictions });
-  world.visibility.setNight(challenge.time === "night" ? 1 : 0);
+  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed });
+  world.visibility.setNight(challenge.time === "night" || challenge.nightFlash ? 1 : 0);
   // (school and playground zones go by the challenge's time of day)
   world.setClock(mapClock(parseHour(challenge.time), map));
   const scenario = challengeScenario(map, challenge);

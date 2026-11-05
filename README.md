@@ -72,7 +72,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Thirty-seven hand-built scenarios test the situations real drivers get wrong:
+Forty-one hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -83,6 +83,7 @@ Thirty-seven hand-built scenarios test the situations real drivers get wrong:
 | **Joining the flow** | Kitsilano | A car pulling out of a parking spot |
 | **Around the corner** | Kitsilano | Someone stepping out from behind a building |
 | **The unprotected left** | Ottawa, afternoon | A left turn on a green with oncoming cars close together |
+| **Left on red** | Calgary, afternoon | A full stop before turning from one-way 14 Avenue SW onto one-way 5 Street SW, yielding to two cars from the right |
 | **Right on red** | Calgary, afternoon | A right turn at a red light, with cars coming from the left on their green |
 | **Four-way stop** | Toronto, afternoon | Taking your turn at an all-way stop, with cars arriving just before and after you |
 | **The blind corner** | Vancouver, afternoon | A two-way stop where a building hides the through road: stop, creep forward to look, and wait for both sides |
@@ -113,6 +114,9 @@ Thirty-seven hand-built scenarios test the situations real drivers get wrong:
 | **Wait for the far curb** | Ottawa, afternoon | Metcalfe Street’s Ontario pedestrian crossover: stay stopped until everyone reaches the far curb across the whole roadway, even after your lane clears. |
 | **Buses only** | Vancouver, morning | Main Street's curb lane is bus-only from 7:00 to 9:30 on weekdays, and you turn right at the end of the block: keep out of the bus lane, then move into it in the last 50 m before the turn |
 | **No left turn** | Toronto, morning | A real OSM no-left-turn sign on Bathurst Street blocks the shortest way to the destination: take a legal detour around the block |
+| **After midnight** | Halifax, 01:00 | Morris Street's signal flashes red overnight while Barrington Street's flashes amber: stop fully, then cross once the main street is clear |
+| **Both ways** | Montréal, afternoon | Turning into Rue Villeneuve Est, one-way for cars but with a painted lane for cyclists riding the other way: let the cyclist coming out clear the junction first |
+| **Dip your lights** | Saskatoon, night | The streetlights are out on 13th Street East: high beams on the empty stretch, dipped within 150 m of an oncoming car and 60 m of the car ahead |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

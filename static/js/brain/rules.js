@@ -1,3 +1,4 @@
+import { beamChoice } from "../sim/high-beams.js";
 // A brain made of plain code. It proves the harness works without any model and is the fallback
 // when a model call fails or times out. Zero latency, zero cost.
 
@@ -13,12 +14,13 @@ export class RulesBrain {
   constructor() { this.name = "rules"; }
 
   decideSync(snap, eligible) {
+    // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
     const i = snap.intersection;
     const v = snap.ego.v;
     let stop = !!snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12;
     if (i) {
       const brakeDist = v * v / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
-      if (i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown") && !i.right_on_red?.go && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
+      if (i.control === "signal" && (i.signal === "red" || i.signal === "yellow" || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go) && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
       if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) stop = true;
       if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) stop = true;
       if (waitsItsTurn(i) && i.bumper_to_line_m < 1.5) stop = true;
@@ -30,6 +32,8 @@ export class RulesBrain {
     if (snap.pxo?.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
+    // (a cyclist riding against the one-way, at the point the car waits for it: sim/contraflow.js)
+    if (snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 1.5) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 1.5) stop = true;
     if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;
@@ -58,7 +62,7 @@ export class RulesBrain {
       if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index) && c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) cost -= 20;
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
-      if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !i.right_on_red?.go) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
+      if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) || i.signal === "yellow" || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_turn_restriction") cost -= 30;
@@ -93,7 +97,7 @@ export class RulesBrain {
     }
     // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
     const motion = stop && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park" ? "stop" : "drive";
-    return { motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
+    return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
   }
 
   async decide(snap, eligible) { return this.decideSync(snap, eligible); }

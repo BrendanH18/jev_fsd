@@ -1,3 +1,4 @@
+import { setNightFlash } from "../sim/night-flash.js";
 // In-memory checkpoints preserve prototypes, object identity, and seeded random streams.
 // Immutable map/render resources are shared; mutable driving state is copied.
 export function cloneState(value, shared = new Set(), seen = new Map()) {
@@ -67,7 +68,7 @@ export class DriveRecorder {
     this.markers = this.markers.filter(m => m.t >= this.frames[0].t);
   }
   mark(t, type) {
-    if (["collision", "red_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "safety"].includes(type)) this.markers.push({ t, type });
+    if (["collision", "red_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "glare", "safety"].includes(type)) this.markers.push({ t, type });
   }
   restore(index, target) {
     const frame = this.frames[Math.max(0, Math.min(this.frames.length - 1, Math.round(index)))];
@@ -82,7 +83,9 @@ export class DriveRecorder {
       for (const field of Object.keys(object)) if (!(field in state[key])) delete object[field];
       Object.assign(object, state[key]);
     }
+    setNightFlash(target.world);
     target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world; target.world.crossingGuards.world = target.world;
+    if (target.world.contraflow) target.world.contraflow.world = target.world;
     if (target.fleet.collection) { target.fleet.collection.world = target.world; target.fleet.collection.fleet = target.fleet; }
     target.world.npcs = target.fleet.vehicles;
     for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;

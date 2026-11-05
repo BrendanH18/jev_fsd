@@ -1,4 +1,6 @@
+import { flashMain } from "../sim/night-flash.js";
 import { busLaneScenario } from "./bus-lane-challenge.js";
+import { contraflowScenario, placeContraflowRider } from "./contraflow-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -73,6 +75,8 @@ export const CHALLENGES = [
     description: "You're going straight on Isabel Street at William Avenue, first at a red light in the right lane. Beside you, cars wait in the left lane to turn left. Then a green arrow comes on, and they go.", lesson: "A green arrow is for the way it points, and no other: going straight, your light is still red. Wait for your own green, even while the lane beside you moves." },
   { id: "flagger", title: "Follow the flagger", map: "ottawa", weather: "dry", time: "afternoon", seed: 22042, icon: "⚑", difficulty: "Patience", hazard: "work-zone", street: "Queen Street",
     description: "A road crew has closed your lane on Queen Street, leaving one lane for both directions. The flagger at your end holds up a STOP paddle while cars come the other way through it.", lesson: "A flagger's paddle is a traffic sign: on STOP, stop before reaching them and stay stopped; on SLOW, go on with care, at the work zone's speed. Where your lane is closed you go round the work in the other lane, so wait until you're waved through: oncoming traffic has that lane until then. That is Ontario's Highway Traffic Act, and every province has a rule like it." },
+  { id: "after-midnight", title: "After midnight", map: "halifax", weather: "dry", time: "01:00", seed: 39042, icon: "☾", difficulty: "Judgement", hazard: "night-flash", nightFlash: true,
+    description: "Late at night, your side street shows flashing red while the main street shows flashing amber.", lesson: "Stop fully at flashing red, then cross only when the main street is clear. Main-street drivers slow and yield to anyone already in the junction; they do not stop in arrival order." },
   { id: "lights-out", title: "Lights out", map: "halifax", weather: "dry", time: "afternoon", seed: 23042, icon: "☇", difficulty: "Judgement", hazard: "outage", street: "Barrington Street",
     description: "A storm has knocked out the power in downtown Halifax, and the traffic lights where Barrington Street meets Morris Street are dark. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left.", lesson: "When traffic lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stops first goes first; stop together and the car on the right goes first. Never drive through as if your light were green: the cross street has no red either. Driver's handbooks across Canada say the same." },
   { id: "double-parked", title: "Round the van", map: "toronto", weather: "dry", time: "afternoon", seed: 24042, icon: "◫", difficulty: "Patience", hazard: "double-parked", street: "Brunswick Avenue",
@@ -101,6 +105,11 @@ export const CHALLENGES = [
     description: "A person crosses Metcalfe Street at a signed pedestrian crossover. Your lane clears before the whole road does.", lesson: "At an Ontario PXO, stay stopped until everyone reaches the far curb across the whole roadway." },
   { id: "bus-lanes", title: "Buses only", map: "mount_pleasant", weather: "dry", time: "08:00", seed: 36042, icon: "◇", difficulty: "Judgement", hazard: "bus-lanes", busLanes: true, street: "Main Street", description: "Keep out of the reserved lane, then enter in the final 50 m to turn right.", lesson: "Keep the bus lane clear until the right-turn approach, then signal and merge safely." },
   { id: "no-left-turn", title: "No left turn", map: "toronto", weather: "dry", time: "morning", seed: 37042, icon: "↰", difficulty: "Navigation", hazard: "turn-restriction", restrictions: true, street: "Bathurst Street", description: "A signed left turn is prohibited. Take a legal route around the block.", lesson: "Follow the signed turn restriction while it applies. Take the legal detour even when the prohibited turn would be shorter; never turn across the sign just to follow a destination." },
+  { id: "contraflow", title: "Both ways", map: "montreal", weather: "dry", time: "afternoon", seed: 40042, icon: "⇄", difficulty: "Anticipation", hazard: "contraflow", contraflow: true, street: "Rue Villeneuve Est",
+    description: "You turn right from Rue Drolet into Rue Villeneuve Est, in the Plateau: one-way for cars, but with a painted lane for cyclists riding the other way. One is coming out of it toward the junction.", lesson: "On a one-way street signed EXCEPT BICYCLES (in Québec, EXCEPTÉ VÉLOS), cyclists ride both ways, against the traffic on the driver's left. Look both ways before turning in, and let a cyclist coming out clear the junction first: at a junction without a sign, one coming from your right has the right of way anyway. Driving along such a street, keep right for a cyclist coming the other way, and stop to let them by where there isn't room to leave them at least 1 m." },
+  { id: "dip-your-lights", title: "Dip your lights", map: "saskatoon", weather: "dry", time: "night", seed: 41042, icon: "☼", difficulty: "Courtesy", hazard: "high-beams", highBeams: true,
+    description: "The streetlights are out on 13th Street East. Use high beams on the empty stretch, dip for an approaching car and the slower car ahead.", lesson: "High beams help you see; dip within 150 m oncoming and 60 m following, and in fog or snow." },
+  { id: "left-on-red", title: "Left on red", map: "calgary", weather: "dry", time: "afternoon", seed: 38042, icon: "↰", difficulty: "Judgement", hazard: "left-on-red", leftOnRed: true, street: "14 Avenue SW", description: "Turn left from one-way 14 Avenue SW onto one-way 5 Street SW. Your light is red; two cars come from the right on their green.", lesson: "Stop fully at the line, then yield to pedestrians and traffic from the right. When clear, turn left from the leftmost lane onto the one-way street. Never do this in Québec, at a scramble, or where a sign forbids it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -565,6 +574,23 @@ function allWaySites(map) {
   allWaySiteCache.set(map, sites); return sites;
 }
 
+// Overnight side-street approaches with a straight crossing and main-street traffic.
+function nightSites(map) {
+  const sites = [];
+  const straight = id => map.successors(id).find(o => map.classifyTurn(map.turnAngle(id, o)) === "straight" && map.edges.get(o).length > 60);
+  for (const inter of map.intersections.values()) {
+    const main = flashMain(inter, map);
+    if (!main || inter.vertices.length !== 1) continue;
+    for (const a of inter.approaches.filter(a => a.group !== main)) {
+      const edge = map.edges.get(a.edge), then = straight(a.edge);
+      const through = inter.approaches.filter(b => b.group === main && straight(b.edge) && map.edges.get(b.edge).length > 80);
+      if (edge.control.s_line < 80 || !then || !through.length) continue;
+      sites.push({ lane: map.lane(a.edge, edge.lanes - 1), straight: then, cars: through.map((b, i) => ({ id: `challenge_night_${i}`, start: [b.edge, map.edges.get(b.edge).length - 70, []], then: straight(b.edge) })) });
+    }
+  }
+  return sites.sort((a,b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
+}
+
 // Lights out: a signal with four approaches at one node, where the approach (on the challenge's
 // `street`, where it has one) and the approaches from the right and opposite meet allWaySites' terms
 // for an all-way stop. Its lights are out (sim/outage.js), so it is one.
@@ -980,7 +1006,16 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.highBeams) {
+    const lane = map.lane("e549", 0), startS = 80, goalS = 650;
+    const p = pointAt(lane.pts, lane.cum, startS), route = routeFromLanes(map, [lane], startS, goalS);
+    const reverse = [...map.edges.values()].find(e => e.from === lane.edgeRef.to && e.to === lane.edgeRef.from);
+    return { id: challenge.id, start: { edge: lane.edge, lane: 0, s: startS, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, startS) },
+      route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, beamTraffic: { reverse: reverse.id },
+      tags: { length_m: Math.round(route.length), signals: 0, stops: 0, lefts: 0, rights: 0 } };
+  }
   if (challenge.busLanes) return busLaneScenario(map, challenge);
+  if (challenge.hazard === "contraflow") return contraflowScenario(map, challenge);
   if (challenge.hazard === "pxo") {
     const cw = map.pxos.find(c => c.id === "x2317854682");
     if (!cw) throw new Error("Metcalfe Street PXO is missing from the crossings v2 layer.");
@@ -1007,6 +1042,14 @@ export function challengeScenario(map, challenge) {
     throw new Error("No real prohibited left turn with a legal detour on this map");
   }
 
+  if (challenge.hazard === "left-on-red") {
+    // Real Beltline one-way pair. installChallenge starts it in the red phase.
+    const lane = map.lane("e594", 0), exit = map.lane("e593", 0);
+    const startS = lane.edgeRef.control.s_line - 65;
+    const route = routeFromLanes(map, [lane, exit], startS, exit.length - 12);
+    return { id: challenge.id, start: { edge: lane.edge, lane: 0, s: startS }, route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, oncoming: { edge: "e140", then: "e593" },
+      tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 1, stops: 0, lefts: 1, rights: 0 } };
+  }
   let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
   const matching = lanes.filter(l => ["door", "pull"].includes(challenge.hazard) ? l.edgeRef.parking?.[1] > 0
     : challenge.hazard === "signal" ? l.edgeRef.control?.type === "signal"
@@ -1030,6 +1073,9 @@ export function challengeScenario(map, challenge) {
   const darks = challenge.hazard === "outage" ? darkSites(map, challenge.street) : null;
   if (darks && !darks.length) throw new Error("This map has no signal with four approaches, traffic from the right and ahead, and room to queue on each.");
   const stop = stops ? stops[Math.floor(random() * stops.length)] : darks ? darks[Math.floor(random() * darks.length)] : null;
+  const nights = challenge.nightFlash ? nightSites(map) : null;
+  if (nights && !nights.length) throw new Error("No overnight flashing side-street approach.");
+  const night = nights ? nights[Math.floor(random() * nights.length)] : null;
   const blinds = challenge.hazard === "two-way" ? twoWaySites(map) : null;
   if (blinds && !blinds.length) throw new Error("This map has no two-way stop with a building hiding the through road.");
   const blind = blinds ? blinds[Math.floor(random() * blinds.length)] : null;
@@ -1099,10 +1145,10 @@ export function challengeScenario(map, challenge) {
   const humps = challenge.hazard === "speed-humps" ? humpSites(map, challenge.street) : null;
   if (humps && !humps.length) throw new Error("This map has no block with a speed hump at least 75 m along it, a limit of 40 km/h or more and no school or playground zone.");
   const hump = humps ? humps[Math.floor(random() * humps.length)] : null;
-  const start = guard?.lane || truck?.lane || scr?.lane || hump?.lane || cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
+  const start = night?.lane || guard?.lane || truck?.lane || scr?.lane || hump?.lane || cyc?.lane || zip?.lane || plow?.lane || step?.lane || park?.lane || van?.lane || flagger?.lane || arrow?.lane || box?.lane || track?.lane || tram?.lane || roadside?.lane || zone?.lane || school?.lane || threat?.lane || site?.lane || left?.lane || right?.lane || stop?.lane || blind?.lane || hook?.lane || siren?.lane || bus?.prev || lanes[Math.floor(random() * lanes.length)];
   // a left or right turn, or a stop sign, starts 70 m before the stop line; a right hook, 95 m
   // before the corner
-  const startS = site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
+  const startS = night ? start.edgeRef.control.s_line - 70 : site ? site.hazardS - 65 : left || right || stop || blind ? start.edgeRef.control.s_line - 70 : arrow ? start.edgeRef.control.s_line - ARROW_START_M : hook ? start.length - HOOK_START_M : siren ? start.length - SIREN_START_M
     : bus ? Math.max(5, start.length - (BUS_START_M - bus.rear)) : threat ? threat.s - THREAT_START_M : school ? school.startS : zone ? zone.startS : roadside ? roadside.startS : tram ? tram.startS : track ? track.startS : box ? box.startS : flagger ? flagger.startS : van ? van.startS : park ? park.startS : step ? step.startS : plow ? plow.startS : zip ? zip.startS : cyc ? cyc.startS : hump ? hump.startS : scr ? scr.startS : truck ? truck.startS : guard ? guard.startS : Math.max(8, Math.min(20, start.length * 0.15));
   const chain = [start], seen = new Set([start.edge]);
   let length = start.length - startS;
@@ -1111,7 +1157,7 @@ export function challengeScenario(map, challenge) {
   if (left) { const turn = map.lane(left.left, 0); chain.push(turn); seen.add(left.left); length += turn.length; }
   const turnRight = right?.right || hook?.right;
   if (turnRight) { const e = map.edges.get(turnRight), turn = map.lane(turnRight, e.lanes - 1); chain.push(turn); seen.add(turnRight); length += turn.length; }
-  const straight = arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge || cyc?.ahead.edge || hump?.ahead?.edge;
+  const straight = night?.straight || arrow?.straight || stop?.straight || blind?.straight || siren?.straight || bus?.lane.edge || track?.ahead?.edge || box?.ahead?.edge || cyc?.ahead.edge || hump?.ahead?.edge;
   if (straight) { const ahead = bus ? bus.lane : track ? track.ahead : box?.ahead ? box.ahead : cyc ? cyc.ahead : hump ? hump.ahead : map.lane(straight, Math.min(start.idx, map.edges.get(straight).lanes - 1)); chain.push(ahead); seen.add(straight); length += ahead.length; }
   // (through the signal, along the queue past it)
   for (const id of box?.queue.edges || []) { const lane = map.lane(id, 0); chain.push(lane); seen.add(id); length += lane.length; }
@@ -1138,6 +1184,7 @@ export function challengeScenario(map, challenge) {
     ...(right ? { oncoming: { edge: right.fromLeft, then: right.right, lane: "curb" } } : {}),
     ...(stop ? { allWay: allWayCars(map, stop) } : {}),
     ...(stop?.signal ? { outage: { signal: stop.signal } } : {}),
+    ...(night ? { twoWay: night.cars } : {}),
     ...(blind ? { twoWay: twoWayCars(map, blind) } : {}),
     ...(hook ? { cyclist: { edge: hook.lane.edge, s: startS + HOOK_LEAD_M, then: hook.straight } } : {}),
     ...(siren ? { emergency: { kind: "ambulance", relation: "behind", distance: SIREN_BACK_M } } : {}),
@@ -1170,7 +1217,19 @@ export function installChallenge(world, fleet, challenge, scenario) {
   const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? scenario.child?.s ?? (scenario.oncoming || scenario.blindLeft || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
   const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
   const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
+  if (challenge.hazard === "left-on-red") world.t = 23; // sig13: B red, A green; no shared signal plan mutation
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
+  if (scenario.beamTraffic) {
+    world.streetLightsOut = true;
+    for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
+      const l = world.map.lane(edge, 0), p = pointAt(l.pts, l.cum, s);
+      const car = new Vehicle(p[0], p[1], headingAt(l.pts, l.cum, s), v);
+      Object.assign(car, { id, color: 0x6b8199, v0: v, driver: { aMax: 1, b: 2, s0: 2, T: 1.5, react: 0.5, lcRate: 0 }, stopMem: new StopMemory(),
+        path: new NpcPath(world.map, fleet.random), frozen: 0, waiting: 0 });
+      car.path.start(edge, 0, s); fleet.vehicles.push(car);
+    }
+    world.challenge.triggered = true;
+  }
   if (["door", "pull"].includes(challenge.hazard)) {
     const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);
     const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);
@@ -1218,6 +1277,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.scramble) Object.assign(world.challenge, placeScramble(world, scenario.scramble, challenge.seed));
   if (scenario.collection) Object.assign(world.challenge, placeTruck(world, fleet, scenario.collection, challenge.seed));
   if (scenario.crossingGuard) Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));
+  if (scenario.contraflow) Object.assign(world.challenge, placeContraflowRider(world, scenario.contraflow));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
   if (scenario.leftArrow) {
@@ -1255,7 +1315,7 @@ export function stepChallenge(world, fleet) {
     : state.hazard === "crossing-guard" ? local.ahead < GUARD_TRIGGER_M + world.ego.spec.length - world.ego.spec.rearOverhang
     // (the arrow comes on, and the cars beside the car turn)
     : state.hazard === "left-arrow" ? approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow"
-    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "hidden-left", "cross", "all-way", "outage", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
+    : local.ahead < (state.hazard === "pull" ? 65 : ["oncoming", "hidden-left", "cross", "all-way", "outage", "night-flash", "right-hook", "emergency", "bus", "crosswalk", "school-bus"].includes(state.hazard) ? ONCOMING_TRIGGER_M : 43);
   if (!state.triggered && trigger && local.ahead > 0) {
     state.triggered = true;
     if (state.oncoming) state.oncomingIds = releaseOncoming(world, fleet, state.oncoming);

@@ -1,3 +1,6 @@
+import { setNightFlash, flashState } from "./night-flash.js";
+import { auditHighBeams, wellLit } from "./high-beams.js";
+import { leftOnRedAllowed } from "./left-on-red.js";
 import { auditRestrictions } from "./turn-restrictions.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
@@ -35,6 +38,7 @@ import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
+import { ContraflowRiders, auditContraflow } from "./contraflow.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -209,8 +213,11 @@ export class World {
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false } = {}) {
+  // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
+  // both ways for them (sim/contraflow.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false } = {}) {
     this.map = map;
+    this.highBeams = !!highBeams; this.highBeamsSeen = false;
     this.pxo = !!pxo && ontarioMap(map);
     this.pxoSeen = false;
     this.pxoLines = new Map();
@@ -220,6 +227,9 @@ export class World {
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
     this.scrambles = setScrambles(scrambles);
+    this.nightFlash = !!nightFlash;
+    this.nightFlashSeen = false;
+    setNightFlash(this);
     this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
     this.t = 0;
     this.tick = 0;
@@ -271,6 +281,8 @@ export class World {
     // has crossed one this drive; and, for each near it, how far ahead of its front axle it was last tick
     this.busLanes = !!busLanes;
     this.busLanesSeen = false;
+    this.leftOnRed = !!leftOnRed;
+    this.leftOnRedSeen = false;
     this.restrictions = !!restrictions;
     this.restrictionsSeen = false;
     this.restrictionEdge = null;
@@ -304,6 +316,11 @@ export class World {
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     this.crossingGuards = new CrossingGuards(this, { enabled: guards, seed });
+    // contraflow cyclists (sim/contraflow.js): whether they ride, whether one has ridden near the car this
+    // drive, and the ones the car has met or cut off
+    this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
+    this.contraflowSeen = false;
+    this.contraflowCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -311,7 +328,9 @@ export class World {
   obstaclesNear(x, y, r) {
     // (a vehicle by its reference point, its rear axle: a long one's front is up to its length away)
     const out = this.npcs.filter((n) => { const m = r + Math.max(5, n.spec?.length || 0); return Math.abs(n.x - x) < m && Math.abs(n.y - y) < m; });
-    return out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
+    const all = out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
+    // (and contraflow cyclists, with that option on: sim/contraflow.js)
+    return this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
@@ -328,7 +347,8 @@ export class World {
 
   // (`reach`: looking further along a street by clear daylight, see sim/visibility.js PASS_SIGHT_M)
   sees(observer, o, reach = 0) {
-    if (!this.visibility.sees(observer, o, reach)) return false;
+    const enhanced = this.highBeams && observer === this.ego && observer.highBeam && this.visibility.night > 0.5 && this.weather !== "fog" && this.weather !== "snow" && !wellLit(this);
+    if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach))) return false;
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
     return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
   }
@@ -374,6 +394,8 @@ export class World {
   light(intersectionId, edgeId, turn = "straight") {
     if (this.outages?.isDark(intersectionId)) return "dark";
     const inter = this.map.intersections.get(intersectionId);
+    const flash = flashState(inter, this.map.edges.get(edgeId)?.control?.group, this);
+    if (flash) return flash;
     if (!inter?.plan?.advance) return this.phase(intersectionId)[this.map.edges.get(edgeId)?.control?.group];
     return movementSignal(approachPhase(inter, edgeId, this.t), turn);
   }
@@ -412,6 +434,7 @@ export class World {
     this.mergeCall = null; this.mergeWait = null; this.mergeLetIn = null;
     this.bikePasses?.clear(); this.cyclistPass = null;
     this.guardCalls?.clear();
+    this.contraflowCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -493,6 +516,7 @@ export class World {
   // contacts, where right of way decides and the sim does not judge it.
   audit(dt, road) {
     this.events.length = 0;
+    if (this.highBeams) auditHighBeams(this, dt);
     if (this.auditStatic(dt)) Object.assign(road, this.roadInfo());
     const egoBox = this.ego.obb();
     for (const n of this.obstaclesNear(this.ego.x, this.ego.y, 12)) {
@@ -552,6 +576,7 @@ export class World {
       // sensors measure it (a lane polyline's length differs from the centerline's on a bend), else
       // along the lane
       const past = rc ? frontS - rc.sRoute : road.s + FRONT - control.s_line;
+      if (this.nightFlash && Math.abs(past) < 60 && (control.night_flash || (control.type === "signal" && flashState(this.map.intersections.get(control.id), control.group, this)))) this.nightFlashSeen = true;
       const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
@@ -565,7 +590,11 @@ export class World {
           // after a full stop, where turning right on red is allowed, which way it turns decides
           // (never at a scramble crossing: sim/signals.js)
           const scramble = isScramble(inter);
-          const pending = state === "red" && this.map.rightOnRed && !scramble && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
+          // The legacy rightOnRed record below also validates enabled one-way left turns.
+          // (and only from the leftmost lane, lane 0, as for traffic: sim/npc.js `rightOnRed`)
+          const egoLane = this.leftOnRed ? this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 8)?.lane : null;
+          const leftPending = this.leftOnRed && egoLane?.edge === edge.id && egoLane.idx === 0 && (this.map.out.get(edge.to) || []).some(id => leftOnRedAllowed(this, edge.id, id));
+          const pending = state === "red" && (this.map.rightOnRed || leftPending) && !scramble && inter && this.egoStop.controlId === control.id && this.egoStop.completed;
           if (state === "red" && !pending) { this.violations.red_lights_run++; this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) }); }
           this.arrowCheck = arrow && inter ? { id: control.id, centre: [inter.x, inter.y], approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
             stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed } : null;
@@ -575,7 +604,7 @@ export class World {
             const exit = rc && rc.sJunction !== null ? this.route.headingAt(Math.min(this.route.length, rc.sJunction + 15)) : null;
             const approach = rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id);
             this.lastSignal = { centre: [inter.x, inter.y], nodes: this.map.junctionNodes(inter), approaches: new Set(inter.approaches.map((a) => a.edge)), facing: approach + Math.PI, exit, counted: false,
-              ...(pending ? { rightOnRed: { edge: edge.id, approach, exit: exit ?? approach - Math.PI / 2, turned: false } } : {}) };
+              ...(pending ? { rightOnRed: { ...(leftPending ? { leftAllowed: true } : {}), edge: edge.id, approach, exit: exit ?? approach - Math.PI / 2, turned: false } } : {}) };
           }
         } else if (control.type === "stop" && !this.egoStop.completed) {
           this.violations.stop_signs_run++;
@@ -596,12 +625,12 @@ export class World {
           this.lastSignal = { centre: [node.x, node.y], nodes: new Set([edge.to]), approaches: new Set(this.map.inn.get(edge.to) || []), facing: approach + Math.PI, exit, counted: false, manualStop: !turn };
         }
         // giving way: at a two-way stop, or where its street has no sign and is not the major road
-        const junction = this.map.nodes.get(edge.to);
+        const junction = control.night_flash ? this.map.intersections.get(control.junction) : this.map.nodes.get(edge.to);
         this.giveWay = junction && ((control.type === "stop" && !control.all_way) || (control.type === "uncontrolled" && control.rule !== "major"))
-          ? { node: edge.to, centre: [junction.x, junction.y], edge: edge.id, to: control.type === "stop" || control.rule === "minor" ? "through traffic" : "traffic from the right", counted: false,
+          ? { node: junction.id ?? edge.to, centre: [junction.x, junction.y], edge: edge.id, to: control.type === "stop" || control.rule === "minor" ? "through traffic" : "traffic from the right", counted: false,
             // the traffic on its way when the car crossed its line (not a car that pulls out from
             // the curb, or turns into the street, after that: it must give way itself)
-            coming: new Set(this.npcs.filter((n) => n.path?.pts && !n.pull && (approachTo(this.map, n, edge.to) || Math.hypot(n.x - junction.x, n.y - junction.y) < AUDIT_BOX_M))) } : null;
+            coming: new Set(this.npcs.filter((n) => n.path?.pts && !n.pull && (approachTo(this.map, n, junction.id ?? edge.to) || Math.hypot(n.x - junction.x, n.y - junction.y) < AUDIT_BOX_M))) } : null;
       }
       // (keyed on the stop itself: with or without a route, it is the same line)
       if (this.allWayCounted !== control.id) this.allWayCounted = null;
@@ -643,6 +672,7 @@ export class World {
     if (this.calming) this.auditCalming();
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();
+    if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
     this.auditKerb();
     leftSpace(this);
   }
@@ -1129,9 +1159,9 @@ export class World {
       if (n.v < 1 || !n.path?.pts || !g.coming.has(n)) return false;
       // the street it comes in on, from its plan: on its way to the junction, or in it
       const a = approachTo(this.map, n, g.node);
-      const inside = !a && Math.hypot(n.x - jx, n.y - jy) < AUDIT_BOX_M ? n.path.edges.find((e) => e.to === g.node && e.sEnd > n.path.s - AUDIT_BOX_M) : null;
+      const inside = !a && Math.hypot(n.x - jx, n.y - jy) < AUDIT_BOX_M ? n.path.edges.find((e) => (e.to === g.node || this.map.intersections.get(g.node)?.approaches.some(a => a.edge === e.id)) && e.sEnd > n.path.s - AUDIT_BOX_M) : null;
       const from = a ? a.edge : inside?.id;
-      if (!from || !outranks(this.map, from, g.edge)) return false;
+      if (!from || !outranks(this.map, from, g.edge, this)) return false;
       if (a && a.to_node_m / n.v >= AUDIT_ONCOMING_S) return false;
       const p = frontOnPath(this.ego, n, fx, fy);
       return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S);
@@ -1167,8 +1197,12 @@ export class World {
       const past = (fx - jx) * Math.cos(rtor.approach) + (fy - jy) * Math.sin(rtor.approach);
       const at = this.map.nearestLane(fx, fy, this.ego.psi, 8), on = at?.lane.edgeRef;
       if (on && on.id !== rtor.edge && on.id !== rtor.via?.id && Math.abs(wrap(at.heading - this.ego.psi)) <= Math.PI / 3) {
-        if (this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right" && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) rtor.via = on;
-        else rtor.via = rtor.via && on.from === rtor.via.to ? on : null;
+        const legalLeft = rtor.leftAllowed && leftOnRedAllowed(this, rtor.edge, on.id);
+        const legalRight = this.map.rightOnRed && this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right";
+        if ((legalRight || legalLeft) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) {
+          rtor.via = on;
+          if (legalLeft) { rtor.exit = this.map.headingOut(on.id); this.leftOnRedSeen = true; }
+        } else rtor.via = rtor.via && on.from === rtor.via.to ? on : null;
       }
       if ((out > AUDIT_RTOR_OUT_M && past > 0) || out > AUDIT_JUNCTION_M) {
         if (on && on.id === rtor.via?.id) { if (out > AUDIT_JUNCTION_M) rtor.turned = true; }

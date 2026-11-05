@@ -1252,3 +1252,181 @@ Challenge `no-left-turn`, “No left turn”, Toronto / Bathurst Street, uses OS
 124176 on approach e192. The direct shortest route makes its forbidden left; the challenge
 routes around it on real streets. Focused checks: `scripts/test_turn_restrictions.mjs` and
 `tests/test_restrictions.py`. Existing challenges and benchmark retain restrictions off.
+
+## Overnight flashing signals
+
+`sim/night-flash.js` implements opt-in `World.nightFlash`, enabled in free drives unless
+`?nightflash=0` and in the `after-midnight` challenge (Halifax, Morris at Barrington, seed 39042).
+It requires a clock: 23:00 <= hour or hour < 05:00. Selection draws no randomness and uses the
+pack's existing `roadRank`: primary/secondary and links = 3, tertiary and links = 2, others = 1.
+Every approach in one phase group must rank strictly above every approach in the other. Equal
+or overlapping ranks retain normal timing. This is a documented simulator policy, not municipal
+signal-program data. Disabled worlds do not select sites or consume random draws.
+
+Main-street `flashing_amber` supplies a 20 km/h caution ceiling (a simulation target, not a
+statutory speed limit): at 5.56 m/s it gives time to observe a junction and stop within a short
+visible distance. Grip and the existing safe-speed controller can require slower travel. Vehicles
+yield to pedestrians and vehicles already crossing. Side-street `flashing_red` becomes an
+approach-specific two-way stop through `controlAt`, `StopMemory` and `priority.js`; a stop on
+another approach does not count. The all-way arrival queue is not involved. Sensing reports the
+flashing state, suppresses countdowns, and shares stops, priority and caution with Rules, cautious,
+Jev and LLM drivers. An unseen signal remains unknown. The audit sets `World.nightFlashSeen` when
+met, counts missed red stops in `stop_signs_run`, and priority violations in `failed_to_yield`.
+No new metric keys appear in disabled benchmark results.
+
+Outages override flashing. Flashing overrides advance greens and scramble timing; there is no
+right-on-red question. Pedestrian heads are dark and pedestrians use gaps. Signal lamps blink
+at 1 Hz with a 50% duty cycle. Like `setScrambles`, `setNightFlash` selects module state for the
+current world; constructor and checkpoint restore reconnect it. `scripts/test_night_flash.mjs`
+is included by the CI Node-check glob.
+
+Legal basis: [BC Motor Vehicle Act s. 131(1)(a), (3)(a)](https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96318_05#section131).
+Flashing red requires stopping before the near crosswalk (or intersection if none), then waiting
+until safe. Flashing yellow allows entry only with caution and requires yielding to pedestrians
+in the junction or adjacent crosswalk. The simulator additionally holds amber traffic for vehicles
+already crossing; its 20 km/h target is a conservative implementation choice.
+## Contraflow cyclists
+
+`jev/osm/contraflow.py` builds `<key>.contraflow.v1.json` beside unchanged packs from the raw OSM
+ways: the one-way streets cyclists may ride both ways (`oneway:bicycle=no`, `cycleway=opposite`,
+`opposite_lane`/`opposite_track`, `bicycle:backward=yes`, and side lanes or tracks running against the
+traffic, `cycleway:left=lane` + `cycleway:left:oneway=-1` and the like). Each record names the pack's
+one-way edge, `kind` (`lane`, `track` or `shared`) and `side` relative to the traffic. Ways are
+matched by both endpoint node IDs, or by name and centreline where the pack merged ways; ways tagged
+`bicycle=no` and roundabouts are left out. `uv run scripts/fetch_map.py <preset> --contraflow`
+rebuilds only the layer. `server.py`, `scripts/build_demo.py` and the Node tests load it with the
+others; `MapData.contraflow` maps edge id to record.
+
+`World` option `contraflow` (free drives unless `?contraflow=0`; challenges with `contraflow: true`)
+creates `World.contraflow` (`sim/contraflow.js` `ContraflowRiders`). It puts up to three riders down on
+contraflow streets 40 to 260 m from the car, from its own random stream (`seed * 122949823 + 47`), and
+another 6 to 20 s after one rides off (340 m away, or at the end of its way). A rider rides the street's
+contraflow blocks in turn (`RiderPath`), 0.6 m in from the asphalt's (or parking lane's) edge on the
+driver's left, then crosses or turns onto an ordinary street and rides with the traffic on its curb
+side. At the end of each block `contraControl` says what faces it: the signal of the approach on its
+street's axis, the stop sign its street's own traffic has from the other side (or a stop where the
+street ends at one that does not stop for it), `yield` (an uncontrolled junction; at an `equal` one,
+only to traffic from its right), or `major`. A signal that is dark, or flashing red overnight
+(`sim/night-flash.js`), is a stop sign to it; flashing amber is a caution. It stops for those, for people on crosswalks and for any
+body in its way just ahead. Riders are `kind: "bike"` with `contra: true`; `world.obstaclesNear`,
+collisions, sight lines and the forward sims see them; `world.npcs` does not hold them.
+
+`riderConflict` is the one test everyone uses: along a vehicle's way (its path or route), from its
+front, against the rider's way ahead (to a stop it means to make), samples that cross its way within
+half the widths plus 0.5 m, or meet it head on within half the widths plus the minimum passing
+distance (1 m at 50 km/h or less, 1.5 m above; `sim/cyclist-pass.js` `minPassM`) after moving right as
+far as the asphalt allows (not into a parking lane), conflict when the vehicle, pulling away at
+2 m/s² from its speed, would be there within 1.5 s of the rider. It returns the first such arc length
+and how far right to move for one coming the other way (within 45 m). Before entering a contraflow
+street the rider is coming out of (within 60 m of the junction), the wait is 1.5 m short of the
+crossing street's asphalt instead (`entryHold`). Traffic (`sim/npc.js`, `trafficYield`) eases right at
+0.7 m/s and holds there; riders coming the other way are not leaders. The driven car's sensing
+(`brain/sensors.js contraflowCyclist`) reports `contraflow_cyclist`: `relation` (`turning_in`,
+`oncoming`, `turning_off`, `crossing`), `wait`, `stop_s_route`, `shift_m` and a `detour` (`cf:<id>`)
+that moves it right, kept from the executing law until it is by. The car waits at the first of the
+entry and conflict holds it can still stop at (from 0.5 m/s, where it is); past both it has committed.
+Candidates add `yield_to_contraflow_cyclist` and reject `fails_to_yield_to_contraflow_cyclist` (front
+0.5 m past the hold) and `passes_contraflow_cyclist_too_close` (moving faster than 1 m/s beside one
+coming the other way with less than the passing distance less 0.1 m). Rules stops within 1.5 m of the
+hold and the cautious agent takes the yield candidate; `toJevState`, the situation clauses, the motion
+question and the LLM prompt describe it.
+
+The audit (`auditContraflow`) sets `World.contraflowSeen` once a rider is within 30 m of the car.
+Cutting one off (the car's front in its way ahead of it, within 2 s, as for `auditCyclists`) is
+`failed_to_yield` (`to: "contraflow cyclist"`, once per rider per 10 s); that and meeting one head on
+with less than the passing distance while moving are `contraflow_conflicts`, which reach the metrics
+and fail a drive only once `contraflowSeen`. `DriveScore` reports `contraflow_conflicts`,
+`contraflow_meets` and `contraflow_cutoffs` with coaching. `render/contraflow.js` draws a solid lane
+line, bicycles and arrows against the traffic (or sharrows on shared streets) and, at the start of each
+street, a ONE WAY sign with an EXCEPT BICYCLES tab (SENS UNIQUE / EXCEPTÉ VÉLOS in Québec); the
+renderer drew no one-way signs before. With the option off nothing is built, stepped or drawn from a
+random stream, `obstaclesNear` returns what it did, and no metric changes.
+
+The challenge **Both ways** (`contraflow`, seed 40042) turns right from Rue Drolet into Rue Villeneuve
+Est (painted contraflow lane, 3.2 m of asphalt) at a junction without a sign while a cyclist comes out
+of it from the car's right (`lab/contraflow-challenge.js`). Focused checks:
+`node --experimental-default-type=module scripts/test_contraflow.mjs` and `tests/test_contraflow.py`.
+
+Limits: contraflow cyclists do not take part in all-way stop turn order or give-way priority for
+traffic (`sim/priority.js`); the conflict test stands in for both. Separate cycle tracks
+(`highway=cycleway`) are not in the packs. Packs give most Plateau one-ways 3.2 m of asphalt, so a car
+there always stops for an oncoming cyclist.
+
+### High beams (`sim/high-beams.js`)
+
+`World.highBeams` is opt-in (free drives unless `?highbeams=0`, Lab with
+`highBeams: true`). No policy, audit or random draws run when disabled. Every
+beam decision is actuation, independent of the chosen manoeuvre. Rules and the
+cautious agent select high only on dark, unlit streets without fog or snow, with
+no oncoming vehicle within 150 m or leader within 60 m. Sensing adds 25 m of
+reaction margin to those bumper-to-bumper distances. Vehicle lamps are detected up to 220 m
+with building occlusion, independently of the short unlit-object sight range.
+`headlights` is included in decision state, optional model answers, and compact
+traces; absent or invalid beam answers fall back to Rules. Trace folding includes
+the beam choice. In clear darkness high beams extend forward object visibility
+from 45 m to 80 m, with the existing sensor query and weather limits still applying.
+Street illumination uses the same deterministic lamp placements as rendering.
+The authored challenge disables those lamps without changing their solid poles.
+NPC dipping and brief flashes are render-only. The HUD indicator is blue.
+
+The audit accumulates `glare_seconds` for high beams inside either dip distance,
+or in fog/snow. Metrics appear only after `World.highBeamsSeen` (enabled at night),
+and more than 0.8 seconds fails a drive. Coaching deducts five safety points per
+second. Tests: `scripts/test_high_beams.mjs`, picked up by CI's Node-check glob.
+
+Ontario's [HTA s.168](https://www.ontario.ca/laws/statute/90h08) and
+[MTO handbook](https://www.ontario.ca/document/official-mto-drivers-handbook/getting-ready-drive)
+specify 150 m oncoming and 60 m following (except overtaking).
+BC's [MVA Regulations s.4.06(5)](https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/26_58_01#section4.06)
+actually prohibits upper beams within 150 m of another motor vehicle, except
+once overtaken and passed; it does **not** state Ontario's 60 m following rule.
+The simulator uses the requested Ontario 150/60 m policy on all maps rather than
+claiming province-specific legal compliance. The
+[MTO bad-weather guidance](https://www.ontario.ca/document/official-mto-drivers-handbook/driving-night-and-bad-weather)
+recommends low beams in fog because reflected light reduces visibility. The
+[MTO bus handbook](https://www.ontario.ca/document/print/book/150319)
+also explicitly recommends low beams in snow to avoid reflection from ice particles.
+
+
+## Left turns on red
+
+`World.leftOnRed` defaults off. Free drives enable it unless `?leftonred=0`;
+Lab enables it only for **Left on red** (seed 38042), 14 Avenue SW
+(`e594`) onto 5 Street SW (`e593`) in Calgary's committed pack. Both streets
+are one-way; two cars approach from the right on 5 Street (`e140`) on green,
+using the existing authored cross-traffic machinery. Installation starts simulation
+time at 23 s (red for the car, green for cross traffic), without changing the
+shared map or signal plan. Sensing adds `intersection.left_on_red` only for legal geometry
+on red, outside scrambles. Stop memory, pedestrian conflicts, sight lines,
+traffic gaps, Rules target speed and candidate rejection share right-on-red's
+machinery. NPCs use the same stop and gap machinery from the leftmost lane.
+The audit judges the actual exit, independently of the planned route; illegal
+lefts still count as red-light runs. `leftOnRedSeen` records an opportunity;
+there is no separate turn counter or change to metrics when disabled.
+
+Jurisdiction eligibility deliberately covers only the bundled map regions;
+unknown areas fail closed. The reviewed city bounds are enumerated in
+`sim/left-on-red.js`; check provincial law before adding a new city. No left turn
+on red is allowed in either Québec map.
+Signed turn restrictions apply even when the separate restrictions feature is
+off; explicit `no_left_on_red` on an edge/control also prohibits it. Street packs
+do not claim an exhaustive inventory of roadside signs.
+
+Provincial sources (checked 2026-11-05):
+
+- [BC Motor Vehicle Act, s.129(3)(b)](https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96318_05#section129): left into a one-way highway after stopping and yielding, unless signed otherwise. BC also permits a two-way approach; this feature deliberately implements only one-way to one-way.
+- [Alberta Driver's Guide](https://open.alberta.ca/dataset/387f4e8a-6c0a-456a-ab31-995aadaf1f2b/resource/1edf5165-9c51-4da8-8206-7bf08bb9a76d/download/tran-drivers-guide-2023-04.pdf): one-way to one-way, full stop, safe and unsigned.
+- [Saskatchewan SGI, Traffic signals](https://sgi.sk.ca/handbook/-/knowledge_base/drivers/traffic-signals): the red-light turn exception also applies at two one-way streets.
+- [Manitoba MPI, Left turns](https://apps.mpi.mb.ca/comms/drivershandbook/left-turns.html): one-way to one-way after stopping and yielding, unless otherwise indicated.
+- [Ontario MTO, Traffic lights](https://www.ontario.ca/document/official-mto-drivers-handbook/traffic-lights): one-way to one-way, full stop and clear way.
+- [Nova Scotia Using the Road Regulations, s.50(3)–(4)](https://novascotia.ca/just/regulations/regs/2026-230.pdf): one-way to one-way after stopping and yielding, unless prohibited by a traffic control device (effective October 19, 2026).
+- [Québec Highway Safety Code, ss.359–359.1](https://www.legisquebec.gouv.qc.ca/fr/document/lc/C-24.2?langCont=en): red requires stopping and waiting; the exception permits right turns only.
+
+Run `node --experimental-default-type=module scripts/test_left_on_red.mjs`
+on Node 22. CI's `scripts/test_*.mjs` loop includes it automatically.
+The saved Jev requests `data/snapshots/left_on_red_clear.json` and
+`left_on_red_traffic.json` cover driving after a full stop and waiting for traffic
+from the right; run them with `uv run scripts/verify_jev.py data/snapshots/left_on_red_*.json`.
+`scripts/test_drive_lab.mjs` also measures two complete saved arena evaluations
+(all challenges with Rules and cautious) and checks the 9 MB cap: 56.1% with
+41 challenges, measured 2026-11-05.

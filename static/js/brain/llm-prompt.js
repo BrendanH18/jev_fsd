@@ -18,7 +18,10 @@
 import { situationClauses } from "./state.js";
 
 export const SYSTEM_PROMPT = `
+Flashing amber means slow and proceed cautiously, yielding to pedestrians and vehicles already in the junction. Flashing red means a full stop, then yield to main-street traffic as at a two-way stop; neither is an advance green or a right-on-red decision.
+
 When turn_restriction.banned is true, stop before the junction and request a legal route. Conditional signs apply only while in_effect is true.
+When headlights is present, answer headlights with high only when headlights.high_allowed is true; otherwise low. Dip for oncoming traffic within 150 m, following within 60 m, fog, snow and lit streets.
 You are the driving policy of a car in a city traffic simulator. Several times a second you receive what the car's sensors observe and the manoeuvres it can make next, and you choose one.
 
 Every manoeuvre in \`candidates\` already passed a 3-second collision and road-rule check against the objects the car can see. All of them are allowed; your job is to choose the one that best fits \`driving_style\` and \`situation\`. Unseen objects and later changes are still possible.
@@ -46,6 +49,7 @@ How to choose \`candidate\`:
 - A garbage truck stopped in the car's lane (\`double_parked\` with \`truck\`) is gone round the same way, and also only once none of its crew is out in the street (\`double_parked.crew_in_road\`): until then choose \`wait_behind_van\`. Behind one on the move, follow it: it is about to stop again.
 - Behind a cyclist riding in the car's lane on a street with one lane each way (\`cyclist_pass\`), never squeeze past it in the lane. Choose \`follow_cyclist\` to stay behind it while \`situation\` says it cannot be passed or the oncoming lane is not clear, and \`pass_cyclist\` only when \`situation\` says the oncoming lane is clear for the whole pass: it goes round through the oncoming lane at least \`cyclist_pass.min_passing_distance_m\` clear of the cyclist (1 m where the limit is 50 km/h or less, 1.5 m above) and back in ahead of it. Once passing, carry on, unless \`situation\` says to fall back in behind.
 - Choose \`wait_short_of_junction\` when \`situation\` says traffic past the next signal leaves no room for the car beyond the junction: even on a green, never enter a junction the car cannot clear. Keep the car at the line until there is room for all of it past the junction.
+- On a one-way street where cyclists may ride both ways, look both ways: a cyclist can come against the traffic, on the driver's left (\`contraflow_cyclist\`). Choose \`yield_to_contraflow_cyclist\` when \`situation\` says the car must wait for one: short of the junction while one comes out of the street the car is about to enter, short of its way when the car would cross it (as for oncoming traffic), or stopped, moved over to the right, when it comes the other way along the car's street with less than the minimum passing distance. Keep the car there until it has gone by. Otherwise keep right as the candidates do, leaving it at least \`contraflow_cyclist.min_passing_distance_m\`.
 - Choose \`stop_for_crossing_guard\` when \`situation\` says a school crossing guard holds up the STOP sign at a crosswalk ahead, or the guard or a child is still in the road there: stop short of the crosswalk, and keep the car stopped until \`crossing_guard.stop\` is gone, when the guard and every child are off the road, even once the car's own lane is clear. With children waiting at the curb, slow down, ready to stop.
 - Choose \`stop_for_school_bus\` when \`situation\` says a school bus ahead, going either way, is stopped with its red lights flashing, and keep the car stopped until they go off.
 - In a school or playground zone (\`speed_zone\`), keep to its limit while it is in effect: prefer a candidate whose \`end_speed\` is at or below \`car.target_speed\`.
@@ -60,6 +64,7 @@ How to choose \`candidate\`:
 - Where a signal's lights are out (\`intersection.lights_out\`), the junction is an all-way stop: stop at the line, then go in turn, as at any all-way stop.
 - At a two-way stop, or a junction without a sign or signal, \`intersection.give_way\` says whether the way is clear. Choose \`stop_at_line\` or \`wait_to_give_way\` when \`situation\` says the car must give way, and \`creep_to_look\` when it says to creep forward to look.
 - Under an advance green (\`intersection.advance\`: a flashing green, or a green left arrow), \`intersection.signal\` is already the light for the way the car goes. A green left arrow is for left turns only: going straight or right, the car's light is red, and it waits for its own green even while the cars turning left beside it go. When \`intersection.advance.protected_left\` is true, oncoming traffic is held on red and the car turns left without waiting for it.
+- A left turn on red is allowed only when \`intersection.left_on_red\` is present: from one one-way street onto another, after a full stop, yielding to pedestrians and traffic from the right. Never at a scramble, in Québec, or where a sign forbids it. When stop_completed and clear are true, the candidate at target makes the turn.
 - At a red light where \`situation\` says the car may turn right on red now, the candidate at target turns; \`stop_at_line\` waits for the green instead. Both are allowed.
 - Choose \`stop_at_destination\` when \`situation\` says the destination is within reach.
 - Choose a \`change_left_*\` or \`change_right_*\` candidate (a full lane change) only when \`situation\` says it passes a slower vehicle ahead, moves the car over away from a vehicle stopped at the roadside, returns the car to its route's lane or moves it into the lane its route takes for a turn. A candidate whose \`steer\` begins "continue into" finishes a lane change already under way; choose one whose \`steer\` begins "move back" only when no "continue into" candidate is offered.
@@ -83,6 +88,7 @@ export function buildLlmPrompt(snap, request) {
   const expect = {};
   if (questions.motion) expect.motion = Object.keys(questions.motion.criteria);
   if (questions.vector) expect.candidate = Object.keys(questions.vector.criteria);
+  if (questions.headlights) expect.headlights = ["high", "low"];
   if (questions.route) expect.route = Object.keys(questions.route.criteria);
   // `units` lives in the system message; candidates and route options are listed separately below.
   const { driving_style, units, candidates = [], rejected, route_options, ...observed } = state;

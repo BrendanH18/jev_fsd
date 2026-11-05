@@ -32,6 +32,7 @@ from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.osm.bus_lanes import build_buslanes
 from jev.osm.calming import build_calming
+from jev.osm.contraflow import build_contraflow
 from jev.osm.crossings import build_crossings
 from jev.osm.rail import build_rail
 from jev.osm.scrambles import build_scrambles
@@ -105,6 +106,10 @@ def load_map(bbox_text: str = "") -> dict:
         restriction_layer = build_restrictions(bbox, MAPS_DIR, entry["pack"], log=log)
         if restriction_layer:
             entry["pack"] = {**entry["pack"], "restrictions": restriction_layer}
+        # and the one-way streets cyclists may ride both ways, likewise
+        contraflow = build_contraflow(bbox, MAPS_DIR, entry["pack"], log=log)
+        if contraflow:
+            entry["pack"] = {**entry["pack"], "contraflow": contraflow}
         # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
         offset = map_identity(bbox).get("utc_offset")
         if offset is not None:

@@ -24,7 +24,7 @@ const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/eva
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
 const root = new URL("../data/maps/", import.meta.url);
-const load = (key, layers = ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions"]) => {
+const load = (key, layers = ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow"]) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
   for (const name of layers) {
     const url = [2, 1].map(v => new URL(`${key}.${name}.v${v}.json`, root)).find(u => fs.existsSync(u));

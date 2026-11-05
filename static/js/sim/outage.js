@@ -1,3 +1,4 @@
+import { flashControl } from "./night-flash.js";
 // Power cuts: now and then a signal's lights go dark. Where they are out, every driver treats the
 // junction as an all-way stop: stop at the line, then go in turn, whoever stopped first going first
 // (the MTO Driver's Handbook: "If traffic lights are not working, treat the intersection as an
@@ -37,7 +38,7 @@ export function darkControl(control, edgeId) {
 // The control a driver obeys in `world` where the map has `control`, on `edgeId`: an all-way stop for
 // a dark signal.
 export function controlAt(world, control, edgeId) {
-  return control?.type === "signal" && world.outages?.isDark(control.id) ? darkControl(control, edgeId) : control;
+  return control?.type === "signal" && world.outages?.isDark(control.id) ? darkControl(control, edgeId) : flashControl(world, control, edgeId);
 }
 
 export class Outages {
