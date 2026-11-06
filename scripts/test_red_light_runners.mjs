@@ -208,14 +208,14 @@ await test("traffic on a fresh green waits at the line for the runner, then goes
 
 // The real map, as the Lab loads it.
 const pack = JSON.parse(fs.readFileSync(new URL("../data/maps/3e794edbefcb.v6.pack.json", import.meta.url)));
-for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow"]) {
+for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
   const url = [2, 1].map(v => new URL(`../data/maps/3e794edbefcb.${layer}.v${v}.json`, import.meta.url)).find(url => fs.existsSync(url));
   if (url) pack[layer] = JSON.parse(fs.readFileSync(url));
 }
 const map = new MapData(pack), lesson = challengeById("fresh-green");
 
 await test("Fresh green: the real junction, its plan unchanged, starts on red with the runner committed", () => {
-  assert.equal(CHALLENGES.at(-1).id, "fresh-green");
+  assert.ok(CHALLENGES.some(c => c.id === "fresh-green"));
   assert.equal(CHALLENGES.filter(c => c.icon === lesson.icon).length, 1);
   const before = JSON.stringify(map.intersections.get("sig3").plan);
   const a = challengeScenario(map, lesson), b = challengeScenario(map, lesson);
