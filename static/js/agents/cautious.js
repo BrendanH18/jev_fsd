@@ -18,11 +18,13 @@ export class CautiousAgent {
     // spend no longer in that lane than the pass was judged clear for
     // a school crossing guard holding up the STOP sign: stop short of the crosswalk, however far off
     // a cyclist riding against a one-way street to wait for (sim/contraflow.js): stop where the car waits
+    // a car running the red across the car's way on a green (sim/red-light-runner.js): wait at the line
+    // a car backing out of a driveway into the lane (sim/driveway-reversers.js): stop to give it room
     // in a bus lane while it is in effect, short of the right-turn approach: out of it, after making way for an emergency vehicle
     const inBusLane = snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index);
     const exitBusLane = inBusLane ? eligible.find(c => c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) : null;
     const pxoStop = snap.pxo?.bumper_to_crosswalk_m < 3.5;
-    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "stop_for_turn_restriction") || exitBusLane || (pxoStop && eligible.find(c => c.id === "stop_for_pedestrian")) || eligible.find(c => c.id === "park" || c.id === "pull_out") || eligible.find(c => c.id === "pass_cyclist") || eligible.find(c => c.id === "stop_for_crossing_guard") || (snap.contraflow_cyclist?.wait && eligible.find(c => c.id === "yield_to_contraflow_cyclist")) || (amberStop && eligible.find(c => c.id === "stop_at_line")) || ranked[0]?.candidate;
+    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "stop_for_turn_restriction") || exitBusLane || (pxoStop && eligible.find(c => c.id === "stop_for_pedestrian")) || eligible.find(c => c.id === "park" || c.id === "pull_out") || eligible.find(c => c.id === "pass_cyclist") || eligible.find(c => c.id === "stop_for_crossing_guard") || (snap.contraflow_cyclist?.wait && eligible.find(c => c.id === "yield_to_contraflow_cyclist")) || (snap.red_light_runner?.wait && eligible.find(c => c.id === "wait_for_runner")) || (snap.reversing_vehicle?.wait && eligible.find(c => c.id === "yield_to_reversing")) || (amberStop && eligible.find(c => c.id === "stop_at_line")) || ranked[0]?.candidate;
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
     // pulling up to park stops where the car reverses in)
     return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion: !(amberStop && candidate?.id === "stop_at_line") && candidate?.sim.end_speed < 0.3 && !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) ? "stop" : "drive", candidateId: candidate?.id ?? null,

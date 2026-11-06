@@ -1,4 +1,5 @@
 import { followingPolicy } from "./following.js";
+import { runnerCap, runnerHold, runsLight } from "./red-light-runner.js";
 import { observeAmber } from "./amber.js";
 import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -26,6 +27,8 @@ import { turnBanned } from "./turn-restrictions.js";
 // it: they wait short of the junction for one coming out of the street they turn into, wait for one as
 // for oncoming traffic, and move over for one coming the other way along it, stopping where that leaves
 // less than the minimum passing distance until it has gone by (sim/contraflow.js).
+// With `driveways` on, drivers slow for a car backing out of a driveway ahead and stop to give it room
+// once it is coming into their lane (sim/driveway-reversers.js reverserYield).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -58,6 +61,8 @@ import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass,
 import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
 import { trafficYield as contraflowYield } from "./contraflow.js";
+import { npcGlareCeiling } from "./sun-glare.js";
+import { reverserYield } from "./driveway-reversers.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -880,6 +885,8 @@ export class NpcFleet {
       if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
       let stopAt = null, flashCap = Infinity, amberCap = Infinity;
+      // a driver running a late amber or a fresh red holds the speed it had (sim/red-light-runner.js)
+      const runCap = n.runner && world.redRunners?.enabled ? runnerCap(world, n, path, front) : Infinity;
       // Entry-stop checks stop at the line; an amber clearing speed stays in
       // force until the rear is beyond the junction's crossing street.
       if (world.amberLights) for (const e of path.edges) {
@@ -904,8 +911,12 @@ export class NpcFleet {
           const amber = world.amberLights ? observeAmber(n, `${e.id}:${ctl.id}`, st, bumperToLine, this.map.intersections.get(ctl.id), approachPhase(this.map.intersections.get(ctl.id), e.id, world.t), world.t) : null;
           const canStop = amber ? amber.stop : bumperToLine > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) + 1;
           if (amber && !amber.stop) amberCap = Math.min(amberCap, amber.speed_mps);
+          // (now and then running it instead; and on a green, waiting at the line for someone crossing
+          // who cannot stop for their red: sim/red-light-runner.js)
+          const run = world.redRunners?.enabled ? runsLight(world, n, e, ctl, st, bumperToLine, canStop, () => this.boxBusy(n, e)) : null;
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
-          else if (st === "red" || (st === "yellow" && canStop)) stopAt = bumperToLine;
+          else if (!run && (st === "red" || (st === "yellow" && canStop))) stopAt = bumperToLine;
+          else if (!run && st === "green" && world.redRunners?.enabled && runnerHold(world, n, e.id, this.map.intersections.get(ctl.id), bumperToLine, all)) stopAt = Math.max(0, bumperToLine);
         } else if (ctl.type === "yield") {
           // roundabout entry: wait at the line while someone in the ring would arrive first
           if (bumperToLine < 12 && ringBusy(this.map.roundabouts.get(ctl.roundabout), this.map.nodes.get(e.to), all, n)) stopAt = bumperToLine;
@@ -1027,6 +1038,13 @@ export class NpcFleet {
         const g = cf.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
       }
+      // for a car backing out of a driveway, slow while it backs out ahead and stop short of it once it is
+      // coming into the lane (once it could stop there: otherwise it carries on) (sim/driveway-reversers.js)
+      const rv = world.driveways?.cars.length && !n.transit?.tram ? reverserYield(world, n, front) : null;
+      if (rv?.hold != null) {
+        const g = rv.hold - front;
+        if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
+      }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -1036,7 +1054,10 @@ export class NpcFleet {
       const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
       const vFollow = this.world.followingDistance && n.lead && n.kind !== "bike"
         ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, n.pull ? 5 : Infinity, vCalm, vFollow);
+      // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
+      // sim/sun-glare.js)
+      const vGlare = this.world.sunGlare && n.kind !== "bike" ? npcGlareCeiling(this.world, n) : Infinity;
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

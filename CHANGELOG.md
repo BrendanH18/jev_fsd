@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- Red-light runners in free drives (`?redrunners=0` disables them): now and then a driver who
+  could stop for an amber runs the late amber or fresh red instead, at the speed it had. It still
+  stops for anyone already in its path. When the light turns green, AI drivers and traffic look
+  both ways and wait at the line while a crossing car cannot stop or is already in the junction.
+  Entering ahead of one counts as `fresh_green_conflicts` and fails a Lab drive.
+- A new Edmonton challenge: **Fresh green**, at 106 Street NW and Whyte Avenue NW, where your
+  light turns green as a car on Whyte Avenue runs its red across your way.
+- Low sun glare in free drives (`?sunglare=0` turns it off). Driving into a low sun on a clear
+  day, glare washes out signals and people ahead: the car sees less far towards the sun, and it
+  and the traffic heading the same way slow to the speed they can stop from within that sight.
+  The sun's position comes from the time of day and the city's latitude and longitude; free
+  drives keep the sky's late-September sun, and a challenge can set its own date. AI drivers see
+  `sun_glare`, the HUD says when the car is slowing for it, and the sky draws a flare and a warm
+  haze when you look into the sun. Driving more than 1 m/s over the glare speed for more than a
+  second, after time to react and slow, fails a Lab drive (`glare_speeding_seconds`).
+- New Lab challenge, **Into the sun** (seed 50042): westbound on 17 Avenue SW, Calgary, at
+  18:15 on a clear 8 October, with the sun just above the avenue ahead, two signals and someone
+  crossing mid-block.
+
+- Cars back out of driveways in free drives (`?driveways=0` disables them). A new layer beside
+  each pack, `<key>.driveways.v1.json` (`jev/osm/driveways.py`, `scripts/fetch_map.py ...
+  --driveways`), records where each mapped driveway meets a street, on which side, and which way
+  it points: 554 driveways across the twelve maps, 135 in Ottawa and 128 in Calgary. The street
+  packs are unchanged. Now and then, from its own random stream, a car parked nose-in in a
+  driveway ahead on the car's route backs out: reverse lamps on, it creeps across the sidewalk,
+  stops to look, backs into the near lane on the shared car model, then drives off with the
+  traffic. It waits for anything it can see or hear coming close, but parked cars hide it from the
+  street and the street from it. Traffic and the driven car slow while one backs out toward their
+  lane and stop to give it room once it comes into the lane; people on the sidewalk wait for it.
+  Sensing reports `reversing_vehicle`, with the new `yield_to_reversing` candidate and the
+  `passes_reversing_vehicle_too_close` rejection. Squeezing past one, or not stopping for one in
+  the lane, counts as `reversing_conflicts`, reported only once a car has backed out near the
+  driven car. Driveway aprons are drawn across the sidewalk, and the HUD says when a car is
+  backing out ahead. With the option on, nobody parks across a driveway.
+- New Lab challenge, **Reverse lights** (seed 49042): 13 Avenue SW in Calgary's Beltline, a car
+  backing out between parked cars as you come along.
+
 - Leave more following room for speed, poor grip and braking response. Free drives share
   gap targets across AI drivers, traffic and coaching; AI eyes explains actual and desired
   bumper gaps. A new close leader gets five seconds to rebuild space before following

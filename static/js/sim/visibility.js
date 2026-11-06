@@ -35,6 +35,9 @@ function blocks(from, to, pts) {
 export class Visibility {
   constructor(map) {
     this.night = 0;
+    // Low sun glare (sim/sun-glare.js), installed by a World with `sunGlare` on: (observer, x, y) ->
+    // how far that observer sees towards (x, y) into the sun (Infinity where it does not dazzle).
+    this.glare = null;
     this.grid = new Map();
     for (const { pts, h } of map.pack.buildings || []) {
       if (pts.length < 3 || h < 1.5) continue;
@@ -55,6 +58,11 @@ export class Visibility {
   get range() { return Math.min(weather.visibility, DAYLIGHT_RANGE_M - 35 * this.night); }
 
   rangeAt(observer, x, y) {
+    const range = this.lightRangeAt(observer, x, y);
+    return this.glare ? Math.min(range, this.glare(observer, x, y)) : range;
+  }
+
+  lightRangeAt(observer, x, y) {
     if (!this.night || !Number.isFinite(observer.psi)) return this.range;
     const bearing = Math.atan2(y - observer.y, x - observer.x) - observer.psi;
     const angle = Math.abs(Math.atan2(Math.sin(bearing), Math.cos(bearing)));
@@ -63,9 +71,12 @@ export class Visibility {
   }
 
   // How far `observer` sees towards (x, y), looking out to `reach` (see PASS_SIGHT_M) where that is
-  // given: by day in clear weather only; otherwise as ever.
+  // given: by day in clear weather only; otherwise as ever. (Into a low sun, no further than the
+  // glare lets it: sim/sun-glare.js)
   reachAt(observer, x, y, reach = 0) {
-    return reach && !this.night && weather.visibility >= DAYLIGHT_RANGE_M ? Math.max(reach, DAYLIGHT_RANGE_M) : this.rangeAt(observer, x, y);
+    if (!(reach && !this.night && weather.visibility >= DAYLIGHT_RANGE_M)) return this.rangeAt(observer, x, y);
+    const far = Math.max(reach, DAYLIGHT_RANGE_M);
+    return this.glare ? Math.min(far, this.glare(observer, x, y)) : far;
   }
 
   canSee(observer, x, y, reach = 0, high = false) {

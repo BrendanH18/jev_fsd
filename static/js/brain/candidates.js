@@ -16,6 +16,7 @@ import { TRY_START_M, planParking, planPullOut } from "../sim/parallel-park.js";
 import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
+import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -174,6 +175,20 @@ export function sampleCandidates(snap, world) {
       // cyclist having come into sight late round a corner)
       out.push({ id: "yield_to_contraflow_cyclist", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, Math.max(v, 2)), stopAtRoute: stopAt(cf.stop_s_route - FRONT - 1) }),
         steer: cf.detour ? "move over to the right" : "hold lane", speed: cf.relation === "oncoming" ? "stop, moved over, and let the cyclist coming the other way go by" : "stop and let the cyclist riding against the one-way go by" });
+    }
+    // A car running the red across the car's way as its light is green (sim/red-light-runner.js): wait
+    // at the line until it has cleared the junction.
+    const rr = snap.red_light_runner;
+    if (rr?.wait && rr.bumper_to_stop_m > 0.3) {
+      out.push({ id: "wait_for_runner", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: Math.min(approach, Math.max(v, 2)), stopAtRoute: stopAt(rr.stop_s_route - FRONT - 0.5) }),
+        steer: "hold lane", speed: "stop at the line and let the car running the red clear the junction" });
+    }
+    // A car backing out of a driveway ahead (sim/driveway-reversers.js): slow while it backs out toward
+    // the lane, and stop short of it, giving it room to finish, once it is coming into the lane.
+    const rv = snap.reversing_vehicle;
+    if (rv && (!rv.wait || rv.bumper_to_stop_m > 0.3)) {
+      out.push({ id: "yield_to_reversing", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, rv.limit_mps ?? approach), ...(rv.wait ? { stopAtRoute: stopAt(rv.stop_s_route - FRONT - 0.5) } : {}) }),
+        steer: "hold lane", speed: rv.wait ? "stop and give the car backing out room to finish" : "slow down, ready to stop for the car backing out" });
     }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
@@ -408,12 +423,18 @@ export function simulateAll(candidates, snap, world) {
   // meets, moving (the minimum passing distance)
   const cfWait = snap.contraflow_cyclist?.wait ? snap.contraflow_cyclist.stop_s_route : null;
   const cfClearance = snap.contraflow_cyclist?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit);
+  // a car running the red across the car's way (sim/red-light-runner.js): the line the car waits at
+  const runnerStop = snap.red_light_runner?.wait ? snap.red_light_runner.stop_s_route : null;
+  // a car backing out of a driveway (sim/driveway-reversers.js): where the car stops for it, and the room
+  // it leaves one backing out as it goes by
+  const rvStop = snap.reversing_vehicle?.wait ? snap.reversing_vehicle.stop_s_route : null;
+  const rvClearance = snap.reversing_vehicle?.min_pass_m ?? null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -448,6 +469,10 @@ export function simulateAll(candidates, snap, world) {
         if (hook && s + FRONT > hook.yield_s_route + HOOK_STOP_M - 0.5) hooks = true;
         // (and here: half a metre past where it waits is still short of the cyclist's way)
         if (cfWait !== null && s + FRONT > cfWait + 0.5) cfCut = true;
+        // (and here: across the line is into the junction)
+        if (runnerStop !== null && s + FRONT > runnerStop + 0.2) passesRunner = true;
+        // (and a metre past where it stops for a car backing out is still clear of it)
+        if (rvStop !== null && s + FRONT > rvStop + 1) rvClose = true;
         // (1.5 m past it, as a short stop overshoots)
         if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         // (1.5 m past where it stops, as a short stop overshoots: into the 2 m it leaves behind the bus)
@@ -488,8 +513,9 @@ export function simulateAll(candidates, snap, world) {
         const box = car.obb();
         const c = Math.cos(car.psi), sn = Math.sin(car.psi);
         for (const o of npcs) {
-          const ob = o.n.obb();
-          ob.center = [o.x + o.vx * t + (ob.center[0] - o.n.x), o.y + o.vy * t + (ob.center[1] - o.n.y)];
+          // (a car backing out of a driveway goes along its way out: sim/driveway-reversers.js)
+          const ob = o.n.reverser ? reverserBoxAt(o.n, t) : o.n.obb();
+          if (!o.n.reverser) ob.center = [o.x + o.vx * t + (ob.center[0] - o.n.x), o.y + o.vy * t + (ob.center[1] - o.n.y)];
           // gap to a vehicle in the car's path (one alongside, like a parked car, does not count)
           const dx = ob.center[0] - box.center[0], dy = ob.center[1] - box.center[1];
           const ahead = dx * c + dy * sn, side = Math.abs(dx * sn - dy * c);
@@ -515,6 +541,8 @@ export function simulateAll(candidates, snap, world) {
           const meeting = o.n.contra && Math.abs(wrap(o.n.psi - car.psi)) > Math.PI * 2 / 3;
           if (o.n.kind === "bike" && !meeting && Math.abs(ahead) < box.halfLength + ob.halfLength && side - box.halfWidth - ob.halfWidth < cyclistClearance) closePass = true;
           if (meeting && car.v > 1 && Math.abs(ahead) < box.halfLength + ob.halfLength && side - box.halfWidth - ob.halfWidth < cfClearance - 0.1) cfMeet = true;
+          // (going by a car backing out of a driveway, with its reverse lamps on: sim/driveway-reversers.js)
+          if (rvClearance !== null && o.n.reverseLamps && car.v > 1 && boxGap(box, ob) < rvClearance) rvClose = true;
           // going round a cyclist with its far side across the centre line, meeting a vehicle coming the
           // other way in its way (sim/cyclist-pass.js)
           if (cp && isCyclistPass(law.detour) && lateral - box.halfWidth < cp.centre_line_route && ahead > 0 && Math.abs(wrap(o.n.psi - car.psi)) > Math.PI * 3 / 4
@@ -565,6 +593,8 @@ export function simulateAll(candidates, snap, world) {
     else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";
     else if (cfCut && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_contraflow_cyclist";
     else if (cfMeet && c.law.kind !== "hard_brake") reject = "passes_contraflow_cyclist_too_close";
+    else if (passesRunner && c.law.kind !== "hard_brake") reject = "enters_ahead_of_red_light_runner";
+    else if (rvClose && c.law.kind !== "hard_brake") reject = "passes_reversing_vehicle_too_close";
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";

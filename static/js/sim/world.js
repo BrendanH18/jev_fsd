@@ -1,4 +1,6 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
+import { auditRunner, createRunners } from "./red-light-runner.js";
+import { auditSunGlare, glareRange } from "./sun-glare.js";
 import { setNightFlash, flashState } from "./night-flash.js";
 import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -41,6 +43,7 @@ import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
+import { DrivewayReversers, auditReversers, reverserHidden } from "./driveway-reversers.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -216,9 +219,15 @@ export class World {
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
-  // both ways for them (sim/contraflow.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false } = {}) {
+  // both ways for them (sim/contraflow.js). `sunGlare`: a low sun ahead dazzles drivers, who slow to
+  // what they can see (sim/sun-glare.js).
+  // `driveways`: now and then a car backs out of a driveway near the car's way, and everyone gives it
+  // room (sim/driveway-reversers.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false } = {}) {
     this.map = map;
+    // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
+    // fresh red, whether one has committed near the car this drive, and the junction the audit watches
+    this.redRunners = createRunners({ enabled: redRunners, seed }); this.redRunnersSeen = false; this.runnerCall = null;
     this.followingDistance = !!followingDistance;
     this.amberLights = !!amberLights; this.amberLightsSeen = false;
     this.highBeams = !!highBeams; this.highBeamsSeen = false;
@@ -227,6 +236,10 @@ export class World {
     this.pxoLines = new Map();
     this.seed = seed;
     this.visibility = new Visibility(map);
+    // low sun glare (sim/sun-glare.js): whether a low sun ahead dazzles drivers (shortening the car's
+    // sight towards it), whether it has dazzled the car this drive, and the audit's allowance
+    this.sunGlare = !!sunGlare; this.sunGlareSeen = false; this.sunGlareCall = null;
+    if (this.sunGlare) this.visibility.glare = (observer, x, y) => glareRange(this, observer, x, y);
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
@@ -326,6 +339,11 @@ export class World {
     this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
     this.contraflowSeen = false;
     this.contraflowCalls = new Map();
+    // cars backing out of driveways (sim/driveway-reversers.js): whether they do, whether one has backed
+    // out near the car this drive, and the ones the car has squeezed past or not stopped for
+    this.driveways = new DrivewayReversers(this, { enabled: driveways, seed });
+    this.drivewaysSeen = false;
+    this.drivewayCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -335,7 +353,9 @@ export class World {
     const out = this.npcs.filter((n) => { const m = r + Math.max(5, n.spec?.length || 0); return Math.abs(n.x - x) < m && Math.abs(n.y - y) < m; });
     const all = out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
     // (and contraflow cyclists, with that option on: sim/contraflow.js)
-    return this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
+    const out2 = this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
+    // (and cars backing out of driveways, with that option on: sim/driveway-reversers.js)
+    return this.driveways?.cars.length ? out2.concat(this.driveways.near(x, y, r)) : out2;
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
@@ -354,6 +374,8 @@ export class World {
   sees(observer, o, reach = 0) {
     const enhanced = this.highBeams && observer === this.ego && observer.highBeam && this.visibility.night > 0.5 && this.weather !== "fog" && this.weather !== "snow" && !wellLit(this);
     if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach))) return false;
+    // (a car backing out of a driveway: the cars parked at the kerb hide it, sim/driveway-reversers.js)
+    if (o.reverser) return !(this.hazards && reverserHidden(this, observer, o));
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
     return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
   }
@@ -440,6 +462,8 @@ export class World {
     this.bikePasses?.clear(); this.cyclistPass = null;
     this.guardCalls?.clear();
     this.contraflowCalls?.clear();
+    this.runnerCall = null;
+    this.drivewayCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -475,7 +499,9 @@ export class World {
     return !!hit;
   }
 
-  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}) } : null; }
+  // (with sun glare on, the clock may also carry the `day` of the year and a `utc_offset`, for the sun:
+  // sim/sun-glare.js)
+  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}), ...(this.sunGlare && clock.day !== undefined ? { day: clock.day } : {}), ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}) } : null; }
 
   // Where the ego is relative to the road network (cached per tick). `limit` is the street's, or a
   // school or playground zone's while it is in effect there (`zone`).
@@ -522,6 +548,7 @@ export class World {
   audit(dt, road) {
     this.events.length = 0;
     if (this.highBeams) auditHighBeams(this, dt);
+    if (this.sunGlare) auditSunGlare(this, dt);
     if (this.auditStatic(dt)) Object.assign(road, this.roadInfo());
     const egoBox = this.ego.obb();
     for (const n of this.obstaclesNear(this.ego.x, this.ego.y, 12)) {
@@ -594,8 +621,15 @@ export class World {
       const amber = amberInter && this.visibility.canSee(this.ego, amberInter.x, amberInter.y)
         ? observeAmber(this.ego, `${edge.id}:${control.id}${amberArrow ? ":arrow" : ""}`, amberSignal, -past, amberInter, amberShows, this.t) : null;
       if (amber && !crossed) this.amberLightsSeen = true;
+      // a car running the red across the car's way as it enters on green (sim/red-light-runner.js)
+      const runner = this.redRunners.enabled && control.type === "signal"
+        ? auditRunner(this, control.id, edge.id, rc?.turn || "straight", rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id), past) : null;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
         if (control.type === "signal") {
+          if (runner) {
+            this.violations.fresh_green_conflicts = (this.violations.fresh_green_conflicts || 0) + 1;
+            this.events.push({ type: "fresh_green_conflict", with: runner.vehicle.id ?? null });
+          }
           const amberViolation = amberSignal === "yellow" && amber && (amber.stop ? "safe_stop" : amber.max_speed_mps > amber.speed_mps + AMBER_SPEED_SLACK_MPS ? "sped_up" : null);
           if (amberViolation && amberShows !== "arrow_yellow") {
             this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
@@ -696,6 +730,7 @@ export class World {
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();
     if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
+    if (this.driveways.enabled) auditReversers(this);
     this.auditKerb();
     leftSpace(this);
   }

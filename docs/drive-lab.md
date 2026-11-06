@@ -5,10 +5,13 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Forty-seven authored challenges
+## Fifty authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
+| Fresh green | Edmonton, 106 Street NW | Red-light runners on (`redRunners`). Your light turns green at Whyte Avenue NW as a car that cannot stop runs its red across your way. Entering ahead of it (`fresh_green_conflicts`) fails the drive |
+| Into the sun | Calgary, 17 Avenue SW | Westbound into a low October sun at 18:15: a red light and someone crossing mid-block, seen late in the glare. `glare_speeding_seconds` fails above 1 s |
+| Reverse lights | Calgary, Beltline | Hidden hazards and driveway reversers on (`driveways`, sim/driveway-reversers.js). 13 Avenue SW (one lane each way, 40 km/h), both kerbs lined with parked cars. A car in a driveway on the right, already across the sidewalk, backs out once the car's front is 70 m away; the parked cars hide each from the other, and it comes into the lane with the car about 30 m off. Squeezing past it or not stopping for it (`reversing_conflicts`) fails the drive. Rules and the cautious agent stop about 9 m back, wait for it to drive off and follow it |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -118,6 +121,10 @@ and yield to people and traffic already in the junction. See [BC Motor Vehicle A
 cyclist coming out of a one-way street in its contraflow lane before turning in. Contraflow cyclists
 are on only for this challenge and free drives; the challenge places its one cyclist and no others.
 
+**Reverse lights** (`reverse-lights`, Calgary, 13 Avenue SW, seed 49042): watch driveways for
+reversing lights, and give a car backing out room to finish. Driveway reversers are on only for this
+challenge and free drives; the challenge places its one car backing out and no others.
+
 ## Paired amber-light lessons
 
 **Room to stop** (`amber-stop`, seed 44042) and **Keep going safely** (`amber-clear`,
@@ -142,6 +149,24 @@ every province's laws. Focused dry/snow and replay coverage lives in
 `scripts/test_amber_challenges.mjs` and `scripts/test_amber_policy.mjs`.
 
 
+## Into the sun
+
+**Into the sun** (seed 50042) drives west on Calgary's 17 Avenue SW, in the right lane, at
+18:15 Mountain daylight time on a clear 8 October. The sun stands about 6° up at 253°, 17° left
+of the avenue, so it glares straight through the windshield. The car sees about 42 m that way
+instead of 80 m, and keeps to about 39 km/h, the speed it can stop from within that. The light at
+4 Street SW is red as the car comes up to it, but shows as unknown until the car is within the
+glare's reach; between 4 and 5 Street someone crosses mid-block from the far side.
+
+The date is chosen so that the low sun really faces a westbound avenue: at Calgary's latitude
+the evening sun sits that close to west only from mid-September to mid-October. On 5 November
+at 16:45 it is low in the south-west, 25° to 35° off a westbound street, outside the glare cone.
+
+The lesson: when the sun is in your eyes, slow down to what you can see, leave more room, and
+look for signals and people early. Rules and the cautious agent pass; a car that holds 50 km/h
+into the sun fails on `glare_speeding_seconds`. Checks: `scripts/test_sun_glare.mjs`; live model
+case `data/snapshots/into_the_sun.json`.
+
 ## Space to react
 
 Both lessons enable the shared following-distance policy. It accounts for road grip,
@@ -159,3 +184,16 @@ Coaching grants five seconds to recover when a newly encountered leader moves si
 existing gap. Continuing to follow below the target after that window lowers the safety
 score; reacquiring the same leader does not reset the allowance. Moving into a short gap yourself earns no allowance. Collision checks and
 emergency braking remain active throughout. Existing challenges leave the feature off.
+
+
+## Fresh green
+
+**Fresh green** (`fresh-green`, Edmonton, seed 48042) uses the unchanged signal at 106 Street NW
+and Whyte Avenue NW (`sig3`). The car waits at the red on 106 Street NW, heading south, its front
+1.5 m short of the line, three seconds before its green. A car on Whyte Avenue NW, coming from the
+car's left in the near curb lane at 11 m/s (about the 40 km/h limit), is committed to running its
+red: its front crosses its line a second after the car's light turns green. Both local drivers wait
+at the line until it has cleared the junction, then carry on 100 m along 106 Street NW. A driver
+who goes as soon as the light turns green enters ahead of it, is counted in
+`fresh_green_conflicts`, and collides with it. Red-light runners are on only for this challenge
+and free drives; the challenge places its one runner and no other traffic.

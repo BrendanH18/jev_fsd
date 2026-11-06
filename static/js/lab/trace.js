@@ -1,5 +1,5 @@
 const round = value => Math.round(value * 1000) / 1000;
-const AUDITS = { amber_lights_run: "Ignored a safe amber stop or sped up to beat the light", collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield", plow_right_passes: "Passed a snow plow on the right", merge_cut_ins: "Merged out of turn at a lane closure", close_passes: "Passed a cyclist closer than the minimum passing distance", hump_hits: "Took a speed hump too fast", crew_close_passes: "Passed a garbage crew worker too close", guard_violations: "Drove past a school crossing guard's STOP sign", pxo_early_goes: "Left a pedestrian crossover before the far curb", illegal_turns: "Made a prohibited turn", contraflow_conflicts: "Cut off or squeezed a cyclist riding against the one-way" };
+const AUDITS = { amber_lights_run: "Ignored a safe amber stop or sped up to beat the light", collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield", plow_right_passes: "Passed a snow plow on the right", merge_cut_ins: "Merged out of turn at a lane closure", close_passes: "Passed a cyclist closer than the minimum passing distance", hump_hits: "Took a speed hump too fast", crew_close_passes: "Passed a garbage crew worker too close", guard_violations: "Drove past a school crossing guard's STOP sign", pxo_early_goes: "Left a pedestrian crossover before the far curb", illegal_turns: "Made a prohibited turn", contraflow_conflicts: "Cut off or squeezed a cyclist riding against the one-way", fresh_green_conflicts: "Entered on green ahead of a car running the red", reversing_conflicts: "Squeezed past or failed to stop for a car backing out of a driveway" };
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and
 // source, and its fallback error and hazard flags when it has any. A run of such records with the same
@@ -62,6 +62,9 @@ export class EvaluationTrace {
     }
     if (!this.glareRecorded && world.highBeamsSeen && world.violations.glare_seconds > 0.8) {
       this.event("glare", "Failed to dip high beams", world.t); this.glareRecorded = true;
+    }
+    if (!this.sunGlareRecorded && world.sunGlareSeen && world.violations.glare_speeding_seconds > 1) {
+      this.event("sun_glare", "Drove too fast to stop within sight in sun glare", world.t); this.sunGlareRecorded = true;
     }
     if (score.followingEnabled && score.closeFollowing >= 1 && !this.followingRecorded) {
       this.event("following_gap", "Following gap remained short after time to react", world.t); this.followingRecorded = true;

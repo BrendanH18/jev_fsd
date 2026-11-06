@@ -1,0 +1,180 @@
+{
+  "name": "into_the_sun",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 13,
+      "limit": 10.7,
+      "speed_vs_limit": "over",
+      "target_speed": 10.1,
+      "target_reason": "limited visibility",
+      "speed_vs_target": "above target"
+    },
+    "visibility": {
+      "range_m": 80,
+      "clear_path_m": 39,
+      "safe_speed_mps": 10.1,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 424.7,
+      "remaining_m": 424.7,
+      "destination": {
+        "right": 0.8,
+        "ahead": 424.7
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "17 Avenue SW",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0
+    },
+    "sun_glare": {
+      "severity": 0.73,
+      "sight_m": 42,
+      "speed_ceiling": 10.7,
+      "sun_elevation_deg": 6.1,
+      "sun_off_heading_deg": 17
+    },
+    "lanes": {
+      "count": 2,
+      "car_lane": "right",
+      "route_lane": "right",
+      "left": {
+        "gap_ok": true
+      }
+    },
+    "candidates": [
+      {
+        "id": "keep_lane_limit",
+        "steer": "hold lane",
+        "speed": "limit 10.7",
+        "end_speed": 10.7,
+        "vs_target": "above target",
+        "max_accel": 0,
+        "max_decel": 2.5,
+        "max_lateral_accel": 0,
+        "progress_m": 33.5,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "slow to 10.1",
+        "end_speed": 10.1,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 3.1,
+        "max_lateral_accel": 0,
+        "progress_m": 32.1,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_cautious",
+        "steer": "hold lane",
+        "speed": "slow to 7.6",
+        "end_speed": 7.6,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 5.6,
+        "max_lateral_accel": 0,
+        "progress_m": 26.7,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0.1,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 7,
+        "max_lateral_accel": 0,
+        "progress_m": 15.6,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "slow to 10.1",
+        "end_speed": 10.1,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 3.1,
+        "max_lateral_accel": 0.9,
+        "progress_m": 32.1,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "slow to 10.1",
+        "end_speed": 10.1,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 3.1,
+        "max_lateral_accel": 0.9,
+        "progress_m": 32.1,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 7,
+        "max_lateral_accel": 0,
+        "progress_m": 15,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ]
+  },
+  "questions": {
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. The car is driving into a low sun (6.1° above the horizon, 17° off its heading): glare washes out signals and people ahead, so the car sees only about 42 m that way. Keep to 39 km/h or less, the speed it can stop from within that, and look for signals and people early (`car.target_speed` already does): prefer a candidate whose `end_speed` is at or below it, and leave more room. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "keep_lane_limit": "hold lane, limit 10.7, +33.5 m, clear",
+        "keep_lane_target": "hold lane, slow to 10.1, +32.1 m, clear",
+        "keep_lane_cautious": "hold lane, slow to 7.6, +26.7 m, clear",
+        "keep_lane_stop": "hold lane, stop, +15.6 m, clear",
+        "left_0.5_target": "shift 0.5 m left, slow to 10.1, +32.1 m, clear",
+        "right_0.5_target": "shift 0.5 m right, slow to 10.1, +32.1 m, clear",
+        "hard_brake": "hold lane, brake hard, +15 m, clear"
+      }
+    }
+  },
+  "local": {
+    "motion": {
+      "type": "choice",
+      "choice": "drive",
+      "probabilities": {
+        "drive": 1
+      },
+      "confidence": 1,
+      "local": true
+    }
+  },
+  "expect": {
+    "vector_in": [
+      "keep_lane_limit",
+      "keep_lane_target",
+      "keep_lane_cautious"
+    ]
+  }
+}

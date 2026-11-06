@@ -141,6 +141,18 @@ Use `?highbeams=0` to disable this feature. The simulator uses Ontario's distanc
 see the provincial rule distinction and sources in [project reference](project-reference.md#high-beams-simhigh-beamsjs).
 
 
+### Slow down into a low sun
+
+On a clear day with the sun low ahead, glare washes out what lies towards it. The car sees less
+far that way, signals and people ahead come into view later, and it slows to the speed it can
+stop from within what it can see; traffic heading into the sun slows the same way. The HUD says
+**SUN GLARE · SLOWING** while the car is above that speed, and the sky shows a flare and a warm
+haze when you look into the sun. In a Lab drive, more than a second over the glare speed (by more
+than 1 m/s, after a moment to react and slow) fails the drive and lowers the safety score; the
+report records `glare_speeding_seconds` once glare has applied. Free drives keep the sky's
+late-September sun, so glare comes at sunrise and sunset; use `?sunglare=0` to turn it off.
+See [Into the sun](drive-lab.md#into-the-sun).
+
 ### Respond to amber
 
 With amber decisions enabled, ignoring a safe amber stop or speeding up to beat it costs
@@ -164,3 +176,25 @@ charge the same leader's temporary TTC deficit during recovery. Other hazards, c
 and comfort penalties still count. Reports include `following_policy` and
 `following_recovery_s`. The old scoring formula remains for drives with the option off.
 Use `?followingdistance=0` to disable it in free drives.
+
+
+### Look both ways on a fresh green
+
+With red-light runners enabled, a car crossing your way now and then runs a late amber or a fresh
+red. When your light turns green, check that cross traffic has stopped: the HUD says
+"CAR RUNNING THE RED · WAIT" and AI eyes outlines the runner while one cannot stop or is already in
+the junction. Entering on green ahead of one, after you could have stopped for it, costs 25 safety
+points, caps the total at 69 and is recorded as `fresh_green_conflicts` once a runner has committed
+near the car. A collision with a runner is still a collision. Use `?redrunners=0` to disable
+runners in free drives. See [Fresh green](drive-lab.md#fresh-green).
+
+
+### Cars backing out of driveways
+
+In free drives (and the **Reverse lights** lesson) a car now and then backs out of a driveway ahead,
+its white reverse lamps on; driveways are drawn as concrete aprons across the sidewalk. The HUD says
+CAR BACKING OUT AHEAD while it backs out toward your lane, and CAR BACKING OUT · GIVE IT ROOM once it
+is coming into it. Slow down for it and stop until it has driven off. Squeezing past one closer than
+1 m, or not stopping for one already in the lane, counts as `reversing_conflicts`: 20 safety points
+each, a replay marker and a coaching tip, reported only once a car has backed out near you. Use
+`?driveways=0` to turn them off.

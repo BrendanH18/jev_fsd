@@ -11,7 +11,7 @@ const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { approachPhase } = await import("../static/js/sim/signals.js");
 const { toJevState } = await import("../static/js/brain/state.js");
 const pack = JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v6.pack.json", import.meta.url)));
-for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow"]) {
+for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
   const url = [2, 1].map(v => new URL(`../data/maps/623b012bc8b5.${layer}.v${v}.json`, import.meta.url)).find(url => fs.existsSync(url));
   if (url) pack[layer] = JSON.parse(fs.readFileSync(url));
 }

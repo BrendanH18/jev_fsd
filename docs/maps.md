@@ -179,3 +179,12 @@ layers; nine have contraflow streets: Montréal 38 edges, Québec City 25, Ottaw
 Pleasant 15, Winnipeg 10, Toronto 6, Victoria 5 and Halifax 4. Kitsilano, Calgary and Saskatoon have
 none. Separately mapped cycle tracks (`highway=cycleway`) are not in the street packs and are not
 added.
+
+Driveways are a separate `<key>.driveways.v1.json` layer (`jev/osm/driveways.py`), built with
+`uv run scripts/fetch_map.py <preset> --driveways` from the raw OSM download (fetched if absent; only
+the layer is committed). It keeps each `highway=service` + `service=driveway` way whose end lies on a
+pack street (on its centreline, or within 2 m outside its asphalt): the point where it meets the
+street, the edge and its side of travel (on a two-way street, the edge whose right it is on), and
+the driveway's heading. All twelve presets have layers: 554 driveways, most in Ottawa (135),
+Calgary (128) and Winnipeg (73); Québec City has 2. The sim has cars back out of them
+(sim/driveway-reversers.js).
