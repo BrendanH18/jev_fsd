@@ -157,6 +157,13 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     state.reversing_vehicle = { id: r.id, backing_out_of: `a driveway on the ${r.side}`, reverse_lights: r.reverse_lights, now: REVERSING_PHASE[r.phase], gap_m: r1(r.gap_m),
       ...(r.wait ? { yield: true, wait_in_m: r1(Math.max(0, r.bumper_to_stop_m)) } : { slow_to: r1(r.limit_mps) }), min_passing_distance_m: r.min_pass_m };
   }
+  if (snap.pothole) {
+    const h = snap.pothole;
+    state.pothole = { id: h.id, ...(h.starts_in_m > 0 ? { ahead_m: r1(h.starts_in_m) } : { under_car: true }), right_of_lane_centre_m: r1(h.lateral_m), length_m: h.length_m, width_m: h.width_m, depth_cm: h.depth_cm,
+      ...(weather.name === "rain" || weather.name === "snow" ? { full_of_water: true } : {}),
+      ...(h.room ? { room_in_lane: true, ...(h.shift_m ? { ease_to_m: r1(h.shift_m) } : { between_the_wheels: true }) } : { room_in_lane: false, drive_over_at: r1(h.speed_mps) }),
+      ...(snap.potholes_ahead.length > 1 ? { more_ahead: snap.potholes_ahead.length - 1 } : {}) };
+  }
   if (snap.emergency) {
     const e = snap.emergency;
     state.emergency_vehicle = { id: e.id, kind: e.kind, siren: true, coming_from: EV_FROM[e.from], distance_m: r1(e.distance_m), reaches_car_in_s: r1(e.eta_s), seen: e.seen,
@@ -296,11 +303,14 @@ function outcomeLabel(c, snap) {
     ? `clear, pulls over to the right and stops ${Math.max(0, r1(snap.emergency.bumper_to_stop_m - c.sim.progress_m))} m before its stop` : "clear, pulls over to the right and stops";
   if (c.id === "stop_for_pedestrian" && snap.pedestrian) return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
   if (c.id === "follow_cyclist" && snap.cyclist_pass) return `clear, stays behind the cyclist, ${snap.cyclist_pass.follow_gap_m} m back`;
+  if (c.id === "ease_round_pothole" && snap.pothole) return `clear, eases ${Math.abs(r1(snap.pothole.shift_m))} m ${snap.pothole.shift_m < 0 ? "left" : "right"} inside the lane so that both wheels miss the pothole, keeping its speed, and back`;
   if (!c.sim.stays_on_road) return c.sim.off_road_fraction > 0.5 ? "leaves the road" : "touches the road edge";
   if (snap.cyclist_pass && isCyclistPass(c.law.detour) && c.law.kind === "lane") return `clear, ${snap.cyclist_pass.going ? "carries on round" : "goes round"} the cyclist through the oncoming lane, at least ${snap.cyclist_pass.min_pass_m} m clear of it, and back into the lane ahead of it`;
   if (c.change?.offer === "move_over" && snap.roadside_stop) return `clear, moves over into the ${c.change.dir} lane, away from the stopped ${snap.roadside_stop.name}${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
   if (c.change) return `clear, ${c.change.offer === "pass" || c.change.prepare ? "moves into" : "moves back into"} the ${c.change.dir} lane${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
   if (!c.sim.stays_in_lane) return "clear, drifts out of lane";
+  // (its wheels would cross a pothole: it slows to drive over it, sim/potholes.js)
+  if (c.law.slowTo && snap.pothole) return `clear, slows to ${r1(Math.min(...c.law.slowTo.map((x) => x.mps)))} m/s to drive over the pothole`;
   if (c.sim.min_gap_m < 4) return `clear, but closes to ${r1(c.sim.min_gap_m)} m of a car`;
   return "clear";
 }
@@ -381,6 +391,7 @@ export function situationClauses(snap) {
   if (snap.contraflow_cyclist) out.push(contraflowClause(snap.contraflow_cyclist));
   if (snap.red_light_runner) out.push(runnerClause(snap.red_light_runner));
   if (snap.reversing_vehicle) out.push(reversingClause(snap.reversing_vehicle));
+  if (snap.pothole) out.push(potholeClause(snap.pothole, snap.potholes_ahead));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));
   if (snap.bus) {
     const b = snap.bus, w = Math.max(0, Math.round(b.bumper_to_stop_m));
@@ -474,6 +485,19 @@ function oncomingClause(i) {
 function rightHookClause(h) {
   const w = Math.max(0, Math.round(h.bumper_to_yield_m));
   return `The car turns right ahead and cyclist \`${h.id}\` is coming up on its right, going its way: it reaches the corner in ${r1(h.eta_s)} s, too soon for the car to turn across its path (it needs ${r1(h.need_s)} s). A cyclist on the right going straight on has the right of way. ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_cyclist\`).`}`;
+}
+
+// A pothole in the car's lane ahead (sim/potholes.js).
+function potholeClause(h, ahead) {
+  const where = h.starts_in_m > 0 ? `${Math.round(h.starts_in_m)} m ahead` : "under the car";
+  const side = Math.abs(h.lateral_m) < 0.25 ? "in the middle of the car's lane" : `${r1(Math.abs(h.lateral_m))} m ${h.lateral_m < 0 ? "left" : "right"} of the middle of the car's lane`;
+  const water = weather.name === "rain" || weather.name === "snow" ? " It is full of water, so it looks like any puddle." : "";
+  const lead = `A pothole \`${h.id}\` ${where}, ${side}, is ${h.width_m} m wide and about ${h.depth_cm} cm deep.${water}`;
+  const more = ahead?.length > 1 ? ` ${ahead.length - 1} more ${ahead.length > 2 ? "are" : "is"} further along the lane.` : "";
+  if (h.room && !h.shift_m) return `${lead} It lies between the car's wheels: keep to the middle of the lane and drive on.${more}`;
+  if (h.room) return `${lead} There is room to go round it inside the lane: choose \`ease_round_pothole\` to ease ${r1(Math.abs(h.shift_m))} m ${h.shift_m < 0 ? "left" : "right"} so that both wheels miss it, keeping its speed, then back to the middle. Never cross a lane line to go round a pothole.${more}`;
+  const kmh = Math.round(h.speed_mps * 3.6);
+  return `${lead} There is no room to go round it without leaving the lane, so the car must drive over it: slow to ${kmh} km/h by the time the front wheels reach it and keep to that until the rear wheels are over it (\`car.target_speed\` already does). Taken faster, it can burst a tyre or bend a wheel. Never cross a lane line to go round it.${more}`;
 }
 
 // What a car backing out of a driveway (sim/driveway-reversers.js) is doing, for models.

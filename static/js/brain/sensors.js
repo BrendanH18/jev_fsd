@@ -1,6 +1,7 @@
 import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
 import { reversingVehicle } from "../sim/driveway-reversers.js";
+import { potholeLimit, potholesAhead } from "../sim/potholes.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -352,6 +353,11 @@ export function buildSnapshot(world, executing = null) {
     }
     // (cars backing out of driveways, with that option on: sim/driveway-reversers.js)
     if (world.driveways?.enabled) snap.reversing_vehicle = world.driveways.cars.length ? reversingVehicle(world, p, frontS, lane) : null;
+    // (spring potholes in the car's lane, with that option on: sim/potholes.js)
+    if (world.potholes?.enabled) {
+      const ph = potholesAhead(world, p, frontS, lane, road.limit);
+      snap.pothole = ph?.pothole || null; snap.potholes_ahead = ph?.ahead || null;
+    }
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -442,6 +448,8 @@ export function buildSnapshot(world, executing = null) {
   if (snap.contraflow_cyclist?.entry_limit_mps != null) snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
   // (and coming up to a car backing out of a driveway: sim/driveway-reversers.js)
   if (snap.reversing_vehicle?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.reversing_vehicle.limit_mps);
+  // (and coming up to a pothole it cannot ease round in its lane, and over it: sim/potholes.js)
+  if (snap.potholes_ahead && snap.routeProj) for (const h of snap.potholes_ahead) if (!h.room) snap.limit = Math.min(snap.limit, potholeLimit(h, snap.routeProj.s));
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -1731,6 +1739,10 @@ export function desiredSpeed(snap) {
     const vr = rv.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(rv.bumper_to_stop_m - 0.5, decel);
     if (vr < v) { v = vr; reasons.push("car backing out of a driveway"); }
   } else if (rv?.limit_mps != null && rv.limit_mps <= v + 0.05) reasons.push("car backing out ahead");
+  // a pothole it cannot ease round in its lane (sim/potholes.js): `limit` is already down to the speed
+  // to drive over it at
+  const slowFor = snap.potholes_ahead?.find((h) => !h.room);
+  if (slowFor && snap.routeProj && potholeLimit(slowFor, snap.routeProj.s) * Math.min(1, weather.speed) <= v + 0.05) reasons.push(slowFor.starts_in_m < 0 ? "over a pothole" : "pothole ahead: no room to go round");
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -1921,6 +1933,7 @@ export function hazardFlags(snap) {
   if (snap.contraflow_cyclist) f.push("contraflow cyclist");
   if (snap.red_light_runner) f.push("red-light runner");
   if (snap.reversing_vehicle) f.push("reversing vehicle");
+  if (snap.pothole) f.push("pothole");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

@@ -63,6 +63,7 @@ import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard
 import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
 import { reverserYield } from "./driveway-reversers.js";
+import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -785,6 +786,15 @@ export class NpcFleet {
         n.cfShift = (n.cfShift || 0) + Math.max(-CF_SHIFT_MPS * dt, Math.min(CF_SHIFT_MPS * dt, (cf?.shift || 0) - (n.cfShift || 0)));
         offset += n.cfShift;
       }
+      // a pothole in its lane ahead (sim/potholes.js): ease over inside the lane where that takes both
+      // wheels clear of it (not while changing lanes or going round something), and otherwise slow to
+      // drive over it
+      const ph = world.potholes?.list.length && n.kind !== "bike" && !n.transit?.tram ? npcPothole(world, n, front) : null;
+      if (ph || n.phShift) {
+        const to = ph && !n.lc && !wzShift && !dpShift && !lzShift && !cyc && !n.pull ? ph.shift : 0;
+        n.phShift = (n.phShift || 0) + Math.max(-PH_SHIFT_MPS * dt, Math.min(PH_SHIFT_MPS * dt, to - (n.phShift || 0)));
+        offset += n.phShift;
+      }
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -1057,7 +1067,7 @@ export class NpcFleet {
       // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
       // sim/sun-glare.js)
       const vGlare = this.world.sunGlare && n.kind !== "bike" ? npcGlareCeiling(this.world, n) : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

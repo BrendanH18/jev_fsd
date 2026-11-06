@@ -5,13 +5,14 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fifty authored challenges
+## Fifty-one authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
 | Fresh green | Edmonton, 106 Street NW | Red-light runners on (`redRunners`). Your light turns green at Whyte Avenue NW as a car that cannot stop runs its red across your way. Entering ahead of it (`fresh_green_conflicts`) fails the drive |
 | Into the sun | Calgary, 17 Avenue SW | Westbound into a low October sun at 18:15: a red light and someone crossing mid-block, seen late in the glare. `glare_speeding_seconds` fails above 1 s |
 | Reverse lights | Calgary, Beltline | Hidden hazards and driveway reversers on (`driveways`, sim/driveway-reversers.js). 13 Avenue SW (one lane each way, 40 km/h), both kerbs lined with parked cars. A car in a driveway on the right, already across the sidewalk, backs out once the car's front is 70 m away; the parked cars hide each from the other, and it comes into the lane with the car about 30 m off. Squeezing past it or not stopping for it (`reversing_conflicts`) fails the drive. Rules and the cautious agent stop about 9 m back, wait for it to drive off and follow it |
+| Pothole season | Montréal, Rue Saint-Denis | Spring potholes on (`potholes`, sim/potholes.js), in the rain. On the block from Avenue Duluth Est toward Rue Rachel Est (one lane each way, 40 km/h), four water-filled potholes in the car's lane: two in the wheel paths to ease round inside the lane, one wide one across the middle to slow to about 15 km/h for, and one between the wheels. A wheel into one faster than its safe speed plus 5 km/h (`pothole_hits`) fails the drive |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -124,6 +125,33 @@ are on only for this challenge and free drives; the challenge places its one cyc
 **Reverse lights** (`reverse-lights`, Calgary, 13 Avenue SW, seed 49042): watch driveways for
 reversing lights, and give a car backing out room to finish. Driveway reversers are on only for this
 challenge and free drives; the challenge places its one car backing out and no others.
+
+**Pothole season** (`pothole-season`, Montréal, Rue Saint-Denis, seed 51042): look well ahead for
+potholes, ease round one inside the lane where there is room, and slow to drive over one where there
+isn't; never cross a lane line to avoid one. Spring potholes are on only for this challenge and free
+drives; the challenge places its own run of four and no others.
+
+## Pothole season
+
+**Pothole season** (seed 51042) drives Rue Saint-Denis in the Plateau, a main street with one lane
+each way, 3.5 m wide, from Avenue Duluth Est toward Rue Rachel Est, on a wet spring afternoon. The
+car starts from a standstill 8 m into the block (`e212`) and stops 160 m on, short of the light at
+Rachel. Four potholes lie in its lane, each full of rain water, which makes them look like the
+puddles around them and come into sight later (50 m instead of 70 m):
+
+| Along the lane | Where | Size | What a driver does |
+|---|---|---|---|
+| 50 m | right wheel path | 0.6 m wide, 6 cm deep | eases 0.55 m right, the hole between the wheels |
+| 90 m | left wheel path | 0.6 m wide, 7 cm deep | eases 0.4 m left, the hole between the wheels |
+| 128 m | across the middle | 1.6 m wide, 10 cm deep | no room: slows to about 15 km/h and drives over it |
+| 152 m | middle | 0.5 m wide, 5 cm deep | nothing: it passes between the wheels |
+
+The lesson: where your lane leaves room, ease over inside it so both wheels miss the hole; where it
+doesn't, slow to about 20 km/h before your wheels reach it (less for a deep one, and in the wet).
+Rules and the cautious agent pass, missing three and crossing the wide one at about 14 km/h; a car
+that holds 34 km/h hits all three it drives over (`pothole_hits`). Checks:
+`scripts/test_potholes.mjs` (its `--write-snapshot` writes the live-model case
+`data/snapshots/pothole_season.json`).
 
 ## Paired amber-light lessons
 
