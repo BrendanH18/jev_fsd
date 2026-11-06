@@ -198,3 +198,15 @@ is coming into it. Slow down for it and stop until it has driven off. Squeezing 
 1 m, or not stopping for one already in the lane, counts as `reversing_conflicts`: 20 safety points
 each, a replay marker and a coaching tip, reported only once a car has backed out near you. Use
 `?driveways=0` to turn them off.
+
+### A ball, then a child
+
+In free drives (and the **Chasing the ball** lesson), now and then by day, a bright ball bounces out
+from between the cars parked along a residential street ahead and rolls across, spinning, until it
+stops against the far kerb. A child runs out after it a second or two later, from behind the parked
+cars, fetches it and walks back to the kerb with it. The HUD says BALL IN THE ROAD · A CHILD MAY
+FOLLOW with the speed to slow to, then CHILD CHASING THE BALL · STOP once the child is out, and AI
+eyes outlines the child. Slow to a speed you can stop from short of where the ball came out, and
+keep to it until the child is back at the kerb. Passing that gap faster, after time to react, counts
+as `ball_warnings_ignored`: 25 safety points, a replay marker and a coaching tip, reported only once
+a ball has rolled out near you. Use `?balls=0` to turn them off.
