@@ -311,7 +311,7 @@ export function situationClauses(snap) {
       ? i.amber.stop ? `The signal ${m} m ahead is yellow. A safe stop was possible when amber was first observed: stop before the line and wait for green.`
         : `The signal ${m} m ahead is yellow. The car was too close for a safe stop when amber was first observed: continue carefully if the path is clear, without speeding up above ${r1(i.amber.speed_mps)} m/s. Amber never overrides pedestrians, oncoming traffic or a blocked exit; red does not grant a new entry.`
       : `The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`);
-    else out.push(`The signal ${m} m ahead is green; proceed unless the path is blocked.`);
+    else out.push(snap.red_light_runner ? `The signal ${m} m ahead is green, but a car crossing the car's way is running the red (below).` : `The signal ${m} m ahead is green; proceed unless the path is blocked.`);
     if (i.advance) out.push(advanceClause(i));
     if (i.no_turn_on_red) out.push("A sign prohibits this turn on red. Wait at the line while the signal for this turn is red, even if the cross street is empty; the sign does not prohibit turning on green.");
     if (i.scramble) out.push(scrambleClause(i));

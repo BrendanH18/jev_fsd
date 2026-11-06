@@ -164,3 +164,14 @@ charge the same leader's temporary TTC deficit during recovery. Other hazards, c
 and comfort penalties still count. Reports include `following_policy` and
 `following_recovery_s`. The old scoring formula remains for drives with the option off.
 Use `?followingdistance=0` to disable it in free drives.
+
+
+### Look both ways on a fresh green
+
+With red-light runners enabled, a car crossing your way now and then runs a late amber or a fresh
+red. When your light turns green, check that cross traffic has stopped: the HUD says
+"CAR RUNNING THE RED · WAIT" and AI eyes outlines the runner while one cannot stop or is already in
+the junction. Entering on green ahead of one, after you could have stopped for it, costs 25 safety
+points, caps the total at 69 and is recorded as `fresh_green_conflicts` once a runner has committed
+near the car. A collision with a runner is still a collision. Use `?redrunners=0` to disable
+runners in free drives. See [Fresh green](drive-lab.md#fresh-green).
