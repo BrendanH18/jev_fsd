@@ -118,6 +118,11 @@ jobs:
     needs: build
     runs-on: namespace-profile-gitrunner
     timeout-minutes: 20
+    # Pages accepts one deployment at a time. Queue deploys from back-to-back
+    # merges instead of letting the second fail; never cancel a running one.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
