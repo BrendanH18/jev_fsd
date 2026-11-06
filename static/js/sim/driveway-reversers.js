@@ -254,13 +254,13 @@ export class DrivewayReversers {
   // A car nose-in in driveway `d` (an entry of map.driveways), backing out once the driven car's front is
   // `trigger` metres short of it along `routeS` (its route arc length), or at once with trigger null.
   // Returns it, or null.
-  place(d, { trigger = null, routeS = null, color = null, style = null, id = null } = {}) {
+  place(d, { trigger = null, routeS = null, color = null, style = null, id = null, keep = false } = {}) {
     const geo = drivewayGeometry(this.world.map, d, CAR);
     if (!geo) return null;
     const r = new Vehicle(geo.start.x, geo.start.y, geo.start.psi, 0, CAR);
     this.made++;
     Object.assign(r, { id: id || `reversing_${this.made}`, kind: "car", reverser: true, reverseLamps: false, color: color ?? COLORS[this.made % COLORS.length], style: style ?? (this.made % 6),
-      driveway: d.id, geo, phase: trigger === null ? "creep" : "parked", trigger, routeS, ps: 0, waited: 0, pause: 0, since: this.world.t, frozen: 0 });
+      driveway: d.id, geo, phase: trigger === null ? "creep" : "parked", trigger, routeS, keep, ps: 0, waited: 0, pause: 0, since: this.world.t, frozen: 0 });
     if (r.phase === "creep") r.reverseLamps = true;
     this.cars.push(r);
     return r;
@@ -310,8 +310,9 @@ export class DrivewayReversers {
     const world = this.world, ego = world.ego;
     for (const r of [...this.cars]) {
       const far = Math.hypot(r.x - ego.x, r.y - ego.y) > RETIRE_M;
-      // (one still in its driveway the car has gone by, or never came near, stays where it is)
-      const passed = r.phase === "parked" && (far || world.t - r.since > GIVE_UP_S || this.egoFrontS(r) > r.routeS + 5);
+      // (one still in its driveway the car has gone by, or never came near, stays where it is; a challenge's
+      // waits for the car however long it takes to come along: `keep`)
+      const passed = r.phase === "parked" && (far || (!r.keep && world.t - r.since > GIVE_UP_S) || this.egoFrontS(r) > r.routeS + 5);
       if (passed || r.phase === "gone" || (far && r.phase !== "parked")) this.retire(r);
     }
     if (this.cars.length < this.target && world.t >= this.next) {

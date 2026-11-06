@@ -72,7 +72,7 @@ export function placeReverser(world, spec, seed) {
       world.parked.add(car);
     }
   }
-  const car = reversers.place(d, { trigger: RV_TRIGGER_M, routeS: world.route.project(geo.q[0], geo.q[1], 0).s, color: 0x9b1e1e, style: 1, id: "challenge_reversing" });
+  const car = reversers.place(d, { trigger: RV_TRIGGER_M, routeS: world.route.project(geo.q[0], geo.q[1], 0).s, color: 0x9b1e1e, style: 1, id: "challenge_reversing", keep: true });
   if (!car) throw new Error(`Could not place the car in driveway ${d.id}.`);
   // (already across the sidewalk, waiting at the wheel, as the car comes along)
   const at = Math.max(0, geo.sCheck - RV_START_BACK_M), p = geo.path.pointAt(at);

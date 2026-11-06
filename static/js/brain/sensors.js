@@ -347,7 +347,7 @@ export function buildSnapshot(world, executing = null) {
     // (a car running the red across the car's way as its light is green, with that option on:
     // sim/red-light-runner.js)
     if (world.redRunners?.enabled && snap.intersection?.control === "signal") {
-      const runner = redLightRunner(world, snap.intersection, route.headingAt(snap.intersection.s_line_route), visibleNpcs);
+      const runner = redLightRunner(world, snap.intersection, route.headingAt(snap.intersection.s_line_route));
       if (runner) snap.red_light_runner = runner;
     }
     // (cars backing out of driveways, with that option on: sim/driveway-reversers.js)

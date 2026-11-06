@@ -308,6 +308,14 @@ await test(`"Reverse lights": a driver who keeps going fails, with reversing_con
   console.log(`  (the driver who kept going: ${JSON.stringify({ reversing_conflicts: w.violations.reversing_conflicts, collisions: w.violations.collisions })})`);
 });
 
+await test("the challenge's car waits in its driveway however long the driver takes to come along", () => {
+  const ctx = { ...setupChallenge(CGY, lesson, { brain: "rules" }), autopilot: idle };
+  for (let k = 0; k < 125 * 60; k++) step(ctx);
+  const r = ctx.world.driveways.cars.find(c => c.id === "challenge_reversing");
+  assert.equal(!!r, true);
+  assert.equal(r.phase, "parked");
+});
+
 await test("checkpoints: a restored drive replays the car backing out exactly", () => {
   const ctx = setupChallenge(CGY, lesson, { brain: "rules" }), recorder = new DriveRecorder(), clock = {};
   for (let k = 0; k < 9 * 60; k++) step(ctx);

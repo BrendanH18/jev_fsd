@@ -185,11 +185,11 @@ export function runnerHold(world, n, edgeId, inter, bumperToLine, others) {
 
 // The driven car's sensing: a runner crossing its way at the signal ahead while its own light is green
 // and it has not entered, from the vehicles it can see. Null when there is none.
-export function redLightRunner(world, i, heading, visible) {
+export function redLightRunner(world, i, heading) {
   if (!i || i.control !== "signal" || i.signal !== "green" || i.entered || i.bumper_to_line_m > LOOK_M) return null;
   const inter = world.map.intersections.get(i.id);
   if (!inter) return null;
-  const threat = runnerThreat(world, world.ego, inter, heading, visible);
+  const threat = runnerThreat(world, world.ego, inter, heading, seenNear(world, inter));
   if (!threat) return null;
   const o = threat.vehicle, r1 = (x) => Math.round(x * 10) / 10;
   const edge = world.route?.controls.find((c) => c.control.id === i.id)?.edge;
@@ -199,6 +199,11 @@ export function redLightRunner(world, i, heading, visible) {
     green_for_s: edge ? greenFor(inter, edge, i.turn || "straight", world.t, FRESH_GREEN_S + 1) : null };
 }
 
+// The traffic the driven car can see near junction `inter`: what its sensing and the audit both look at.
+function seenNear(world, inter) {
+  return world.npcs.filter((o) => Math.abs(o.x - inter.x) < LOOK_M && Math.abs(o.y - inter.y) < LOOK_M && world.sees(world.ego, o));
+}
+
 // The audit, each step on the way up to a signal: the runner the car must not enter ahead of, once it
 // has been in sight while the car could still stop for it (`world.runnerCall` remembers that per
 // junction), or null. `past`: how far the front bumper is past the line.
@@ -206,8 +211,7 @@ export function auditRunner(world, interId, edgeId, turn, heading, past) {
   const inter = world.map.intersections.get(interId);
   if (!inter || past > 0.5 || past < -HOLD_LOOK_M) return null;
   if (movementSignal(approachPhase(inter, edgeId, world.t), turn) !== "green") return null;
-  const ego = world.ego;
-  const others = world.npcs.filter((o) => Math.abs(o.x - inter.x) < LOOK_M && Math.abs(o.y - inter.y) < LOOK_M && world.sees(ego, o));
+  const ego = world.ego, others = seenNear(world, inter);
   const threat = others.length ? runnerThreat(world, ego, inter, heading, others) : null;
   const call = world.runnerCall?.id === interId ? world.runnerCall : (world.runnerCall = { id: interId, owed: false });
   if (threat && past < 0 && canStopForRunner(ego, -past)) call.owed = true;
