@@ -1,4 +1,5 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
+import { auditSunGlare, glareRange } from "./sun-glare.js";
 import { setNightFlash, flashState } from "./night-flash.js";
 import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -216,8 +217,9 @@ export class World {
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
-  // both ways for them (sim/contraflow.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false } = {}) {
+  // both ways for them (sim/contraflow.js). `sunGlare`: a low sun ahead dazzles drivers, who slow to
+  // what they can see (sim/sun-glare.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, sunGlare = false } = {}) {
     this.map = map;
     this.followingDistance = !!followingDistance;
     this.amberLights = !!amberLights; this.amberLightsSeen = false;
@@ -227,6 +229,10 @@ export class World {
     this.pxoLines = new Map();
     this.seed = seed;
     this.visibility = new Visibility(map);
+    // low sun glare (sim/sun-glare.js): whether a low sun ahead dazzles drivers (shortening the car's
+    // sight towards it), whether it has dazzled the car this drive, and the audit's allowance
+    this.sunGlare = !!sunGlare; this.sunGlareSeen = false; this.sunGlareCall = null;
+    if (this.sunGlare) this.visibility.glare = (observer, x, y) => glareRange(this, observer, x, y);
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
@@ -475,7 +481,9 @@ export class World {
     return !!hit;
   }
 
-  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}) } : null; }
+  // (with sun glare on, the clock may also carry the `day` of the year and a `utc_offset`, for the sun:
+  // sim/sun-glare.js)
+  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}), ...(this.sunGlare && clock.day !== undefined ? { day: clock.day } : {}), ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}) } : null; }
 
   // Where the ego is relative to the road network (cached per tick). `limit` is the street's, or a
   // school or playground zone's while it is in effect there (`zone`).
@@ -522,6 +530,7 @@ export class World {
   audit(dt, road) {
     this.events.length = 0;
     if (this.highBeams) auditHighBeams(this, dt);
+    if (this.sunGlare) auditSunGlare(this, dt);
     if (this.auditStatic(dt)) Object.assign(road, this.roadInfo());
     const egoBox = this.ego.obb();
     for (const n of this.obstaclesNear(this.ego.x, this.ego.y, 12)) {

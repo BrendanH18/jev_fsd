@@ -45,6 +45,7 @@ import { FOLLOW_M as CYCLIST_FOLLOW_M, LEAD_M as CYCLIST_LEAD_M, LOOK_M as CYCLI
 import { onStreet } from "../sim/double-parked.js";
 import { ENTRY_LOOK_M, comingOut, contraLine, contraflowOf, entryHold, riderConflict, roomRight } from "../sim/contraflow.js";
 import { minPassM } from "../sim/cyclist-pass.js";
+import { sunGlareSensing } from "../sim/sun-glare.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
 // Passing a snow plow, the car's route ahead must be in view as far as it looks for that (the 60 m of
@@ -422,6 +423,11 @@ export function buildSnapshot(world, executing = null) {
   if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
   // (and coming up to a speed hump or the like, and over it: sim/traffic-calming.js)
   if (snap.traffic_calming) snap.limit = Math.min(snap.limit, calmingSpeed(snap.traffic_calming));
+  // (and driving into a low sun, no faster than it can stop within what it can see: sim/sun-glare.js)
+  if (world.sunGlare) {
+    snap.sun_glare = sunGlareSensing(world);
+    if (snap.sun_glare) snap.limit = Math.min(snap.limit, snap.sun_glare.ceiling_mps);
+  }
   // (and coming up to a contraflow street it cannot see into yet: sim/contraflow.js)
   if (snap.contraflow_cyclist?.entry_limit_mps != null) snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
   // (and going round a cyclist, at the pass speed)
@@ -1598,6 +1604,8 @@ export function desiredSpeed(snap) {
     const visibleSpeed = snap.visibility.safe_speed_mps ?? visibilitySpeed(snap.visibility.range_m, FRONT);
     if (visibleSpeed < v) { v = visibleSpeed; reasons.push("limited visibility"); }
   }
+  // a low sun ahead (sim/sun-glare.js): `limit` is already down to the speed to stop within the glare
+  if (snap.sun_glare && snap.sun_glare.ceiling_mps <= v + 0.05) { v = Math.min(v, snap.sun_glare.ceiling_mps); reasons.push("sun glare"); }
   if (snap.route && snap.routeProj) {
     const curve = curveProfileSpeed(snap.route, snap.routeProj.s);
     if (curve.v < v) { v = curve.v; reasons.push(curve.at < 4 ? "curve" : "upcoming turn"); }

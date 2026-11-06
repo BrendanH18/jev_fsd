@@ -5,10 +5,11 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Forty-seven authored challenges
+## Forty-eight authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
+| Into the sun | Calgary, 17 Avenue SW | Westbound into a low October sun at 18:15: a red light and someone crossing mid-block, seen late in the glare. `glare_speeding_seconds` fails above 1 s |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -141,6 +142,24 @@ is a conservative simulator policy, rather than a statutory distance or a claim 
 every province's laws. Focused dry/snow and replay coverage lives in
 `scripts/test_amber_challenges.mjs` and `scripts/test_amber_policy.mjs`.
 
+
+## Into the sun
+
+**Into the sun** (seed 50042) drives west on Calgary's 17 Avenue SW, in the right lane, at
+18:15 Mountain daylight time on a clear 8 October. The sun stands about 6° up at 253°, 17° left
+of the avenue, so it glares straight through the windshield. The car sees about 42 m that way
+instead of 80 m, and keeps to about 39 km/h, the speed it can stop from within that. The light at
+4 Street SW is red as the car comes up to it, but shows as unknown until the car is within the
+glare's reach; between 4 and 5 Street someone crosses mid-block from the far side.
+
+The date is chosen so that the low sun really faces a westbound avenue: at Calgary's latitude
+the evening sun sits that close to west only from mid-September to mid-October. On 5 November
+at 16:45 it is low in the south-west, 25° to 35° off a westbound street, outside the glare cone.
+
+The lesson: when the sun is in your eyes, slow down to what you can see, leave more room, and
+look for signals and people early. Rules and the cautious agent pass; a car that holds 50 km/h
+into the sun fails on `glare_speeding_seconds`. Checks: `scripts/test_sun_glare.mjs`; live model
+case `data/snapshots/into_the_sun.json`.
 
 ## Space to react
 
