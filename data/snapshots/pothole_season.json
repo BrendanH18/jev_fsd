@@ -1,0 +1,259 @@
+{
+  "name": "pothole_season",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 8.5,
+      "limit": 11.1,
+      "speed_vs_limit": "under",
+      "target_speed": 9.8,
+      "target_reason": "rain",
+      "speed_vs_target": "below target"
+    },
+    "visibility": {
+      "range_m": 55,
+      "clear_path_m": 55,
+      "safe_speed_mps": 10.5,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 145.7,
+      "remaining_m": 145.7,
+      "destination": {
+        "right": -0.4,
+        "ahead": 145.7
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "Rue Saint-Denis",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": -0.2,
+      "conditions": "rain, wet road"
+    },
+    "pothole": {
+      "id": "challenge_pothole_1",
+      "ahead_m": 24,
+      "right_of_lane_centre_m": 0.8,
+      "length_m": 0.7,
+      "width_m": 0.6,
+      "depth_cm": 6,
+      "full_of_water": true,
+      "room_in_lane": true,
+      "ease_to_m": 0.6
+    },
+    "candidates": [
+      {
+        "id": "ease_round_pothole",
+        "steer": "ease 0.6 m right within the lane, round the pothole, and back",
+        "speed": "speed up to 9.8",
+        "end_speed": 9.8,
+        "vs_target": "at target",
+        "max_accel": 2.2,
+        "max_decel": 0,
+        "max_lateral_accel": 0.3,
+        "progress_m": 28.7,
+        "lane": "centered",
+        "outcome": "clear, eases 0.6 m right inside the lane so that both wheels miss the pothole, keeping its speed, and back"
+      },
+      {
+        "id": "keep_lane_limit",
+        "steer": "hold lane",
+        "speed": "limit 11.1",
+        "end_speed": 5.3,
+        "vs_target": "below target",
+        "max_accel": 1,
+        "max_decel": 1.5,
+        "max_lateral_accel": 0.1,
+        "progress_m": 20.9,
+        "lane": "centered",
+        "outcome": "clear, slows to 5 m/s to drive over the pothole"
+      },
+      {
+        "id": "keep_lane_faster",
+        "steer": "hold lane",
+        "speed": "speed up to 10.5",
+        "end_speed": 5.3,
+        "vs_target": "below target",
+        "max_accel": 1,
+        "max_decel": 1.5,
+        "max_lateral_accel": 0.1,
+        "progress_m": 20.9,
+        "lane": "centered",
+        "outcome": "clear, slows to 5 m/s to drive over the pothole"
+      },
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "speed up to 9.8",
+        "end_speed": 5.3,
+        "vs_target": "below target",
+        "max_accel": 1,
+        "max_decel": 1.5,
+        "max_lateral_accel": 0.1,
+        "progress_m": 20.9,
+        "lane": "centered",
+        "outcome": "clear, slows to 5 m/s to drive over the pothole"
+      },
+      {
+        "id": "keep_lane_hold",
+        "steer": "hold lane",
+        "speed": "keep 8.5",
+        "end_speed": 5.3,
+        "vs_target": "below target",
+        "max_accel": 1,
+        "max_decel": 1.5,
+        "max_lateral_accel": 0.1,
+        "progress_m": 20.9,
+        "lane": "centered",
+        "outcome": "clear, slows to 5 m/s to drive over the pothole"
+      },
+      {
+        "id": "keep_lane_cautious",
+        "steer": "hold lane",
+        "speed": "slow to 7.3",
+        "end_speed": 5.4,
+        "vs_target": "below target",
+        "max_accel": 0.9,
+        "max_decel": 1.4,
+        "max_lateral_accel": 0.1,
+        "progress_m": 20.9,
+        "lane": "centered",
+        "outcome": "clear, slows to 5 m/s to drive over the pothole"
+      },
+      {
+        "id": "keep_lane_slow",
+        "steer": "hold lane",
+        "speed": "slow to 5.5",
+        "end_speed": 5.4,
+        "vs_target": "below target",
+        "max_accel": 0.9,
+        "max_decel": 3.2,
+        "max_lateral_accel": 0.1,
+        "progress_m": 18.9,
+        "lane": "centered",
+        "outcome": "clear, slows to 5 m/s to drive over the pothole"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0.9,
+        "max_decel": 5.3,
+        "max_lateral_accel": 0.1,
+        "progress_m": 9.9,
+        "lane": "centered",
+        "outcome": "clear, slows to 5 m/s to drive over the pothole"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "speed up to 9.8",
+        "end_speed": 9.8,
+        "vs_target": "at target",
+        "max_accel": 2.2,
+        "max_decel": 0,
+        "max_lateral_accel": 1.5,
+        "progress_m": 28.8,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_hold",
+        "steer": "shift 0.5 m left",
+        "speed": "keep 8.5",
+        "end_speed": 8.5,
+        "vs_target": "below target",
+        "max_accel": 1.4,
+        "max_decel": 0.2,
+        "max_lateral_accel": 1.6,
+        "progress_m": 25.7,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "speed up to 9.8",
+        "end_speed": 9.8,
+        "vs_target": "at target",
+        "max_accel": 2.2,
+        "max_decel": 0,
+        "max_lateral_accel": 1.4,
+        "progress_m": 28.8,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_hold",
+        "steer": "shift 0.5 m right",
+        "speed": "keep 8.5",
+        "end_speed": 8.5,
+        "vs_target": "below target",
+        "max_accel": 1.4,
+        "max_decel": 0.2,
+        "max_lateral_accel": 1.4,
+        "progress_m": 25.7,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0.9,
+        "max_decel": 4.3,
+        "max_lateral_accel": 0.1,
+        "progress_m": 11.2,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ]
+  },
+  "questions": {
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. A pothole `challenge_pothole_1` 24 m ahead, 0.8 m right of the middle of the car's lane, is 0.6 m wide and about 6 cm deep. It is full of water, so it looks like any puddle. There is room to go round it inside the lane: choose `ease_round_pothole` to ease 0.6 m right so that both wheels miss it, keeping its speed, then back to the middle. Never cross a lane line to go round a pothole. Conditions: rain, wet road. Grip is reduced, so `car.target_speed` sits below the limit and braking needs more room. Objects beyond 55 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "ease_round_pothole": "ease 0.6 m right within the lane, round the pothole, and back, speed up to 9.8, +28.7 m, clear, eases 0.6 m right inside the lane so that both wheels miss the pothole, keeping its speed, and back",
+        "keep_lane_limit": "hold lane, limit 11.1, +20.9 m, clear, slows to 5 m/s to drive over the pothole",
+        "keep_lane_faster": "hold lane, speed up to 10.5, +20.9 m, clear, slows to 5 m/s to drive over the pothole",
+        "keep_lane_target": "hold lane, speed up to 9.8, +20.9 m, clear, slows to 5 m/s to drive over the pothole",
+        "keep_lane_hold": "hold lane, keep 8.5, +20.9 m, clear, slows to 5 m/s to drive over the pothole",
+        "keep_lane_cautious": "hold lane, slow to 7.3, +20.9 m, clear, slows to 5 m/s to drive over the pothole",
+        "keep_lane_slow": "hold lane, slow to 5.5, +18.9 m, clear, slows to 5 m/s to drive over the pothole",
+        "keep_lane_stop": "hold lane, stop, +9.9 m, clear, slows to 5 m/s to drive over the pothole",
+        "left_0.5_target": "shift 0.5 m left, speed up to 9.8, +28.8 m, clear",
+        "left_0.5_hold": "shift 0.5 m left, keep 8.5, +25.7 m, clear",
+        "right_0.5_target": "shift 0.5 m right, speed up to 9.8, +28.8 m, clear",
+        "right_0.5_hold": "shift 0.5 m right, keep 8.5, +25.7 m, clear",
+        "hard_brake": "hold lane, brake hard, +11.2 m, clear"
+      }
+    }
+  },
+  "local": {
+    "motion": {
+      "type": "choice",
+      "choice": "drive",
+      "probabilities": {
+        "drive": 1
+      },
+      "confidence": 1,
+      "local": true
+    }
+  },
+  "expect": {
+    "vector_in": [
+      "ease_round_pothole"
+    ]
+  }
+}

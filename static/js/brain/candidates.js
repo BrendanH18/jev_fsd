@@ -17,6 +17,7 @@ import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
+import { SIM_OVER_MPS, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -190,6 +191,13 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "yield_to_reversing", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, rv.limit_mps ?? approach), ...(rv.wait ? { stopAtRoute: stopAt(rv.stop_s_route - FRONT - 0.5) } : {}) }),
         steer: "hold lane", speed: rv.wait ? "stop and give the car backing out room to finish" : "slow down, ready to stop for the car backing out" });
     }
+    // A pothole ahead in the car's lane that it can ease round without leaving the lane (sim/potholes.js):
+    // over inside the lane, both wheel paths clear of it, and back, keeping its speed.
+    const ph = snap.pothole;
+    if (ph?.room && ph.detour && !shifting && !detour.detour && !passing.detour) {
+      out.push({ id: "ease_round_pothole", laneUntil, law: { ...inLane({ kind: "lane", vTarget: target }), detour: ph.detour },
+        steer: `ease ${Math.abs(ph.shift_m).toFixed(1)} m ${ph.shift_m < 0 ? "left" : "right"} within the lane, round the pothole, and back`, speed: speedLabel(target, v, limit) });
+    }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
     if (hook && hook.bumper_to_yield_m > 0.3) {
@@ -342,11 +350,21 @@ export function sampleCandidates(snap, world) {
   }
   // Keep required stopping options when a busy street supplies many lateral alternatives, and lane
   // changes ahead of small nudges.
-  const priority = (c) => c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || c.law.kind === "park" || c.id === "pass_cyclist" || c.id === "follow_cyclist" ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
+  const priority = (c) => c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || c.law.kind === "park" || c.id === "pass_cyclist" || c.id === "follow_cyclist" || c.id === "ease_round_pothole" ? 0 : c.change ? 2 : (c.law.offset || 0) === (c.law.center || 0) ? 1 : 3;
   // (once round a cyclist has begun, the car carries on round it at the pass speed or, still behind it,
   // drops back in behind it: nothing else would get it by in the time the way round was clear for)
   const going = snap.cyclist_pass?.going ? out.filter((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist") : out;
   const list = dedupe(going).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
+  // (every lane manoeuvre whose wheels would cross a pothole ahead slows to the speed to drive over it
+  // at, by then: sim/potholes.js)
+  if (snap.potholes_ahead && snap.route && snap.routeProj) {
+    for (const c of list) {
+      if (c.law.kind !== "lane") continue;
+      const law = { ...c.law, s0: c.law.s0 ?? s };
+      const slow = snap.potholes_ahead.filter((h) => wheelsCross(lateralAt(law, h.s_route, snap.route), h.lateral_route, h, world.ego.spec, 0.05)).map((h) => h.slow);
+      if (slow.length) c.law.slowTo = slow;
+    }
+  }
   list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   const amber = snap.amber_clear || snap.intersection?.amber;
   for (const c of list) if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);
@@ -429,12 +447,16 @@ export function simulateAll(candidates, snap, world) {
   // it leaves one backing out as it goes by
   const rvStop = snap.reversing_vehicle?.wait ? snap.reversing_vehicle.stop_s_route : null;
   const rvClearance = snap.reversing_vehicle?.min_pass_m ?? null;
+  // spring potholes the car's front wheels have still to reach (sim/potholes.js): no manoeuvre may put a
+  // wheel into one faster than its safe speed
+  const egoC = Math.cos(world.ego.psi), egoS = Math.sin(world.ego.psi), wb = world.ego.spec.wheelbase;
+  const holes = world.potholes?.list.length ? world.potholes.near(world.ego.x, world.ego.y, 60).filter((h) => (h.x - world.ego.x) * egoC + (h.y - world.ego.y) * egoS - wb > -h.a + 0.05) : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -442,7 +464,13 @@ export function simulateAll(candidates, snap, world) {
     for (let k = 1; k <= steps; k++) {
       const t = k * SIM_DT;
       const previousPose = poseOf(car);
+      const wheelsBefore = holes?.length ? wheelPoints(car) : null;
       applyLaw(car, law, route, s, SIM_DT, world);
+      // (a wheel going into a pothole too fast: sim/potholes.js)
+      if (wheelsBefore && !potholeFast) {
+        const wheelsAfter = wheelPoints(car);
+        for (const h of holes) if (car.v > safeSpeed(h) + SIM_OVER_MPS && wheelsAfter.some(([x, y], i) => crossesPothole(h, wheelsBefore[i][0], wheelsBefore[i][1], x, y))) { potholeFast = true; break; }
+      }
       // Static map geometry is known even when fog or a corner hides moving traffic. Use the
       // same footprint sweep as execution, including reverse and sideways body motion.
       // Keep sweeping after a predicted vehicle contact, so a later static hit is still known.
@@ -595,6 +623,7 @@ export function simulateAll(candidates, snap, world) {
     else if (cfMeet && c.law.kind !== "hard_brake") reject = "passes_contraflow_cyclist_too_close";
     else if (passesRunner && c.law.kind !== "hard_brake") reject = "enters_ahead_of_red_light_runner";
     else if (rvClose && c.law.kind !== "hard_brake") reject = "passes_reversing_vehicle_too_close";
+    else if (potholeFast && c.law.kind !== "hard_brake") reject = "hits_pothole_too_fast";
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";

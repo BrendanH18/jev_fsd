@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Spring potholes in free drives (`?potholes=0` takes them off). From their own random stream,
+  potholes are placed in the lanes, many more on busy main streets than on quiet ones, each with a
+  position across its lane, a size and a depth. The driven car and traffic ease round one inside
+  their lane where that takes both wheels clear of it, never crossing a lane line, and otherwise
+  slow to its safe speed (about 20 km/h, less for a deep one and in the wet) before driving over
+  it. In rain or snow a pothole holds water: it looks like any puddle and is seen later. Sensing
+  reports `pothole`, with the new `ease_round_pothole` candidate and the `hits_pothole_too_fast`
+  rejection; lane manoeuvres that would put a wheel in one slow for it. A wheel into one more than
+  5 km/h over its safe speed counts as `pothole_hits` and fails a Lab drive, reported only once the
+  car has come near a pothole. Potholes are drawn as ragged holes in broken asphalt, full of water
+  in the wet, cars jolt over them, and the HUD says whether the car is easing round one or slowing.
+- New Lab challenge, **Pothole season** (seed 51042): Rue Saint-Denis in Montréal's Plateau in the
+  rain, with two potholes to ease round inside the lane and a wide one to slow for.
+
 - CI runs on Namespace runners. Each Node check has a six-minute limit and every job a
   `timeout-minutes`, so a runaway check fails fast; the Node loop runs every check and lists the
   ones that failed or timed out. uv's cache and Playwright's Chromium download are cached, a new

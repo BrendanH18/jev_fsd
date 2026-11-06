@@ -83,6 +83,9 @@ export class DriveScore {
     // (with cars backing out of driveways, sim/driveway-reversers.js: squeezing past one, or not stopping
     // for one in the lane; reported only for a drive one backed out near the car in)
     this.driveways = false; this.reversingConflicts = 0;
+    // (with spring potholes, sim/potholes.js: a wheel into one faster than its safe speed; reported only
+    // for a drive in which the car came near one)
+    this.potholes = false; this.potholeHits = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.followingEnabled = !!world.followingDistance;
     this.followingState = null; this.followingMessage = null;
@@ -186,6 +189,7 @@ export class DriveScore {
     if (world.contraflowSeen) this.contraflow = true;
     if (world.redRunnersSeen) this.redRunnersSeen = true;
     if (world.drivewaysSeen) this.driveways = true;
+    if (world.potholesSeen) this.potholes = true;
     // (a school crossing guard ahead holding up the STOP sign: sim/crossing-guard.js)
     const guardSign = this.guards && !!world.crossingGuards?.notice()?.stop;
     const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
@@ -221,6 +225,7 @@ export class DriveScore {
       if (ev.type === "hump_hit") { this.humpHits++; this.incident("hump_hit", `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`, { device: ev.device, kmh: ev.kmh }); }
       if (ev.type === "close_pass") { this.closePasses++; this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
       if (ev.type === "failed_to_yield" && ev.cyclist_pass) this.cyclistCutoffs++;
+      if (ev.type === "pothole_hit") { this.potholeHits++; this.incident("pothole_hit", `Hit a pothole at ${Math.round(ev.kmh)} km/h`, { pothole: ev.pothole, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
       if (ev.type === "reversing_conflict") { this.reversingConflicts++; this.incident("reversing_conflict", ev.reason === "close_pass" ? "Squeezed past a car backing out of a driveway" : "Did not stop for a car backing out into the lane", { car: ev.with, clearance_m: ev.clearance_m }); }
       if (ev.type === "contraflow_conflict") { this.contraflowMeets++; this.incident("contraflow_meet", "Met a cyclist riding against the one-way with less than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
       if (ev.type === "fresh_green_conflict") { this.runnerConflicts++; this.incident("fresh_green_conflict", "Entered on green ahead of a car running the red", { with: ev.with }); }
@@ -340,7 +345,7 @@ export class DriveScore {
     const categories = {
       safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20 - this.glareSeconds * 5 - this.runnerConflicts * 25 - this.glareSpeeding * 3 - this.reversingConflicts * 20)),
       legality: Math.round(clamp(100 - delta("amber_lights_run") * 25 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25 - this.contraflowMeets * 20)),
-      comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8)),
+      comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8 - this.potholeHits * 10)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
     let score = Math.round(Object.entries(SCORE_WEIGHTS).reduce((sum, [key, weight]) => sum + categories[key] * weight, 0));
@@ -365,6 +370,7 @@ export class DriveScore {
     if (this.earlyMerges) tips.push("In slow traffic, don't merge early into the open lane. Stay in your lane to the merge point and take your turn there: using both lanes keeps the queue shorter, and everyone gets through sooner.");
     if (this.contraflowMeets || this.contraflowCutoffs) tips.push("On a one-way street where cyclists may ride both ways, look both ways. Before turning or going straight into one, check for a cyclist coming out of it against the traffic, on your left, and let them clear the junction first. Driving along one, keep right for a cyclist coming the other way, and where that doesn't leave them at least 1 m (1.5 m above 50 km/h), stop and let them go by.");
     if (this.runnerConflicts) tips.push("When your light turns green, don't just go: look both ways and check that cross traffic has stopped. A driver trying to beat a stale amber may run the red; let anyone who cannot stop clear the junction first.");
+    if (this.potholeHits) tips.push("Look well ahead for potholes, especially in spring and when they are full of water. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.");
     if (this.reversingConflicts) tips.push("Watch driveways for reversing lights. Slow down when a car is backing out ahead, and once it is coming into your lane, stop and give it room to finish; never try to squeeze past behind it.");
     if (this.guardViolations) tips.push("When a school crossing guard holds up the STOP sign, stop before the crosswalk and stay stopped until the guard and every child are off the road, not just out of your lane. Slow down whenever children wait at the curb with a guard.");
     if (this.closePasses) tips.push("Give cyclists room: leave at least 1 m when you pass one where the limit is 50 km/h or less, 1.5 m above. On a street with one lane each way that means moving into the oncoming lane, so stay behind until it is clear.");
@@ -415,6 +421,7 @@ export class DriveScore {
       ...(this.guards ? { guard_violations: this.guardViolations } : {}),
       ...(this.redRunnersSeen ? { fresh_green_conflicts: this.runnerConflicts } : {}),
       ...(this.driveways ? { reversing_conflicts: this.reversingConflicts } : {}),
+      ...(this.potholes ? { pothole_hits: this.potholeHits } : {}),
       ...(this.contraflow ? { contraflow_conflicts: this.contraflowMeets + this.contraflowCutoffs, contraflow_meets: this.contraflowMeets, contraflow_cutoffs: this.contraflowCutoffs } : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),

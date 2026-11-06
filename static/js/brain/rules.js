@@ -76,6 +76,9 @@ export class RulesBrain {
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       if (c.id === "wait_for_runner") cost -= 12;
       if (c.id === "yield_to_reversing" && snap.reversing_vehicle?.wait) cost -= 6;
+      // easing round a pothole inside the lane, where there is room, rather than driving over it
+      // (sim/potholes.js)
+      if (c.id === "ease_round_pothole" && snap.pothole?.room) cost -= 1.5;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;
