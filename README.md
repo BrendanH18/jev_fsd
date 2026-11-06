@@ -72,10 +72,11 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Forty-seven hand-built scenarios test the situations real drivers get wrong:
+Forty-eight hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
+| **Reverse lights** | Calgary, afternoon | A car backs out of a driveway between parked cars as you come along: slow down and give it room to finish |
 | **Brakes ahead** | Vancouver, rain | The lead car brakes hard on West 6th Avenue: leave room for response and a wet-road stop |
 | **Make room** | Vancouver, afternoon | A moving car merges into your gap on West 4th Avenue: ease off and rebuild space |
 | **Room to stop** | Vancouver, afternoon | Amber appears on West 4th Avenue with room to stop safely: brake smoothly and wait for green |

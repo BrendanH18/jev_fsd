@@ -133,6 +133,15 @@ function poseBox(path, s, spec) {
   return { center: [p[0] + Math.cos(psi) * f, p[1] + Math.sin(psi) * f], heading: psi, halfLength: spec.length / 2, halfWidth: spec.width / 2 };
 }
 
+// Where reversing car `r` will be `t` seconds from now, as a box: along its way out at the speed it
+// backs out at (the forward sims' prediction, brain/candidates.js), not straight on at its velocity.
+export function reverserBoxAt(r, t) {
+  const g = r.geo;
+  if (r.phase === "creep") return poseBox(g.path, Math.min(g.sCheck, r.ps + CREEP_MPS * t), r.spec);
+  if (r.phase === "out") return poseBox(g.path, Math.min(g.sEnd, r.ps + Math.max(Math.abs(r.v), 0.5 * REVERSE_MPS) * t), r.spec);
+  return r.obb();
+}
+
 // Distance from point p to box b (0 inside).
 function pointBoxDist(p, b) {
   const c = Math.cos(b.heading), s = Math.sin(b.heading), dx = p[0] - b.center[0], dy = p[1] - b.center[1];
@@ -210,6 +219,28 @@ export class DrivewayReversers {
     // (their own stream, drawn from only while the option is on)
     this.random = this.enabled ? rng(seed * 179426549 + 53) : null;
     this.next = this.enabled ? FIRST_S[0] + this.random() * (FIRST_S[1] - FIRST_S[0]) : Infinity;
+    if (this.enabled) this.clearDriveways();
+  }
+
+  // Nobody parks across a driveway (city bylaws keep the kerb clear there): the parked cars standing in
+  // the way a car backs out of each one are taken away, before anything is drawn.
+  clearDriveways() {
+    const parked = this.world.parked;
+    for (const d of this.world.map.driveways) {
+      const geo = drivewayGeometry(this.world.map, d, CAR);
+      if (!geo) continue;
+      const near = parked.near(geo.q[0], geo.q[1], 20);
+      if (!near.length) continue;
+      for (let s = 0; s <= geo.sEnd; s += 0.5) {
+        const b = poseBox(geo.path, s, CAR);
+        for (const c of near) if (!c.stay && parked.list.includes(c) && obbOverlap(b, c.obb(), 0.3)) {
+          parked.remove(c);
+          // (and nobody parks there later)
+          if (c.slot) c.slot.reserved = "driveway";
+        }
+      }
+    }
+    parked.removed.length = 0;
   }
 
   near(x, y, r) {

@@ -16,7 +16,7 @@ import { TRY_START_M, planParking, planPullOut } from "../sim/parallel-park.js";
 import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
-import { boxGap } from "../sim/driveway-reversers.js";
+import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -502,8 +502,9 @@ export function simulateAll(candidates, snap, world) {
         const box = car.obb();
         const c = Math.cos(car.psi), sn = Math.sin(car.psi);
         for (const o of npcs) {
-          const ob = o.n.obb();
-          ob.center = [o.x + o.vx * t + (ob.center[0] - o.n.x), o.y + o.vy * t + (ob.center[1] - o.n.y)];
+          // (a car backing out of a driveway goes along its way out: sim/driveway-reversers.js)
+          const ob = o.n.reverser ? reverserBoxAt(o.n, t) : o.n.obb();
+          if (!o.n.reverser) ob.center = [o.x + o.vx * t + (ob.center[0] - o.n.x), o.y + o.vy * t + (ob.center[1] - o.n.y)];
           // gap to a vehicle in the car's path (one alongside, like a parked car, does not count)
           const dx = ob.center[0] - box.center[0], dy = ob.center[1] - box.center[1];
           const ahead = dx * c + dy * sn, side = Math.abs(dx * sn - dy * c);

@@ -5,10 +5,11 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Forty-seven authored challenges
+## Forty-eight authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
+| Reverse lights | Calgary, Beltline | Hidden hazards and driveway reversers on (`driveways`, sim/driveway-reversers.js). 13 Avenue SW (one lane each way, 40 km/h), both kerbs lined with parked cars. A car in a driveway on the right, already across the sidewalk, backs out once the car's front is 70 m away; the parked cars hide each from the other, and it comes into the lane with the car about 30 m off. Squeezing past it or not stopping for it (`reversing_conflicts`) fails the drive. Rules and the cautious agent stop about 9 m back, wait for it to drive off and follow it |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -117,6 +118,10 @@ and yield to people and traffic already in the junction. See [BC Motor Vehicle A
 **Both ways** (`contraflow`, Montréal, Rue Drolet into Rue Villeneuve Est, seed 40042): give way to a
 cyclist coming out of a one-way street in its contraflow lane before turning in. Contraflow cyclists
 are on only for this challenge and free drives; the challenge places its one cyclist and no others.
+
+**Reverse lights** (`reverse-lights`, Calgary, 13 Avenue SW, seed 49042): watch driveways for
+reversing lights, and give a car backing out room to finish. Driveway reversers are on only for this
+challenge and free drives; the challenge places its one car backing out and no others.
 
 ## Paired amber-light lessons
 
