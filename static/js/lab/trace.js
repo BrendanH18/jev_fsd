@@ -63,6 +63,9 @@ export class EvaluationTrace {
     if (!this.glareRecorded && world.highBeamsSeen && world.violations.glare_seconds > 0.8) {
       this.event("glare", "Failed to dip high beams", world.t); this.glareRecorded = true;
     }
+    if (!this.sunGlareRecorded && world.sunGlareSeen && world.violations.glare_speeding_seconds > 1) {
+      this.event("sun_glare", "Drove too fast to stop within sight in sun glare", world.t); this.sunGlareRecorded = true;
+    }
     if (score.followingEnabled && score.closeFollowing >= 1 && !this.followingRecorded) {
       this.event("following_gap", "Following gap remained short after time to react", world.t); this.followingRecorded = true;
     }

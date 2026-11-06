@@ -59,6 +59,7 @@ import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass,
 import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
 import { trafficYield as contraflowYield } from "./contraflow.js";
+import { npcGlareCeiling } from "./sun-glare.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -1043,7 +1044,10 @@ export class NpcFleet {
       const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
       const vFollow = this.world.followingDistance && n.lead && n.kind !== "bike"
         ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow);
+      // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
+      // sim/sun-glare.js)
+      const vGlare = this.world.sunGlare && n.kind !== "bike" ? npcGlareCeiling(this.world, n) : Infinity;
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

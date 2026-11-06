@@ -9,6 +9,17 @@
   Entering ahead of one counts as `fresh_green_conflicts` and fails a Lab drive.
 - A new Edmonton challenge: **Fresh green**, at 106 Street NW and Whyte Avenue NW, where your
   light turns green as a car on Whyte Avenue runs its red across your way.
+- Low sun glare in free drives (`?sunglare=0` turns it off). Driving into a low sun on a clear
+  day, glare washes out signals and people ahead: the car sees less far towards the sun, and it
+  and the traffic heading the same way slow to the speed they can stop from within that sight.
+  The sun's position comes from the time of day and the city's latitude and longitude; free
+  drives keep the sky's late-September sun, and a challenge can set its own date. AI drivers see
+  `sun_glare`, the HUD says when the car is slowing for it, and the sky draws a flare and a warm
+  haze when you look into the sun. Driving more than 1 m/s over the glare speed for more than a
+  second, after time to react and slow, fails a Lab drive (`glare_speeding_seconds`).
+- New Lab challenge, **Into the sun** (seed 50042): westbound on 17 Avenue SW, Calgary, at
+  18:15 on a clear 8 October, with the sun just above the avenue ahead, two signals and someone
+  crossing mid-block.
 
 - Leave more following room for speed, poor grip and braking response. Free drives share
   gap targets across AI drivers, traffic and coaching; AI eyes explains actual and desired

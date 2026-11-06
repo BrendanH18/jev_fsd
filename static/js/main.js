@@ -38,6 +38,8 @@ import { STEP_OUT_COUNT, hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
 import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { calmingNotice } from "./sim/traffic-calming.js";
+import { sunGlareNotice, egoGlare } from "./sim/sun-glare.js";
+import { SunGlareView } from "./render/sun-glare.js";
 import { TRUCK_COUNT, isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
 import { buildBusLanes } from "./render/bus-lanes.js";
@@ -201,7 +203,7 @@ export async function boot() {
     // and, on one-way streets that allow it, cyclists ride against the traffic, and everyone looks both
     // ways for them (`?contraflow=0` takes them off)
     const contraflow = params.get("contraflow") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -221,6 +223,8 @@ export async function boot() {
   if (world.busLanes) view.scene.add(buildBusLanes(map));
   if (world.restrictions || world.redTurnSigns) view.scene.add(buildRestrictions(map, [...(world.restrictions ? map.restrictions : []), ...(world.redTurnSigns ? map.redTurns : [])]));
   if (world.calming) view.scene.add(buildCalming(map));
+  // a low sun's flare and haze, where the world has sun glare (sim/sun-glare.js)
+  const sunGlareView = world.sunGlare ? new SunGlareView(view.scene) : null;
   // and the contraflow lanes, sharrows and signs of one-way streets cyclists ride both ways, where the
   // world has them ride (sim/contraflow.js)
   if (world.contraflow.enabled) view.scene.add(buildContraflow(map));
@@ -284,12 +288,19 @@ export async function boot() {
   panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };
   const weatherView = new WeatherView(view);
   const applySky = () => {
-    const a = atmosphereFor(hour, world.weather, { latitude: pack.origin.lat, longitude: pack.origin.lon, utcOffset: status.map.utc_offset ?? -7 });
+    // (a sun glare challenge's clock has its date and time zone, and the sky draws that day's sun:
+    // sim/sun-glare.js)
+    const sunDay = world.sunGlare && world.clock?.day !== undefined ? { day: world.clock.day, utcOffset: world.clock.utc_offset ?? pack.origin.lon / 15 } : {};
+    const a = atmosphereFor(hour, world.weather, { latitude: pack.origin.lat, longitude: pack.origin.lon, utcOffset: status.map.utc_offset ?? -7, ...sunDay });
     view.setAtmosphere(a); tintSurroundings(a); world.visibility.setNight(a.night); syncClock();
   };
   // school and playground zones go by the time of day (sim/speed-zones.js); a benchmark replay, as
   // the benchmark itself, drives none
-  function syncClock() { if (!replay) world.setClock({ ...mapClock(hour, map), ...(world.restrictions || world.busLanes || world.redTurnSigns ? { weekday: clock.weekday } : {}) }); }
+  // (and, with sun glare on, so does the sun: a challenge's date and time zone stay; a free drive has the
+  // sky's sun, at the city's offset: sim/sun-glare.js)
+  const sunClock = () => !world.sunGlare ? {} : world.clock?.day !== undefined ? { day: world.clock.day, ...(world.clock.utc_offset !== undefined ? { utc_offset: world.clock.utc_offset } : {}) }
+    : challenge ? {} : { utc_offset: status.map.utc_offset ?? -7 };
+  function syncClock() { if (!replay) world.setClock({ ...mapClock(hour, map), ...(world.restrictions || world.busLanes || world.redTurnSigns ? { weekday: clock.weekday } : {}), ...sunClock() }); }
   clock.update(world.t);
   function rememberConditions() {
     const next = new URL(location.href);
@@ -695,7 +706,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null;
+  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null, announcedGlare = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -890,6 +901,10 @@ export async function boot() {
     const calmingLine = calmingNotice(world);
     if (calmingLine && calmingLine.key !== announcedCalming) { announcedCalming = calmingLine.key; hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000); }
     if (!calmingLine) announcedCalming = null;
+    // driving into a low sun: slowing to what the car can see (said again when that changes)
+    const glareLine = sunGlareNotice(world);
+    if (glareLine && glareLine.key !== announcedGlare) { announcedGlare = glareLine.key; hud.badge(glareLine.text, glareLine.slow ? "safety" : "", 2500); }
+    if (!glareLine) announcedGlare = null;
     // a scramble crossing ahead: every light red while people cross every way; no right turn on red
     const leftRed = autopilot.snap?.intersection?.left_on_red;
     const leftRedKey = leftRed ? `${autopilot.snap.intersection.id}:${leftRed.stop_completed}:${leftRed.clear}` : null;
@@ -931,6 +946,7 @@ export async function boot() {
     roads.streetLights.setOutage?.(!!world.streetLightsOut);
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
+    if (sunGlareView) sunGlareView.update(view.camera, view.atmosphere, egoGlare(world)?.severity ?? 0);
     view.render(dt);
     cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
     audio.update(world.ego, world.weather, world.paused || document.hidden, view.mode === "hood");

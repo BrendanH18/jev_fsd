@@ -12,15 +12,20 @@ import { yieldNow } from "../bench/runner.js";
 import { EvaluationTrace } from "./trace.js";
 import { mapClock } from "../sim/speed-zones.js";
 import { parseHour } from "../sim/world-clock.js";
+import { dayOfYear } from "../sim/sun-glare.js";
+
+// A sun glare challenge's date ("MM-DD") and UTC offset, for the clock (sim/sun-glare.js).
+const sunClock = (challenge) => ({ ...(challenge.date ? { day: dayOfYear(challenge.date) } : {}), ...(Number.isFinite(challenge.utcOffset) ? { utc_offset: challenge.utcOffset } : {}) });
 
 // (3: school and playground zones apply in every challenge, so earlier runs no longer compare)
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
 export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
-  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed, redTurnSigns: !!challenge.redTurnSigns, amberLights: !!challenge.amberLights, followingDistance: !!challenge.followingDistance, redRunners: !!challenge.redRunners });
+  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed, redTurnSigns: !!challenge.redTurnSigns, amberLights: !!challenge.amberLights, followingDistance: !!challenge.followingDistance, redRunners: !!challenge.redRunners, sunGlare: !!challenge.sunGlare });
   world.visibility.setNight(challenge.time === "night" || challenge.nightFlash ? 1 : 0);
   // (school and playground zones go by the challenge's time of day)
-  world.setClock(mapClock(parseHour(challenge.time), map));
+  // (and, for low sun glare, its date and time zone: sim/sun-glare.js)
+  world.setClock({ ...mapClock(parseHour(challenge.time), map), ...(challenge.sunGlare ? sunClock(challenge) : {}) });
   const scenario = challengeScenario(map, challenge);
   world.placeOnLane(map.lane(scenario.start.edge, scenario.start.lane), scenario.start.s);
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: challenge.seed });

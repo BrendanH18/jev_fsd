@@ -141,6 +141,18 @@ Use `?highbeams=0` to disable this feature. The simulator uses Ontario's distanc
 see the provincial rule distinction and sources in [project reference](project-reference.md#high-beams-simhigh-beamsjs).
 
 
+### Slow down into a low sun
+
+On a clear day with the sun low ahead, glare washes out what lies towards it. The car sees less
+far that way, signals and people ahead come into view later, and it slows to the speed it can
+stop from within what it can see; traffic heading into the sun slows the same way. The HUD says
+**SUN GLARE · SLOWING** while the car is above that speed, and the sky shows a flare and a warm
+haze when you look into the sun. In a Lab drive, more than a second over the glare speed (by more
+than 1 m/s, after a moment to react and slow) fails the drive and lowers the safety score; the
+report records `glare_speeding_seconds` once glare has applied. Free drives keep the sky's
+late-September sun, so glare comes at sunrise and sunset; use `?sunglare=0` to turn it off.
+See [Into the sun](drive-lab.md#into-the-sun).
+
 ### Respond to amber
 
 With amber decisions enabled, ignoring a safe amber stop or speeding up to beat it costs

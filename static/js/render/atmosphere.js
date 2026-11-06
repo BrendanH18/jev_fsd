@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import { sunAngles } from "../sim/speed-zones.js";
+import { solarAngles } from "../sim/sun-glare.js";
 
 export const lighting = {
   night: { value: 0 },      // 0 in daylight, 1 once it is dark enough that street lights are on
@@ -24,9 +25,10 @@ export function updateNightMaterials() {
   for (const { material, day, night, prop } of nightMaterials) material[prop] = day + (night - day) * k;
 }
 
-// Sun direction in Three.js coordinates (x east, y up, z south) and its elevation (rad).
+// Sun direction in Three.js coordinates (x east, y up, z south) and its elevation (rad). (A location
+// with a `day` of the year, from a sun glare challenge's clock, has the sun of that date: sim/sun-glare.js)
 export function sunPosition(hour, location = null) {
-  const { elevation: el, H, latitude, declination: DECLINATION } = sunAngles(hour, location);
+  const { elevation: el, H, latitude, declination: DECLINATION } = Number.isFinite(location?.day) ? solarAngles(hour, location) : sunAngles(hour, location);
   // azimuth from north, clockwise
   const cosAz = (Math.sin(DECLINATION) - Math.sin(el) * Math.sin(latitude)) / (Math.cos(el) * Math.cos(latitude));
   let az = Math.acos(Math.max(-1, Math.min(1, cosAz)));
