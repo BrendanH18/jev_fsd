@@ -368,11 +368,15 @@ export class DrivewayReversers {
     return true;
   }
 
-  // Whether something stands, or is about to be, in the way of `r` going on along its path in the next
-  // second (and a little more).
+  // Where `r` will be over the next second (and a little more) going on along its path.
+  wayBoxes(r) {
+    const g = r.geo, ahead = Math.min(g.sEnd, r.ps + 0.8 + Math.abs(r.v) * 1.0);
+    return [poseBox(g.path, Math.min(g.sEnd, r.ps + 0.4), r.spec), poseBox(g.path, ahead, r.spec)];
+  }
+
+  // Whether something stands, or is about to be, in that way.
   blocked(r) {
-    const world = this.world, g = r.geo, ahead = Math.min(g.sEnd, r.ps + 0.8 + Math.abs(r.v) * 1.0);
-    const boxes = [poseBox(g.path, Math.min(g.sEnd, r.ps + 0.4), r.spec), poseBox(g.path, ahead, r.spec)];
+    const world = this.world, boxes = this.wayBoxes(r);
     const [x, y] = r.center;
     const bodies = [world.ego, ...world.npcs, ...(world.contraflow?.riders || []), ...world.parked.near(x, y, 12), ...world.crowd.near(x, y, 10), ...this.cars];
     for (const o of bodies) {
@@ -453,9 +457,11 @@ export class DrivewayReversers {
   holdPedestrians() {
     for (const r of this.cars) {
       if (r.phase !== "creep" && r.phase !== "look" && r.phase !== "out") continue;
-      const b = r.obb(), sweep = { ...b, halfLength: b.halfLength + 1.2, halfWidth: b.halfWidth + 0.6 };
+      const b = r.obb(), sweep = { ...b, halfLength: b.halfLength + 1.2, halfWidth: b.halfWidth + 0.6 }, way = this.wayBoxes(r);
       for (const p of this.world.crowd.near(b.center[0], b.center[1], 8)) {
         if (p.crossing || p.crew || p.guard || p.held || p.frozen > 0) continue;
+        // (someone already in its way, whom it waits for, walks on by: holding them too would leave both waiting)
+        if (way.some((w) => obbOverlap(w, p.obb(), BLOCK_M + 0.5))) continue;
         const d = pointBoxDist([p.x, p.y], sweep);
         if (d > 1.8 || pointBoxDist([p.x, p.y], b) < 0.3) continue;
         const toward = Math.cos(p.psi) * (b.center[0] - p.x) + Math.sin(p.psi) * (b.center[1] - p.y);

@@ -251,6 +251,23 @@ await test("people on the sidewalk wait for it to go by", () => {
   assert.equal(ctx.world.violations.collisions, 0);
 });
 
+await test("someone already in its way walks on, and it goes once they are by", () => {
+  const ctx = world();
+  egoAt(ctx, 200);
+  const r = ctx.world.driveways.place(D);
+  const g = r.geo, e = g.e, h = g.h;
+  // (on the sidewalk, 2 m upstream of the driveway, walking toward it: close enough to be in its way)
+  const out = e.asphalt[1] + 0.3 + 0.22 + 1.8 + 0.75, q = [g.q[0] - Math.cos(h) * 2 + Math.sin(h) * out, g.q[1] - Math.sin(h) * 2 - Math.cos(h) * out];
+  const to = [q[0] + Math.cos(h) * 30, q[1] + Math.sin(h) * 30];
+  const ped = new Pedestrian({ id: "close_walker", x: q[0], y: q[1], psi: h, v: 0, speed: 1.3, home: true, path: [{ p: to }], crossing: null, waiting: 0, phase: 0, look: 0 });
+  ctx.world.crowd.list.push(ped);
+  const start = [ped.x, ped.y];
+  runUntil(ctx, () => r.phase === "gone", 60);
+  assert.equal(r.phase, "gone");
+  assert.equal(Math.hypot(ped.x - start[0], ped.y - start[1]) > 5, true);
+  assert.equal(ctx.world.violations.collisions, 0);
+});
+
 for (const brain of ["rules", "cautious"]) await test(`"Reverse lights", ${brain}: slows, stops for the car backing out, and arrives cleanly`, async () => {
   const ctx = setupChallenge(CGY, lesson, { brain }), { world: w, autopilot } = ctx;
   assert.equal(w.driveways.enabled, true); assert.equal(w.hazards, true);
