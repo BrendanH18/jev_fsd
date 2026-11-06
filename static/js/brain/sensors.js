@@ -1,4 +1,5 @@
 import { observeAmber } from "../sim/amber.js";
+import { redLightRunner } from "../sim/red-light-runner.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -341,6 +342,12 @@ export function buildSnapshot(world, executing = null) {
     snap.crossing_guard = crossingGuard(world, frontS);
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     if (world.contraflow?.riders.length) snap.contraflow_cyclist = contraflowCyclist(world, p, frontS, lane, road, executing);
+    // (a car running the red across the car's way as its light is green, with that option on:
+    // sim/red-light-runner.js)
+    if (world.redRunners?.enabled && snap.intersection?.control === "signal") {
+      const runner = redLightRunner(world, snap.intersection, route.headingAt(snap.intersection.s_line_route), visibleNpcs);
+      if (runner) snap.red_light_runner = runner;
+    }
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -1699,6 +1706,12 @@ export function desiredSpeed(snap) {
     const vc = cf.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(cf.bumper_to_stop_m - 0.5, decel);
     if (vc < v) { v = vc; reasons.push(cf.relation === "oncoming" ? "cyclist coming the other way: no room" : "cyclist riding against the one-way"); }
   }
+  // a car running the red across the car's way (sim/red-light-runner.js): wait at the line
+  const rr = snap.red_light_runner;
+  if (rr?.wait) {
+    const vr = rr.bumper_to_stop_m < 0.5 ? 0 : stopSpeedFor(rr.bumper_to_stop_m, decel);
+    if (vr < v) { v = vr; reasons.push("car running the red: wait"); }
+  }
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -1887,6 +1900,7 @@ export function hazardFlags(snap) {
   if (snap.cyclist_pass) f.push("cyclist ahead");
   if (snap.crossing_guard) f.push("crossing guard");
   if (snap.contraflow_cyclist) f.push("contraflow cyclist");
+  if (snap.red_light_runner) f.push("red-light runner");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

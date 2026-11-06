@@ -1,4 +1,5 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
+import { auditRunner, createRunners } from "./red-light-runner.js";
 import { setNightFlash, flashState } from "./night-flash.js";
 import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -217,8 +218,11 @@ export class World {
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false } = {}) {
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false } = {}) {
     this.map = map;
+    // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
+    // fresh red, whether one has committed near the car this drive, and the junction the audit watches
+    this.redRunners = createRunners({ enabled: redRunners, seed }); this.redRunnersSeen = false; this.runnerCall = null;
     this.followingDistance = !!followingDistance;
     this.amberLights = !!amberLights; this.amberLightsSeen = false;
     this.highBeams = !!highBeams; this.highBeamsSeen = false;
@@ -440,6 +444,7 @@ export class World {
     this.bikePasses?.clear(); this.cyclistPass = null;
     this.guardCalls?.clear();
     this.contraflowCalls?.clear();
+    this.runnerCall = null;
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -594,8 +599,15 @@ export class World {
       const amber = amberInter && this.visibility.canSee(this.ego, amberInter.x, amberInter.y)
         ? observeAmber(this.ego, `${edge.id}:${control.id}${amberArrow ? ":arrow" : ""}`, amberSignal, -past, amberInter, amberShows, this.t) : null;
       if (amber && !crossed) this.amberLightsSeen = true;
+      // a car running the red across the car's way as it enters on green (sim/red-light-runner.js)
+      const runner = this.redRunners.enabled && control.type === "signal"
+        ? auditRunner(this, control.id, edge.id, rc?.turn || "straight", rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id), past) : null;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
         if (control.type === "signal") {
+          if (runner) {
+            this.violations.fresh_green_conflicts = (this.violations.fresh_green_conflicts || 0) + 1;
+            this.events.push({ type: "fresh_green_conflict", with: runner.vehicle.id ?? null });
+          }
           const amberViolation = amberSignal === "yellow" && amber && (amber.stop ? "safe_stop" : amber.max_speed_mps > amber.speed_mps + AMBER_SPEED_SLACK_MPS ? "sped_up" : null);
           if (amberViolation && amberShows !== "arrow_yellow") {
             this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
