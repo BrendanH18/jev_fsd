@@ -118,6 +118,13 @@ jobs:
     needs: build
     runs-on: namespace-profile-gitrunner
     timeout-minutes: 20
+    # Pages accepts one deployment at a time. A deploy that starts while another
+    # runs waits instead of failing, and a running deploy is never cancelled.
+    # GitHub keeps one waiting job per group, so a newer deploy replaces an
+    # older waiting one; each deploy publishes the whole site, so the newest wins.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
