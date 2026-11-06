@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- CI runs on Namespace runners. Each Node check has a six-minute limit and every job a
+  `timeout-minutes`, so a runaway check fails fast; the Node loop runs every check and lists the
+  ones that failed or timed out. uv's cache and Playwright's Chromium download are cached, a new
+  push to a pull request cancels its older run (never on `main` or the Pages deploy), and
+  Dependabot opens monthly, grouped updates for the workflow's actions and Python dependencies.
 - Red-light runners in free drives (`?redrunners=0` disables them): now and then a driver who
   could stop for an amber runs the late amber or fresh red instead, at the speed it had. It still
   stops for anyone already in its path. When the light turns green, AI drivers and traffic look

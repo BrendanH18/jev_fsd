@@ -321,7 +321,9 @@ Every `scripts/test_*.mjs` file is a standalone Node check. Node 22 or newer run
 The [full reference](docs/project-reference.md#development) lists them all, along with the
 Playwright browser checks. CI runs every check on every pull request: the Python tests, all Node
 checks, the Jev fixture and offline request checks, and the browser, renderer and arena suites in
-headless Chromium. It then builds the Pages demo and deploys it from `main`.
+headless Chromium. It then builds the Pages demo and deploys it from `main`. CI runs on
+[Namespace](https://namespace.so) runners, gives each Node check six minutes, and cancels a pull
+request's older run when a new commit is pushed.
 
 ```
 server.py          local HTTP server and API (stdlib only)
