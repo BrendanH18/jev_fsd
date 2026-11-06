@@ -127,7 +127,7 @@ export function drivewayGeometry(map, d, spec = CAR) {
 }
 
 // The body of a car of `spec` with its rear axle at path arc length s, backing along `path`.
-function poseBox(path, s, spec) {
+export function poseBox(path, s, spec) {
   const p = path.pointAt(s), back = path.headingAt(s), psi = back + Math.PI;
   const f = spec.length / 2 - spec.rearOverhang;
   return { center: [p[0] + Math.cos(psi) * f, p[1] + Math.sin(psi) * f], heading: psi, halfLength: spec.length / 2, halfWidth: spec.width / 2 };
@@ -223,21 +223,24 @@ export class DrivewayReversers {
   }
 
   // Nobody parks across a driveway (city bylaws keep the kerb clear there): the parked cars standing in
-  // the way a car backs out of each one are taken away, before anything is drawn.
+  // the way a car backs out of each one are taken away, before anything is drawn, and the parking bays
+  // there, taken or free, are kept for nobody to park in later.
   clearDriveways() {
     const parked = this.world.parked;
     for (const d of this.world.map.driveways) {
       const geo = drivewayGeometry(this.world.map, d, CAR);
       if (!geo) continue;
       const near = parked.near(geo.q[0], geo.q[1], 20);
-      if (!near.length) continue;
+      const bays = parked.slots.filter((slot) => !slot.reserved && !slot.occupant && Math.abs(slot.x - geo.q[0]) < 20 && Math.abs(slot.y - geo.q[1]) < 20)
+        .map((slot) => ({ slot, box: new Vehicle(slot.x, slot.y, slot.psi, 0, CAR).obb() }));
+      if (!near.length && !bays.length) continue;
       for (let s = 0; s <= geo.sEnd; s += 0.5) {
         const b = poseBox(geo.path, s, CAR);
         for (const c of near) if (!c.stay && parked.list.includes(c) && obbOverlap(b, c.obb(), 0.3)) {
           parked.remove(c);
-          // (and nobody parks there later)
           if (c.slot) c.slot.reserved = "driveway";
         }
+        for (const bay of bays) if (!bay.slot.reserved && obbOverlap(b, bay.box, 0.3)) bay.slot.reserved = "driveway";
       }
     }
     parked.removed.length = 0;

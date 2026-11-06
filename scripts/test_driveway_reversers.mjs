@@ -17,6 +17,7 @@ const { setWeather } = await import("../static/js/sim/weather.js");
 const { applyLaw } = await import("../static/js/sim/controller.js");
 const { Pedestrian } = await import("../static/js/sim/pedestrians.js");
 const RV = await import("../static/js/sim/driveway-reversers.js");
+const { obbOverlap } = await import("../static/js/sim/collision.js");
 const { DriveMetrics, failures } = await import("../static/js/bench/metrics.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
@@ -325,6 +326,18 @@ await test("free drives: one now and then in a driveway ahead on the route, clea
   const parkedOn = new World(CGY, { seed: 4, pedestrians: 0, driveways: true }), parkedOff = new World(CGY, { seed: 4, pedestrians: 0 });
   assert.equal(parkedOn.parked.list.length < parkedOff.parked.list.length, true);
   assert.equal(CGY.driveways.every(d => { const g = RV.drivewayGeometry(CGY, d, CAR); return !g || parkedOn.driveways.clearWay(g); }), true);
+  // (and no free parking bay is left there for traffic to park in later)
+  let openAcross = 0;
+  for (const d of CGY.driveways) {
+    const g = RV.drivewayGeometry(CGY, d, CAR);
+    if (!g) continue;
+    const bays = parkedOn.parked.slots.filter(sl => !sl.occupant && !sl.reserved && Math.abs(sl.x - g.q[0]) < 20 && Math.abs(sl.y - g.q[1]) < 20);
+    for (const sl of bays) {
+      const box = new Vehicle(sl.x, sl.y, sl.psi, 0, CAR).obb();
+      for (let s = 0; s <= g.sEnd; s += 0.5) if (obbOverlap(RV.poseBox(g.path, s, CAR), box, 0.3)) { openAcross++; break; }
+    }
+  }
+  assert.equal(openAcross, 0, `${openAcross} free bays across driveways`);
   const w = new World(CGY, { seed: 4, parked: 0, pedestrians: 0, driveways: true });
   const fleet = new NpcFleet(w, { count: 0, bikes: 0, seed: 5 });
   const ctx = { world: w, fleet, autopilot: idle };
