@@ -1,4 +1,24 @@
-# Rules benchmark check — 2026-11-05 (roundabout priority and red-turn signs)
+# Rules benchmark check — 2026-11-05 (following distance)
+
+The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4)
+passes on base `8672135` and this change. Every per-route field matches except `wall_ms`.
+Both have zero collisions, red lights, stop-sign violations, failures to yield or deadlocks,
+0.2 seconds off road and seven safety brakes. The base is a fresh `git archive 8672135`,
+verified file for file against the archive, served separately and run through `bench_node.mjs`.
+The new following policy is off in the seeded benchmark.
+
+WebKit also passes all 12 routes on the fresh base and current build, with every field
+matching except the start timestamp and wall time. Both record ten safety brakes and
+0.2 seconds off road. WebKit and V8 differ from each other, as before; each comparison
+uses the same engine on both sides. Both new challenges also arrived without collisions
+or rule violations in the rendered WebKit app, and `/tests` passed 153/153 checks.
+
+The newest committed historical run, `data/runs/20261022-092538-rules.json`, also passes
+12/12, with the same zero collision/rule counts and 0.2 seconds off road. Its eight safety
+brakes and detailed timings already differ on unchanged base `8672135`; it is not an exact
+current-engine baseline. No dependencies were installed for these checks.
+
+## Earlier record: 2026-11-05 (roundabout priority and red-turn signs)
 
 The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4)
 passes on both base `e5b95ac` and this change. Every result field matches except timing

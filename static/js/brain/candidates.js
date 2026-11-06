@@ -3,6 +3,7 @@
 // visible observations and can change behavior after a choice.
 
 import { CAR, comfort } from "../sim/vehicle.js";
+import { followingPolicy } from "../sim/following.js";
 import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
@@ -411,7 +412,7 @@ export function simulateAll(candidates, snap, world) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
-    let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity;
+    let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
     let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
@@ -495,6 +496,16 @@ export function simulateAll(candidates, snap, world) {
           if (ahead > 0 && side < box.halfWidth + ob.halfWidth + 0.3) {
             const gap = ahead - box.halfLength - ob.halfLength;
             if (gap < minGap) minGap = gap;
+            // A transient cut-in may already leave too little room. Keep braking/recovery
+            // choices available, but reject a choice that maintains or worsens the deficit.
+            // Once a pass has cleared the leader's lane, this constraint no longer applies.
+            const f = snap.following;
+            if (k === steps && f?.policy && o.n.id === f.id && car.v > 2 && Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4) {
+              const future = followingPolicy(car, { gap_m: gap, speed: f.speed, vehicle: o.n });
+              const deficit = future.target_gap_m - gap;
+              closesFollowingGap = deficit > Math.max(1, f.policy.target_gap_m - f.gap_m - 0.5)
+                && car.v > f.policy.safe_speed_mps + 0.2;
+            }
           }
           if (Math.abs(ahead) < box.halfLength + ob.halfLength + 1) minClearance = Math.min(minClearance, Math.max(0, side - box.halfWidth - ob.halfWidth));
           // passing a cyclist needs the minimum passing distance: a metre (and with passing cyclists on,
@@ -539,6 +550,7 @@ export function simulateAll(candidates, snap, world) {
       && (c.id !== "stop_at_line" || !!mustStop || !!(control?.give_way?.wait_for && control.give_way.hold_s_route === control.s_line_route));
     let reject = null;
     if (collision) reject = "collision";
+    else if (closesFollowingGap && c.law.kind !== "hard_brake") reject = "following_distance";
     else if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(c.law.laneIdx) && !c.change && c.law.vTarget > 0.1 && !obliged && c.law.kind !== "hard_brake") reject = "bus_lane_driving";
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
     else if (c.change && (c.change.too_late || lateLeaving)) reject = "lane_change_too_late";

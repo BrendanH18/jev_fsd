@@ -71,7 +71,7 @@ export class PerceptionView {
       mesh.geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
       mesh.geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3)); mesh.geometry.computeBoundingSphere();
     }
-    const reasons = { collision: "Predicted collision", visibility_stopping_distance: "Beyond stopping sight", passes_cyclist_too_close: "Too close to cyclist", passes_cyclist_without_room: "Cyclist: less than the passing distance", crosses_into_oncoming_traffic: "Oncoming traffic",
+    const reasons = { following_distance: "Leaves too little braking room", collision: "Predicted collision", visibility_stopping_distance: "Beyond stopping sight", passes_cyclist_too_close: "Too close to cyclist", passes_cyclist_without_room: "Cyclist: less than the passing distance", crosses_into_oncoming_traffic: "Oncoming traffic",
       off_road: "Leaves the road", runs_red: "Red light", fails_to_yield: "Must yield", runs_stop: "Missed stop", fails_to_yield_to_pedestrian: "Person crossing",
       fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", fails_to_yield_to_bus: "Bus pulling out", passes_car_stopped_at_crosswalk: "Car stopped at crosswalk", passes_stopped_school_bus: "School bus stopped", passes_streetcar_doors: "Streetcar doors open", crosses_in_front_of_train: "Train coming", no_room_past_tracks: "No room past the tracks", blocks_junction: "No room past the junction", runs_flagger_stop: "Flagger showing STOP", passes_crossing_guard: "Crossing guard: STOP", fails_to_yield_to_contraflow_cyclist: "Cyclist against the one-way", passes_contraflow_cyclist_too_close: "Cyclist coming: less than the passing distance", no_room_to_go_round: "Too close to pull out round the van", passes_plow_on_right: "Snow plow: never pass on the right", enters_unseen_junction: "Cannot see yet",
       passes_turn_round_point: "Turns round here" };
@@ -121,7 +121,9 @@ export class PerceptionView {
     // a cyclist riding against a one-way street (sim/contraflow.js)
     const cf = snap.contraflow_cyclist;
     const contraflow = cf?.relation === "entering" ? "Contraflow street ahead, out of sight: creep and look both ways" : cf ? `Cyclist against the one-way ${Math.round(cf.gap_m)} m away: ${cf.wait ? `${cf.relation === "oncoming" ? "no room to pass, move over and" : "give way,"} wait${cf.bumper_to_stop_m > 0.5 ? ` in ${Math.round(cf.bumper_to_stop_m)} m` : ""}` : `keep right, ${cf.min_pass_m} m clear`}` : null;
-    return { seen, hidden, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, guard, contraflow, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    const f = snap.following;
+    const following = f?.policy ? `Following gap ${Math.round(f.gap_m)} m; target ${Math.round(f.policy.target_gap_m)} m for speed and grip` : null;
+    return { seen, hidden, following, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, guard, contraflow, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

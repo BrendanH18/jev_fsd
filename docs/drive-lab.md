@@ -5,10 +5,12 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Forty-one authored challenges
+## Forty-seven authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
+| Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
+| Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
 | The door zone | Vancouver, Kitsilano | A cyclist and a parked car's opening street-side door |
 | Into the unknown | Victoria, Old Town | A signal-controlled junction with 28 m fog visibility |
@@ -138,3 +140,22 @@ stop for amber unless the stop cannot be made safely. The stopping-distance calc
 is a conservative simulator policy, rather than a statutory distance or a claim about
 every province's laws. Focused dry/snow and replay coverage lives in
 `scripts/test_amber_challenges.mjs` and `scripts/test_amber_policy.mjs`.
+
+
+## Space to react
+
+Both lessons enable the shared following-distance policy. It accounts for road grip,
+relative speed, decision time, actuator lag and brake response. These are conservative
+simulator targets, not statutory following distances. AI eyes shows the actual and target
+bumper gaps; model observations and event-linked decision records retain the same values.
+
+In **Brakes ahead**, the leader on West 6th Avenue brakes after three seconds,
+stands for four seconds, then resumes. The car need not come to a full stop if room remains
+and the leader has moved off. In **Make room**, a car in the left lane of West 4th Avenue
+moves into the driven car's lane over 3.5 seconds, then accelerates toward the speed limit.
+Both use the ordinary vehicle physics and are repeatable after restoring a checkpoint.
+
+Coaching grants five seconds to recover when a newly encountered leader moves sideways into an
+existing gap. Continuing to follow below the target after that window lowers the safety
+score; reacquiring the same leader does not reset the allowance. Moving into a short gap yourself earns no allowance. Collision checks and
+emergency braking remain active throughout. Existing challenges leave the feature off.

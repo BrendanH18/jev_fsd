@@ -4,6 +4,7 @@ import { contraflowScenario, placeContraflowRider } from "./contraflow-challenge
 import { roundaboutScenario, placeRoundaboutTraffic } from "./roundabout-challenge.js";
 import { redTurnScenario, installRedTurn } from "./red-turn-challenge.js";
 import { amberScenario, installAmber } from "./amber-challenge.js";
+import { followingScenario, installFollowing, stepFollowing } from "./following-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -121,6 +122,10 @@ export const CHALLENGES = [
     description: "The light turns amber on West 4th Avenue, with room to stop safely. Ease off, stop before the line, and wait for green.", lesson: "Amber means stop if you can do so safely. Decide when the light changes, allow for grip and braking response, and never speed up to beat it." },
   { id: "amber-clear", title: "Keep going safely", map: "kitsilano", weather: "dry", time: "afternoon", seed: 45042, icon: "◉", difficulty: "Judgement", hazard: "amber", amberLights: true, street: "West 4th Avenue",
     description: "The same light turns amber when you are too close to stop safely. Keep a steady speed and clear the junction cautiously.", lesson: "If a safe stop is no longer possible when amber appears, continue cautiously without speeding up. Yield to anyone in your path; an amber decision never permits entering on red." },
+  { id: "brakes-ahead", title: "Brakes ahead", map: "kitsilano", weather: "rain", time: "afternoon", seed: 46042, icon: "⇣", difficulty: "Anticipation", hazard: "following", followingDistance: true, street: "West 6th Avenue",
+    description: "The car ahead brakes hard on a wet West 6th Avenue. Leave room to stop, then follow it once it moves again.", lesson: "Your following gap needs to allow for road grip, braking response and the car ahead stopping suddenly. Leave more room on a wet road and brake while there is still space." },
+  { id: "make-room", title: "Make room", map: "kitsilano", weather: "dry", time: "afternoon", seed: 47042, icon: "↘", difficulty: "Anticipation", hazard: "following", followingDistance: true, street: "West 4th Avenue",
+    description: "A moving car merges from the next lane into your gap on West 4th Avenue. Ease off and rebuild your following room.", lesson: "When someone moves into the gap ahead, make room by easing off or braking as needed. A short gap forced on you is a reason to respond, not to accelerate and close it further." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1017,6 +1022,7 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.hazard === "following") return followingScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1235,6 +1241,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
   if (scenario.redTurnSign) installRedTurn(world, scenario);
   if (scenario.amber) installAmber(world, scenario);
+  if (scenario.following) installFollowing(world, fleet, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
@@ -1317,6 +1324,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
 export function stepChallenge(world, fleet) {
   const state = world.challenge;
   if (!state) return;
+  if (state.following) { stepFollowing(world, fleet); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
