@@ -18,6 +18,7 @@ from jev.osm.restrictions import load_restrictions
 from jev.osm.calming import load_calming
 from jev.osm.contraflow import load_contraflow
 from jev.osm.crossings import load_crossings
+from jev.osm.driveways import load_driveways
 from jev.osm.rail import load_rail
 from jev.osm.scrambles import load_scrambles
 from jev.osm.transit import load_transit
@@ -76,6 +77,9 @@ def build(output: Path) -> None:
         contraflow = load_contraflow(PRESET_BBOXES[item["id"]], MAPS_DIR)
         if contraflow:
             pack["contraflow"] = contraflow
+        driveways = load_driveways(PRESET_BBOXES[item["id"]], MAPS_DIR)
+        if driveways:
+            pack["driveways"] = driveways
         pack["utc_offset"] = item["utc_offset"]
         (data / f"{item['id']}.json").write_text(json.dumps(pack, separators=(",", ":")))
     (data / "catalog.json").write_text(json.dumps(maps, separators=(",", ":")))
