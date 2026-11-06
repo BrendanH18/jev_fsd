@@ -8,15 +8,28 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels that pull request's older run. Pushes to main and manual
+# runs get a group of their own (the run id), so they, and the Pages deploy, are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   checks:
     name: Python and Node checks
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 30
+    env:
+      # Seconds each scripts/test_*.mjs may run. The slowest (test_drive_lab.mjs) takes about
+      # two minutes; a failing assert on a sim object can grow without bound (see AGENTS.md).
+      NODE_TEST_TIMEOUT: 360
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -26,17 +39,35 @@ jobs:
         run: uv run --locked scripts/verify_jev.py --offline
       - name: Node checks
         run: |
+          failed=()
           for f in scripts/test_*.mjs; do
             echo "::group::$f"
-            node --experimental-default-type=module "$f"
+            rc=0
+            timeout --kill-after=10s "${NODE_TEST_TIMEOUT}s" node --experimental-default-type=module "$f" || rc=$?
             echo "::endgroup::"
+            if [ "$rc" -eq 124 ]; then
+              echo "::error file=$f::$f timed out after ${NODE_TEST_TIMEOUT} s"
+              failed+=("$f")
+            elif [ "$rc" -eq 137 ]; then
+              echo "::error file=$f::$f was killed (timed out and ignored SIGTERM, or ran out of memory)"
+              failed+=("$f")
+            elif [ "$rc" -ne 0 ]; then
+              echo "::error file=$f::$f failed with exit code $rc"
+              failed+=("$f")
+            fi
           done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "Failed Node checks:"
+            printf '  %s\n' "${failed[@]}"
+            exit 1
+          fi
       - name: Jev fixtures match the current pipeline
         run: node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 
   browser:
     name: Browser suites
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 30
     env:
       PLAYWRIGHT: playwright==1.64.0
     steps:
@@ -44,6 +75,13 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ env.PLAYWRIGHT }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-chromium-${{ runner.os }}-${{ runner.arch }}-${{ env.PLAYWRIGHT }}
       - name: Install Playwright Chromium
         run: uv run --locked --with "$PLAYWRIGHT" python -m playwright install --with-deps chromium
       - name: Start the local server
@@ -61,7 +99,8 @@ jobs:
 
   build:
     needs: [checks, browser]
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,7 +116,8 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 20
     permissions:
       pages: write
       id-token: write
