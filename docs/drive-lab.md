@@ -159,3 +159,16 @@ Coaching grants five seconds to recover when a newly encountered leader moves si
 existing gap. Continuing to follow below the target after that window lowers the safety
 score; reacquiring the same leader does not reset the allowance. Moving into a short gap yourself earns no allowance. Collision checks and
 emergency braking remain active throughout. Existing challenges leave the feature off.
+
+
+## Fresh green
+
+**Fresh green** (`fresh-green`, Edmonton, seed 48042) uses the unchanged signal at 106 Street NW
+and Whyte Avenue NW (`sig3`). The car waits at the red on 106 Street NW, heading south, its front
+1.5 m short of the line, three seconds before its green. A car on Whyte Avenue NW, coming from the
+car's left in the near curb lane at 11 m/s (about the 40 km/h limit), is committed to running its
+red: its front crosses its line a second after the car's light turns green. Both local drivers wait
+at the line until it has cleared the junction, then carry on 100 m along 106 Street NW. A driver
+who goes as soon as the light turns green enters ahead of it, is counted in
+`fresh_green_conflicts`, and collides with it. Red-light runners are on only for this challenge
+and free drives; the challenge places its one runner and no other traffic.

@@ -5,6 +5,7 @@ import { roundaboutScenario, placeRoundaboutTraffic } from "./roundabout-challen
 import { redTurnScenario, installRedTurn } from "./red-turn-challenge.js";
 import { amberScenario, installAmber } from "./amber-challenge.js";
 import { followingScenario, installFollowing, stepFollowing } from "./following-challenge.js";
+import { freshGreenScenario, installFreshGreen, stepFreshGreen } from "./fresh-green-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -126,6 +127,8 @@ export const CHALLENGES = [
     description: "The car ahead brakes hard on a wet West 6th Avenue. Leave room to stop, then follow it once it moves again.", lesson: "Your following gap needs to allow for road grip, braking response and the car ahead stopping suddenly. Leave more room on a wet road and brake while there is still space." },
   { id: "make-room", title: "Make room", map: "kitsilano", weather: "dry", time: "afternoon", seed: 47042, icon: "↘", difficulty: "Anticipation", hazard: "following", followingDistance: true, street: "West 4th Avenue",
     description: "A moving car merges from the next lane into your gap on West 4th Avenue. Ease off and rebuild your following room.", lesson: "When someone moves into the gap ahead, make room by easing off or braking as needed. A short gap forced on you is a reason to respond, not to accelerate and close it further." },
+  { id: "fresh-green", title: "Fresh green", map: "edmonton", weather: "dry", time: "afternoon", seed: 48042, icon: "⇶", difficulty: "Anticipation", hazard: "fresh-green", redRunners: true, street: "106 Street NW",
+    description: "You wait at the red on 106 Street NW at Whyte Avenue NW. Your light turns green just as a car on Whyte Avenue, too late to stop, runs its red across your way.", lesson: "When your light turns green, look both ways and let a driver who cannot stop clear the junction before you go." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1022,6 +1025,7 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.hazard === "fresh-green") return freshGreenScenario(map, challenge);
   if (challenge.hazard === "following") return followingScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
@@ -1242,6 +1246,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.redTurnSign) installRedTurn(world, scenario);
   if (scenario.amber) installAmber(world, scenario);
   if (scenario.following) installFollowing(world, fleet, scenario);
+  if (scenario.freshGreen) installFreshGreen(world, fleet, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
@@ -1325,6 +1330,7 @@ export function stepChallenge(world, fleet) {
   const state = world.challenge;
   if (!state) return;
   if (state.following) { stepFollowing(world, fleet); return; }
+  if (state.freshGreen) { stepFreshGreen(world); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Red-light runners in free drives (`?redrunners=0` disables them): now and then a driver who
+  could stop for an amber runs the late amber or fresh red instead, at the speed it had. It still
+  stops for anyone already in its path. When the light turns green, AI drivers and traffic look
+  both ways and wait at the line while a crossing car cannot stop or is already in the junction.
+  Entering ahead of one counts as `fresh_green_conflicts` and fails a Lab drive.
+- A new Edmonton challenge: **Fresh green**, at 106 Street NW and Whyte Avenue NW, where your
+  light turns green as a car on Whyte Avenue runs its red across your way.
+
 - Leave more following room for speed, poor grip and braking response. Free drives share
   gap targets across AI drivers, traffic and coaching; AI eyes explains actual and desired
   bumper gaps. A new close leader gets five seconds to rebuild space before following

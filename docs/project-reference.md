@@ -1552,3 +1552,48 @@ manual coaching, bounded recovery and feature-off behavior;
 `test_following_challenges.mjs` runs the real streets with Rules/cautious and checks
 physical merging and checkpoint determinism. The integration script's optional
 `--write-snapshots` generates the two live-model cases in `data/snapshots/`.
+
+
+## Red-light runners
+
+`sim/red-light-runner.js` is opt-in through `World.redRunners` (`createRunners`): free drives
+enable it unless `?redrunners=0`; only the **Fresh green** challenge enables it in the lab. With it
+off, `random` is null, no vehicle gets a `runner` or `runDrawn`, and no metric key is added.
+
+**Runners.** `runsLight`, called from the NPC signal check, draws once per approach from the
+feature's own stream when an ordinary car first sees amber, could still stop (the existing
+`canStop`, or the amber decision with `amberLights`), goes at least 6 m/s, and would reach its line
+between 1 s before and 2.5 s after its light turns red. With `RUNNER_CHANCE` (12%) it commits
+(`commitRunner`, which `World.redRunnersSeen` notes within 120 m of the car); no other car commits
+for 30 s. A runner skips the red/amber stop, and `runnerCap` holds its speed at the commitment
+speed until its rear clears the junction, marking `runner.entered` at the line. It never commits
+while someone is in the junction box, gives up while it can still stop if someone gets there
+first (or if it slows below 2 m/s short of the line), and keeps every leader, crosswalk and box
+check. The challenge commits its runner directly. Checkpoints carry the commitment on the vehicle
+and the stream in `world.redRunners`.
+
+**The test.** `runnerThreat(world, observer, inter, heading, others)` returns the nearest vehicle
+crossing the observer's way (30 to 150 degrees off its heading, above 2.5 m/s) that is on a red
+or amber approach to the same signal and cannot stop before its line (`canStopAt`: the
+`amberStoppingDistance`, unless it is already braking hard enough), or that has entered the
+junction on one (past its line on its approach, or a committed runner with `entered`). Traffic on
+a green waits at the line for one (`runnerHold`) when within 40 m and able to stop.
+
+**The driven car.** Sensing adds `red_light_runner` (id, `relation` `cannot_stop`/`in_junction`,
+`from` left/right, speed, `to_line_m`, `wait`, `stop_s_route`, `bumper_to_stop_m`, `green_for_s`)
+while its own light is green and it has not entered, from the vehicles it can see; `wait` holds
+while it can still stop at the line, braking hard if it must. The target speed stops at the line,
+`wait_for_runner` stops there, and any other candidate whose front crosses the line is rejected
+as `enters_ahead_of_red_light_runner` (hard braking excepted). Rules and the cautious agent wait,
+and the deadlock detector counts the wait as legitimate. Jev/LLM state carries
+`red_light_runner`; the situation clause and the motion criteria say to hold at the line until it
+has gone through even though the light is green.
+
+**Audit.** `auditRunner` watches the car's approach to a green signal within 40 m. Once a visible
+runner threat has existed while the car could still stop, entering the junction while one remains
+counts as `fresh_green_conflicts` (event `fresh_green_conflict`, replay marker, coaching tip,
+25 safety points and a 69 cap). Metrics report the key only once `World.redRunnersSeen`.
+
+The challenge uses Edmonton's 106 Street NW (`e220` to `e367`) at Whyte Avenue NW (`sig3`), the
+runner on `e309` to `e316`. Focused checks: `scripts/test_red_light_runners.mjs`, and
+`data/snapshots/fresh_green.json` for live Jev verification.
