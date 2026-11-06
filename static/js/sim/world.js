@@ -41,6 +41,7 @@ import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
+import { DrivewayReversers, auditReversers, reverserHidden } from "./driveway-reversers.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -217,7 +218,9 @@ export class World {
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false } = {}) {
+  // `driveways`: now and then a car backs out of a driveway near the car's way, and everyone gives it
+  // room (sim/driveway-reversers.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, driveways = false } = {}) {
     this.map = map;
     this.followingDistance = !!followingDistance;
     this.amberLights = !!amberLights; this.amberLightsSeen = false;
@@ -326,6 +329,11 @@ export class World {
     this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
     this.contraflowSeen = false;
     this.contraflowCalls = new Map();
+    // cars backing out of driveways (sim/driveway-reversers.js): whether they do, whether one has backed
+    // out near the car this drive, and the ones the car has squeezed past or not stopped for
+    this.driveways = new DrivewayReversers(this, { enabled: driveways, seed });
+    this.drivewaysSeen = false;
+    this.drivewayCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -335,7 +343,9 @@ export class World {
     const out = this.npcs.filter((n) => { const m = r + Math.max(5, n.spec?.length || 0); return Math.abs(n.x - x) < m && Math.abs(n.y - y) < m; });
     const all = out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
     // (and contraflow cyclists, with that option on: sim/contraflow.js)
-    return this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
+    const out2 = this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
+    // (and cars backing out of driveways, with that option on: sim/driveway-reversers.js)
+    return this.driveways?.cars.length ? out2.concat(this.driveways.near(x, y, r)) : out2;
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
@@ -354,6 +364,8 @@ export class World {
   sees(observer, o, reach = 0) {
     const enhanced = this.highBeams && observer === this.ego && observer.highBeam && this.visibility.night > 0.5 && this.weather !== "fog" && this.weather !== "snow" && !wellLit(this);
     if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach))) return false;
+    // (a car backing out of a driveway: the cars parked at the kerb hide it, sim/driveway-reversers.js)
+    if (o.reverser) return !(this.hazards && reverserHidden(this, observer, o));
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
     return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
   }
@@ -440,6 +452,7 @@ export class World {
     this.bikePasses?.clear(); this.cyclistPass = null;
     this.guardCalls?.clear();
     this.contraflowCalls?.clear();
+    this.drivewayCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -696,6 +709,7 @@ export class World {
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();
     if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
+    if (this.driveways.enabled) auditReversers(this);
     this.auditKerb();
     leftSpace(this);
   }

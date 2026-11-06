@@ -26,6 +26,8 @@ import { turnBanned } from "./turn-restrictions.js";
 // it: they wait short of the junction for one coming out of the street they turn into, wait for one as
 // for oncoming traffic, and move over for one coming the other way along it, stopping where that leaves
 // less than the minimum passing distance until it has gone by (sim/contraflow.js).
+// With `driveways` on, drivers slow for a car backing out of a driveway ahead and stop to give it room
+// once it is coming into their lane (sim/driveway-reversers.js reverserYield).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -58,6 +60,7 @@ import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass,
 import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
 import { trafficYield as contraflowYield } from "./contraflow.js";
+import { reverserYield } from "./driveway-reversers.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -1027,6 +1030,13 @@ export class NpcFleet {
         const g = cf.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
       }
+      // for a car backing out of a driveway, slow while it backs out ahead and stop short of it once it is
+      // coming into the lane (once it could stop there: otherwise it carries on) (sim/driveway-reversers.js)
+      const rv = world.driveways?.cars.length && !n.transit?.tram ? reverserYield(world, n, front) : null;
+      if (rv?.hold != null) {
+        const g = rv.hold - front;
+        if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
+      }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -1036,7 +1046,7 @@ export class NpcFleet {
       const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
       const vFollow = this.world.followingDistance && n.lead && n.kind !== "bike"
         ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, n.pull ? 5 : Infinity, vCalm, vFollow);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, n.pull ? 5 : Infinity, vCalm, vFollow, rv?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

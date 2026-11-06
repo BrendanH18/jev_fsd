@@ -188,6 +188,9 @@ export class MapData {
     // one-way streets cyclists may ride both ways (jev/osm/contraflow.py; sim/contraflow.js), by edge:
     // { edge, kind: "lane" | "track" | "shared", side }
     this.contraflow = new Map((pack.contraflow?.edges || []).filter((c) => this.edges.has(c.edge) && this.edges.get(c.edge).oneway).map((c) => [c.edge, c]));
+    // driveways cars back out of (jev/osm/driveways.py; sim/driveway-reversers.js): { id, edge, s, side,
+    // x, y, heading, length }
+    this.driveways = (pack.driveways?.driveways || []).filter((d) => this.edges.has(d.edge));
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
     // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in

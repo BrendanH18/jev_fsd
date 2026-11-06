@@ -5,6 +5,7 @@ import { roundaboutScenario, placeRoundaboutTraffic } from "./roundabout-challen
 import { redTurnScenario, installRedTurn } from "./red-turn-challenge.js";
 import { amberScenario, installAmber } from "./amber-challenge.js";
 import { followingScenario, installFollowing, stepFollowing } from "./following-challenge.js";
+import { drivewayScenario, placeReverser } from "./driveway-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -126,6 +127,8 @@ export const CHALLENGES = [
     description: "The car ahead brakes hard on a wet West 6th Avenue. Leave room to stop, then follow it once it moves again.", lesson: "Your following gap needs to allow for road grip, braking response and the car ahead stopping suddenly. Leave more room on a wet road and brake while there is still space." },
   { id: "make-room", title: "Make room", map: "kitsilano", weather: "dry", time: "afternoon", seed: 47042, icon: "↘", difficulty: "Anticipation", hazard: "following", followingDistance: true, street: "West 4th Avenue",
     description: "A moving car merges from the next lane into your gap on West 4th Avenue. Ease off and rebuild your following room.", lesson: "When someone moves into the gap ahead, make room by easing off or braking as needed. A short gap forced on you is a reason to respond, not to accelerate and close it further." },
+  { id: "reverse-lights", title: "Reverse lights", map: "calgary", weather: "dry", time: "afternoon", seed: 49042, icon: "↶", difficulty: "Anticipation", hazard: "reversing", driveways: true, hidden: true, street: "13 Avenue SW",
+    description: "Cars are parked along both sides of 13 Avenue SW, a residential street in the Beltline with one lane each way. Between them, a car is about to back out of a driveway on your right as you come along.", lesson: "Watch driveways for reversing lights. Slow down and give a car backing out room to finish; never try to squeeze past behind it." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1023,6 +1026,7 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 
 export function challengeScenario(map, challenge) {
   if (challenge.hazard === "following") return followingScenario(map, challenge);
+  if (challenge.hazard === "reversing") return drivewayScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1301,6 +1305,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.collection) Object.assign(world.challenge, placeTruck(world, fleet, scenario.collection, challenge.seed));
   if (scenario.crossingGuard) Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));
   if (scenario.contraflow) Object.assign(world.challenge, placeContraflowRider(world, scenario.contraflow));
+  if (scenario.reverser) Object.assign(world.challenge, placeReverser(world, scenario.reverser, challenge.seed));
   if (scenario.roundabout) Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }

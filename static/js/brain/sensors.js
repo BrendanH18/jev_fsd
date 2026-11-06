@@ -1,4 +1,5 @@
 import { observeAmber } from "../sim/amber.js";
+import { reversingVehicle } from "../sim/driveway-reversers.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -341,6 +342,8 @@ export function buildSnapshot(world, executing = null) {
     snap.crossing_guard = crossingGuard(world, frontS);
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     if (world.contraflow?.riders.length) snap.contraflow_cyclist = contraflowCyclist(world, p, frontS, lane, road, executing);
+    // (cars backing out of driveways, with that option on: sim/driveway-reversers.js)
+    if (world.driveways?.enabled) snap.reversing_vehicle = world.driveways.cars.length ? reversingVehicle(world, p, frontS, lane) : null;
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -424,6 +427,8 @@ export function buildSnapshot(world, executing = null) {
   if (snap.traffic_calming) snap.limit = Math.min(snap.limit, calmingSpeed(snap.traffic_calming));
   // (and coming up to a contraflow street it cannot see into yet: sim/contraflow.js)
   if (snap.contraflow_cyclist?.entry_limit_mps != null) snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
+  // (and coming up to a car backing out of a driveway: sim/driveway-reversers.js)
+  if (snap.reversing_vehicle?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.reversing_vehicle.limit_mps);
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -1699,6 +1704,12 @@ export function desiredSpeed(snap) {
     const vc = cf.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(cf.bumper_to_stop_m - 0.5, decel);
     if (vc < v) { v = vc; reasons.push(cf.relation === "oncoming" ? "cyclist coming the other way: no room" : "cyclist riding against the one-way"); }
   }
+  // a car backing out of a driveway into the lane (sim/driveway-reversers.js): stop and give it room
+  const rv = snap.reversing_vehicle;
+  if (rv?.wait) {
+    const vr = rv.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(rv.bumper_to_stop_m - 0.5, decel);
+    if (vr < v) { v = vr; reasons.push("car backing out of a driveway"); }
+  } else if (rv?.limit_mps != null && rv.limit_mps <= v + 0.05) reasons.push("car backing out ahead");
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -1887,6 +1898,7 @@ export function hazardFlags(snap) {
   if (snap.cyclist_pass) f.push("cyclist ahead");
   if (snap.crossing_guard) f.push("crossing guard");
   if (snap.contraflow_cyclist) f.push("contraflow cyclist");
+  if (snap.reversing_vehicle) f.push("reversing vehicle");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
