@@ -50,6 +50,8 @@ import { buildDriveways, syncReverseLamps } from "./render/driveway-reversers.js
 import { reverserNotice } from "./sim/driveway-reversers.js";
 import { buildPotholes, potholeJolt } from "./render/potholes.js";
 import { potholeNotice } from "./sim/potholes.js";
+import { BallView } from "./render/ball-chase.js";
+import { ballNotice } from "./sim/ball-chase.js";
 import { buildCalming, rideOver } from "./render/traffic-calming.js";
 import { guardNotice } from "./sim/crossing-guard.js";
 import { addGuardSign, syncGuardSign } from "./render/crossing-guard.js";
@@ -207,7 +209,7 @@ export async function boot() {
     // and, on one-way streets that allow it, cyclists ride against the traffic, and everyone looks both
     // ways for them (`?contraflow=0` takes them off)
     const contraflow = params.get("contraflow") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -237,6 +239,8 @@ export async function boot() {
   // and spring potholes in the lanes, where the world has them (sim/potholes.js; `?potholes=0` takes them
   // off in a free drive)
   if (world.potholes.enabled) view.scene.add(buildPotholes(world));
+  // and a ball rolling into the street, where the world has one roll out now and then (sim/ball-chase.js)
+  const ballView = world.balls?.enabled ? new BallView(view.scene) : null;
   pxoRendering = world.pxo ? buildPxos(world) : null;
   if (pxoRendering) view.scene.add(pxoRendering.group);
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
@@ -718,6 +722,7 @@ export async function boot() {
   let acc = 0;
   let announcedPothole = null;
   let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null, announcedGlare = null, announcedReversing = null;
+  let announcedBall = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -760,6 +765,7 @@ export async function boot() {
           else if (ev.type === "contraflow_conflict") hud.badge("MET A CONTRAFLOW CYCLIST TOO CLOSE", "alert", 1500);
           else if (ev.type === "fresh_green_conflict") hud.badge("ENTERED AHEAD OF A CAR RUNNING THE RED", "alert", 1500);
           else if (ev.type === "pothole_hit") hud.badge(`HIT A POTHOLE AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
+          else if (ev.type === "ball_warning_ignored") hud.badge("TOO FAST PAST WHERE A BALL ROLLED OUT", "alert", 1500);
           else if (ev.type === "reversing_conflict") hud.badge(ev.reason === "close_pass" ? "SQUEEZED PAST A CAR BACKING OUT" : "DID NOT STOP FOR A CAR BACKING OUT", "alert", 1500);
           else if (ev.type === "passed_crossing_guard") hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
@@ -927,6 +933,10 @@ export async function boot() {
     const potholeLine = potholeNotice(world, autopilot.enabled ? autopilot.snap : null);
     if (potholeLine && potholeLine.key !== announcedPothole) { announcedPothole = potholeLine.key; hud.badge(potholeLine.text, potholeLine.slow ? "safety" : "", 2000); }
     if (!potholeLine) announcedPothole = null;
+    // a ball rolled into the street ahead: a child may follow (sim/ball-chase.js)
+    const ballLine = ballView ? ballNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
+    if (ballLine && ballLine.key !== announcedBall) { announcedBall = ballLine.key; hud.badge(ballLine.text, "safety", 2500); }
+    if (!ballLine) announcedBall = null;
     // a speed hump or the like on the route ahead: the speed to take it at (said again once over it)
     const calmingLine = calmingNotice(world);
     if (calmingLine && calmingLine.key !== announcedCalming) { announcedCalming = calmingLine.key; hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000); }
@@ -977,6 +987,7 @@ export async function boot() {
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
     if (sunGlareView) sunGlareView.update(view.camera, view.atmosphere, egoGlare(world)?.severity ?? 0);
+    ballView?.update(world, view.camera);
     view.render(dt);
     cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
     audio.update(world.ego, world.weather, world.paused || document.hidden, view.mode === "hood");

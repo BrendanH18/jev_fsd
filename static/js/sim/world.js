@@ -45,6 +45,7 @@ import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
 import { DrivewayReversers, auditReversers, reverserHidden } from "./driveway-reversers.js";
 import { Potholes, auditPotholes } from "./potholes.js";
+import { BallChase, auditBalls } from "./ball-chase.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -226,7 +227,9 @@ export class World {
   // room (sim/driveway-reversers.js).
   // `potholes`: spring potholes in the lanes, which everyone eases round in the lane where there is
   // room and otherwise slows for (sim/potholes.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false } = {}) {
+  // `balls`: now and then a ball rolls out from between parked cars ahead, a child runs out after it,
+  // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false } = {}) {
     this.map = map;
     // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
     // fresh red, whether one has committed near the car this drive, and the junction the audit watches
@@ -352,6 +355,11 @@ export class World {
     this.potholes = new Potholes(map, { enabled: potholes, seed });
     this.potholesSeen = false;
     this.potholeCalls = new Map();
+    // a ball rolling out from between parked cars, and a child after it (sim/ball-chase.js): whether
+    // they do, whether one has rolled out near the car this drive, and the audit's calls on each
+    this.balls = new BallChase(this, { enabled: balls, seed });
+    this.ballsSeen = false;
+    this.ballCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -473,6 +481,7 @@ export class World {
     this.runnerCall = null;
     this.drivewayCalls?.clear();
     this.potholeCalls?.clear();
+    this.ballCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -741,6 +750,7 @@ export class World {
     if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
     if (this.driveways.enabled) auditReversers(this);
     if (this.potholes.enabled) auditPotholes(this);
+    if (this.balls?.enabled) auditBalls(this);
     this.auditKerb();
     leftSpace(this);
   }

@@ -18,6 +18,7 @@ import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 import { SIM_OVER_MPS, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
+import { coverAfter } from "../sim/ball-chase.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -197,6 +198,14 @@ export function sampleCandidates(snap, world) {
     if (ph?.room && ph.detour && !shifting && !detour.detour && !passing.detour) {
       out.push({ id: "ease_round_pothole", laneUntil, law: { ...inLane({ kind: "lane", vTarget: target }), detour: ph.detour },
         steer: `ease ${Math.abs(ph.shift_m).toFixed(1)} m ${ph.shift_m < 0 ? "left" : "right"} within the lane, round the pothole, and back`, speed: speedLabel(target, v, limit) });
+    }
+    // A ball rolled into the street ahead (sim/ball-chase.js): slow to the speed from which the car can
+    // stop short of the gap it came from, where it will be by the end of the prediction, ready for a
+    // child running out after it.
+    const ball = snap.ball_in_road;
+    if (ball?.limit_mps != null && ball.gap_m > 0.3) {
+      out.push({ id: "slow_for_ball", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, ball.limit_mps, coverAfter(ball.gap_m, v, HORIZON_S)) }),
+        steer: "hold lane", speed: "slow down, ready to stop for a child running out after the ball" });
     }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
@@ -451,12 +460,16 @@ export function simulateAll(candidates, snap, world) {
   // wheel into one faster than its safe speed
   const egoC = Math.cos(world.ego.psi), egoS = Math.sin(world.ego.psi), wb = world.ego.spec.wheelbase;
   const holes = world.potholes?.list.length ? world.potholes.near(world.ego.x, world.ego.y, 60).filter((h) => (h.x - world.ego.x) * egoC + (h.y - world.ego.y) * egoS - wb > -h.a + 0.05) : null;
+  // a ball rolled into the street (sim/ball-chase.js): the gap's line, which the car passes no faster
+  // than a crawl while the warning stands
+  const ballLine = snap.ball_in_road?.limit_mps != null ? snap.ball_in_road.stop_s_route : null;
+  const ballCreep = snap.ball_in_road?.creep_mps ?? 0;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, ballFast = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -501,6 +514,8 @@ export function simulateAll(candidates, snap, world) {
         if (runnerStop !== null && s + FRONT > runnerStop + 0.2) passesRunner = true;
         // (and a metre past where it stops for a car backing out is still clear of it)
         if (rvStop !== null && s + FRONT > rvStop + 1) rvClose = true;
+        // (and past the gap a ball rolled out of, faster than a crawl)
+        if (ballLine !== null && s + FRONT > ballLine && car.v > ballCreep + 1) ballFast = true;
         // (1.5 m past it, as a short stop overshoots)
         if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         // (1.5 m past where it stops, as a short stop overshoots: into the 2 m it leaves behind the bus)
@@ -624,6 +639,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesRunner && c.law.kind !== "hard_brake") reject = "enters_ahead_of_red_light_runner";
     else if (rvClose && c.law.kind !== "hard_brake") reject = "passes_reversing_vehicle_too_close";
     else if (potholeFast && c.law.kind !== "hard_brake") reject = "hits_pothole_too_fast";
+    else if (ballFast && c.law.kind !== "hard_brake") reject = "passes_ball_gap_too_fast";
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";

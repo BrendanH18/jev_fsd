@@ -80,6 +80,7 @@ Fifty-one hand-built scenarios test the situations real drivers get wrong:
 | **Into the sun** | Calgary, October evening | Westbound into a low sun on 17 Avenue SW: slow to what you can see, and find the signal and the person crossing early |
 | **Reverse lights** | Calgary, afternoon | A car backs out of a driveway between parked cars as you come along: slow down and give it room to finish |
 | **Pothole season** | Montréal, rain | A run of water-filled potholes on Rue Saint-Denis: ease round the ones you can inside your lane, and slow for the one you can't |
+| **Chasing the ball** | Vancouver, afternoon | A ball rolls out from between parked cars on West 7th Avenue: slow right down, because a child is about to run out after it |
 | **Brakes ahead** | Vancouver, rain | The lead car brakes hard on West 6th Avenue: leave room for response and a wet-road stop |
 | **Make room** | Vancouver, afternoon | A moving car merges into your gap on West 4th Avenue: ease off and rebuild space |
 | **Room to stop** | Vancouver, afternoon | Amber appears on West 4th Avenue with room to stop safely: brake smoothly and wait for green |

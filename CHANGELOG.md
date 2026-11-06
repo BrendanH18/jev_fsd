@@ -16,6 +16,21 @@
 - New Lab challenge, **Pothole season** (seed 51042): Rue Saint-Denis in Montréal's Plateau in the
   rain, with two potholes to ease round inside the lane and a wide one to slow for.
 
+- A ball rolls out, then a child chases it, in free drives (`?balls=0` turns it off). Now and
+  then, by day and not in snow, a ball bounces out from between the cars parked along a
+  residential street ahead and rolls across, slowing, bouncing off the far kerb or a parked car,
+  and coming to rest in the road. One to two seconds later a child runs out after it from the
+  same gap, hidden by the parked cars until they are in the road (with hidden hazards on), picks
+  it up and walks back to the kerb. The driven car and traffic that see the ball slow to a speed
+  from which they can stop short of where it came out, and keep to it until the child has come
+  and gone, or eight seconds pass with no child. AI drivers see `ball_in_road`, with the new
+  `slow_for_ball` candidate and the `passes_ball_gap_too_fast` rejection; the HUD says BALL IN
+  THE ROAD · A CHILD MAY FOLLOW. Passing the gap faster than the car could stop from, after time
+  to react, counts as `ball_warnings_ignored` and fails a Lab drive, reported only once a ball has
+  rolled out near the car.
+- New Lab challenge, **Chasing the ball** (seed 52042): West 7th Avenue in Kitsilano, a ball
+  rolling out in plain view from between the parked cars, and a child after it.
+
 - CI runs on Namespace runners. Each Node check has a six-minute limit and every job a
   `timeout-minutes`, so a runaway check fails fast; the Node loop runs every check and lists the
   ones that failed or timed out. uv's cache and Playwright's Chromium download are cached, a new

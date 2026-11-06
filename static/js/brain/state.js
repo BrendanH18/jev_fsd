@@ -164,6 +164,11 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(h.room ? { room_in_lane: true, ...(h.shift_m ? { ease_to_m: r1(h.shift_m) } : { between_the_wheels: true }) } : { room_in_lane: false, drive_over_at: r1(h.speed_mps) }),
       ...(snap.potholes_ahead.length > 1 ? { more_ahead: snap.potholes_ahead.length - 1 } : {}) };
   }
+  if (snap.ball_in_road) {
+    const b = snap.ball_in_road;
+    state.ball_in_road = { rolled_out_from: `between the parked cars on the ${b.side}`, gap_m: r1(b.gap_m), ball: b.ball, child: BALL_CHILD[b.child],
+      ...(b.limit_mps != null ? { warning: true, slow_to: r1(b.limit_mps), ...(b.cover_left_s != null ? { warning_lifts_in_s: r1(b.cover_left_s) } : {}) } : { warning: false }) };
+  }
   if (snap.emergency) {
     const e = snap.emergency;
     state.emergency_vehicle = { id: e.id, kind: e.kind, siren: true, coming_from: EV_FROM[e.from], distance_m: r1(e.distance_m), reaches_car_in_s: r1(e.eta_s), seen: e.seen,
@@ -286,6 +291,7 @@ function outcomeLabel(c, snap) {
   if (c.id === "stop_for_oncoming" && snap.intersection?.oncoming) return `clear, waits ${Math.max(0, r1(snap.intersection.oncoming.bumper_to_yield_m - c.sim.progress_m))} m short of oncoming traffic's path`;
   if (c.id === "yield_to_contraflow_cyclist" && snap.contraflow_cyclist?.wait) return `clear, waits ${Math.max(0, r1(snap.contraflow_cyclist.bumper_to_stop_m - c.sim.progress_m))} m ahead for the cyclist riding against the one-way`;
   if (c.id === "wait_for_runner" && snap.red_light_runner) return `clear, waits ${Math.max(0, r1(snap.red_light_runner.bumper_to_stop_m - c.sim.progress_m))} m ahead, at the line, for the car running the red`;
+  if (c.id === "slow_for_ball" && snap.ball_in_road) return `clear, slows to ${r1(c.sim.end_speed)} m/s, able to stop short of where the ball came out`;
   if (c.id === "yield_to_reversing" && snap.reversing_vehicle) return snap.reversing_vehicle.wait ? `clear, stops ${Math.max(0, r1(snap.reversing_vehicle.bumper_to_stop_m - c.sim.progress_m))} m short of where it waits for the car backing out` : "clear, slows for the car backing out";
   if (c.id === "stop_for_cyclist" && snap.right_hook) return `clear, waits ${Math.max(0, r1(snap.right_hook.bumper_to_yield_m - c.sim.progress_m))} m short of the cyclist's path`;
   if (c.id === "stop_at_crosswalk" && snap.crosswalk_stop) return `clear, stops ${Math.max(0, r1(snap.crosswalk_stop.bumper_to_stop_m - c.sim.progress_m))} m short of the crosswalk, beside the stopped ${snap.crosswalk_stop.kind}`;
@@ -392,6 +398,7 @@ export function situationClauses(snap) {
   if (snap.red_light_runner) out.push(runnerClause(snap.red_light_runner));
   if (snap.reversing_vehicle) out.push(reversingClause(snap.reversing_vehicle));
   if (snap.pothole) out.push(potholeClause(snap.pothole, snap.potholes_ahead));
+  if (snap.ball_in_road) out.push(ballClause(snap.ball_in_road));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));
   if (snap.bus) {
     const b = snap.bus, w = Math.max(0, Math.round(b.bumper_to_stop_m));
@@ -509,6 +516,17 @@ function reversingClause(r) {
   const lead = `Car \`${r.id}\` ahead, ${Math.round(r.gap_m)} m from where its way meets the car's, is ${REVERSING_PHASE[r.phase]} from a driveway on the ${r.side}${r.reverse_lights ? ", its reverse lights on" : ""}.`;
   if (r.wait) return `${lead} It is coming into the car's lane: give it room to finish. ${w < 2 ? "Hold still until it has driven off." : `Slow down and stop ${w} m ahead (\`yield_to_reversing\`), and stay stopped until it has driven off.`} Never squeeze past behind it.`;
   return `${lead} It may back out into the car's lane at any moment: slow to ${r1(r.limit_mps)} m/s, ready to stop (\`car.target_speed\` already does), and pass it no closer than ${r.min_pass_m} m.`;
+}
+
+// Who models are told has come after a ball that rolled into the street (sim/ball-chase.js).
+const BALL_CHILD = { not_seen: "not seen yet: may be hidden behind the parked cars", in_road: "in the road after the ball", clear: "back at the kerb" };
+
+// A ball rolled into the street ahead from between parked cars (sim/ball-chase.js).
+function ballClause(b) {
+  const lead = `A ball has rolled into the street from between the parked cars on the ${b.side}, ${Math.max(0, Math.round(b.gap_m))} m ahead.`;
+  if (b.limit_mps == null) return b.child === "clear" ? `${lead} The child who ran out after it is back at the kerb; drive on with care.` : `${lead} The car is past where it came out.`;
+  if (b.child === "in_road") return `${lead} A child has run out after it and is in the road: stop for them (\`pedestrian\`), and keep to ${r1(b.limit_mps)} m/s or less (\`car.target_speed\` already does) until they are back at the kerb.`;
+  return `${lead} A child may run out after it at any moment, hidden by the parked cars until they are in the road. Choose \`slow_for_ball\` while this warning stands: slow to ${r1(b.limit_mps)} m/s or less (\`car.target_speed\` already does), the speed from which the car can stop short of where the ball came out, and keep to it until the child has come and gone back to the kerb${b.cover_left_s != null ? `, or ${Math.round(b.cover_left_s)} s more pass with no child` : ""}.`;
 }
 
 // How a contraflow cyclist (sim/contraflow.js) meets the car's way, for models.

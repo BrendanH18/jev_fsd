@@ -9,6 +9,7 @@ import { freshGreenScenario, installFreshGreen, stepFreshGreen } from "./fresh-g
 import { sunGlareScenario, installSunGlare } from "./sun-glare-challenge.js";
 import { drivewayScenario, placeReverser } from "./driveway-challenge.js";
 import { potholeScenario, installPotholes } from "./pothole-challenge.js";
+import { ballScenario, placeBall } from "./ball-chase-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -138,6 +139,8 @@ export const CHALLENGES = [
     description: "Cars are parked along both sides of 13 Avenue SW, a residential street in the Beltline with one lane each way. Between them, a car is about to back out of a driveway on your right as you come along.", lesson: "Watch driveways for reversing lights. Slow down and give a car backing out room to finish; never try to squeeze past behind it." },
   { id: "pothole-season", title: "Pothole season", map: "montreal", weather: "rain", time: "afternoon", seed: 51042, icon: "◍", difficulty: "Control", hazard: "potholes", potholes: true, street: "Rue Saint-Denis",
     description: "Spring on Rue Saint-Denis, in the Plateau: the frost is coming out of the ground and the rain has filled a run of potholes in your lane. Some you can ease round without leaving the lane; one wide one you can't.", lesson: "Look well ahead for potholes, especially when they are full of water and look like any puddle. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one." },
+  { id: "chasing-the-ball", title: "Chasing the ball", map: "kitsilano", weather: "dry", time: "afternoon", seed: 52042, icon: "●", difficulty: "Anticipation", hazard: "ball", balls: true, hidden: true, street: "West 7th Avenue",
+    description: "A sunny afternoon on West 7th Avenue in Kitsilano, a residential street lined with parked cars, the limit 50 km/h. Ahead, a ball bounces out from between the parked cars on your right and rolls across the street.", lesson: "A ball rolling into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb. Driver's handbooks across Canada say the same." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1039,6 +1042,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "sun-glare") return sunGlareScenario(map, challenge);
   if (challenge.hazard === "reversing") return drivewayScenario(map, challenge);
   if (challenge.hazard === "potholes") return potholeScenario(map, challenge);
+  if (challenge.hazard === "ball") return ballScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1321,6 +1325,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.crossingGuard) Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));
   if (scenario.contraflow) Object.assign(world.challenge, placeContraflowRider(world, scenario.contraflow));
   if (scenario.reverser) Object.assign(world.challenge, placeReverser(world, scenario.reverser, challenge.seed));
+  if (scenario.ball) Object.assign(world.challenge, placeBall(world, scenario.ball, challenge.seed));
   if (scenario.roundabout) Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }

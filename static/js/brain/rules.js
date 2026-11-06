@@ -79,6 +79,9 @@ export class RulesBrain {
       // easing round a pothole inside the lane, where there is room, rather than driving over it
       // (sim/potholes.js)
       if (c.id === "ease_round_pothole" && snap.pothole?.room) cost -= 1.5;
+      // (a ball rolled into the street: slowing, ready for a child running out after it, sim/ball-chase.js;
+      // once someone is crossing ahead, stopping for them comes first)
+      if (c.id === "slow_for_ball" && !snap.pedestrian) cost -= 4;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;
