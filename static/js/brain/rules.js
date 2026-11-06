@@ -37,6 +37,8 @@ export class RulesBrain {
     if (snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 1.5) stop = true;
     // (a car running the red across the car's way as its light is green: sim/red-light-runner.js)
     if (snap.red_light_runner?.wait && snap.red_light_runner.bumper_to_stop_m < 1.5) stop = true;
+    // (a car backing out of a driveway into the lane, at the point the car stops for it: sim/driveway-reversers.js)
+    if (snap.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 1.5) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 1.5) stop = true;
     if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;
@@ -73,6 +75,7 @@ export class RulesBrain {
       if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist" || c.id === "stop_to_turn_round" || c.id === "yield_to_bus" || c.id === "stop_at_crosswalk" || c.id === "stop_for_school_bus" || c.id === "stop_for_streetcar" || c.id === "stop_before_tracks" || c.id === "wait_short_of_junction" || c.id === "stop_for_flagger" || c.id === "stop_for_crossing_guard" || c.id === "wait_behind_van" || c.id === "wait_to_merge" || c.id === "let_merge_in") cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       if (c.id === "wait_for_runner") cost -= 12;
+      if (c.id === "yield_to_reversing" && snap.reversing_vehicle?.wait) cost -= 6;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;

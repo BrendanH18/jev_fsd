@@ -74,7 +74,7 @@ export class PerceptionView {
     const reasons = { following_distance: "Leaves too little braking room", collision: "Predicted collision", visibility_stopping_distance: "Beyond stopping sight", passes_cyclist_too_close: "Too close to cyclist", passes_cyclist_without_room: "Cyclist: less than the passing distance", crosses_into_oncoming_traffic: "Oncoming traffic",
       off_road: "Leaves the road", runs_red: "Red light", fails_to_yield: "Must yield", runs_stop: "Missed stop", fails_to_yield_to_pedestrian: "Person crossing",
       fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", fails_to_yield_to_bus: "Bus pulling out", passes_car_stopped_at_crosswalk: "Car stopped at crosswalk", passes_stopped_school_bus: "School bus stopped", passes_streetcar_doors: "Streetcar doors open", crosses_in_front_of_train: "Train coming", no_room_past_tracks: "No room past the tracks", blocks_junction: "No room past the junction", runs_flagger_stop: "Flagger showing STOP", passes_crossing_guard: "Crossing guard: STOP", fails_to_yield_to_contraflow_cyclist: "Cyclist against the one-way", passes_contraflow_cyclist_too_close: "Cyclist coming: less than the passing distance", enters_ahead_of_red_light_runner: "Car running the red", no_room_to_go_round: "Too close to pull out round the van", passes_plow_on_right: "Snow plow: never pass on the right", enters_unseen_junction: "Cannot see yet",
-      passes_turn_round_point: "Turns round here" };
+      passes_turn_round_point: "Turns round here", passes_reversing_vehicle_too_close: "Car backing out" };
     const e = snap.emergency;
     const emergency = e ? `${e.kind[0].toUpperCase()}${e.kind.slice(1)} ${e.from === "behind" ? "behind" : e.from === "ahead" ? "ahead" : `from the ${e.from}`}, ${Math.round(e.distance_m)} m${e.seen ? "" : ", heard not seen"}: ${e.lead ? "stuck behind the car, driving on ahead" : `pull over ${e.offset_m.toFixed(1)} m, stop in ${Math.max(0, Math.round(e.bumper_to_stop_m))} m${e.clearing ? " past the junction" : ""}`}` : null;
     const b = snap.bus;
@@ -124,9 +124,12 @@ export class PerceptionView {
     // a car running the red across the car's way as its light is green (sim/red-light-runner.js)
     const rr = snap.red_light_runner;
     const runner = rr ? `Car from the ${rr.from} ${rr.relation === "in_junction" ? "running the red in the junction" : "cannot stop for its red"}: ${rr.wait ? "wait at the line" : "too close to stop, keep clear"}` : null;
+    // a car backing out of a driveway (sim/driveway-reversers.js)
+    const rv = snap.reversing_vehicle;
+    const reversing = rv ? `Car backing out ${Math.round(rv.gap_m)} m ahead: ${rv.wait ? `give it room${rv.bumper_to_stop_m > 0.5 ? `, stop in ${Math.round(rv.bumper_to_stop_m)} m` : ""}` : `slow to ${Math.round(rv.limit_mps * 3.6)} km/h`}` : null;
     const f = snap.following;
     const following = f?.policy ? `Following gap ${Math.round(f.gap_m)} m; target ${Math.round(f.policy.target_gap_m)} m for speed and grip` : null;
-    return { seen, hidden, following, runner, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, guard, contraflow, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    return { seen, hidden, following, runner, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, guard, contraflow, reversing, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

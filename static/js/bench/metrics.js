@@ -104,6 +104,8 @@ export class DriveMetrics {
       ...(world.contraflowSeen ? { contraflow_conflicts: v.contraflow_conflicts || 0 } : {}),
       // (only for a drive a red-light runner committed near the car in: sim/red-light-runner.js)
       ...(world.redRunnersSeen ? { fresh_green_conflicts: v.fresh_green_conflicts || 0 } : {}),
+      // (only for a drive a car backed out of a driveway near the car in: sim/driveway-reversers.js)
+      ...(world.drivewaysSeen ? { reversing_conflicts: v.reversing_conflicts || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -158,6 +160,7 @@ export function failures(m) {
   if (m.guard_violations) f.push("drove past a crossing guard's stop sign");
   if (m.contraflow_conflicts) f.push("cut off or squeezed a contraflow cyclist");
   if (m.fresh_green_conflicts) f.push("entered on green ahead of a car running the red");
+  if (m.reversing_conflicts) f.push("squeezed past or failed to stop for a car backing out");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

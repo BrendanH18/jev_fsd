@@ -21,6 +21,24 @@
   18:15 on a clear 8 October, with the sun just above the avenue ahead, two signals and someone
   crossing mid-block.
 
+- Cars back out of driveways in free drives (`?driveways=0` disables them). A new layer beside
+  each pack, `<key>.driveways.v1.json` (`jev/osm/driveways.py`, `scripts/fetch_map.py ...
+  --driveways`), records where each mapped driveway meets a street, on which side, and which way
+  it points: 554 driveways across the twelve maps, 135 in Ottawa and 128 in Calgary. The street
+  packs are unchanged. Now and then, from its own random stream, a car parked nose-in in a
+  driveway ahead on the car's route backs out: reverse lamps on, it creeps across the sidewalk,
+  stops to look, backs into the near lane on the shared car model, then drives off with the
+  traffic. It waits for anything it can see or hear coming close, but parked cars hide it from the
+  street and the street from it. Traffic and the driven car slow while one backs out toward their
+  lane and stop to give it room once it comes into the lane; people on the sidewalk wait for it.
+  Sensing reports `reversing_vehicle`, with the new `yield_to_reversing` candidate and the
+  `passes_reversing_vehicle_too_close` rejection. Squeezing past one, or not stopping for one in
+  the lane, counts as `reversing_conflicts`, reported only once a car has backed out near the
+  driven car. Driveway aprons are drawn across the sidewalk, and the HUD says when a car is
+  backing out ahead. With the option on, nobody parks across a driveway.
+- New Lab challenge, **Reverse lights** (seed 49042): 13 Avenue SW in Calgary's Beltline, a car
+  backing out between parked cars as you come along.
+
 - Leave more following room for speed, poor grip and braking response. Free drives share
   gap targets across AI drivers, traffic and coaching; AI eyes explains actual and desired
   bumper gaps. A new close leader gets five seconds to rebuild space before following

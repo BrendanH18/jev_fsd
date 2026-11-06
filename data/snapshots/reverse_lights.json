@@ -1,0 +1,265 @@
+{
+  "name": "reverse_lights",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 2.8,
+      "limit": 9,
+      "speed_vs_limit": "under",
+      "target_speed": 2,
+      "target_reason": "parked cars hide the sidewalk, car ahead",
+      "speed_vs_target": "above target"
+    },
+    "visibility": {
+      "range_m": 80,
+      "clear_path_m": 51.3,
+      "safe_speed_mps": 12.4,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "roadside": [
+      {
+        "id": "challenge_parked_6",
+        "kind": "parked car",
+        "right": 2.6,
+        "ahead": -4.9,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_21",
+        "kind": "parked car",
+        "right": -5.8,
+        "ahead": -2.5,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_7",
+        "kind": "parked car",
+        "right": 2.6,
+        "ahead": 1,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_20",
+        "kind": "parked car",
+        "right": -5.8,
+        "ahead": 4.5,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_8",
+        "kind": "parked car",
+        "right": 2.6,
+        "ahead": 6.9,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_19",
+        "kind": "parked car",
+        "right": -5.8,
+        "ahead": 10.3,
+        "signal": null
+      }
+    ],
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 51.3,
+      "remaining_m": 51.3,
+      "destination": {
+        "right": 0,
+        "ahead": 51.3
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "13 Avenue SW",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0
+    },
+    "following": {
+      "id": "challenge_reversing",
+      "gap_m": 15.2,
+      "gap": "comfortable",
+      "speed": -1.5,
+      "closing_mps": 4.3
+    },
+    "reversing_vehicle": {
+      "id": "challenge_reversing",
+      "backing_out_of": "a driveway on the right",
+      "reverse_lights": true,
+      "now": "backing into the car's lane",
+      "gap_m": 9.4,
+      "yield": true,
+      "wait_in_m": 6.9,
+      "min_passing_distance_m": 1
+    },
+    "blind_spot": {
+      "side": "right",
+      "beside_car": true,
+      "parked_cars_to_m": 47.7,
+      "clearance_m": 0.8,
+      "street": "quiet street",
+      "hides": "the sidewalk: someone may step out from between the parked cars",
+      "stop_within_m": 15,
+      "pass_at": 9
+    },
+    "candidates": [
+      {
+        "id": "yield_to_reversing",
+        "steer": "hold lane",
+        "speed": "stop and give the car backing out room to finish",
+        "end_speed": 0.9,
+        "vs_target": "below target",
+        "max_accel": 0.7,
+        "max_decel": 2.9,
+        "max_lateral_accel": 0,
+        "min_clearance_m": 0.8,
+        "progress_m": 7.6,
+        "lane": "centered",
+        "outcome": "clear, stops 0 m short of where it waits for the car backing out"
+      },
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "slow to 2.0",
+        "end_speed": 2,
+        "vs_target": "at target",
+        "max_accel": 0.1,
+        "max_decel": 2.8,
+        "max_lateral_accel": 0,
+        "min_clearance_m": 0.8,
+        "progress_m": 6.1,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_cautious",
+        "steer": "hold lane",
+        "speed": "slow to 1.5",
+        "end_speed": 1.5,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 3.1,
+        "max_lateral_accel": 0,
+        "min_clearance_m": 0.8,
+        "progress_m": 4.9,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 4,
+        "max_lateral_accel": 0,
+        "min_clearance_m": 0.8,
+        "progress_m": 1.5,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "slow to 2.0",
+        "end_speed": 2,
+        "vs_target": "at target",
+        "max_accel": 0.1,
+        "max_decel": 2.8,
+        "max_lateral_accel": 0.5,
+        "min_clearance_m": 0.8,
+        "progress_m": 6.1,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_1_hold",
+        "steer": "shift 1 m left",
+        "speed": "keep 2.8",
+        "end_speed": 2.8,
+        "vs_target": "above target",
+        "max_accel": 0.5,
+        "max_decel": 2.4,
+        "max_lateral_accel": 0.7,
+        "min_clearance_m": 0.9,
+        "progress_m": 7.9,
+        "lane": "far left",
+        "outcome": "clear, but closes to 3.1 m of a car"
+      },
+      {
+        "id": "left_1_target",
+        "steer": "shift 1 m left",
+        "speed": "slow to 2.0",
+        "end_speed": 2,
+        "vs_target": "at target",
+        "max_accel": 0.1,
+        "max_decel": 2.8,
+        "max_lateral_accel": 0.7,
+        "min_clearance_m": 0.9,
+        "progress_m": 6.1,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 6.8,
+        "max_lateral_accel": 0,
+        "min_clearance_m": 0.8,
+        "progress_m": 0.8,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ],
+    "rejected": {
+      "collision": 6,
+      "passes_reversing_vehicle_too_close": 2
+    }
+  },
+  "questions": {
+    "motion": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Car `challenge_reversing` ahead, 9 m from where its way meets the car's, is backing into the car's lane from a driveway on the right, its reverse lights on. It is coming into the car's lane: give it room to finish. Slow down and stop 7 m ahead (`yield_to_reversing`), and stay stopped until it has driven off. Never squeeze past behind it. Cars parked along the right beside the car, 0.8 m from the car's side, hide the sidewalk on this quiet street: someone could step out from between them, unseen until they do. Keep to 32 km/h beside them, a speed from which the car can stop for someone who steps out 15 m ahead (`car.target_speed` already does). Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes. Decide whether the car should keep moving or hold still right now.",
+      "criteria": {
+        "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
+        "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when a car backing out of a driveway is coming into the car's lane and the car has reached the point where it stops for it (`reversing_vehicle.wait_in_m` under 2), when the path directly ahead is blocked, or when the car has reached the destination."
+      }
+    },
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Car `challenge_reversing` ahead, 9 m from where its way meets the car's, is backing into the car's lane from a driveway on the right, its reverse lights on. It is coming into the car's lane: give it room to finish. Slow down and stop 7 m ahead (`yield_to_reversing`), and stay stopped until it has driven off. Never squeeze past behind it. Cars parked along the right beside the car, 0.8 m from the car's side, hide the sidewalk on this quiet street: someone could step out from between them, unseen until they do. Keep to 32 km/h beside them, a speed from which the car can stop for someone who steps out 15 m ahead (`car.target_speed` already does). Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "yield_to_reversing": "hold lane, stop and give the car backing out room to finish, +7.6 m, clear, stops 0 m short of where it waits for the car backing out",
+        "keep_lane_target": "hold lane, slow to 2.0, +6.1 m, clear",
+        "keep_lane_cautious": "hold lane, slow to 1.5, +4.9 m, clear",
+        "keep_lane_stop": "hold lane, stop, +1.5 m, clear",
+        "left_0.5_target": "shift 0.5 m left, slow to 2.0, +6.1 m, clear",
+        "left_1_hold": "shift 1 m left, keep 2.8, +7.9 m, clear, but closes to 3.1 m of a car",
+        "left_1_target": "shift 1 m left, slow to 2.0, +6.1 m, clear",
+        "hard_brake": "hold lane, brake hard, +0.8 m, clear"
+      }
+    }
+  },
+  "local": {},
+  "expect": {
+    "motion": "drive",
+    "vector_in": [
+      "yield_to_reversing",
+      "keep_lane_target",
+      "keep_lane_cautious",
+      "keep_lane_stop",
+      "left_0.5_target",
+      "left_1_target",
+      "hard_brake"
+    ]
+  }
+}

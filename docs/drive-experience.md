@@ -187,3 +187,14 @@ the junction. Entering on green ahead of one, after you could have stopped for i
 points, caps the total at 69 and is recorded as `fresh_green_conflicts` once a runner has committed
 near the car. A collision with a runner is still a collision. Use `?redrunners=0` to disable
 runners in free drives. See [Fresh green](drive-lab.md#fresh-green).
+
+
+### Cars backing out of driveways
+
+In free drives (and the **Reverse lights** lesson) a car now and then backs out of a driveway ahead,
+its white reverse lamps on; driveways are drawn as concrete aprons across the sidewalk. The HUD says
+CAR BACKING OUT AHEAD while it backs out toward your lane, and CAR BACKING OUT · GIVE IT ROOM once it
+is coming into it. Slow down for it and stop until it has driven off. Squeezing past one closer than
+1 m, or not stopping for one already in the lane, counts as `reversing_conflicts`: 20 safety points
+each, a replay marker and a coaching tip, reported only once a car has backed out near you. Use
+`?driveways=0` to turn them off.
