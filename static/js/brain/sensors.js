@@ -4,7 +4,7 @@ import { reversingVehicle } from "../sim/driveway-reversers.js";
 import { potholeLimit, potholesAhead } from "../sim/potholes.js";
 import { ballInRoad } from "../sim/ball-chase.js";
 import { geeseCrossing } from "../sim/geese.js";
-import { iceLimit, iceSensing } from "../sim/black-ice.js";
+import { iceLimit, iceSensing, iceTurn } from "../sim/black-ice.js";
 import { snowbankAhead } from "../sim/snowbanks.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
@@ -477,12 +477,6 @@ export function buildSnapshot(world, executing = null) {
   if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
   // (and coming up to geese by the road, or crossing it: sim/geese.js)
   if (snap.geese_crossing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.geese_crossing.limit_mps);
-  // (and coming up to black ice it has seen, or a bridge in icy weather, and across it: sim/black-ice.js;
-  // the speed is the target itself, so the weather does not take it off again)
-  if ((snap.black_ice_ahead || snap.ice_caution?.slow) && snap.routeProj) {
-    const cap = iceLimit(snap, snap.routeProj.s);
-    if (cap < Infinity) { snap.ice_limit_mps = cap; snap.limit = Math.min(snap.limit, cap / Math.min(1, weather.speed)); }
-  }
   // (and through a narrowed stretch between snowbanks, and up to a corner a snowbank hides: sim/snowbanks.js)
   if (snap.snowbank?.narrowing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.snowbank.narrowing.limit_mps);
   if (snap.snowbank?.corner) snap.limit = Math.min(snap.limit, snap.snowbank.corner.limit_mps);
@@ -494,6 +488,13 @@ export function buildSnapshot(world, executing = null) {
   if (snap.blind_spot) snap.limit = Math.min(snap.limit, blindApproach(snap.blind_spot.limit_mps, snap.blind_spot.from_m));
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.parking = parkingState(world, snap, executing);
+  // (and coming up to black ice it has seen, or a bridge in icy weather, and across it, ready to stop
+  // gently on it for what is ahead, the parking space included: sim/black-ice.js; the speed is the target
+  // itself, so the weather does not take it off again)
+  if ((snap.black_ice_ahead || snap.ice_caution?.slow) && snap.routeProj) {
+    const cap = iceLimit(snap, snap.routeProj.s);
+    if (cap < Infinity) { snap.ice_limit_mps = cap; snap.limit = Math.min(snap.limit, cap / Math.min(1, weather.speed)); }
+  }
   if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
@@ -653,7 +654,7 @@ function oncomingYield(world, c, frontS, look = true) {
   const centre = route.pointAt(c.sJunction);
   const toClear = c.sJunction + CLEAR_PAST_M + ego.spec.length - frontS;
   if (toClear <= 0) return null;
-  const need = clearTime(ego.v, toClear) + (ego.v > 1.5 && frontS > c.sRoute ? GAP_KEEP_S : GAP_MARGIN_S);
+  const need = clearTime(ego.v, toClear, TURN_MPS, world, frontS) + (ego.v > 1.5 && frontS > c.sRoute ? GAP_KEEP_S : GAP_MARGIN_S);
   const facing = route.headingAt(c.sRoute) + Math.PI, down = route.headingAt(Math.min(route.length, c.sJunction + 15)) + Math.PI;
   let best = null;
   for (const n of world.npcs) {
@@ -1394,10 +1395,14 @@ function allWayPriority(world, control, visible) {
 
 // Seconds for the car to cover `distance` taking a turn: speeding up from `v` at TURN_ACCEL to at
 // most `vMax` (holding its speed if already faster).
-function clearTime(v, distance, vMax = TURN_MPS) {
+function clearTime(v, distance, vMax = TURN_MPS, world = null, frontS = 0) {
+  // (over black ice it has seen, as slowly and gently as the ice lets it go: sim/black-ice.js iceTurn)
+  let accel = TURN_ACCEL;
+  const ice = world?.ice?.list.length ? iceTurn(world, frontS, distance) : null;
+  if (ice) { vMax = Math.max(0.5, Math.min(vMax, ice.mps)); accel = ice.accel; }
   const v0 = Math.min(Math.max(0, v), vMax);
-  const t1 = (vMax - v0) / TURN_ACCEL, d1 = (v0 + vMax) / 2 * t1;
-  return d1 >= distance ? (Math.sqrt(v0 * v0 + 2 * TURN_ACCEL * distance) - v0) / TURN_ACCEL : t1 + (distance - d1) / vMax;
+  const t1 = (vMax - v0) / accel, d1 = (v0 + vMax) / 2 * t1;
+  return d1 >= distance ? (Math.sqrt(v0 * v0 + 2 * accel * distance) - v0) / accel : t1 + (distance - d1) / vMax;
 }
 
 // Seconds until a vehicle covers `distance`: at its speed, or, while it speeds up, accelerating as it
@@ -1428,7 +1433,7 @@ function turnOnRed(world, c, inter, frontS, visible, held = false) {
   const sCentre = c.sJunction ?? c.sRoute + 8;
   const exit = route.headingAt(Math.min(route.length, sCentre + 15)), inward = route.headingAt(c.sRoute);
   const fromCrossStreet = (h) => Math.abs(wrap(h - exit)) <= RTOR_CONE || map.classifyTurn(wrap(h - inward)) === (c.turn === "left" ? "left" : "right");
-  const need = clearTime(ego.v, Math.max(0, sCentre - frontS) + ego.spec.length) + RTOR_MARGIN_S;
+  const need = clearTime(ego.v, Math.max(0, sCentre - frontS) + ego.spec.length, TURN_MPS, world, frontS) + RTOR_MARGIN_S;
   out.need_s = need;
   // (an advance green opposite sends protected left turns into the street the car turns into)
   if (held && !entered) { out.wait_for = { kind: "advance" }; return out; }
@@ -1511,7 +1516,7 @@ function giveWayAt(world, c, frontS) {
   if (!centre || frontS > peekS + 0.5) return out;
   const turning = c.turn === "left" || c.turn === "right" || c.turn === "uturn";
   const vMax = turning ? TURN_MPS : Math.max(TURN_MPS, (edge.limit || 11.2) * weather.speed);
-  const need = clearTime(ego.v, Math.max(0, sCentre + half - frontS) + ego.spec.length, vMax) + (ego.v > 1.5 ? GIVE_WAY_MARGIN_S : GIVE_WAY_REST_S);
+  const need = clearTime(ego.v, Math.max(0, sCentre + half - frontS) + ego.spec.length, vMax, world, frontS) + (ego.v > 1.5 ? GIVE_WAY_MARGIN_S : GIVE_WAY_REST_S);
   out.need_s = need;
   const inward = route.headingAt(c.sRoute), exit = route.headingAt(Math.min(route.length, sCentre + 15));
   for (const n of world.npcs) {

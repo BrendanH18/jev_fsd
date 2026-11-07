@@ -81,6 +81,19 @@ const NEAR_AHEAD_M = 40;
 const RAIL = new Set(["streetcar", "train"]);
 // The days of the year (1 November, 31 March, a common year) between which a night can freeze.
 const COLD_DAYS = [305, 90];
+// On black ice it has seen (a lane law with `ice`, sim/controller.js), the driver only eases the pedals
+// and the wheel: no more than GENTLE_SHARE of the ice's grip either way (under the audit's HARD_SHARE
+// and the forward sims' SIM_HARD_SHARE), and the wheel turned no faster than ICE_STEER_RATE (rad/s: a
+// quick turn of the wheel slides the front tyres past their small sliding angle on ice before the car
+// can yaw). It starts ICE_LEAD_S of travel before the front wheels reach the ice, for the pedals' lag.
+export const GENTLE_SHARE = 0.5, ICE_STEER_RATE = 0.15, ICE_LEAD_S = 0.6;
+// The car crosses a patch in a bend no faster than keeps its sideways acceleration within LAT_SHARE of
+// the ice's grip.
+export const LAT_SHARE = 0.4;
+// On or coming up to black ice it has seen, the car keeps to a speed from which it can stop at
+// GENTLE_SHARE of the ice's grip for the car ahead (ICE_GAP_M short of it), the line ahead and the
+// destination.
+export const ICE_GAP_M = 4, STOP_PLAN_SHARE = 0.7;
 
 // Whether the weather and the time of day (`clock.hour`) favour black ice: { kind, text }, or null. Snow
 // at any hour (what melts refreezes); freezing fog by night and in the morning; rain on a road cooling
@@ -103,6 +116,24 @@ export const safeSpeed = (p) => Math.sqrt(2 * BRAKE_SHARE * p.mu * G * STOP_M);
 export const planSpeed = (p) => safeSpeed(p) * PLAN_SHARE;
 // On a patch at `v`, the speed to keep to for now: toward `mps`, by no more than EASE_MPS.
 export const easeToward = (mps, v) => v > mps ? Math.max(mps, v - EASE_MPS) : Math.min(mps, v + EASE_MPS);
+// The driver's inputs on black ice it has seen (sim/controller.js, for a lane law with `ice`): `steer`
+// and `accel` as asked, or eased while an axle is on a patch, or the front wheels will be within
+// ICE_LEAD_S of travel: the pedals to GENTLE_SHARE of the ice's grip, the wheel at ICE_STEER_RATE.
+export function gentleOnIce(vehicle, steer, accel, dt) {
+  const at = ROAD.gripAt, P = vehicle.spec, c = Math.cos(vehicle.psi), s = Math.sin(vehicle.psi), wb = P.wheelbase;
+  const lead = wb + Math.max(0, vehicle.v) * ICE_LEAD_S;
+  const on = Math.min(at(vehicle.x, vehicle.y, P) ?? Infinity, at(vehicle.x + c * wb, vehicle.y + s * wb, P) ?? Infinity);
+  // (still on the dry road, only speeding up is eased: braking there before the ice is what it is for)
+  const mu = on < ROAD.mu ? on : at(vehicle.x + c * lead, vehicle.y + s * lead, P) ?? Infinity;
+  if (!(mu < ROAD.mu)) return { steer, accel };
+  const lim = GENTLE_SHARE * mu * G, turn = ICE_STEER_RATE * dt;
+  return { steer: vehicle.delta + Math.max(-turn, Math.min(turn, steer - vehicle.delta)), accel: Math.max(on < ROAD.mu ? -lim : -Infinity, Math.min(lim, accel)) };
+}
+// The gentlest grip among the seen patches (`ahead`, sensing's black_ice_ahead), for the stopping caps.
+const gentleDecel = (ahead) => GENTLE_SHARE * Math.min(...ahead.map((a) => a.mu)) * G;
+// The deceleration a stop is planned at on or coming up to black ice it has seen (brain/candidates.js:
+// every lane manoeuvre that stops plans to stop as gently as the pedals are eased on the ice).
+export const iceStopDecel = (ahead) => STOP_PLAN_SHARE * gentleDecel(ahead);
 // How far ahead the driven car sees a patch (`world.visibility`: night, and the sight range).
 export function seeRange(world) {
   const night = (world.visibility?.night ?? 0) > 0.5;
@@ -327,9 +358,15 @@ export function iceSensing(world, p, frontS) {
     if (m.to < s - 0.3) continue;
     const startsIn = m.from - frontS, on = s + wb >= m.from - 0.2;
     if (!on && startsIn > see) break;
-    const pa = m.patch, plan = planSpeed(pa);
+    // (no faster than its sideways grip allows round a bend on it: LAT_SHARE)
+    const pa = m.patch, plan = Math.min(planSpeed(pa), bendSpeed(route, m.from - wb, m.to, pa.mu));
+    // (on it, the car only eases toward its speed; slower than that, coming up to it, it speeds up no
+    // further than that, and only gently once its front wheels are about to reach it: so it never
+    // reaches the ice still accelerating, or has to brake on it for having sped up)
+    const from = m.from - wb - EARLY_M;
+    const slow = on ? { from, mps: easeToward(plan, v) } : v < plan ? { from: Math.min(from, s), mps: s >= from ? Math.min(plan, v + EASE_MPS) : plan } : { from, mps: plan };
     ahead.push({ id: pa.id, kind: pa.kind, name: pa.name, s_from: m.from, s_to: m.to, starts_in_m: startsIn, ends_in_m: m.to - frontS, length_m: Math.round((m.to - m.from) * 10) / 10,
-      mu: pa.mu, safe_mps: safeSpeed(pa), speed_mps: plan, on_ice: on, slow: { from: m.from - wb - EARLY_M, to: m.to + 0.5, mps: on ? easeToward(plan, v) : plan } });
+      mu: pa.mu, safe_mps: safeSpeed(pa), speed_mps: plan, on_ice: on, slow: { from: slow.from, to: m.to + 0.5, mps: slow.mps } });
   }
   let caution = null;
   if (ice.conditions) {
@@ -342,13 +379,65 @@ export function iceSensing(world, p, frontS) {
   return { black_ice: ahead[0] || null, black_ice_ahead: ahead.length ? ahead : null, ice_caution: caution };
 }
 
+// Crossing a junction over black ice it has seen (brain/sensors.js clearTime, for the gaps it waits for
+// in traffic: oncoming traffic turning left, traffic it gives way to): { mps, accel } it goes through at
+// no faster than, and speeds up at, over the route from its front bumper (`frontS`) `distance` on, or
+// null with no seen patch there. A turn across traffic on ice takes longer, so it needs a longer gap.
+export function iceTurn(world, frontS, distance) {
+  const ice = world.ice, route = world.route;
+  if (!ice?.list.length || !route) return null;
+  const see = seeRange(world), wb = world.ego.spec.wheelbase;
+  let out = null;
+  for (const m of marksAlong(ice, route)) {
+    if (m.to < frontS - wb - 2 || m.from > frontS + distance) continue;
+    if (m.from - frontS > see) continue;
+    const pa = m.patch, mps = Math.min(planSpeed(pa), bendSpeed(route, m.from - wb, m.to, pa.mu)), accel = STOP_PLAN_SHARE * GENTLE_SHARE * pa.mu * G;
+    out = out ? { mps: Math.min(out.mps, mps), accel: Math.min(out.accel, accel) } : { mps, accel };
+  }
+  return out;
+}
+
 // The driven car's speed limit (brain/sensors.js `snap.limit`) at route arc length s (rear axle), for
 // the black ice it has seen and the bridge it is coming up to in icy conditions.
+// On or coming up to black ice it has seen, also no faster than it can stop from at STOP_PLAN_SHARE of
+// GENTLE_SHARE of the ice's grip wherever its way to a stop lies over ice: ICE_GAP_M short of the car
+// ahead, short of the line ahead, at the destination, or where it stops to reverse into a parking space.
+// A line or stop it is already too close to stop for even at the audit's HARD_SHARE is left to the rest
+// of the planner (it has committed, or must brake hard: an emergency).
 export function iceLimit(snap, s) {
   let limit = Infinity;
-  for (const a of snap.black_ice_ahead || []) limit = Math.min(limit, slowCap(a.slow, s));
+  const ahead = snap.black_ice_ahead;
+  for (const a of ahead || []) limit = Math.min(limit, slowCap(a.slow, s));
   if (snap.ice_caution?.slow) limit = Math.min(limit, slowCap(snap.ice_caution.slow, s));
+  if (ahead) {
+    const d = gentleDecel(ahead), first = Math.min(...ahead.map((a) => a.starts_in_m)), v = Math.max(0, snap.ego?.v ?? 0);
+    // (planned at STOP_PLAN_SHARE of that, for the speed control's lag behind it)
+    const stopIn = (room, v0 = 0) => Math.sqrt(v0 * v0 + 2 * STOP_PLAN_SHARE * d * Math.max(0, room));
+    // (one it could not stop for even at the audit's HARD_SHARE has been left too late: an emergency)
+    const canStop = (room) => v * v <= 2 * (HARD_SHARE / GENTLE_SHARE) * d * room + 0.25;
+    const f = snap.following;
+    // (the car ahead may brake as hard as the road under it lets it, and stops within vL² / 2aL: the car
+    // keeps room to stop gently behind where it would stop)
+    if (f && f.gap_m - ICE_GAP_M > first) {
+      const vL = Math.max(0, f.speed || 0), lead = f.vehicle, aL = ((lead && ROAD.gripAt?.(lead.x, lead.y, lead.spec)) ?? ROAD.mu) * G;
+      limit = Math.min(limit, stopIn(f.gap_m - ICE_GAP_M + vL * vL / (2 * aL)));
+    }
+    const i = snap.intersection, line = i && !i.entered && i.bumper_to_line_m > 0 ? i.bumper_to_line_m - 1 : null;
+    if (line !== null && line > first && canStop(line)) limit = Math.min(limit, stopIn(line));
+    // (the destination, or, parking there, where the car stops to reverse into the space)
+    for (const goal of [snap.nav?.remaining_m, snap.parking?.mode === "in" ? snap.parking.stop_in_m : null]) {
+      if (goal != null && goal > first && canStop(goal)) limit = Math.min(limit, stopIn(goal));
+    }
+  }
   return limit;
+}
+
+// The fastest the car can go round the route's bends between route arc lengths a and b keeping its
+// sideways acceleration within LAT_SHARE of grip `mu` (Route.curveSpeedAt).
+function bendSpeed(route, a, b, mu) {
+  let v = Infinity;
+  for (let x = Math.max(0, a); x <= b; x += 3) v = Math.min(v, route.curveSpeedAt(x, 0, LAT_SHARE * mu * G));
+  return v;
 }
 
 // `slow_for_ice`'s plan (brain/candidates.js): every patch seen, at its speed ICE_EARLY_M sooner.

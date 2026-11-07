@@ -343,6 +343,140 @@ await test("models and the HUD are told: the state, the situation, the outcome l
   assert.match(ICE.iceNotice(far.world, sf).text, /BRIDGES FREEZE FIRST/);
 });
 
+// Regressions from a free-drive soak in snow, where the Rules car failed its own audit: a world in snow
+// with the car on `lanes` (from `s`, at `v`, to `goal` on the last), and the patches given.
+function rig({ lanes, s = 10, v = 0, goal = null, patches = [], brain = "rules" }) {
+  setWeather("snow");
+  const world = new World(SK, { seed: 3, parked: 0, pedestrians: 0, weather: "snow", vehicleSpec: COMPACT, ice: true });
+  world.setClock(MORNING); world.ice.refresh(world);
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 });
+  world.placeOnLane(lanes[0], s); world.ego.v = v;
+  world.route = new Route(routeFromLanes(SK, lanes, s, goal), SK, world.ego.spec);
+  world.ice.setList(patches.map((p, i) => ICE.patchOn(SK, p.edge, p.from, p.to, { id: `r${i + 1}`, kind: "shade", mu: p.mu ?? 0.12, shape: 3 + i })));
+  const autopilot = new Autopilot(world, {}); autopilot.setBrain(brain); autopilot.setEnabled(true);
+  return { world, fleet, autopilot };
+}
+// Drive a rig to its end (or `seconds`), watching the car on the ice: { events, hardest (|a| above
+// HARD_MIN_MPS), slip, entry (speed), arrived }.
+async function watch(ctx, seconds = 60) {
+  const w = ctx.world, out = { events: [], hardest: 0, slip: 0, entry: null, collisions: 0 };
+  await drive(ctx, seconds, () => {
+    for (const e of w.events) if (e.type === "ice_overspeed") out.events.push(`${e.reason} ${e.kmh} km/h`);
+    if (onIce(w, w.ego)) { out.entry ??= w.ego.v; if (w.ego.v > ICE.HARD_MIN_MPS) out.hardest = Math.max(out.hardest, Math.abs(w.ego.a)); out.slip = Math.max(out.slip, w.ego.slipping); }
+  }, () => !ctx.autopilot.enabled);
+  out.arrived = !ctx.autopilot.enabled; out.collisions = w.violations.collisions;
+  return out;
+}
+
+await test("gentle on seen ice: the pedals eased to half its grip, the wheel turned slowly, braking before it left alone", () => {
+  const ctx = deck({ s: 100, from: 140, to: 200, mu: 0.12 }), w = ctx.world, car = w.ego;
+  const lim = ICE.GENTLE_SHARE * 0.12 * G;
+  // (on it)
+  w.placeOnLane(lane, 160); car.delta = 0;
+  let out = ICE.gentleOnIce(car, 0.2, -6, 1 / 60);
+  assert.equal(Math.abs(out.accel + lim) < 1e-9, true);
+  assert.equal(Math.abs(out.steer - ICE.ICE_STEER_RATE / 60) < 1e-9, true);
+  assert.equal(ICE.gentleOnIce(car, 0, 4, 1 / 60).accel, lim);
+  // (on the dry road just before it: speeding up is eased, braking is not)
+  w.placeOnLane(lane, 134); car.v = 6;
+  out = ICE.gentleOnIce(car, 0.2, -6, 1 / 60);
+  assert.equal(out.accel, -6);
+  assert.equal(ICE.gentleOnIce(car, 0, 4, 1 / 60).accel, lim);
+  // (well clear of it: as asked)
+  w.placeOnLane(lane, 60);
+  out = ICE.gentleOnIce(car, 0.2, -6, 1 / 60);
+  assert.equal(out.accel, -6); assert.equal(out.steer, 0.2);
+  // (every lane manoeuvre on seen ice is marked gentle, and plans its stops as gently)
+  const near = deck({ s: 125, v: 7, from: 140, to: 200 }), sn = buildSnapshot(near.world), cands = sampleCandidates(sn, near.world);
+  assert.equal(cands.filter((c) => c.law.kind === "lane").every((c) => c.law.ice === true), true);
+  assert.equal(cands.find((c) => c.law.kind === "hard_brake").law.ice, undefined);
+  for (const c of cands) if (c.law.kind === "lane" && c.law.stopAtRoute !== undefined) assert.equal(c.law.stopDecel <= ICE.iceStopDecel(sn.black_ice_ahead) + 1e-9, true, c.id);
+});
+
+await test("regression: slower than the ice's speed as it comes into sight, the car speeds up only gently and never brakes on it", async () => {
+  // (sensing: no faster than the ice's speed from now, and within its slowing window only a little faster
+  // than now)
+  for (const [s0, v0] of [[106, 4], [122, 4]]) {
+    const ctx = rig({ lanes: [lane, SK.lane(NEXT, 0)], s: s0, v: v0, goal: 20, patches: [{ edge: DECK, from: 128, to: 200, mu: 0.128 }] });
+    const snap = buildSnapshot(ctx.world), a = snap.black_ice;
+    assert.equal(!!a && !a.on_ice, true);
+    assert.equal(a.slow.from <= snap.routeProj.s, true);
+    assert.equal(a.slow.mps <= a.speed_mps + 1e-9, true);
+    if (snap.routeProj.s >= a.s_from - COMPACT.wheelbase - 4) assert.equal(a.slow.mps <= v0 + ICE.EASE_MPS + 1e-9, true);
+  }
+  // (closed loop: crawling behind a slow car that turns off just as the ice comes into sight, as in the
+  // soak on 4th Avenue North, it speeds up gently and does not brake on the ice)
+  for (const brain of ["rules", "cautious"]) {
+    const ctx = rig({ lanes: [lane, SK.lane(NEXT, 0)], s: 60, v: 5.2, goal: 20, patches: [{ edge: DECK, from: 128, to: 200, mu: 0.128 }], brain });
+    const slow = trafficCar(ctx.world, ctx.fleet, 75, 5.2, CAR, "slow"); slow.v0 = 5.2;
+    const r = { events: [], hardest: 0 };
+    await drive(ctx, 40, () => {
+      const w = ctx.world;
+      if (slow && w.ice.at(...pointAt(lane.pts, lane.cum, w.route.project(w.ego.x, w.ego.y).s + 17 + 3.6)) && ctx.fleet.vehicles.includes(slow)) { ctx.fleet.vehicles.splice(ctx.fleet.vehicles.indexOf(slow), 1); w.npcs = ctx.fleet.vehicles; }
+      for (const e of w.events) if (e.type === "ice_overspeed") r.events.push(`${e.reason} ${e.kmh} km/h`);
+      if (onIce(w, w.ego) && w.ego.v > ICE.HARD_MIN_MPS) r.hardest = Math.max(r.hardest, Math.abs(w.ego.a));
+    }, () => !ctx.autopilot.enabled);
+    assert.deepEqual(r.events, [], brain);
+    assert.equal(r.hardest < ICE.HARD_SHARE * 0.128 * G, true, `${brain}: ${r.hardest}`);
+    console.log(`  (${brain}: hardest input on the ice ${r.hardest.toFixed(2)} m/s²)`);
+  }
+});
+
+// A right turn on Saskatoon's map, from one street of at least 60 m onto another of at least 40 m.
+function rightTurn() {
+  for (const a of SK.edges.values()) {
+    if (a.length < 60 || a.lanes !== 1 || a.ring) continue;
+    for (const id of SK.successors(a.id)) {
+      const b = SK.edges.get(id);
+      if (b.length >= 40 && b.lanes === 1 && !b.ring && SK.classifyTurn(SK.turnAngle(a.id, id)) === "right" && !a.control && !b.control) return [a, b];
+    }
+  }
+  return null;
+}
+
+await test("regression: a patch in a bend is crossed no faster than the ice's sideways grip allows, without a skid", async () => {
+  const [a, b] = rightTurn();
+  for (const brain of ["rules", "cautious"]) {
+    const ctx = rig({ lanes: [SK.lane(a.id, 0), SK.lane(b.id, 0)], s: a.length - 50, v: 6, goal: 35, patches: [{ edge: b.id, from: 0, to: 30, mu: 0.11 }, { edge: a.id, from: a.length - 12, to: a.length, mu: 0.11 }], brain });
+    const snapAt = [];
+    const r = await watch(ctx);
+    assert.deepEqual(r.events, [], brain);
+    assert.equal(r.slip <= ICE.SKID, true, `${brain}: ${r.slip}`);
+    assert.equal(r.arrived, true);
+    console.log(`  (${brain}, ${a.name || a.id} onto ${b.name || b.id}: onto the ice at ${(r.entry * 3.6).toFixed(1)} km/h, peak slip ${r.slip.toFixed(2)})`);
+  }
+});
+
+await test("regression: stopping on the ice for the destination, and for a car stopping ahead, is planned gently", async () => {
+  for (const brain of ["rules", "cautious"]) {
+    const r = await watch(rig({ lanes: [lane], s: 80, v: 7, goal: 175, patches: [{ edge: DECK, from: 140, to: 210, mu: 0.12 }], brain }));
+    assert.deepEqual(r.events, [], `${brain}: ${r.events}`);
+    assert.equal(r.arrived, true);
+    assert.equal(r.hardest < ICE.HARD_SHARE * 0.12 * G, true, `${brain}: ${r.hardest}`);
+  }
+  // (a car ahead, on the ice, that stops: the car keeps back far enough to stop gently behind it)
+  for (const brain of ["rules", "cautious"]) {
+    const ctx = rig({ lanes: [lane, SK.lane(NEXT, 0)], s: 95, v: 7, goal: 20, patches: [{ edge: DECK, from: 120, to: 224, mu: 0.12 }], brain });
+    const lead = trafficCar(ctx.world, ctx.fleet, 125, 6, CAR, "lead");
+    lead.v0 = 6;
+    let stopped = false;
+    const r = await watch({ ...ctx, autopilot: ctx.autopilot }, 1);
+    for (let k = 0; k < 40 * 60 && ctx.autopilot.enabled; k++) {
+      if (!stopped && lead.path.s > 175) { lead.v0 = 0; stopped = true; }
+      if (stopped && lead.v < 0.05 && !lead.released) { lead.released = ctx.world.t; }
+      if (lead.released && ctx.world.t - lead.released > 6) lead.v0 = 6;
+      step(ctx);
+      if (ctx.autopilot.firing) await ctx.autopilot.firing;
+      for (const e of ctx.world.events) if (e.type === "ice_overspeed") r.events.push(`${e.reason} ${e.kmh} km/h`);
+      if (onIce(ctx.world, ctx.world.ego) && ctx.world.ego.v > ICE.HARD_MIN_MPS) r.hardest = Math.max(r.hardest, Math.abs(ctx.world.ego.a));
+    }
+    assert.equal(stopped, true);
+    assert.deepEqual(r.events, [], `${brain}: ${r.events}`);
+    assert.equal(ctx.world.violations.collisions, 0, brain);
+    console.log(`  (${brain}, behind a car stopping on the ice: hardest input on it ${r.hardest.toFixed(2)} m/s²)`);
+  }
+});
+
 await test("checkpoints: a restored drive replays exactly", async () => {
   const ctx = setupChallenge(SK, lesson, { brain: "rules" }), recorder = new DriveRecorder(), clock = {};
   await drive(ctx, 10);
@@ -399,7 +533,7 @@ if (process.argv.includes("--write-snapshot")) {
   }
   const { questions, local } = buildQuestions(snap, eligible), state = toJevState(snap, candidates, { rejected });
   fs.writeFileSync(new URL("../data/snapshots/bridges_freeze_first.json", import.meta.url), JSON.stringify({ name: "bridges_freeze_first", state, questions, local,
-    expect: { ...(questions.motion ? { motion: "drive" } : {}), vector_in: eligible.filter(c => c.id === "slow_for_ice" || (c.sim.end_speed <= snap.black_ice.speed_mps + 0.5 && c.law.kind === "lane" && c.sim.end_speed > 2)).map(c => c.id) } }, null, 2) + "\n");
+    expect: { ...(questions.motion ? { motion: "drive" } : {}), vector_in: eligible.filter(c => c.id === "slow_for_ice" || (c.id.startsWith("keep_lane") && c.sim.end_speed <= snap.black_ice.speed_mps + 0.5 && c.sim.end_speed > 2)).map(c => c.id) } }, null, 2) + "\n");
   console.log(`wrote data/snapshots/bridges_freeze_first.json (black ice in ${snap.black_ice.starts_in_m.toFixed(1)} m, ${eligible.length} eligible)`);
 }
 

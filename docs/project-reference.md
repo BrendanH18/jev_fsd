@@ -2091,8 +2091,12 @@ object between checkpoints.
 **Speeds.** `safeSpeed(p)` is the speed from which the car could still stop within 40 m on the ice
 braking at 70% of its grip: about 28 km/h on a glaze of 0.11, 29 km/h on 0.12. The driven car plans
 to cross at 95% of that (`planSpeed`), reached 4 m before its front wheels get there at 60% of
-`comfort().decel` (the `slowTo` curve of `sim/potholes.js`); on the ice it only eases toward it,
-0.3 m/s a decision (`easeToward`), never braking. In icy conditions it keeps to 40 km/h across a
+`comfort().decel` (the `slowTo` curve of `sim/potholes.js`), and no faster round a bend on the ice
+than keeps its sideways acceleration within 40% of the ice's grip (`bendSpeed`, from
+`Route.curveSpeedAt`); on the ice it only eases toward it, 0.3 m/s a decision (`easeToward`), never
+braking. Slower than that speed when the ice comes into sight, it speeds up no further than it, and
+only by `easeToward` once its slowing window has begun, so it never reaches the ice still
+accelerating. In icy conditions it keeps to 40 km/h across a
 bridge (`CAUTION_MPS`), from its start to its end, slowing for it like a lower limit; spans of one
 bridge less than 50 m apart along the route are one. Traffic does the same through `npcIce` (90% of
 the safe speed, 40% of `comfort().decel`, 6 m early, looking 70 m ahead; locals know the bridge).
@@ -2112,6 +2116,20 @@ over its safe speed, and `brakes_on_ice` braking or accelerating harder than 60%
 excepted, the last resort). Rules gives `slow_for_ice` a bonus when a patch is seen; the cautious
 agent takes it unless following a car. Models get `black_ice` and `ice_caution` fields, a situation
 clause, outcome labels and a line in the system prompt.
+
+**Gentle on the ice.** With black ice seen, every lane law is marked `ice`, and `applyLaw`
+(`sim/controller.js`) passes its pedal and wheel through `gentleOnIce`: while an axle is on a patch the
+pedals are held to 50% of the ice's grip either way (`GENTLE_SHARE`, under the forward sims' 60% and
+the audit's 75%) and the wheel turns no faster than 0.15 rad/s (`ICE_STEER_RATE`: a quick turn of the
+wheel slides the front tyres past their sliding angle, about 2° on ice, before the car can yaw);
+from 0.6 s of travel before the front wheels reach it only speeding up is held back, for the pedals'
+lag. The forward sims run the same law, so what they predict is what the car can do. Lane laws that
+stop plan the stop at 70% of that (`iceStopDecel`), and `iceLimit` caps the speed wherever the way to a
+stop lies over seen ice, so the car can stop as gently: short of the car ahead (4 m short of where
+that car would stop, braking as hard as the road under it lets it), of the line ahead, of the
+destination, and of where it stops to reverse into a parking space. A stop it could not make even at
+the audit's 75% has been left too late, and is left to the rest of the planner. `hard_brake`, and the
+shared emergency brake, are never eased: an emergency on the ice stays one.
 
 **Audit.** `auditIce` counts, once a patch a crossing, the car going onto it more than 10 km/h over
 its safe speed (`fast`), or, above 2.5 m/s on it, braking or accelerating harder than 75% of its
@@ -2137,8 +2155,9 @@ deck `e572` (226 m, one lane each way, 50 km/h, on the bridges layer) and `e475`
 to 9 m along it, short of the roundabout at Spadina Crescent. `lab/black-ice-challenge.js` puts one
 patch on the deck from 125 m to 212 m (grip 0.11), a local driver 30 m ahead of the car, both moving
 at 11 m/s, and a car waiting at the roundabout's yield line (on `e473`) until the driven car has
-stood still for 2 s or 45 s have passed. Rules and the cautious agent go onto the ice at 26–28 km/h
-(safe 28 km/h), cross without braking and arrive; a car holding 50 km/h goes onto it too fast.
+stood still for 2 s or 45 s have passed. Rules and the cautious agent keep well back of the car
+ahead, go onto the ice at about 20 km/h (safe 28 km/h), cross without braking and arrive; a car
+holding 50 km/h goes onto it too fast.
 Checks: `scripts/test_black_ice.mjs` (its `--write-snapshot` writes the live-model case
 `data/snapshots/bridges_freeze_first.json`) and `tests/test_bridges.py`.
 

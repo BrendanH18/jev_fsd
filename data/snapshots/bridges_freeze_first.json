@@ -5,10 +5,10 @@
     "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
     "car": {
       "speed": 10.7,
-      "limit": 9.6,
+      "limit": 5.5,
       "speed_vs_limit": "over",
-      "target_speed": 9.2,
-      "target_reason": "car ahead",
+      "target_speed": 5.5,
+      "target_reason": "black ice ahead",
       "speed_vs_target": "above target"
     },
     "visibility": {
@@ -53,7 +53,7 @@
       "cross_at": 7.4
     },
     "ice_caution": {
-      "conditions": "a clear night near freezing: frost on the road",
+      "conditions": "near freezing",
       "ice_forms_first_on": "bridges, overpasses and shaded stretches",
       "bridge": {
         "name": "Traffic Bridge",
@@ -74,28 +74,28 @@
     ],
     "candidates": [
       {
-        "id": "keep_lane_slow",
+        "id": "keep_lane_target",
         "steer": "hold lane",
-        "speed": "slow to 7.7",
-        "end_speed": 7.4,
-        "vs_target": "below target",
+        "speed": "limit 5.5",
+        "end_speed": 5.5,
+        "vs_target": "at target",
         "max_accel": 0,
-        "max_decel": 3.6,
+        "max_decel": 5.7,
         "max_lateral_accel": 0,
-        "progress_m": 24.4,
+        "progress_m": 19.6,
         "lane": "centered",
         "outcome": "clear, slows to 7.4 m/s by the black ice and holds it across"
       },
       {
         "id": "keep_lane_cautious",
         "steer": "hold lane",
-        "speed": "slow to 6.9",
-        "end_speed": 6.9,
+        "speed": "slow to 4.1",
+        "end_speed": 4.1,
         "vs_target": "below target",
         "max_accel": 0,
-        "max_decel": 4.4,
+        "max_decel": 6.5,
         "max_lateral_accel": 0,
-        "progress_m": 22.8,
+        "progress_m": 16.7,
         "lane": "centered",
         "outcome": "clear, slows to 7.4 m/s by the black ice and holds it across"
       },
@@ -116,14 +116,66 @@
         "id": "slow_for_ice",
         "steer": "hold lane, steering gently",
         "speed": "ease off before the ice, then hold steady across it",
-        "end_speed": 7.4,
-        "vs_target": "below target",
+        "end_speed": 5.5,
+        "vs_target": "at target",
         "max_accel": 0,
-        "max_decel": 3.7,
+        "max_decel": 5.7,
         "max_lateral_accel": 0,
-        "progress_m": 24.1,
+        "progress_m": 19.7,
         "lane": "centered",
         "outcome": "clear, eases off early, on the dry road, to 7.4 m/s before the black ice and holds it across, without braking on it"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "limit 5.5",
+        "end_speed": 5.5,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 5.7,
+        "max_lateral_accel": 1.1,
+        "progress_m": 19.6,
+        "lane": "slightly left",
+        "outcome": "clear, slows to 7.4 m/s by the black ice and holds it across"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "limit 5.5",
+        "end_speed": 5.5,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 5.7,
+        "max_lateral_accel": 1.1,
+        "progress_m": 19.6,
+        "lane": "slightly right",
+        "outcome": "clear, slows to 7.4 m/s by the black ice and holds it across"
+      },
+      {
+        "id": "left_1_target",
+        "steer": "shift 1 m left",
+        "speed": "limit 5.5",
+        "end_speed": 5.5,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 5.8,
+        "max_lateral_accel": 2.1,
+        "progress_m": 19.5,
+        "lane": "far left",
+        "outcome": "clear, slows to 7.4 m/s by the black ice and holds it across"
+      },
+      {
+        "id": "right_1_target",
+        "steer": "shift 1 m right",
+        "speed": "limit 5.5",
+        "end_speed": 5.5,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 5.8,
+        "max_lateral_accel": 2.1,
+        "progress_m": 19.5,
+        "lane": "far right",
+        "outcome": "clear, slows to 7.4 m/s by the black ice and holds it across"
       },
       {
         "id": "hard_brake",
@@ -138,15 +190,12 @@
         "lane": "centered",
         "outcome": "clear"
       }
-    ],
-    "rejected": {
-      "brakes_on_ice": 6
-    }
+    ]
   },
   "questions": {
     "motion": {
       "type": "choice",
-      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Conditions favour black ice (a clear night near freezing: frost on the road): it forms first on bridges, overpasses and shaded stretches, thin and nearly invisible, while the rest of the road looks dry or damp. The car is on a bridge (Traffic Bridge): keep to 11.1 m/s or less until the end of it, 115 m on. The road 16 m ahead, on a bridge deck (Traffic Bridge), has a glossy sheen: black ice, 87 m of it, where the tyres have about a tenth of their grip. Slow down now, on the dry road, to 7.4 m/s by the time the front wheels reach it, then cross it steadily, without braking, accelerating or steering sharply (choose `slow_for_ice`; `car.target_speed` already slows for it). Leave more room to anything ahead: on the ice the car can hardly stop. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Decide whether the car should keep moving or hold still right now.",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Conditions favour black ice (near freezing): it forms first on bridges, overpasses and shaded stretches, thin and nearly invisible, while the rest of the road looks dry or damp. The car is on a bridge (Traffic Bridge): keep to 11.1 m/s or less until the end of it, 115 m on. The road 16 m ahead, on a bridge deck (Traffic Bridge), has a glossy sheen: black ice, 87 m of it, where the tyres have about a tenth of their grip. Slow down now, on the dry road, to 7.4 m/s by the time the front wheels reach it, then cross it steadily, without braking, accelerating or steering sharply (choose `slow_for_ice`; `car.target_speed` already slows for it). Leave more room to anything ahead: on the ice the car can hardly stop. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Decide whether the car should keep moving or hold still right now.",
       "criteria": {
         "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
         "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when the path directly ahead is blocked, or when the car has reached the destination."
@@ -154,12 +203,16 @@
     },
     "vector": {
       "type": "choice",
-      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Conditions favour black ice (a clear night near freezing: frost on the road): it forms first on bridges, overpasses and shaded stretches, thin and nearly invisible, while the rest of the road looks dry or damp. The car is on a bridge (Traffic Bridge): keep to 11.1 m/s or less until the end of it, 115 m on. The road 16 m ahead, on a bridge deck (Traffic Bridge), has a glossy sheen: black ice, 87 m of it, where the tyres have about a tenth of their grip. Slow down now, on the dry road, to 7.4 m/s by the time the front wheels reach it, then cross it steadily, without braking, accelerating or steering sharply (choose `slow_for_ice`; `car.target_speed` already slows for it). Leave more room to anything ahead: on the ice the car can hardly stop. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. Conditions favour black ice (near freezing): it forms first on bridges, overpasses and shaded stretches, thin and nearly invisible, while the rest of the road looks dry or damp. The car is on a bridge (Traffic Bridge): keep to 11.1 m/s or less until the end of it, 115 m on. The road 16 m ahead, on a bridge deck (Traffic Bridge), has a glossy sheen: black ice, 87 m of it, where the tyres have about a tenth of their grip. Slow down now, on the dry road, to 7.4 m/s by the time the front wheels reach it, then cross it steadily, without braking, accelerating or steering sharply (choose `slow_for_ice`; `car.target_speed` already slows for it). Leave more room to anything ahead: on the ice the car can hardly stop. Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
       "criteria": {
-        "keep_lane_slow": "hold lane, slow to 7.7, +24.4 m, clear, slows to 7.4 m/s by the black ice and holds it across",
-        "keep_lane_cautious": "hold lane, slow to 6.9, +22.8 m, clear, slows to 7.4 m/s by the black ice and holds it across",
+        "keep_lane_target": "hold lane, limit 5.5, +19.6 m, clear, slows to 7.4 m/s by the black ice and holds it across",
+        "keep_lane_cautious": "hold lane, slow to 4.1, +16.7 m, clear, slows to 7.4 m/s by the black ice and holds it across",
         "keep_lane_stop": "hold lane, stop, +10 m, clear",
-        "slow_for_ice": "hold lane, steering gently, ease off before the ice, then hold steady across it, +24.1 m, clear, eases off early, on the dry road, to 7.4 m/s before the black ice and holds it across, without braking on it",
+        "slow_for_ice": "hold lane, steering gently, ease off before the ice, then hold steady across it, +19.7 m, clear, eases off early, on the dry road, to 7.4 m/s before the black ice and holds it across, without braking on it",
+        "left_0.5_target": "shift 0.5 m left, limit 5.5, +19.6 m, clear, slows to 7.4 m/s by the black ice and holds it across",
+        "right_0.5_target": "shift 0.5 m right, limit 5.5, +19.6 m, clear, slows to 7.4 m/s by the black ice and holds it across",
+        "left_1_target": "shift 1 m left, limit 5.5, +19.5 m, clear, slows to 7.4 m/s by the black ice and holds it across",
+        "right_1_target": "shift 1 m right, limit 5.5, +19.5 m, clear, slows to 7.4 m/s by the black ice and holds it across",
         "hard_brake": "hold lane, brake hard, +9.4 m, clear"
       }
     }
@@ -168,7 +221,7 @@
   "expect": {
     "motion": "drive",
     "vector_in": [
-      "keep_lane_slow",
+      "keep_lane_target",
       "keep_lane_cautious",
       "slow_for_ice"
     ]
