@@ -26,6 +26,68 @@ PILOT_ROW_FITS = """() => {
     detail: JSON.stringify({ content: [Math.round(left), Math.round(right)], rects: all.map(r => [Math.round(r.left), Math.round(r.right), Math.round(r.top)]) }) }];
 }"""
 
+# Exercise the real finish hook, using fresh authored challenges rather than synthetic reports.
+PRACTICE_FINISH = """async kind => {
+  const { PRACTICE_KEY, readPractice } = await import('/js/lab/practice.js');
+  const { HISTORY_KEY } = await import('/js/sim/drive-score.js');
+  const keys = [PRACTICE_KEY, HISTORY_KEY], before = keys.map(key => localStorage.getItem(key));
+  try {
+    keys.forEach(key => localStorage.removeItem(key));
+    const app = window.__jev;
+    if (kind === 'resume') {
+      app.world.violations.collisions++;
+      app.world.paused = false; app.advance(0.05); // Sample the injected violation before finishing.
+      app.finishDrive('finished');
+      app.driveReport.dialog.close();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      app.world.paused = false;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+      app.advance(0.1);
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
+      const route = app.world.route, [x, y] = route.pointAt(route.length);
+      Object.assign(app.world.ego, { x, y, psi: route.headingAt(route.length), v: 0, a: 0 });
+      route.hint = route.pts.length - 2;
+      app.advance(0.1);
+      const reports = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      const record = readPractice().records['pothole-season'];
+      return [{ name: 'Finishing and resuming cannot erase the original failed attempt', ok: reports.length === 2
+        && reports[1].collisions === 1 && reports[0].status === 'arrived' && reports[0].title === 'Free drive'
+        && reports[0].modified === true && record?.attempts === 1 && record.completed === false,
+        detail: JSON.stringify({ reports: reports.map(r => ({ title: r.title, status: r.status, modified: r.modified, collisions: r.collisions })), record }) }];
+    }
+    const parking = ['parked', 'wide-kerb', 'outside-space'].includes(kind);
+    if (kind === 'modified') app.setTime('morning');
+    if (kind === 'branched') app.recorder.branched = true;
+    if (parking) {
+      const { spacesAlong } = await import('/js/sim/parallel-park.js');
+      const car = app.world.ego, space = spacesAlong(app.world, app.world.route, car.spec)[0];
+      const u = kind === 'outside-space' ? space.sTo + car.spec.length : space.goalU;
+      const w = space.goalW - (kind === 'wide-kerb' ? 1 : 0);
+      Object.assign(car, { x: space.ox + u * Math.cos(space.h) + w * Math.sin(space.h),
+        y: space.oy + u * Math.sin(space.h) - w * Math.cos(space.h), psi: space.h, v: 0 });
+      app.finishDrive('finished');
+    } else if (kind === 'arrived') {
+      const route = app.world.route, [x, y] = route.pointAt(route.length);
+      Object.assign(app.world.ego, { x, y, psi: route.headingAt(route.length), v: 0 });
+      route.hint = route.pts.length - 2;
+      app.world.paused = false; app.advance(0.1);
+    } else app.finishDrive(kind === 'early' ? 'finished' : 'arrived');
+    const report = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')[0];
+    const record = readPractice().records[parking ? 'parallel-park' : 'pothole-season'];
+    const allowed = ['early', 'arrived'].includes(kind) || parking;
+    const completed = ['arrived', 'parked'].includes(kind);
+    return [{ name: `Manual practice finish integration: ${kind}`, ok: !!report
+      && report.status === (kind === 'early' || parking && !completed ? 'finished' : 'arrived')
+      && (allowed ? record?.attempts === 1 && record.completed === completed : !record)
+      && (kind !== 'modified' || report.modified === true)
+      && (kind !== 'branched' || report.branched === true)
+      && (kind !== 'rules' || report.driver === 'rules'),
+      detail: JSON.stringify({ status: report?.status, driver: report?.driver, modified: report?.modified, branched: report?.branched, record }) }];
+  } finally {
+    keys.forEach((key, i) => before[i] === null ? localStorage.removeItem(key) : localStorage.setItem(key, before[i]));
+  }
+}"""
+
 
 def report(label, results):
     failed = [r for r in results if not r.get("ok")]
@@ -55,6 +117,14 @@ def check(url, chromium=None):
         results = page.evaluate("import('/tests/render-tests.js').then(m => m.runRenderTests())")
         ok &= report("renderer tests", results)
         ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
+
+        for kind in ["early", "arrived", "rules", "modified", "branched", "parked", "wide-kerb", "outside-space", "resume"]:
+            driver = "rules" if kind == "rules" else "manual"
+            challenge = "parallel-park" if kind in ["parked", "wide-kerb", "outside-space"] else "pothole-season"
+            page.goto(url.rstrip("/") + f"/?challenge={challenge}&drive={driver}&quality=low")
+            page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+            page.evaluate("window.__jev.world.paused = true")
+            ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
 
         if errors:
             ok = False

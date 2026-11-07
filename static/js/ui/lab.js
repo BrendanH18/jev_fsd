@@ -3,6 +3,9 @@ import { CHALLENGES, challengeConfig } from "../lab/challenges.js";
 import { driveLink } from "../lab/share.js";
 import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/registry.js";
 import { replayPosition } from "../lab/playback.js";
+import { challengeCity, filterChallenges, practiceStatus, readPractice } from "../lab/practice.js";
+
+const PRACTICE_LABELS = { untried: "Untried", attempted: "Attempted", completed: "Completed cleanly" };
 
 export class DriveLab {
   constructor({ city, demo, agentNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception, onConnectModel }) {
@@ -78,7 +81,7 @@ export class DriveLab {
       h("p", { class: "lab-hero-copy" }, "Take the wheel, challenge an AI, or look inside its next decision. Every drive has something to teach you."),
       h("div", { class: "welcome-options" },
         this.welcomeCard("01", "Take a scenic drive", "Real neighbourhoods. Golden light. Find your rhythm.", "Start cruising →", () => this.scenic("manual")),
-        this.welcomeCard("02", "Can you beat the AI?", "Six authored challenges. The same conditions for every driver.", "Pick a challenge →", () => this.challenges()),
+        this.welcomeCard("02", "Can you beat the AI?", `${CHALLENGES.length} authored challenges. The same conditions for every driver.`, "Pick a challenge →", () => this.challenges()),
         this.welcomeCard("03", "Watch the AI drive", "Follow its choices, then rewind and try your own.", "Watch Rules →", () => this.scenic("rules"))),
       h("div", { class: "lab-footer" }, h("span", {}, "12 neighbourhoods · 11 Canadian cities · No key needed for Rules"),
         h("a", { href: "https://github.com/BrendanH18/jev_fsd", target: "_blank", rel: "noopener" }, "Star on GitHub ↗")),
@@ -92,16 +95,64 @@ export class DriveLab {
     try { await this.onScenic(driver); } catch (error) { this.open(h("div", {}, h("h2", {}, "Could not find a scenic drive."), h("p", {}, error.message), h("button", { class: "toggle", onclick: () => this.scenic(driver) }, "Try again"))); }
   }
   challenges() {
+    const practice = this.practice?.available === false ? this.practice : readPractice();
+    const filters = this.challengeFilters ||= { query: "", city: "", skill: "", weather: "", progress: "" };
+    const controls = {};
+    const unique = values => [...new Set(values)].sort((a, b) => a.localeCompare(b));
+    const picker = (key, label, options) => h("label", {}, h("span", {}, label), controls[key] = h("select", {
+      "aria-label": `Filter by ${label.toLowerCase()}`, onchange: () => { filters[key] = controls[key].value; render(); },
+    }, h("option", { value: "" }, { city: "All cities", skill: "All skills", weather: "Any weather", progress: "Any progress" }[key]),
+    options.map(([value, text]) => h("option", { value, selected: filters[key] === value }, text))));
+    const grid = h("div", { class: "challenge-grid" });
+    const count = h("p", { class: "challenge-results", role: "status", "aria-live": "polite", "aria-atomic": "true" });
+    const next = h("a", { class: "chip-button challenge-next" });
+    const reset = () => {
+      for (const key of Object.keys(filters)) { filters[key] = ""; controls[key].value = ""; }
+      render(); controls.query.focus();
+    };
+    const empty = h("div", { class: "challenge-empty", hidden: true }, h("h2", {}, "No matching challenges"),
+      h("p", {}, "Try another search or clear your filters to see every drive."),
+      h("button", { class: "chip-button", onclick: reset }, "Clear filters"));
+    const challengeUrl = challenge => driveLink({ ...challengeConfig(challenge), drive: this.challengeDriver.value });
+    const render = () => {
+      const matches = filterChallenges(CHALLENGES, filters, practice.records);
+      const completed = CHALLENGES.filter(c => practiceStatus(c, practice.records) === "completed").length;
+      count.textContent = `${matches.length} of ${CHALLENGES.length} challenges · ${completed} completed cleanly by you`;
+      empty.hidden = matches.length > 0;
+      grid.replaceChildren(...matches.map(c => {
+        const status = practiceStatus(c, practice.records);
+        return h("a", { class: "challenge-card", "data-challenge": c.id, href: challengeUrl(c) },
+          h("div", { class: "challenge-card-top" }, h("span", { class: "challenge-icon", "aria-hidden": "true" }, c.icon), h("span", { class: "label" }, c.difficulty)),
+          h("h2", {}, c.title), h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
+          h("p", {}, c.description), h("div", { class: "challenge-card-meta" }, `${challengeCity(c)} · ${c.map.replaceAll("_", " ")} · ${c.weather} · ${c.time}`),
+          h("strong", {}, status === "attempted" ? "Retry challenge →" : status === "completed" ? "Practise again →" : "Try challenge →"));
+      }));
+      const recommendation = matches.find(c => practiceStatus(c, practice.records) === "attempted")
+        || matches.find(c => practiceStatus(c, practice.records) === "untried") || matches[0];
+      next.hidden = !recommendation;
+      next.textContent = recommendation ? `Practise next: ${recommendation.title} →` : "Practise next";
+      if (recommendation) next.href = challengeUrl(recommendation); else next.removeAttribute("href");
+    };
     this.open(h("div", {}, h("div", { class: "lab-eyebrow" }, "SAME STREET. SAME HAZARD. YOUR MOVE."),
       h("h1", { class: "challenge-title" }, "Can you beat the AI?"),
       h("p", { class: "lab-hero-copy" }, "Choose a short drive. Compare complete arrivals under the same conditions; a higher score alone does not mean a safer driver."),
-      h("label", { class: "challenge-driver" }, "Drive with ", this.challengeDriver = h("select", { "aria-label": "Challenge driver" },
+      h("label", { class: "challenge-driver" }, "Drive with ", this.challengeDriver = h("select", { "aria-label": "Challenge driver", onchange: render },
         h("option", { value: "manual" }, "Me · manual"), ...agentDefinitions().filter(a => a.available !== false).map(a => h("option", { value: a.id }, agentOptionLabel(a))))),
-      h("div", { class: "challenge-grid" }, CHALLENGES.map(c => h("button", { class: "challenge-card", onclick: () => location.assign(driveLink({ ...challengeConfig(c), drive: this.challengeDriver.value })) },
-        h("div", { class: "challenge-card-top" }, h("span", { class: "challenge-icon" }, c.icon), h("span", { class: "label" }, c.difficulty)),
-        h("h2", {}, c.title), h("p", {}, c.description), h("div", { class: "challenge-card-meta" }, `${c.map.replaceAll("_", " ")} · ${c.weather} · ${c.time}`), h("strong", {}, "Try challenge →")))),
+      h("div", { class: "challenge-filters", role: "group", "aria-label": "Find a challenge" },
+        h("label", { class: "challenge-search" }, h("span", {}, "Search challenges"), controls.query = h("input", { type: "search", value: filters.query,
+          placeholder: "Title, city, street or lesson", "aria-label": "Search challenges", oninput: () => { filters.query = controls.query.value; render(); } })),
+        picker("city", "City", unique(CHALLENGES.map(challengeCity)).map(value => [value, value])),
+        picker("skill", "Skill", unique(CHALLENGES.map(c => c.difficulty)).map(value => [value, value])),
+        picker("weather", "Weather", unique(CHALLENGES.map(c => c.weather)).map(value => [value, value])),
+        picker("progress", "Progress", Object.entries(PRACTICE_LABELS))),
+      h("p", { class: "lab-footnote" }, practice.available
+        ? "Your manual practice is saved in this browser. A clean completion means arriving under the authored conditions with no challenge failures. AI, mixed-driver, modified and replay attempts stay separate."
+        : "Browser storage is unavailable. Practice progress cannot be saved on this device."),
+      h("div", { class: "challenge-library-actions" }, count, h("button", { class: "chip-button", onclick: reset }, "Clear filters"), next),
+      grid, empty,
       h("div", { class: "lab-footer" }, h("button", { class: "chip-button", onclick: () => this.home() }, "← Drive lab"),
         h("a", { href: appUrl(this.demo ? "arena.html" : "arena"), target: "_blank", rel: "noopener" }, "Evaluate agents ↗"))));
+    render();
   }
   setAgent(name) { this.agent.value = name; }
   async loadAgent() {

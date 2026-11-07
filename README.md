@@ -135,6 +135,13 @@ seed and compare results. A pass means you arrived with no collision, no red lig
 run, no failure to yield, and less than a second off the road (and, in Squeeze in, parked within 30 cm
 of the kerb). A good coaching score on its own doesn't count.
 
+The challenge library searches titles, cities, streets and lessons, with filters for city, skill,
+weather and your practice progress. It remembers your unchanged manual attempts and clean arrivals
+in this browser, separately from AI drives and the last 20 full drive reports. Retry an attempted
+challenge or choose **Practise next** to keep working through the library. Modified setups and
+replay takeovers do not count toward manual completion.
+In **Squeeze in**, stop inside the space and select **Finish & review** to check your parking.
+
 ### 🧠 See through the AI's eyes
 
 Turn on **AI eyes** to see what the driver actually perceives. It shows which hazards are

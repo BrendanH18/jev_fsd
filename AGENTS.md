@@ -76,6 +76,8 @@ Layers beside a pack (`<key>.<layer>.v1.json`: transit, crossings, zones, rail, 
 
 **Benchmark** (`static/js/bench/`): `scenarios.buildSuite` (seeded, routes via `/api/route`), `runner.runScenario` / `setupScenario` (also used by the app's `/?replay=1`), and `metrics.DriveMetrics`. Pass/fail rules live in `failures()` (collisions, red lights, stop signs, failures to yield, off road). Bench runs take a `weather` option. Runs are stored by `server.py` under `data/runs/`, which is gitignored, so a baseline has to be added with `git add -f`.
 
+**Challenge practice library** (`lab/practice.js`, `ui/lab.js`): compact manual progress is stored separately from the last 20 full reports, keyed by challenge id and authored version. Only the original unchanged manual attempt counts; AI/mixed drivers, replay branches and resets do not. Starting another score session on the same challenge page invalidates eligibility until an authored retry reloads it. Clean completion reuses `bench/metrics.js` `failures()`, including parking where required, rather than the coaching grade. Changing the time through photo mode marks the challenge modified. In Squeeze in, Finish & review recognizes a manual car stopped inside a legal space using `spacesAlong` and `parkedPose`. Checks: `scripts/test_practice_library.mjs`, `static/tests/practice-tests.js` through `/tests`, and the finish integration cases in `scripts/test_browser_pages.py`.
+
 ## Gotchas
 
 - Editing a Python file with an in-place substitution that keeps the file size, inside the same second, can leave a stale `__pycache__/*.pyc` that Python still trusts. Delete `__pycache__` if a change seems to have no effect.
