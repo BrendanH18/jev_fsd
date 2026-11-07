@@ -54,6 +54,8 @@ import { BallView } from "./render/ball-chase.js";
 import { ballNotice } from "./sim/ball-chase.js";
 import { geeseNotice } from "./sim/geese.js";
 import { GeeseView } from "./render/geese.js";
+import { IceView } from "./render/black-ice.js";
+import { iceNotice } from "./sim/black-ice.js";
 import { buildCalming, rideOver } from "./render/traffic-calming.js";
 import { guardNotice } from "./sim/crossing-guard.js";
 import { addGuardSign, syncGuardSign } from "./render/crossing-guard.js";
@@ -213,7 +215,7 @@ export async function boot() {
     // and, on one-way streets that allow it, cyclists ride against the traffic, and everyone looks both
     // ways for them (`?contraflow=0` takes them off)
     const contraflow = params.get("contraflow") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0", ice: params.get("ice") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -247,6 +249,9 @@ export async function boot() {
   const ballView = world.balls?.enabled ? new BallView(view.scene) : null;
   // and the Canada geese crossing the road, where the world has them (sim/geese.js)
   const geeseView = world.geese.enabled ? new GeeseView(view.scene) : null;
+  // and black ice on bridges and in the shade, while the weather and the time favour it, where the world
+  // has it (sim/black-ice.js; `?ice=0` takes it off in a free drive)
+  const iceView = world.ice?.enabled ? new IceView(view.scene) : null;
   pxoRendering = world.pxo ? buildPxos(world) : null;
   if (pxoRendering) view.scene.add(pxoRendering.group);
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
@@ -749,6 +754,7 @@ export async function boot() {
   let announcedPothole = null;
   let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null, announcedGlare = null, announcedReversing = null, announcedGeese = null;
   let announcedBall = null;
+  let announcedIce = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
     lab.update(recorder, now);
@@ -794,6 +800,7 @@ export async function boot() {
           else if (ev.type === "ball_warning_ignored") hud.badge("TOO FAST PAST WHERE A BALL ROLLED OUT", "alert", 1500);
           else if (ev.type === "reversing_conflict") hud.badge(ev.reason === "close_pass" ? "SQUEEZED PAST A CAR BACKING OUT" : "DID NOT STOP FOR A CAR BACKING OUT", "alert", 1500);
           else if (ev.type === "wildlife_conflict") hud.badge(ev.reason === "hit" ? "HIT A GOOSE" : "DROVE ON TOO CLOSE TO THE GEESE", "alert", 1500);
+          else if (ev.type === "ice_overspeed") hud.badge(ev.reason === "fast" ? `ONTO BLACK ICE AT ${Math.round(ev.kmh)} KM/H` : ev.reason === "skid" ? "SKIDDED ON BLACK ICE" : `${ev.reason === "brake" ? "BRAKED" : "ACCELERATED"} HARD ON BLACK ICE`, "alert", 1500);
           else if (ev.type === "passed_crossing_guard") hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
         }
@@ -968,6 +975,11 @@ export async function boot() {
     const geeseLine = world.geese.enabled ? geeseNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
     if (geeseLine && geeseLine.key !== announcedGeese) { announcedGeese = geeseLine.key; hud.badge(geeseLine.text, geeseLine.wait ? "safety" : "", 2500); }
     if (!geeseLine) announcedGeese = null;
+    // black ice seen ahead, or under the car, or a bridge coming up while it is near freezing
+    // (sim/black-ice.js)
+    const iceLine = iceView ? iceNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
+    if (iceLine && iceLine.key !== announcedIce) { announcedIce = iceLine.key; hud.badge(iceLine.text, iceLine.slow ? "safety" : "", 2500); }
+    if (!iceLine) announcedIce = null;
     // a speed hump or the like on the route ahead: the speed to take it at (said again once over it)
     const calmingLine = calmingNotice(world);
     if (calmingLine && calmingLine.key !== announcedCalming) { announcedCalming = calmingLine.key; hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000); }
@@ -1018,6 +1030,7 @@ export async function boot() {
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
     if (geeseView) geeseView.sync(world, world.t);
+    iceView?.sync(world);
     if (sunGlareView) sunGlareView.update(view.camera, view.atmosphere, egoGlare(world)?.severity ?? 0);
     ballView?.update(world, view.camera);
     view.render(dt);

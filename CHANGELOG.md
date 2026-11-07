@@ -1471,6 +1471,26 @@
   checker validates requests offline and checks model expectations when a key is available.
 - Live Jev behavior remains unverified; historical benchmark numbers describe the earlier world.
 
+- Black ice in free drives (`?ice=0` takes it off). Near freezing (snow at any hour, freezing fog,
+  or rain or a clear frosty night late at night and early in the morning), thin, nearly invisible
+  patches of ice lie on the road: on bridge decks and overpasses, from a new `bridges` layer beside
+  each pack (`jev/osm/bridges.py`; the street packs are unchanged), and on stretches in the shade of
+  tall buildings, placed from their own random stream. On a patch the tyres have about a tenth of
+  their grip: the shared car model now takes the grip under each axle from a per-position hook
+  (`ROAD.gripAt`), so the driven car, traffic, cyclists and every candidate's forward sim slide
+  alike; streetcars do not. With no ice the hook is null and vehicles step exactly as before. The
+  car eases off to 40 km/h on bridges in icy conditions ("bridges freeze first"), sees a patch late
+  (about 20 m by day, 40 m as a sheen in its headlights at night), slows on the dry road to the speed
+  it can cross it at (about 28 km/h), and crosses steadily. AI drivers see `black_ice` and
+  `ice_caution`, with the new `slow_for_ice` candidate and the `crosses_ice_too_fast` and
+  `brakes_on_ice` rejections. Going onto a patch more than 10 km/h too fast, or braking,
+  accelerating or skidding on one, counts as `ice_overspeed` and fails a Lab drive, reported only
+  once the car has come near black ice. Patches are drawn as a feathered, glossy glaze that catches
+  headlights and a low sun, and the HUD warns of them and of icy bridges.
+- New Lab challenge, **Bridges freeze first** (seed 55042): northbound over Saskatoon's Traffic
+  Bridge at dawn after a frosty night, with black ice on the deck and a queue for the roundabout
+  just past it.
+
 ## 0.2.0
 
 A large realism and graphics update. The Rules benchmark (seed 1) still passes 12 of 12 drives in

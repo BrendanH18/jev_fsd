@@ -11,6 +11,7 @@ import { drivewayScenario, placeReverser } from "./driveway-challenge.js";
 import { potholeScenario, installPotholes } from "./pothole-challenge.js";
 import { ballScenario, placeBall } from "./ball-chase-challenge.js";
 import { geeseScenario, placeGeese } from "./geese-challenge.js";
+import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -144,6 +145,8 @@ export const CHALLENGES = [
     description: "A sunny afternoon on West 7th Avenue in Kitsilano, a residential street lined with parked cars, the limit 50 km/h. Ahead, a ball bounces out from between the parked cars on your right and rolls across the street.", lesson: "A ball rolling into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb. Driver's handbooks across Canada say the same." },
   { id: "goose-crossing", title: "Goose crossing", map: "ottawa", weather: "dry", time: "afternoon", seed: 53042, icon: "⋯", difficulty: "Patience", hazard: "geese", geese: true, street: "Clemow Avenue",
     description: "Clemow Avenue in the Glebe runs between Central Park and Patterson's Creek Park, where Canada geese graze by the creek. A family of them, goslings and all, is about to walk across the street in front of you.", lesson: "Geese cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them." },
+  { id: "bridges-freeze-first", title: "Bridges freeze first", map: "saskatoon", weather: "dry", time: "dawn", seed: 55042, icon: "❄", difficulty: "Control", hazard: "black-ice", ice: true, street: "Traffic Bridge",
+    description: "Dawn after a clear night just below freezing in Saskatoon. You are heading north over the South Saskatchewan River on the Traffic Bridge, toward downtown. The approach is dry, but the deck has iced over, and traffic is queuing for the roundabout just past the far end.", lesson: "Bridges and overpasses freeze before the road around them, and black ice is nearly invisible. Near freezing, ease off before a bridge and watch for a glossy sheen. Slow down on the dry road before the ice, then cross it steadily: no braking, accelerating or sharp steering on it, and leave extra room to the car ahead." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1047,6 +1050,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "potholes") return potholeScenario(map, challenge);
   if (challenge.hazard === "ball") return ballScenario(map, challenge);
   if (challenge.hazard === "geese") return geeseScenario(map, challenge);
+  if (challenge.hazard === "black-ice") return iceScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1267,6 +1271,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.amber) installAmber(world, scenario);
   if (scenario.sunGlare) installSunGlare(world, scenario, challenge.seed);
   if (scenario.potholes) installPotholes(world, scenario);
+  if (scenario.blackIce) installIce(world, fleet, scenario);
   if (scenario.following) installFollowing(world, fleet, scenario);
   if (scenario.freshGreen) installFreshGreen(world, fleet, scenario);
   if (scenario.beamTraffic) {
@@ -1356,6 +1361,7 @@ export function stepChallenge(world, fleet) {
   if (!state) return;
   if (state.following) { stepFollowing(world, fleet); return; }
   if (state.freshGreen) { stepFreshGreen(world); return; }
+  if (state.blackIce) { stepIce(world, fleet); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang

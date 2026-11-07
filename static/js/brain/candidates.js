@@ -19,6 +19,7 @@ import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 import { SIM_OVER_MPS, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
 import { coverAfter } from "../sim/ball-chase.js";
+import { earlySlows, iceSimCheck, patchesUnder } from "../sim/black-ice.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -214,6 +215,13 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "wait_for_geese", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, gc.limit_mps ?? approach), ...(gc.wait ? { stopAtRoute: stopAt(gc.stop_s_route - FRONT - 0.5) } : {}) }),
         steer: "hold lane", speed: gc.wait ? "stop and wait until the last goose is off the road" : "slow down, ready to stop for the geese" });
     }
+    // Black ice seen ahead, or under the car (sim/black-ice.js): ease off early, on the dry road, to the
+    // speed to cross it at, and hold that across it, without braking, accelerating or steering hard on it.
+    const ice = snap.black_ice_ahead;
+    if (ice) {
+      out.push({ id: "slow_for_ice", laneUntil, law: { ...inLane({ kind: "lane", vTarget: target }), slowTo: earlySlows(ice) },
+        steer: "hold lane, steering gently", speed: snap.black_ice.on_ice ? "ease off, no braking, and hold steady across the ice" : "ease off before the ice, then hold steady across it" });
+    }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
     if (hook && hook.bumper_to_yield_m > 0.3) {
@@ -381,6 +389,9 @@ export function sampleCandidates(snap, world) {
       if (slow.length) c.law.slowTo = slow;
     }
   }
+  // (and every lane manoeuvre slows for the black ice it has seen, to its speed by then, and on the ice
+  // only eases off: sim/black-ice.js)
+  if (snap.black_ice_ahead) for (const c of list) if (c.law.kind === "lane") c.law.slowTo = [...(c.law.slowTo || []), ...snap.black_ice_ahead.map((a) => a.slow)];
   list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   const amber = snap.amber_clear || snap.intersection?.amber;
   for (const c of list) if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);
@@ -473,12 +484,17 @@ export function simulateAll(candidates, snap, world) {
   const ballCreep = snap.ball_in_road?.creep_mps ?? 0;
   // Canada geese crossing (sim/geese.js): where the car stops for them
   const geeseStop = snap.geese_crossing?.wait ? snap.geese_crossing.stop_s_route : null;
+  // black ice the car has seen (sim/black-ice.js): no manoeuvre may take it onto a patch faster than its
+  // safe speed, or brake, accelerate or skid on one (the ice under every forward sim's tyres is the car
+  // model's own: sim/vehicle.js ROAD.gripAt)
+  const icy = snap.black_ice_ahead && world.ice?.list.length ? snap.black_ice_ahead : null;
+  const iceStart = icy ? patchesUnder(world.ice, world.ego) : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, ballFast = false, intoGeese = false, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, ballFast = false, intoGeese = false, iceCall = null, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -493,6 +509,8 @@ export function simulateAll(candidates, snap, world) {
         const wheelsAfter = wheelPoints(car);
         for (const h of holes) if (car.v > safeSpeed(h) + SIM_OVER_MPS && wheelsAfter.some(([x, y], i) => crossesPothole(h, wheelsBefore[i][0], wheelsBefore[i][1], x, y))) { potholeFast = true; break; }
       }
+      // (onto black ice too fast, or braking, accelerating or skidding on it: sim/black-ice.js)
+      if (icy && !iceCall) iceCall = iceSimCheck(world.ice, icy, car, t, iceStart);
       // Static map geometry is known even when fog or a corner hides moving traffic. Use the
       // same footprint sweep as execution, including reverse and sideways body motion.
       // Keep sweeping after a predicted vehicle contact, so a later static hit is still known.
@@ -652,6 +670,7 @@ export function simulateAll(candidates, snap, world) {
     else if (potholeFast && c.law.kind !== "hard_brake") reject = "hits_pothole_too_fast";
     else if (ballFast && c.law.kind !== "hard_brake") reject = "passes_ball_gap_too_fast";
     else if (intoGeese && c.law.kind !== "hard_brake") reject = "drives_into_geese";
+    else if (iceCall && c.law.kind !== "hard_brake") reject = iceCall === "fast" ? "crosses_ice_too_fast" : "brakes_on_ice";
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";

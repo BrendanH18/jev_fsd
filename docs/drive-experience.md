@@ -235,3 +235,18 @@ road; one may stop in your lane. Driving on within 2 m of a goose on the road, o
 counts as `wildlife_conflicts`: 20 safety points each, a replay marker and a coaching tip, reported
 only once a gaggle has crossed near you. Hitting one is also a collision. Use `?geese=0` to turn them
 off.
+
+### Black ice
+
+In free drives (and the **Bridges freeze first** lesson), when it is near freezing (snow at any
+hour; freezing fog, rain, or a clear frosty night, late at night and early in the morning), thin
+patches of black ice lie on bridge decks and overpasses and on stretches of street in the shade of
+tall buildings, while the rest of the road looks dry or damp. They are drawn as a faint, glossy
+glaze that darkens the asphalt a little and catches your headlights at night and a low sun by day;
+by day you will hardly see one until you are close. On the ice the tyres have about a tenth of their
+grip, for every car, cyclist and the car you drive: brake or steer hard on it and the car slides.
+The HUD says BRIDGES FREEZE FIRST · 40 KM/H coming up to a bridge, BLACK ICE AHEAD · EASE OFF TO
+28 KM/H BEFORE IT once a patch is in sight, and ON BLACK ICE · HOLD 28 KM/H · NO BRAKING OR SHARP
+STEERING on it. Going onto a patch more than 10 km/h faster than its safe speed, or braking,
+accelerating or skidding on one, counts as `ice_overspeed`: 20 safety points each, a replay marker
+and a coaching tip, reported only once you have come near black ice. Use `?ice=0` to take it off.

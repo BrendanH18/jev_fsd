@@ -47,6 +47,7 @@ import { DrivewayReversers, auditReversers, reverserHidden } from "./driveway-re
 import { Potholes, auditPotholes } from "./potholes.js";
 import { BallChase, auditBalls } from "./ball-chase.js";
 import { Geese, auditGeese } from "./geese.js";
+import { BlackIce, auditIce } from "./black-ice.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -232,7 +233,9 @@ export class World {
   // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
   // `geese`: now and then, by day, a gaggle of Canada geese crosses a street beside a park or water near
   // the car's way, and everyone waits until the last one is off the road (sim/geese.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false } = {}) {
+  // `ice`: near freezing, black ice forms on bridges and in the shade of tall buildings, where everyone's
+  // tyres lose their grip, and everyone slows before it and crosses it gently (sim/black-ice.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, ice = false } = {}) {
     this.map = map;
     // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
     // fresh red, whether one has committed near the car this drive, and the junction the audit watches
@@ -368,6 +371,11 @@ export class World {
     this.geese = new Geese(this, { enabled: geese, seed });
     this.geeseSeen = false;
     this.geeseCalls = new Map();
+    // black ice (sim/black-ice.js): where it forms, whether the car has come near a patch this drive, and
+    // the patches it is crossing (built in every world: one without it clears the car model's grip hook)
+    this.ice = new BlackIce(this, { enabled: ice, seed });
+    this.iceSeen = false;
+    this.iceCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -493,6 +501,7 @@ export class World {
     this.potholeCalls?.clear();
     this.ballCalls?.clear();
     this.geeseCalls?.clear();
+    this.iceCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -764,6 +773,7 @@ export class World {
     if (this.potholes.enabled) auditPotholes(this);
     if (this.balls?.enabled) auditBalls(this);
     if (this.geese.enabled) auditGeese(this);
+    if (this.ice?.enabled) auditIce(this);
     this.auditKerb();
     leftSpace(this);
   }

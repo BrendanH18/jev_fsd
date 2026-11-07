@@ -33,6 +33,8 @@ import { turnBanned } from "./turn-restrictions.js";
 // short of the gap it came from, until the child after it has come and gone (sim/ball-chase.js ballYield).
 // With `geese` on, drivers and cyclists slow for a gaggle of Canada geese coming up to the kerb ahead and
 // stop short of their way across until the last goose is off the roadway (sim/geese.js geeseYield).
+// With `ice` on, drivers and cyclists slow for black ice ahead, and for bridges in icy weather, and only
+// ease off on the ice; their tyres feel it through the shared car model (sim/black-ice.js npcIce).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -70,6 +72,7 @@ import { reverserYield } from "./driveway-reversers.js";
 import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { ballYield } from "./ball-chase.js";
 import { geeseYield } from "./geese.js";
+import { npcIce } from "./black-ice.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -1083,7 +1086,10 @@ export class NpcFleet {
       // (and, having seen a ball roll into the street ahead, no faster than it can stop from short of
       // the gap it came from: sim/ball-chase.js)
       const vBall = this.world.balls?.balls.length && !n.transit?.tram ? ballYield(this.world, n, front)?.limit ?? Infinity : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity);
+      // (and, with black ice on, slowing for the ice ahead, and for bridges in icy weather, and easing off
+      // on it: sim/black-ice.js; a streetcar's steel wheels do not feel it)
+      const vIce = this.world.ice?.list.length && !n.transit?.tram ? npcIce(this.world, n, front)?.limit ?? Infinity : Infinity;
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

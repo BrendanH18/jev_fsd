@@ -3,8 +3,9 @@
 (jev/osm/transit.py), marked crosswalks (jev/osm/crossings.py), school and playground zones
 (jev/osm/zones.py), railway level crossings (jev/osm/rail.py), speed humps and the like
 (jev/osm/calming.py), scramble crossings (jev/osm/scrambles.py), the one-way streets cyclists may
-ride both ways (jev/osm/contraflow.py), driveways (jev/osm/driveways.py) and the parks and water geese
-live by (jev/osm/parks.py), and print its statistics.
+ride both ways (jev/osm/contraflow.py), driveways (jev/osm/driveways.py), the parks and water geese
+live by (jev/osm/parks.py) and the bridges black ice forms on first (jev/osm/bridges.py), and print its
+statistics.
 
     uv run scripts/fetch_map.py                                   # the configured/default bbox
     uv run scripts/fetch_map.py -123.1120,49.2570,-123.0940,49.2680   # W,S,E,N
@@ -24,7 +25,8 @@ live by (jev/osm/parks.py), and print its statistics.
                                                                   # OSM (downloaded if it is not cached)
     uv run scripts/fetch_map.py ... --parks                       # rebuild only the parks and water layer, from
                                                                   # the raw OSM (downloaded if it is not cached)
-    uv run scripts/fetch_map.py ... --calming                     # rebuild only the speed humps and the
+    uv run scripts/fetch_map.py ... --bridges                     # rebuild only the bridges layer, likewise
+    uv run scripts/fetch_map.py ... --calming                    # rebuild only the speed humps and the
                                                                   # scramble crossings, likewise
 """
 
@@ -45,6 +47,7 @@ from jev.osm.contraflow import build_contraflow, contraflow_path  # noqa: E402
 from jev.osm.crossings import build_crossings, crossings_path  # noqa: E402
 from jev.osm.driveways import build_driveways, driveways_path  # noqa: E402
 from jev.osm.parks import build_parks, parks_path  # noqa: E402
+from jev.osm.bridges import build_bridges, bridges_path  # noqa: E402
 from jev.osm.rail import build_rail, rail_path  # noqa: E402
 from jev.osm.scrambles import build_scrambles, scrambles_path  # noqa: E402
 from jev.osm.transit import build_transit, transit_path  # noqa: E402
@@ -86,6 +89,13 @@ def main(argv: list) -> int:
             parks = build_parks(bbox, MAPS_DIR, pack, force=True, log=print)
             print("parks: %s (%d parks and waters, %d street spans beside them)" % (parks_path(MAPS_DIR, bbox), len(parks["areas"]), len(parks["spans"])))
             return 0
+        if "--bridges" in argv:
+            # Rebuild only the sidecar; never rebuild the street pack or other layers.
+            pack = build_pack(bbox, MAPS_DIR, log=print)
+            fetch.fetch_osm_xml(bbox, MAPS_DIR, force=force, log=print)
+            bridges = build_bridges(bbox, MAPS_DIR, pack, force=True, log=print)
+            print("bridges: %s (%d street spans on bridges)" % (bridges_path(MAPS_DIR, bbox), len(bridges["spans"])))
+            return 0
         if "--crossings" in argv:
             # Rebuild only the sidecar; never rebuild the street pack or other layers.
             pack = build_pack(bbox, MAPS_DIR, log=print)
@@ -113,6 +123,7 @@ def main(argv: list) -> int:
         contraflow = build_contraflow(bbox, MAPS_DIR, pack, force=force, log=print)
         driveways = build_driveways(bbox, MAPS_DIR, pack, force=force, log=print)
         parks = build_parks(bbox, MAPS_DIR, pack, force=force, log=print)
+        bridges = build_bridges(bbox, MAPS_DIR, pack, force=force, log=print)
     except fetch.FetchError as err:
         print("FAILED: %s" % err)
         return 1
@@ -136,6 +147,8 @@ def main(argv: list) -> int:
         print("driveways: %s (%d driveways)" % (driveways_path(MAPS_DIR, bbox), len(driveways["driveways"])))
     if parks:
         print("parks: %s (%d parks and waters, %d street spans beside them)" % (parks_path(MAPS_DIR, bbox), len(parks["areas"]), len(parks["spans"])))
+    if bridges:
+        print("bridges: %s (%d street spans on bridges)" % (bridges_path(MAPS_DIR, bbox), len(bridges["spans"])))
     print("pack: %s" % pack_path(MAPS_DIR, bbox))
     print("edges %d, lanes %d, signalled intersections %d, stop signs %d, buildings %d" % (
         len(pack["edges"]), len(pack["lanes"]), len(pack["intersections"]), len(pack["stops"]), len(pack["buildings"])))

@@ -85,6 +85,8 @@ export class RulesBrain {
       // once someone is crossing ahead, stopping for them comes first)
       if (c.id === "slow_for_ball" && !snap.pedestrian) cost -= 4;
       if (c.id === "wait_for_geese" && snap.geese_crossing?.wait) cost -= 6;
+      // (black ice seen ahead: easing off early, to cross it steadily, sim/black-ice.js)
+      if (c.id === "slow_for_ice" && snap.black_ice) cost -= 2;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;
