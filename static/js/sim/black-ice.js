@@ -79,15 +79,19 @@ const STEP_M = 2, CELL = 25;
 const NEAR_AHEAD_M = 40;
 // Rail vehicles (sim/streetcar.js, sim/rail.js) run on steel rails.
 const RAIL = new Set(["streetcar", "train"]);
+// The days of the year (1 November, 31 March, a common year) between which a night can freeze.
+const COLD_DAYS = [305, 90];
 
 // Whether the weather and the time of day (`clock.hour`) favour black ice: { kind, text }, or null. Snow
 // at any hour (what melts refreezes); freezing fog by night and in the morning; rain on a road cooling
-// toward freezing late at night and early in the morning; and frost after a clear, cold night. Without
-// a clock, only snow.
+// toward freezing late at night and early in the morning; and frost after a clear, cold night. Those
+// three need the clock's `day` of the year in the cold season (COLD_DAYS, November to March): a clock
+// without one (free drives keep the sky's late-September sun) or without a clock, only snow.
+export const isColdSeason = (day) => Number.isFinite(day) && (day >= COLD_DAYS[0] || day <= COLD_DAYS[1]);
 export function iceConditions(weather, clock) {
   if (weather === "snow") return { kind: "snow", text: "snow: what melts on the road refreezes" };
   const h = clock?.hour;
-  if (!Number.isFinite(h)) return null;
+  if (!Number.isFinite(h) || !isColdSeason(clock.day)) return null;
   if (weather === "fog" && (h < 11 || h >= 18)) return { kind: "freezing_fog", text: "freezing fog near zero" };
   if (weather === "rain" && (h < 9 || h >= 20)) return { kind: "freezing_rain", text: "rain on a road cooling to freezing" };
   if (weather === "dry" && (h < 9 || h >= 22)) return { kind: "frost", text: "a clear night near freezing: frost on the road" };

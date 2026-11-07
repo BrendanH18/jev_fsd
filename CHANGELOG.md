@@ -1501,8 +1501,10 @@
   two lanes each way, with a tailgater in your lane, an empty lane on the right and a light ahead
   that turns amber.
 
-- Black ice in free drives (`?ice=0` takes it off). Near freezing (snow at any hour, freezing fog,
-  or rain or a clear frosty night late at night and early in the morning), thin, nearly invisible
+- Black ice in free drives while it snows (`?ice=0` takes it off). Near freezing (snow at any hour;
+  and, on a clock with a date from November to March, freezing fog, or rain or a clear frosty night
+  late at night and early in the morning; free drives keep the sky's late-September sun, so only
+  snow brings it there), thin, nearly invisible
   patches of ice lie on the road: on bridge decks and overpasses, from a new `bridges` layer beside
   each pack (`jev/osm/bridges.py`; the street packs are unchanged), and on stretches in the shade of
   tall buildings, placed from their own random stream. On a patch the tyres have about a tenth of

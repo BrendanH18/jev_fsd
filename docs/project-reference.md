@@ -2068,7 +2068,10 @@ the one car model, all of them slide on the ice alike.
 
 **Conditions.** `iceConditions(weather, clock)` favours ice in snow at any hour; in fog before 11:00
 or from 18:00 (freezing fog); in rain before 9:00 or from 20:00; on a dry road before 9:00 or from
-22:00 (frost after a clear night). Without a clock (the benchmark), only snow. `refresh` runs at the
+22:00 (frost after a clear night). Those three need the clock's `day` of the year in the cold
+season (`isColdSeason`: 1 November to 31 March); a clock without a `day` (free drives, which keep
+the sky's late-September sun) and no clock at all (the benchmark) favour ice only in snow. The
+`World` keeps the clock's `day` with ice on, as it does with sun glare. `refresh` runs at the
 start of every `stepWorld`: while conditions favour ice every placed patch lies on the road (`list`),
 otherwise none, so changing the weather or the time mid-drive brings it or takes it away. A
 challenge's `setList` fixes its own patches whatever the conditions.

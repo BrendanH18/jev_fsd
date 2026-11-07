@@ -54,7 +54,7 @@ const lesson = CHALLENGES.find(c => c.id === "bridges-freeze-first");
 const COMPACT = getVehicleModel("compact").spec;
 // The Traffic Bridge's deck northbound (226 m, one lane each way, 50 km/h), and 3rd Avenue South past it.
 const DECK = "e572", lane = SK.lane(DECK, 0), NEXT = "e475";
-const MORNING = { hour: 6.5, sun_deg: -4 };
+const MORNING = { hour: 6.5, sun_deg: -4, day: 340 };
 
 // A world on the deck with ice on (or off), at dawn, the car `s` metres along it at `v` m/s, a route to
 // past its end, and one patch from `from` to `to` (metres along the deck) in place of the world's own.
@@ -91,8 +91,12 @@ function trafficCar(world, fleet, s, v, spec = CAR, id = "npc") {
   return car;
 }
 
-await test("conditions: snow at any hour, freezing fog, rain and frost by night and early morning, nothing without a clock but snow", () => {
-  const at = (w, hour) => ICE.iceConditions(w, hour === null ? null : { hour })?.kind ?? null;
+await test("conditions: snow at any hour, freezing fog, rain and frost by night and early morning in the cold season, only snow without a winter date", () => {
+  const at = (w, hour, day = 340) => ICE.iceConditions(w, hour === null ? null : { hour, day })?.kind ?? null;
+  // (free drives' clock has no day, and keeps the sky's late-September sun: only snow; nor in September)
+  assert.equal(ICE.iceConditions("dry", { hour: 6.5 }), null); assert.equal(ICE.iceConditions("rain", { hour: 5 }), null);
+  assert.equal(at("dry", 6.5, 265), null); assert.equal(at("fog", 7, 200), null); assert.equal(at("snow", 14, 200), "snow");
+  assert.equal(at("dry", 6.5, 20), "frost"); assert.equal(at("dry", 6.5, 305), "frost"); assert.equal(at("dry", 6.5, 91), null);
   assert.equal(at("snow", 14), "snow"); assert.equal(at("snow", null), "snow");
   assert.equal(at("dry", 6.5), "frost"); assert.equal(at("dry", 23), "frost"); assert.equal(at("dry", 15.5), null); assert.equal(at("dry", null), null);
   assert.equal(at("fog", 7), "freezing_fog"); assert.equal(at("fog", 13), null);
@@ -104,7 +108,7 @@ await test("conditions: snow at any hour, freezing fog, rain and frost by night 
 
 await test("placement: from its own stream, on the bridges and in the shade of tall buildings, lying on the road only while conditions favour ice", () => {
   setWeather("dry");
-  const mk = (seed, hour = 6.5) => { const w = new World(SK, { seed, parked: 0, pedestrians: 0, ice: true }); w.setClock({ hour, sun_deg: 0 }); w.ice.refresh(w); return w; };
+  const mk = (seed, hour = 6.5) => { const w = new World(SK, { seed, parked: 0, pedestrians: 0, ice: true }); w.setClock({ hour, sun_deg: 0, day: 340 }); w.ice.refresh(w); return w; };
   const a = mk(3), b = mk(3), c = mk(4);
   assert.equal(a.ice.enabled, true);
   assert.equal(JSON.stringify(a.ice.all.map(p => [p.edge, p.from, p.to, p.mu])), JSON.stringify(b.ice.all.map(p => [p.edge, p.from, p.to, p.mu])));

@@ -253,8 +253,9 @@ points each, a replay marker and a coaching tip, reported only once a tailgater 
 
 ### Black ice
 
-In free drives (and the **Bridges freeze first** lesson), when it is near freezing (snow at any
-hour; freezing fog, rain, or a clear frosty night, late at night and early in the morning), thin
+In free drives while it snows (and in the **Bridges freeze first** lesson, and any drive whose
+clock has a winter date: freezing fog, rain, or a clear frosty night, late at night and early in
+the morning), thin
 patches of black ice lie on bridge decks and overpasses and on stretches of street in the shade of
 tall buildings, while the rest of the road looks dry or damp. They are drawn as a faint, glossy
 glaze that darkens the asphalt a little and catches your headlights at night and a low sun by day;

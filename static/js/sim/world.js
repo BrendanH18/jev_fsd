@@ -548,7 +548,7 @@ export class World {
 
   // (with sun glare on, the clock may also carry the `day` of the year and a `utc_offset`, for the sun:
   // sim/sun-glare.js)
-  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}), ...(this.sunGlare && clock.day !== undefined ? { day: clock.day } : {}), ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}) } : null; }
+  setClock(clock) { this.clock = clock ? { hour: clock.hour, sun_deg: clock.sun_deg, ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}), ...((this.sunGlare || this.ice?.enabled) && clock.day !== undefined ? { day: clock.day } : {}), ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}) } : null; }
 
   // Where the ego is relative to the road network (cached per tick). `limit` is the street's, or a
   // school or playground zone's while it is in effect there (`zone`).
