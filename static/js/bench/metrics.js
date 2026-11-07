@@ -110,6 +110,8 @@ export class DriveMetrics {
       ...(world.potholesSeen ? { pothole_hits: v.pothole_hits || 0 } : {}),
       // (only for a drive in which a ball rolled into the street near the car: sim/ball-chase.js)
       ...(world.ballsSeen ? { ball_warnings_ignored: v.ball_warnings_ignored || 0 } : {}),
+      // (only for a drive a gaggle of Canada geese crossed near the car in: sim/geese.js)
+      ...(world.geeseSeen ? { wildlife_conflicts: v.wildlife_conflicts || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -167,6 +169,7 @@ export function failures(m) {
   if (m.reversing_conflicts) f.push("squeezed past or failed to stop for a car backing out");
   if (m.pothole_hits) f.push("hit a pothole too fast");
   if (m.ball_warnings_ignored) f.push("ignored a ball rolling into the street");
+  if (m.wildlife_conflicts) f.push("drove into or too close to geese crossing the road");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

@@ -208,7 +208,7 @@ await test("traffic on a fresh green waits at the line for the runner, then goes
 
 // The real map, as the Lab loads it.
 const pack = JSON.parse(fs.readFileSync(new URL("../data/maps/3e794edbefcb.v6.pack.json", import.meta.url)));
-for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
+for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) {
   const url = [2, 1].map(v => new URL(`../data/maps/3e794edbefcb.${layer}.v${v}.json`, import.meta.url)).find(url => fs.existsSync(url));
   if (url) pack[layer] = JSON.parse(fs.readFileSync(url));
 }

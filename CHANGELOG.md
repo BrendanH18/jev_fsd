@@ -31,6 +31,27 @@
 - New Lab challenge, **Chasing the ball** (seed 52042): West 7th Avenue in Kitsilano, a ball
   rolling out in plain view from between the parked cars, and a child after it.
 
+- Canada geese cross the road in free drives (`?geese=0` disables them). A new layer beside each
+  pack, `<key>.parks.v1.json` (`jev/osm/parks.py`, `scripts/fetch_map.py ... --parks`), records
+  the parks, gardens, recreation grounds, large lawns and water geese live by, and the stretches
+  of street beside or between them: 149 areas and 889 spans across the twelve maps, from 32 in
+  Mount Pleasant to 155 in Halifax, 10 of them beside the South Saskatchewan River in Saskatoon. The street packs are
+  unchanged. Now and then, from its own random stream, by day and not in snow, a gaggle of 4 to 9
+  geese (sometimes adults with their goslings) gathers on the grass beside such a street ahead on
+  the car's route and, as the car comes along, crosses in loose single file at 0.4 to 0.8 m/s:
+  the lead looks at the kerb and steps off only once nothing coming would have to brake hard, one
+  or another pauses on the road, and in some gaggles one stands in the road for several seconds.
+  Traffic, cyclists and the driven car slow while they come up to the kerb and stop short of
+  their way across until the last goose is off the road. Geese are small obstacles in
+  `world.obstaclesNear`, not traffic: hitting one is a collision (at fault when the car was
+  moving). Sensing reports `geese_crossing`, with the new `wait_for_geese` candidate and the
+  `drives_into_geese` rejection. Moving faster than a crawl within 2 m of a goose on the road, or
+  hitting one, counts as `wildlife_conflicts`, reported only once a gaggle has crossed near the
+  driven car. Low-poly geese waddle across (instanced: four draw calls a gaggle), and the HUD says
+  when geese are by the road or crossing.
+- New Lab challenge, **Goose crossing** (seed 53042): Clemow Avenue in Ottawa's Glebe, between
+  Central Park and Patterson's Creek Park, where a family of geese crosses and one stops in your
+  lane.
 - CI runs on Namespace runners. Each Node check has a six-minute limit and every job a
   `timeout-minutes`, so a runaway check fails fast; the Node loop runs every check and lists the
   ones that failed or timed out. uv's cache and Playwright's Chromium download are cached, a new

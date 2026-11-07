@@ -1,0 +1,245 @@
+{
+  "name": "goose_crossing",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 7.3,
+      "limit": 8.5,
+      "speed_vs_limit": "under",
+      "target_speed": 8.5,
+      "target_reason": "speed limit",
+      "speed_vs_target": "below target"
+    },
+    "visibility": {
+      "range_m": 80,
+      "clear_path_m": 62.4,
+      "safe_speed_mps": 14.1,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "nav": {
+      "next_turn": "none",
+      "turn_in_m": 62.4,
+      "remaining_m": 62.4,
+      "destination": {
+        "right": 0.4,
+        "ahead": 62.4
+      },
+      "on_route": true
+    },
+    "road": {
+      "name": "Clemow Avenue",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": -0.1
+    },
+    "intersection": {
+      "control": "uncontrolled",
+      "bumper_to_line_m": -9.6,
+      "distance": "at",
+      "entered": true,
+      "cross_traffic_moving": false,
+      "right_of_way": "no sign: give way to traffic from the right",
+      "give_way": {
+        "clear": true
+      }
+    },
+    "geese_crossing": {
+      "id": "challenge_gaggle",
+      "geese": 8,
+      "goslings": 5,
+      "coming_from": "left",
+      "now": "crossing the road in single file",
+      "on_road": 2,
+      "gap_m": 26.9,
+      "wait": true,
+      "wait_in_m": 24.9,
+      "slow_to": 8.5
+    },
+    "candidates": [
+      {
+        "id": "wait_for_geese",
+        "steer": "hold lane",
+        "speed": "stop and wait until the last goose is off the road",
+        "end_speed": 5.1,
+        "vs_target": "below target",
+        "max_accel": 2.2,
+        "max_decel": 3.4,
+        "max_lateral_accel": 0.1,
+        "progress_m": 23.1,
+        "lane": "centered",
+        "outcome": "clear, stops 1.9 m short of the geese's way across"
+      },
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "limit 8.5",
+        "end_speed": 8.5,
+        "vs_target": "at target",
+        "max_accel": 2.2,
+        "max_decel": 0,
+        "max_lateral_accel": 0.1,
+        "progress_m": 25,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_hold",
+        "steer": "hold lane",
+        "speed": "keep 7.3",
+        "end_speed": 7.3,
+        "vs_target": "below target",
+        "max_accel": 1.5,
+        "max_decel": 0.3,
+        "max_lateral_accel": 0.1,
+        "progress_m": 22.2,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_cautious",
+        "steer": "hold lane",
+        "speed": "slow to 6.4",
+        "end_speed": 6.4,
+        "vs_target": "below target",
+        "max_accel": 1,
+        "max_decel": 1.1,
+        "max_lateral_accel": 0.1,
+        "progress_m": 20,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_slow",
+        "steer": "hold lane",
+        "speed": "slow to 4.3",
+        "end_speed": 4.3,
+        "vs_target": "below target",
+        "max_accel": 1,
+        "max_decel": 3.3,
+        "max_lateral_accel": 0.1,
+        "progress_m": 15.4,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 1,
+        "max_decel": 6.6,
+        "max_lateral_accel": 0.1,
+        "progress_m": 7.5,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "limit 8.5",
+        "end_speed": 8.5,
+        "vs_target": "at target",
+        "max_accel": 2.1,
+        "max_decel": 0,
+        "max_lateral_accel": 1.8,
+        "progress_m": 25,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_hold",
+        "steer": "shift 0.5 m left",
+        "speed": "keep 7.3",
+        "end_speed": 7.3,
+        "vs_target": "below target",
+        "max_accel": 1.4,
+        "max_decel": 0.3,
+        "max_lateral_accel": 1.8,
+        "progress_m": 22.1,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "limit 8.5",
+        "end_speed": 8.5,
+        "vs_target": "at target",
+        "max_accel": 2.1,
+        "max_decel": 0,
+        "max_lateral_accel": 1.9,
+        "progress_m": 25,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_hold",
+        "steer": "shift 0.5 m right",
+        "speed": "keep 7.3",
+        "end_speed": 7.3,
+        "vs_target": "below target",
+        "max_accel": 1.4,
+        "max_decel": 0.3,
+        "max_lateral_accel": 1.9,
+        "progress_m": 22.1,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 1,
+        "max_decel": 7,
+        "max_lateral_accel": 0.1,
+        "progress_m": 6.8,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ]
+  },
+  "questions": {
+    "motion": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. The junction 0 m ahead has no sign or signal, so the car gives way to traffic coming from the right and to anything already in the junction, and nothing it can see would reach the junction before the car can cross it: go when the junction is clear. A gaggle of 8 Canada geese, 5 of them goslings, 27 m ahead, coming from the left, is crossing the road in single file (2 on the road). Stop short of their way across and wait until the last goose is off the road, on the far side, however long they take: never drive through a gap between geese, and never creep toward the file. Slow down and stop 25 m ahead (`wait_for_geese`). Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Decide whether the car should keep moving or hold still right now.",
+      "criteria": {
+        "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
+        "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when Canada geese are crossing the road ahead (`geese_crossing.wait` true) and the car has reached the point where it stops for them (`geese_crossing.wait_in_m` under 2), until the last goose is off the road, when the path directly ahead is blocked, or when the car has reached the destination."
+      }
+    },
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. The junction 0 m ahead has no sign or signal, so the car gives way to traffic coming from the right and to anything already in the junction, and nothing it can see would reach the junction before the car can cross it: go when the junction is clear. A gaggle of 8 Canada geese, 5 of them goslings, 27 m ahead, coming from the left, is crossing the road in single file (2 on the road). Stop short of their way across and wait until the last goose is off the road, on the far side, however long they take: never drive through a gap between geese, and never creep toward the file. Slow down and stop 25 m ahead (`wait_for_geese`). Objects beyond 80 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "wait_for_geese": "hold lane, stop and wait until the last goose is off the road, +23.1 m, clear, stops 1.9 m short of the geese's way across",
+        "keep_lane_target": "hold lane, limit 8.5, +25 m, clear",
+        "keep_lane_hold": "hold lane, keep 7.3, +22.2 m, clear",
+        "keep_lane_cautious": "hold lane, slow to 6.4, +20 m, clear",
+        "keep_lane_slow": "hold lane, slow to 4.3, +15.4 m, clear",
+        "keep_lane_stop": "hold lane, stop, +7.5 m, clear",
+        "left_0.5_target": "shift 0.5 m left, limit 8.5, +25 m, clear",
+        "left_0.5_hold": "shift 0.5 m left, keep 7.3, +22.1 m, clear",
+        "right_0.5_target": "shift 0.5 m right, limit 8.5, +25 m, clear",
+        "right_0.5_hold": "shift 0.5 m right, keep 7.3, +22.1 m, clear",
+        "hard_brake": "hold lane, brake hard, +6.8 m, clear"
+      }
+    }
+  },
+  "local": {},
+  "expect": {
+    "motion": "drive",
+    "vector_in": [
+      "wait_for_geese",
+      "keep_lane_cautious",
+      "keep_lane_slow",
+      "keep_lane_stop",
+      "hard_brake"
+    ]
+  }
+}

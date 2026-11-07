@@ -12,7 +12,7 @@ const { obbOverlap } = await import("../static/js/sim/collision.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 
 const pack = JSON.parse(fs.readFileSync(new URL("../data/maps/49db0d437c8c.v6.pack.json", import.meta.url)));
-for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
+for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) {
   const url = [2, 1].map(v => new URL(`../data/maps/49db0d437c8c.${layer}.v${v}.json`, import.meta.url)).find(url => fs.existsSync(url));
   if (url) pack[layer] = JSON.parse(fs.readFileSync(url));
 }

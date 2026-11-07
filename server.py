@@ -35,6 +35,7 @@ from jev.osm.calming import build_calming
 from jev.osm.contraflow import build_contraflow
 from jev.osm.crossings import build_crossings
 from jev.osm.driveways import build_driveways
+from jev.osm.parks import build_parks
 from jev.osm.rail import build_rail
 from jev.osm.scrambles import build_scrambles
 from jev.osm.transit import build_transit
@@ -115,6 +116,10 @@ def load_map(bbox_text: str = "") -> dict:
         driveways = build_driveways(bbox, MAPS_DIR, entry["pack"], log=log)
         if driveways:
             entry["pack"] = {**entry["pack"], "driveways": driveways}
+        # and the parks and water geese cross the street beside, likewise
+        parks = build_parks(bbox, MAPS_DIR, entry["pack"], log=log)
+        if parks:
+            entry["pack"] = {**entry["pack"], "parks": parks}
         # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
         offset = map_identity(bbox).get("utc_offset")
         if offset is not None:

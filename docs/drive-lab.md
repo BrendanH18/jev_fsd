@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fifty-one authored challenges
+## Fifty-three authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -14,6 +14,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Reverse lights | Calgary, Beltline | Hidden hazards and driveway reversers on (`driveways`, sim/driveway-reversers.js). 13 Avenue SW (one lane each way, 40 km/h), both kerbs lined with parked cars. A car in a driveway on the right, already across the sidewalk, backs out once the car's front is 70 m away; the parked cars hide each from the other, and it comes into the lane with the car about 30 m off. Squeezing past it or not stopping for it (`reversing_conflicts`) fails the drive. Rules and the cautious agent stop about 9 m back, wait for it to drive off and follow it |
 | Pothole season | Montréal, Rue Saint-Denis | Spring potholes on (`potholes`, sim/potholes.js), in the rain. On the block from Avenue Duluth Est toward Rue Rachel Est (one lane each way, 40 km/h), four water-filled potholes in the car's lane: two in the wheel paths to ease round inside the lane, one wide one across the middle to slow to about 15 km/h for, and one between the wheels. A wheel into one faster than its safe speed plus 5 km/h (`pothole_hits`) fails the drive |
 | Chasing the ball | Vancouver, West 7th Avenue | Hidden hazards and balls on (`balls`, sim/ball-chase.js). A residential street (one lane each way, 50 km/h) lined with parked cars. A ball rolls out in plain view from a gap between them on the right once the car's front is 28 m away; 1.2 s later a child runs out after it from behind the parked cars. Passing the gap faster than the car could stop from (`ball_warnings_ignored`) fails the drive. Rules and the cautious agent slow as the ball rolls out, give the child room, and go on once they are back at the kerb; a driver who keeps to 50 km/h hits the child |
+| Goose crossing | Ottawa, the Glebe | Canada geese on (`geese`, sim/geese.js). Clemow Avenue (one lane each way, 40 km/h) between Central Park and Patterson's Creek Park, from the parks layer. Eight geese (three adults, five goslings) on the grass on the left set off across once the car's front is 75 m away, the lead already at the kerb; the adult in the middle stops in the car's lane for 8 s. Driving on within 2 m of a goose on the road, or hitting one (`wildlife_conflicts`), fails the drive. Rules and the cautious agent stop 4–7 m short of the file and wait about 40 s for the last goose |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -158,6 +159,11 @@ that holds 34 km/h hits all three it drives over (`pothole_hits`). Checks:
 into the street means a child may be right behind it. Slow to a speed you can stop from short of
 where it came out, and stay ready to stop until the child has come and gone. Balls are on only for
 this challenge and free drives; the challenge places its one ball and no others.
+
+**Goose crossing** (`goose-crossing`, Ottawa, Clemow Avenue, seed 53042): stop for geese crossing the
+road and wait until the last one is off it; never go through a gap between them, even once the ones
+ahead are across your lane. Geese are on only for this challenge and free drives; the challenge
+places its one gaggle and no others.
 
 ## Paired amber-light lessons
 

@@ -22,7 +22,7 @@ const { rng } = await import("../static/js/common.js");
 
 function loadMap(key) {
   const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${key}.v6.pack.json`, import.meta.url)));
-  for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
+  for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) {
     const file = [2, 1].map(v => new URL(`../data/maps/${key}.${name}.v${v}.json`, import.meta.url)).find(p => fs.existsSync(p));
     if (file) pack[name] = JSON.parse(fs.readFileSync(file));
   }

@@ -131,8 +131,8 @@ class ZoneTests(unittest.TestCase):
         self.assertEqual([(z["id"], z["name"]) for z in out["zones"]], [("sr71", "Big School")])
         xml = ('<?xml version="1.0"?><osm><relation id="71"><member type="way" ref="70" role="outer"/>'
                '<tag k="type" v="multipolygon"/><tag k="amenity" v="school"/></relation>'
-               '<relation id="72"><tag k="type" v="multipolygon"/><tag k="landuse" v="grass"/></relation></osm>')
-        self.assertEqual([r["id"] for r in parse_xml(xml).relations], [71], "only schools and playgrounds are kept")
+               '<relation id="72"><tag k="type" v="multipolygon"/><tag k="landuse" v="retail"/></relation></osm>')
+        self.assertEqual([r["id"] for r in parse_xml(xml).relations], [71], "only schools, playgrounds, and parks and water (jev/osm/parks.py) are kept")
 
     def test_grounds_split_across_several_outer_ways_are_one_ring(self):
         # a square round the middle of the street, its outline in two ways (reversed, as mapped)
