@@ -15,6 +15,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Pothole season | Montréal, Rue Saint-Denis | Spring potholes on (`potholes`, sim/potholes.js), in the rain. On the block from Avenue Duluth Est toward Rue Rachel Est (one lane each way, 40 km/h), four water-filled potholes in the car's lane: two in the wheel paths to ease round inside the lane, one wide one across the middle to slow to about 15 km/h for, and one between the wheels. A wheel into one faster than its safe speed plus 5 km/h (`pothole_hits`) fails the drive |
 | Chasing the ball | Vancouver, West 7th Avenue | Hidden hazards and balls on (`balls`, sim/ball-chase.js). A residential street (one lane each way, 50 km/h) lined with parked cars. A ball rolls out in plain view from a gap between them on the right once the car's front is 28 m away; 1.2 s later a child runs out after it from behind the parked cars. Passing the gap faster than the car could stop from (`ball_warnings_ignored`) fails the drive. Rules and the cautious agent slow as the ball rolls out, give the child room, and go on once they are back at the kerb; a driver who keeps to 50 km/h hits the child |
 | Goose crossing | Ottawa, the Glebe | Canada geese on (`geese`, sim/geese.js). Clemow Avenue (one lane each way, 40 km/h) between Central Park and Patterson's Creek Park, from the parks layer. Eight geese (three adults, five goslings) on the grass on the left set off across once the car's front is 75 m away, the lead already at the kerb; the adult in the middle stops in the car's lane for 8 s. Driving on within 2 m of a goose on the road, or hitting one (`wildlife_conflicts`), fails the drive. Rules and the cautious agent stop 4–7 m short of the file and wait about 40 s for the last goose |
+| Bridges freeze first | Saskatoon, Traffic Bridge | Black ice on (`ice`, sim/black-ice.js), at dawn after a frosty night. Northbound over the South Saskatchewan River (one lane each way, 50 km/h): the deck has iced over for 87 m, ending just short of its north end, where traffic queues for the roundabout. Going onto the ice more than 10 km/h over its safe speed (about 28 km/h), or braking, accelerating or skidding on it (`ice_overspeed`), fails the drive. Rules and the cautious agent keep to 40 km/h on the bridge, slow before the ice and cross it steadily |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -176,6 +177,28 @@ this challenge and free drives; the challenge places its one ball and no others.
 road and wait until the last one is off it; never go through a gap between them, even once the ones
 ahead are across your lane. Geese are on only for this challenge and free drives; the challenge
 places its one gaggle and no others.
+
+**Bridges freeze first** (`bridges-freeze-first`, Saskatoon, Traffic Bridge, seed 55042): bridges
+ice over before the road around them. Near freezing, ease off before a bridge, slow on the dry road
+before black ice, and cross it steadily, without braking, accelerating or steering hard on it. Black
+ice is on only for this challenge and free drives; the challenge places its one patch and no others.
+
+## Bridges freeze first
+
+**Bridges freeze first** (seed 55042) crosses the South Saskatchewan River northbound on Saskatoon's
+Traffic Bridge (one lane each way, 50 km/h), from Nutana toward downtown, at dawn after a clear
+night just below freezing. The car starts at 40 km/h on the bridge's south approach (`e577`) and
+ends on 3rd Avenue South, short of the roundabout at Spadina Crescent. The deck (`e572`, 226 m, on
+the bridges layer) has iced over from 125 m to 212 m along it (black ice, grip 0.11); the approach
+is dry. A local driver 30 m ahead eases off for the ice too, and a car waits at the roundabout's
+yield line until the driven car has stopped behind the queue.
+
+The lesson: keep to about 40 km/h over a bridge when it is near freezing, slow on the dry road to
+about 28 km/h once you see the glossy sheen (about 20 m off by day), and cross the ice steadily,
+leaving room to the car ahead. Rules and the cautious agent go onto the ice at 27–28 km/h, hold it
+across without braking, and arrive; a car holding 50 km/h goes onto it too fast (`ice_overspeed`)
+and fails. Checks: `scripts/test_black_ice.mjs` (its `--write-snapshot` writes the live-model case
+`data/snapshots/bridges_freeze_first.json`) and `tests/test_bridges.py`.
 
 ## Paired amber-light lessons
 

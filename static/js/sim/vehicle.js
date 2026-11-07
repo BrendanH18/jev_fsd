@@ -133,7 +133,10 @@ export const COLLECTION_TRUCK = {
 };
 
 // Road grip from weather. mu ~0.9 dry asphalt, ~0.55 wet, ~0.25 packed snow.
-export const ROAD = { mu: 0.9 };
+// `gripAt`: where grip varies from place to place (black ice, sim/black-ice.js), a function (x, y, spec)
+// giving the friction coefficient under a tyre at (x, y), or null where it is `mu`. It is null in every
+// world without such a surface, and then nothing about it is computed.
+export const ROAD = { mu: 0.9, gripAt: null };
 export const G = 9.81;
 const LOAD_SENSITIVITY = 0.12;   // a tire at twice its static load grips 12% less per newton
 const KINEMATIC_BELOW = 3.0;     // m/s: below this the kinematic model is used
@@ -188,7 +191,8 @@ export class Vehicle {
   // Walking pace: the car goes where its wheels point, limited by the friction circle.
   kinematic(dt) {
     const P = this.spec;
-    const grip = ROAD.mu * G;
+    // (where grip varies, the slipperier axle's: ROAD.gripAt)
+    const grip = (ROAD.gripAt ? Math.min(...axleGrip(this)) : ROAD.mu) * G;
     const a = Math.max(-grip, Math.min(grip, this.a));
     let curvature = Math.tan(this.delta) / P.wheelbase;
     const latMax = Math.sqrt(Math.max(0, grip * grip - a * a));
@@ -214,8 +218,11 @@ export class Vehicle {
     const Fzr = Math.max(0, m * (G * lf + this.ax * P.cgHeight) / L);
     // lateral transfer: the axle's grip falls because the outside tire is over its static load
     const dFz = m * Math.abs(this.latAccel) * P.cgHeight / P.track;
-    const muF = axleMu(mu, Fzf, dFz * P.rollFront, m * G * lr / L);
-    const muR = axleMu(mu, Fzr, dFz * (1 - P.rollFront), m * G * lf / L);
+    // (where grip varies, each axle's own: ROAD.gripAt; elsewhere both are ROAD.mu, untouched)
+    let muFront = mu, muRear = mu;
+    if (ROAD.gripAt) [muFront, muRear] = axleGrip(this);
+    const muF = axleMu(muFront, Fzf, dFz * P.rollFront, m * G * lr / L);
+    const muR = axleMu(muRear, Fzr, dFz * (1 - P.rollFront), m * G * lf / L);
     const vx = this.v, vy = this.vy, r = this.r, d = this.delta;
     const alphaF = Math.atan2(vy + lf * r, vx) - d;
     const alphaR = Math.atan2(vy - lr * r, vx);
@@ -292,6 +299,13 @@ function wrapPsi(v) {
 }
 
 const clampAbs = (x, lim) => Math.max(-lim, Math.min(lim, x));
+
+// The road's grip under a vehicle's front and rear axles, where it varies (ROAD.gripAt): [front, rear].
+function axleGrip(v) {
+  const at = ROAD.gripAt, P = v.spec, wb = P.wheelbase;
+  const front = at(v.x + Math.cos(v.psi) * wb, v.y + Math.sin(v.psi) * wb, P), rear = at(v.x, v.y, P);
+  return [front ?? ROAD.mu, rear ?? ROAD.mu];
+}
 
 // Longitudinal force an axle may use: what its friction circle has left after the cornering force
 // it is being asked for, and never less than a quarter of its grip.

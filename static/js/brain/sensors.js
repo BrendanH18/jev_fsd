@@ -4,6 +4,7 @@ import { reversingVehicle } from "../sim/driveway-reversers.js";
 import { potholeLimit, potholesAhead } from "../sim/potholes.js";
 import { ballInRoad } from "../sim/ball-chase.js";
 import { geeseCrossing } from "../sim/geese.js";
+import { iceLimit, iceSensing } from "../sim/black-ice.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -366,6 +367,9 @@ export function buildSnapshot(world, executing = null) {
     if (world.balls?.enabled) snap.ball_in_road = world.balls.balls.length ? ballInRoad(world, p, frontS) : null;
     // (Canada geese crossing the road, with that option on: sim/geese.js)
     if (world.geese?.enabled) snap.geese_crossing = world.geese.gaggles.length ? geeseCrossing(world, p, frontS, lane) : null;
+    // (black ice the car has seen ahead, and a caution while conditions favour it, with that option on:
+    // sim/black-ice.js)
+    if (world.ice?.enabled) Object.assign(snap, iceSensing(world, p, frontS));
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -469,6 +473,12 @@ export function buildSnapshot(world, executing = null) {
   if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
   // (and coming up to geese by the road, or crossing it: sim/geese.js)
   if (snap.geese_crossing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.geese_crossing.limit_mps);
+  // (and coming up to black ice it has seen, or a bridge in icy weather, and across it: sim/black-ice.js;
+  // the speed is the target itself, so the weather does not take it off again)
+  if ((snap.black_ice_ahead || snap.ice_caution?.slow) && snap.routeProj) {
+    const cap = iceLimit(snap, snap.routeProj.s);
+    if (cap < Infinity) { snap.ice_limit_mps = cap; snap.limit = Math.min(snap.limit, cap / Math.min(1, weather.speed)); }
+  }
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -1779,6 +1789,9 @@ export function desiredSpeed(snap) {
     const vg = gc.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(gc.bumper_to_stop_m - 0.5, decel);
     if (vg < v) { v = vg; reasons.push("geese crossing"); }
   } else if (gc?.limit_mps != null && gc.limit_mps <= v + 0.05) reasons.push("geese by the road");
+  // black ice seen ahead or under the car, or a bridge in icy weather (sim/black-ice.js): `limit` is
+  // already down to it
+  if (snap.ice_limit_mps != null && snap.ice_limit_mps <= v + 0.05) reasons.push(snap.black_ice?.on_ice ? "on black ice: no braking or sharp steering" : snap.black_ice ? "black ice ahead" : "bridges freeze first");
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -1973,6 +1986,7 @@ export function hazardFlags(snap) {
   if (snap.ball_in_road) f.push("ball in the road");
   if (snap.geese_crossing) f.push("geese");
   if (snap.tailgater) f.push("tailgater");
+  if (snap.black_ice || (snap.ice_caution?.bridge && snap.ice_caution.bridge.starts_in_m < 80)) f.push("black ice");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

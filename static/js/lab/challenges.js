@@ -13,6 +13,7 @@ import { ballScenario, placeBall } from "./ball-chase-challenge.js";
 import { geeseScenario, placeGeese } from "./geese-challenge.js";
 import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { tailgaterScenario, installTailgater, stepTailgater } from "./tailgater-challenge.js";
+import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -148,6 +149,8 @@ export const CHALLENGES = [
     description: "Clemow Avenue in the Glebe runs between Central Park and Patterson's Creek Park, where Canada geese graze by the creek. A family of them, goslings and all, is about to walk across the street in front of you.", lesson: "Geese cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them." },
   { id: "on-your-bumper", title: "On your bumper", map: "winnipeg", weather: "dry", time: "afternoon", seed: 56042, icon: "⇊", difficulty: "Courtesy", hazard: "tailgater", tailgaters: true, street: "William Avenue",
     description: "William Avenue runs straight through the Exchange District, two lanes each way, 50 km/h. You're in the left lane when a driver in a hurry closes up right behind you, half a second back, and stays there. The right lane is empty, and the light ahead at Isabel Street will change.", lesson: "A tailgater can't stop in time if you brake suddenly, so never brake-check them and don't speed up to please them. Leave twice your usual gap ahead so you can brake early and gently, and let them by: move into the right lane when it's safe, or, with no lane to move into, ease off a little so they can pass. Canadian driver's handbooks give the same advice." },
+  { id: "bridges-freeze-first", title: "Bridges freeze first", map: "saskatoon", weather: "dry", time: "dawn", seed: 55042, icon: "❄", difficulty: "Control", hazard: "black-ice", ice: true, street: "Traffic Bridge",
+    description: "Dawn after a clear night just below freezing in Saskatoon. You are heading north over the South Saskatchewan River on the Traffic Bridge, toward downtown. The approach is dry, but the deck has iced over, and traffic is queuing for the roundabout just past the far end.", lesson: "Bridges and overpasses freeze before the road around them, and black ice is nearly invisible. Near freezing, ease off before a bridge and watch for a glossy sheen. Slow down on the dry road before the ice, then cross it steadily: no braking, accelerating or sharp steering on it, and leave extra room to the car ahead." },
 ];
 // (road tests, lab/road-tests.js, open and play the same way)
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
@@ -1054,6 +1057,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "ball") return ballScenario(map, challenge);
   if (challenge.hazard === "geese") return geeseScenario(map, challenge);
   if (challenge.hazard === "tailgater") return tailgaterScenario(map, challenge);
+  if (challenge.hazard === "black-ice") return iceScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1274,6 +1278,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.amber) installAmber(world, scenario);
   if (scenario.sunGlare) installSunGlare(world, scenario, challenge.seed);
   if (scenario.potholes) installPotholes(world, scenario);
+  if (scenario.blackIce) installIce(world, fleet, scenario);
   if (scenario.following) installFollowing(world, fleet, scenario);
   if (scenario.freshGreen) installFreshGreen(world, fleet, scenario);
   if (scenario.roadTest) installRoadTest(world, fleet, challenge, scenario);
@@ -1366,6 +1371,7 @@ export function stepChallenge(world, fleet) {
   if (state.following) { stepFollowing(world, fleet); return; }
   if (state.freshGreen) { stepFreshGreen(world); return; }
   if (state.tailgater) { stepTailgater(world); return; }
+  if (state.blackIce) { stepIce(world, fleet); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang

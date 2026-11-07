@@ -196,6 +196,9 @@ export class MapData {
     // left, right, water }
     this.parks = pack.parks?.areas || [];
     this.parkSpans = (pack.parks?.spans || []).filter((sp) => this.edges.has(sp.edge));
+    // the stretches of street on bridges and overpasses, where black ice forms first (jev/osm/bridges.py;
+    // sim/black-ice.js): { edge, from, to, name, kind }
+    this.bridges = (pack.bridges?.spans || []).filter((sp) => this.edges.has(sp.edge));
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
     // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in

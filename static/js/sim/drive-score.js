@@ -95,6 +95,9 @@ export class DriveScore {
     // (with tailgaters, sim/tailgaters.js: braking hard with one close behind when nothing ahead called for
     // it; reported only for a drive one followed the car in)
     this.tailgaters = false; this.brakeChecks = 0;
+    // (with black ice, sim/black-ice.js: crossing a patch too fast, or braking, accelerating or skidding
+    // on one; reported only for a drive in which the car came near one)
+    this.ice = false; this.iceOverspeed = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.followingEnabled = !!world.followingDistance;
     this.followingState = null; this.followingMessage = null;
@@ -204,6 +207,7 @@ export class DriveScore {
     if (world.ballsSeen) this.balls = true;
     if (world.geeseSeen) this.geese = true;
     if (world.tailgatersSeen) this.tailgaters = true;
+    if (world.iceSeen) this.ice = true;
     // (a school crossing guard ahead holding up the STOP sign: sim/crossing-guard.js)
     const guardSign = this.guards && !!world.crossingGuards?.notice()?.stop;
     const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
@@ -243,6 +247,7 @@ export class DriveScore {
       if (ev.type === "ball_warning_ignored") { this.ballWarnings++; this.incident("ball_warning_ignored", "Drove on past where a ball rolled out, too fast to stop for a child after it", { ball: ev.ball, kmh: ev.kmh }); }
       if (ev.type === "reversing_conflict") { this.reversingConflicts++; this.incident("reversing_conflict", ev.reason === "close_pass" ? "Squeezed past a car backing out of a driveway" : "Did not stop for a car backing out into the lane", { car: ev.with, clearance_m: ev.clearance_m }); }
       if (ev.type === "brake_check") { this.brakeChecks++; this.incident("brake_check", "Braked hard with a tailgater close behind, with nothing ahead calling for it", { with: ev.with, decel_mps2: ev.decel_mps2, need_mps2: ev.need_mps2 }); }
+      if (ev.type === "ice_overspeed") { this.iceOverspeed++; this.incident("ice_overspeed", ev.reason === "fast" ? `Crossed black ice at ${Math.round(ev.kmh)} km/h` : ev.reason === "skid" ? "Skidded on black ice" : `${ev.reason === "brake" ? "Braked" : "Accelerated"} hard on black ice`, { patch: ev.patch, reason: ev.reason, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
       if (ev.type === "wildlife_conflict") { this.wildlifeConflicts++; this.incident("wildlife_conflict", ev.reason === "hit" ? "Hit a goose crossing the road" : "Drove on too close to geese crossing the road", { goose: ev.with, gaggle: ev.gaggle, ...(ev.clearance_m !== undefined ? { clearance_m: ev.clearance_m } : {}) }); }
       if (ev.type === "contraflow_conflict") { this.contraflowMeets++; this.incident("contraflow_meet", "Met a cyclist riding against the one-way with less than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
       if (ev.type === "fresh_green_conflict") { this.runnerConflicts++; this.incident("fresh_green_conflict", "Entered on green ahead of a car running the red", { with: ev.with }); }
@@ -362,7 +367,7 @@ export class DriveScore {
     const collisions = delta("collisions"), atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
-      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20 - this.glareSeconds * 5 - this.runnerConflicts * 25 - this.glareSpeeding * 3 - this.reversingConflicts * 20 - this.ballWarnings * 25 - this.wildlifeConflicts * 20)),
+      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20 - this.glareSeconds * 5 - this.runnerConflicts * 25 - this.glareSpeeding * 3 - this.reversingConflicts * 20 - this.ballWarnings * 25 - this.wildlifeConflicts * 20 - this.iceOverspeed * 20)),
       legality: Math.round(clamp(100 - delta("amber_lights_run") * 25 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25 - this.contraflowMeets * 20)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8 - this.potholeHits * 10)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
@@ -395,6 +400,7 @@ export class DriveScore {
     if (this.ballWarnings) tips.push("A ball bouncing into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb.");
     if (this.brakeChecks) tips.push("Never brake-check a tailgater: they can't stop in time. Increase your gap to the car ahead so you can brake early and gently, don't speed up to please them, and let them by: move into the right lane when it's safe, or ease off a little so they can pass.");
     if (this.wildlifeConflicts) tips.push("Geese and their goslings cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them or creep toward them.");
+    if (this.iceOverspeed) tips.push("Near freezing, expect black ice on bridges, overpasses and shaded stretches, even when the road looks only dry or damp. Slow down before them, on the dry road, and cross the ice steadily: no braking, accelerating or sharp steering on it. If you are already on it, ease off and keep the wheel straight.");
     if (this.reversingConflicts) tips.push("Watch driveways for reversing lights. Slow down when a car is backing out ahead, and once it is coming into your lane, stop and give it room to finish; never try to squeeze past behind it.");
     if (this.guardViolations) tips.push("When a school crossing guard holds up the STOP sign, stop before the crosswalk and stay stopped until the guard and every child are off the road, not just out of your lane. Slow down whenever children wait at the curb with a guard.");
     if (this.closePasses) tips.push("Give cyclists room: leave at least 1 m when you pass one where the limit is 50 km/h or less, 1.5 m above. On a street with one lane each way that means moving into the oncoming lane, so stay behind until it is clear.");
@@ -449,6 +455,7 @@ export class DriveScore {
       ...(this.balls ? { ball_warnings_ignored: this.ballWarnings } : {}),
       ...(this.geese ? { wildlife_conflicts: this.wildlifeConflicts } : {}),
       ...(this.tailgaters ? { brake_checks: this.brakeChecks } : {}),
+      ...(this.ice ? { ice_overspeed: this.iceOverspeed } : {}),
       ...(this.contraflow ? { contraflow_conflicts: this.contraflowMeets + this.contraflowCutoffs, contraflow_meets: this.contraflowMeets, contraflow_cutoffs: this.contraflowCutoffs } : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),

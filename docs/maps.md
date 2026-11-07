@@ -205,3 +205,16 @@ Halifax; only Saskatoon's bbox has water beside a street (the South Saskatchewan
 Ottawa's bbox has 18 areas and 75 spans but stops short of the Rideau Canal. Ottawa is too big for the
 main API's 50,000-node limit, so its raw download comes from Overpass, whose query asks for parks and
 water too. Geese cross the street there (sim/geese.js).
+
+Bridges are a separate `<key>.bridges.v1.json` layer (`jev/osm/bridges.py`), built with
+`uv run scripts/fetch_map.py <preset> --bridges` from the raw OSM download (fetched if absent; only
+the layer is committed). Its `spans` are the stretches of pack streets, each way the traffic goes,
+whose centreline runs within 4 m of a drivable way tagged `bridge=*` (not `no`: bridges, viaducts,
+overpasses, movable bridges), going its way (within 25°, so a street passing under one is not on it)
+and between its ends: the `edge`, `from` and `to` along it, the bridge's `name` (`bridge:name`, else
+`name`) and `kind` (the `bridge` value). Stretches closer than 6 m are one; those under 8 m and
+roundabout rings are left out. All twelve presets have layers, most of them empty: Saskatoon has the
+Traffic Bridge and the Broadway Bridge over the South Saskatchewan River (6 spans), Victoria the
+Johnson Street Bridge and its approaches (10), Kitsilano a stretch of West Broadway mapped as a bridge (6).
+The other bboxes have only footbridges, rail bridges or motorways that are not pack streets. Black ice
+forms there first (sim/black-ice.js).
