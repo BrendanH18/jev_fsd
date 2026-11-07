@@ -14,7 +14,7 @@ import { LAYER, groundLayer } from "./scene.js";
 // Across a patch, this many columns of vertices; along it, a row every STEP_M.
 const COLUMNS = 8, STEP_M = 1.5;
 // How far its edges feather into the dry road, and how strongly the glaze shows at its heart.
-const FEATHER_M = 1.6, ALPHA = 0.55;
+const FEATHER_M = 1.6, ALPHA = 0.7;
 
 // Value noise along a patch (s metres) and across it (u, 0 to 1), from its shape seed: the glaze is
 // thicker in streaks along the wheel paths and thins in places.
@@ -67,7 +67,7 @@ export class IceView {
     this.version = -1;
     // (a dark, clear glaze: a mirror-smooth surface that darkens the asphalt a little and catches
     // specular light, the headlights' and the sun's, at a glancing angle)
-    this.material = new THREE.MeshStandardMaterial({ color: 0x2a3138, roughness: 0.04, metalness: 0.0, envMapIntensity: 1.8, transparent: true, vertexColors: true, side: THREE.DoubleSide });
+    this.material = new THREE.MeshStandardMaterial({ color: 0x3d4b58, emissive: 0x2a3a4a, roughness: 0.04, metalness: 0.0, envMapIntensity: 1.8, transparent: true, vertexColors: true, side: THREE.DoubleSide });
   }
 
   // Follow the world's ice: rebuilt when its patches change, shown while any lie on the road.
