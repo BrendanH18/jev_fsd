@@ -4,6 +4,7 @@ import { reversingVehicle } from "../sim/driveway-reversers.js";
 import { potholeLimit, potholesAhead } from "../sim/potholes.js";
 import { ballInRoad } from "../sim/ball-chase.js";
 import { geeseCrossing } from "../sim/geese.js";
+import { snowbankAhead } from "../sim/snowbanks.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -365,6 +366,9 @@ export function buildSnapshot(world, executing = null) {
     if (world.balls?.enabled) snap.ball_in_road = world.balls.balls.length ? ballInRoad(world, p, frontS) : null;
     // (Canada geese crossing the road, with that option on: sim/geese.js)
     if (world.geese?.enabled) snap.geese_crossing = world.geese.gaggles.length ? geeseCrossing(world, p, frontS, lane) : null;
+    // (snowbanks: a narrowed stretch to take turns through, and corners they hide, with that option on:
+    // sim/snowbanks.js)
+    if (world.snowbanks?.enabled) snap.snowbank = snowbankAhead(world, p, frontS);
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -384,7 +388,7 @@ export function buildSnapshot(world, executing = null) {
     // go: see workZone and doubleParked)
     // (and round a cyclist, through the oncoming lane: see cyclistPass)
     // (and over to the right for a contraflow cyclist coming the other way: see contraflowCyclist)
-    const detour = snap.work_zone?.detour || snap.lane_closure?.detour || snap.double_parked?.detour || snap.cyclist_pass?.detour || snap.contraflow_cyclist?.detour || null;
+    const detour = snap.work_zone?.detour || snap.lane_closure?.detour || snap.double_parked?.detour || snap.cyclist_pass?.detour || snap.contraflow_cyclist?.detour || snap.snowbank?.narrowing?.detour || null;
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
     const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
     const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center, frame)
@@ -462,6 +466,9 @@ export function buildSnapshot(world, executing = null) {
   if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
   // (and coming up to geese by the road, or crossing it: sim/geese.js)
   if (snap.geese_crossing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.geese_crossing.limit_mps);
+  // (and through a narrowed stretch between snowbanks, and up to a corner a snowbank hides: sim/snowbanks.js)
+  if (snap.snowbank?.narrowing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.snowbank.narrowing.limit_mps);
+  if (snap.snowbank?.corner) snap.limit = Math.min(snap.limit, snap.snowbank.corner.limit_mps);
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -1523,7 +1530,8 @@ function giveWayAt(world, c, frontS) {
         const b = Math.min(back, far), p = alongApproach(map, e, b);
         // as far as the car can see at all, in this weather and light
         if (Math.hypot(p[0] - ego.x, p[1] - ego.y) > world.visibility.rangeAt(ego, ...p)) break;
-        if (world.visibility.occluded([ego.x, ego.y], p)) { blocked = true; break; }
+        // (or, with snowbanks on, a high one at the corner: sim/snowbanks.js)
+        if (world.visibility.occluded([ego.x, ego.y], p) || (world.snowbanks?.piles.length && world.snowbanks.blocksView([ego.x, ego.y], p))) { blocked = true; break; }
         last = b;
         if (b >= far) break;
       }
@@ -1763,6 +1771,14 @@ export function desiredSpeed(snap) {
     const vg = gc.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(gc.bumper_to_stop_m - 0.5, decel);
     if (vg < v) { v = vg; reasons.push("geese crossing"); }
   } else if (gc?.limit_mps != null && gc.limit_mps <= v + 0.05) reasons.push("geese by the road");
+  // between snowbanks (sim/snowbanks.js): wait short of the one-car stretch while it is the oncoming car's
+  // turn; `limit` is already down to the speed through it, and to the creep up to a hidden corner
+  const nb = snap.snowbank?.narrowing;
+  if (nb?.wait) {
+    const vn = nb.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(nb.bumper_to_stop_m - 0.5, decel);
+    if (vn < v) { v = vn; reasons.push("oncoming car's turn between the snowbanks"); }
+  } else if (nb?.limit_mps != null && nb.limit_mps <= v + 0.05) reasons.push(nb.squeeze ? "squeezing past an oncoming car between the snowbanks" : "narrowed by snowbanks");
+  if (snap.snowbank?.corner && snap.snowbank.corner.limit_mps <= v + 0.05) reasons.push("snowbank hides the corner");
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -1956,6 +1972,8 @@ export function hazardFlags(snap) {
   if (snap.pothole) f.push("pothole");
   if (snap.ball_in_road) f.push("ball in the road");
   if (snap.geese_crossing) f.push("geese");
+  if (snap.snowbank?.narrowing) f.push("snowbank narrowing");
+  if (snap.snowbank?.corner) f.push("snowbank corner");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

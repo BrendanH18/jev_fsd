@@ -166,6 +166,20 @@ export class ParkedCars {
     return this.activeDoors.filter((d) => d.angle > 0.02 && Math.hypot(d.x - x, d.y - y) < r);
   }
 
+  // Move parked car `car` (its rear axle) to (x, y), keeping the grid in step (snowbanks push the cars
+  // parked in a narrowing out from the kerb: sim/snowbanks.js).
+  move(car, x, y) {
+    const key = (c) => { const [cx, cy] = c.center; return `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`; };
+    const before = key(car);
+    car.x = x; car.y = y;
+    const after = key(car);
+    if (after === before) return;
+    const cell = this.grid.get(before);
+    if (cell && cell.includes(car)) cell.splice(cell.indexOf(car), 1);
+    if (!this.grid.has(after)) this.grid.set(after, []);
+    this.grid.get(after).push(car);
+  }
+
   // Parked cars whose center lies within `r` meters of (x, y).
   near(x, y, r) {
     const out = [];

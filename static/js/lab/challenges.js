@@ -11,6 +11,7 @@ import { drivewayScenario, placeReverser } from "./driveway-challenge.js";
 import { potholeScenario, installPotholes } from "./pothole-challenge.js";
 import { ballScenario, placeBall } from "./ball-chase-challenge.js";
 import { geeseScenario, placeGeese } from "./geese-challenge.js";
+import { snowbankScenario, placeSnowbank, stepSnowbank } from "./snowbank-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -144,6 +145,8 @@ export const CHALLENGES = [
     description: "A sunny afternoon on West 7th Avenue in Kitsilano, a residential street lined with parked cars, the limit 50 km/h. Ahead, a ball bounces out from between the parked cars on your right and rolls across the street.", lesson: "A ball rolling into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb. Driver's handbooks across Canada say the same." },
   { id: "goose-crossing", title: "Goose crossing", map: "ottawa", weather: "dry", time: "afternoon", seed: 53042, icon: "⋯", difficulty: "Patience", hazard: "geese", geese: true, street: "Clemow Avenue",
     description: "Clemow Avenue in the Glebe runs between Central Park and Patterson's Creek Park, where Canada geese graze by the creek. A family of them, goslings and all, is about to walk across the street in front of you.", lesson: "Geese cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them." },
+  { id: "one-car-at-a-time", title: "One car at a time", map: "montreal", weather: "snow", time: "afternoon", seed: 54042, icon: "❄", difficulty: "Patience", hazard: "snowbanks", snowbanks: true, street: "Avenue Laval",
+    description: "Snow is falling on Avenue Laval in the Plateau, and the banks the plows left have pushed the parked cars out from both kerbs: there is room for only one car at a time. A car coming the other way is already in the narrow stretch, and at the corner beyond, the snow is piled higher than a person.", lesson: "Where snowbanks leave room for one car, take turns: whoever is already in the narrow stretch, or got there first, goes first, so wait at your end. Keep to the middle through it, and creep up to corners where the banks are high: someone waiting to cross can be hidden right behind them." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1047,6 +1050,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "potholes") return potholeScenario(map, challenge);
   if (challenge.hazard === "ball") return ballScenario(map, challenge);
   if (challenge.hazard === "geese") return geeseScenario(map, challenge);
+  if (challenge.hazard === "snowbanks") return snowbankScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1331,6 +1335,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.reverser) Object.assign(world.challenge, placeReverser(world, scenario.reverser, challenge.seed));
   if (scenario.ball) Object.assign(world.challenge, placeBall(world, scenario.ball, challenge.seed));
   if (scenario.geese) Object.assign(world.challenge, placeGeese(world, scenario.geese));
+  if (scenario.snowbank) Object.assign(world.challenge, placeSnowbank(world, fleet, scenario.snowbank, challenge.seed));
   if (scenario.roundabout) Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
@@ -1356,6 +1361,7 @@ export function stepChallenge(world, fleet) {
   if (!state) return;
   if (state.following) { stepFollowing(world, fleet); return; }
   if (state.freshGreen) { stepFreshGreen(world); return; }
+  if (state.snowbank) { stepSnowbank(world); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang

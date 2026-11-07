@@ -58,6 +58,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Buses only | Vancouver, Mount Pleasant | Main Street at 8:00, bus lanes on (`busLanes`): the curb lane is bus-only from 7:00 to 9:30 on weekdays. The car keeps out of it, then moves into it in the last 50 m before the right turn onto East 4th Avenue. Driving more than 1 m in it outside that approach (`bus_lane_driving`) fails the drive. |
 | No left turn | Toronto, Bathurst Street | Turn restrictions on (`restrictions`). OSM relation 124176 prohibits the shortest route’s left turn; navigation takes a legal detour. `illegal_turns` fails the drive once a restriction has applied. |
 | Both ways | Montréal, Le Plateau | Contraflow cyclists on (`contraflow`, sim/contraflow.js). The car starts from a standstill on Rue Drolet (one-way), its front 45 m short of Rue Villeneuve Est, to turn right into it: one-way for cars, with a painted contraflow lane, at a junction without a sign. A cyclist rides out of Villeneuve toward the junction in that lane at 16 km/h, 65 m from it, from the car's right; it is hidden behind the corner building until the car is close. The street is too narrow to meet it with the minimum passing distance. The route ends 40 m along the next block of Villeneuve, past Avenue Henri-Julien. Cutting the cyclist off (`failed to yield`) or meeting it closer than the minimum passing distance (`contraflow_conflicts`) fails the drive. Rules and the cautious agent stop short of the junction about 8 s in, wait about 5 s while the cyclist comes out, then turn in; a car that does not see it runs into it. |
+| One car at a time | Montréal, Avenue Laval | Snowbanks on (`snowbanks`, sim/snowbanks.js), in falling snow. The banks have pushed the parked cars out from both kerbs of a 60 m stretch: room for one moving car at a time, and a car coming the other way is already in it. Wait at your end until it is through (`snowbank_conflicts` fails the drive otherwise), keep to the middle, then creep up to the corner at Rue Marie-Anne Est, where someone hidden behind the high pile steps off to cross |
 
 Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors, clear the tracks, keep the box clear, not your arrow, follow the flagger, lights out, round the van, squeeze in, between the cars, blind left, behind the plow, take turns, give them room, over the humps, all walk, collection day and both ways joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
@@ -175,6 +176,12 @@ this challenge and free drives; the challenge places its one ball and no others.
 road and wait until the last one is off it; never go through a gap between them, even once the ones
 ahead are across your lane. Geese are on only for this challenge and free drives; the challenge
 places its one gaggle and no others.
+
+**One car at a time** (`one-car-at-a-time`, Montréal, Avenue Laval, seed 54042): where snowbanks
+leave room for one car, take turns: whoever is already in the narrow stretch, or got to it first,
+goes first. Wait at your end, keep to the middle when it is your turn, and creep up to corners where
+the banks are piled high. Snowbanks are on only for this challenge and free drives in snow; the
+challenge places its own narrowed stretch and no others.
 
 ## Paired amber-light lessons
 

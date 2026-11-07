@@ -1471,6 +1471,23 @@
   checker validates requests offline and checks model expectations when a key is available.
 - Live Jev behavior remains unverified; historical benchmark numbers describe the earlier world.
 
+- Snowbanks in free drives while it snows (`?snowbanks=0` takes them off). From their own random
+  stream, banks line every kerb after a snowfall, white and lumpy with grit on the street side,
+  piled higher at the corners where the plows turn, with a cut at each corner's crosswalk. On
+  two-way residential blocks with parking at both kerbs, the banks push the parked cars out and
+  leave room for one moving car at a time: the driven car and traffic move over toward the middle
+  and take turns, whoever is already in the narrow stretch (or too close to stop) going first, then
+  whoever got to their end first, and the other waits at its end. A high corner pile hides a person
+  waiting to cross and a car or cyclist coming out of the side street, so the car creeps up to the
+  corner and, giving way, creeps up to look as past a building. Sensing reports `snowbank`
+  (`narrowing` and `corner`), with the new `wait_for_oncoming_narrowing` candidate and the
+  `enters_narrowing_out_of_turn` rejection. Going in while a car the driver could see coming the
+  other way had the way counts as `snowbank_conflicts` and fails a Lab drive, reported only once
+  the car has come up to a narrowing. The HUD says whose turn it is, and when a bank hides a corner.
+- New Lab challenge, **One car at a time** (seed 54042): Avenue Laval in Montréal's Plateau in
+  falling snow, a car already coming through the narrow stretch, and someone hidden behind the pile
+  at the corner beyond.
+
 ## 0.2.0
 
 A large realism and graphics update. The Rules benchmark (seed 1) still passes 12 of 12 drives in
