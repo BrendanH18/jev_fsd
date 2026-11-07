@@ -1,6 +1,8 @@
 import { $, h } from "../common.js";
 import { readHistory } from "../sim/drive-score.js";
 import { exportDriveCard, copyDriveLink, driveLink } from "../lab/share.js";
+import { CHALLENGES, challengeById, challengeConfig } from "../lab/challenges.js";
+import { readPractice, practiceStatus } from "../lab/practice.js";
 
 const time = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
@@ -48,6 +50,13 @@ export class DriveReport {
   }
 
   show(report, saved = true) {
+    const challenge = challengeById(report.config?.challenge);
+    const records = challenge ? readPractice().records : {};
+    const remaining = challenge ? CHALLENGES.filter(c => c.id !== challenge.id) : [];
+    const next = remaining.find(c => practiceStatus(c, records) === "attempted") || remaining.find(c => practiceStatus(c, records) === "untried");
+    const practiceNote = report.practice?.outcome === "completed" ? "Clean manual arrival. Challenge completed."
+      : report.practice?.outcome === "attempted" ? "Manual attempt recorded. Retry for a clean arrival."
+      : "AI, mixed-driver, modified and replay drives do not change your manual practice progress.";
     this.dialog.replaceChildren(
       h("div", { class: "dialog-header" }, h("span", { class: "label" }, "DRIVE REPORT"), h("button", { class: "toggle", "aria-label": "Close report", onclick: () => this.dialog.close() }, "×")),
       h("h2", {}, report.title), h("p", { class: "muted" }, `${report.map} · ${report.driver} · ${report.status}${report.parking && report.parking.result !== "not yet" ? ` · ${report.parking.result}${report.parking.result === "parked" ? `, ${Math.round(report.parking.kerb_m * 100)} cm from the kerb` : ""}` : ""}${report.modified ? " · modified challenge" : ""}`),
@@ -58,12 +67,16 @@ export class DriveReport {
       h("details", {}, h("summary", {}, `${report.incidents.length} recorded events`),
         h("ol", { class: "report-events" }, report.incidents.map(i => h("li", {}, `${time(i.at_s)} · ${i.at_m} m · ${i.message}`)))),
       h("p", { class: "score-explanation" }, `Score = 40% safety + 30% road rules + 20% smoothness + 10% control. Collisions cap the score at 59; red lights and failures to yield at 69. Waiting at lights carries no penalty. Simulation coaching model v1.${report.branched ? " This drive includes a replay takeover." : ""}`),
+      challenge ? h("p", { class: "challenge-practice-note" }, practiceNote,
+        report.practice?.outcome ? (report.practice.saved ? " Progress saved in this browser." : " Browser storage is unavailable; progress could not be saved.") : "") : null,
       this.shareStatus = h("p", { class: "report-share-status", role: "status" }),
       h("div", { class: "dialog-footer" }, h("span", { class: "muted" }, saved ? "Saved on this device" : "Storage unavailable · export to keep this drive"),
         h("button", { id: "export-drive", class: "toggle", onclick: () => this.export(report) }, "Export JSON"),
         h("button", { class: "toggle", onclick: () => this.share(() => exportDriveCard(report, report.config), "Image saved. Share it with your challenge link.") }, "Save score card"),
         report.config ? h("button", { class: "toggle", onclick: () => this.share(() => copyDriveLink(report.config), "Link copied. It recreates the setup, not the recorded drive.") }, report.config.challenge ? "Copy challenge link" : "Copy setup link") : null,
         report.config?.challenge ? h("a", { class: "toggle", href: driveLink({ ...report.config, drive: "rules" }) }, "Try with Rules") : null,
+        challenge ? h("a", { class: "toggle", href: driveLink({ ...challengeConfig(challenge), drive: "manual" }) }, "Retry manually") : null,
+        next ? h("a", { class: "toggle", href: driveLink({ ...challengeConfig(next), drive: "manual" }) }, `Practise next: ${next.title}`) : null,
         this.onReplay && report.started_at === this.current?.started_at ? h("button", { class: "toggle", onclick: () => { this.dialog.close(); this.onReplay(); } }, "Review replay") : null));
     this.open();
   }

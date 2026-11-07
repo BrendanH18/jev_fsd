@@ -3,6 +3,7 @@
 import { api } from "../js/common.js";
 import { runUiTests } from "./ui-tests.js";
 import { runExplorerTests } from "./explorer-tests.js";
+import { runPracticeTests } from "./practice-tests.js";
 import { MapData } from "../js/map/mapdata.js";
 import { Route } from "../js/map/route.js";
 import { Vehicle, CAR, BIKE, DELIVERY_VAN, ROAD, comfort } from "../js/sim/vehicle.js";
@@ -429,6 +430,7 @@ async function run() {
   check("city benchmark routes and start use the selected map", citySuite.length === 1 && !!victoria.lane(citySuite[0].start.edge, citySuite[0].start.lane) && citySuite[0].route.edges.every(e => victoria.edges.has(e)));
   results.push(...await runUiTests());
   results.push(...await runExplorerTests());
+  results.push(...await runPracticeTests());
   const ok = results.filter((r) => r.ok).length;
   out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;
   window.__results = results;

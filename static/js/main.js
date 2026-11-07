@@ -33,7 +33,7 @@ import { createVanMesh, syncVan } from "./render/delivery-van.js";
 import { VAN_COUNT, vanNotice } from "./sim/double-parked.js";
 import { PLOW_COUNT, isPlow, plowNotice } from "./sim/snow-plow.js";
 import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
-import { parkNotice } from "./sim/parallel-park.js";
+import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
 import { STEP_OUT_COUNT, hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
 import { cyclistNotice } from "./sim/cyclist-pass.js";
@@ -93,6 +93,7 @@ import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-mod
 import { OrbitControls } from "./ui/orbit-controls.js";
 import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
+import { savePractice } from "./lab/practice.js";
 import { DriveRecorder } from "./lab/recorder.js";
 import { DriveLab } from "./ui/lab.js";
 import { PerceptionView } from "./render/perception.js";
@@ -333,6 +334,7 @@ export async function boot() {
   hud.setTime(nearestPreset(hour));
   hud.onWeatherChange((name) => { world.weather = setWeather(name).name; weatherView.apply(world.weather); applySky(); autopilot.bumpEpoch(); rememberConditions(); hud.badge(`weather: ${name}`, "", 800); });
   function setHour(value) {
+    if (challenge && parseHour(value) !== clock.hour) challengeModified = true;
     clock.setHour(parseHour(value), world.t); hour = clock.hour;
     applySky(); hud.setTime(nearestPreset(hour)); autopilot.bumpEpoch(); rememberConditions();
   }
@@ -547,6 +549,7 @@ export async function boot() {
     onClose: () => { world.paused = lab?.reviewing ? true : pausedBeforeReport; },
   });
   function startDrive(title, route = null) {
+    if (challenge && drive) challengeModified = true; // Only the original authored attempt counts.
     if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("replaced"));
     drive = new DriveScore(world, { title, route, map: pack.synthetic ? "Practice grid" : status.map.label, driver: autopilot.enabled ? autopilot.brainName : "manual" });
     arrivalPending = false;
@@ -559,6 +562,17 @@ export async function boot() {
   function finishDrive(reason) {
     if (lab?.reviewing) return;
     if (!drive || drive.finished) return;
+    // A manual driver finishes parking with the review button; the AI reports its own arrival.
+    if (reason === "finished" && challenge?.park && drive.driver === "manual" && world.route && Math.abs(world.ego.v) < 0.05) {
+      const car = world.ego, spec = car.spec;
+      const space = spacesAlong(world, world.route, spec).find(p => {
+        const f = frameOf(car, p), side = spec.width / 2 * Math.abs(Math.sin(f.phi));
+        return parkedPose(car, p, world).within_kerb
+          && f.u - spec.rearOverhang * Math.cos(f.phi) - side >= p.sFrom
+          && f.u + (spec.length - spec.rearOverhang) * Math.cos(f.phi) + side <= p.sTo;
+      });
+      if (space) { drive.noteArrival({ parked: true, ...parkedPose(car, space, world) }); reason = "arrived"; }
+    }
     if (autopilot.enabled) { autopilot.setEnabled(false); hud.setAutopilot(false); overlays.setCandidates(null); }
     const report = drive.finish(reason);
     report.config = challenge ? challengeConfig(challenge) : { map: status.map.id, seed: options.seed, traffic: options.traffic,
@@ -566,6 +580,11 @@ export async function boot() {
     report.branched = recorder.branched;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
+    if (challenge) {
+      const practice = savePractice(challenge, report);
+      lab.practice = practice;
+      report.practice = { outcome: practice.outcome, saved: practice.available };
+    }
     recorder.record({ world, fleet, autopilot, drive, clock }, true);
     const saved = saveDrive(report);
     driveReport.lastUpdate = -Infinity; driveReport.update(drive);
