@@ -35,6 +35,9 @@ import { turnBanned } from "./turn-restrictions.js";
 // stop short of their way across until the last goose is off the roadway (sim/geese.js geeseYield).
 // With `ice` on, drivers and cyclists slow for black ice ahead, and for bridges in icy weather, and only
 // ease off on the ice; their tyres feel it through the shared car model (sim/black-ice.js npcIce).
+// With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
+// toward the middle and take turns with traffic coming the other way through the one-car stretch, and
+// cyclists keep clear of the parked cars (sim/snowbanks.js snowbankYield).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -74,6 +77,7 @@ import { ballYield } from "./ball-chase.js";
 import { geeseYield } from "./geese.js";
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { npcIce } from "./black-ice.js";
+import { snowbankYield } from "./snowbanks.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -174,6 +178,7 @@ const BODY_LOOK_M = 8;
 const BODY_AHEAD_M = 2;
 // How fast a driver moves over for a contraflow cyclist coming the other way (sim/contraflow.js).
 const CF_SHIFT_MPS = 0.7;
+const SB_SHIFT_MPS = 0.6;     // moving over toward the middle between snowbanks (sim/snowbanks.js)
 // Giving way to an emergency vehicle (sim/emergency.js): a driver eases over at up to 0.8 m/s and
 // stops within its stopping distance braking at 1.5 m/s^2 (3.5 m/s^2 for one coming toward it or
 // across its way; at least 4 m on), short of the next junction
@@ -809,6 +814,15 @@ export class NpcFleet {
       }
       // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
       if (n.tgPeek) offset += n.tgPeek;
+      // between snowbanks that push the parked cars out from the kerb (sim/snowbanks.js): over toward the
+      // middle, clear of them, as far as it has come into the stretch at its pursuit point
+      const sb = world.snowbanks?.narrowings.length && !n.transit?.tram ? snowbankYield(world, n, front) : null;
+      const sbBase = offset, sbAt = (s) => (sb ? Math.min(0, sb.keep - sbBase) * sb.at(s) : 0);
+      if (sb || n.sbShift) {
+        const to = sbAt(path.s + lookahead(n.v));
+        n.sbShift = (n.sbShift || 0) + Math.max(-SB_SHIFT_MPS * dt, Math.min(SB_SHIFT_MPS * dt, to - (n.sbShift || 0)));
+        offset += n.sbShift;
+      }
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -841,9 +855,11 @@ export class NpcFleet {
         const inWay = (lat, at) => {
           if (wz?.detour) lat -= detourAt(wz.detour, at) - wzShift;
           if (lz?.detour) lat -= detourAt(lz.detour, at) - lzShift;
+          // (between snowbanks, the line it will keep to where `o` is: sim/snowbanks.js)
+          if (sb) lat -= sbAt(at) - (n.sbShift || 0);
           // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
           const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
-          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0)) <= reach;
+          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0) - (n.sbShift || 0)) <= reach;
         };
         const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
         if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral, p.s)) {
@@ -1078,6 +1094,12 @@ export class NpcFleet {
         const g = gs.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
       }
+      // between snowbanks, short of the one-car stretch until it is its turn (once it could stop there:
+      // otherwise it has the way) (sim/snowbanks.js)
+      if (sb?.hold != null) {
+        const g = sb.hold - front;
+        if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
+      }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -1096,7 +1118,7 @@ export class NpcFleet {
       // (and, with black ice on, slowing for the ice ahead, and for bridges in icy weather, and easing off
       // on it: sim/black-ice.js; a streetcar's steel wheels do not feel it)
       const vIce = this.world.ice?.list.length && !n.transit?.tram ? npcIce(this.world, n, front)?.limit ?? Infinity : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce, sb?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

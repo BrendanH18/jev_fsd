@@ -49,6 +49,7 @@ import { BallChase, auditBalls } from "./ball-chase.js";
 import { Geese, auditGeese } from "./geese.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { BlackIce, auditIce } from "./black-ice.js";
+import { Snowbanks, auditSnowbanks, bankHidden } from "./snowbanks.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -238,7 +239,10 @@ export class World {
   // not brake-check it, and lets it by (sim/tailgaters.js).
   // `ice`: near freezing, black ice forms on bridges and in the shade of tall buildings, where everyone's
   // tyres lose their grip, and everyone slows before it and crosses it gently (sim/black-ice.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false, ice = false } = {}) {
+  // `snowbanks`: when it is snowing as the drive starts, snowbanks line the kerbs, high at the corners,
+  // where they hide whoever waits there; and where they push the parked cars out, drivers take turns
+  // through the one-car stretch (sim/snowbanks.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false, ice = false, snowbanks = false } = {}) {
     this.map = map;
     // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
     // fresh red, whether one has committed near the car this drive, and the junction the audit watches
@@ -384,6 +388,11 @@ export class World {
     this.ice = new BlackIce(this, { enabled: ice, seed });
     this.iceSeen = false;
     this.iceCalls = new Map();
+    // snowbanks (sim/snowbanks.js): the banks, piles and narrowings, whether the car has come up to a
+    // narrowing this drive, and whether it was in each one it is near last tick
+    this.snowbanks = new Snowbanks(this, { enabled: snowbanks, seed });
+    this.snowbanksSeen = false;
+    this.snowbankCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -416,6 +425,8 @@ export class World {
   sees(observer, o, reach = 0) {
     const enhanced = this.highBeams && observer === this.ego && observer.highBeam && this.visibility.night > 0.5 && this.weather !== "fog" && this.weather !== "snow" && !wellLit(this);
     if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach))) return false;
+    // (a high snowbank at a corner hides people, cyclists and cars behind it from the car: sim/snowbanks.js)
+    if (this.snowbanks?.piles.length && observer === this.ego && bankHidden(this, observer, o)) return false;
     // (a car backing out of a driveway: the cars parked at the kerb hide it, sim/driveway-reversers.js)
     if (o.reverser) return !(this.hazards && reverserHidden(this, observer, o));
     if (o.kind === "pedestrian") return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
@@ -511,6 +522,7 @@ export class World {
     this.geeseCalls?.clear();
     this.tailgaterCall = null;
     this.iceCalls?.clear();
+    this.snowbankCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -784,6 +796,7 @@ export class World {
     if (this.geese.enabled) auditGeese(this);
     if (this.tailgaters?.enabled) auditTailgaters(this);
     if (this.ice?.enabled) auditIce(this);
+    if (this.snowbanks?.enabled) auditSnowbanks(this);
     this.auditKerb();
     leftSpace(this);
   }

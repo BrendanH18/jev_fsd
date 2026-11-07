@@ -91,7 +91,9 @@ export function sampleCandidates(snap, world) {
   // round was worked out for, and `hard_brake` keeps to it: see cyclistPass)
   // (and over to the right for a contraflow cyclist coming the other way: see contraflowCyclist)
   const detour = snap.work_zone?.detour ? { detour: snap.work_zone.detour } : snap.lane_closure?.detour ? { detour: snap.lane_closure.detour } : snap.double_parked?.detour ? { detour: snap.double_parked.detour }
-    : snap.contraflow_cyclist?.detour && !snap.cyclist_pass?.detour ? { detour: snap.contraflow_cyclist.detour } : {};
+    : snap.contraflow_cyclist?.detour && !snap.cyclist_pass?.detour ? { detour: snap.contraflow_cyclist.detour }
+    // (and over toward the middle between snowbanks: see sim/snowbanks.js)
+    : snap.snowbank?.narrowing?.detour && !snap.cyclist_pass?.detour ? { detour: snap.snowbank.narrowing.detour } : {};
   const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
   const inLane = (law) => ({ ...law, offset: keep.center + (law.offset || 0), ...keep, ...(law.offset ? {} : carry), ...detour });
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
@@ -241,6 +243,13 @@ export function sampleCandidates(snap, world) {
     if (ice) {
       out.push({ id: "slow_for_ice", laneUntil, law: { ...inLane({ kind: "lane", vTarget: target }), slowTo: earlySlows(ice) },
         steer: "hold lane, steering gently", speed: snap.black_ice.on_ice ? "ease off, no braking, and hold steady across the ice" : "ease off before the ice, then hold steady across it" });
+    }
+    // Between snowbanks (sim/snowbanks.js): while it is the turn of a car coming the other way through the
+    // one-car stretch ahead, stop short of it and wait.
+    const nb = snap.snowbank?.narrowing;
+    if (nb?.wait && nb.bumper_to_stop_m > 0.3) {
+      out.push({ id: "wait_for_oncoming_narrowing", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, nb.limit_mps ?? approach), stopAtRoute: stopAt(nb.stop_s_route - FRONT - 0.5) }),
+        steer: "hold lane", speed: "stop short of the stretch narrowed by snowbanks and let the oncoming car through" });
     }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
@@ -512,12 +521,15 @@ export function simulateAll(candidates, snap, world) {
   // model's own: sim/vehicle.js ROAD.gripAt)
   const icy = snap.black_ice_ahead && world.ice?.list.length ? snap.black_ice_ahead : null;
   const iceStart = icy ? patchesUnder(world.ice, world.ego) : null;
+  // a stretch narrowed by snowbanks while it is an oncoming car's turn (sim/snowbanks.js): where the car waits
+  const narrowStop = snap.snowbank?.narrowing?.wait ? snap.snowbank.narrowing.stop_s_route : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
     let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, ballFast = false, intoGeese = false, iceCall = null, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let intoNarrowing = false;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -568,6 +580,8 @@ export function simulateAll(candidates, snap, world) {
         if (ballLine !== null && s + FRONT > ballLine && car.v > ballCreep + 1) ballFast = true;
         // (and a metre past where it stops for geese crossing is still short of their way)
         if (geeseStop !== null && s + FRONT > geeseStop + 1) intoGeese = true;
+        // (and a metre past where it waits its turn between snowbanks)
+        if (narrowStop !== null && s + FRONT > narrowStop + 1) intoNarrowing = true;
         // (1.5 m past it, as a short stop overshoots)
         if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         // (1.5 m past where it stops, as a short stop overshoots: into the 2 m it leaves behind the bus)
@@ -694,6 +708,7 @@ export function simulateAll(candidates, snap, world) {
     else if (ballFast && c.law.kind !== "hard_brake") reject = "passes_ball_gap_too_fast";
     else if (intoGeese && c.law.kind !== "hard_brake") reject = "drives_into_geese";
     else if (iceCall && c.law.kind !== "hard_brake") reject = iceCall === "fast" ? "crosses_ice_too_fast" : "brakes_on_ice";
+    else if (intoNarrowing && c.law.kind !== "hard_brake") reject = "enters_narrowing_out_of_turn";
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";

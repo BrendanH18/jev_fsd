@@ -266,3 +266,16 @@ The HUD says BRIDGES FREEZE FIRST · 40 KM/H coming up to a bridge, BLACK ICE AH
 STEERING on it. Going onto a patch more than 10 km/h faster than its safe speed, or braking,
 accelerating or skidding on one, counts as `ice_overspeed`: 20 safety points each, a replay marker
 and a coaching tip, reported only once you have come near black ice. Use `?ice=0` to take it off.
+
+### Snowbanks
+
+When it is snowing as a free drive starts (and in the **One car at a time** lesson), snowbanks line
+the kerbs: white, lumpy and grey with grit on the street side, piled higher than a person at the
+corners. On narrow two-way residential streets with parking on both sides the banks push the parked
+cars out, and there is room for only one moving car at a time. Take turns: whoever is already in the
+narrow stretch, or got to it first, goes first, and the other waits at its end. The HUD says
+SNOWBANKS · ONE CAR AT A TIME and whose turn it is; keep to the middle when it is yours. At a corner
+where the pile hides the sidewalk and the side street, the HUD says SNOWBANK HIDES THE CORNER · CREEP
+UP AND LOOK: someone may step out from behind it. Going in while a car you could see coming the other
+way had the way counts as `snowbank_conflicts`: 20 legality points, a replay marker and a coaching
+tip, reported only once you have come up to a narrowed stretch. Use `?snowbanks=0` to turn them off.

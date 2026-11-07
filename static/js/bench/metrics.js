@@ -116,6 +116,8 @@ export class DriveMetrics {
       ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
       // (only for a drive in which the car came near black ice: sim/black-ice.js)
       ...(world.iceSeen ? { ice_overspeed: v.ice_overspeed || 0 } : {}),
+      // (only for a drive in which the car came up to a stretch snowbanks narrow to one car: sim/snowbanks.js)
+      ...(world.snowbanksSeen ? { snowbank_conflicts: v.snowbank_conflicts || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -176,6 +178,7 @@ export function failures(m) {
   if (m.wildlife_conflicts) f.push("drove into or too close to geese crossing the road");
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
   if (m.ice_overspeed) f.push("crossed black ice too fast, or braked or steered hard on it");
+  if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

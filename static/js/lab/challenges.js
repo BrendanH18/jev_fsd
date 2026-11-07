@@ -14,6 +14,7 @@ import { geeseScenario, placeGeese } from "./geese-challenge.js";
 import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { tailgaterScenario, installTailgater, stepTailgater } from "./tailgater-challenge.js";
 import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
+import { snowbankScenario, placeSnowbank, stepSnowbank } from "./snowbank-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -151,6 +152,8 @@ export const CHALLENGES = [
     description: "William Avenue runs straight through the Exchange District, two lanes each way, 50 km/h. You're in the left lane when a driver in a hurry closes up right behind you, half a second back, and stays there. The right lane is empty, and the light ahead at Isabel Street will change.", lesson: "A tailgater can't stop in time if you brake suddenly, so never brake-check them and don't speed up to please them. Leave twice your usual gap ahead so you can brake early and gently, and let them by: move into the right lane when it's safe, or, with no lane to move into, ease off a little so they can pass. Canadian driver's handbooks give the same advice." },
   { id: "bridges-freeze-first", title: "Bridges freeze first", map: "saskatoon", weather: "dry", time: "dawn", seed: 55042, icon: "❄", difficulty: "Control", hazard: "black-ice", ice: true, street: "Traffic Bridge",
     description: "Dawn after a clear night just below freezing in Saskatoon. You are heading north over the South Saskatchewan River on the Traffic Bridge, toward downtown. The approach is dry, but the deck has iced over, and traffic is queuing for the roundabout just past the far end.", lesson: "Bridges and overpasses freeze before the road around them, and black ice is nearly invisible. Near freezing, ease off before a bridge and watch for a glossy sheen. Slow down on the dry road before the ice, then cross it steadily: no braking, accelerating or sharp steering on it, and leave extra room to the car ahead." },
+  { id: "one-car-at-a-time", title: "One car at a time", map: "montreal", weather: "snow", time: "afternoon", seed: 54042, icon: "❄", difficulty: "Patience", hazard: "snowbanks", snowbanks: true, street: "Avenue Laval",
+    description: "Snow is falling on Avenue Laval in the Plateau, and the banks the plows left have pushed the parked cars out from both kerbs: there is room for only one car at a time. A car coming the other way is already in the narrow stretch, and at the corner beyond, the snow is piled higher than a person.", lesson: "Where snowbanks leave room for one car, take turns: whoever is already in the narrow stretch, or got there first, goes first, so wait at your end. Keep to the middle through it, and creep up to corners where the banks are high: someone waiting to cross can be hidden right behind them." },
 ];
 // (road tests, lab/road-tests.js, open and play the same way)
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
@@ -1058,6 +1061,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "geese") return geeseScenario(map, challenge);
   if (challenge.hazard === "tailgater") return tailgaterScenario(map, challenge);
   if (challenge.hazard === "black-ice") return iceScenario(map, challenge);
+  if (challenge.hazard === "snowbanks") return snowbankScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1345,6 +1349,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.reverser) Object.assign(world.challenge, placeReverser(world, scenario.reverser, challenge.seed));
   if (scenario.ball) Object.assign(world.challenge, placeBall(world, scenario.ball, challenge.seed));
   if (scenario.geese) Object.assign(world.challenge, placeGeese(world, scenario.geese));
+  if (scenario.snowbank) Object.assign(world.challenge, placeSnowbank(world, fleet, scenario.snowbank, challenge.seed));
   if (scenario.roundabout) Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
@@ -1372,6 +1377,7 @@ export function stepChallenge(world, fleet) {
   if (state.freshGreen) { stepFreshGreen(world); return; }
   if (state.tailgater) { stepTailgater(world); return; }
   if (state.blackIce) { stepIce(world, fleet); return; }
+  if (state.snowbank) { stepSnowbank(world); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang

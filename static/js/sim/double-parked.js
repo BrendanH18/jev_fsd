@@ -248,6 +248,8 @@ export class DoubleParked {
       if (this.vans.some((d) => d.edge === site.edge || d.edge === site.opposite)) continue;
       if ((world.workZones?.zones || []).some((z) => z.closed === site.edge || z.closed === site.opposite)) continue;
       if ((world.laneClosures?.zones || []).some((z) => z.edge === site.edge || z.edge === site.opposite)) continue;
+      // (nor where snowbanks have pushed the parked cars out: sim/snowbanks.js)
+      if (world.snowbanks?.narrowings.length && (world.snowbanks.on(site.edge) || world.snowbanks.on(site.opposite))) continue;
       const rear = site.lo + this.random() * (site.hi - site.lo), e = map.edges.get(site.edge);
       const mid = at(e, rear + DELIVERY_VAN.length / 2, 0), dist = Math.hypot(mid[0] - ego.x, mid[1] - ego.y);
       if (dist < SPAWN_M[0] || dist > SPAWN_M[1] || world.visibility.canSee(ego, mid[0], mid[1])) continue;
