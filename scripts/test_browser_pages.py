@@ -117,14 +117,19 @@ def check(url, chromium=None):
         results = page.evaluate("import('/tests/render-tests.js').then(m => m.runRenderTests())")
         ok &= report("renderer tests", results)
         ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
+        page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
 
         for kind in ["early", "arrived", "rules", "modified", "branched", "parked", "wide-kerb", "outside-space", "resume"]:
+            page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
+            page.on("pageerror", lambda error: errors.append(str(error)))
             driver = "rules" if kind == "rules" else "manual"
             challenge = "parallel-park" if kind in ["parked", "wide-kerb", "outside-space"] else "pothole-season"
-            page.goto(url.rstrip("/") + f"/?challenge={challenge}&drive={driver}&quality=low")
+            page.goto(url.rstrip("/") + f"/?challenge={challenge}&drive={driver}&quality=low",
+                      wait_until="domcontentloaded", timeout=TIMEOUT_MS)
             page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
             page.evaluate("window.__jev.world.paused = true")
             ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
+            page.close()
 
         if errors:
             ok = False
