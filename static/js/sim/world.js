@@ -47,6 +47,7 @@ import { DrivewayReversers, auditReversers, reverserHidden } from "./driveway-re
 import { Potholes, auditPotholes } from "./potholes.js";
 import { BallChase, auditBalls } from "./ball-chase.js";
 import { Geese, auditGeese } from "./geese.js";
+import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -232,7 +233,9 @@ export class World {
   // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
   // `geese`: now and then, by day, a gaggle of Canada geese crosses a street beside a park or water near
   // the car's way, and everyone waits until the last one is off the road (sim/geese.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false } = {}) {
+  // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
+  // not brake-check it, and lets it by (sim/tailgaters.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false } = {}) {
     this.map = map;
     // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
     // fresh red, whether one has committed near the car this drive, and the junction the audit watches
@@ -368,6 +371,11 @@ export class World {
     this.geese = new Geese(this, { enabled: geese, seed });
     this.geeseSeen = false;
     this.geeseCalls = new Map();
+    // tailgaters (sim/tailgaters.js): whether traffic now and then closes up right behind the car, whether
+    // one has followed it this drive, and the braking the audit follows
+    this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
+    this.tailgatersSeen = false;
+    this.tailgaterCall = null;
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -493,6 +501,7 @@ export class World {
     this.potholeCalls?.clear();
     this.ballCalls?.clear();
     this.geeseCalls?.clear();
+    this.tailgaterCall = null;
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -764,6 +773,7 @@ export class World {
     if (this.potholes.enabled) auditPotholes(this);
     if (this.balls?.enabled) auditBalls(this);
     if (this.geese.enabled) auditGeese(this);
+    if (this.tailgaters?.enabled) auditTailgaters(this);
     this.auditKerb();
     leftSpace(this);
   }

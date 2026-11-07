@@ -129,6 +129,7 @@ Fifty-three hand-built scenarios test the situations real drivers get wrong:
 | **Dip your lights** | Saskatoon, night | The streetlights are out on 13th Street East: high beams on the empty stretch, dipped within 150 m of an oncoming car and 60 m of the car ahead |
 | **Find your gap** | Halifax, afternoon | Yield to three circulating cars at the North Park roundabout, then take the third exit onto North Park Street |
 | **Wait for green** | Toronto, afternoon | Harbord Street onto Spadina Avenue: obey the mapped no-turn-on-red sign even when the cross street is empty, then turn on green |
+| **On your bumper** | Winnipeg, afternoon | A driver in a hurry sits half a second behind you on William Avenue: don't brake-check them, leave more room ahead, and move right to let them by |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

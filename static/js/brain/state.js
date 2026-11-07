@@ -175,6 +175,12 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(g.stopped_on_road ? { standing_in_road: g.stopped_on_road } : {}), gap_m: r1(g.gap_m),
       ...(g.wait ? { wait: true, wait_in_m: r1(Math.max(0, g.bumper_to_stop_m)) } : {}), slow_to: r1(g.limit_mps) };
   }
+  if (snap.tailgater) {
+    const t = snap.tailgater;
+    state.tailgater = { id: t.id, behind_m: r1(t.gap_m), headway_s: t.headway_s, closing_mps: r1(t.closing_mps), ...(t.flashing ? { flashing_headlights: true } : {}),
+      brake_no_harder_than_mps2: r1(t.gentle_mps2), ...(t.need_for ? { ahead_requires_mps2: r1(t.need_mps2), because_of: t.need_for } : {}), gap_ahead: "twice the usual",
+      ...(t.can_move_right ? { move_right_to_let_it_pass: true } : { lane_to_the_right: t.lane_right }) };
+  }
   if (snap.emergency) {
     const e = snap.emergency;
     state.emergency_vehicle = { id: e.id, kind: e.kind, siren: true, coming_from: EV_FROM[e.from], distance_m: r1(e.distance_m), reaches_car_in_s: r1(e.eta_s), seen: e.seen,
@@ -298,6 +304,8 @@ function outcomeLabel(c, snap) {
   if (c.id === "yield_to_contraflow_cyclist" && snap.contraflow_cyclist?.wait) return `clear, waits ${Math.max(0, r1(snap.contraflow_cyclist.bumper_to_stop_m - c.sim.progress_m))} m ahead for the cyclist riding against the one-way`;
   if (c.id === "wait_for_runner" && snap.red_light_runner) return `clear, waits ${Math.max(0, r1(snap.red_light_runner.bumper_to_stop_m - c.sim.progress_m))} m ahead, at the line, for the car running the red`;
   if (c.id === "slow_for_ball" && snap.ball_in_road) return `clear, slows to ${r1(c.sim.end_speed)} m/s, able to stop short of where the ball came out`;
+  if (c.id === "let_tailgater_pass" && snap.tailgater) return `clear, moves over into the right lane at the car's speed and lets the tailgater by${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
+  if (c.id === "ease_off_for_tailgater" && snap.tailgater) return `clear, eases off gently to ${r1(c.sim.end_speed)} m/s so the tailgater can get by, leaving more room ahead`;
   if (c.id === "wait_for_geese" && snap.geese_crossing) return snap.geese_crossing.wait ? `clear, stops ${Math.max(0, r1(snap.geese_crossing.bumper_to_stop_m - c.sim.progress_m))} m short of the geese's way across` : "clear, slows for the geese by the road";
   if (c.id === "yield_to_reversing" && snap.reversing_vehicle) return snap.reversing_vehicle.wait ? `clear, stops ${Math.max(0, r1(snap.reversing_vehicle.bumper_to_stop_m - c.sim.progress_m))} m short of where it waits for the car backing out` : "clear, slows for the car backing out";
   if (c.id === "stop_for_cyclist" && snap.right_hook) return `clear, waits ${Math.max(0, r1(snap.right_hook.bumper_to_yield_m - c.sim.progress_m))} m short of the cyclist's path`;
@@ -407,6 +415,7 @@ export function situationClauses(snap) {
   if (snap.pothole) out.push(potholeClause(snap.pothole, snap.potholes_ahead));
   if (snap.ball_in_road) out.push(ballClause(snap.ball_in_road));
   if (snap.geese_crossing) out.push(geeseClause(snap.geese_crossing));
+  if (snap.tailgater) out.push(tailgaterClause(snap.tailgater));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));
   if (snap.bus) {
     const b = snap.bus, w = Math.max(0, Math.round(b.bumper_to_stop_m));
@@ -548,6 +557,15 @@ function geeseClause(g) {
   if (g.wait) return `${lead} Stop short of their way across and wait until the last goose is off the road, on the far side, however long they take: never drive through a gap between geese, and never creep toward the file. ${w < 2 ? "Hold still until the last goose is off the road." : `Slow down and stop ${w} m ahead (\`wait_for_geese\`).`}`;
   if (g.phase === "about_to_cross") return `${lead} They may step into the road at any moment: slow to ${r1(g.limit_mps)} m/s, ready to stop for them (\`car.target_speed\` already does).`;
   return `${lead} The car is already at their way across: keep to ${r1(g.limit_mps)} m/s and keep clear of them.`;
+}
+
+// A car tailgating the driven car, close behind it in its lane (sim/tailgaters.js).
+function tailgaterClause(t) {
+  const lead = `Car \`${t.id}\` is tailgating the car, ${Math.max(0, Math.round(t.gap_m))} m behind (${r1(t.headway_s)} s)${t.flashing ? ", flashing its headlights" : ""}: far too close to stop if the car brakes suddenly.`;
+  const brake = `Never brake-check it, and never brake harder than ${r1(t.gentle_mps2)} m/s^2 unless something ahead calls for more${t.need_for ? ` (the ${t.need_for} ahead needs ${r1(t.need_mps2)} m/s^2)` : ""}; never speed up to please it either. Leave twice the usual gap to whatever is ahead (\`car.target_speed\` already does), so the car can brake early and gently.`;
+  const by = t.can_move_right ? "Another lane goes the car's way on the right and it is clear: choose `let_tailgater_pass` to move over at the car's speed and let it by."
+    : "There is no lane to move right into: ease off a little, gently (`ease_off_for_tailgater`, where it is offered), so it can pass when it is safe.";
+  return `${lead} ${brake} ${by}`;
 }
 
 // How a contraflow cyclist (sim/contraflow.js) meets the car's way, for models.

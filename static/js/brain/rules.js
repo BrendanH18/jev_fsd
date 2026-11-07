@@ -85,6 +85,10 @@ export class RulesBrain {
       // once someone is crossing ahead, stopping for them comes first)
       if (c.id === "slow_for_ball" && !snap.pedestrian) cost -= 4;
       if (c.id === "wait_for_geese" && snap.geese_crossing?.wait) cost -= 6;
+      // a tailgater close behind (sim/tailgaters.js): over to the right to let it by, outweighing the
+      // cost of the change and of leaving the route's lane; or, with no lane there, easing off a little
+      if (c.id === "let_tailgater_pass") cost -= 8;
+      if (c.id === "ease_off_for_tailgater") cost -= 5;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;

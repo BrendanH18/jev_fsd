@@ -58,6 +58,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Buses only | Vancouver, Mount Pleasant | Main Street at 8:00, bus lanes on (`busLanes`): the curb lane is bus-only from 7:00 to 9:30 on weekdays. The car keeps out of it, then moves into it in the last 50 m before the right turn onto East 4th Avenue. Driving more than 1 m in it outside that approach (`bus_lane_driving`) fails the drive. |
 | No left turn | Toronto, Bathurst Street | Turn restrictions on (`restrictions`). OSM relation 124176 prohibits the shortest route’s left turn; navigation takes a legal detour. `illegal_turns` fails the drive once a restriction has applied. |
 | Both ways | Montréal, Le Plateau | Contraflow cyclists on (`contraflow`, sim/contraflow.js). The car starts from a standstill on Rue Drolet (one-way), its front 45 m short of Rue Villeneuve Est, to turn right into it: one-way for cars, with a painted contraflow lane, at a junction without a sign. A cyclist rides out of Villeneuve toward the junction in that lane at 16 km/h, 65 m from it, from the car's right; it is hidden behind the corner building until the car is close. The street is too narrow to meet it with the minimum passing distance. The route ends 40 m along the next block of Villeneuve, past Avenue Henri-Julien. Cutting the cyclist off (`failed to yield`) or meeting it closer than the minimum passing distance (`contraflow_conflicts`) fails the drive. Rules and the cautious agent stop short of the junction about 8 s in, wait about 5 s while the cyclist comes out, then turn in; a car that does not see it runs into it. |
+| On your bumper | Winnipeg, William Avenue | Tailgaters on (`tailgaters`, sim/tailgaters.js). Two lanes each way, 50 km/h, straight for half a kilometre. A driver in a hurry closes up half a second behind you in the left lane and stays there; the right lane is empty, and the light ahead at Isabel Street turns amber. Move right and let them by, or brake early and gently; braking hard with them close behind (`brake_checks`) fails the drive |
 
 Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors, clear the tracks, keep the box clear, not your arrow, follow the flagger, lights out, round the van, squeeze in, between the cars, blind left, behind the plow, take turns, give them room, over the humps, all walk, collection day and both ways joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
@@ -248,3 +249,18 @@ at the line until it has cleared the junction, then carry on 100 m along 106 Str
 who goes as soon as the light turns green enters ahead of it, is counted in
 `fresh_green_conflicts`, and collides with it. Red-light runners are on only for this challenge
 and free drives; the challenge places its one runner and no other traffic.
+
+## On your bumper
+
+**On your bumper** (`on-your-bumper`, Winnipeg, seed 56042) drives William Avenue eastbound through
+the Exchange District (`e481`), straight for 504 m with two lanes each way and a 50 km/h limit, up
+to its unchanged signal at Isabel Street (`sig16`). The car sets off at 11 m/s in the left lane. A
+dark car in a hurry starts 12 m behind it and tailgates it from the start: it closes to about half a
+second back, edges in and out, drifts left in its lane now and then to look past, and flashes its
+headlights. The right lane is empty. Rules and the cautious agent move over into it (`let_tailgater_pass`)
+and let the tailgater by on the left; the light turns amber 28 s in, about 60 m short of the line,
+and they stop gently and go on at the green. A driver who stays in the left lane must brake early
+and gently for the amber: braking hard with the tailgater close behind, with nothing ahead calling
+for it, is a brake check (`brake_checks`), which fails the drive, and a hard enough one leaves the
+tailgater no room: it rear-ends the car, its own fault. Tailgaters are on only for this challenge and
+free drives; the challenge places its one tailgater and no other traffic.

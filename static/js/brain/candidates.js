@@ -19,6 +19,7 @@ import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 import { SIM_OVER_MPS, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
 import { coverAfter } from "../sim/ball-chase.js";
+import { TAIL_EASE_MIN_MPS, TAIL_EASE_MPS, TAIL_GENTLEST_SLACK, TAIL_STOP_DECEL } from "../sim/tailgaters.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -125,6 +126,16 @@ export function sampleCandidates(snap, world) {
     const len = Math.max(MIN_CHANGE_M, Math.min(laneChangeLength(v), leaving));
     for (const side of lane ? Object.values(lane.sides) : []) {
       if (!side.offer) continue;
+      // (tailgated: over to the right at the car's speed, never faster, and let the tailgater by:
+      // sim/tailgaters.js)
+      if (side.offer === "let_pass") {
+        const vt = Math.round(Math.max(0, Math.min(limit, v, side.target_v)) * 10) / 10;
+        if (vt > 0.05) out.push({ id: "let_tailgater_pass", change: { dir: side.dir, offer: side.offer, gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M, leave }, laneUntil: side.until_s, laneTarget: side.target_v,
+          law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, laneIdx: lane.route_index + side.delta, chain: lane.chain, fromLane: lane.delta, fromIdx: lane.index, vTarget: vt,
+            shift: { from: snap.routeProj.lateral, start: s, len } },
+          steer: "move over to the right lane and let the tailgater by", speed: speedLabel(vt, v, limit) });
+        continue;
+      }
       const prepare = side.delta === 0 && lane.route_ahead && side.offer === "return";
       const toRoute = side.delta === 0 ? (prepare ? " for the turn ahead" : " (the route's lane)") : "";
       // (moving over, also at the speed it could keep there: it is no time to hang back)
@@ -146,7 +157,9 @@ export function sampleCandidates(snap, world) {
     const queue = f ? f.s - (f.vehicle.spec || CAR).rearOverhang - FRONT - QUEUE_GAP_M : Infinity;
     const stopAt = (mark) => Math.min(mark, queue);
     if (snap.intersection && snap.intersection.bumper_to_line_m > 0.3) {
-      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, ...(snap.intersection.amber?.stop ? { stopDecel: snap.intersection.amber.stop_decel, stopReaction: snap.intersection.amber.reaction_s } : {}), stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
+      // (tailgated, it starts braking earlier and more gently: sim/tailgaters.js)
+      const gently = snap.tailgater && !snap.intersection.amber?.stop ? { stopDecel: TAIL_STOP_DECEL } : {};
+      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, ...(snap.intersection.amber?.stop ? { stopDecel: snap.intersection.amber.stop_decel, stopReaction: snap.intersection.amber.reaction_s } : {}), ...gently, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "approach and stop at the line" });
     }
     // Giving way at a two-way stop or a junction without a sign: past the line, wait where the car
@@ -213,6 +226,13 @@ export function sampleCandidates(snap, world) {
     if (gc && (!gc.wait || gc.bumper_to_stop_m > 0.3)) {
       out.push({ id: "wait_for_geese", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, gc.limit_mps ?? approach), ...(gc.wait ? { stopAtRoute: stopAt(gc.stop_s_route - FRONT - 0.5) } : {}) }),
         steer: "hold lane", speed: gc.wait ? "stop and wait until the last goose is off the road" : "slow down, ready to stop for the geese" });
+    }
+    // A tailgater close behind and no lane to move right into (sim/tailgaters.js): ease off slightly, and
+    // gently, below the target speed, so it can get by and the car has more room ahead.
+    const tg = snap.tailgater;
+    if (tg && !tg.can_move_right && target >= TAIL_EASE_MIN_MPS && target >= 0.9 * limit) {
+      const vt = Math.round((target - TAIL_EASE_MPS) * 10) / 10;
+      out.push({ id: "ease_off_for_tailgater", laneUntil, law: inLane({ kind: "lane", vTarget: vt }), steer: "hold lane", speed: `ease off gently to ${vt.toFixed(1)} and let the tailgater by` });
     }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
@@ -399,7 +419,10 @@ export function simulateAll(candidates, snap, world) {
   // (an emergency vehicle coming up behind stops for what it cannot get past: it is not predicted
   // to run into the car)
   const behindEv = (o) => isEmergency(o) && world.ego.toLocal(o.x, o.y).ahead < 0 && Math.abs(wrap(o.psi - world.ego.psi)) < Math.PI / 4;
-  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !behindEv(o)).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
+  // (nor a tailgater close behind, sim/tailgaters.js: it brakes too, late; braking it could not match is
+  // `brakes_hard_with_tailgater`, below)
+  const tailgater = snap.tailgater?.vehicle || null;
+  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !behindEv(o) && o !== tailgater).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
@@ -679,6 +702,14 @@ export function simulateAll(candidates, snap, world) {
     else if (pastSpace && c.law.kind === "lane") reject = "passes_parking_space";
     c.reject = reject;
     c.eligible = !reject;
+  }
+  // A tailgater close behind (sim/tailgaters.js): no manoeuvre brakes harder than the situation ahead
+  // requires (`gentle_mps2`), or than the gentlest one that passes every other check: a brake check it
+  // could not match. Braking hard stays on offer as `hard_brake`.
+  if (tailgater) {
+    const decels = candidates.filter((c) => !c.reject && c.law.kind !== "hard_brake").map((c) => c.sim.max_decel);
+    const ceiling = Math.max(snap.tailgater.gentle_mps2, decels.length ? Math.min(...decels) + TAIL_GENTLEST_SLACK : 0);
+    for (const c of candidates) if (!c.reject && c.law.kind !== "hard_brake" && c.sim.max_decel > ceiling) { c.reject = "brakes_hard_with_tailgater"; c.eligible = false; }
   }
   const rejected = {};
   for (const c of candidates) if (c.reject) rejected[c.reject] = (rejected[c.reject] || 0) + 1;

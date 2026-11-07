@@ -5,7 +5,8 @@ import { CAR, G, ROAD, comfort } from "./vehicle.js";
 export const FOLLOWING_STANDSTILL_M = 3;
 export const FOLLOWING_REACTION_S = 0.4;
 
-export function followingPolicy(vehicle, lead) {
+// `scale`: how many times the usual gap to leave (twice, tailgated: sim/tailgaters.js).
+export function followingPolicy(vehicle, lead, { scale = 1 } = {}) {
   const spec = vehicle.spec || CAR, leadSpec = lead.vehicle?.spec || CAR;
   const v = Math.max(0, vehicle.v), ahead = Math.max(0, lead.speed);
   const gap = Math.max(0, lead.gap_m), grip = Math.max(0.05, ROAD.mu);
@@ -20,7 +21,7 @@ export function followingPolicy(vehicle, lead) {
   const leadBraking = Math.min(leadSpec.maxBrake ?? CAR.maxBrake, grip * G);
   const leadStop = ahead * ahead / (2 * leadBraking);
   const stopping = v * reaction + v * v / (2 * braking) - leadStop;
-  const target = FOLLOWING_STANDSTILL_M + Math.max(v * headway, stopping);
+  const target = FOLLOWING_STANDSTILL_M + scale * Math.max(v * headway, stopping);
   const room = Math.max(0, gap - FOLLOWING_STANDSTILL_M);
   // Invert v*reaction + v²/(2*braking) <= room + leader stopping distance.
   const br = braking * reaction;

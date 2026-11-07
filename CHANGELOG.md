@@ -1471,6 +1471,22 @@
   checker validates requests offline and checks model expectations when a key is available.
 - Live Jev behavior remains unverified; historical benchmark numbers describe the earlier world.
 
+- Tailgaters in free drives (`?tailgaters=0` takes them off): the first hazard behind the car. Now
+  and then, from its own random stream, an ordinary car that has come up behind the driven car in
+  its lane closes up to about half a second and holds it, edging in and out, drifting left to look
+  past and flashing its headlights. It reacts to the car's brake lights late but then brakes for
+  real: it follows a gentle stop, and a hard one can leave it no room, a rear-end on the follower.
+  Sensing reports `tailgater`; tailgated, the car leaves twice its usual gap ahead, stops at lines
+  more gently, and has the new `let_tailgater_pass` (move right where another lane goes its way) and
+  `ease_off_for_tailgater` candidates, while the `brakes_hard_with_tailgater` rejection keeps out
+  braking harder than what is ahead requires. Braking harder than 4 m/s² with a tailgater close
+  behind, well beyond what anything ahead called for, counts as `brake_checks` and fails a Lab drive,
+  reported only once a tailgater has followed the car. The HUD says TAILGATER · LEAVE MORE ROOM AHEAD
+  (or MOVE RIGHT AND LET THEM BY).
+- New Lab challenge, **On your bumper** (seed 56042): William Avenue in Winnipeg's Exchange District,
+  two lanes each way, with a tailgater in your lane, an empty lane on the right and a light ahead
+  that turns amber.
+
 ## 0.2.0
 
 A large realism and graphics update. The Rules benchmark (seed 1) still passes 12 of 12 drives in
