@@ -490,6 +490,23 @@ await test("checkpoints: a restored drive replays exactly", async () => {
   assert.equal(sig(), first);
 });
 
+await test("checkpoints: restoring a snowy moment after the weather turned dry puts its ice back at once, paused", () => {
+  setWeather("snow");
+  const world = new World(SK, { seed: 3, parked: 0, pedestrians: 0, weather: "snow", ice: true });
+  world.ice.refresh(world);
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 }), autopilot = new Autopilot(world, {});
+  const recorder = new DriveRecorder(), clock = {}, ctx = { world, fleet, autopilot };
+  const placed = world.ice.all.length;
+  assert.equal(placed > 0 && world.ice.list.length === placed, true);
+  recorder.record({ ...ctx, drive: null, clock }, true);
+  world.weather = setWeather("dry").name; world.ice.refresh(world);
+  assert.equal(world.ice.list.length, 0);
+  recorder.restore(0, { ...ctx, clock, setDrive: () => {} });
+  assert.equal(world.weather, "snow");
+  assert.equal(world.ice.list.length, placed);
+  setWeather("dry");
+});
+
 for (const brain of ["rules", "cautious"]) await test(`"Bridges freeze first", ${brain}: eases off for the bridge and the ice, crosses it steadily, arrives cleanly`, async () => {
   const ctx = setupChallenge(SK, lesson, { brain }), w = ctx.world, p = w.ice.list[0];
   assert.equal(w.ice.enabled, true);

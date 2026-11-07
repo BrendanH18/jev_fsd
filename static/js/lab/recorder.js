@@ -104,6 +104,9 @@ export class DriveRecorder {
     target.world.paused = true;
     target.world.visibility.setNight(frame.night);
     target.setDrive(state.drive); Object.assign(target.clock, state.clock);
+    // (black ice is shared between frames: lay the patches the restored weather and time call for,
+    // now, so that a paused frame shows them: sim/black-ice.js)
+    if (target.world.ice?.enabled) target.world.ice.refresh(target.world);
     return frame;
   }
   branch(index) {
