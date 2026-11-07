@@ -5,13 +5,14 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fifty authored challenges
+## Fifty-one authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
 | Fresh green | Edmonton, 106 Street NW | Red-light runners on (`redRunners`). Your light turns green at Whyte Avenue NW as a car that cannot stop runs its red across your way. Entering ahead of it (`fresh_green_conflicts`) fails the drive |
 | Into the sun | Calgary, 17 Avenue SW | Westbound into a low October sun at 18:15: a red light and someone crossing mid-block, seen late in the glare. `glare_speeding_seconds` fails above 1 s |
 | Reverse lights | Calgary, Beltline | Hidden hazards and driveway reversers on (`driveways`, sim/driveway-reversers.js). 13 Avenue SW (one lane each way, 40 km/h), both kerbs lined with parked cars. A car in a driveway on the right, already across the sidewalk, backs out once the car's front is 70 m away; the parked cars hide each from the other, and it comes into the lane with the car about 30 m off. Squeezing past it or not stopping for it (`reversing_conflicts`) fails the drive. Rules and the cautious agent stop about 9 m back, wait for it to drive off and follow it |
+| Goose crossing | Ottawa, the Glebe | Canada geese on (`geese`, sim/geese.js). Clemow Avenue (one lane each way, 40 km/h) between Central Park and Patterson's Creek Park, from the parks layer. Eight geese (three adults, five goslings) on the grass on the left set off across once the car's front is 75 m away, the lead already at the kerb; the adult in the middle stops in the car's lane for 8 s. Driving on within 2 m of a goose on the road, or hitting one (`wildlife_conflicts`), fails the drive. Rules and the cautious agent stop 4–7 m short of the file and wait about 40 s for the last goose |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -124,6 +125,11 @@ are on only for this challenge and free drives; the challenge places its one cyc
 **Reverse lights** (`reverse-lights`, Calgary, 13 Avenue SW, seed 49042): watch driveways for
 reversing lights, and give a car backing out room to finish. Driveway reversers are on only for this
 challenge and free drives; the challenge places its one car backing out and no others.
+
+**Goose crossing** (`goose-crossing`, Ottawa, Clemow Avenue, seed 53042): stop for geese crossing the
+road and wait until the last one is off it; never go through a gap between them, even once the ones
+ahead are across your lane. Geese are on only for this challenge and free drives; the challenge
+places its one gaggle and no others.
 
 ## Paired amber-light lessons
 

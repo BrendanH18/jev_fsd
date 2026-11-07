@@ -47,11 +47,13 @@ def overpass_query(bbox: Bbox) -> str:
     w, s, e, n = bbox
     # (bus and streetcar routes with a member in the box too, as the main API returns them, without
     # their members outside it, and the railway and streetcar tracks, jev/osm/rail.py; and schools and
-    # playgrounds, jev/osm/zones.py, with the ways of their multipolygons; and the stops beside the tracks)
+    # playgrounds, jev/osm/zones.py, and the parks and water geese live by, jev/osm/parks.py, with the
+    # ways of their multipolygons; and the stops beside the tracks)
     return (
         "[out:xml][timeout:90][bbox:%f,%f,%f,%f];"
-        "(way[\"highway\"];way[\"building\"];way[\"railway\"~\"^(rail|light_rail|tram|narrow_gauge)$\"];way[\"amenity\"=\"school\"];way[\"leisure\"=\"playground\"];)->.a;"
-        "(rel[\"amenity\"=\"school\"];rel[\"leisure\"=\"playground\"];)->.z;way(r.z)->.zw;"
+        "(way[\"highway\"];way[\"building\"];way[\"railway\"~\"^(rail|light_rail|tram|narrow_gauge)$\"];way[\"amenity\"=\"school\"];way[\"leisure\"=\"playground\"];"
+        "way[\"leisure\"~\"^(park|garden|recreation_ground)$\"];way[\"natural\"=\"water\"];way[\"waterway\"~\"^(river|canal|riverbank)$\"];way[\"landuse\"=\"grass\"];)->.a;"
+        "(rel[\"amenity\"=\"school\"];rel[\"leisure\"~\"^(playground|park|garden|recreation_ground)$\"];rel[\"natural\"=\"water\"];rel[\"waterway\"=\"riverbank\"];rel[\"landuse\"=\"grass\"];)->.z;way(r.z)->.zw;"
         "(.a;.zw;)->.a;"
         ".a out body;.a >;out body qt;"
         "(node[\"amenity\"=\"school\"];node[\"leisure\"=\"playground\"];node[\"railway\"~\"^(tram_stop|halt|station)$\"];);out body qt;"

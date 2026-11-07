@@ -1,6 +1,7 @@
 import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
 import { reversingVehicle } from "../sim/driveway-reversers.js";
+import { geeseCrossing } from "../sim/geese.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -311,7 +312,8 @@ export function buildSnapshot(world, executing = null) {
     }
     const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, { list: world.crowd.list.filter((p) => visible.includes(p)) });
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
-    const vehicles = visible.filter((o) => o.kind !== "pedestrian");
+    // (geese, sim/geese.js, are waited for as a gaggle, never followed or passed)
+    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && !o.goose);
     if (world.busLanes) {
       route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
       const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
@@ -352,6 +354,8 @@ export function buildSnapshot(world, executing = null) {
     }
     // (cars backing out of driveways, with that option on: sim/driveway-reversers.js)
     if (world.driveways?.enabled) snap.reversing_vehicle = world.driveways.cars.length ? reversingVehicle(world, p, frontS, lane) : null;
+    // (Canada geese crossing the road, with that option on: sim/geese.js)
+    if (world.geese?.enabled) snap.geese_crossing = world.geese.gaggles.length ? geeseCrossing(world, p, frontS, lane) : null;
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -442,6 +446,8 @@ export function buildSnapshot(world, executing = null) {
   if (snap.contraflow_cyclist?.entry_limit_mps != null) snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
   // (and coming up to a car backing out of a driveway: sim/driveway-reversers.js)
   if (snap.reversing_vehicle?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.reversing_vehicle.limit_mps);
+  // (and coming up to geese by the road, or crossing it: sim/geese.js)
+  if (snap.geese_crossing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.geese_crossing.limit_mps);
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -1544,7 +1550,7 @@ function laneClearS(shift, fromCenter, toCenter) {
 function laneOptions(snap, world) {
   const { route, lane, ego } = snap;
   const p = snap.routeProj, s = p.s, FRONT = ego.front_m, REAR = world.ego.spec.rearOverhang;
-  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian");
+  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian" && !o.goose);
   const free = desiredSpeed({ ...snap, following: null }).v;
   const i = snap.intersection;
   const line = snap.control_line_m ?? (i ? i.bumper_to_line_m : Infinity);
@@ -1731,6 +1737,12 @@ export function desiredSpeed(snap) {
     const vr = rv.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(rv.bumper_to_stop_m - 0.5, decel);
     if (vr < v) { v = vr; reasons.push("car backing out of a driveway"); }
   } else if (rv?.limit_mps != null && rv.limit_mps <= v + 0.05) reasons.push("car backing out ahead");
+  // Canada geese crossing the road (sim/geese.js): stop short of them until the last is off the road
+  const gc = snap.geese_crossing;
+  if (gc?.wait) {
+    const vg = gc.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(gc.bumper_to_stop_m - 0.5, decel);
+    if (vg < v) { v = vg; reasons.push("geese crossing"); }
+  } else if (gc?.limit_mps != null && gc.limit_mps <= v + 0.05) reasons.push("geese by the road");
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -1921,6 +1933,7 @@ export function hazardFlags(snap) {
   if (snap.contraflow_cyclist) f.push("contraflow cyclist");
   if (snap.red_light_runner) f.push("red-light runner");
   if (snap.reversing_vehicle) f.push("reversing vehicle");
+  if (snap.geese_crossing) f.push("geese");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

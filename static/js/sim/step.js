@@ -20,6 +20,8 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   if (world.contraflow.enabled) world.contraflow.step(dt);
   // (cars backing out of driveways, with that option on: sim/driveway-reversers.js)
   if (world.driveways?.enabled) world.driveways.step(dt, fleet);
+  // (Canada geese crossing the road, with that option on: sim/geese.js)
+  if (world.geese?.enabled) world.geese.step(dt);
   world.crowd.step(dt);
   world.t += dt;
   world.tick++;

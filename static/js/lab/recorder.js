@@ -68,7 +68,7 @@ export class DriveRecorder {
     this.markers = this.markers.filter(m => m.t >= this.frames[0].t);
   }
   mark(t, type) {
-    if (["collision", "red_light", "amber_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "fresh_green_conflict", "reversing_conflict", "glare", "sun_glare", "safety"].includes(type)) this.markers.push({ t, type });
+    if (["collision", "red_light", "amber_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "fresh_green_conflict", "reversing_conflict", "wildlife_conflict", "glare", "sun_glare", "safety"].includes(type)) this.markers.push({ t, type });
   }
   restore(index, target) {
     const frame = this.frames[Math.max(0, Math.min(this.frames.length - 1, Math.round(index)))];
@@ -87,6 +87,7 @@ export class DriveRecorder {
     target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world; target.world.crossingGuards.world = target.world;
     if (target.world.contraflow) target.world.contraflow.world = target.world;
     if (target.world.driveways) target.world.driveways.world = target.world;
+    if (target.world.geese) target.world.geese.world = target.world;
     if (target.fleet.collection) { target.fleet.collection.world = target.world; target.fleet.collection.fleet = target.fleet; }
     target.world.npcs = target.fleet.vehicles;
     for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;

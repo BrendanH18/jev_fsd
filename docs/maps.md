@@ -188,3 +188,20 @@ street, the edge and its side of travel (on a two-way street, the edge whose rig
 the driveway's heading. All twelve presets have layers: 554 driveways, most in Ottawa (135),
 Calgary (128) and Winnipeg (73); Québec City has 2. The sim has cars back out of them
 (sim/driveway-reversers.js).
+
+Parks and water are a separate `<key>.parks.v1.json` layer (`jev/osm/parks.py`), built with
+`uv run scripts/fetch_map.py <preset> --parks` from the raw OSM download (fetched if absent; only the
+layer is committed). Its `areas` are the parks (`leisure=park`), gardens (`leisure=garden`),
+recreation grounds (`leisure=recreation_ground`), lawns (`landuse=grass`) and water (`natural=water`,
+`waterway=riverbank`; rivers and canals, `waterway=river|canal`, as lines) beside a pack street, as
+ways or multipolygons (their outer ways joined; `closed` is false where the download cut one off),
+projected to pack metres and simplified to 1 m, leaving out the small (a park under 800 m², a garden
+under 1,500 m², a lawn under 2,500 m², water under 300 m²). Its `spans` are the stretches of pack
+streets, each way the traffic goes, whose centreline passes within 25 m of one, or through one: the
+`edge`, `from` and `to` along it, the area on each side (`left`, `right`, by the sim's right of
+travel) and whether either is `water`. Stretches shorter than 20 m and roundabout rings are left out.
+All twelve presets have layers: 149 areas and 889 spans, from 32 spans in Mount Pleasant to 155 in
+Halifax; only Saskatoon's bbox has water beside a street (the South Saskatchewan River, 10 spans).
+Ottawa's bbox has 18 areas and 75 spans but stops short of the Rideau Canal. Ottawa is too big for the
+main API's 50,000-node limit, so its raw download comes from Overpass, whose query asks for parks and
+water too. Geese cross the street there (sim/geese.js).

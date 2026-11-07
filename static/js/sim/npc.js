@@ -29,6 +29,8 @@ import { turnBanned } from "./turn-restrictions.js";
 // less than the minimum passing distance until it has gone by (sim/contraflow.js).
 // With `driveways` on, drivers slow for a car backing out of a driveway ahead and stop to give it room
 // once it is coming into their lane (sim/driveway-reversers.js reverserYield).
+// With `geese` on, drivers and cyclists slow for a gaggle of Canada geese coming up to the kerb ahead and
+// stop short of their way across until the last goose is off the roadway (sim/geese.js geeseYield).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -63,6 +65,7 @@ import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard
 import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
 import { reverserYield } from "./driveway-reversers.js";
+import { geeseYield } from "./geese.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -1045,6 +1048,13 @@ export class NpcFleet {
         const g = rv.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
       }
+      // for Canada geese, slow while a gaggle comes up to the kerb ahead and stop short of their way across
+      // until the last is off the roadway (once it could stop there: otherwise it carries on) (sim/geese.js)
+      const gs = world.geese?.gaggles.length ? geeseYield(world, n, front) : null;
+      if (gs?.hold != null) {
+        const g = gs.hold - front;
+        if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
+      }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -1057,7 +1067,7 @@ export class NpcFleet {
       // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
       // sim/sun-glare.js)
       const vGlare = this.world.sunGlare && n.kind !== "bike" ? npcGlareCeiling(this.world, n) : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, gs?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);

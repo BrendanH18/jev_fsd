@@ -1,6 +1,6 @@
 """Parse OSM XML into plain dicts: nodes, ways, and the relations that are bus and streetcar routes
 (jev/osm/transit.py)
-or school and playground areas (jev/osm/zones.py)."""
+or school and playground areas (jev/osm/zones.py), or parks and water (jev/osm/parks.py)."""
 
 from __future__ import annotations
 
@@ -12,10 +12,17 @@ from typing import Dict, List, Union
 TRANSIT_ROUTES = ("bus", "trolleybus", "tram")
 
 
+def _green_or_water(tags: dict) -> bool:
+    """A park, garden, recreation ground, lawn or body of water (jev/osm/parks.py)."""
+    return (tags.get("leisure") in ("park", "garden", "recreation_ground") or tags.get("natural") == "water"
+            or tags.get("waterway") == "riverbank" or tags.get("landuse") == "grass")
+
+
 class OsmData:
     """nodes: id -> (lat, lon, tags). ways: list of {id, nodes: [node ids], tags}. relations: list of
     {id, members: [(type, ref, role)], tags}, only bus, trolleybus and tram routes, turn restrictions
-    (type=restriction or restriction:on_red), and multipolygons that are schools or playgrounds."""
+    (type=restriction or restriction:on_red), and multipolygons that are schools or playgrounds, or the
+    parks and water of jev/osm/parks.py."""
 
     def __init__(self):
         self.nodes: Dict[int, tuple] = {}
@@ -50,7 +57,8 @@ def parse_xml(source: Union[Path, str, bytes]) -> OsmData:
         elif el.tag == "relation":
             tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
             if tags.get("type") in ("restriction", "restriction:on_red") or (tags.get("type") == "route" and tags.get("route") in TRANSIT_ROUTES) or (
-                    tags.get("type") == "multipolygon" and (tags.get("amenity") == "school" or tags.get("leisure") == "playground")):
+                    tags.get("type") == "multipolygon" and (tags.get("amenity") == "school" or tags.get("leisure") == "playground"
+                                                            or _green_or_water(tags))):
                 members = [(m.get("type"), int(m.get("ref")), m.get("role") or "") for m in el.findall("member")]
                 data.add_relation(int(el.get("id")), members, tags)
     return data

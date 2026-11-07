@@ -8,6 +8,7 @@ import { followingScenario, installFollowing, stepFollowing } from "./following-
 import { freshGreenScenario, installFreshGreen, stepFreshGreen } from "./fresh-green-challenge.js";
 import { sunGlareScenario, installSunGlare } from "./sun-glare-challenge.js";
 import { drivewayScenario, placeReverser } from "./driveway-challenge.js";
+import { geeseScenario, placeGeese } from "./geese-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -135,6 +136,8 @@ export const CHALLENGES = [
     description: "Westbound on 17 Avenue SW at 18:15 on a clear October evening, the sun sits just above the avenue ahead. Two signals and someone crossing mid-block are somewhere in the glare.", lesson: "When the sun is in your eyes, slow down to what you can see, leave more room, and look for signals and people early." },
   { id: "reverse-lights", title: "Reverse lights", map: "calgary", weather: "dry", time: "afternoon", seed: 49042, icon: "↶", difficulty: "Anticipation", hazard: "reversing", driveways: true, hidden: true, street: "13 Avenue SW",
     description: "Cars are parked along both sides of 13 Avenue SW, a residential street in the Beltline with one lane each way. Between them, a car is about to back out of a driveway on your right as you come along.", lesson: "Watch driveways for reversing lights. Slow down and give a car backing out room to finish; never try to squeeze past behind it." },
+  { id: "goose-crossing", title: "Goose crossing", map: "ottawa", weather: "dry", time: "afternoon", seed: 53042, icon: "⋯", difficulty: "Patience", hazard: "geese", geese: true, street: "Clemow Avenue",
+    description: "Clemow Avenue in the Glebe runs between Central Park and Patterson's Creek Park, where Canada geese graze by the creek. A family of them, goslings and all, is about to walk across the street in front of you.", lesson: "Geese cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them." },
 ];
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
 
@@ -1035,6 +1038,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "following") return followingScenario(map, challenge);
   if (challenge.hazard === "sun-glare") return sunGlareScenario(map, challenge);
   if (challenge.hazard === "reversing") return drivewayScenario(map, challenge);
+  if (challenge.hazard === "geese") return geeseScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1316,6 +1320,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.crossingGuard) Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));
   if (scenario.contraflow) Object.assign(world.challenge, placeContraflowRider(world, scenario.contraflow));
   if (scenario.reverser) Object.assign(world.challenge, placeReverser(world, scenario.reverser, challenge.seed));
+  if (scenario.geese) Object.assign(world.challenge, placeGeese(world, scenario.geese));
   if (scenario.roundabout) Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }

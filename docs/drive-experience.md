@@ -198,3 +198,16 @@ is coming into it. Slow down for it and stop until it has driven off. Squeezing 
 1 m, or not stopping for one already in the lane, counts as `reversing_conflicts`: 20 safety points
 each, a replay marker and a coaching tip, reported only once a car has backed out near you. Use
 `?driveways=0` to turn them off.
+
+### Geese crossing the road
+
+In free drives (and the **Goose crossing** lesson) a gaggle of Canada geese now and then gathers on
+the grass beside a street that runs beside a park or water, by day and not in snow, and walks across
+in loose single file as you come along: brown-grey bodies, black necks and white chinstraps, now and
+then with yellow-grey goslings, waddling at walking pace and grazing on the grass either side. The
+HUD says GEESE BY THE ROAD AHEAD while they come up to the kerb, and GEESE CROSSING · WAIT FOR THE
+LAST ONE once they step off. Slow down, stop short of them, and wait until the last goose is off the
+road; one may stop in your lane. Driving on within 2 m of a goose on the road, or hitting one,
+counts as `wildlife_conflicts`: 20 safety points each, a replay marker and a coaching tip, reported
+only once a gaggle has crossed near you. Hitting one is also a collision. Use `?geese=0` to turn them
+off.

@@ -27,7 +27,7 @@ const G = await import("../static/js/sim/sun-glare.js");
 
 const key = "a53c5bcf6438";   // Calgary, Beltline
 const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${key}.v6.pack.json`, import.meta.url)));
-for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
+for (const layer of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) {
   const url = [2, 1].map(v => new URL(`../data/maps/${key}.${layer}.v${v}.json`, import.meta.url)).find(url => fs.existsSync(url));
   if (url) pack[layer] = JSON.parse(fs.readFileSync(url));
 }
