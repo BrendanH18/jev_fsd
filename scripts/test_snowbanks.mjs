@@ -26,6 +26,7 @@ const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challen
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
+const { Route } = await import("../static/js/map/route.js");
 
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
@@ -323,6 +324,43 @@ await test("with the option off nothing is built, drawn or reported, and the oth
   for (let k = 0; k < 300; k++) { step(a); step(b); }
   assert.equal(JSON.stringify(a.fleet.vehicles.map(n => [n.x, n.y])), JSON.stringify(b.fleet.vehicles.map(n => [n.x, n.y])));
   assert.equal(JSON.stringify(a.world.parked.list.map(c => [c.x, c.y])), JSON.stringify(b.world.parked.list.map(c => [c.x, c.y])));
+});
+
+await test("creeping up to an end it cannot see past: held to the creep to the end, and one already in outranks a late claim it could still stop for", () => {
+  // (a free drive in snow on Kent Street, Ottawa, found the car's own "too close to stop" claim, with a
+  // metre to spare, lifting the creep 1.4 m short of the stretch and outranking a car already in it)
+  const ctx = world(), w = ctx.world, sb = w.snowbanks, nw = sb.narrowings[0];
+  const e = MTL.edges.get(SITE.edge), L = lengthOf(e), lane = MTL.lane(SITE.edge, 0);
+  w.route = new Route(scenario.route, MTL, w.ego.spec);
+  const at = (gap, v) => {
+    w.placeOnLane(lane, (SITE.a - gap - FRONT) * lane.length / L); w.ego.v = v; w.tick++;
+    return buildSnapshot(w);
+  };
+  // (nobody coming: the far end out of sight in the snow, the creep holds right up to the stretch)
+  for (const [gap, v] of [[3, 1.4], [1.4, 1.66], [1.2, 1.2], [0.5, 1.2]]) {
+    const n = at(gap, v).snowbank.narrowing;
+    assert.equal(n.sees_through, false); assert.equal(n.wait, false);
+    assert.equal(n.limit_mps <= SB.EDGE_MPS + 1e-9, true, `gap ${gap}: limit ${n.limit_mps}`);
+  }
+  assert.equal(at(8, 3).snowbank.narrowing.limit_mps < 2.5, true);
+  // (one coming the other way already in it, seen only now, 1.1 m short at the creep: the car can still stop,
+  // braking hard, so it waits, short of the stretch, and nothing on offer takes it in)
+  addCar(ctx, nw.opposite, nw.L - nw.b + 40, 4.5, "late");
+  const snap = at(1.1, SB.EDGE_MPS), n = snap.snowbank.narrowing;
+  assert.equal(n.oncoming?.id, "late"); assert.equal(n.oncoming.inside, true);
+  assert.equal(n.wait, true); assert.equal(n.priority, "oncoming"); assert.equal(n.reason, "inside");
+  assert.equal(n.stop_s_route <= n.entry_s_route, true);
+  assert.equal(n.bumper_to_stop_m > 0.3, true, `${n.bumper_to_stop_m}`);
+  const { eligible } = simulateAll(sampleCandidates(snap, w), snap, w);
+  assert.equal(eligible.length > 0, true);
+  for (const c of eligible) assert.equal(c.sim.progress_m < 1.1, true, `${c.id} ${c.sim.progress_m}`);
+  // (the shared test says the same: not committed, braking hard; traffic in its place would hold short too)
+  const c = sb.claimFor(nw, w.ego);
+  assert.equal(sb.committed(nw, c, true), false);
+  assert.equal(SB.narrowingTurn(sb, nw, c).mayEnter, false);
+  // (one that truly cannot stop, even braking hard, goes on)
+  w.ego.v = 5;
+  assert.equal(sb.committed(nw, sb.claimFor(nw, w.ego), true), true);
 });
 
 // Optional: the live-model case (`uv run scripts/verify_jev.py data/snapshots/one_car_at_a_time.json`), from

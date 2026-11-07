@@ -525,7 +525,8 @@ export function simulateAll(candidates, snap, world) {
   const icy = snap.black_ice_ahead && world.ice?.list.length ? snap.black_ice_ahead : null;
   const iceStart = icy ? patchesUnder(world.ice, world.ego) : null;
   // a stretch narrowed by snowbanks while it is an oncoming car's turn (sim/snowbanks.js): where the car waits
-  const narrowStop = snap.snowbank?.narrowing?.wait ? snap.snowbank.narrowing.stop_s_route : null;
+  // (a metre's overshoot, but never into the stretch itself)
+  const narrowStop = snap.snowbank?.narrowing?.wait ? Math.min(snap.snowbank.narrowing.stop_s_route + 1, snap.snowbank.narrowing.entry_s_route ?? Infinity) : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
@@ -584,7 +585,7 @@ export function simulateAll(candidates, snap, world) {
         // (and a metre past where it stops for geese crossing is still short of their way)
         if (geeseStop !== null && s + FRONT > geeseStop + 1) intoGeese = true;
         // (and a metre past where it waits its turn between snowbanks)
-        if (narrowStop !== null && s + FRONT > narrowStop + 1) intoNarrowing = true;
+        if (narrowStop !== null && s + FRONT > narrowStop) intoNarrowing = true;
         // (1.5 m past it, as a short stop overshoots)
         if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         // (1.5 m past where it stops, as a short stop overshoots: into the 2 m it leaves behind the bus)

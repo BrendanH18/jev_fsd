@@ -32,7 +32,7 @@
 //
 // With the option off nothing here is built, stepped, drawn from a random stream or looked at.
 
-import { CAR, comfort } from "./vehicle.js";
+import { CAR, G, ROAD, comfort } from "./vehicle.js";
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { rng } from "../common.js";
 import { oppositeOf, onStreet } from "./double-parked.js";
@@ -92,6 +92,22 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const ease = (u) => { const t = clamp(u, 0, 1); return t * t * (3 - 2 * t); };
 
 const lengthOf = (e) => e.cum[e.cum.length - 1];
+// The hardest a vehicle can brake on the grip under its wheels: the road's, or a black-ice patch's
+// where one is under an axle (sim/black-ice.js sets ROAD.gripAt), as sim/vehicle.js comfort() does.
+function hardDecelUnder(v) {
+  let mu = ROAD.mu;
+  if (ROAD.gripAt && v?.spec) {
+    const c = Math.cos(v.psi), s = Math.sin(v.psi), wb = v.spec.wheelbase || 2.7;
+    mu = Math.min(mu, ROAD.gripAt(v.x, v.y, v.spec) ?? Infinity, ROAD.gripAt(v.x + c * wb, v.y + s * wb, v.spec) ?? Infinity);
+  }
+  return Math.min(4, mu * G * 0.8);
+}
+// Where a driver waiting its turn stops its front, along its way, given where its front is: WAIT_M short
+// of the stretch, or, once past that point (creeping up to an end it cannot see past, say), HOLD_M short
+// of the stretch itself.
+const HOLD_M = 0.2;
+const BRAKE_RAMP_S = 0.15;
+export const waitPoint = (en, front) => (en - front >= WAIT_M ? en - WAIT_M : en - HOLD_M);
 function offsetPoint(e, s, lat) {
   const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
@@ -379,12 +395,16 @@ export class Snowbanks {
 
   sinceOf(nw, c) { return this.since.get(keyOf(c.v, nw)) ?? (c.gap <= ZONE_M ? this.world.t : Infinity); }
 
-  // It has the way, whatever else: in, gone (its turn come), or too close to stop short of it: as others
-  // see it, comfortably; as it sees itself (`self`), even braking hard.
+  // It has the way, whatever else: in, gone (its turn come), or too close to stop short of it. As others
+  // see it: comfortably, with COMMIT_M to spare. As it sees itself (`self`): only when it truly could not
+  // stop short of it even braking hard, on the grip under its wheels (black ice too), so that one already
+  // in, coming the other way, outranks a late claim from a driver still outside that could still stop.
   committed(nw, c, self = false) {
     if (c.inside || this.go.get(keyOf(c.v, nw))) return true;
-    const decel = self ? Math.min(4, comfort().hardDecel) : comfort().decel;
-    return c.speed > 0.3 && c.gap < c.speed * c.speed / (2 * decel) + COMMIT_M;
+    if (c.speed <= 0.3) return false;
+    if (!self) return c.gap < c.speed * c.speed / (2 * comfort().decel) + COMMIT_M;
+    // (after the brakes' response, and the ramp to full braking, then braking hard)
+    return c.gap < c.speed * ((c.v.spec?.accelLag || 0) + BRAKE_RAMP_S) + c.speed * c.speed / (2 * hardDecelUnder(c.v));
   }
 
   // Whether `o` (coming the other way) goes before `c`: it came within ZONE_M of its end first (and is
@@ -451,8 +471,10 @@ export function narrowSpeed(gap, squeeze = false) {
 }
 
 // Coming up to the end of a narrowing it cannot see through, `gap` metres short of where it would wait:
-// slowing gently to EDGE_MPS by there, slow enough to stop for one it then sees coming.
+// slowing gently to EDGE_MPS by EDGE_LEAD_M before there, and keeping to it until it is in (whatever it
+// may think of its own claim): slow enough to stop, short of the stretch, for one it then sees in it.
 export const EDGE_MPS = 1.2;
+export const EDGE_LEAD_M = 2;
 export function edgeSpeed(gap) {
   return Math.sqrt(EDGE_MPS * EDGE_MPS + 2 * 0.6 * comfort().decel * Math.max(0, gap));
 }
@@ -516,7 +538,7 @@ export function snowbankYield(world, n, front) {
     const c = sb.claims(nw).find((x) => x.v === n) || sb.claimFor(nw, n);
     if (!c) return { hold: null, limit: Infinity, keep, at };
     const turn = narrowingTurn(sb, nw, c);
-    return { hold: turn.mayEnter ? null : en - WAIT_M, limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)), keep, at, turn };
+    return { hold: turn.mayEnter ? null : waitPoint(en, front), limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)), keep, at, turn };
   }
   return null;
 }
@@ -559,18 +581,18 @@ function egoNarrowing(world, frontS) {
   }
   if (!best) return null;
   const { nw, c } = best, turn = narrowingTurn(sb, nw, c, (v) => world.sees(ego, v));
-  const wait = !turn.mayEnter, stop = wait ? c.en - WAIT_M : null, squeeze = squeezing(sb, nw, c);
+  const wait = !turn.mayEnter, stop = wait ? waitPoint(c.en, frontS) : null, squeeze = squeezing(sb, nw, c);
   const o = turn.oncoming, r1 = (x) => Math.round(x * 10) / 10;
   const e = world.map.edges.get(c.dir > 0 ? nw.edge : nw.opposite), shift = keepRel(world.map, nw, c.dir, ego.spec);
   // (whether it can see to the far end, where anyone coming would come in: when it cannot, in snow or
   // fog, say, it comes up to its end no faster than it could stop there from, and edges in)
   const far = offsetPoint(e, exitOf(nw, c.dir), -(e.lane_offsets?.[0] ?? e.lane_width / 2));
   const through = c.inside || world.visibility.canSee(ego, far[0], far[1]);
-  const limit = Math.min(narrowSpeed(c.gap, !!squeeze), through || turn.committed ? Infinity : edgeSpeed(c.gap - WAIT_M));
+  const limit = Math.min(narrowSpeed(c.gap, !!squeeze), through ? Infinity : edgeSpeed(c.gap - WAIT_M - EDGE_LEAD_M));
   return { id: nw.id, street: nw.name || "", length_m: Math.round(nw.b - nw.a), gap_m: r1(c.gap), inside: c.inside,
     priority: wait ? "oncoming" : "car", reason: turn.reason, committed: turn.committed, sees_through: through,
     oncoming: o ? { id: o.id, inside: o.inside, gap_m: r1(Math.max(0, o.gap)), speed: r1(o.speed) } : null,
-    wait, stop_s_route: stop, bumper_to_stop_m: wait ? stop - frontS : null,
+    wait, stop_s_route: stop, bumper_to_stop_m: wait ? stop - frontS : null, entry_s_route: c.en,
     limit_mps: limit, squeeze: !!squeeze && squeeze.v !== ego,
     detour: shift < 0 ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - 1, back: c.ex + 1, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
 }
