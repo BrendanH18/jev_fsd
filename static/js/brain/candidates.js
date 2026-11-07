@@ -20,7 +20,7 @@ import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 import { SIM_OVER_MPS, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
 import { coverAfter } from "../sim/ball-chase.js";
 import { TAIL_EASE_MIN_MPS, TAIL_EASE_MPS, TAIL_GENTLEST_SLACK, TAIL_STOP_DECEL } from "../sim/tailgaters.js";
-import { earlySlows, iceSimCheck, patchesUnder } from "../sim/black-ice.js";
+import { earlySlows, iceSimCheck, iceStopDecel, patchesUnder } from "../sim/black-ice.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -419,8 +419,11 @@ export function sampleCandidates(snap, world) {
     }
   }
   // (and every lane manoeuvre slows for the black ice it has seen, to its speed by then, and on the ice
-  // only eases off: sim/black-ice.js)
-  if (snap.black_ice_ahead) for (const c of list) if (c.law.kind === "lane") c.law.slowTo = [...(c.law.slowTo || []), ...snap.black_ice_ahead.map((a) => a.slow)];
+  // only eases the pedals and the wheel, `ice`, stopping as gently: sim/black-ice.js gentleOnIce)
+  if (snap.black_ice_ahead) for (const c of list) if (c.law.kind === "lane") {
+    c.law.slowTo = [...(c.law.slowTo || []), ...snap.black_ice_ahead.map((a) => a.slow)]; c.law.ice = true;
+    if (c.law.stopAtRoute !== undefined) c.law.stopDecel = Math.min(c.law.stopDecel ?? Infinity, iceStopDecel(snap.black_ice_ahead));
+  }
   list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   const amber = snap.amber_clear || snap.intersection?.amber;
   for (const c of list) if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);

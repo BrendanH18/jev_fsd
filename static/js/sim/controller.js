@@ -1,7 +1,8 @@
 // The one control law used by the autopilot, the NPCs, and every candidate forward-simulation:
 // pure pursuit on a route (with a lateral offset) plus a proportional speed controller.
 
-import { CAR, comfort } from "./vehicle.js";
+import { CAR, ROAD, comfort } from "./vehicle.js";
+import { gentleOnIce } from "./black-ice.js";
 import { clamp } from "../common.js";
 import { stepTurnaround } from "./turnaround.js";
 import { stepParking } from "./parallel-park.js";
@@ -98,7 +99,8 @@ export function curveProfileSpeed(route, s) {
 // ceiling: the curve profile lowers it through turns, the way a real speed controller would.
 //   kind: "lane" (follow route with offset, target speed, and a stop at `stopAt`, braking at up to
 //         `stopDecel` if given; `stopReaction` reserves seconds of travel for response lag; `slowTo`,
-//         potholes to slow for, sim/potholes.js) | "hard_brake" | "reverse" | "steer" (fixed angle)
+//         potholes and black ice to slow for, sim/potholes.js; `ice`, black ice seen, on which the
+//         inputs are gentle, sim/black-ice.js gentleOnIce) | "hard_brake" | "reverse" | "steer" (fixed angle)
 //         | "turnaround" (a three-point turn at a U-turn, sim/turnaround.js; it needs `world`)
 //         | "park" (parallel parking at the destination, or pulling out again, sim/parallel-park.js;
 //         it needs `world`)
@@ -129,7 +131,10 @@ export function applyLaw(vehicle, law, route, s, dt, world = null) {
       // (down to the speed to drive over each pothole its wheels cross, by then, and no faster until its
       // rear wheels are over: sim/potholes.js; route arc lengths)
       if (law.slowTo) for (const slow of law.slowTo) vTarget = Math.min(vTarget, slowCap(slow, s));
-      return vehicle.step(dt, { steer: purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)), accel: speedControl(vehicle.v, vTarget) });
+      const steer = purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)), accel = speedControl(vehicle.v, vTarget);
+      // (on black ice it has seen, the driver only eases the pedals and the wheel: sim/black-ice.js)
+      if (law.ice && ROAD.gripAt) return vehicle.step(dt, gentleOnIce(vehicle, steer, accel, dt));
+      return vehicle.step(dt, { steer, accel });
     }
   }
 }
