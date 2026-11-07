@@ -44,6 +44,19 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .challenge-empty { padding: 28px 0; color: #afc0cc; }
 .challenge-empty h2 { color: var(--text); font-size: 20px; }
 .challenge-practice-note { padding: 12px; border: 1px solid #83d9c433; border-radius: 8px; color: #afc0cc; }
+.challenge-debrief { margin: 20px 0; padding: 16px; border: 1px solid #f2ce9044; border-radius: 12px; background: #ffffff04; }
+.challenge-verdict { display: block; margin-top: 10px; color: #f2ce90; font-size: 20px; }
+.challenge-verdict.clean { color: #83d9c4; }
+.challenge-debrief p:last-child { margin-bottom: 0; }
+.challenge-debrief .challenge-failures { margin-bottom: 0; }
+.challenge-failures li::first-letter { text-transform: uppercase; }
+.incident-replay { display: block; width: 100%; padding: 10px; border: 1px solid #83d9c433; border-radius: 8px; background: #83d9c408; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.incident-replay:hover { background: #83d9c416; border-color: #83d9c477; }
+.incident-replay:focus-visible { outline: 2px solid #83d9c4; outline-offset: 2px; }
+.incident-replay span, .incident-replay-unavailable { display: block; font-size: 11px; }
+.incident-replay span { color: #83d9c4; }
+.incident-replay-unavailable { color: var(--muted); }
+.report-events li { margin: 10px 0; overflow-wrap: anywhere; }
 .perception-panel { padding: 12px; font-size: 11px; line-height: 1.5; }
 .perception-panel p { margin: 8px 0; }
 .perception-legend { color: #83d9c4; }

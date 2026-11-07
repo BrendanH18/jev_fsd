@@ -78,6 +78,8 @@ Layers beside a pack (`<key>.<layer>.v1.json`: transit, crossings, zones, rail, 
 
 **Challenge practice library** (`lab/practice.js`, `ui/lab.js`): compact manual progress is stored separately from the last 20 full reports, keyed by challenge id and authored version. Only the original unchanged manual attempt counts; AI/mixed drivers, replay branches and resets do not. Starting another score session on the same challenge page invalidates eligibility until an authored retry reloads it. Clean completion reuses `bench/metrics.js` `failures()`, including parking where required, rather than the coaching grade. Changing the time through photo mode marks the challenge modified. In Squeeze in, Finish & review recognizes a manual car stopped inside a legal space using `spacesAlong` and `parkedPose`. Checks: `scripts/test_practice_library.mjs`, `static/tests/practice-tests.js` through `/tests`, and the finish integration cases in `scripts/test_browser_pages.py`.
 
+**Challenge debriefs** (`ui/drive-report.js`): use `challengeFailures` in `lab/practice.js` for the same arrival, safety and parking verdict as manual progress. Keep coaching grades separate. Incident replay must match the recorder's recording id and drive session; incident `at_s` is drive-relative, while checkpoint `t` is world time. Link only events still inside the recording, with up to three seconds of lead-in; older reports and discarded replay futures must never seek a different recording.
+
 ## Gotchas
 
 - Editing a Python file with an in-place substitution that keeps the file size, inside the same second, can leave a stale `__pycache__/*.pyc` that Python still trusts. Delete `__pycache__` if a change seems to have no effect.

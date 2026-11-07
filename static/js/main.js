@@ -95,6 +95,7 @@ import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
 import { savePractice } from "./lab/practice.js";
 import { DriveRecorder } from "./lab/recorder.js";
+import { reportIncidentTarget } from "./lab/playback.js";
 import { DriveLab } from "./ui/lab.js";
 import { PerceptionView } from "./render/perception.js";
 import { setupChallenge } from "./lab/evaluation.js";
@@ -544,7 +545,8 @@ export async function boot() {
   driveReport = new DriveReport({
     onFinish: () => finishDrive("finished"),
     onNewDrive: () => explorer.open(),
-    onReplay: () => lab.openReplay(),
+    getReplayTarget: (report, incident) => reportIncidentTarget(recorder, report, incident),
+    onReplay: index => { lab.update(recorder, performance.now()); lab.openReplay(index); },
     onOpen: () => { pausedBeforeReport = world.paused; world.paused = true; },
     onClose: () => { world.paused = lab?.reviewing ? true : pausedBeforeReport; },
   });
@@ -578,6 +580,7 @@ export async function boot() {
     report.config = challenge ? challengeConfig(challenge) : { map: status.map.id, seed: options.seed, traffic: options.traffic,
       weather: world.weather, time: formatClock(hour), clock: clock.rate, car: garage.vehicle.id };
     report.branched = recorder.branched;
+    report.recording_id = recorder.recordingId;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
     if (challenge) {

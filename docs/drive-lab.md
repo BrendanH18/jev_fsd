@@ -75,6 +75,17 @@ recreates conditions; it does not contain the original result or recording. Imag
 the drive status, so unfinished drives do not claim arrival. Reports and arena results remain
 local to the browser. Scores do not establish real-world driving ability.
 
+Challenge reports begin with a debrief: **Clean arrival** or the specific reasons the drive was
+**Not completed cleanly**, followed by the authored lesson. The verdict shares the challenge's
+arrival, safety and parking rules with manual practice; a high coaching grade does not override
+a failure, and a clean AI or modified drive still earns no manual completion. Older reports
+without enough information show **Completion unavailable**.
+
+Expand **recorded events** and select **Rewind before event** to open paused replay up to three
+seconds before that event. If the event is near the oldest retained checkpoint, replay begins
+there. An event outside the rolling recording, a drive from another session, or an earlier replay
+branch keeps its event text but shows **Replay unavailable**. Saved reports do not store recordings.
+
 ## AI eyes
 
 **AI eyes** draws the geometric sight region and obstacle footprints using the same building,

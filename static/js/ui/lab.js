@@ -187,10 +187,12 @@ export class DriveLab {
     this.playing = !this.playing; this.lastTick = performance.now();
     this.play.textContent = this.playing ? "Pause replay" : "Play replay";
   }
-  openReplay() {
-    if (!this.recorder?.frames.length || this.reviewing) return;
+  openReplay(index) {
+    if (!this.recorder?.frames.length || this.reviewing && index === undefined) return;
     this.reviewing = true; this.controls.hidden = false;
-    this.slider.max = this.recorder.frames.length - 1; this.seek(Math.max(0, this.recorder.frames.length - 11));
+    this.playing = false; this.play.textContent = "Play replay";
+    this.slider.max = this.recorder.frames.length - 1;
+    this.seek(index === undefined ? Math.max(0, this.recorder.frames.length - 11) : index);
   }
   seek(index) {
     this.replayElapsed = 0; this.replayAlpha = 0; this.lastTick = performance.now();
