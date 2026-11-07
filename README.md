@@ -141,6 +141,9 @@ in this browser, separately from AI drives and the last 20 full drive reports. R
 challenge or choose **Practise next** to keep working through the library. Modified setups and
 replay takeovers do not count toward manual completion.
 In **Squeeze in**, stop inside the space and select **Finish & review** to check your parking.
+Challenge reports explain each reason a drive was not completed cleanly and show the authored
+lesson alongside the coaching grade. Select a retained event to rewind up to three seconds before
+it. Events outside the current recording stay readable and are labelled **Replay unavailable**.
 
 ### 🧠 See through the AI's eyes
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { PRACTICE_KEY, challengeCity, filterChallenges, practiceStatus, readPractice, practiceOutcome, savePractice } from "../static/js/lab/practice.js";
+import { PRACTICE_KEY, challengeCity, filterChallenges, practiceStatus, readPractice, practiceOutcome, savePractice, challengeFailures } from "../static/js/lab/practice.js";
 
 let passed = 0;
 const test = (name, fn) => { fn(); passed++; console.log(`✓ ${name}`); };
@@ -58,6 +58,15 @@ test("every existing failure policy blocks a clean completion", () => {
     assert.equal(practiceOutcome(challenge, report(challenge, { [key]: value })), "attempted", key);
   }
   assert.equal(practiceOutcome(challenge, report(challenge, { off_road_s: 0.9, glare_seconds: 0.8, bus_lane_driving: 1 })), "completed");
+});
+test("debrief verdicts share progress failures but remain available for AI and modified reports", () => {
+  const failed = report(challenge, { driver: "rules", modified: true, score: 100, collisions: 1, red_lights: 1, pothole_hits: 1 });
+  assert.equal(challengeFailures(challenge, failed).join(), "collision,red light,hit a pothole too fast");
+  assert.equal(practiceOutcome(challenge, failed), null);
+  assert.equal(challengeFailures(challenge, report(challenge, { driver: "rules", qualified: false })).length, 0);
+  assert.equal(challengeFailures(challenge, report(challenge, { status: "finished" })).join(), "timeout");
+  assert.equal(challengeFailures({ ...challenge, park: true }, report()).join(), "not parked");
+  assert.equal(challengeFailures(challenge, report(challenge, { off_road_s: undefined })), null);
 });
 test("AI, mixed, replay, modified, reset and nonterminal drives earn no manual progress", () => {
   for (const overrides of [{ driver: "rules" }, { driver: "mixed" }, { branched: true }, { modified: true },

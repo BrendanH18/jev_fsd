@@ -96,6 +96,44 @@ export async function runPracticeTests() {
     driveReport.show({ ...report, driver: "manual", practice: { outcome: "attempted", saved: false } });
     check("Unsaved manual reports explain retry and storage failure", driveReport.dialog.querySelector(".challenge-practice-note")?.textContent.includes("Retry for a clean arrival")
       && driveReport.dialog.querySelector(".challenge-practice-note")?.textContent.includes("could not be saved"));
+
+    const clean = { ...report, driver: "manual", config: challengeConfig(completed), branched: false, modified: false,
+      collisions: 0, red_lights: 0, stop_signs: 0, failed_to_yield: 0, off_road_s: 0, resets: 0 };
+    const verdict = () => driveReport.dialog.querySelector(".challenge-verdict")?.textContent;
+    driveReport.show({ ...clean, qualified: false });
+    check("Challenge debrief shows clean arrival independently of coaching qualification", verdict() === "Clean arrival"
+      && driveReport.dialog.querySelector(".challenge-lesson")?.textContent === completed.lesson);
+    driveReport.show({ ...clean, score: 100, red_lights: 1, pothole_hits: 1, status: "finished" });
+    check("High scores cannot hide incomplete arrivals or specific safety failures", verdict() === "Not completed cleanly"
+      && [...driveReport.dialog.querySelectorAll(".challenge-failures li")].map(li => li.textContent).join("|")
+        === "Destination not reached.|red light|hit a pothole too fast");
+    const parking = CHALLENGES.find(c => c.park);
+    driveReport.show({ ...clean, config: challengeConfig(parking), parking: { result: "parked", within_kerb: false, kerb_m: 0.6 } });
+    check("Parking debrief explains why reaching the destination was insufficient", verdict() === "Not completed cleanly"
+      && driveReport.dialog.querySelector(".challenge-failures")?.textContent.includes("Not parked within 30 cm"));
+    driveReport.show({ ...clean, resets: 1 });
+    check("Debrief explains why a reset prevents manual completion", verdict() === "Not completed cleanly"
+      && driveReport.dialog.querySelector(".challenge-failures")?.textContent.includes("Retry without resetting"));
+    driveReport.show({ ...clean, off_road_s: undefined });
+    check("Saved reports without audit counters cannot claim clean completion", verdict() === "Completion unavailable");
+    driveReport.show({ ...clean, config: undefined });
+    check("Free-drive reports keep coaching without an authored challenge verdict", !driveReport.dialog.querySelector(".challenge-debrief"));
+
+    let replayIndex = null, target = 0;
+    driveReport.onReplay = index => { replayIndex = index; };
+    driveReport.getReplayTarget = (r, incident) => !incident || incident.at_s === 5 ? target : null;
+    const events = [{ at_s: 5, at_m: 10, message: "Hard braking" }, { at_s: 1, at_m: 2, message: "Earlier event" }];
+    driveReport.show({ ...clean, incidents: events });
+    check("Retained incidents are rewind buttons and expired events retain their text with an explanation",
+      driveReport.dialog.querySelectorAll(".incident-replay").length === 1
+      && driveReport.dialog.querySelector(".incident-replay-unavailable")?.textContent.includes("outside the current recording")
+      && driveReport.dialog.querySelector(".report-events")?.textContent.includes("Earlier event"));
+    driveReport.dialog.querySelector(".incident-replay").click();
+    check("An incident link can seek checkpoint zero and closes the report", replayIndex === 0 && !driveReport.dialog.open);
+    driveReport.show({ ...clean, incidents: events }); target = null; replayIndex = null;
+    driveReport.dialog.querySelector(".incident-replay").click();
+    check("Incident links revalidate recording availability before seeking", replayIndex === null && driveReport.dialog.open
+      && driveReport.dialog.querySelectorAll(".incident-replay").length === 0);
   } finally {
     lab?.dialog.close(); lab?.dialog.remove(); lab?.replay.remove();
     driveReport?.dialog.close(); driveReport?.dialog.remove();

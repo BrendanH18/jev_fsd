@@ -35,8 +35,9 @@ export class DriveRecorder {
     this.capacity = Math.ceil(seconds / interval) + 1; this.interval = interval;
     this.frames = []; this.at = -Infinity; this.markers = []; this.branched = false;
     this.spend = { cost: 0, tokens: 0, calls: 0 };
+    this.recordingId = crypto.randomUUID();
   }
-  reset() { this.frames = []; this.markers = []; this.at = -Infinity; this.branched = false; this.baseShared = null; this.indexedMap = null; }
+  reset() { this.frames = []; this.markers = []; this.at = -Infinity; this.branched = false; this.baseShared = null; this.indexedMap = null; this.recordingId = crypto.randomUUID(); }
   sharedFor({ world, fleet, autopilot }) {
     const shared = this.baseShared ||= new Set([world.map, world.staticObstacles, world.visibility, world.crowd.streets,
       world.crowd.legsAt, world.crowd.streetIndex, world.crowd.ringNodes, autopilot.brains, autopilot.onDecision, autopilot.onEvent]);
@@ -103,6 +104,7 @@ export class DriveRecorder {
   branch(index) {
     this.frames.splice(index + 1); this.at = this.frames.at(-1)?.t ?? -Infinity;
     this.markers = this.markers.filter(m => m.t <= this.at); this.branched = true;
+    this.recordingId = crypto.randomUUID();
   }
   restoreSpend(pilot) { for (const key of Object.keys(this.spend)) pilot.totals[key] = Math.max(pilot.totals[key] || 0, this.spend[key]); }
 }

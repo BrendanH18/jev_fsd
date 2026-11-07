@@ -46,6 +46,14 @@ export function readPractice(storage) {
   return { records, available: true };
 }
 
+// Reports and manual progress use the same arrival, safety and parking verdict.
+// Older reports without the required audit counters cannot establish a clean arrival.
+export function challengeFailures(challenge, report) {
+  if (!report || !counterKeys.every(key => finite(report[key]))) return null;
+  return failures({ ...report, arrived: report.status === "arrived",
+    ...(challenge.park ? { parked: report.parking?.result === "parked" && report.parking.within_kerb === true } : {}) });
+}
+
 // A coaching grade is not a pass. Only the unchanged authored manual drive can earn progress.
 export function practiceOutcome(challenge, report) {
   if (!report || report.driver !== "manual" || report.branched !== false || report.modified !== false
@@ -54,9 +62,7 @@ export function practiceOutcome(challenge, report) {
   const expected = { version: version(challenge), challenge: challenge.id, map: challenge.map, seed: challenge.seed,
     weather: challenge.weather, time: challenge.time, traffic: 0, car: "compact", clock: 0 };
   if (!Object.entries(expected).every(([key, value]) => report.config?.[key] === value)) return null;
-  const metrics = { ...report, arrived: report.status === "arrived",
-    ...(challenge.park ? { parked: report.parking?.result === "parked" && report.parking.within_kerb === true } : {}) };
-  return failures(metrics).length ? "attempted" : "completed";
+  return challengeFailures(challenge, report).length ? "attempted" : "completed";
 }
 
 export function savePractice(challenge, report, storage) {

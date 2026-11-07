@@ -89,6 +89,40 @@ PRACTICE_FINISH = """async kind => {
 }"""
 
 
+# Exercise the actual report wiring, including a button rendered before a branch.
+DEBRIEF_REPLAY = """async () => {
+  const app = window.__jev;
+  app.world.paused = false; app.advance(8);
+  app.drive.incident('test', 'Test incident');
+  app.advance(2); app.finishDrive('finished');
+  const { readHistory } = await import('/js/sim/drive-score.js');
+  const report = readHistory()[0], incident = report.incidents[0], frames = app.recorder.frames;
+  const eventTime = frames[0].t - frames[0].state.drive.elapsed + incident.at_s;
+  app.driveReport.dialog.querySelector('details').open = true;
+  const button = app.driveReport.dialog.querySelector('.incident-replay');
+  button.focus(); const focused = document.activeElement === button;
+  button.click();
+  const chosen = frames[Number(app.lab.slider.value)].t;
+  const replay = focused && app.lab.reviewing && !app.lab.playing && app.world.paused
+    && !app.driveReport.dialog.open && eventTime - chosen >= 3 - 1e-6 && eventTime - chosen < 3.6;
+  app.driveReport.show(report);
+  const oldButton = app.driveReport.dialog.querySelector('.incident-replay');
+  app.recorder.branch(0); oldButton.click();
+  const revalidated = app.driveReport.dialog.open && !app.lab.playing
+    && app.driveReport.dialog.textContent.includes('Replay unavailable');
+  app.driveReport.showHistory(); app.driveReport.dialog.querySelector('.history-entry').click();
+  const history = app.driveReport.dialog.textContent.includes('Replay unavailable')
+    && !app.driveReport.dialog.querySelector('.incident-replay');
+  app.recorder.reset(); app.driveReport.show(report);
+  const replaced = app.driveReport.dialog.textContent.includes('Replay unavailable')
+    && !app.driveReport.dialog.querySelector('.incident-replay');
+  return [{ name: 'Real report opens paused replay before incident', ok: replay,
+    detail: JSON.stringify({ focused, eventTime, chosen }) },
+    { name: 'A stale incident button revalidates after branching', ok: revalidated },
+    { name: 'History and replaced recordings do not seek discarded events', ok: history && replaced }];
+}"""
+
+
 def report(label, results):
     failed = [r for r in results if not r.get("ok")]
     for r in failed:
@@ -130,6 +164,14 @@ def check(url, chromium=None):
             page.evaluate("window.__jev.world.paused = true")
             ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
             page.close()
+
+        page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(url.rstrip("/") + "/?challenge=pothole-season&drive=manual&quality=low",
+                  wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+        page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+        ok &= report("debrief replay integration", page.evaluate(DEBRIEF_REPLAY))
+        page.close()
 
         if errors:
             ok = False
