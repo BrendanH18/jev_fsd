@@ -94,6 +94,9 @@ import { OrbitControls } from "./ui/orbit-controls.js";
 import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
 import { savePractice } from "./lab/practice.js";
+import { saveRoadTest } from "./lab/practice.js";
+import { RoadTestObserver, examine } from "./lab/examiner.js";
+import { ExaminerPrompt } from "./ui/road-test.js";
 import { DriveRecorder } from "./lab/recorder.js";
 import { reportIncidentTarget } from "./lab/playback.js";
 import { DriveLab } from "./ui/lab.js";
@@ -157,6 +160,7 @@ export async function boot() {
   const recorder = new DriveRecorder();
   let lab;
   let challengeModified = false;
+  let examinerPrompt = null;
   let drive = null, arrivalPending = false, driveReport;
   const callbacks = {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
@@ -554,6 +558,7 @@ export async function boot() {
     if (challenge && drive) challengeModified = true; // Only the original authored attempt counts.
     if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("replaced"));
     drive = new DriveScore(world, { title, route, map: pack.synthetic ? "Practice grid" : status.map.label, driver: autopilot.enabled ? autopilot.brainName : "manual" });
+    if (challenge?.roadTest) drive.observer = new RoadTestObserver(); // (the road test's examiner: lab/examiner.js)
     arrivalPending = false;
     recorder.reset();
     lab?.endReview();
@@ -584,7 +589,7 @@ export async function boot() {
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
     if (challenge) {
-      const practice = savePractice(challenge, report);
+      const practice = challenge.roadTest ? saveRoadTest(challenge, report, examine(challenge, report)) : savePractice(challenge, report);
       lab.practice = practice;
       report.practice = { outcome: practice.outcome, saved: practice.available };
     }
@@ -729,7 +734,8 @@ export async function boot() {
     selectBrain(driver === "manual" ? "rules" : driver);
     autopilot.setEnabled(driver !== "manual"); hud.setAutopilot(autopilot.enabled);
     overlays.setRoute(world.route); startDrive(challenge.title, world.route);
-    $(".hud-top-left").append(h("div", { class: "challenge-banner" }, h("strong", {}, challenge.title), challenge.lesson));
+    if (challenge.roadTest) examinerPrompt = new ExaminerPrompt(challenge, world.route);
+    $(".hud-top-left").append(examinerPrompt?.element || h("div", { class: "challenge-banner" }, h("strong", {}, challenge.title), challenge.lesson));
     for (const selector of ["#weather", "#time", "#clock-rate", "#traffic-density", "#world-seed", "#restart-world"]) $(selector).disabled = true;
   }
   if (replay) {
@@ -1034,6 +1040,7 @@ export async function boot() {
       decision: autopilot.lastDecision, totals: autopilot.totals, paused: world.paused, autopilot: autopilot.enabled, hasRoute: !!world.route }, now);
     panel.render(now);
     driveReport.update(drive, now);
+    examinerPrompt?.update(world, drive, now);
     if (lab.reviewing) driveReport.finishButton.disabled = true;
     if (!manual) requestAnimationFrame(frame);
   }

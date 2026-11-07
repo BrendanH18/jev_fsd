@@ -4,8 +4,11 @@ import { driveLink } from "../lab/share.js";
 import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/registry.js";
 import { replayPosition } from "../lab/playback.js";
 import { challengeCity, filterChallenges, practiceStatus, readPractice } from "../lab/practice.js";
+import { ROAD_TESTS } from "../lab/road-tests.js";
+import { readRoadTests, roadTestRecord, roadTestStatus } from "../lab/practice.js";
 
 const PRACTICE_LABELS = { untried: "Untried", attempted: "Attempted", completed: "Completed cleanly" };
+const ROAD_TEST_LABELS = { untried: "Untried", attempted: "Not yet passed", passed: "Passed" };
 
 export class DriveLab {
   constructor({ city, demo, agentNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception, onConnectModel }) {
@@ -114,7 +117,19 @@ export class DriveLab {
       h("p", {}, "Try another search or clear your filters to see every drive."),
       h("button", { class: "chip-button", onclick: reset }, "Clear filters"));
     const challengeUrl = challenge => driveLink({ ...challengeConfig(challenge), drive: this.challengeDriver.value });
+    // (road tests, lab/road-tests.js: a longer drive marked like an examiner's sheet)
+    const roadTests = readRoadTests(), roadGrid = h("div", { class: "challenge-grid road-test-grid" });
+    const renderRoadTests = () => roadGrid.replaceChildren(...ROAD_TESTS.map(t => {
+      const status = roadTestStatus(t, roadTests.records), best = roadTestRecord(t, roadTests.records)?.best;
+      return h("a", { class: "road-test-card", "data-road-test": t.id, href: challengeUrl(t) },
+        h("div", { class: "challenge-card-top" }, h("span", { class: "challenge-icon", "aria-hidden": "true" }, t.icon), h("span", { class: "label" }, t.style)),
+        h("h2", {}, t.title), h("span", { class: `practice-badge practice-${status === "passed" ? "completed" : status}` }, ROAD_TEST_LABELS[status]),
+        best ? h("span", { class: "road-test-best" }, `Best: ${best.pass ? "Pass" : "Fail"} · ${best.demerits} demerit${best.demerits === 1 ? "" : "s"}`) : null,
+        h("p", {}, t.description), h("div", { class: "challenge-card-meta" }, `${challengeCity(t)} · ${t.region} · ${t.weather} · ${t.time}`),
+        h("strong", {}, status === "untried" ? "Take the test →" : "Retake the test →"));
+    }));
     const render = () => {
+      renderRoadTests();
       const matches = filterChallenges(CHALLENGES, filters, practice.records);
       const completed = CHALLENGES.filter(c => practiceStatus(c, practice.records) === "completed").length;
       count.textContent = `${matches.length} of ${CHALLENGES.length} challenges · ${completed} completed cleanly by you`;
@@ -138,6 +153,11 @@ export class DriveLab {
       h("p", { class: "lab-hero-copy" }, "Choose a short drive. Compare complete arrivals under the same conditions; a higher score alone does not mean a safer driver."),
       h("label", { class: "challenge-driver" }, "Drive with ", this.challengeDriver = h("select", { "aria-label": "Challenge driver", onchange: render },
         h("option", { value: "manual" }, "Me · manual"), ...agentDefinitions().filter(a => a.available !== false).map(a => h("option", { value: a.id }, agentOptionLabel(a))))),
+      h("section", { class: "road-test-library", "aria-labelledby": "road-tests-heading" },
+        h("h2", { id: "road-tests-heading", class: "road-test-heading" }, "Road tests"),
+        h("p", { class: "lab-footnote" }, `Longer licence-style drives on a fixed route, with an examiner's directions and sheet. Any dangerous action or violation fails; minor errors are demerits. Any driver can take one; only an unchanged manual attempt is recorded as yours${roadTests.available ? "" : ", and browser storage is unavailable"}.`),
+        roadGrid),
+      h("h2", { class: "road-test-heading" }, "Challenges"),
       h("div", { class: "challenge-filters", role: "group", "aria-label": "Find a challenge" },
         h("label", { class: "challenge-search" }, h("span", {}, "Search challenges"), controls.query = h("input", { type: "search", value: filters.query,
           placeholder: "Title, city, street or lesson", "aria-label": "Search challenges", oninput: () => { filters.query = controls.query.value; render(); } })),

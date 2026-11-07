@@ -248,3 +248,59 @@ at the line until it has cleared the junction, then carry on 100 m along 106 Str
 who goes as soon as the light turns green enters ahead of it, is counted in
 `fresh_green_conflicts`, and collides with it. Red-light runners are on only for this challenge
 and free drives; the challenge places its one runner and no other traffic.
+
+## Road tests
+
+A road test is one longer drive on a fixed, seeded route that strings everyday situations together,
+marked like an examiner's sheet and ending in **Pass** or **Fail** with the examiner's remarks. The
+wording is generic ("Class 5-style", "G2-style"): the tests are styled on provincial licence road
+tests and are not affiliated with any licensing authority.
+
+| Test | Map | Route |
+|---|---|---|
+| Kitsilano road test (Class 5-style, `road-test-kitsilano`, seed 61042) | Kitsilano, 9:00 | West 10th Avenue east through a two-way stop and the Kitsilano Secondary school zone; left onto Larch Street, across West Broadway at the lights, stop signs at 8th and 7th; left at the lights onto West 4th Avenue and into the left lane; left at the lights onto Stephens Street (stop at 5th); right at the stop sign onto West 7th Avenue and park. About 1.7 km. |
+| Annex road test (G2-style, `road-test-toronto`, seed 62042) | Toronto, 9:00 | Huron Street south through the Huron Street Junior school zone and the all-way stop at Lowther; right at the lights onto Bloor Street West; left at the lights onto Spadina Avenue and into the left lane; left at the lights onto Sussex Avenue, through the all-way stop at Huron, and park. About 1.2 km. |
+
+Tests live in `lab/road-tests.js` (`ROAD_TESTS`), not in `CHALLENGES`, but play exactly like a
+challenge: `challengeById` finds them, links use `?challenge=<id>`, `setupChallenge` builds the
+world, and `challengeScenario` / `installChallenge` call `roadTestScenario` / `installRoadTest`.
+The route is the authored edge chain in the router's lanes (the leftmost before a left turn), so a
+lane change happens where a multi-lane street leads to a left turn. The world turns on parking at
+the destination, amber-light decisions and following distance; `installRoadTest` adds 16 cars and
+40 people from the world's and fleet's own seeded streams and parks two cars either side of a
+7.2 m gap at the kerb of the last street. Nothing else changes how anything drives.
+
+**The examiner.** `RoadTestObserver` (`lab/examiner.js`) rides along in the drive's `DriveScore`
+(`drive.observer`, attached only to road tests, so other reports are unchanged) and adds what it
+notices to the drive's incident stream: a turn without a signal, a turn too fast (over 25 km/h
+right, 32 left) or more than 2 m wide or across the corner, a first stop more than 1 m past the
+line, a lane change (a move of 2.4 m across the street's lanes in the route's frame) without a
+signal or into too small a gap, more than 4 s more than 1.2 m off the lane centre, and 6 s stopped
+with the road clear. `examine(test, report)` marks the sheet:
+
+- **Fail** for every reason `challengeFailures` gives (collisions, red lights, stop signs, failures
+  to yield, off road, not parked, and every audit `failures()` gains later, which goes under
+  **Other** when the examiner does not know it), and for school or playground zone speeding over
+  1 s, driving on the wrong side, speeding over 10 s in all, a reset (the examiner intervening),
+  not moving over, a flagger's STOP and stopping on tracks.
+- **Demerits**, one each, a repeated one marked at most three times: the observer's remarks, harsh
+  braking, brief speeding (one per started 3 s), following closely, closing fast, a wheel off the
+  edge, stopping in a junction, touching the kerb, and a parking finish more than 20 cm out, at an
+  angle or after extra moves. More than `maxDemerits` (10) fails.
+
+Remarks are grouped as Observation, Speed control, Space management, Steering and lane position,
+Signals and right of way, Parking and Other. The examiner's directions (`examinerScript`) come from
+the same route: the start, each stop or signal, each turn onto another street (a bend in the same
+street is not a turn), each lane change, each school or playground zone, and the parking.
+
+**Eligibility and storage.** Any driver can take a test, so AI drivers can be "licensed". Only an
+unchanged, unreplayed manual attempt counts, by the challenge rule (`practiceEligible`). Results
+are stored apart from challenge practice (`jev-fsd-road-tests-v1`, `saveRoadTest`), keyed by test
+id and version: attempts, passes and the best attempt (a pass first, then fewer violations, then
+fewer demerits). The drive report shows the examiner's sheet in place of the challenge debrief; a
+remark linked to a recorded event has the same rewind link as the report's events.
+
+The arena includes road tests only when **Include road tests** is ticked, and shows each
+attempt's examiner verdict beside the audit result. Two saved runs of both tests with Rules and the
+cautious agent take 832,770 bytes, 8.8% of the 9 MB history cap. Checks:
+`scripts/test_road_test.mjs` and `static/tests/road-test-tests.js` through `/tests`.

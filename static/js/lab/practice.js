@@ -54,14 +54,19 @@ export function challengeFailures(challenge, report) {
     ...(challenge.park ? { parked: report.parking?.result === "parked" && report.parking.within_kerb === true } : {}) });
 }
 
-// A coaching grade is not a pass. Only the unchanged authored manual drive can earn progress.
-export function practiceOutcome(challenge, report) {
+// Only the unchanged authored manual drive can earn progress (road tests use the same rule).
+export function practiceEligible(challenge, report) {
   if (!report || report.driver !== "manual" || report.branched !== false || report.modified !== false
     || !["arrived", "finished"].includes(report.status) || !date(report.started_at)
-    || !counterKeys.every(key => finite(report[key])) || report.resets !== 0) return null;
+    || !counterKeys.every(key => finite(report[key])) || report.resets !== 0) return false;
   const expected = { version: version(challenge), challenge: challenge.id, map: challenge.map, seed: challenge.seed,
     weather: challenge.weather, time: challenge.time, traffic: 0, car: "compact", clock: 0 };
-  if (!Object.entries(expected).every(([key, value]) => report.config?.[key] === value)) return null;
+  return Object.entries(expected).every(([key, value]) => report.config?.[key] === value);
+}
+
+// A coaching grade is not a pass.
+export function practiceOutcome(challenge, report) {
+  if (!practiceEligible(challenge, report)) return null;
   return challengeFailures(challenge, report).length ? "attempted" : "completed";
 }
 
@@ -75,6 +80,51 @@ export function savePractice(challenge, report, storage) {
     completed: outcome === "completed" || !!previous?.completed,
     best_score: score === null ? previous?.best_score ?? null : Math.max(score, previous?.best_score ?? 0), last_at: report.started_at };
   try { (storage || globalThis.localStorage).setItem(PRACTICE_KEY, JSON.stringify(state.records)); state.available = true; }
+  catch { state.available = false; }
+  return { ...state, outcome };
+}
+
+// Road tests (lab/road-tests.js, scored by lab/examiner.js): eligible manual attempts only, under the
+// same rule as challenge practice, kept apart from it and keyed by test id and authored version: how
+// many attempts and passes, and the best attempt (a pass before a fail, then fewer violations, then
+// fewer demerits, then the earlier).
+export const ROAD_TEST_KEY = "jev-fsd-road-tests-v1";
+const validBest = b => b && typeof b.pass === "boolean" && Number.isInteger(b.demerits) && b.demerits >= 0
+  && Number.isInteger(b.fails) && b.fails >= 0 && date(b.at);
+export function readRoadTests(storage) {
+  let raw;
+  try { raw = (storage || globalThis.localStorage).getItem(ROAD_TEST_KEY); }
+  catch { return { records: {}, available: false }; }
+  let parsed;
+  try { parsed = JSON.parse(raw || "{}"); } catch { parsed = {}; }
+  const valid = r => r && Number.isInteger(r.version) && r.version > 0 && Number.isInteger(r.attempts) && r.attempts > 0
+    && Number.isInteger(r.passes) && r.passes >= 0 && r.passes <= r.attempts && validBest(r.best) && date(r.last_at);
+  const records = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? Object.fromEntries(Object.entries(parsed).filter(([id, r]) => /^[a-z0-9-]+$/.test(id) && valid(r))
+      .map(([id, r]) => [id, { version: r.version, attempts: r.attempts, passes: r.passes,
+        best: { pass: r.best.pass, demerits: r.best.demerits, fails: r.best.fails, at: r.best.at }, last_at: r.last_at }])) : {};
+  return { records, available: true };
+}
+export function roadTestRecord(test, records = {}) {
+  const record = Object.hasOwn(records, test.id) ? records[test.id] : null;
+  return record && record.version === version(test) ? record : null;
+}
+export function roadTestStatus(test, records = {}) {
+  const record = roadTestRecord(test, records);
+  return !record ? "untried" : record.passes ? "passed" : "attempted";
+}
+const better = (a, b) => a.pass !== b.pass ? a.pass : a.fails !== b.fails ? a.fails < b.fails : a.demerits < b.demerits;
+// `sheet` is the examiner's sheet for the report (lab/examiner.js `examine`).
+export function saveRoadTest(test, report, sheet, storage) {
+  const state = readRoadTests(storage);
+  if (!practiceEligible(test, report) || !sheet?.available) return { ...state, outcome: null };
+  const outcome = sheet.pass ? "passed" : "failed";
+  const previous = roadTestRecord(test, state.records);
+  if (previous?.last_at === report.started_at) return { ...state, outcome };
+  const attempt = { pass: sheet.pass, demerits: sheet.demerits, fails: sheet.fails.length, at: report.started_at };
+  state.records[test.id] = { version: version(test), attempts: (previous?.attempts || 0) + 1, passes: (previous?.passes || 0) + (sheet.pass ? 1 : 0),
+    best: previous && !better(attempt, previous.best) ? previous.best : attempt, last_at: report.started_at };
+  try { (storage || globalThis.localStorage).setItem(ROAD_TEST_KEY, JSON.stringify(state.records)); state.available = true; }
   catch { state.available = false; }
   return { ...state, outcome };
 }

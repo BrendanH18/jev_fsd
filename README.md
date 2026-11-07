@@ -145,6 +145,13 @@ Challenge reports explain each reason a drive was not completed cleanly and show
 lesson alongside the coaching grade. Select a retained event to rewind up to three seconds before
 it. Events outside the current recording stay readable and are labelled **Replay unavailable**.
 
+**Road tests** sit beside the challenges: a Class 5-style test in Kitsilano and a G2-style test in
+Toronto's Annex, each a longer drive on a fixed route with an examiner's directions in the HUD and
+an examiner's sheet at the end. A dangerous action or violation fails; minor errors are demerits,
+grouped by category, with rewind links. Any driver can take one, so you can see whether an AI would
+be licensed; only your unchanged manual attempts are recorded, with your best result. These are
+styled on provincial road tests, not affiliated with any licensing authority.
+
 ### 🧠 See through the AI's eyes
 
 Turn on **AI eyes** to see what the driver actually perceives. It shows which hazards are

@@ -11,6 +11,7 @@ import { drivewayScenario, placeReverser } from "./driveway-challenge.js";
 import { potholeScenario, installPotholes } from "./pothole-challenge.js";
 import { ballScenario, placeBall } from "./ball-chase-challenge.js";
 import { geeseScenario, placeGeese } from "./geese-challenge.js";
+import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -145,7 +146,8 @@ export const CHALLENGES = [
   { id: "goose-crossing", title: "Goose crossing", map: "ottawa", weather: "dry", time: "afternoon", seed: 53042, icon: "⋯", difficulty: "Patience", hazard: "geese", geese: true, street: "Clemow Avenue",
     description: "Clemow Avenue in the Glebe runs between Central Park and Patterson's Creek Park, where Canada geese graze by the creek. A family of them, goslings and all, is about to walk across the street in front of you.", lesson: "Geese cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them." },
 ];
-export const challengeById = id => CHALLENGES.find(c => c.id === id) || null;
+// (road tests, lab/road-tests.js, open and play the same way)
+export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
 
 // Follow the flagger: a work zone (sim/work-zone.js) where the car's lane is closed, on a block of the
 // challenge's `street` (where it has one) with a limit above the zone's, with room for the car to
@@ -1040,6 +1042,7 @@ function placeTurners(world, fleet, { edge, left }, seed) {
 }
 
 export function challengeScenario(map, challenge) {
+  if (challenge.roadTest) return roadTestScenario(map, challenge);
   if (challenge.hazard === "fresh-green") return freshGreenScenario(map, challenge);
   if (challenge.hazard === "following") return followingScenario(map, challenge);
   if (challenge.hazard === "sun-glare") return sunGlareScenario(map, challenge);
@@ -1269,6 +1272,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.potholes) installPotholes(world, scenario);
   if (scenario.following) installFollowing(world, fleet, scenario);
   if (scenario.freshGreen) installFreshGreen(world, fleet, scenario);
+  if (scenario.roadTest) installRoadTest(world, fleet, challenge, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
