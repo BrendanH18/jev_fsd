@@ -38,7 +38,7 @@ async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`)
 const root = new URL("../data/maps/", import.meta.url);
 const load = (key) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
-  for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
+  for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) {
     const url = [2, 1].map(v => new URL(`${key}.${name}.v${v}.json`, root)).find(u => fs.existsSync(u));
     if (url) pack[name] = JSON.parse(fs.readFileSync(url));
   }
