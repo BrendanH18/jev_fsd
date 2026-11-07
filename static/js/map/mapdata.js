@@ -191,6 +191,11 @@ export class MapData {
     // driveways cars back out of (jev/osm/driveways.py; sim/driveway-reversers.js): { id, edge, s, side,
     // x, y, heading, length }
     this.driveways = (pack.driveways?.driveways || []).filter((d) => this.edges.has(d.edge));
+    // the parks and water geese live by, and the street spans beside them where a gaggle may cross
+    // (jev/osm/parks.py; sim/geese.js): { id, kind, name, rings, closed, lines } and { edge, from, to,
+    // left, right, water }
+    this.parks = pack.parks?.areas || [];
+    this.parkSpans = (pack.parks?.spans || []).filter((sp) => this.edges.has(sp.edge));
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
     // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in

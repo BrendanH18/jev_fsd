@@ -28,7 +28,7 @@ const load = id => {
   const rail = new URL(`../data/maps/${names[id]}.rail.v1.json`, import.meta.url);
   if (fs.existsSync(rail)) pack.rail = JSON.parse(fs.readFileSync(rail));
   // (and speed humps and the like, and scramble crossings)
-  for (const name of ["calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways"]) {
+  for (const name of ["calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) {
     const url = new URL(`../data/maps/${names[id]}.${name}.v1.json`, import.meta.url);
     if (fs.existsSync(url)) pack[name] = JSON.parse(fs.readFileSync(url));
   }

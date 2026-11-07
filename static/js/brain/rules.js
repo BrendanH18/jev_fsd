@@ -39,6 +39,8 @@ export class RulesBrain {
     if (snap.red_light_runner?.wait && snap.red_light_runner.bumper_to_stop_m < 1.5) stop = true;
     // (a car backing out of a driveway into the lane, at the point the car stops for it: sim/driveway-reversers.js)
     if (snap.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 1.5) stop = true;
+    // (Canada geese crossing, at the point the car stops for them: sim/geese.js)
+    if (snap.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 1.5) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 1.5) stop = true;
     if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;
@@ -76,6 +78,13 @@ export class RulesBrain {
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       if (c.id === "wait_for_runner") cost -= 12;
       if (c.id === "yield_to_reversing" && snap.reversing_vehicle?.wait) cost -= 6;
+      // easing round a pothole inside the lane, where there is room, rather than driving over it
+      // (sim/potholes.js)
+      if (c.id === "ease_round_pothole" && snap.pothole?.room) cost -= 1.5;
+      // (a ball rolled into the street: slowing, ready for a child running out after it, sim/ball-chase.js;
+      // once someone is crossing ahead, stopping for them comes first)
+      if (c.id === "slow_for_ball" && !snap.pedestrian) cost -= 4;
+      if (c.id === "wait_for_geese" && snap.geese_crossing?.wait) cost -= 6;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;

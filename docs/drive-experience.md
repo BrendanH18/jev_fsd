@@ -198,3 +198,40 @@ is coming into it. Slow down for it and stop until it has driven off. Squeezing 
 1 m, or not stopping for one already in the lane, counts as `reversing_conflicts`: 20 safety points
 each, a replay marker and a coaching tip, reported only once a car has backed out near you. Use
 `?driveways=0` to turn them off.
+
+### Spring potholes
+
+In free drives (and the **Pothole season** lesson) the streets have potholes, many more on the
+busy main streets than on quiet ones, drawn as dark, ragged holes in broken asphalt. In rain or
+snow they hold water and look like any puddle, so they come into sight later. Where the lane leaves
+room, the car eases over inside it so both wheels miss the hole, and the HUD says POTHOLE · EASE
+0.5 M RIGHT IN THE LANE; where it doesn't, the car slows to about 20 km/h (less for a deep one, and
+in the wet) and the HUD says POTHOLE AHEAD · NO ROOM · SLOW TO 19 KM/H (a 7 cm hole on a dry road). Traffic does the same, and
+cars jolt as a tyre drops into one. A wheel into one more than 5 km/h faster than its safe speed
+counts as `pothole_hits`: 10 comfort points each, a replay marker and a coaching tip, reported only
+once the car has come near a pothole. Use `?potholes=0` to take them off.
+
+### A ball, then a child
+
+In free drives (and the **Chasing the ball** lesson), now and then by day, a bright ball bounces out
+from between the cars parked along a residential street ahead and rolls across, spinning, until it
+stops against the far kerb. A child runs out after it a second or two later, from behind the parked
+cars, fetches it and walks back to the kerb with it. The HUD says BALL IN THE ROAD · A CHILD MAY
+FOLLOW with the speed to slow to, then CHILD CHASING THE BALL · STOP once the child is out, and AI
+eyes outlines the child. Slow to a speed you can stop from short of where the ball came out, and
+keep to it until the child is back at the kerb. Passing that gap faster, after time to react, counts
+as `ball_warnings_ignored`: 25 safety points, a replay marker and a coaching tip, reported only once
+a ball has rolled out near you. Use `?balls=0` to turn them off.
+
+### Geese crossing the road
+
+In free drives (and the **Goose crossing** lesson) a gaggle of Canada geese now and then gathers on
+the grass beside a street that runs beside a park or water, by day and not in snow, and walks across
+in loose single file as you come along: brown-grey bodies, black necks and white chinstraps, now and
+then with yellow-grey goslings, waddling at walking pace and grazing on the grass either side. The
+HUD says GEESE BY THE ROAD AHEAD while they come up to the kerb, and GEESE CROSSING · WAIT FOR THE
+LAST ONE once they step off. Slow down, stop short of them, and wait until the last goose is off the
+road; one may stop in your lane. Driving on within 2 m of a goose on the road, or hitting one,
+counts as `wildlife_conflicts`: 20 safety points each, a replay marker and a coaching tip, reported
+only once a gaggle has crossed near you. Hitting one is also a collision. Use `?geese=0` to turn them
+off.

@@ -1726,3 +1726,237 @@ as it comes out, stop about 9 m back, wait for it to drive off and follow it. A 
 going at 32 km/h squeezes past or hits it (`reversing_conflicts`). Checks:
 `scripts/test_driveway_reversers.mjs` (its `--write-snapshots` writes the live-model case
 `data/snapshots/reverse_lights.json`) and `tests/test_driveways.py`.
+
+
+## Spring potholes (`sim/potholes.js`)
+
+`World` option `potholes` is on in free drives unless `?potholes=0`, and in the **Pothole season**
+challenge (`potholes: true`). With it off `World.potholes` is an empty, disabled `Potholes`: no
+random stream is created or drawn from, sensing adds no `pothole` field, no law gets a `slowTo`,
+traffic adds no `phShift`, the audit does not run and no metric key is added.
+
+**Placement.** `new Potholes(map, { enabled, seed })` walks every lane of every edge (not
+roundabout rings, nor lanes under 40 m) from its own stream (`rng(seed * 2654435761 + 97)`): a
+pothole on average every 70 m of lane on a main street (tertiary and up) and every 260 m on a
+quiet one (residential, unclassified, living street), none on service roads, none within 12 m of a
+lane's ends and none within 25 m of the last on the same lane. The Plateau gets about 270, 9.8 per
+lane-km of main street and 3.6 of quiet street. Sizes: 60% small (0.4–0.7 m wide, 4–7 cm deep),
+30% medium (0.7–1.1 m, 6–10 cm), 10% wide (1.2–1.7 m, 8–13 cm); 70% lie in a wheel path, the rest
+anywhere across the lane, always inside it. Each record is `{ id, edge, lane, s, offset, a, b,
+depth, shape, x, y, heading, lane_w }`, an ellipse `a` long and `b` wide (half-axes), `offset`
+right of the lane's centre. `setList` replaces them (a challenge places its own) and rebuilds the
+20 m grid (`near`) and the per-lane lists (`onLane`). Placement is all the world's potholes, so
+traffic everywhere meets them; the recorder shares the object between checkpoints, as it never
+changes once placed.
+
+**Room.** `wheelRoom(dl, h, laneW, spec)` is the smallest move from the lane's centre (to the
+nearest centimetre) that keeps both wheel paths (at ± `track / 2`) clear of the pothole by its
+half-width plus a tyre's half-width (0.1 m) and a 0.15 m margin, without the body coming within
+0.05 m of either lane line; ties go to the move that puts the hole between the wheels, and null
+means there is none. In a 3.5 m lane a compact may move 0.81 m either way; a hole up to about
+1.1 m wide in a wheel path can be got round, a wide one across the middle cannot.
+
+**Speed.** `safeSpeed(h)` is 20 km/h for a 7 cm hole, scaled by `sqrt(0.07 / depth)` within
+15–30 km/h (the blow at the far edge grows with speed squared and depth). The driven car plans to
+cross at 95% of that, times the weather's speed factor (`planSpeed`), and slows at 60% of
+`comfort().decel` to reach it 6 m before its front wheels get there (`slowCap`). Traffic plans at
+90%, at 40% of `comfort().decel`, also 6 m early (its drivers ease off rather than follow a curve).
+
+**Sensing and candidates.** Sensing sees potholes in the car's lane 70 m ahead, or 50 m in rain or
+snow (a pothole full of water is a puddle like any other), within the visibility range.
+`potholesAhead` projects the route's potholes (cached per route) into the frame of the car's lane:
+`pothole` is the next, `potholes_ahead` all in sight, each with `room`, `shift_m`, `lateral_m`,
+`speed_mps`, the `slow` window in route arc length of the rear axle and, with room, the `detour`
+to ease round it (`controller.detourAt`): over `easeLength` (twice the street's limit in metres,
+12–30 m) before the front wheels reach it, back after the rear wheels and the pursuit point are
+past. Room is withdrawn when the car is too close to make the move. Every pothole without room
+caps `snap.limit` (`potholeLimit`) and the target speed names it. The candidates add
+`ease_round_pothole` (the detour, at the target speed) when there is room and no other detour is
+under way; every lane law whose lateral target at a pothole (`lateralAt`) would put a wheel in it
+gets a `slowTo` entry, which `applyLaw` honours like `stopAt`, so keeping the middle of the lane
+slows for it. Forward sims sweep each tyre between steps (`crossesPothole`) over the potholes
+ahead of the front wheels and reject `hits_pothole_too_fast` above the safe speed plus 0.5 m/s
+(`hard_brake` excepted). Rules gives easing round a small bonus; the cautious agent takes it when
+its end speed is near the target. Models get a `pothole` field, a situation clause, outcome labels
+for `ease_round_pothole` and for laws that slow over one, and a line in the system prompt.
+
+**Traffic.** `npcPothole` reads the potholes on the lanes of an NPC's path within 80 m: the first
+it has room for sets an in-lane shift once its front wheels are 35 m short (eased at 0.6 m/s,
+`phShift`, not while changing lanes, going round a work zone, lane closure, van or cyclist, or
+pulling out), and every one without room caps its desired speed. Cyclists and streetcars do
+neither.
+
+**Audit.** `auditPotholes` counts a tyre going into a pothole more than 5 km/h over its safe speed
+as `pothole_hits`, once a pothole a pass, with a `pothole_hit` event (km/h, safe km/h, depth).
+`World.potholesSeen` is set once a pothole is within 30 m ahead of the car's front, in or beside
+its lane; only then do the metrics report `pothole_hits`, which fails a drive ("hit a pothole too
+fast"). The drive score costs 10 comfort points each, with an incident, a coaching tip and a
+replay marker.
+
+**Rendering.** `render/potholes.js` draws every pothole as two coplanar ground fans: a ragged rim
+of lighter, crumbled asphalt on `LAYER.patch` (above the asphalt, below the markings) and the dark
+hole just above it; both are seeded by the pothole's `shape`. In rain or snow the hole is a water
+surface (`wetReflective`, gloss 1.6) close to the wet road's colour. `potholeJolt` heaves and
+pitches a car's mesh for a few tenths of a second as a tyre drops in (render only). The HUD says
+POTHOLE · EASE 0.6 M RIGHT IN THE LANE, POTHOLE · BETWEEN THE WHEELS, or POTHOLE AHEAD · NO ROOM ·
+SLOW TO 19 KM/H, and AI eyes lists the next one.
+
+**Pothole season** (`pothole-season`, seed 51042, Montréal, Rue Saint-Denis, rain): the block from
+Avenue Duluth Est toward Rue Rachel Est (`e212`, 176 m, one lane each way, 3.5 m, 40 km/h, no
+control along it). `lab/pothole-challenge.js` replaces the world's potholes with four in the car's
+lane: 0.75 m right at 50 m (0.6 m wide, 6 cm), 0.6 m left at 90 m (0.6 m, 7 cm), a wide one across
+the middle at 128 m (1.6 m, 10 cm; the hazard) and a small one in the middle at 152 m. Rules and the
+cautious agent ease 0.55 m right and 0.4 m left round the first two, cross the wide one at about
+14 km/h and arrive; a car holding 34 km/h hits three. Checks: `scripts/test_potholes.mjs` (its
+`--write-snapshot` writes the live-model case `data/snapshots/pothole_season.json`).
+
+
+## A ball, then a child (`sim/ball-chase.js`)
+
+`World` option `balls` is on in free drives unless `?balls=0`, and in the **Chasing the ball**
+challenge (`balls: true`). It is independent of `hazards`, which free drives also turn on. One ball
+at a time, 20–60 s into a drive and 60–150 s after the last (retrying every 5 s), by day
+(`visibility.night < 0.5`) and not in snow, `BallChase.spawn` looks along the residential (or living)
+street the car is on for a gap of 0.9–3.5 m between two cars parked parallel at either kerb,
+50–110 m ahead of its front and on its route; the ball waits there, 0.6 m in from the cars' traffic
+side, until the car's front is 26–42 m short of the gap's line (`frontToGap`), then rolls out (all
+from its own random stream). A ball that waits more than 60 s, or that the car has passed, goes.
+
+The ball (radius 0.11 m) leaves the gap across the street at 3–4.5 m/s, with up to 0.5 m/s along
+it. Rolling resistance slows it at 0.35 m/s²; at the asphalt's edge, or a parked car's side, it
+bounces back keeping 45% of its speed that way (and 85% overall), and it comes to rest below
+0.05 m/s. It is not an obstacle: nothing steers round or stops for the ball itself, and a vehicle
+whose body passes over it squashes it flat (`burst`) where it is. 1–2 s after it rolls out, a child
+(`kid_ball_<ball id>`, a `Pedestrian` with `child`, `dart` and `ballChase` set) comes out of the same
+gap at 2.3–2.7 m/s (2.6–3.1 m/s crossing), without looking, on a crossing from the gap to beyond the
+far kerb through the ball (so `crosswalkConflict` sees it for everyone), following the ball. Within
+0.45 m of it they pick it up (0.8 s), then walk back to the gap at 1.5 m/s, looking, and on to the
+sidewalk and home; the ball goes with them. The child is one of the crowd: in `obstaclesNear`,
+hit as any pedestrian, drawn as any child.
+
+Who has seen what is kept per ball: `seenBy` (driver id, or `"ego"`, to the time it first saw the
+ball: `ballVisible`, in its line of sight and, with hazards on, not behind a parked car,
+`ballHidden`) and `childSeenBy` (the driven car by `World.sees`, so parked cars hide the child with
+hazards on; traffic by line of sight). For a driver that has seen the ball, the warning stands
+(`warningStands`) from 0.3 s after it until the child it has seen is back at the kerb (or gone), or
+8 s pass with no child seen (40 s at most). While it stands, `ballCover` gives the cover speed for
+the gap's line ahead along the driver's line (`gapCrossing`, a segment across the street through
+the gap): `coverSpeed(d)`, the speed from which, reacting within 0.75 s and braking at
+`comfort().decel`, it stops 2 m short of the line, never below 1.5 m/s (on a dry road about 43 km/h
+40 m out, 28 km/h at 20 m and 17 km/h at 10 m; in rain 35, 23 and 14). Sensing reports `ball_in_road` (`gap_m`, `stop_s_route`, `side`,
+`ball`, `child`: `not_seen`/`in_road`/`clear`, `child_id`, `warning`, `limit_mps`,
+`cover_left_s`) and caps `snap.limit`; `desiredSpeed` names it. The `slow_for_ball` candidate
+aims at the cover speed for where the car will be at the end of the prediction; forward sims reject
+`passes_ball_gap_too_fast` for crossing the gap's line faster than 1 m/s over the crawl while the
+warning stands. Rules prefers `slow_for_ball` unless someone is crossing ahead; the cautious agent
+takes it whenever it is eligible and no one is. Models get a `ball_in_road` field, a situation
+clause saying when `slow_for_ball` is correct, and a line in the system prompt. Traffic
+(`ballYield`) caps its speed at the cover speed for where it will be in a second (its IDM eases
+off gently above a ceiling).
+
+The audit (`auditBalls`) watches each ball the car has seen: from 1 s after it saw it, while the
+warning stands and the gap's line is ahead, the car may go no faster than the higher of the cover
+speed and the speed it would be down to braking at `comfort().decel` from then, by more than
+1 m/s. Having gone faster, passing the gap's line with the warning still standing counts once per
+ball as `ball_warnings_ignored`, reported (and failing a drive) only once a ball has rolled out
+within 60 m of the car (`World.ballsSeen`). The drive score costs 25 safety points each, with an
+incident, a coaching tip and a replay marker. The renderer (`render/ball-chase.js`) draws the
+ball panelled in its colour and white, turning as it rolls, resting on the asphalt and
+depth-tested; flattened once burst; and in front of the child who carries it. The HUD says BALL IN
+THE ROAD · A CHILD MAY FOLLOW (with the cover speed), then CHILD CHASING THE BALL · STOP; AI eyes
+outlines the child.
+
+**Chasing the ball** (`chasing-the-ball`, seed 52042, Kitsilano, West 7th Avenue, dry afternoon,
+hidden hazards on): the first block of the street that is a straight, two-way residential street
+with one lane each way, a parking lane on the right, a limit of 40 km/h or more, no marked
+crosswalk, school or playground zone or speed hump, and room to park all along (`ballSites`). Cars
+line the right kerb 1.4 m apart from 55 m before the gap's line to 30 m past it, the gap itself
+2.2 m, and the far kerb too. The car starts from a standstill 120 m short of the line; the ball
+(red, 3.6 m/s, 0.25 m/s drift) rolls out in plain view once its front is 28 m short, and the
+child follows 1.2 s later. Rules (at the blind-spot speed, 9 m/s, as it rolls out) slows, stops
+about 2 m short for the child and goes on once they are back at the kerb; the cautious agent slows
+enough that the child is across before it gets there. A driver who keeps to 50 km/h passes the gap
+too fast (`ball_warnings_ignored`) and hits the child. Checks: `scripts/test_ball_chase.mjs` (its
+`--write-snapshot` writes the live-model case `data/snapshots/chasing_the_ball.json`).
+
+## Geese crossing the road (`sim/geese.js`)
+
+`jev/osm/parks.py` builds `<key>.parks.v1.json` beside unchanged packs from the raw OSM download:
+`areas`, the parks (`leisure=park`), gardens (`leisure=garden`), recreation grounds
+(`leisure=recreation_ground`), lawns (`landuse=grass`) and water (`natural=water`,
+`waterway=riverbank`; `waterway=river|canal` as lines), as ways or multipolygons (`jev/osm/parse.py`
+now keeps those multipolygons too), projected to pack metres and simplified to 1 m, without the
+small ones (a park under 800 m², a garden under 1,500 m², a recreation ground under 1,000 m², a
+lawn under 2,500 m², water under 300 m²); and `spans`, every stretch of a pack street (each
+direction's edge) whose centreline passes within 25 m of an area, or through one, with the area on
+each side of travel (`left`, `right`), `water`, and `from`/`to` along the edge (stretches under
+20 m and roundabout rings are left out). Only areas beside a span are kept.
+`uv run scripts/fetch_map.py <preset> --parks` rebuilds only the layer; `server.py`,
+`scripts/build_demo.py` and the Node tests load it with the others, and `MapData.parks` and
+`MapData.parkSpans` hold it. All twelve presets have layers (149 areas, 889 spans: Halifax 155,
+Québec City 138, Saskatoon 118, Victoria 98, Ottawa 75, Calgary 55, Winnipeg 51, Montréal 47,
+Toronto 46, Kitsilano 38, Edmonton 36, Mount Pleasant 32). Only Saskatoon has water beside a
+street, the South Saskatchewan River; Ottawa's bbox stops short of the Rideau Canal. Ottawa's raw
+download comes from Overpass (it exceeds the main API's 50,000-node limit), so
+`fetch.overpass_query` asks for the parks and water too.
+
+`World` option `geese` is on in free drives unless `?geese=0`, and in the **Goose crossing**
+challenge (`geese: true`). One gaggle at a time, 20–45 s into a drive and 50–120 s after the last,
+by day (`world.clock.sun_deg > 0`, or a daylit sky without a clock) and not in snow, a gaggle of 4–9
+geese (45% of the time two or three adults with goslings between them; adults lead and bring up the
+rear) is put on the grass beside a span 100–200 m ahead along the route, 15 m or more from the
+edge's ends, 20 m from its stop line and 12 m from a crosswalk, on a side with a park or water. It
+sets off once the car's front is 50–80 m short (all from its own random stream). Their way
+(`crossingGeometry`) runs from the grass 1 m beyond the sidewalk, straight across within ±14°, to
+the far grass. They walk in loose single file, each at its own pace (adults 0.5–0.8 m/s, goslings
+0.4–0.65 m/s), keeping 1.0–1.6 m (goslings 0.6–1.0 m) behind the one ahead and wandering ±0.3 m
+either side of the line. The lead stops 0.4 m short of the kerb to look for 1 s, and steps off once
+nothing coming whose way crosses theirs would need more than 2.5 m/s² (after 0.8 s to react) to
+stop short of them, and nothing stands in their way across. On the road one or another pauses for
+0.8–2.5 s now and then (0.05/s), and in 35% of gaggles one stops in the road for 4–9 s; the ones
+behind it wait in file. A goose stops for a vehicle about to be in its way. Once the last is 0.3 m
+past the far kerb face the gaggle is `across`, and they wander onto the grass and graze.
+
+Geese are `Goose` objects (`goose: true`, `kind: "goose"`; 0.9 × 0.4 m, goslings 0.45 × 0.25 m),
+not in `world.npcs`; `world.obstaclesNear` adds them, so the forward sims and the safety supervisor
+see them, and hitting one is a collision in `collisions`, at fault when the car was moving, as for a
+pedestrian. Sensing leaves them out of the vehicles it follows or changes lanes around: a gaggle is
+waited for, never followed or passed. Sensing, the forward sims, traffic and cyclists, and the lead's
+look share `geeseConflict`: the corridor from 0.5 m outside one kerb face to 0.5 m outside the other,
+1.3 m either side of the file's line, against a vehicle's line (route or path), whichever way it
+goes. While they come up to the kerb or look (`coming`), a driver slows to reach 4 m/s by 8 m short
+of the corridor (`cautionSpeed`); from the lead stepping off until the last goose is off the roadway
+(`crossing`), it stops 2 m short and keeps the same gentle approach ceiling. Sensing reports
+`geese_crossing` (`geese`, `goslings`, `from`, `phase`, `on_road`, `stopped_on_road`, `wait`,
+`stop_s_route`, `bumper_to_stop_m`, `limit_mps`), caps `snap.limit`, and `desiredSpeed` stops at the
+wait point. The `wait_for_geese` candidate slows, or stops there; forward sims reject
+`drives_into_geese` for passing the wait point by more than 1 m. Rules stops at the wait point and
+prefers the candidate; the cautious agent takes it whenever the car must wait; the deadlock detector
+leaves a car waiting for geese alone. Models get a `geese_crossing` field, a situation clause, a
+stop criterion for the motion question and a line in the system prompt. Traffic and cyclists
+(`geeseYield` in `sim/npc.js`) cap their speed and hold at the same point once they could still
+stop there.
+
+The audit counts moving faster than 0.8 m/s with less than 2 m between the car's body and a goose
+on the roadway, and hitting one, each once per gaggle, as `wildlife_conflicts`, reported (and
+failing a drive) only once a gaggle has crossed within 60 m of the driven car (`World.geeseSeen`).
+The drive score costs 20 safety points each, with an incident, a coaching tip and a replay marker.
+The renderer (`render/geese.js`) draws low-poly adults (brown-grey body, pale belly, black tail,
+neck and head, white chinstrap) and half-size yellow-grey goslings as four instanced meshes (each
+kind with neck up, and head down for grazing), waddling with a bob and a roll paced by the distance
+walked. The HUD says GEESE BY THE ROAD AHEAD, and GEESE CROSSING · WAIT FOR THE LAST ONE once the car
+must stop.
+
+**Goose crossing** (`goose-crossing`, seed 53042, Ottawa, Clemow Avenue in the Glebe, dry
+afternoon): the first span of the street in the parks layer with a park on both sides (Central
+Park and Patterson's Creek Park), on a two-way street with one lane each way (`gooseSites`). Ottawa's
+bbox has no water beside a street, so this, a creek-side park where geese graze, stands in for the
+canal. The car starts from a standstill on the block before, 98 m short of the crossing, through an
+uncontrolled junction with Cobalt Avenue; eight geese (three adults, five goslings) wait on the
+grass of Patterson's Creek Park on the left, the lead a step short of the kerb, and set off once the
+car's front is 75 m away. The adult in the middle of the file stops in the car's lane for 8 s. The
+route ends 30 m past the crossing. Rules stops about 4 m short of the file, the cautious agent about
+7 m, and both wait about 40 s, until the last goose is off the road. A driver who stops, then goes
+as soon as the lead is across its lane comes within 2 m of the goose standing in it
+(`wildlife_conflicts`). Checks: `scripts/test_geese.mjs` (its `--write-snapshot` writes the
+live-model case `data/snapshots/goose_crossing.json`) and `tests/test_parks.py`.

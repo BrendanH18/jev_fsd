@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+- Spring potholes in free drives (`?potholes=0` takes them off). From their own random stream,
+  potholes are placed in the lanes, many more on busy main streets than on quiet ones, each with a
+  position across its lane, a size and a depth. The driven car and traffic ease round one inside
+  their lane where that takes both wheels clear of it, never crossing a lane line, and otherwise
+  slow to its safe speed (about 20 km/h, less for a deep one and in the wet) before driving over
+  it. In rain or snow a pothole holds water: it looks like any puddle and is seen later. Sensing
+  reports `pothole`, with the new `ease_round_pothole` candidate and the `hits_pothole_too_fast`
+  rejection; lane manoeuvres that would put a wheel in one slow for it. A wheel into one more than
+  5 km/h over its safe speed counts as `pothole_hits` and fails a Lab drive, reported only once the
+  car has come near a pothole. Potholes are drawn as ragged holes in broken asphalt, full of water
+  in the wet, cars jolt over them, and the HUD says whether the car is easing round one or slowing.
+- New Lab challenge, **Pothole season** (seed 51042): Rue Saint-Denis in Montréal's Plateau in the
+  rain, with two potholes to ease round inside the lane and a wide one to slow for.
+
+- A ball rolls out, then a child chases it, in free drives (`?balls=0` turns it off). Now and
+  then, by day and not in snow, a ball bounces out from between the cars parked along a
+  residential street ahead and rolls across, slowing, bouncing off the far kerb or a parked car,
+  and coming to rest in the road. One to two seconds later a child runs out after it from the
+  same gap, hidden by the parked cars until they are in the road (with hidden hazards on), picks
+  it up and walks back to the kerb. The driven car and traffic that see the ball slow to a speed
+  from which they can stop short of where it came out, and keep to it until the child has come
+  and gone, or eight seconds pass with no child. AI drivers see `ball_in_road`, with the new
+  `slow_for_ball` candidate and the `passes_ball_gap_too_fast` rejection; the HUD says BALL IN
+  THE ROAD · A CHILD MAY FOLLOW. Passing the gap faster than the car could stop from, after time
+  to react, counts as `ball_warnings_ignored` and fails a Lab drive, reported only once a ball has
+  rolled out near the car.
+- New Lab challenge, **Chasing the ball** (seed 52042): West 7th Avenue in Kitsilano, a ball
+  rolling out in plain view from between the parked cars, and a child after it.
+
+- Canada geese cross the road in free drives (`?geese=0` disables them). A new layer beside each
+  pack, `<key>.parks.v1.json` (`jev/osm/parks.py`, `scripts/fetch_map.py ... --parks`), records
+  the parks, gardens, recreation grounds, large lawns and water geese live by, and the stretches
+  of street beside or between them: 149 areas and 889 spans across the twelve maps, from 32 in
+  Mount Pleasant to 155 in Halifax, 10 of them beside the South Saskatchewan River in Saskatoon. The street packs are
+  unchanged. Now and then, from its own random stream, by day and not in snow, a gaggle of 4 to 9
+  geese (sometimes adults with their goslings) gathers on the grass beside such a street ahead on
+  the car's route and, as the car comes along, crosses in loose single file at 0.4 to 0.8 m/s:
+  the lead looks at the kerb and steps off only once nothing coming would have to brake hard, one
+  or another pauses on the road, and in some gaggles one stands in the road for several seconds.
+  Traffic, cyclists and the driven car slow while they come up to the kerb and stop short of
+  their way across until the last goose is off the road. Geese are small obstacles in
+  `world.obstaclesNear`, not traffic: hitting one is a collision (at fault when the car was
+  moving). Sensing reports `geese_crossing`, with the new `wait_for_geese` candidate and the
+  `drives_into_geese` rejection. Moving faster than a crawl within 2 m of a goose on the road, or
+  hitting one, counts as `wildlife_conflicts`, reported only once a gaggle has crossed near the
+  driven car. Low-poly geese waddle across (instanced: four draw calls a gaggle), and the HUD says
+  when geese are by the road or crossing.
+- New Lab challenge, **Goose crossing** (seed 53042): Clemow Avenue in Ottawa's Glebe, between
+  Central Park and Patterson's Creek Park, where a family of geese crosses and one stops in your
+  lane.
 - CI runs on Namespace runners. Each Node check has a six-minute limit and every job a
   `timeout-minutes`, so a runaway check fails fast; the Node loop runs every check and lists the
   ones that failed or timed out. uv's cache and Playwright's Chromium download are cached, a new
