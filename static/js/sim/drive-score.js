@@ -126,6 +126,8 @@ export class DriveScore {
     if (this.finished || !Number.isFinite(dt) || dt <= 0 || world.paused) return;
     const ego = world.ego, speed = Math.abs(ego.v);
     this.elapsed += dt; this.distance += speed * dt; this.maxSpeed = Math.max(this.maxSpeed, speed);
+    // (a road test's examiner, lab/examiner.js: attached only to road test drives)
+    this.observer?.record(world, road, dt, this);
     if (speed > 0.5) this.moving += dt;
     const speeding = !!road && speed > road.limit + SPEED_GRACE_MPS;
     const offRoad = road?.on_road === false;

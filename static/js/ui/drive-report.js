@@ -3,6 +3,7 @@ import { readHistory } from "../sim/drive-score.js";
 import { exportDriveCard, copyDriveLink, driveLink } from "../lab/share.js";
 import { CHALLENGES, challengeById, challengeConfig } from "../lab/challenges.js";
 import { readPractice, practiceStatus, challengeFailures } from "../lab/practice.js";
+import { examinerSheet, roadTestNote } from "./road-test.js";
 
 const time = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
@@ -95,10 +96,12 @@ export class DriveReport {
     const practiceNote = report.practice?.outcome === "completed" ? "Clean manual arrival. Challenge completed."
       : report.practice?.outcome === "attempted" ? "Manual attempt recorded. Retry for a clean arrival."
       : "AI, mixed-driver, modified and replay drives do not change your manual practice progress.";
+    // (a road test, lab/road-tests.js, is marked on the examiner's sheet instead: ui/road-test.js)
+    const roadTest = !!challenge?.roadTest;
     this.dialog.replaceChildren(
       h("div", { class: "dialog-header" }, h("span", { class: "label" }, "DRIVE REPORT"), h("button", { class: "toggle", "aria-label": "Close report", onclick: () => this.dialog.close() }, "×")),
       h("h2", {}, report.title), h("p", { class: "muted" }, `${report.map} · ${report.driver} · ${report.status}${report.parking && report.parking.result !== "not yet" ? ` · ${report.parking.result}${report.parking.result === "parked" ? `, ${Math.round(report.parking.kerb_m * 100)} cm from the kerb` : ""}` : ""}${report.modified ? " · modified challenge" : ""}`),
-      challenge ? this.debrief(challenge, report) : null,
+      roadTest ? examinerSheet(challenge, report, incident => this.incidentRow(report, incident)) : challenge ? this.debrief(challenge, report) : null,
       h("div", { class: "report-score" }, h("strong", {}, report.qualified ? report.score : "—"), h("span", {}, report.qualified ? `Grade ${report.grade} / 100` : "Practice drive · not yet graded")),
       h("div", { class: "report-metrics" }, h("span", {}, `${(report.distance_m / 1000).toFixed(2)} km`), h("span", {}, time(report.elapsed_s)), h("span", {}, `${report.max_kmh} km/h peak`)),
       h("div", { class: "report-categories" }, this.categoryBars(report)),
@@ -106,7 +109,7 @@ export class DriveReport {
       h("details", {}, h("summary", {}, `${report.incidents.length} recorded events`),
         h("ol", { class: "report-events" }, report.incidents.map(i => this.incidentRow(report, i)))),
       h("p", { class: "score-explanation" }, `Score = 40% safety + 30% road rules + 20% smoothness + 10% control. Collisions cap the score at 59; red lights and failures to yield at 69. Waiting at lights carries no penalty. Simulation coaching model v1.${report.branched ? " This drive includes a replay takeover." : ""}`),
-      challenge ? h("p", { class: "challenge-practice-note" }, practiceNote,
+      challenge ? h("p", { class: "challenge-practice-note" }, roadTest ? roadTestNote(challenge, report) : practiceNote,
         report.practice?.outcome ? (report.practice.saved ? " Progress saved in this browser." : " Browser storage is unavailable; progress could not be saved.") : "") : null,
       this.shareStatus = h("p", { class: "report-share-status", role: "status" }),
       h("div", { class: "dialog-footer" }, h("span", { class: "muted" }, saved ? "Saved on this device" : "Storage unavailable · export to keep this drive"),

@@ -1471,6 +1471,21 @@
   checker validates requests offline and checks model expectations when a key is available.
 - Live Jev behavior remains unverified; historical benchmark numbers describe the earlier world.
 
+- Road test mode in the Lab: a **Road tests** section in the library beside the challenges, with a
+  Class 5-style test in Kitsilano and a G2-style test in Toronto's Annex (`lab/road-tests.js`). Each
+  is one longer drive on a fixed, seeded route through stop signs, a school zone, signalled left
+  turns, a lane change on an arterial and residential streets, with light traffic and people out on
+  foot, ending in a parallel park between parked cars. The examiner gives directions in the HUD
+  before each manoeuvre and marks the drive on an examiner's sheet (`lab/examiner.js`): any failure
+  of the shared challenge verdict (`challengeFailures`), school zone speeding, driving on the wrong
+  side or a reset fails outright; minor errors (a turn or lane change without a signal, a turn too
+  fast or wide, a stop past the line, a lane change into a small gap, drifting, hesitating, brief
+  speeding, harsh braking, following closely, a parking attempt that needs correcting) are one
+  demerit each, a repeated one at most three times, with more than ten a fail. Remarks are grouped
+  by category, with the report's rewind links. Any driver can take a test; only an unchanged,
+  unreplayed manual attempt is stored, by test id and version, with its best result. The arena can
+  include road tests (opt-in). Existing challenges and the seeded benchmark are unchanged.
+
 ## 0.2.0
 
 A large realism and graphics update. The Rules benchmark (seed 1) still passes 12 of 12 drives in

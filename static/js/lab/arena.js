@@ -8,10 +8,17 @@ import { registerDecisionAgents, checkDecisionEndpoints, decisionSummary } from 
 import { readHistory } from "../sim/drive-score.js";
 import { EVALUATION_SCHEMA, EVALUATION_HISTORY_KEY, MAX_IMPORT_BYTES, validateEvaluation, readEvaluations,
   saveEvaluation, compareResult, incidentCount, summarizeResults } from "./history.js";
+import { ROAD_TESTS } from "./road-tests.js";
+import { examine } from "./examiner.js";
 
 let running = false, stop = false, results = [], current = null, saved = [];
 const agentLabel = id => agentDefinitions().find(a => a.id === id)?.label || id;
-const challengeLabel = id => CHALLENGES.find(c => c.id === id)?.title || id;
+const challengeLabel = id => CHALLENGES.find(c => c.id === id)?.title || ROAD_TESTS.find(t => t.id === id)?.title || id;
+// (a road test is also marked on the examiner's sheet, from its report: lab/examiner.js)
+const roadTestVerdict = r => {
+  const test = ROAD_TESTS.find(t => t.id === r.challenge), sheet = test && !r.stopped ? examine(test, r.report) : null;
+  return sheet?.available ? h("small", { class: "delta" }, `${sheet.pass ? "Licensed" : "Not licensed"} · ${sheet.demerits} demerit${sheet.demerits === 1 ? "" : "s"}${sheet.fails.length ? ` · ${sheet.fails.map(f => f.remark).join("; ")}` : ""}`) : null;
+};
 const percent = n => `${Math.round(n * 100)}%`;
 const signed = (n, digits = 0) => `${n > 0 ? "+" : ""}${n.toFixed(digits)}`;
 const runLabel = run => `${new Date(run.created_at).toLocaleString()} · ${run.status} · ${run.results.length} attempts · ${[...new Set(run.results.map(r => r.mode))].join(" / ")}`;
@@ -49,7 +56,7 @@ function render() {
     return h("tr", {},
       h("td", {}, h("button", { class: "result-button", onclick: () => details(r), "aria-label": `Inspect ${agentLabel(r.brain)} on ${challengeLabel(r.challenge)}` }, agentLabel(r.brain)),
         h("small", {}, challengeLabel(r.challenge)), comparison.reasons?.length ? h("small", { class: "comparison-note" }, `Not compared: ${comparison.reasons.join(", ")}`) : null),
-      h("td", { class: r.pass ? "pass" : "fail" }, r.stopped ? "STOPPED" : r.pass ? "PASS" : r.failures.join(", "),
+      h("td", { class: r.pass ? "pass" : "fail" }, r.stopped ? "STOPPED" : r.pass ? "PASS" : r.failures.join(", "), roadTestVerdict(r),
         before ? h("small", { class: "delta" }, before.pass === r.pass ? "Same outcome" : before.pass ? "Baseline passed" : "Baseline failed") : null),
       h("td", {}, r.report.qualified ? r.report.score : "Practice"), h("td", {}, `${r.time_s}s`),
       h("td", {}, incidentCount(r), before ? h("small", { class: "delta" }, `${signed(incidentCount(r) - incidentCount(before))} vs baseline`) : null),
@@ -103,7 +110,7 @@ function details(result) {
   $("#arena-details").hidden = false; $("#details-heading").focus(); $("#arena-details").scrollIntoView({ behavior: "instant", block: "start" });
 }
 function busy(value) {
-  for (const id of ["arena-history", "arena-baseline", "arena-baseline-agent", "arena-import", "arena-load", "arena-mode"]) $("#" + id).disabled = value;
+  for (const id of ["arena-history", "arena-baseline", "arena-baseline-agent", "arena-import", "arena-load", "arena-mode", "arena-road-tests"]) if ($("#" + id)) $("#" + id).disabled = value;
   $("#agents").querySelectorAll("input").forEach(i => { i.disabled = value || agentDefinitions().find(a => a.id === i.value)?.available === false; });
   if (!value) baselineAgents();
 }
@@ -123,14 +130,14 @@ async function run() {
   running = true; stop = false; results = [];
   current = { schema: EVALUATION_SCHEMA, challenge_version: CHALLENGE_VERSION, created_at: new Date().toISOString(), status: "complete", results };
   $("#arena-history").value = "current"; $("#arena-details").hidden = true; busy(true); render(); $("#arena-run").textContent = "Stop evaluation";
-  const mode = $("#arena-mode").value;
+  const mode = $("#arena-mode").value, pool = [...CHALLENGES, ...($("#arena-road-tests")?.checked ? ROAD_TESTS : [])];
   try {
-    for (const challenge of CHALLENGES) {
+    for (const challenge of pool) {
       if (stop) break;
       const pack = await api(`/api/map?map=${challenge.map}`), map = new MapData(pack);
       for (const brain of selected) {
         if (stop) break;
-        $("#arena-status").textContent = `${challenge.title} · ${agentLabel(brain)} · ${results.length + 1}/${CHALLENGES.length * selected.length}`;
+        $("#arena-status").textContent = `${challenge.title} · ${agentLabel(brain)} · ${results.length + 1}/${pool.length * selected.length}`;
         results.push(await evaluateChallenge(map, challenge, { brain, mode, shouldStop: () => stop })); render();
       }
     }

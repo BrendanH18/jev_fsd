@@ -77,3 +77,34 @@ body:has(.replay-controls:not([hidden])) .cluster { bottom: 180px; }
 @media (max-width: 760px) { .lab-dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 22px; border-radius: 18px; } .lab-dialog-top { margin-bottom: 28px; } .welcome-options { grid-template-columns: 1fr; } .welcome-card { padding: 18px; } .welcome-card h2 { margin-top: 10px; } .welcome-card p { min-height: 0; } .welcome-card strong { margin-top: 12px; } .lab-footer { align-items: flex-start; flex-direction: column; } .challenge-grid { grid-template-columns: 1fr; } .lab-hero-copy { font-size: 14px; } .replay-deck { bottom: 6px; } }
 @media (max-width: 760px) { .challenge-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .challenge-filters input, .challenge-filters select { font-size: 16px; } .challenge-driver { flex-wrap: wrap; } .challenge-driver select { max-width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .welcome-card, .challenge-card { transition: none; } .welcome-card:hover, .challenge-card:hover { transform: none; } }
+/* Road tests (lab/road-tests.js): the library section, the examiner's directions and sheet */
+.road-test-library { margin: 4px 0 30px; }
+.road-test-heading { font-size: 20px; letter-spacing: -.02em; margin: 0 0 6px; }
+.road-test-library .lab-footnote { margin: 0 0 14px; max-width: 720px; }
+.road-test-card { display: block; padding: 20px; color: var(--text); font: inherit; text-align: left; text-decoration: none; background: #f2ce9006; border: 1px solid #f2ce9033; border-radius: 14px; cursor: pointer; transition: transform .2s, background .2s, border-color .2s; }
+.road-test-card:hover { background: #83d9c410; border-color: #83d9c477; transform: translateY(-3px); }
+.road-test-card:focus-visible { outline: 2px solid #83d9c4; outline-offset: 3px; }
+.road-test-card h2 { font-size: 19px; letter-spacing: -.02em; margin: 16px 0 10px; }
+.road-test-card p { color: #afc0cc; font-size: 13px; line-height: 1.7; }
+.road-test-card strong { color: #83d9c4; font-size: 12px; display: block; margin-top: 18px; }
+@media (prefers-reduced-motion: reduce) { .road-test-card { transition: none; } .road-test-card:hover { transform: none; } }
+.road-test-best { display: inline-block; margin-left: 8px; color: #afc0cc; font: 11px var(--mono); }
+.road-test-banner .label { display: block; margin-top: 8px; color: #f2ce90; }
+.examiner-instruction { margin: 4px 0 0; color: var(--text); font-size: 13px; line-height: 1.45; }
+.examiner-sheet { border-color: #83d9c433; }
+.examiner-sheet[data-result="fail"] { border-color: #ff999c55; }
+.examiner-sheet[data-result="fail"] .examiner-verdict { color: #ff999c; }
+.examiner-verdict { font-size: 28px; letter-spacing: -.02em; }
+.examiner-summary { margin: 6px 0 2px; color: var(--text); }
+.examiner-categories { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 6px; }
+.examiner-category { padding: 10px 12px; border: 1px solid #ffffff14; border-radius: 8px; background: #ffffff03; }
+.examiner-category-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.examiner-count { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.examiner-count.minor { color: #f2ce90; }
+.examiner-count.fail { color: #ff999c; }
+.examiner-remarks { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; font-size: 12px; color: #afc0cc; }
+.examiner-remark { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: baseline; }
+.examiner-mark { font: 11px var(--mono); color: #f2ce90; }
+.examiner-remark.fail .examiner-mark { color: #ff999c; }
+.examiner-events { grid-column: 2; list-style: none; padding: 0; margin: 2px 0 0; }
+.examiner-events li { margin: 0; }
