@@ -196,8 +196,8 @@ yield line until the driven car has stopped behind the queue.
 
 The lesson: keep to about 40 km/h over a bridge when it is near freezing, slow on the dry road to
 about 28 km/h once you see the glossy sheen (about 20 m off by day), and cross the ice steadily,
-leaving room to the car ahead. Rules and the cautious agent go onto the ice at 27–28 km/h, hold it
-across without braking, and arrive; a car holding 50 km/h goes onto it too fast (`ice_overspeed`)
+leaving room to the car ahead. Rules and the cautious agent, keeping the longer gap the ice calls for
+behind the car ahead, go onto the ice at about 20 km/h, hold it across without braking, and arrive; a car holding 50 km/h goes onto it too fast (`ice_overspeed`)
 and fails. Checks: `scripts/test_black_ice.mjs` (its `--write-snapshot` writes the live-model case
 `data/snapshots/bridges_freeze_first.json`) and `tests/test_bridges.py`.
 

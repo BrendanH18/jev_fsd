@@ -993,7 +993,8 @@ export class NpcFleet {
       const ji = path.edges.findIndex((e) => e.sEnd > front);
       const cur = path.edges[ji], after = path.edges[ji + 1];
       const toNode = cur ? cur.sEnd - front : Infinity;
-      const turn = after ? this.map.classifyTurn(this.map.turnAngle(cur.id, after.id)) : "straight";
+      // (past the end of its path, `cur` is gone: no turn)
+      const turn = cur && after ? this.map.classifyTurn(this.map.turnAngle(cur.id, after.id)) : "straight";
       n.signal = n.pull ? (n.pull.lat > 0 ? "left" : "right") : n.lc ? (n.lc.dir < 0 ? "left" : "right") : toNode < 35 && (turn === "left" || turn === "right") ? turn : null;
       if (stand && stand.signal !== undefined) n.signal = stand.signal;
       // turning left: yield to oncoming traffic before crossing its lane
