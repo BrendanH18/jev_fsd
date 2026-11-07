@@ -270,6 +270,19 @@ await test("traffic does the same: round one with room, inside its lane, at spee
   }
 });
 
+await test("traffic: two it could each get round, too close together to shift between in time, it slows for the second", () => {
+  const ctx = street({ s: 2, holes: [{ s: 100, ...SMALL }, { s: 125, ...SMALL, offset: -0.75 }] }), w = ctx.world, [h1, h2] = w.potholes.list;
+  w.placeOnLane(MTL.lane("e157", 0), 20);
+  const p = pointAt(lane.pts, lane.cum, 20), car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, 20), 10, CAR);
+  Object.assign(car, { id: "npc", kind: "car", color: 0x777777, v0: 11.1, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), path: new NpcPath(MTL, rng(9)), frozen: 0, waiting: 0 });
+  car.path.start(EDGE, 0, 20, [[NEXT, 0]]);
+  ctx.fleet.vehicles.push(car); w.npcs = ctx.fleet.vehicles;
+  let into1 = null, into2 = null;
+  for (let k = 0; k < 16 * 60; k++) { step(ctx); into1 ??= entry(car, h1); into2 ??= entry(car, h2); }
+  for (const [h, into] of [[h1, into1], [h2, into2]]) assert.equal(into === null || into <= PH.safeSpeed(h) + 0.4, true, `into ${h.id} at ${into} (safe ${PH.safeSpeed(h)})`);
+  console.log(`  (first: ${into1 === null ? "round it" : `over at ${(into1 * 3.6).toFixed(1)} km/h`}; second: ${into2 === null ? "round it" : `over at ${(into2 * 3.6).toFixed(1)} km/h`})`);
+});
+
 await test("the audit: a wheel into one too fast is a hit, counted once, in the metrics, the coaching and the failures; slowly, none", () => {
   for (const v of [11, 4]) {
     const ctx = street({ s: 60, holes: [{ s: 100, ...WIDE }] }), w = ctx.world;

@@ -303,11 +303,16 @@ export function npcPothole(world, n, front) {
       const at = pe.sStart + h.s * k;
       if (at + h.a < s - 0.5) continue;
       if (at - h.a > front + NPC_LOOK_M) break;
-      const room = wheelRoom(h.offset, h, h.lane_w, spec);
-      if (room !== null) {
+      const room = wheelRoom(h.offset, h, h.lane_w, spec), ahead = at - h.a - (s + wb);
+      // (one it can get round only if it gets there in time: over at NPC_SHIFT_MPS from where it is
+      // before its front wheels reach it, or, past the one it is easing round, clear of it where it is going)
+      let round = false;
+      if (room !== null && shift === null) {
         // (the first it can get round: over by the time its front wheels are NPC_EASE_M short of it)
-        if (shift === null && at - h.a - (s + wb) < NPC_EASE_M) shift = room;
-      } else {
+        if (ahead < NPC_EASE_M) { shift = room; round = Math.abs(room - (n.phShift || 0)) <= NPC_SHIFT_MPS * Math.max(0, ahead) / Math.max(1, n.v) + 0.05; }
+        else round = true;
+      } else if (room !== null) round = !wheelsCross(shift, h.offset, h, spec, ROOM_MARGIN_M);
+      if (!round) {
         const mps = safeSpeed(h) * Math.min(1, weather.speed) * NPC_SHARE, from = at - h.a - wb - NPC_EARLY_M;
         if (at + h.a + 0.5 >= s) limit = Math.min(limit, s >= from ? mps : approachSpeed(mps, from - s, NPC_SLOW_SHARE));
       }
