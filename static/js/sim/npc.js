@@ -70,6 +70,7 @@ import { reverserYield } from "./driveway-reversers.js";
 import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { ballYield } from "./ball-chase.js";
 import { geeseYield } from "./geese.js";
+import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -669,6 +670,8 @@ export class NpcFleet {
     if (world.doubleParked?.vans.length) this.driveOffVans();
     if (this.plows.length || this.plowTarget) this.managePlows();
     if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
+    // (now and then a car behind the driven car tailgates it, with that option on: sim/tailgaters.js)
+    if (world.tailgaters?.enabled) manageTailgaters(world, this, dt);
     const all = [world.ego, ...this.vehicles];
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     const riders = world.contraflow?.riders || [];
@@ -801,6 +804,8 @@ export class NpcFleet {
         n.phShift = (n.phShift || 0) + Math.max(-PH_SHIFT_MPS * dt, Math.min(PH_SHIFT_MPS * dt, to - (n.phShift || 0)));
         offset += n.phShift;
       }
+      // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
+      if (n.tgPeek) offset += n.tgPeek;
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -899,6 +904,8 @@ export class NpcFleet {
       if (forPlow && forPlow.gap < gap) { gap = forPlow.gap; leadV = forPlow.plow.v; leader = forPlow.plow; }
       // (and stays back the distance the law asks of it, less the room it leaves anyway)
       if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
+      // (a tailgater close behind the driven car sees its brake lights late: sim/tailgaters.js)
+      if (n.tailgate && leader === world.ego) leadV = tailgateLeadSpeed(world);
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
       let stopAt = null, flashCap = Infinity, amberCap = Infinity;
       // a driver running a late amber or a fresh red holds the speed it had (sim/red-light-runner.js)
@@ -1075,7 +1082,7 @@ export class NpcFleet {
       // (a snow plow keeps to its clearing speed, whatever the weather)
       // (and, with calming on, down to the speed to cross each speed hump at: sim/traffic-calming.js)
       const vCalm = this.world.calming && this.map.calmingSpans?.size ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed) : Infinity;
-      const vFollow = this.world.followingDistance && n.lead && n.kind !== "bike"
+      const vFollow = this.world.followingDistance && n.lead && n.kind !== "bike" && !n.tailgate
         ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps : Infinity;
       // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
       // sim/sun-glare.js)
@@ -1083,7 +1090,7 @@ export class NpcFleet {
       // (and, having seen a ball roll into the street ahead, no faster than it can stop from short of
       // the gap it came from: sim/ball-chase.js)
       const vBall = this.world.balls?.balls.length && !n.transit?.tram ? ballYield(this.world, n, front)?.limit ?? Infinity : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
@@ -1096,6 +1103,8 @@ export class NpcFleet {
         const sStar = D.s0 + Math.max(0, n.v * T + n.v * dv / (2 * Math.sqrt(D.aMax * b)));
         a = D.aMax * (1 - Math.pow(n.v / v0, 4) - Math.pow(sStar / Math.max(gap, 0.1), 2));
       }
+      // (a tailgater brakes for the driven car as hard as it sees it braking, and more: sim/tailgaters.js)
+      if (n.tailgate && leader === world.ego && gap < Infinity) a = Math.min(a, tailgateBrake(world, n, gap));
       a = Math.max(-Math.min(6, comfort().hardDecel * 1.1), Math.min(D.aMax, a));
       // standing still, a driver takes a moment to notice the way is clear and move off
       if (n.v < 0.3 && a > 0.2) { n.ready = (n.ready || 0) + dt; if (n.ready < (D.react || 0)) a = -1; }

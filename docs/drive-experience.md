@@ -235,3 +235,18 @@ road; one may stop in your lane. Driving on within 2 m of a goose on the road, o
 counts as `wildlife_conflicts`: 20 safety points each, a replay marker and a coaching tip, reported
 only once a gaggle has crossed near you. Hitting one is also a collision. Use `?geese=0` to turn them
 off.
+
+### Tailgaters
+
+In free drives (and the **On your bumper** lesson) a car that comes up behind you in your lane now
+and then closes right up, about half a second back, and stays there: it edges in and out, drifts
+left in its lane to look past you, and flashes its headlights. The HUD says TAILGATER · MOVE RIGHT
+AND LET THEM BY where another lane goes your way, and TAILGATER · LEAVE MORE ROOM AHEAD otherwise;
+the coach says the same while it is there. Don't brake-check it and don't speed up to please it:
+leave twice your usual gap ahead so you can brake early and gently, and let it by, moving right when
+it's safe or easing off a little. It reacts to your brake lights late: it follows a gentle stop, but
+brake hard with it close behind and it can run into you (its fault). Braking harder than 4 m/s² with
+a tailgater behind, well beyond what anything ahead called for, counts as `brake_checks`: 20 safety
+points each, a replay marker and a coaching tip, reported only once a tailgater has followed you. Use
+`?tailgaters=0` to turn them off.
+

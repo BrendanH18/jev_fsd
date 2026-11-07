@@ -59,6 +59,7 @@ const PASS_CLEAR_M = 60;
 import { EGO_ID, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, THROUGH_M as LC_THROUGH_M, OWED_DECEL as LC_OWED_DECEL, canStop as canStopForMerge, detourOf as closureDetour, isLaneClosure } from "../sim/lane-closure.js";
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
+import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -408,6 +409,12 @@ export function buildSnapshot(world, executing = null) {
       const bs = b.vehicle.spec || CAR;
       snap.rear_follower = { id: b.vehicle.id, gap_m: p.s - b.s - (bs.length - bs.rearOverhang) - ego.spec.rearOverhang, closing_mps: b.vehicle.v - ego.v };
     }
+    // (a tailgater close behind, with that option on: sim/tailgaters.js; tailgated, the car leaves twice
+    // its usual gap to whatever is ahead, so as to brake early and gently)
+    if (world.tailgaters?.enabled) {
+      snap.tailgater = tailgaterSensing(world, visibleNpcs, p.s);
+      if (snap.tailgater && snap.following) snap.following.policy = followingPolicy(ego, snap.following, { scale: TAIL_ROOM });
+    }
   }
   for (const n of visibleNpcs) {
     const d = Math.hypot(n.x - ego.x, n.y - ego.y);
@@ -473,6 +480,12 @@ export function buildSnapshot(world, executing = null) {
   if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
+  // (whether there is a lane to the right, and the car can move into it and let a tailgater by: sim/tailgaters.js)
+  if (snap.tailgater) {
+    const right = snap.lane?.sides.right;
+    snap.tailgater.lane_right = !!right;
+    snap.tailgater.can_move_right = !!right && (right.offer === "let_pass" || right.offer === "return") && right.gap_ok;
+  }
   if (world.highBeams) snap.headlights = headlights(world, world.ego, undefined, 25);
   return snap;
 }
@@ -1612,6 +1625,9 @@ function laneOptions(snap, world) {
     // (a snow plow, only on the left and only when the car may pass it: sim/snow-plow.js)
     else side.offer = slowAhead && !(f.id === sp?.id && (dir === "right" || !sp.may_pass)) && side.target_v > f.speed + 2 && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M) ? "pass"
       : moveOver && dir === "left" && (side.until_s ?? route.length) > rs.s_front_route + MOVE_OVER_PAST_M && !inJunction(CHANGE_JUNCTION_M) ? "move_over" : null;
+    // (tailgated, over to the right to let the tailgater by, where another lane goes the car's way:
+    // sim/tailgaters.js)
+    if (dir === "right" && snap.tailgater && !side.offer && !lane.shift && !turnLane && side.gap_ok && room >= Math.max(80, 2 * laneChangeLength(v) + 30) && !inJunction(PASS_JUNCTION_M)) side.offer = "let_pass";
     if (world.busLanes) {
       const b = routeBusLane(route, s, world.clock, route.busLanePolicy?.curb);
       if (b && !legalBusLane(world.map, b.edge, lane.route_index + delta, world.clock, b.turn, b.remaining, route.busLanePolicy?.curb)) side.offer = null;
@@ -1956,6 +1972,7 @@ export function hazardFlags(snap) {
   if (snap.pothole) f.push("pothole");
   if (snap.ball_in_road) f.push("ball in the road");
   if (snap.geese_crossing) f.push("geese");
+  if (snap.tailgater) f.push("tailgater");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

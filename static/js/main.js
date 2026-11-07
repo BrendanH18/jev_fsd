@@ -54,6 +54,8 @@ import { BallView } from "./render/ball-chase.js";
 import { ballNotice } from "./sim/ball-chase.js";
 import { geeseNotice } from "./sim/geese.js";
 import { GeeseView } from "./render/geese.js";
+import { tailgaterFlash, tailgaterNotice } from "./sim/tailgaters.js";
+import { syncTailgaterFlash } from "./render/tailgaters.js";
 import { buildCalming, rideOver } from "./render/traffic-calming.js";
 import { guardNotice } from "./sim/crossing-guard.js";
 import { addGuardSign, syncGuardSign } from "./render/crossing-guard.js";
@@ -217,7 +219,9 @@ export async function boot() {
     // and, on one-way streets that allow it, cyclists ride against the traffic, and everyone looks both
     // ways for them (`?contraflow=0` takes them off)
     const contraflow = params.get("contraflow") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0" });
+    // and, now and then, a car behind closes up and tailgates the driven car (`?tailgaters=0` turns that off)
+    const tailgaters = params.get("tailgaters") !== "0";
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0", tailgaters });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -754,6 +758,7 @@ export async function boot() {
   let acc = 0;
   let announcedPothole = null;
   let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null, announcedGlare = null, announcedReversing = null, announcedGeese = null;
+  let announcedTailgater = null;
   let announcedBall = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
@@ -799,6 +804,7 @@ export async function boot() {
           else if (ev.type === "pothole_hit") hud.badge(`HIT A POTHOLE AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
           else if (ev.type === "ball_warning_ignored") hud.badge("TOO FAST PAST WHERE A BALL ROLLED OUT", "alert", 1500);
           else if (ev.type === "reversing_conflict") hud.badge(ev.reason === "close_pass" ? "SQUEEZED PAST A CAR BACKING OUT" : "DID NOT STOP FOR A CAR BACKING OUT", "alert", 1500);
+          else if (ev.type === "brake_check") hud.badge("BRAKE CHECK · TAILGATER BEHIND", "alert", 1500);
           else if (ev.type === "wildlife_conflict") hud.badge(ev.reason === "hit" ? "HIT A GOOSE" : "DROVE ON TOO CLOSE TO THE GEESE", "alert", 1500);
           else if (ev.type === "passed_crossing_guard") hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
@@ -853,6 +859,8 @@ export async function boot() {
       (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : isTruck(n) ? syncTruck : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
       if (world.calming && n.kind !== "bike" && !isTrain(n)) rideOver(map, npcMeshes.get(n.id), pose);
       if (world.potholes.enabled && n.kind !== "bike" && !isTrain(n) && !isStreetcar(n)) potholeJolt(world, npcMeshes.get(n.id), pose, dt, world.calming);
+      // (a tailgater flashing its headlights: sim/tailgaters.js, render-only)
+      if (n.tailgate && world.tailgaters?.enabled) syncTailgaterFlash(npcMeshes.get(n.id), tailgaterFlash(world, n));
     }
     for (const n of world.contraflow.riders) {
       const next = replayNext?.world.contraflow?.riders.find(v => v.id === n.id), pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
@@ -974,6 +982,10 @@ export async function boot() {
     const geeseLine = world.geese.enabled ? geeseNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
     if (geeseLine && geeseLine.key !== announcedGeese) { announcedGeese = geeseLine.key; hud.badge(geeseLine.text, geeseLine.wait ? "safety" : "", 2500); }
     if (!geeseLine) announcedGeese = null;
+    // a car tailgating the driven car: leave more room ahead, and let it by (sim/tailgaters.js)
+    const tailLine = world.tailgaters?.enabled ? tailgaterNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
+    if (tailLine && tailLine.key !== announcedTailgater) { announcedTailgater = tailLine.key; hud.badge(tailLine.text, "safety", 2500); }
+    if (!tailLine) announcedTailgater = null;
     // a speed hump or the like on the route ahead: the speed to take it at (said again once over it)
     const calmingLine = calmingNotice(world);
     if (calmingLine && calmingLine.key !== announcedCalming) { announcedCalming = calmingLine.key; hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000); }
