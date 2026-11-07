@@ -200,6 +200,16 @@ await test("the file: the lead looks at the kerb, they keep their spacing, pause
   assert.equal(g.geese.every(o => o.pace <= 0.8), true);
 });
 
+await test("a long file: the lead walks on far enough past the far kerb for the last goose to get off the road", () => {
+  const ctx = world();
+  egoAt(ctx, 95);
+  const w = ctx.world, geo = G.crossingGeometry(OTT, SITE.edge, SITE.s, SITE.sigma, 0);
+  const g = w.geese.place(SITE, Array.from({ length: 9 }, (_, i) => ({ gosling: false, pace: 0.6, spacing: i ? 1.4 : 0 })));
+  assert.equal(geo.uEnd - geo.uOut - G.OFF_M < 8 * 1.4, true, "the site leaves room for the whole file anyway");
+  assert.equal(runUntil(ctx, () => g.phase === "across", 300), true, JSON.stringify(g.geese.map(o => Math.round(o.u * 10) / 10)));
+  assert.equal(g.geese.every(o => o.u > geo.uOut + G.OFF_M), true);
+});
+
 await test("the lead waits for a car too close to stop, and steps off ahead of one that can", () => {
   const ctx = world(), w = ctx.world;
   egoAt(ctx, 18, 11);

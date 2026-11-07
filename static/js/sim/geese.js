@@ -221,6 +221,9 @@ export class Geese {
       if (g.phase === "waiting") o.psi = geo.heading + (o.graze - 0.5) * 2.4;
       g.geese.push(o);
     });
+    // (where the lead stops on the far side: far enough for the last of the file, at its spacing, to be
+    // off the roadway)
+    g.uEnd = Math.max(geo.uEnd, geo.uOut + OFF_M + 0.5 + (g.geese[0].u - g.geese[g.geese.length - 1].u));
     this.gaggles.push(g);
     return g;
   }
@@ -398,8 +401,8 @@ export class Geese {
       // (in file: no closer than its spacing to the one ahead)
       if (i > 0) vt = Math.min(vt, Math.max(0, (g.geese[i - 1].u - o.u - o.spacing) * 1.5));
       // (on the far grass, they slow and stop to graze)
-      if (o.u >= geo.uEnd) vt = 0;
-      else if (o.u > geo.uOut + 1) vt = Math.min(vt, Math.max(0.15, (geo.uEnd - o.u) * 0.5));
+      if (o.u >= g.uEnd) vt = 0;
+      else if (o.u > geo.uOut + 1) vt = Math.min(vt, Math.max(0.15, (g.uEnd - o.u) * 0.5));
       const road = onRoadway(g, o);
       if (g.phase === "crossing" && o.stopAt !== null && !o.stopped && o.u >= o.stopAt) { o.stopped = true; o.pause = Math.max(o.pause, o.stopFor); }
       else if (g.phase === "crossing" && road && o.pause <= 0 && r && r() < PAUSE_RATE * dt) o.pause = PAUSE_S[0] + r() * (PAUSE_S[1] - PAUSE_S[0]);
