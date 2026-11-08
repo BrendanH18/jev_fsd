@@ -423,8 +423,10 @@ export class Snowbanks {
   step(dt = 0) {
     if (!this.narrowings.length) return;
     const t = this.world.t, live = new Set();
+    // (the claims once a step: they depend only on where everyone is, not on what this loop records)
+    this.refresh();
     for (const nw of this.narrowings) {
-      const claims = this.claims(nw, true);
+      const claims = this.claims(nw);
       for (const c of claims) {
         const key = keyOf(c.v, nw);
         live.add(key);

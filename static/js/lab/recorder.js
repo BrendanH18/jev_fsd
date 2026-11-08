@@ -54,7 +54,7 @@ export class DriveRecorder {
     // (nor does black ice: which patches lie on the road follows the conditions, each step: sim/black-ice.js)
     if (world.ice?.enabled) shared.add(world.ice);
     // (nor do snowbanks, nor the narrowings they make: sim/snowbanks.js)
-    if (world.snowbanks?.enabled) { shared.add(world.snowbanks.geo); for (const nw of world.snowbanks.narrowings) shared.add(nw); shared.add(world.snowbanks.routeEnds); }
+    if (world.snowbanks?.enabled) { shared.add(world.snowbanks.geo); shared.add(world.snowbanks.piles); for (const nw of world.snowbanks.narrowings) shared.add(nw); shared.add(world.snowbanks.routeEnds); }
     for (const route of [world.route, autopilot.snap?.route]) if (route) {
       for (const key of ["pts", "cum", "edges", "turns", "controls", "edgeStarts", "limitMarks", "zoneMarks", "calmingMarks"]) shared.add(route[key]);
     }
