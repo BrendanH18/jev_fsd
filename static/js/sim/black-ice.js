@@ -86,7 +86,7 @@ const COLD_DAYS = [305, 90];
 // and the forward sims' SIM_HARD_SHARE), and the wheel turned no faster than ICE_STEER_RATE (rad/s: a
 // quick turn of the wheel slides the front tyres past their small sliding angle on ice before the car
 // can yaw). It starts ICE_LEAD_S of travel before the front wheels reach the ice, for the pedals' lag.
-export const GENTLE_SHARE = 0.5, ICE_STEER_RATE = 0.15, ICE_LEAD_S = 0.6;
+export const GENTLE_SHARE = 0.5, ICE_STEER_RATE = 0.15, ICE_LEAD_S = 0.6, STEER_LAT_SHARE = 0.6;
 // The car crosses a patch in a bend no faster than keeps its sideways acceleration within LAT_SHARE of
 // the ice's grip.
 export const LAT_SHARE = 0.4;
@@ -127,7 +127,10 @@ export function gentleOnIce(vehicle, steer, accel, dt) {
   const mu = on < ROAD.mu ? on : at(vehicle.x + c * lead, vehicle.y + s * lead, P) ?? Infinity;
   if (!(mu < ROAD.mu)) return { steer, accel };
   const lim = GENTLE_SHARE * mu * G, turn = ICE_STEER_RATE * dt;
-  return { steer: vehicle.delta + Math.max(-turn, Math.min(turn, steer - vehicle.delta)), accel: Math.max(on < ROAD.mu ? -lim : -Infinity, Math.min(lim, accel)) };
+  // (and never so far that the turn asks more sideways grip than STEER_LAT_SHARE of the ice's: a lane change
+  // on the ice is taken wider than on the dry road)
+  const most = Math.atan(wb * STEER_LAT_SHARE * mu * G / Math.max(1, vehicle.v * vehicle.v));
+  return { steer: Math.max(-most, Math.min(most, vehicle.delta + Math.max(-turn, Math.min(turn, steer - vehicle.delta)))), accel: Math.max(on < ROAD.mu ? -lim : -Infinity, Math.min(lim, accel)) };
 }
 // The gentlest grip among the seen patches (`ahead`, sensing's black_ice_ahead), for the stopping caps.
 const gentleDecel = (ahead) => GENTLE_SHARE * Math.min(...ahead.map((a) => a.mu)) * G;
@@ -432,11 +435,19 @@ export function iceLimit(snap, s) {
   return limit;
 }
 
-// The fastest the car can go round the route's bends between route arc lengths a and b keeping its
-// sideways acceleration within LAT_SHARE of grip `mu` (Route.curveSpeedAt).
-function bendSpeed(route, a, b, mu) {
+// The fastest a vehicle can go round the bends of `line` (the driven car's route, or a traffic car's
+// path: anything with `length` and `headingAt`) between arc lengths a and b keeping its sideways
+// acceleration within LAT_SHARE of grip `mu`, each bend's radius from its heading over 12 m as
+// Route.curveSpeedAt measures it.
+function bendSpeed(line, a, b, mu) {
+  const aLat = LAT_SHARE * mu * G;
   let v = Infinity;
-  for (let x = Math.max(0, a); x <= b; x += 3) v = Math.min(v, route.curveSpeedAt(x, 0, LAT_SHARE * mu * G));
+  for (let x = Math.max(0, a); x <= b; x += 3) {
+    const s0 = Math.min(x, line.length - 1);
+    let dh = Math.abs(line.headingAt(Math.min(line.length, s0 + 6)) - line.headingAt(Math.max(0, s0 - 6)));
+    while (dh > Math.PI) dh = Math.abs(dh - 2 * Math.PI);
+    if (dh >= 1e-3) v = Math.min(v, Math.sqrt(aLat * 12 / dh));
+  }
   return v;
 }
 
@@ -480,7 +491,11 @@ export function npcIce(world, n, front) {
     if (pe.sEnd < s - 2) continue;
     if (pe.sStart > front + NPC_LOOK_M) break;
     const e = map.edges.get(pe.id), k = (pe.sEnd - pe.sStart) / Math.max(1e-6, e?.length || 1);
-    for (const r of ice.onEdge(pe.id)) cap(pe.sStart + r.from * k, pe.sStart + r.to * k, safeSpeed(r.patch) * NPC_SHARE);
+    // (and no faster round a bend on the ice than its sideways grip allows, as the driven car: bendSpeed)
+    for (const r of ice.onEdge(pe.id)) {
+      const from = pe.sStart + r.from * k, to = pe.sStart + r.to * k;
+      cap(from, to, Math.min(safeSpeed(r.patch) * NPC_SHARE, bendSpeed(path, from - (n.spec?.wheelbase ?? 2.7), to, r.patch.mu)));
+    }
     if (ice.conditions) for (const b of ice.bridgeByEdge.get(pe.id) || []) cap(pe.sStart + b.from * k, pe.sStart + b.to * k, CAUTION_MPS);
   }
   return limit === Infinity ? null : { limit };

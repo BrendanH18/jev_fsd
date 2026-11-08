@@ -290,6 +290,32 @@ await test("traffic and cyclists slow for the ice and the bridge, and cross it s
   }
 });
 
+await test("traffic eases the wheel on the ice: a car changing lanes on world seed 3's patch on 3rd Avenue North does not skid", () => {
+  // (the free drive's own patch, in snow: a traffic car coming down 3rd Avenue North in the inner lane
+  // moves over to the outer lane across it; on the ice it takes the lane change wider, and in bends no
+  // faster than the ice's sideways grip allows)
+  setWeather("snow");
+  const w = new World(SK, { seed: 3, parked: 0, pedestrians: 0, weather: "snow", ice: true });
+  w.setClock({ hour: 15.5, sun_deg: 20 }); w.ice.refresh(w);
+  const p = w.ice.list.find((x) => x.edge === "e401");
+  assert.equal(!!p, true);
+  const fleet = new NpcFleet(w, { count: 0, bikes: 0, seed: 5 });
+  w.placeOnLane(SK.lane("e157", 0), 20);
+  const from = SK.lane("e478", 0), s = from.length - 40, q = pointAt(from.pts, from.cum, s);
+  const car = new Vehicle(q[0], q[1], headingAt(from.pts, from.cum, s), 9, CAR);
+  Object.assign(car, { id: "npc", kind: "car", color: 1, v0: 13.9, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), path: new NpcPath(SK, rng(9)), frozen: 0, waiting: 0 });
+  car.path.start("e478", 0, s, [["e401", 0]]);
+  fleet.vehicles.push(car); w.npcs = fleet.vehicles;
+  let slip = 0, ticks = 0;
+  for (let k = 0; k < 30 * 60; k++) {
+    step({ world: w, fleet, autopilot: idle });
+    if (onIce(w, car)) { ticks++; slip = Math.max(slip, car.slipping || 0); }
+  }
+  assert.equal(ticks > 60, true, `${ticks}`);
+  assert.equal(slip <= ICE.SKID, true, `peak slip ${slip}`);
+  setWeather("dry");
+});
+
 await test("the audit: onto the ice too fast, or braking hard on it, is counted once a crossing, in the metrics, coaching and failures", () => {
   for (const [v, brakeAt, reason] of [[13, null, "fast"], [7, 70, "brake"], [7, null, null]]) {
     const ctx = deck({ s: 80, from: 140, to: 200 }), w = ctx.world;

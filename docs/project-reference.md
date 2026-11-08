@@ -2099,7 +2099,11 @@ only by `easeToward` once its slowing window has begun, so it never reaches the 
 accelerating. In icy conditions it keeps to 40 km/h across a
 bridge (`CAUTION_MPS`), from its start to its end, slowing for it like a lower limit; spans of one
 bridge less than 50 m apart along the route are one. Traffic does the same through `npcIce` (90% of
-the safe speed, 40% of `comfort().decel`, 6 m early, looking 70 m ahead; locals know the bridge).
+the safe speed, 40% of `comfort().decel`, 6 m early, looking 70 m ahead; locals know the bridge), no
+faster round a bend on the ice than `bendSpeed` allows along its own path, and, short of an emergency
+stop (braking harder than its driver's comfortable `b`), with its pedals and wheel through `gentleOnIce`
+as the driven car's. On the ice `gentleOnIce` also keeps the wheel from asking more than 60% of the ice's
+sideways grip (`STEER_LAT_SHARE`), so a lane change across a patch is taken wider.
 
 **Sensing and candidates.** `iceSensing` finds where the route's line is on a patch (cached per
 route and placement) and reports `black_ice` (the next patch seen), `black_ice_ahead` (all seen:

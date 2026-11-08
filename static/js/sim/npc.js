@@ -76,7 +76,7 @@ import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { ballYield } from "./ball-chase.js";
 import { geeseYield } from "./geese.js";
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
-import { npcIce } from "./black-ice.js";
+import { gentleOnIce, npcIce } from "./black-ice.js";
 import { snowbankYield } from "./snowbanks.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
@@ -1148,7 +1148,10 @@ export class NpcFleet {
         if (Math.abs(offset - proj.lateral) > 0.05 || Math.abs(turn) > 0.02) this.shuffle(n, offset - proj.lateral, turn, dt);
       }
       const steer = purePursuit(n, path, path.s, offset);
-      n.step(dt, { steer, accel: a });
+      // (on or coming up to black ice, a driver eases the pedals and the wheel, short of braking harder
+      // than it ever does but in an emergency: sim/black-ice.js gentleOnIce)
+      if (vIce < Infinity && a > -D.b) n.step(dt, gentleOnIce(n, steer, a, dt));
+      else n.step(dt, { steer, accel: a });
       if (n.v < 0) n.v = 0;
     }
   }
