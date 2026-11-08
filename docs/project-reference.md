@@ -1960,3 +1960,297 @@ route ends 30 m past the crossing. Rules stops about 4 m short of the file, the 
 as soon as the lead is across its lane comes within 2 m of the goose standing in it
 (`wildlife_conflicts`). Checks: `scripts/test_geese.mjs` (its `--write-snapshot` writes the
 live-model case `data/snapshots/goose_crossing.json`) and `tests/test_parks.py`.
+
+## Tailgaters (`sim/tailgaters.js`)
+
+The first hazard behind the car rather than ahead of it. `World` option `tailgaters` is on in free
+drives unless `?tailgaters=0`, and in the **On your bumper** challenge (`tailgaters: true`). From
+20 s into a drive, every 2 s while none is active and 60 s after the last, the ordinary traffic car
+(not a cyclist, bus, school bus, train, plow, truck at work, emergency vehicle, car pulling out or
+parking, red-light runner, or car passing a cyclist) nearest behind the driven car in its lane,
+within 50 m, both going at 6 m/s or more, becomes a tailgater with chance 0.3 (`TAIL_CHANCE`; a draw
+only when there is such a car, from the feature's own stream). It stays an `NpcFleet` car on the
+shared car model; `commitTailgater` layers a tailgating driver on it: IDM time gap 0.3 s
+(`TAIL_T`, swinging ±20% over 7 s: edging in and out), standstill gap 1.2 m, a wish to go at 1.2 times
+the limit (`TAIL_HURRY`, which is also its speed cap while it tailgates; following-distance traffic
+policy does not apply to it), and the driven car's speed and brake lights seen 0.4 s late
+(`TAIL_REACT_S`; the IDM sees that speed, and `tailgateBrake` judges how hard the car brakes over
+0.2 s). Once it sees braking it brakes 1.0 m/s² harder than it sees, or as hard as stopping 1.2 m
+behind the car needs if the car brakes on like that to a stop, up to the hardest the road allows
+(6 m/s² dry). At 13 m/s it settles about 6–8 m back, 0.5–0.6 s. Every 11 s it drifts 0.5 m left
+in its lane for 2.5 s, to look past the car; every 9 s it double-flashes its headlights
+(`tailgaterFlash`, drawn by `render/tailgaters.js`, render-only); from the leftmost lane it never
+changes lanes, so it never cuts by on the right (it may pass on the left from another lane). It
+gives up once its rear is past the car's front, after 6 s not behind it in its lane, or after
+120 s, and drives on as its own driver at up to 1.1 times the limit. So a car that brakes early and
+gently is followed down to a stop (from 12 m/s braking at 2.5 m/s² it stops about 3 m behind);
+braking at 7 m/s² from 13 m/s is a rear-end, which the collision audit puts on the follower
+(`fault: "other"`).
+
+`tailgaterThreat` is the one test: a vehicle behind the observer within 30 m, within 1.4 m of its
+line and heading within 30° of it, going at 3 m/s or more, whose front bumper is less than 0.8 s
+(`TAIL_THREAT_S`) of its own speed behind the observer's rear bumper. Ordinary traffic, with time
+gaps from 0.8 s up and a standstill gap on top, settles outside it. `brakingNeed` is what the
+situation ahead requires (m/s², and why): closing on whatever is in the car's path within 80 m (a
+vehicle, parked car or door within the two half-widths plus 0.3 m of its line, a person or goose
+within 1.8 m of its side: `(v − its speed along)²` over twice the gap less 2 m (1 m to a person),
+or, while it brakes, the car's stopping distance against its own), a red light, an amber it can stop for (`sim/amber.js`
+stopping distance) or a stop sign not yet stopped at, at the line, the route's bends at comfortable
+cornering, and the destination.
+
+Sensing reports `tailgater` (`id`, `gap_m`, `headway_s`, `speed`, `closing_mps`, `flashing`,
+`need_mps2` and `need_for` from `brakingNeed`, `gentle_mps2` = max(3.0, need + 1.0), `room_factor`,
+`lane_right`, and `can_move_right` once the lane options are known), from the vehicles it can see.
+Tailgated, the car's following policy (`sim/following.js`, `followingPolicy(…, { scale: 2 })`, with
+or without the `followingDistance` option) leaves twice the usual gap to the vehicle ahead, which
+`desiredSpeed` and the `following_distance` rejection then hold it to. Candidates: on a street with
+another lane going the car's way on the right, clear (`gap_ok`), with room for two lane changes and
+not near a junction, the right side is offered as `let_pass`, the candidate `let_tailgater_pass`
+(over to the right at the car's speed, never faster); with no lane to move into and a target speed
+of 8 m/s or more near the limit, `ease_off_for_tailgater` (1.4 m/s below the target speed, gently);
+and `stop_at_line` starts earlier, braking at 2.0 m/s² (`TAIL_STOP_DECEL`) instead of the
+comfortable 2.5. The forward sims leave the tailgater out of their constant-velocity collision
+prediction (it brakes too), and reject `brakes_hard_with_tailgater` for any manoeuvre but
+`hard_brake` whose prediction brakes harder than `gentle_mps2`, or than the gentlest manoeuvre that
+passes every other check plus 0.5 m/s², so that the gentlest is always kept. Rules prefers
+`let_tailgater_pass` (−8) and `ease_off_for_tailgater` (−5); the cautious agent takes
+`let_tailgater_pass` when it can move right (it already keeps below the limit). Models get a
+`tailgater` field (`behind_m`, `headway_s`, `brake_no_harder_than_mps2`, `ahead_requires_mps2`,
+`gap_ahead: "twice the usual"`, `move_right_to_let_it_pass` or `lane_to_the_right`), a situation
+clause and a line in the system prompt. The HUD says TAILGATER · MOVE RIGHT AND LET THEM BY, or
+TAILGATER · LEAVE MORE ROOM AHEAD (from `tailgaterThreat` when driving by hand); AI eyes draws the
+tailgater amber and the Lab panel lists it (a rear proximity line: gap and headway behind).
+
+The audit (`auditTailgaters`) follows each braking harder than 4.0 m/s² (`BRAKE_CHECK_DECEL`) from
+3 m/s or more until it eases below 1.5 m/s²: once it has lasted 0.25 s, with a tailgater (the one
+test) behind at any point of it, braking more than 2.5 m/s² above the most `brakingNeed` asked
+during it is a brake check, counted once a braking as `brake_checks` (event `brake_check`, with the
+tailgater, the braking, the need and why). It reaches the metrics and fails a drive only once a
+tailgater has closed within the threat headway of the car (`World.tailgatersSeen`). The drive score
+costs 20 safety points each, with an incident, a coaching tip and a replay marker, and while one is
+close behind the coach says to leave more room ahead, brake early and gently and let them by. With
+the option off nothing is computed, no random number is drawn, and the seeded benchmark and the
+other challenges play out and report exactly as before.
+
+**On your bumper** (`on-your-bumper`, seed 56042, Winnipeg, William Avenue in the Exchange District,
+dry afternoon): `e481`, eastbound, straight for 504 m, two lanes each way, 50 km/h, up to its signal
+at Isabel Street (`sig16`, its plan unchanged). The car sets off at 11 m/s in the left lane, 40 m
+along, on a route in that lane on along William Avenue (`e343`) 60 m past the junction; a dark car in
+a hurry starts 12 m behind it at the same speed and tailgates it from the start (it closes within
+0.8 s about 6 s in). The right lane is empty. The car's light turns amber 28 s after the start, about
+60 m short of the line at the limit. Rules and the cautious agent move into the right lane about 6
+and 3 s in, the tailgater goes by on the left, and they stop gently at the red and go on at the
+green. A driver who stays in the left lane and brakes hard is rear-ended (`brake_checks`, and the
+collision is the tailgater's). Checks: `scripts/test_tailgaters.mjs` (its `--write-snapshot` writes
+the live-model case `data/snapshots/on_your_bumper.json`).
+
+## Black ice (`sim/black-ice.js`)
+
+`World` option `ice` is on in free drives unless `?ice=0`, and in the **Bridges freeze first**
+challenge (`ice: true`). With it off `World.ice` is an empty, disabled `BlackIce` whose constructor
+only sets `ROAD.gripAt = null`: no random stream is created or drawn from, sensing adds no
+`black_ice`, `black_ice_ahead`, `ice_caution` or `ice_limit_mps` field, no law gets an ice `slowTo`,
+traffic computes nothing, the audit does not run and no metric key is added. Every `World` built
+without ice clears the hook, so a world built after one with ice steps as before.
+
+**The grip hook.** `ROAD` in `sim/vehicle.js` has a `gripAt` beside `mu`: null, or a function
+`(x, y, spec)` giving the friction coefficient under a tyre there (null where it is `ROAD.mu`). Where
+it is set, the dynamic model takes each axle's grip from it (the front axle `wheelbase` ahead of the
+rear one), so `axleMu` and the friction circles of each axle follow the surface under it (braking on
+ice with the rear axle on it and the front off it unloads the rear onto ice: it steps out); the
+kinematic model below 3 m/s takes the slipperier axle's. Where it is null both axles get `ROAD.mu`
+through the same expressions as before, with no extra arithmetic: the branch is taken once per
+substep. `comfort()` still derives from the global `ROAD.mu`. `BlackIce` installs the hook while
+it is enabled (and again each step, `refresh`, in case another world was built since); it returns
+a patch's `mu` for road vehicles and null for streetcars and trains (`spec.kind`), which run on
+steel. Because the driven car, every NPC and cyclist (BIKE), and every candidate's forward sim step
+the one car model, all of them slide on the ice alike.
+
+**Conditions.** `iceConditions(weather, clock)` favours ice in snow at any hour; in fog before 11:00
+or from 18:00 (freezing fog); in rain before 9:00 or from 20:00; on a dry road before 9:00 or from
+22:00 (frost after a clear night). Those three need the clock's `day` of the year in the cold
+season (`isColdSeason`: 1 November to 31 March); a clock without a `day` (free drives, which keep
+the sky's late-September sun) and no clock at all (the benchmark) favour ice only in snow. The
+`World` keeps the clock's `day` with ice on, as it does with sun glare. `refresh` runs at the
+start of every `stepWorld`: while conditions favour ice every placed patch lies on the road (`list`),
+otherwise none, so changing the weather or the time mid-drive brings it or takes it away. A
+challenge's `setList` fixes its own patches whatever the conditions.
+
+**Placement.** From its own stream (`rng(seed * 2654435761 + 233)`), once: on each bridge span of
+the map's `bridges` layer (one per two-way street, both directions sharing it), with chance 0.8, a
+patch 25–70 m long somewhere along it; and, on streets (not service roads or roundabout rings) with
+a stretch at least 20 m long in the shade of a building 20 m or taller (one whose footprint lies to
+the south, within 50° of due south, within 2.5 times its height and 90 m: the low winter sun), with
+chance 0.2, a patch 10–30 m long in it, none within 8 m of a street's ends. Each patch covers the
+roadway kerb to kerb (the edge's `asphalt`) over its stretch (`patchOn`: `{ id, kind, name, edge,
+from, to, mu, lo, hi, pts, cum, len, box, shape }`), with grip 0.10–0.15. A 25 m grid finds them
+(`at`), and `onEdge` lists them by edge, the two-way twin included, for traffic. Saskatoon at seed 3
+gets 4 patches on bridges and about 20 in the shade of downtown's towers. The recorder shares the
+object between checkpoints.
+
+**Speeds.** `safeSpeed(p)` is the speed from which the car could still stop within 40 m on the ice
+braking at 70% of its grip: about 28 km/h on a glaze of 0.11, 29 km/h on 0.12. The driven car plans
+to cross at 95% of that (`planSpeed`), reached 4 m before its front wheels get there at 60% of
+`comfort().decel` (the `slowTo` curve of `sim/potholes.js`), and no faster round a bend on the ice
+than keeps its sideways acceleration within 40% of the ice's grip (`bendSpeed`, from
+`Route.curveSpeedAt`); on the ice it only eases toward it, 0.3 m/s a decision (`easeToward`), never
+braking. Slower than that speed when the ice comes into sight, it speeds up no further than it, and
+only by `easeToward` once its slowing window has begun, so it never reaches the ice still
+accelerating. In icy conditions it keeps to 40 km/h across a
+bridge (`CAUTION_MPS`), from its start to its end, slowing for it like a lower limit; spans of one
+bridge less than 50 m apart along the route are one. Traffic does the same through `npcIce` (90% of
+the safe speed, 40% of `comfort().decel`, 6 m early, looking 70 m ahead; locals know the bridge), no
+faster round a bend on the ice than `bendSpeed` allows along its own path, and, short of an emergency
+stop (braking harder than its driver's comfortable `b`), with its pedals and wheel through `gentleOnIce`
+as the driven car's. On the ice `gentleOnIce` also keeps the wheel from asking more than 60% of the ice's
+sideways grip (`STEER_LAT_SHARE`), so a lane change across a patch is taken wider.
+
+**Sensing and candidates.** `iceSensing` finds where the route's line is on a patch (cached per
+route and placement) and reports `black_ice` (the next patch seen), `black_ice_ahead` (all seen:
+`starts_in_m`, `ends_in_m`, `length_m`, `mu`, `safe_mps`, `speed_mps`, `on_ice`, the `slow` window
+in route arc length of the rear axle) and `ice_caution` (`kind`, `text`, the next bridge within
+120 m, `{ name, starts_in_m, ends_in_m, on }`, and its `slow` window). A patch is seen 20 m ahead
+by day and 40 m at night (`visibility.night` over 0.5), within the sight range. `iceLimit` caps
+`snap.limit` with both, divided by the weather's speed factor so that the target speed is the ice's
+own (`snap.ice_limit_mps`), and the target speed names it. Every lane law gets an ice `slowTo` entry
+for each patch seen; `slow_for_ice` holds the target with each one 10 m earlier. Forward sims reject
+`crosses_ice_too_fast` going onto a seen patch (one the car is not already on) more than 0.5 m/s
+over its safe speed, and `brakes_on_ice` braking or accelerating harder than 60% of a patch's grip
+(after the actuator's lag, 0.4 s) or slipping past 0.2 on one, above 2.5 m/s (`hard_brake`
+excepted, the last resort). Rules gives `slow_for_ice` a bonus when a patch is seen; the cautious
+agent takes it unless following a car. Models get `black_ice` and `ice_caution` fields, a situation
+clause, outcome labels and a line in the system prompt.
+
+**Gentle on the ice.** With black ice seen, every lane law is marked `ice`, and `applyLaw`
+(`sim/controller.js`) passes its pedal and wheel through `gentleOnIce`: while an axle is on a patch the
+pedals are held to 50% of the ice's grip either way (`GENTLE_SHARE`, under the forward sims' 60% and
+the audit's 75%) and the wheel turns no faster than 0.15 rad/s (`ICE_STEER_RATE`: a quick turn of the
+wheel slides the front tyres past their sliding angle, about 2° on ice, before the car can yaw);
+from 0.6 s of travel before the front wheels reach it only speeding up is held back, for the pedals'
+lag. The forward sims run the same law, so what they predict is what the car can do. Lane laws that
+stop plan the stop at 70% of that (`iceStopDecel`), and `iceLimit` caps the speed wherever the way to a
+stop lies over seen ice, so the car can stop as gently: short of the car ahead (4 m short of where
+that car would stop, braking as hard as the road under it lets it), of the line ahead, of the
+destination, and of where it stops to reverse into a parking space. A stop it could not make even at
+the audit's 75% has been left too late, and is left to the rest of the planner. `hard_brake`, and the
+shared emergency brake, are never eased: an emergency on the ice stays one.
+
+**Audit.** `auditIce` counts, once a patch a crossing, the car going onto it more than 10 km/h over
+its safe speed (`fast`), or, above 2.5 m/s on it, braking or accelerating harder than 75% of its
+grip (`brake`, `accelerate`) or slipping past 0.2 (`skid`), as `ice_overspeed`, with an
+`ice_overspeed` event. `World.iceSeen` is set once a patch is under the car or within 40 m ahead of
+its front; only then do the metrics report `ice_overspeed`, which fails a drive ("crossed black ice
+too fast, or braked or steered hard on it"). The drive score costs 20 safety points each, with an
+incident, a coaching tip and a replay marker. Slides that end in a collision are already
+collisions.
+
+**Rendering.** `render/black-ice.js` (`IceView`) draws every patch on the road as one coplanar ground
+strip on `LAYER.patch` (above the asphalt; it is transparent, so drawn after the opaque markings,
+which show through it), a dark, near-mirror glaze (roughness 0.04) whose vertex alpha feathers out
+over 1.6 m at its sides and its ragged ends and thins in streaks, so that it shows mostly as a sheen
+where it catches the headlights or a low sun. It is hidden while no patch lies on the road and
+rebuilt when the patches change. The HUD says BRIDGES FREEZE FIRST · 40 KM/H, BLACK ICE AHEAD · EASE
+OFF TO 27 KM/H BEFORE IT and ON BLACK ICE · HOLD 27 KM/H · NO BRAKING OR SHARP STEERING, and AI eyes
+lists the patch or the bridge.
+
+**Bridges freeze first** (`bridges-freeze-first`, seed 55042, Saskatoon, Traffic Bridge, dry, dawn):
+northbound from Nutana over the South Saskatchewan River: `e577` (the south approach), `e579`, the
+deck `e572` (226 m, one lane each way, 50 km/h, on the bridges layer) and `e475` (3rd Avenue South)
+to 9 m along it, short of the roundabout at Spadina Crescent. `lab/black-ice-challenge.js` puts one
+patch on the deck from 125 m to 212 m (grip 0.11), a local driver 30 m ahead of the car, both moving
+at 11 m/s, and a car waiting at the roundabout's yield line (on `e473`) until the driven car has
+stood still for 2 s or 45 s have passed. Rules and the cautious agent keep well back of the car
+ahead, go onto the ice at about 20 km/h (safe 28 km/h), cross without braking and arrive; a car
+holding 50 km/h goes onto it too fast.
+Checks: `scripts/test_black_ice.mjs` (its `--write-snapshot` writes the live-model case
+`data/snapshots/bridges_freeze_first.json`) and `tests/test_bridges.py`.
+
+## Snowbanks (`sim/snowbanks.js`)
+
+`World` option `snowbanks` is on in free drives unless `?snowbanks=0`, and in the **One car at a
+time** challenge (`snowbanks: true`). It builds only when the weather is snow as the World is made
+(banks stay if the weather later changes; snow starting mid-drive adds none), from its own random
+stream. A bank runs along every kerb of a street with a curb (residential, unclassified, living
+street, tertiary, secondary, primary, trunk; not roundabout rings): each edge's right kerb, and a
+one-way edge's left kerb too. It sits from 0.4 m out from the kerb face (`BANK_IN_M`) over the curb
+to 80% of the way across the boulevard, 0.6–1.1 m high on quiet streets and 0.3–0.6 m on main
+streets, lumpy every 2.5 m (`LUMP_M`). At each end of an edge at a junction, a corner pile runs
+7–10 m back along the kerb from a cut 2 m past the corner's crosswalk middle (the widest street's
+asphalt half plus 1.6 m from the node, as `sim/pedestrians.js` puts the crosswalks): 1.4–1.9 m high
+on quiet streets (0.8–1.2 m on main ones), rising toward the corner. Banks are scenery, not
+obstacles.
+
+**Narrowings.** `narrowingSites` are the two-way residential blocks with one lane each way and a
+parking lane at both kerbs, off transit routes and level crossings and without a marked crosswalk,
+where cars park at both kerbs (as `sim/parking.js` places them) for at least 30 m, at least 20 m
+from either junction (one per street, on its lower-id edge; Montréal has six, Ottawa about 50). The
+stream makes 70% of them narrowings (`NARROW_P`), each a 40–100 m stretch `[a, b]` of the edge
+(cum frame) within the site. There the bank fills the kerb side of the parking lane: the cars
+parked at either kerb, and the spaces, stand `PUSH_M` (0.6 m) further out (`ParkedCars.move` keeps
+the grid in step). A vehicle keeps its centre at most `keepAt` right of the centreline,
+`SIDE_CLEAR_M` (0.5 m) clear of them: a car about 0.4 m left of its lane's centre, leaving two cars
+coming opposite ways 0.5 m apart, so they could only squeeze past each other. The driven car moves
+over through a `detour` (route arc lengths) on every lane law, easing in over 10 m before the
+stretch and out over 8 m after it; traffic through `sbShift` (0.6 m/s), aiming where the stretch is
+at its pursuit point and judging what is in its way by where it will be (cyclists move over only as
+far as clears the parked cars). Everyone keeps to 20 km/h in the stretch (`NARROW_MPS`, slowing
+gently toward it), and two that meet in it anyway squeeze past at 1.5 m/s.
+
+**Taking turns.** `Snowbanks.claims(nw)` lists who is coming to or in each narrowing, once a tick:
+the driven car along its route (the stretch's ends projected onto it, or by where it is on the
+street off its route), traffic along its path (the ends projected onto the path, which rounds the
+corners where its lanes join): `{ dir, gap }`, `gap` from the front to where the stretch starts its
+way (below 0 once in). `step()` (before the traffic moves) records when each came within 30 m of its
+end (`since`), latches one moving off within 8 m of it with its turn come (`go`), and drops the
+turn of one that has stood free to go for 8 s (`stall`). `narrowingTurn` is the one test, shared by
+sensing, the forward sims, traffic and the audit: a driver goes if it is in, latched, or could not
+stop short of the stretch even braking hard; otherwise it waits WAIT_M (2 m) short of it for one
+coming the other way that is in it, latched, or could not stop comfortably short of its end, and
+then for one within 30 m of its end that got there first (on a tie, by id; not one standing queued
+more than 12 m back). The driven car counts only what it can see; when it cannot see to the far end
+it comes up to the stretch no faster than it could stop at its end from (`edgeSpeed`, 1.2 m/s at the
+wait point). Sensing reports `snowbank.narrowing` (`length_m`, `gap_m`, `inside`, `priority`,
+`reason`, `oncoming`, `wait`, `stop_s_route`, `bumper_to_stop_m`, `limit_mps`, `squeeze`,
+`sees_through`, `detour`) and caps `snap.limit`; `desiredSpeed` stops at the wait point. The
+`wait_for_oncoming_narrowing` candidate stops there; forward sims reject
+`enters_narrowing_out_of_turn` for passing it by more than 1 m. Rules stops at the wait point and
+prefers the candidate; the cautious agent takes it whenever the car must wait; the deadlock detector
+leaves a car waiting there alone. Traffic (`snowbankYield` in `sim/npc.js`) holds at the same point
+once it could stop there. Double-parked vans never stop on a narrowing.
+
+**Corners.** A corner pile on a quiet street at least 1.3 m high (`HIDE_H`) is cut into 2 m boxes
+in a 25 m grid. `blocksView(from, to)` says whether a line passes through one. `World.sees` hides
+from the driven car a person, cyclist, goose or car (not a bus, truck, van, plow, streetcar or
+train, nor anything parked) when every line to it (middle, nose and tail) does (`bankHidden`),
+whatever `hazards` is. `giveWayAt` treats a pile like a building when looking along the streets it
+gives way to, so the car creeps up to its peek point to look. Coming up to the junction at the end
+of a quiet street, sensing reports `snowbank.corner` (`side`, `gap_m` to the crosswalk, `limit_mps`)
+while a pile hides the crosswalk's end on either side, and caps `snap.limit` to slow gently to 2.5
+m/s by 3 m short of the crosswalk (`cornerSpeed`).
+
+The audit (`auditSnowbanks`) counts the driven car's front entering a stretch while one it could see
+coming the other way had the way (`oncoming_inside`, `forced_to_stop` or `out_of_turn`), once each
+time in, as `snowbank_conflicts`, reported (and failing a drive) only once the car has come within
+40 m of a narrowing (`World.snowbanksSeen`). The drive score costs 20 legality points each, with an
+incident, a coaching tip and a replay marker. Models get a `snowbank` field (`narrowing`:
+`one_car_at_a_time`, `turn`, `oncoming`, `wait`, `wait_in_m`, `slow_to`; `corner_hidden`), situation
+clauses, a stop criterion for the motion question and a line in the system prompt. The renderer
+(`render/snowbanks.js`) draws every bank as one depth-tested mesh after the ground's markings: white
+mounds, highest just kerb-side of their middle, lumpy, grey-brown with grit low on the street side
+and icy here and there. The HUD says SNOWBANKS · ONE CAR AT A TIME with whose turn it is, and
+SNOWBANK HIDES THE CORNER · CREEP UP AND LOOK.
+
+**One car at a time** (`one-car-at-a-time`, seed 54042, Montréal, Avenue Laval in the Plateau,
+falling snow, afternoon): the first site of the street driven the way whose far end has no stop
+sign (toward Rue Marie-Anne Est), narrowed for 60 m starting 42 m plus the car's front from its
+start (`snowbankSites`; the stream's own narrowings are replaced by it, and cars are parked along
+both kerbs of it, pushed out). The car starts from a standstill 42 m short of the stretch. A car
+coming the other way is already 8 m into it at 3.5 m/s; in the snow (40 m sight) the car sees it as
+it comes up to its end and must wait there a few seconds. Past the stretch the street runs on to the
+corner, where someone waiting behind the high pile on the right steps off to cross Avenue Laval,
+without seeing the car either, once its front is 26 m short of the crosswalk. The route turns left
+onto Rue Marie-Anne Est (Laval runs one way toward the corner beyond) and ends 25 m along it. Rules
+arrives in about 75 s and the cautious agent in about 82 s, both waiting at the stretch, creeping up
+to the corner and stopping for the person; a driver who keeps going at 3.5 m/s enters with the
+oncoming car in the stretch (`snowbank_conflicts`). Checks: `scripts/test_snowbanks.mjs` (its
+`--write-snapshot` writes the live-model case `data/snapshots/one_car_at_a_time.json`).

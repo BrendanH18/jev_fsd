@@ -72,7 +72,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Fifty-three hand-built scenarios test the situations real drivers get wrong:
+Fifty-six hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -129,6 +129,9 @@ Fifty-three hand-built scenarios test the situations real drivers get wrong:
 | **Dip your lights** | Saskatoon, night | The streetlights are out on 13th Street East: high beams on the empty stretch, dipped within 150 m of an oncoming car and 60 m of the car ahead |
 | **Find your gap** | Halifax, afternoon | Yield to three circulating cars at the North Park roundabout, then take the third exit onto North Park Street |
 | **Wait for green** | Toronto, afternoon | Harbord Street onto Spadina Avenue: obey the mapped no-turn-on-red sign even when the cross street is empty, then turn on green |
+| **On your bumper** | Winnipeg, afternoon | A driver in a hurry sits half a second behind you on William Avenue: don't brake-check them, leave more room ahead, and move right to let them by |
+| **Bridges freeze first** | Saskatoon, dawn | Black ice on the Traffic Bridge deck, nearly invisible on a dry road: ease off before the bridge and cross the ice steadily, with no braking or sharp steering on it |
+| **One car at a time** | Montréal, snow | Snowbanks narrow Avenue Laval to one moving car: wait while an oncoming car comes through, then creep up to a corner where a high pile hides someone about to cross |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign
@@ -144,6 +147,13 @@ In **Squeeze in**, stop inside the space and select **Finish & review** to check
 Challenge reports explain each reason a drive was not completed cleanly and show the authored
 lesson alongside the coaching grade. Select a retained event to rewind up to three seconds before
 it. Events outside the current recording stay readable and are labelled **Replay unavailable**.
+
+**Road tests** sit beside the challenges: a Class 5-style test in Kitsilano and a G2-style test in
+Toronto's Annex, each a longer drive on a fixed route with an examiner's directions in the HUD and
+an examiner's sheet at the end. A dangerous action or violation fails; minor errors are demerits,
+grouped by category, with rewind links. Any driver can take one, so you can see whether an AI would
+be licensed; only your unchanged manual attempts are recorded, with your best result. These are
+styled on provincial road tests, not affiliated with any licensing authority.
 
 ### 🧠 See through the AI's eyes
 

@@ -175,6 +175,31 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(g.stopped_on_road ? { standing_in_road: g.stopped_on_road } : {}), gap_m: r1(g.gap_m),
       ...(g.wait ? { wait: true, wait_in_m: r1(Math.max(0, g.bumper_to_stop_m)) } : {}), slow_to: r1(g.limit_mps) };
   }
+  if (snap.tailgater) {
+    const t = snap.tailgater;
+    state.tailgater = { id: t.id, behind_m: r1(t.gap_m), headway_s: t.headway_s, closing_mps: r1(t.closing_mps), ...(t.flashing ? { flashing_headlights: true } : {}),
+      brake_no_harder_than_mps2: r1(t.gentle_mps2), ...(t.need_for ? { ahead_requires_mps2: r1(t.need_mps2), because_of: t.need_for } : {}), gap_ahead: "twice the usual",
+      ...(t.can_move_right ? { move_right_to_let_it_pass: true } : { lane_to_the_right: t.lane_right }) };
+  }
+  if (snap.black_ice) {
+    const a = snap.black_ice;
+    state.black_ice = { id: a.id, on: ICE_WHERE[a.kind], ...(a.name ? { street: a.name } : {}), ...(a.on_ice ? { under_car: true, ends_in_m: r1(Math.max(0, a.ends_in_m)) } : { ahead_m: r1(a.starts_in_m) }),
+      length_m: a.length_m, grip: "about a tenth of dry asphalt", safe_speed: r1(a.safe_mps), cross_at: r1(a.speed_mps),
+      ...(snap.black_ice_ahead.length > 1 ? { more_ahead: snap.black_ice_ahead.length - 1 } : {}) };
+  }
+  if (snap.ice_caution) {
+    const k = snap.ice_caution, b = k.bridge;
+    state.ice_caution = { conditions: k.text, ice_forms_first_on: "bridges, overpasses and shaded stretches", ...(b ? { bridge: { ...(b.name ? { name: b.name } : {}), ...(b.on ? { on_it: true, ends_in_m: r1(Math.max(0, b.ends_in_m)) } : { ahead_m: r1(b.starts_in_m) }), keep_to: r1(k.slow.mps) } } : {}) };
+  }
+  if (snap.snowbank) {
+    const n = snap.snowbank.narrowing, k = snap.snowbank.corner;
+    state.snowbank = {
+      ...(n ? { narrowing: { one_car_at_a_time: true, length_m: n.length_m, ...(n.inside ? { car_in_it: true } : { starts_in_m: r1(Math.max(0, n.gap_m)) }),
+        turn: n.priority === "car" ? "car" : "oncoming", ...(n.oncoming ? { oncoming: { id: n.oncoming.id, in_it: n.oncoming.inside, ...(n.oncoming.inside ? {} : { from_its_end_m: n.oncoming.gap_m }) } } : {}),
+        ...(n.wait ? { wait: true, wait_in_m: r1(Math.max(0, n.bumper_to_stop_m)) } : {}), ...(n.squeeze ? { squeeze_past: true } : {}), slow_to: r1(n.limit_mps) } } : {}),
+      ...(k ? { corner_hidden: { side: k.side, crosswalk_in_m: r1(k.gap_m), creep_to: r1(k.limit_mps) } } : {}),
+    };
+  }
   if (snap.emergency) {
     const e = snap.emergency;
     state.emergency_vehicle = { id: e.id, kind: e.kind, siren: true, coming_from: EV_FROM[e.from], distance_m: r1(e.distance_m), reaches_car_in_s: r1(e.eta_s), seen: e.seen,
@@ -298,6 +323,9 @@ function outcomeLabel(c, snap) {
   if (c.id === "yield_to_contraflow_cyclist" && snap.contraflow_cyclist?.wait) return `clear, waits ${Math.max(0, r1(snap.contraflow_cyclist.bumper_to_stop_m - c.sim.progress_m))} m ahead for the cyclist riding against the one-way`;
   if (c.id === "wait_for_runner" && snap.red_light_runner) return `clear, waits ${Math.max(0, r1(snap.red_light_runner.bumper_to_stop_m - c.sim.progress_m))} m ahead, at the line, for the car running the red`;
   if (c.id === "slow_for_ball" && snap.ball_in_road) return `clear, slows to ${r1(c.sim.end_speed)} m/s, able to stop short of where the ball came out`;
+  if (c.id === "let_tailgater_pass" && snap.tailgater) return `clear, moves over into the right lane at the car's speed and lets the tailgater by${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
+  if (c.id === "ease_off_for_tailgater" && snap.tailgater) return `clear, eases off gently to ${r1(c.sim.end_speed)} m/s so the tailgater can get by, leaving more room ahead`;
+  if (c.id === "wait_for_oncoming_narrowing" && snap.snowbank?.narrowing?.wait) return `clear, waits ${Math.max(0, r1(snap.snowbank.narrowing.bumper_to_stop_m - c.sim.progress_m))} m ahead, short of the stretch narrowed by snowbanks, for the oncoming car's turn`;
   if (c.id === "wait_for_geese" && snap.geese_crossing) return snap.geese_crossing.wait ? `clear, stops ${Math.max(0, r1(snap.geese_crossing.bumper_to_stop_m - c.sim.progress_m))} m short of the geese's way across` : "clear, slows for the geese by the road";
   if (c.id === "yield_to_reversing" && snap.reversing_vehicle) return snap.reversing_vehicle.wait ? `clear, stops ${Math.max(0, r1(snap.reversing_vehicle.bumper_to_stop_m - c.sim.progress_m))} m short of where it waits for the car backing out` : "clear, slows for the car backing out";
   if (c.id === "stop_for_cyclist" && snap.right_hook) return `clear, waits ${Math.max(0, r1(snap.right_hook.bumper_to_yield_m - c.sim.progress_m))} m short of the cyclist's path`;
@@ -324,6 +352,9 @@ function outcomeLabel(c, snap) {
   if (!c.sim.stays_in_lane) return "clear, drifts out of lane";
   // (its wheels would cross a pothole: it slows to drive over it, sim/potholes.js)
   if (c.law.slowTo && snap.pothole) return `clear, slows to ${r1(Math.min(...c.law.slowTo.map((x) => x.mps)))} m/s to drive over the pothole`;
+  // (black ice it has seen: it eases off to cross it steadily, sim/black-ice.js)
+  if (c.id === "slow_for_ice" && snap.black_ice) return snap.black_ice.on_ice ? `clear, eases off to ${r1(snap.black_ice.speed_mps)} m/s without braking and holds steady across the ice` : `clear, eases off early, on the dry road, to ${r1(snap.black_ice.speed_mps)} m/s before the black ice and holds it across, without braking on it`;
+  if (c.law.slowTo && snap.black_ice && c.sim.end_speed > 0.5) return `clear, slows to ${r1(snap.black_ice.speed_mps)} m/s by the black ice and holds it across`;
   if (c.sim.min_gap_m < 4) return `clear, but closes to ${r1(c.sim.min_gap_m)} m of a car`;
   return "clear";
 }
@@ -406,7 +437,10 @@ export function situationClauses(snap) {
   if (snap.reversing_vehicle) out.push(reversingClause(snap.reversing_vehicle));
   if (snap.pothole) out.push(potholeClause(snap.pothole, snap.potholes_ahead));
   if (snap.ball_in_road) out.push(ballClause(snap.ball_in_road));
+  if (snap.black_ice || snap.ice_caution) out.push(iceClause(snap.black_ice, snap.ice_caution, snap.black_ice_ahead));
   if (snap.geese_crossing) out.push(geeseClause(snap.geese_crossing));
+  if (snap.tailgater) out.push(tailgaterClause(snap.tailgater));
+  if (snap.snowbank) out.push(...snowbankClauses(snap.snowbank));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));
   if (snap.bus) {
     const b = snap.bus, w = Math.max(0, Math.round(b.bumper_to_stop_m));
@@ -537,6 +571,20 @@ function ballClause(b) {
   return `${lead} A child may run out after it at any moment, hidden by the parked cars until they are in the road. Choose \`slow_for_ball\` while this warning stands: slow to ${r1(b.limit_mps)} m/s or less (\`car.target_speed\` already does), the speed from which the car can stop short of where the ball came out, and keep to it until the child has come and gone back to the kerb${b.cover_left_s != null ? `, or ${Math.round(b.cover_left_s)} s more pass with no child` : ""}.`;
 }
 
+// Snowbanks ahead (sim/snowbanks.js): a stretch they narrow to one car at a time, and a corner they hide.
+function snowbankClauses({ narrowing: n, corner: k }) {
+  const out = [];
+  if (n) {
+    const where = n.inside ? "The car is in a stretch" : `${Math.round(Math.max(0, n.gap_m))} m ahead is a ${n.length_m} m stretch`;
+    const lead = `${where} of ${n.street || "the street"} where snowbanks have pushed the parked cars out from both kerbs, leaving room for only one moving car at a time. Drivers take turns: whoever is already in the stretch, or too close to stop short of it, goes first, then whoever got to their end of it first.`;
+    if (n.wait) out.push(`${lead} It is the turn of the car coming the other way${n.oncoming?.inside ? ", which is already in the stretch" : n.reason === "turn" ? ", which got to its end first" : ", which is too close to stop"}: stop short of the stretch and wait there until it is through (\`wait_for_oncoming_narrowing\`${Math.round(n.bumper_to_stop_m) < 2 ? ", holding still" : `, stopping ${Math.max(0, Math.round(n.bumper_to_stop_m))} m ahead`}). Never enter while it is their turn.`);
+    else if (n.squeeze) out.push(`${lead} A car coming the other way is in the stretch too: squeeze past each other at walking pace, ${r1(n.limit_mps)} m/s or less (\`car.target_speed\` already does), keeping to the middle.`);
+    else out.push(`${lead} ${n.inside ? "It is the car's turn: carry on through" : "It is the car's turn: nobody coming the other way has the way, so go on in"}, over toward the middle and clear of the parked cars, at ${r1(n.limit_mps)} m/s or less (\`car.target_speed\` already does).`);
+  }
+  if (k) out.push(`A high snowbank at the ${k.side === "both" ? "corners" : `${k.side} corner`} of the junction ${Math.round(k.gap_m)} m ahead hides anyone waiting there to cross, and anything small coming out of the side street: creep up to ${r1(k.limit_mps)} m/s or less (\`car.target_speed\` already does), ready to stop for someone stepping out from behind it.`);
+  return out;
+}
+
 // What a gaggle of Canada geese (sim/geese.js) is doing, for models.
 const GEESE_PHASE = { about_to_cross: "on the grass by the road, walking up to the kerb", crossing: "crossing the road in single file", stopped_in_road: "crossing the road in single file, one or more standing still in it" };
 
@@ -548,6 +596,31 @@ function geeseClause(g) {
   if (g.wait) return `${lead} Stop short of their way across and wait until the last goose is off the road, on the far side, however long they take: never drive through a gap between geese, and never creep toward the file. ${w < 2 ? "Hold still until the last goose is off the road." : `Slow down and stop ${w} m ahead (\`wait_for_geese\`).`}`;
   if (g.phase === "about_to_cross") return `${lead} They may step into the road at any moment: slow to ${r1(g.limit_mps)} m/s, ready to stop for them (\`car.target_speed\` already does).`;
   return `${lead} The car is already at their way across: keep to ${r1(g.limit_mps)} m/s and keep clear of them.`;
+}
+
+// A car tailgating the driven car, close behind it in its lane (sim/tailgaters.js).
+function tailgaterClause(t) {
+  const lead = `Car \`${t.id}\` is tailgating the car, ${Math.max(0, Math.round(t.gap_m))} m behind (${r1(t.headway_s)} s)${t.flashing ? ", flashing its headlights" : ""}: far too close to stop if the car brakes suddenly.`;
+  const brake = `Never brake-check it, and never brake harder than ${r1(t.gentle_mps2)} m/s^2 unless something ahead calls for more${t.need_for ? ` (the ${t.need_for} ahead needs ${r1(t.need_mps2)} m/s^2)` : ""}; never speed up to please it either. Leave twice the usual gap to whatever is ahead (\`car.target_speed\` already does), so the car can brake early and gently.`;
+  const by = t.can_move_right ? "Another lane goes the car's way on the right and it is clear: choose `let_tailgater_pass` to move over at the car's speed and let it by."
+    : "There is no lane to move right into: ease off a little, gently (`ease_off_for_tailgater`, where it is offered), so it can pass when it is safe.";
+  return `${lead} ${brake} ${by}`;
+}
+
+// Where a patch of black ice (sim/black-ice.js) lies, for models.
+const ICE_WHERE = { bridge: "a bridge deck", shade: "a stretch in the shade of tall buildings" };
+
+// Black ice the car has seen, and the caution while conditions favour it (sim/black-ice.js).
+function iceClause(a, k, ahead) {
+  const caution = k ? `Conditions favour black ice (${k.text}): it forms first on bridges, overpasses and shaded stretches, thin and nearly invisible, while the rest of the road looks dry or damp.` : "";
+  const bridge = k?.bridge ? k.bridge.on ? ` The car is on a bridge${k.bridge.name ? ` (${k.bridge.name})` : ""}: keep to ${r1(k.slow.mps)} m/s or less until the end of it, ${Math.max(0, Math.round(k.bridge.ends_in_m))} m on.` : ` A bridge${k.bridge.name ? ` (${k.bridge.name})` : ""} starts ${Math.max(0, Math.round(k.bridge.starts_in_m))} m ahead: ease off to ${r1(k.slow.mps)} m/s before it (\`car.target_speed\` already does).` : "";
+  if (!a) return `${caution}${bridge}`;
+  const where = `on ${ICE_WHERE[a.kind]}${a.name ? ` (${a.name})` : ""}`;
+  const more = ahead?.length > 1 ? ` ${ahead.length - 1} more patch${ahead.length > 2 ? "es are" : " is"} further on.` : "";
+  const lead = a.on_ice ? `The car is on black ice ${where}, ${Math.max(0, Math.round(a.ends_in_m))} m from the end of it: its tyres have about a tenth of their grip.` : `The road ${Math.round(a.starts_in_m)} m ahead, ${where}, has a glossy sheen: black ice, ${a.length_m} m of it, where the tyres have about a tenth of their grip.`;
+  const how = a.on_ice ? ` Do not brake, accelerate or steer sharply: ease off and hold steady at ${r1(a.speed_mps)} m/s or less until all four wheels are off it (\`slow_for_ice\`, or \`car.target_speed\`). Braking hard here slides the car.`
+    : ` Slow down now, on the dry road, to ${r1(a.speed_mps)} m/s by the time the front wheels reach it, then cross it steadily, without braking, accelerating or steering sharply (choose \`slow_for_ice\`; \`car.target_speed\` already slows for it). Leave more room to anything ahead: on the ice the car can hardly stop.`;
+  return `${caution}${bridge} ${lead}${how}${more}`.trim();
 }
 
 // How a contraflow cyclist (sim/contraflow.js) meets the car's way, for models.
@@ -745,7 +818,7 @@ function parkingClause(p) {
 }
 
 export function needsMotionQuestion(snap) {
-  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.contraflow_cyclist?.wait || snap.red_light_runner?.wait || snap.reversing_vehicle?.wait || snap.geese_crossing?.wait || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.crossing_guard?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.cyclist_pass || snap.parking
+  return !!((snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) || (snap.following && snap.following.gap_m < 12) || (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 30) || snap.right_hook || snap.contraflow_cyclist?.wait || snap.red_light_runner?.wait || snap.reversing_vehicle?.wait || snap.geese_crossing?.wait || snap.snowbank?.narrowing?.wait || snap.emergency || snap.bus || snap.crosswalk_stop || snap.school_bus || snap.streetcar || snap.level_crossing?.wait || snap.level_crossing?.on_tracks || snap.junction_box || snap.work_zone?.wait || snap.crossing_guard?.wait || snap.lane_closure?.stop_s_route != null || snap.double_parked?.wait || snap.cyclist_pass || snap.parking
     || snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) || snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) || snap.stuck || (snap.nav && snap.nav.remaining_m < 30));
 }
 
@@ -778,6 +851,8 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const reverseWait = snap.reversing_vehicle?.wait ? ", when a car backing out of a driveway is coming into the car's lane and the car has reached the point where it stops for it (`reversing_vehicle.wait_in_m` under 2)" : "";
     // And waiting for geese crossing the road.
     const geeseWait = snap.geese_crossing?.wait ? ", when Canada geese are crossing the road ahead (`geese_crossing.wait` true) and the car has reached the point where it stops for them (`geese_crossing.wait_in_m` under 2), until the last goose is off the road" : "";
+    // And waiting for an oncoming car's turn through a stretch narrowed by snowbanks.
+    const narrowWait = snap.snowbank?.narrowing?.wait ? ", when it is an oncoming car's turn through the stretch narrowed by snowbanks ahead (`snowbank.narrowing.wait` true) and the car has reached the point where it waits for it (`snowbank.narrowing.wait_in_m` under 2), until that car is through" : "";
     // And giving way to an emergency vehicle, once pulled over.
     const evWait = snap.emergency && !snap.emergency.lead ? ", when an emergency vehicle is coming and the car has pulled over where it stops for it (`emergency_vehicle.stop_in_m` under 2)" : "";
     // And letting a bus pull out from its stop.
@@ -810,7 +885,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${snap.cyclist_pass ? " Staying behind a cyclist (`follow_cyclist`), at its speed, and passing it (`pass_cyclist`) are driving too." : ""}`,
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${contraWait}${runnerWait}${reverseWait}${geeseWait}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${guardWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${contraWait}${runnerWait}${reverseWait}${geeseWait}${narrowWait}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${guardWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
       },
     };
   } else {

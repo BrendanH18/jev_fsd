@@ -235,3 +235,47 @@ road; one may stop in your lane. Driving on within 2 m of a goose on the road, o
 counts as `wildlife_conflicts`: 20 safety points each, a replay marker and a coaching tip, reported
 only once a gaggle has crossed near you. Hitting one is also a collision. Use `?geese=0` to turn them
 off.
+
+### Tailgaters
+
+In free drives (and the **On your bumper** lesson) a car that comes up behind you in your lane now
+and then closes right up, about half a second back, and stays there: it edges in and out, drifts
+left in its lane to look past you, and flashes its headlights. The HUD says TAILGATER · MOVE RIGHT
+AND LET THEM BY where another lane goes your way, and TAILGATER · LEAVE MORE ROOM AHEAD otherwise;
+the coach says the same while it is there. Don't brake-check it and don't speed up to please it:
+leave twice your usual gap ahead so you can brake early and gently, and let it by, moving right when
+it's safe or easing off a little. It reacts to your brake lights late: it follows a gentle stop, but
+brake hard with it close behind and it can run into you (its fault). Braking harder than 4 m/s² with
+a tailgater behind, well beyond what anything ahead called for, counts as `brake_checks`: 20 safety
+points each, a replay marker and a coaching tip, reported only once a tailgater has followed you. Use
+`?tailgaters=0` to turn them off.
+
+
+### Black ice
+
+In free drives while it snows (and in the **Bridges freeze first** lesson, and any drive whose
+clock has a winter date: freezing fog, rain, or a clear frosty night, late at night and early in
+the morning), thin
+patches of black ice lie on bridge decks and overpasses and on stretches of street in the shade of
+tall buildings, while the rest of the road looks dry or damp. They are drawn as a faint, glossy
+glaze that darkens the asphalt a little and catches your headlights at night and a low sun by day;
+by day you will hardly see one until you are close. On the ice the tyres have about a tenth of their
+grip, for every car, cyclist and the car you drive: brake or steer hard on it and the car slides.
+The HUD says BRIDGES FREEZE FIRST · 40 KM/H coming up to a bridge, BLACK ICE AHEAD · EASE OFF TO
+28 KM/H BEFORE IT once a patch is in sight, and ON BLACK ICE · HOLD 28 KM/H · NO BRAKING OR SHARP
+STEERING on it. Going onto a patch more than 10 km/h faster than its safe speed, or braking,
+accelerating or skidding on one, counts as `ice_overspeed`: 20 safety points each, a replay marker
+and a coaching tip, reported only once you have come near black ice. Use `?ice=0` to take it off.
+
+### Snowbanks
+
+When it is snowing as a free drive starts (and in the **One car at a time** lesson), snowbanks line
+the kerbs: white, lumpy and grey with grit on the street side, piled higher than a person at the
+corners. On narrow two-way residential streets with parking on both sides the banks push the parked
+cars out, and there is room for only one moving car at a time. Take turns: whoever is already in the
+narrow stretch, or got to it first, goes first, and the other waits at its end. The HUD says
+SNOWBANKS · ONE CAR AT A TIME and whose turn it is; keep to the middle when it is yours. At a corner
+where the pile hides the sidewalk and the side street, the HUD says SNOWBANK HIDES THE CORNER · CREEP
+UP AND LOOK: someone may step out from behind it. Going in while a car you could see coming the other
+way had the way counts as `snowbank_conflicts`: 20 legality points, a replay marker and a coaching
+tip, reported only once you have come up to a narrowed stretch. Use `?snowbanks=0` to turn them off.

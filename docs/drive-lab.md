@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fifty-three authored challenges
+## Fifty-six authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -15,6 +15,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Pothole season | Montréal, Rue Saint-Denis | Spring potholes on (`potholes`, sim/potholes.js), in the rain. On the block from Avenue Duluth Est toward Rue Rachel Est (one lane each way, 40 km/h), four water-filled potholes in the car's lane: two in the wheel paths to ease round inside the lane, one wide one across the middle to slow to about 15 km/h for, and one between the wheels. A wheel into one faster than its safe speed plus 5 km/h (`pothole_hits`) fails the drive |
 | Chasing the ball | Vancouver, West 7th Avenue | Hidden hazards and balls on (`balls`, sim/ball-chase.js). A residential street (one lane each way, 50 km/h) lined with parked cars. A ball rolls out in plain view from a gap between them on the right once the car's front is 28 m away; 1.2 s later a child runs out after it from behind the parked cars. Passing the gap faster than the car could stop from (`ball_warnings_ignored`) fails the drive. Rules and the cautious agent slow as the ball rolls out, give the child room, and go on once they are back at the kerb; a driver who keeps to 50 km/h hits the child |
 | Goose crossing | Ottawa, the Glebe | Canada geese on (`geese`, sim/geese.js). Clemow Avenue (one lane each way, 40 km/h) between Central Park and Patterson's Creek Park, from the parks layer. Eight geese (three adults, five goslings) on the grass on the left set off across once the car's front is 75 m away, the lead already at the kerb; the adult in the middle stops in the car's lane for 8 s. Driving on within 2 m of a goose on the road, or hitting one (`wildlife_conflicts`), fails the drive. Rules and the cautious agent stop 4–7 m short of the file and wait about 40 s for the last goose |
+| Bridges freeze first | Saskatoon, Traffic Bridge | Black ice on (`ice`, sim/black-ice.js), at dawn after a frosty night. Northbound over the South Saskatchewan River (one lane each way, 50 km/h): the deck has iced over for 87 m, ending just short of its north end, where traffic queues for the roundabout. Going onto the ice more than 10 km/h over its safe speed (about 28 km/h), or braking, accelerating or skidding on it (`ice_overspeed`), fails the drive. Rules and the cautious agent keep to 40 km/h on the bridge, slow before the ice and cross it steadily |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
@@ -58,6 +59,8 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Buses only | Vancouver, Mount Pleasant | Main Street at 8:00, bus lanes on (`busLanes`): the curb lane is bus-only from 7:00 to 9:30 on weekdays. The car keeps out of it, then moves into it in the last 50 m before the right turn onto East 4th Avenue. Driving more than 1 m in it outside that approach (`bus_lane_driving`) fails the drive. |
 | No left turn | Toronto, Bathurst Street | Turn restrictions on (`restrictions`). OSM relation 124176 prohibits the shortest route’s left turn; navigation takes a legal detour. `illegal_turns` fails the drive once a restriction has applied. |
 | Both ways | Montréal, Le Plateau | Contraflow cyclists on (`contraflow`, sim/contraflow.js). The car starts from a standstill on Rue Drolet (one-way), its front 45 m short of Rue Villeneuve Est, to turn right into it: one-way for cars, with a painted contraflow lane, at a junction without a sign. A cyclist rides out of Villeneuve toward the junction in that lane at 16 km/h, 65 m from it, from the car's right; it is hidden behind the corner building until the car is close. The street is too narrow to meet it with the minimum passing distance. The route ends 40 m along the next block of Villeneuve, past Avenue Henri-Julien. Cutting the cyclist off (`failed to yield`) or meeting it closer than the minimum passing distance (`contraflow_conflicts`) fails the drive. Rules and the cautious agent stop short of the junction about 8 s in, wait about 5 s while the cyclist comes out, then turn in; a car that does not see it runs into it. |
+| On your bumper | Winnipeg, William Avenue | Tailgaters on (`tailgaters`, sim/tailgaters.js). Two lanes each way, 50 km/h, straight for half a kilometre. A driver in a hurry closes up half a second behind you in the left lane and stays there; the right lane is empty, and the light ahead at Isabel Street turns amber. Move right and let them by, or brake early and gently; braking hard with them close behind (`brake_checks`) fails the drive |
+| One car at a time | Montréal, Avenue Laval | Snowbanks on (`snowbanks`, sim/snowbanks.js), in falling snow. The banks have pushed the parked cars out from both kerbs of a 60 m stretch: room for one moving car at a time, and a car coming the other way is already in it. Wait at your end until it is through (`snowbank_conflicts` fails the drive otherwise), keep to the middle, then creep up to the corner at Rue Marie-Anne Est, where someone hidden behind the high pile steps off to cross |
 
 Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors, clear the tracks, keep the box clear, not your arrow, follow the flagger, lights out, round the van, squeeze in, between the cars, blind left, behind the plow, take turns, give them room, over the humps, all walk, collection day and both ways joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
@@ -176,6 +179,34 @@ road and wait until the last one is off it; never go through a gap between them,
 ahead are across your lane. Geese are on only for this challenge and free drives; the challenge
 places its one gaggle and no others.
 
+**Bridges freeze first** (`bridges-freeze-first`, Saskatoon, Traffic Bridge, seed 55042): bridges
+ice over before the road around them. Near freezing, ease off before a bridge, slow on the dry road
+before black ice, and cross it steadily, without braking, accelerating or steering hard on it. Black
+ice is on only for this challenge and free drives; the challenge places its one patch and no others.
+
+## Bridges freeze first
+
+**Bridges freeze first** (seed 55042) crosses the South Saskatchewan River northbound on Saskatoon's
+Traffic Bridge (one lane each way, 50 km/h), from Nutana toward downtown, at dawn after a clear
+night just below freezing. The car starts at 40 km/h on the bridge's south approach (`e577`) and
+ends on 3rd Avenue South, short of the roundabout at Spadina Crescent. The deck (`e572`, 226 m, on
+the bridges layer) has iced over from 125 m to 212 m along it (black ice, grip 0.11); the approach
+is dry. A local driver 30 m ahead eases off for the ice too, and a car waits at the roundabout's
+yield line until the driven car has stopped behind the queue.
+
+The lesson: keep to about 40 km/h over a bridge when it is near freezing, slow on the dry road to
+about 28 km/h once you see the glossy sheen (about 20 m off by day), and cross the ice steadily,
+leaving room to the car ahead. Rules and the cautious agent, keeping the longer gap the ice calls for
+behind the car ahead, go onto the ice at about 20 km/h, hold it across without braking, and arrive; a car holding 50 km/h goes onto it too fast (`ice_overspeed`)
+and fails. Checks: `scripts/test_black_ice.mjs` (its `--write-snapshot` writes the live-model case
+`data/snapshots/bridges_freeze_first.json`) and `tests/test_bridges.py`.
+
+**One car at a time** (`one-car-at-a-time`, Montréal, Avenue Laval, seed 54042): where snowbanks
+leave room for one car, take turns: whoever is already in the narrow stretch, or got to it first,
+goes first. Wait at your end, keep to the middle when it is your turn, and creep up to corners where
+the banks are piled high. Snowbanks are on only for this challenge and free drives in snow; the
+challenge places its own narrowed stretch and no others.
+
 ## Paired amber-light lessons
 
 **Room to stop** (`amber-stop`, seed 44042) and **Keep going safely** (`amber-clear`,
@@ -248,3 +279,74 @@ at the line until it has cleared the junction, then carry on 100 m along 106 Str
 who goes as soon as the light turns green enters ahead of it, is counted in
 `fresh_green_conflicts`, and collides with it. Red-light runners are on only for this challenge
 and free drives; the challenge places its one runner and no other traffic.
+
+## On your bumper
+
+**On your bumper** (`on-your-bumper`, Winnipeg, seed 56042) drives William Avenue eastbound through
+the Exchange District (`e481`), straight for 504 m with two lanes each way and a 50 km/h limit, up
+to its unchanged signal at Isabel Street (`sig16`). The car sets off at 11 m/s in the left lane. A
+dark car in a hurry starts 12 m behind it and tailgates it from the start: it closes to about half a
+second back, edges in and out, drifts left in its lane now and then to look past, and flashes its
+headlights. The right lane is empty. Rules and the cautious agent move over into it (`let_tailgater_pass`)
+and let the tailgater by on the left; the light turns amber 28 s in, about 60 m short of the line,
+and they stop gently and go on at the green. A driver who stays in the left lane must brake early
+and gently for the amber: braking hard with the tailgater close behind, with nothing ahead calling
+for it, is a brake check (`brake_checks`), which fails the drive, and a hard enough one leaves the
+tailgater no room: it rear-ends the car, its own fault. Tailgaters are on only for this challenge and
+free drives; the challenge places its one tailgater and no other traffic.
+
+## Road tests
+
+A road test is one longer drive on a fixed, seeded route that strings everyday situations together,
+marked like an examiner's sheet and ending in **Pass** or **Fail** with the examiner's remarks. The
+wording is generic ("Class 5-style", "G2-style"): the tests are styled on provincial licence road
+tests and are not affiliated with any licensing authority.
+
+| Test | Map | Route |
+|---|---|---|
+| Kitsilano road test (Class 5-style, `road-test-kitsilano`, seed 61042) | Kitsilano, 9:00 | West 10th Avenue east through a two-way stop and the Kitsilano Secondary school zone; left onto Larch Street, across West Broadway at the lights, stop signs at 8th and 7th; left at the lights onto West 4th Avenue and into the left lane; left at the lights onto Stephens Street (stop at 5th); right at the stop sign onto West 7th Avenue and park. About 1.7 km. |
+| Annex road test (G2-style, `road-test-toronto`, seed 62042) | Toronto, 9:00 | Huron Street south through the Huron Street Junior school zone and the all-way stop at Lowther; right at the lights onto Bloor Street West; left at the lights onto Spadina Avenue and into the left lane; left at the lights onto Sussex Avenue, through the all-way stop at Huron, and park. About 1.2 km. |
+
+Tests live in `lab/road-tests.js` (`ROAD_TESTS`), not in `CHALLENGES`, but play exactly like a
+challenge: `challengeById` finds them, links use `?challenge=<id>`, `setupChallenge` builds the
+world, and `challengeScenario` / `installChallenge` call `roadTestScenario` / `installRoadTest`.
+The route is the authored edge chain in the router's lanes (the leftmost before a left turn), so a
+lane change happens where a multi-lane street leads to a left turn. The world turns on parking at
+the destination, amber-light decisions and following distance; `installRoadTest` adds 16 cars and
+40 people from the world's and fleet's own seeded streams and parks two cars either side of a
+7.2 m gap at the kerb of the last street. Nothing else changes how anything drives.
+
+**The examiner.** `RoadTestObserver` (`lab/examiner.js`) rides along in the drive's `DriveScore`
+(`drive.observer`, attached only to road tests, so other reports are unchanged) and adds what it
+notices to the drive's incident stream: a turn without a signal, a turn too fast (over 25 km/h
+right, 32 left) or more than 2 m wide or across the corner, a first stop more than 1 m past the
+line, a lane change (a move of 2.4 m across the street's lanes in the route's frame) without a
+signal or into too small a gap, more than 4 s more than 1.2 m off the lane centre, and 6 s stopped
+with the road clear. `examine(test, report)` marks the sheet:
+
+- **Fail** for every reason `challengeFailures` gives (collisions, red lights, stop signs, failures
+  to yield, off road, not parked, and every audit `failures()` gains later, which goes under
+  **Other** when the examiner does not know it), and for school or playground zone speeding over
+  1 s, driving on the wrong side, speeding over 10 s in all, a reset (the examiner intervening),
+  not moving over, a flagger's STOP and stopping on tracks.
+- **Demerits**, one each, a repeated one marked at most three times: the observer's remarks, harsh
+  braking, brief speeding (one per started 3 s), following closely, closing fast, a wheel off the
+  edge, stopping in a junction, touching the kerb, and a parking finish more than 20 cm out, at an
+  angle or after extra moves. More than `maxDemerits` (10) fails.
+
+Remarks are grouped as Observation, Speed control, Space management, Steering and lane position,
+Signals and right of way, Parking and Other. The examiner's directions (`examinerScript`) come from
+the same route: the start, each stop or signal, each turn onto another street (a bend in the same
+street is not a turn), each lane change, each school or playground zone, and the parking.
+
+**Eligibility and storage.** Any driver can take a test, so AI drivers can be "licensed". Only an
+unchanged, unreplayed manual attempt counts, by the challenge rule (`practiceEligible`). Results
+are stored apart from challenge practice (`jev-fsd-road-tests-v1`, `saveRoadTest`), keyed by test
+id and version: attempts, passes and the best attempt (a pass first, then fewer violations, then
+fewer demerits). The drive report shows the examiner's sheet in place of the challenge debrief; a
+remark linked to a recorded event has the same rewind link as the report's events.
+
+The arena includes road tests only when **Include road tests** is ticked, and shows each
+attempt's examiner verdict beside the audit result. Two saved runs of both tests with Rules and the
+cautious agent take 832,770 bytes, 8.8% of the 9 MB history cap. Checks:
+`scripts/test_road_test.mjs` and `static/tests/road-test-tests.js` through `/tests`.

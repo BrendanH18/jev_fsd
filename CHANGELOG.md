@@ -1471,6 +1471,75 @@
   checker validates requests offline and checks model expectations when a key is available.
 - Live Jev behavior remains unverified; historical benchmark numbers describe the earlier world.
 
+- Road test mode in the Lab: a **Road tests** section in the library beside the challenges, with a
+  Class 5-style test in Kitsilano and a G2-style test in Toronto's Annex (`lab/road-tests.js`). Each
+  is one longer drive on a fixed, seeded route through stop signs, a school zone, signalled left
+  turns, a lane change on an arterial and residential streets, with light traffic and people out on
+  foot, ending in a parallel park between parked cars. The examiner gives directions in the HUD
+  before each manoeuvre and marks the drive on an examiner's sheet (`lab/examiner.js`): any failure
+  of the shared challenge verdict (`challengeFailures`), school zone speeding, driving on the wrong
+  side or a reset fails outright; minor errors (a turn or lane change without a signal, a turn too
+  fast or wide, a stop past the line, a lane change into a small gap, drifting, hesitating, brief
+  speeding, harsh braking, following closely, a parking attempt that needs correcting) are one
+  demerit each, a repeated one at most three times, with more than ten a fail. Remarks are grouped
+  by category, with the report's rewind links. Any driver can take a test; only an unchanged,
+  unreplayed manual attempt is stored, by test id and version, with its best result. The arena can
+  include road tests (opt-in). Existing challenges and the seeded benchmark are unchanged.
+- Tailgaters in free drives (`?tailgaters=0` takes them off): the first hazard behind the car. Now
+  and then, from its own random stream, an ordinary car that has come up behind the driven car in
+  its lane closes up to about half a second and holds it, edging in and out, drifting left to look
+  past and flashing its headlights. It reacts to the car's brake lights late but then brakes for
+  real: it follows a gentle stop, and a hard one can leave it no room, a rear-end on the follower.
+  Sensing reports `tailgater`; tailgated, the car leaves twice its usual gap ahead, stops at lines
+  more gently, and has the new `let_tailgater_pass` (move right where another lane goes its way) and
+  `ease_off_for_tailgater` candidates, while the `brakes_hard_with_tailgater` rejection keeps out
+  braking harder than what is ahead requires. Braking harder than 4 m/s² with a tailgater close
+  behind, well beyond what anything ahead called for, counts as `brake_checks` and fails a Lab drive,
+  reported only once a tailgater has followed the car. The HUD says TAILGATER · LEAVE MORE ROOM AHEAD
+  (or MOVE RIGHT AND LET THEM BY).
+- New Lab challenge, **On your bumper** (seed 56042): William Avenue in Winnipeg's Exchange District,
+  two lanes each way, with a tailgater in your lane, an empty lane on the right and a light ahead
+  that turns amber.
+
+- Black ice in free drives while it snows (`?ice=0` takes it off). Near freezing (snow at any hour;
+  and, on a clock with a date from November to March, freezing fog, or rain or a clear frosty night
+  late at night and early in the morning; free drives keep the sky's late-September sun, so only
+  snow brings it there), thin, nearly invisible
+  patches of ice lie on the road: on bridge decks and overpasses, from a new `bridges` layer beside
+  each pack (`jev/osm/bridges.py`; the street packs are unchanged), and on stretches in the shade of
+  tall buildings, placed from their own random stream. On a patch the tyres have about a tenth of
+  their grip: the shared car model now takes the grip under each axle from a per-position hook
+  (`ROAD.gripAt`), so the driven car, traffic, cyclists and every candidate's forward sim slide
+  alike; streetcars do not. With no ice the hook is null and vehicles step exactly as before. The
+  car eases off to 40 km/h on bridges in icy conditions ("bridges freeze first"), sees a patch late
+  (about 20 m by day, 40 m as a sheen in its headlights at night), slows on the dry road to the speed
+  it can cross it at (about 28 km/h), and crosses steadily. AI drivers see `black_ice` and
+  `ice_caution`, with the new `slow_for_ice` candidate and the `crosses_ice_too_fast` and
+  `brakes_on_ice` rejections. Going onto a patch more than 10 km/h too fast, or braking,
+  accelerating or skidding on one, counts as `ice_overspeed` and fails a Lab drive, reported only
+  once the car has come near black ice. Patches are drawn as a feathered, glossy glaze that catches
+  headlights and a low sun, and the HUD warns of them and of icy bridges.
+- New Lab challenge, **Bridges freeze first** (seed 55042): northbound over Saskatoon's Traffic
+  Bridge at dawn after a frosty night, with black ice on the deck and a queue for the roundabout
+  just past it.
+
+- Snowbanks in free drives while it snows (`?snowbanks=0` takes them off). From their own random
+  stream, banks line every kerb after a snowfall, white and lumpy with grit on the street side,
+  piled higher at the corners where the plows turn, with a cut at each corner's crosswalk. On
+  two-way residential blocks with parking at both kerbs, the banks push the parked cars out and
+  leave room for one moving car at a time: the driven car and traffic move over toward the middle
+  and take turns, whoever is already in the narrow stretch (or too close to stop) going first, then
+  whoever got to their end first, and the other waits at its end. A high corner pile hides a person
+  waiting to cross and a car or cyclist coming out of the side street, so the car creeps up to the
+  corner and, giving way, creeps up to look as past a building. Sensing reports `snowbank`
+  (`narrowing` and `corner`), with the new `wait_for_oncoming_narrowing` candidate and the
+  `enters_narrowing_out_of_turn` rejection. Going in while a car the driver could see coming the
+  other way had the way counts as `snowbank_conflicts` and fails a Lab drive, reported only once
+  the car has come up to a narrowing. The HUD says whose turn it is, and when a bank hides a corner.
+- New Lab challenge, **One car at a time** (seed 54042): Avenue Laval in Montréal's Plateau in
+  falling snow, a car already coming through the narrow stretch, and someone hidden behind the pile
+  at the corner beyond.
+
 ## 0.2.0
 
 A large realism and graphics update. The Rules benchmark (seed 1) still passes 12 of 12 drives in

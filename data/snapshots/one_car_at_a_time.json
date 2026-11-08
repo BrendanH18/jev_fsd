@@ -1,0 +1,296 @@
+{
+  "name": "one_car_at_a_time",
+  "state": {
+    "driving_style": "cautious city driver: obeys limits, stops fully at stop signs, keeps a safe gap, smooth steering, takes turns slowly",
+    "units": "meters, m/s, seconds. right/ahead are relative to the car; negative ahead is behind.",
+    "car": {
+      "speed": 4,
+      "limit": 3.7,
+      "speed_vs_limit": "at",
+      "target_speed": 2.3,
+      "target_reason": "snow",
+      "speed_vs_target": "above target"
+    },
+    "visibility": {
+      "range_m": 40,
+      "clear_path_m": 40,
+      "safe_speed_mps": 6.6,
+      "building_occlusion": true,
+      "note": "Traffic and signal phases are observed only within range and line of sight. Unseen traffic may exist."
+    },
+    "roadside": [
+      {
+        "id": "challenge_parked_1",
+        "kind": "parked car",
+        "right": 2.1,
+        "ahead": 20.2,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_18",
+        "kind": "parked car",
+        "right": -5.1,
+        "ahead": 22.6,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_2",
+        "kind": "parked car",
+        "right": 2.1,
+        "ahead": 27.3,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_17",
+        "kind": "parked car",
+        "right": -5.1,
+        "ahead": 29,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_3",
+        "kind": "parked car",
+        "right": 2.2,
+        "ahead": 34.3,
+        "signal": null
+      },
+      {
+        "id": "challenge_parked_16",
+        "kind": "parked car",
+        "right": -5,
+        "ahead": 35.7,
+        "signal": null
+      }
+    ],
+    "nav": {
+      "next_turn": "left",
+      "turn_in_m": 180.5,
+      "remaining_m": 204.8,
+      "destination": {
+        "right": -25,
+        "ahead": 180.9
+      },
+      "on_route": true,
+      "turn_street": "Rue Marie-Anne Est"
+    },
+    "road": {
+      "name": "Avenue Laval",
+      "on_road": true,
+      "lane_offset_m": 0,
+      "lane_position": "centered",
+      "heading_error_deg": 0,
+      "conditions": "snow, packed snow on the road"
+    },
+    "snowbank": {
+      "narrowing": {
+        "one_car_at_a_time": true,
+        "length_m": 60,
+        "starts_in_m": 13.6,
+        "turn": "oncoming",
+        "oncoming": {
+          "id": "challenge_oncoming",
+          "in_it": true
+        },
+        "wait": true,
+        "wait_in_m": 11.6,
+        "slow_to": 3.7
+      }
+    },
+    "traffic": [
+      {
+        "id": "challenge_oncoming",
+        "right": -2.5,
+        "ahead": 43.4,
+        "speed": 3.4,
+        "heading": "oncoming",
+        "moving": true
+      }
+    ],
+    "candidates": [
+      {
+        "id": "wait_for_oncoming_narrowing",
+        "steer": "hold lane",
+        "speed": "stop short of the stretch narrowed by snowbanks and let the oncoming car through",
+        "end_speed": 2.4,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 1.1,
+        "max_lateral_accel": 0.1,
+        "progress_m": 9.4,
+        "lane": "centered",
+        "outcome": "clear, waits 2.2 m ahead, short of the stretch narrowed by snowbanks, for the oncoming car's turn"
+      },
+      {
+        "id": "keep_lane_limit",
+        "steer": "hold lane",
+        "speed": "limit 3.7",
+        "end_speed": 3.7,
+        "vs_target": "above target",
+        "max_accel": 0,
+        "max_decel": 0.4,
+        "max_lateral_accel": 0.1,
+        "progress_m": 11.3,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_target",
+        "steer": "hold lane",
+        "speed": "slow to 2.3",
+        "end_speed": 2.3,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 1.9,
+        "max_lateral_accel": 0,
+        "progress_m": 8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_cautious",
+        "steer": "hold lane",
+        "speed": "slow to 1.7",
+        "end_speed": 1.7,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 2.3,
+        "max_lateral_accel": 0,
+        "progress_m": 6.6,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_slow",
+        "steer": "hold lane",
+        "speed": "slow to 1.0",
+        "end_speed": 1,
+        "vs_target": "below target",
+        "max_accel": 0,
+        "max_decel": 2.5,
+        "max_lateral_accel": 0,
+        "progress_m": 5.2,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "keep_lane_stop",
+        "steer": "hold lane",
+        "speed": "stop",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 2.5,
+        "max_lateral_accel": 0,
+        "progress_m": 3.8,
+        "lane": "centered",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_0.5_target",
+        "steer": "shift 0.5 m left",
+        "speed": "slow to 2.3",
+        "end_speed": 2.3,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 1.9,
+        "max_lateral_accel": 1.4,
+        "progress_m": 8,
+        "lane": "slightly left",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_0.5_target",
+        "steer": "shift 0.5 m right",
+        "speed": "slow to 2.3",
+        "end_speed": 2.3,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 1.9,
+        "max_lateral_accel": 1.4,
+        "progress_m": 8,
+        "lane": "slightly right",
+        "outcome": "clear"
+      },
+      {
+        "id": "left_1_target",
+        "steer": "shift 1 m left",
+        "speed": "slow to 2.3",
+        "end_speed": 2.3,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 1.8,
+        "max_lateral_accel": 1.5,
+        "progress_m": 8,
+        "lane": "far left",
+        "outcome": "clear"
+      },
+      {
+        "id": "right_1_target",
+        "steer": "shift 1 m right",
+        "speed": "slow to 2.3",
+        "end_speed": 2.3,
+        "vs_target": "at target",
+        "max_accel": 0,
+        "max_decel": 1.8,
+        "max_lateral_accel": 1.5,
+        "progress_m": 8,
+        "lane": "far right",
+        "outcome": "clear"
+      },
+      {
+        "id": "hard_brake",
+        "steer": "hold lane",
+        "speed": "brake hard",
+        "end_speed": 0,
+        "vs_target": "stopped",
+        "max_accel": 0,
+        "max_decel": 2,
+        "max_lateral_accel": 0,
+        "progress_m": 4.8,
+        "lane": "centered",
+        "outcome": "clear"
+      }
+    ]
+  },
+  "questions": {
+    "motion": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. 14 m ahead is a 60 m stretch of Avenue Laval where snowbanks have pushed the parked cars out from both kerbs, leaving room for only one moving car at a time. Drivers take turns: whoever is already in the stretch, or too close to stop short of it, goes first, then whoever got to their end of it first. It is the turn of the car coming the other way, which is already in the stretch: stop short of the stretch and wait there until it is through (`wait_for_oncoming_narrowing`, stopping 12 m ahead). Never enter while it is their turn. Conditions: snow, packed snow on the road. Grip is reduced, so `car.target_speed` sits below the limit and braking needs more room. Objects beyond 40 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes. Decide whether the car should keep moving or hold still right now.",
+      "criteria": {
+        "drive": "Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.",
+        "stop": "Hold completely still right now. Correct only when the car is already at the line (`intersection.distance` is \"at\") with a red or unseen signal, a stop not yet completed, or a roundabout yield line with `ring_traffic` true, when a pedestrian is crossing right in front (`pedestrian.distance` is \"at\"), when it is an oncoming car's turn through the stretch narrowed by snowbanks ahead (`snowbank.narrowing.wait` true) and the car has reached the point where it waits for it (`snowbank.narrowing.wait_in_m` under 2), until that car is through, when the path directly ahead is blocked, or when the car has reached the destination."
+      }
+    },
+    "vector": {
+      "type": "choice",
+      "instructions": "You are the driving policy of a car in city traffic. Obey traffic controls and drive as described in `driving_style`. 14 m ahead is a 60 m stretch of Avenue Laval where snowbanks have pushed the parked cars out from both kerbs, leaving room for only one moving car at a time. Drivers take turns: whoever is already in the stretch, or too close to stop short of it, goes first, then whoever got to their end of it first. It is the turn of the car coming the other way, which is already in the stretch: stop short of the stretch and wait there until it is through (`wait_for_oncoming_narrowing`, stopping 12 m ahead). Never enter while it is their turn. Conditions: snow, packed snow on the road. Grip is reduced, so `car.target_speed` sits below the limit and braking needs more room. Objects beyond 40 m or behind buildings are unseen; an empty traffic list does not prove the road is clear. Parked cars may conceal people or open doors. A visible open door, parking maneuver or pull-out requires extra clearance or slowing; assess the listed candidate outcomes. Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.",
+      "criteria": {
+        "wait_for_oncoming_narrowing": "hold lane, stop short of the stretch narrowed by snowbanks and let the oncoming car through, +9.4 m, clear, waits 2.2 m ahead, short of the stretch narrowed by snowbanks, for the oncoming car's turn",
+        "keep_lane_limit": "hold lane, limit 3.7, +11.3 m, clear",
+        "keep_lane_target": "hold lane, slow to 2.3, +8 m, clear",
+        "keep_lane_cautious": "hold lane, slow to 1.7, +6.6 m, clear",
+        "keep_lane_slow": "hold lane, slow to 1.0, +5.2 m, clear",
+        "keep_lane_stop": "hold lane, stop, +3.8 m, clear",
+        "left_0.5_target": "shift 0.5 m left, slow to 2.3, +8 m, clear",
+        "right_0.5_target": "shift 0.5 m right, slow to 2.3, +8 m, clear",
+        "left_1_target": "shift 1 m left, slow to 2.3, +8 m, clear",
+        "right_1_target": "shift 1 m right, slow to 2.3, +8 m, clear",
+        "hard_brake": "hold lane, brake hard, +4.8 m, clear"
+      }
+    }
+  },
+  "local": {},
+  "expect": {
+    "motion": "drive",
+    "vector_in": [
+      "wait_for_oncoming_narrowing",
+      "keep_lane_target",
+      "keep_lane_cautious",
+      "keep_lane_slow",
+      "keep_lane_stop",
+      "left_0.5_target",
+      "right_0.5_target",
+      "hard_brake"
+    ]
+  }
+}

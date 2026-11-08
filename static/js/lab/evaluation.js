@@ -10,6 +10,7 @@ import { getVehicleModel } from "../sim/vehicle-models.js";
 import { challengeScenario, installChallenge } from "./challenges.js";
 import { yieldNow } from "../bench/runner.js";
 import { EvaluationTrace } from "./trace.js";
+import { RoadTestObserver } from "./examiner.js";
 import { mapClock } from "../sim/speed-zones.js";
 import { parseHour } from "../sim/world-clock.js";
 import { dayOfYear } from "../sim/sun-glare.js";
@@ -21,7 +22,7 @@ const sunClock = (challenge) => ({ ...(challenge.date ? { day: dayOfYear(challen
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
 export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
-  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed, redTurnSigns: !!challenge.redTurnSigns, amberLights: !!challenge.amberLights, followingDistance: !!challenge.followingDistance, redRunners: !!challenge.redRunners, sunGlare: !!challenge.sunGlare, driveways: !!challenge.driveways, potholes: !!challenge.potholes, balls: !!challenge.balls, geese: !!challenge.geese });
+  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed, redTurnSigns: !!challenge.redTurnSigns, amberLights: !!challenge.amberLights, followingDistance: !!challenge.followingDistance, redRunners: !!challenge.redRunners, sunGlare: !!challenge.sunGlare, driveways: !!challenge.driveways, potholes: !!challenge.potholes, balls: !!challenge.balls, geese: !!challenge.geese, tailgaters: !!challenge.tailgaters, ice: !!challenge.ice, snowbanks: !!challenge.snowbanks });
   world.visibility.setNight(challenge.time === "night" || challenge.nightFlash ? 1 : 0);
   // (school and playground zones go by the challenge's time of day)
   // (and, for low sun glare, its date and time zone: sim/sun-glare.js)
@@ -35,7 +36,7 @@ export function setupChallenge(map, challenge, { brain = "rules", onDecision = (
   return { world, fleet, autopilot, scenario };
 }
 
-export async function evaluateChallenge(map, challenge, { brain = "rules", mode = "lockstep", shouldStop = () => false, limit = 180 } = {}) {
+export async function evaluateChallenge(map, challenge, { brain = "rules", mode = "lockstep", shouldStop = () => false, limit = challenge.limit_s || 180 } = {}) {
   if (!["lockstep", "realtime"].includes(mode) || !Number.isFinite(limit) || limit <= 0) throw new Error("Choose a valid evaluation clock and time limit.");
   let arrived = false, arrival = null;
   const latencies = [], trace = new EvaluationTrace();
@@ -50,6 +51,7 @@ export async function evaluateChallenge(map, challenge, { brain = "rules", mode 
     if (decision.meta?.source === "rules_fallback") trace.event("fallback", `Rules fallback executed: ${decision.meta.error || decision.meta.fallback || "invalid agent response"}`, ctx.world.t);
   } });
   const { world, fleet, autopilot } = ctx, score = new DriveScore(world, { title: challenge.title, map: challenge.map, driver: brain, route: world.route });
+  if (challenge.roadTest) score.observer = new RoadTestObserver();
   const metrics = new DriveMetrics(world.route.length), start = performance.now();
   metrics.latencies = latencies;
   let hazardRecorded = false;

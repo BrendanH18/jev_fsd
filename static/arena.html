@@ -14,6 +14,7 @@
     <section class="arena-controls panel" aria-label="Evaluation controls">
       <fieldset><legend>Agents to compare</legend><div id="agents"></div><p id="llm-status" class="llm-status"></p></fieldset>
       <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
+      <label><input type="checkbox" id="arena-road-tests"> Include road tests (longer drives)</label>
       <button id="arena-run" class="toggle on">Run evaluation</button><button id="arena-export" class="toggle" disabled>Export results</button>
       <p id="arena-status" role="status">Loading the arena…</p>
       <details><summary>Add a trusted local agent</summary><label>Module path <input id="agent-module" placeholder="./js/agents/my-agent.js"></label><button id="arena-load" class="toggle">Load agent</button><p>Export a default definition with id, label and create(). JavaScript runs in this browser. See <a href="https://github.com/BrendanH18/jev_fsd/blob/main/docs/agents.md">the adapter guide</a>.</p></details>
