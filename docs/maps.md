@@ -214,7 +214,7 @@ overpasses, movable bridges), going its way (within 25°, so a street passing un
 and between its ends: the `edge`, `from` and `to` along it, the bridge's `name` (`bridge:name`, else
 `name`) and `kind` (the `bridge` value). Stretches closer than 6 m are one; those under 8 m and
 roundabout rings are left out. All twelve presets have layers, most of them empty: Saskatoon has the
-Traffic Bridge and the Broadway Bridge over the South Saskatchewan River (6 spans), Victoria the
+Traffic Bridge, the Broadway Bridge and the Chief Mistawasis Bridge over the South Saskatchewan River (6 spans), Victoria the
 Johnson Street Bridge and its approaches (10), Kitsilano a stretch of West Broadway mapped as a bridge (6).
 The other bboxes have only footbridges, rail bridges or motorways that are not pack streets. Black ice
 forms there first (sim/black-ice.js).

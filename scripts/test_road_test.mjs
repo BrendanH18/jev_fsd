@@ -25,7 +25,7 @@ const load = id => {
   for (const [key, file] of [["transit", "transit.v1.json"], ["zones", "zones.v1.json"], ["rail", "rail.v1.json"]]) if (fs.existsSync(at(file))) pack[key] = JSON.parse(fs.readFileSync(at(file)));
   const crossings = ["crossings.v2.json", "crossings.v1.json"].map(at).find(u => fs.existsSync(u));
   if (crossings) pack.crossings = JSON.parse(fs.readFileSync(crossings));
-  for (const name of ["calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) if (fs.existsSync(at(`${name}.v1.json`))) pack[name] = JSON.parse(fs.readFileSync(at(`${name}.v1.json`)));
+  for (const name of ["calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks", "bridges"]) if (fs.existsSync(at(`${name}.v1.json`))) pack[name] = JSON.parse(fs.readFileSync(at(`${name}.v1.json`)));
   return new MapData(pack);
 };
 let passed = 0;

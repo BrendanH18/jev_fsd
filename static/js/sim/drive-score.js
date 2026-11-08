@@ -3,6 +3,9 @@
 import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
 import { egoPlow } from "./snow-plow.js";
 import { followingPolicy } from "./following.js";
+
+// What the coach says while a tailgater is close behind (sim/tailgaters.js).
+const TAILGATER_COACH = "Someone’s on your bumper. Leave more room ahead, brake early and gently, and let them by.";
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
 export const SPEED_GRACE_MPS = 5 / 3.6;
@@ -290,7 +293,7 @@ export class DriveScore {
       : !this.followingEnabled && this.lastGap / Math.max(speed, 0.1) < 1.2 ? "Leave more space to the vehicle ahead."
       : "Look ahead. Keep your inputs smooth.";
     // (a tailgater close behind, with that option on: sim/tailgaters.js `behind`)
-    if (world.tailgaters?.behind && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = "Someone’s on your bumper. Leave more room ahead, brake early and gently, and let them by.";
+    if (world.tailgaters?.behind && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = TAILGATER_COACH;
 
     this.sample += dt;
     if (this.sample + 1e-9 < 0.1) return;
@@ -362,6 +365,7 @@ export class DriveScore {
     if (ttc < 1.5 && !(recovering && dangerWith === leader?.vehicle)) this.danger += h;
     if (!offRoad && !wrongWay && !speeding) {
       if (ttc < 1.5) this.coach = "Brake gently now. The gap is closing.";
+      else if (world.tailgaters?.behind) this.coach = TAILGATER_COACH;
       else if (this.followingMessage) this.coach = this.followingMessage;
       else if (!this.followingEnabled && gap / Math.max(speed, 0.1) < 1.2) this.coach = "Leave more space to the vehicle ahead.";
     }
