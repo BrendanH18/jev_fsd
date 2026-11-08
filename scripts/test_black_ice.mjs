@@ -366,6 +366,12 @@ await test("models and the HUD are told: the state, the situation, the outcome l
   assert.match(situationClauses(so).join(" "), /Do not brake/);
   assert.equal(ICE.iceNotice(on.world, so).text.startsWith("ON BLACK ICE"), true);
   const far = deck({ s: 2, v: 11, from: null }), sf = buildSnapshot(far.world);
+  // (driving by hand, with no snapshot, the HUD says the same, and the car's route position is untouched)
+  for (const [world, sn] of [[w, snap], [on.world, so], [far.world, sf]]) {
+    const hint = world.route.hint;
+    assert.equal(ICE.iceNotice(world, null)?.text, ICE.iceNotice(world, sn)?.text);
+    assert.equal(world.route.hint, hint);
+  }
   assert.match(ICE.iceNotice(far.world, sf).text, /BRIDGES FREEZE FIRST/);
 });
 

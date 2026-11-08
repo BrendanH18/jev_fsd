@@ -538,7 +538,14 @@ export function auditIce(world) {
 // What the HUD tells the driver about black ice and icy bridges (from the car's sensing): { key, text,
 // slow }, or null.
 export function iceNotice(world, snap) {
-  if (!world.ice?.enabled || !snap) return null;
+  if (!world.ice?.enabled) return null;
+  // (driving by hand there is no snapshot: what sensing would see, along the route, with its hint so
+  // the car's own route position stays as it was)
+  if (!snap && world.route) {
+    const p = world.route.project(world.ego.x, world.ego.y, world.route.hint ?? 0);
+    if (p) snap = iceSensing(world, p, p.s + world.ego.spec.length - world.ego.spec.rearOverhang);
+  }
+  if (!snap) return null;
   const a = snap.black_ice;
   if (a) {
     const kmh = Math.round(a.speed_mps * 3.6);
