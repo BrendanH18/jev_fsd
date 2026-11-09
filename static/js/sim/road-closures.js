@@ -4,9 +4,10 @@
 // barricades across the street at both ends, just past the crosswalks, with flashing amber lamps, ROAD
 // CLOSED and DETOUR signs (render/road-closures.js). Never the block the car is on, nor the one its drive
 // started on or ends on, nor one it is already close to (the closure goes up beyond its sight), nor one
-// whose closure would leave the car no way to its destination, nor one a bus, streetcar, school bus,
-// plow or garbage truck is due along; and never inside a scenario that has not asked for one (the option
-// is off in the seeded benchmark and every other challenge).
+// whose closure would leave the car no way to its destination from the street before it (it may see the
+// barricade only from there), nor one a bus, streetcar, school bus, plow or garbage truck is due along; and
+// never inside a scenario that has not asked for one (the option is off in the seeded benchmark and every
+// other challenge).
 //
 // The car learns of a closure only when it sees a barricade (sim/visibility.js: weather, darkness and
 // buildings), and then re-plans: a new route request that avoids the closed edges (`avoid`, on the local
@@ -338,11 +339,13 @@ export class RoadClosures {
     const blocks = this.blocksAhead(world);
     if (!blocks.length || this.random() >= CLOSURE_CHANCE) return;
     const edge = blocks[Math.floor(this.random() * blocks.length)];
-    // (only where the car still has a way to its destination round it)
-    const avoid = [edge, reverseOf(world.map, edge)].filter(Boolean);
-    const way = browserRoute(world.map, { x: ego.x, y: ego.y, heading: ego.psi }, { x: world.destination[0], y: world.destination[1] },
+    // (only where the car still has a way to its destination round it from the start of the street before
+    // the block: it may not see the barricade until it is on that street, and must turn off at its end)
+    const avoid = [edge, reverseOf(world.map, edge)].filter(Boolean), before = route.edges[route.edges.indexOf(edge) - 1];
+    const lane = world.map.lane(before, 0), at = lane ? pointAt(lane.pts, lane.cum, Math.min(1, lane.length / 2)) : null;
+    const way = at && browserRoute(world.map, { x: at[0], y: at[1], heading: headingAt(lane.pts, lane.cum, 0) }, { x: world.destination[0], y: world.destination[1] },
       { avoid, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
-    if (!way) return;
+    if (!way || way.edges[0] !== before) return;
     this.close(world, fleet, edge);
   }
 

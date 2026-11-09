@@ -2266,7 +2266,7 @@ and 90 s after the last came down, the blocks of the route whose near junction l
 roundabout ring, the drive's first edge or the destination's (either way), an edge on a transit run,
 or a contraflow street. With one, a draw (chance 0.35, the feature's own stream, seeded
 `seed * 2654435761 + 60042`) closes one of them, but only if the browser router still finds a way to
-the destination avoiding it, no board is in the car's sight, and no driver who keeps to a way of its
+the destination avoiding it from the start of the street before it (turning off at that street's end), no board is in the car's sight, and no driver who keeps to a way of its
 own (bus, streetcar, school bus, plow, garbage truck, train) has it on its way. It comes down once it
 has stood 60 s and the car is 200 m from it with neither direction on its route.
 

@@ -345,6 +345,11 @@ await test("free drives: now and then a block on the route ahead closes, from th
         assert.equal(c.boards.some(b => world.visibility.sees(world.ego, b)), false, "out of sight");
         assert.equal(c.edges.includes(startEdge) || c.edges.includes(goalEdge), false);
         assert.equal(world.t >= RC.CLOSURE_FIRST_S, true);
+        // (a way round it from the start of the street before it, where the car may first see it: a soak
+        // once closed the only way out of a street, and the car, seeing it from there, had no detour)
+        const i = world.route.edges.findIndex(id => c.edges.includes(id)), before = HFX.lane(world.route.edges[i - 1], 0);
+        const way = browserRoute(HFX, pose(before, 0.5), { x: world.destination[0], y: world.destination[1] }, { avoid: c.edges });
+        assert.equal(way?.edges[0], before.edge);
       }
     }, () => !autopilot.enabled);
     if (first) made++;
@@ -352,8 +357,30 @@ await test("free drives: now and then a block on the route ahead closes, from th
     assert.equal(world.violations.closure_entries || 0, 0, `seed ${seed}`);
     assert.equal(world.violations.collisions_at_fault, 0, `seed ${seed}`);
   }
-  assert.equal(made >= 2, true, `${made}`);
+  assert.equal(made >= 1, true, `${made}`);
   console.log(`  (${made} of 4 drives had a closure; the car came up to ${seen})`);
+});
+
+await test("free drives never close a block that is the only way out of the street before it", () => {
+  // (Queen Street, e83, leads only onto e81: closed, a car that first sees the barricade from e83 has no
+  // way round, as a Halifax soak found)
+  const only = HFX.successors("e83").filter(id => Math.abs(HFX.turnAngle("e83", id)) < 130 * Math.PI / 180);
+  assert.deepEqual(only, ["e81"]);
+  setWeather("dry");
+  const world = new World(HFX, { seed: 2, parked: 0, pedestrians: 0, roadClosures: true });
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 2 });
+  const lane = HFX.lane("e460", 0), goal = pointAt(HFX.lane("e336", 0).pts, HFX.lane("e336", 0).cum, 30);
+  world.placeOnLane(lane, 5);
+  world.route = new Route(browserRoute(HFX, pose(lane, 5), { x: goal[0], y: goal[1] }), HFX, world.ego.spec);
+  world.destination = goal;
+  assert.equal(world.route.edges.join(",").includes("e83,e81"), true);
+  const rc = world.roadClosures;
+  rc.random = () => 0; rc.next = 0;
+  for (const edge of ["e81", "e492"]) {
+    rc.blocksAhead = () => [edge]; rc.checkAt = 0;
+    rc.step(world, fleet);
+    assert.equal(rc.list.some(c => c.edges.includes(edge)), edge !== "e81", edge);
+  }
 });
 
 await test("\"Road closed\": a stable scenario on Spring Garden Road, and Rules and the cautious agent take the detour", async () => {
