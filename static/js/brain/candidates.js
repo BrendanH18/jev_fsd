@@ -260,6 +260,14 @@ export function sampleCandidates(snap, world) {
       out.push({ id: "wait_for_oncoming_narrowing", laneUntil, law: inLane({ kind: "lane", vTarget: Math.min(approach, nb.limit_mps ?? approach), stopAtRoute: stopAt(nb.stop_s_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "stop short of the stretch narrowed by snowbanks and let the oncoming car through" });
     }
+    // A car ahead parallel parking (sim/parkers.js): stop well back, at its hold line, short of the room it
+    // reverses into, and wait until it is in (offered once the hold line is nearer than the queue behind it:
+    // until then the car simply follows it).
+    const pa = snap.parking_ahead, parkerAt = pa ? pa.stop_s_route - FRONT - 0.5 : Infinity;
+    if (pa?.wait && pa.bumper_to_stop_m > 0.3 && parkerAt <= queue + 0.5) {
+      out.push({ id: "wait_for_parker", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: parkerAt }),
+        steer: "hold lane", speed: "stop well back and wait while the car ahead parallel parks" });
+    }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
     if (hook && hook.bumper_to_yield_m > 0.3) {
@@ -549,13 +557,16 @@ export function simulateAll(candidates, snap, world) {
   // a stretch narrowed by snowbanks while it is an oncoming car's turn (sim/snowbanks.js): where the car waits
   // (a metre's overshoot, but never into the stretch itself)
   const narrowStop = snap.snowbank?.narrowing?.wait ? Math.min(snap.snowbank.narrowing.stop_s_route + 1, snap.snowbank.narrowing.entry_s_route ?? Infinity) : null;
+  // a car ahead parallel parking (sim/parkers.js): its hold line (a metre's overshoot, as a short stop
+  // makes), never into the room it reverses into, nor round it (no lane change while behind it)
+  const parkerHold = snap.parking_ahead?.wait ? snap.parking_ahead.stop_s_route + 1 : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
     let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, ballFast = false, intoGeese = false, iceCall = null, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
-    let intoNarrowing = false, splashes = false;
+    let intoNarrowing = false, splashes = false, intoParker = false;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -610,6 +621,8 @@ export function simulateAll(candidates, snap, world) {
         if (geeseStop !== null && s + FRONT > geeseStop + 1) intoGeese = true;
         // (and a metre past where it waits its turn between snowbanks)
         if (narrowStop !== null && s + FRONT > narrowStop) intoNarrowing = true;
+        // (and a metre past a parking car's hold line)
+        if (parkerHold !== null && s + FRONT > parkerHold) intoParker = true;
         // (1.5 m past it, as a short stop overshoots)
         if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         // (1.5 m past where it stops, as a short stop overshoots: into the 2 m it leaves behind the bus)
@@ -737,6 +750,8 @@ export function simulateAll(candidates, snap, world) {
     else if (intoGeese && c.law.kind !== "hard_brake") reject = "drives_into_geese";
     else if (iceCall && c.law.kind !== "hard_brake") reject = iceCall === "fast" ? "crosses_ice_too_fast" : "brakes_on_ice";
     else if (intoNarrowing && c.law.kind !== "hard_brake") reject = "enters_narrowing_out_of_turn";
+    // (nor going round it: no lane change while behind it, sim/parkers.js)
+    else if ((intoParker || (parkerHold !== null && c.change)) && c.law.kind !== "hard_brake") reject = "blocks_parking_car";
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";

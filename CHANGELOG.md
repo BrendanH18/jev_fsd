@@ -23,6 +23,24 @@
   the rain, past people waiting at a bus stop beside one puddle and someone walking beside a deeper
   one with no room to miss it.
 
+- Traffic parallel parks ahead in free drives (`?parkers=0` takes it off). Now and then, from its
+  own random stream, the ordinary car right ahead of the driven car in its lane, on a street with a
+  parking lane and a free gap long enough, signals right, slows, stops alongside the car parked in
+  front of the gap, pauses, reverses in and straightens up. It uses the driven car's own parking
+  geometry and manoeuvre (`sim/parallel-park.js`) on the shared car model, and once in it is an
+  ordinary parked car, its slot taken. Everyone behind it (the driven car, traffic and cyclists)
+  stops at its hold line, the length of its reverse and a margin behind where its rear bumper
+  stops, doesn't creep into that room and doesn't go round it until it is in. A car that finds the
+  room blocked waits, then gives up and drives on; reversing, it stops for anyone moving into the
+  room or standing right behind it, and backing into a stationary car is its fault. Sensing reports
+  `parking_ahead`, with the new `wait_for_parker` candidate and the `blocks_parking_car` rejection.
+  Standing inside the room while it waits or reverses, or going round it after being behind it,
+  counts as `parking_conflicts` and fails a Lab drive (and a road test), reported only once a car
+  has signalled to park ahead of the car. The parker shows its right indicator and its reverse
+  lamps; the HUD says CAR PARKING AHEAD · WAIT.
+- New Lab challenge, **Room to park** (seed 58042): Larch Street in Kitsilano, a residential street
+  lined with parked cars, where the car ahead of you stops beside the one gap and reverses into it.
+
 - Spring potholes in free drives (`?potholes=0` takes them off). From their own random stream,
   potholes are placed in the lanes, many more on busy main streets than on quiet ones, each with a
   position across its lane, a size and a depth. The driven car and traffic ease round one inside

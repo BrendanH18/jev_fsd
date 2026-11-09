@@ -294,3 +294,16 @@ A puddle with nobody near is just water. Each person you splash counts as `pedes
 legality points, a replay marker and a coaching tip, reported only once you have come up to a
 puddle with someone beside it; splashing someone is careless driving. Use `?puddles=0` to take them
 off.
+
+### A car parking ahead
+
+In free drives (and the **Room to park** lesson) the car right ahead of you now and then signals
+right, slows and stops alongside a parked car with a gap behind it: it is about to parallel park.
+Its right indicator flashes, and its white reverse lamps come on as it backs in. The HUD says CAR
+PARKING AHEAD · WAIT (· REVERSING IN · WAIT once it backs up), and the coach tells you to stay well
+back. Stop at least the length of its reverse and a margin behind it, about 9 m for a car, leave it
+that room, and wait until it is in; don't creep up behind it and don't go round it while it signals
+or reverses. If you take its room it waits a while, then gives up and drives on. Standing in the
+room it needs, or going round it, counts as `parking_conflicts`: 20 legality points, a replay marker
+and a coaching tip, reported only once a car has signalled to park ahead of you. Use `?parkers=0` to
+turn it off.

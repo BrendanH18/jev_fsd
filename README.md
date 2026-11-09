@@ -72,7 +72,7 @@ on at dusk.
 
 ### 🏁 Take on the challenges
 
-Fifty-six hand-built scenarios test the situations real drivers get wrong:
+Fifty-seven hand-built scenarios test the situations real drivers get wrong:
 
 | Challenge | Where | What it tests |
 |---|---|---|
@@ -133,6 +133,7 @@ Fifty-six hand-built scenarios test the situations real drivers get wrong:
 | **Bridges freeze first** | Saskatoon, dawn | Black ice on the Traffic Bridge deck, nearly invisible on a dry road: ease off before the bridge and cross the ice steadily, with no braking or sharp steering on it |
 | **One car at a time** | Montréal, snow | Snowbanks narrow Avenue Laval to one moving car: wait while an oncoming car comes through, then creep up to a corner where a high pile hides someone about to cross |
 | **Don't splash** | Vancouver, rain | Puddles in the gutter of Main Street, with people waiting at a bus stop and walking beside them: ease left in your lane, or slow right down, so you don't drench anyone |
+| **Room to park** | Vancouver, afternoon | The car ahead on Larch Street signals right and stops beside a gap in the parked cars: stop well back, leave it room to reverse in, and wait until it is in |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

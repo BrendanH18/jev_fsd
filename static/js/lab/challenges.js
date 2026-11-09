@@ -16,6 +16,7 @@ import { tailgaterScenario, installTailgater, stepTailgater } from "./tailgater-
 import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
 import { snowbankScenario, placeSnowbank, stepSnowbank } from "./snowbank-challenge.js";
 import { puddleScenario, installPuddles, stepPuddles } from "./puddle-challenge.js";
+import { parkerScenario, placeParker, stepParkerChallenge } from "./parker-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -157,6 +158,8 @@ export const CHALLENGES = [
     description: "Snow is falling on Avenue Laval in the Plateau, and the banks the plows left have pushed the parked cars out from both kerbs: there is room for only one car at a time. A car coming the other way is already in the narrow stretch, and at the corner beyond, the snow is piled higher than a person.", lesson: "Where snowbanks leave room for one car, take turns: whoever is already in the narrow stretch, or got there first, goes first, so wait at your end. Keep to the middle through it, and creep up to corners where the banks are high: someone waiting to cross can be hidden right behind them." },
   { id: "dont-splash", title: "Don't splash", map: "mount_pleasant", weather: "rain", time: "afternoon", seed: 59042, icon: "☂", difficulty: "Courtesy", hazard: "puddles", puddles: true, street: "Main Street",
     description: "Rain on Main Street in Mount Pleasant. You're in the kerb lane, where the gutter has flooded: people wait at the bus stop right beside one puddle, someone is walking up the sidewalk beside a deeper one, and further on a puddle has nobody near it at all.", lesson: "In the rain, watch for puddles by the kerb and for people beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down until you're through. Splashing a pedestrian is careless driving. A puddle with nobody near is just water." },
+  { id: "room-to-park", title: "Room to park", map: "kitsilano", weather: "dry", time: "afternoon", seed: 58042, icon: "Ⓟ", difficulty: "Patience", hazard: "parker", parkers: true, street: "Larch Street",
+    description: "An afternoon on Larch Street in Kitsilano, a residential street with cars parked along both kerbs. The car ahead of you signals right, slows and pulls up alongside a parked car: there is a gap behind it, and it is about to reverse in.", lesson: "A car ahead signalling and stopping beside a gap is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses." },
 ];
 // (road tests, lab/road-tests.js, open and play the same way)
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
@@ -1066,6 +1069,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "black-ice") return iceScenario(map, challenge);
   if (challenge.hazard === "snowbanks") return snowbankScenario(map, challenge);
   if (challenge.hazard === "puddles") return puddleScenario(map, challenge);
+  if (challenge.hazard === "parker") return parkerScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1355,6 +1359,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.ball) Object.assign(world.challenge, placeBall(world, scenario.ball, challenge.seed));
   if (scenario.geese) Object.assign(world.challenge, placeGeese(world, scenario.geese));
   if (scenario.snowbank) Object.assign(world.challenge, placeSnowbank(world, fleet, scenario.snowbank, challenge.seed));
+  if (scenario.parker) Object.assign(world.challenge, placeParker(world, fleet, scenario.parker, challenge.seed));
   if (scenario.roundabout) Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
   // (the signal's lights are out for the whole drive)
   if (scenario.outage) { world.outages.cut(scenario.outage.signal); world.challenge.signalId = scenario.outage.signal; }
@@ -1384,6 +1389,7 @@ export function stepChallenge(world, fleet) {
   if (state.blackIce) { stepIce(world, fleet); return; }
   if (state.snowbank) { stepSnowbank(world); return; }
   if (state.puddles) { stepPuddles(world); return; }
+  if (state.parker) { stepParkerChallenge(world); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
