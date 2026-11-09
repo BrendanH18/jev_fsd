@@ -134,6 +134,10 @@ await test("when they lie: in the rain, and on after it until it snows; never wi
   assert.equal(PD.puddlesLie(w), true, "still there once the rain has stopped");
   w.weather = setWeather("snow").name;
   assert.equal(PD.puddlesLie(w), false);
+  // (and the snow clears the rain: dry again after it, they stay gone until it rains again)
+  step({ world: w, fleet: new NpcFleet(w, { count: 0, bikes: 0 }), autopilot: idle });
+  w.weather = setWeather("dry").name;
+  assert.equal(w.puddlesRained, false); assert.equal(PD.puddlesLie(w), false, "gone after snow, until it rains again");
   assert.equal(PD.puddlesLie(street({ puddles: false }).world), false);
 });
 

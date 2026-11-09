@@ -365,6 +365,7 @@ export function wheelsInWater(world, v) {
 // within reach is NEAR_AHEAD_M ahead of its front, in or beside its lane.
 export function auditPuddles(world) {
   if (world.weather === "rain") world.puddlesRained = true;
+  else if (world.weather === "snow") world.puddlesRained = false;
   if (!puddlesLie(world)) { world.puddleWarn = null; return; }
   const ego = world.ego, spec = ego.spec, c = Math.cos(ego.psi), sn = Math.sin(ego.psi), front = spec.length - spec.rearOverhang;
   const calls = world.puddleCalls ||= new Map();

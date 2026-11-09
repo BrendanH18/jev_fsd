@@ -161,6 +161,20 @@ await test("phases: everyone held between waves until the box is empty, a car to
   assert.equal(w.violations.collisions, 0);
 });
 
+await test("a vehicle in the box holds the switch however long the all-stop has lasted", () => {
+  const ctx = world({ t: B_GREEN, toLine: 30, v: 0 }), w = ctx.world;
+  const o = O.placeOfficer(w, SIG), start = [w.ego.x, w.ego.y];
+  o.phaseSince = w.t - O.CLEAR_MAX_S - 5;
+  // the driven car standing in the middle of the junction: the officer keeps everyone held
+  w.ego.x = o.x; w.ego.y = o.y;
+  for (let k = 0; k < 10; k++) O.stepOfficers(w, DT);
+  assert.equal(o.phase, "clear", "never waves the next axis while the box is occupied");
+  // out of the box: the next axis is waved
+  [w.ego.x, w.ego.y] = start;
+  O.stepOfficers(w, DT);
+  assert.notEqual(o.phase, "clear", "the next axis is waved once the box is empty");
+});
+
 await test("traffic and cyclists take the officer's direction, not the light's, and a held driver never gives up waiting", () => {
   const ctx = world({ t: B_GREEN, toLine: 60, v: 0 }), w = ctx.world;
   const o = O.placeOfficer(w, SIG, { phase: "A", holdUntil: B_GREEN + 40 });

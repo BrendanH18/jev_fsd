@@ -367,15 +367,18 @@ function stepPhase(world, o, inter) {
   // holding everyone: until the box is empty and whoever was waved on as the officer turned is through
   const since = t - o.phaseSince;
   if (since < CLEAR_S || t < o.holdUntil) return;
-  let busy = onFoot(world, o);
-  for (const v of busy ? [] : movers(world, o)) {
-    if (inBox(o, v)) { busy = true; break; }
+  // (someone on foot crossing or a vehicle in the box always holds the switch; only waiting for a driver
+  // waved on as the officer turned, still short of its line, gives up after CLEAR_MAX_S)
+  if (onFoot(world, o)) return;
+  let late = false;
+  for (const v of movers(world, o)) {
+    if (inBox(o, v)) return;
     const id = idOf(world, v);
     if (o.committed[id] !== o.turn) continue;
     const a = approachOf(world, inter, v);
-    if (a && a.toLine > -0.5) { busy = true; break; }
+    if (a && a.toLine > -0.5) late = true;
   }
-  if (busy && since < CLEAR_MAX_S) return;
+  if (late && since < CLEAR_MAX_S) return;
   o.phase = o.next; o.phaseSince = t; o.committed = {}; o.turn++;
   o.face = faceFor(world, o, inter, other(o.phase));
 }
