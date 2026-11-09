@@ -132,6 +132,7 @@ Fifty-six hand-built scenarios test the situations real drivers get wrong:
 | **On your bumper** | Winnipeg, afternoon | A driver in a hurry sits half a second behind you on William Avenue: don't brake-check them, leave more room ahead, and move right to let them by |
 | **Bridges freeze first** | Saskatoon, dawn | Black ice on the Traffic Bridge deck, nearly invisible on a dry road: ease off before the bridge and cross the ice steadily, with no braking or sharp steering on it |
 | **One car at a time** | Montréal, snow | Snowbanks narrow Avenue Laval to one moving car: wait while an oncoming car comes through, then creep up to a corner where a high pile hides someone about to cross |
+| **Don't splash** | Vancouver, rain | Puddles in the gutter of Main Street, with people waiting at a bus stop and walking beside them: ease left in your lane, or slow right down, so you don't drench anyone |
 
 Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
 seed and compare results. A pass means you arrived with no collision, no red light or stop sign

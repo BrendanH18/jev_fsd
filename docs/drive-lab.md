@@ -61,6 +61,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Both ways | Montréal, Le Plateau | Contraflow cyclists on (`contraflow`, sim/contraflow.js). The car starts from a standstill on Rue Drolet (one-way), its front 45 m short of Rue Villeneuve Est, to turn right into it: one-way for cars, with a painted contraflow lane, at a junction without a sign. A cyclist rides out of Villeneuve toward the junction in that lane at 16 km/h, 65 m from it, from the car's right; it is hidden behind the corner building until the car is close. The street is too narrow to meet it with the minimum passing distance. The route ends 40 m along the next block of Villeneuve, past Avenue Henri-Julien. Cutting the cyclist off (`failed to yield`) or meeting it closer than the minimum passing distance (`contraflow_conflicts`) fails the drive. Rules and the cautious agent stop short of the junction about 8 s in, wait about 5 s while the cyclist comes out, then turn in; a car that does not see it runs into it. |
 | On your bumper | Winnipeg, William Avenue | Tailgaters on (`tailgaters`, sim/tailgaters.js). Two lanes each way, 50 km/h, straight for half a kilometre. A driver in a hurry closes up half a second behind you in the left lane and stays there; the right lane is empty, and the light ahead at Isabel Street turns amber. Move right and let them by, or brake early and gently; braking hard with them close behind (`brake_checks`) fails the drive |
 | One car at a time | Montréal, Avenue Laval | Snowbanks on (`snowbanks`, sim/snowbanks.js), in falling snow. The banks have pushed the parked cars out from both kerbs of a 60 m stretch: room for one moving car at a time, and a car coming the other way is already in it. Wait at your end until it is through (`snowbank_conflicts` fails the drive otherwise), keep to the middle, then creep up to the corner at Rue Marie-Anne Est, where someone hidden behind the high pile steps off to cross |
+| Don't splash | Vancouver, Main Street | Puddles on (`puddles`, sim/puddles.js), in the rain. You're in the kerb lane of Mount Pleasant's Main Street, where the gutter has flooded: three people wait at the bus stop beside one puddle (ease left in your lane and your wheels miss it), someone walks up the sidewalk beside a deeper one that fills most of the lane (slow right down, to about 12 km/h), and a last one has nobody near (just water). Splashing anyone (`pedestrians_splashed`) fails the drive |
 
 Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors, clear the tracks, keep the box clear, not your arrow, follow the flagger, lights out, round the van, squeeze in, between the cars, blind left, behind the plow, take turns, give them room, over the humps, all walk, collection day and both ways joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
@@ -294,6 +295,21 @@ and gently for the amber: braking hard with the tailgater close behind, with not
 for it, is a brake check (`brake_checks`), which fails the drive, and a hard enough one leaves the
 tailgater no room: it rear-ends the car, its own fault. Tailgaters are on only for this challenge and
 free drives; the challenge places its one tailgater and no other traffic.
+
+## Don't splash
+
+**Don't splash** (`dont-splash`, Vancouver, Mount Pleasant, seed 59042) drives Main Street
+northbound in the rain on an afternoon, in the kerb lane (three lanes each way, 50 km/h, no parking
+lane, the sidewalk right at the kerb), along the block past the stop for the 8 and the 19 and on
+along the next (`e708`, `e666`). The car sets off at 11 m/s. Three people wait at the kerb by the
+bus stop, beside a puddle reaching 1.3 m out from the kerb, into the right wheel path: Rules and the
+cautious agent ease about 0.25 m left inside the lane (`ease_round_puddle`) and keep their speed. On
+the next block a deep puddle spreads 2 m out, most of the way across the lane, as someone walks up
+the sidewalk beside it: there is no room to miss it without crossing the lane line, so they slow to
+about 12.5 km/h, below its splash speed of 16 km/h, until they are through. A last, long shallow
+puddle has nobody near it, and they drive on through it. A car that holds 40 km/h splashes three
+people (`pedestrians_splashed`), which fails the drive. Puddles are on only for this challenge and
+free drives; the challenge places its own three puddles and four people, and no traffic.
 
 ## Road tests
 

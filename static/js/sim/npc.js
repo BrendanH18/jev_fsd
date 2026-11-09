@@ -38,6 +38,8 @@ import { turnBanned } from "./turn-restrictions.js";
 // With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
 // toward the middle and take turns with traffic coming the other way through the one-car stretch, and
 // cyclists keep clear of the parked cars (sim/snowbanks.js snowbankYield).
+// With `puddles` on, in the rain, drivers ease left inside their lane round a puddle at the kerb with
+// someone within splash reach of it, or otherwise slow below its splash speed (sim/puddles.js npcPuddle).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -78,6 +80,7 @@ import { geeseYield } from "./geese.js";
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { gentleOnIce, npcIce } from "./black-ice.js";
 import { snowbankYield } from "./snowbanks.js";
+import { NPC_SHIFT_MPS as PD_SHIFT_MPS, npcPuddle } from "./puddles.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -812,6 +815,16 @@ export class NpcFleet {
         n.phShift = (n.phShift || 0) + Math.max(-PH_SHIFT_MPS * dt, Math.min(PH_SHIFT_MPS * dt, to - (n.phShift || 0)));
         offset += n.phShift;
       }
+      // a puddle at the kerb with someone within splash reach (sim/puddles.js): ease left inside the lane
+      // where that takes the wheels out of it (not while off the middle of the lane for anything else, or
+      // easing round a pothole), and otherwise slow below its splash speed, wherever in the lane it is going
+      const pdBusy = !!(n.lc || wzShift || dpShift || lzShift || cyc || n.pull || ph?.shift || Math.abs(offset) > 0.05);
+      const pd = world.puddles?.enabled && n.kind !== "bike" && !n.transit?.tram ? npcPuddle(world, n, front, offset, pdBusy, offset + (ph && !n.lc ? ph.shift : 0) - (n.phShift || 0)) : null;
+      if (pd || n.pdShift) {
+        const to = pd && !pdBusy ? pd.shift : 0;
+        n.pdShift = (n.pdShift || 0) + Math.max(-PD_SHIFT_MPS * dt, Math.min(PD_SHIFT_MPS * dt, to - (n.pdShift || 0)));
+        offset += n.pdShift;
+      }
       // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
       if (n.tgPeek) offset += n.tgPeek;
       // between snowbanks that push the parked cars out from the kerb (sim/snowbanks.js): over toward the
@@ -1119,7 +1132,7 @@ export class NpcFleet {
       // (and, with black ice on, slowing for the ice ahead, and for bridges in icy weather, and easing off
       // on it: sim/black-ice.js; a streetcar's steel wheels do not feel it)
       const vIce = this.world.ice?.list.length && !n.transit?.tram ? npcIce(this.world, n, front)?.limit ?? Infinity : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce, sb?.limit ?? Infinity);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce, sb?.limit ?? Infinity, pd?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
