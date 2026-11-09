@@ -12,7 +12,7 @@ globalThis.document = { querySelector: () => null };
 const { MapData, pointAt, headingAt } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
-const { Vehicle, CAR } = await import("../static/js/sim/vehicle.js");
+const { Vehicle, CAR, BIKE } = await import("../static/js/sim/vehicle.js");
 const { StopMemory, approachPhase } = await import("../static/js/sim/signals.js");
 const { controlAt } = await import("../static/js/sim/outage.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
@@ -169,8 +169,14 @@ await test("a vehicle in the box holds the switch however long the all-stop has 
   w.ego.x = o.x; w.ego.y = o.y;
   for (let k = 0; k < 10; k++) O.stepOfficers(w, DT);
   assert.equal(o.phase, "clear", "never waves the next axis while the box is occupied");
-  // out of the box: the next axis is waved
+  // out of the box, but a contraflow cyclist (not in world.npcs) is still in it: still held
   [w.ego.x, w.ego.y] = start;
+  const rider = new Vehicle(o.x, o.y, 0, 4, BIKE), riders = w.contraflow.riders;
+  w.contraflow.riders = [rider];
+  O.stepOfficers(w, DT);
+  assert.equal(o.phase, "clear", "a contraflow cyclist in the box holds the switch too");
+  // the box empty: the next axis is waved
+  w.contraflow.riders = riders;
   O.stepOfficers(w, DT);
   assert.notEqual(o.phase, "clear", "the next axis is waved once the box is empty");
 });

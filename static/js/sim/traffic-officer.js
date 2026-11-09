@@ -378,6 +378,8 @@ function stepPhase(world, o, inter) {
     const a = approachOf(world, inter, v);
     if (a && a.toLine > -0.5) late = true;
   }
+  // (a contraflow cyclist, not in world.npcs, still in the box holds it too: sim/contraflow.js)
+  for (const r of world.contraflow?.riders || []) if (inBox(o, r)) return;
   if (late && since < CLEAR_MAX_S) return;
   o.phase = o.next; o.phaseSince = t; o.committed = {}; o.turn++;
   o.face = faceFor(world, o, inter, other(o.phase));
