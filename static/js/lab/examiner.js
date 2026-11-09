@@ -202,7 +202,7 @@ const FAIL_CATEGORY = { timeout: "other", stuck: "other", collision: "space", "r
   "hit a pothole too fast": "speed", "ignored a ball rolling into the street": "observation", "drove into or too close to geese crossing the road": "observation",
   "splashed a pedestrian from a puddle": "speed",
   "blocked or went round a car parallel parking": "space",
-  "not parked": "parking" };
+  "not parked": "parking", "drove onto a closed road": "observation" };
 const FAIL_REMARK = { timeout: "Did not complete the route", stuck: "Did not complete the route: the car got stuck", collision: "Collision",
   "red light": "Entered the junction on a red light", "stop sign": "Did not come to a complete stop at a stop sign", "failed to yield": "Failed to yield the right of way",
   "off road": "Left the road", "not parked": "Did not finish parked within 30 cm of the kerb" };

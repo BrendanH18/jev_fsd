@@ -19,6 +19,8 @@ export class RulesBrain {
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     const v = snap.ego.v;
     let stop = !!snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12;
+    // (a road closed ahead with no detour yet, at the point the car stops for it: sim/road-closures.js)
+    if (snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 1.5) stop = true;
     if (i) {
       const brakeDist = v * v / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
       if (i.control === "signal" && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go) && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
@@ -78,6 +80,7 @@ export class RulesBrain {
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_turn_restriction") cost -= 30;
+      if (c.id === "stop_for_closure") cost -= 30;
       if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist" || c.id === "stop_to_turn_round" || c.id === "yield_to_bus" || c.id === "stop_at_crosswalk" || c.id === "stop_for_school_bus" || c.id === "stop_for_streetcar" || c.id === "stop_before_tracks" || c.id === "wait_short_of_junction" || c.id === "stop_for_flagger" || c.id === "stop_for_crossing_guard" || c.id === "wait_behind_van" || c.id === "wait_to_merge" || c.id === "let_merge_in") cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       if (c.id === "wait_for_runner") cost -= 12;

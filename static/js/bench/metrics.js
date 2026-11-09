@@ -122,6 +122,8 @@ export class DriveMetrics {
       ...(world.puddlesSeen ? { pedestrians_splashed: v.pedestrians_splashed || 0 } : {}),
       // (only for a drive in which a car signalled to parallel park ahead of the car: sim/parkers.js)
       ...(world.parkersSeen ? { parking_conflicts: v.parking_conflicts || 0 } : {}),
+      // (only for a drive in which the car came up to a block closed for an event: sim/road-closures.js)
+      ...(world.roadClosuresSeen ? { closure_entries: v.closure_entries || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -185,6 +187,7 @@ export function failures(m) {
   if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
   if (m.pedestrians_splashed) f.push("splashed a pedestrian from a puddle");
   if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");
+  if (m.closure_entries) f.push("drove onto a closed road");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

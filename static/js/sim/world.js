@@ -49,6 +49,7 @@ import { BallChase, auditBalls } from "./ball-chase.js";
 import { Geese, auditGeese } from "./geese.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers } from "./parkers.js";
+import { RoadClosures, auditRoadClosures } from "./road-closures.js";
 import { BlackIce, auditIce } from "./black-ice.js";
 import { Snowbanks, auditSnowbanks, bankHidden } from "./snowbanks.js";
 import { Puddles, auditPuddles } from "./puddles.js";
@@ -248,7 +249,9 @@ export class World {
   // the splash speed, rather than drench someone on the sidewalk beside one (sim/puddles.js).
   // `parkers`: now and then the traffic car ahead of the driven car parallel parks, and everyone behind
   // it stops well back and waits until it is in (sim/parkers.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false, ice = false, snowbanks = false, puddles = false, parkers = false } = {}) {
+  // `roadClosures`: now and then a block on the car's route ahead is closed for an event, barricaded at
+  // both ends; the car re-plans round it once it sees a barricade (sim/road-closures.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false, ice = false, snowbanks = false, puddles = false, parkers = false, roadClosures = false } = {}) {
     this.map = map;
     // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
     // fresh red, whether one has committed near the car this drive, and the junction the audit watches
@@ -412,6 +415,11 @@ export class World {
     this.parkers = createParkers({ enabled: parkers, seed });
     this.parkersSeen = false;
     this.parkerCalls = new Map();
+    // road closures (sim/road-closures.js): the blocks closed for an event and their barricades, whether the
+    // car has come up to one this drive, and where its front was against each barricade line last tick
+    this.roadClosures = new RoadClosures({ enabled: roadClosures, seed });
+    this.roadClosuresSeen = false;
+    this.roadClosureCalls = new Map();
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -425,7 +433,9 @@ export class World {
     // (and cars backing out of driveways, with that option on: sim/driveway-reversers.js)
     const out3 = this.driveways?.cars.length ? out2.concat(this.driveways.near(x, y, r)) : out2;
     // (and Canada geese, with that option on: sim/geese.js)
-    return this.geese?.gaggles.length ? out3.concat(this.geese.near(x, y, r)) : out3;
+    const out4 = this.geese?.gaggles.length ? out3.concat(this.geese.near(x, y, r)) : out3;
+    // (and the barricades across a block closed for an event, with that option on: sim/road-closures.js)
+    return this.roadClosures?.list.length ? out4.concat(this.roadClosures.near(x, y, r)) : out4;
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
@@ -544,6 +554,7 @@ export class World {
     this.snowbankCalls?.clear();
     this.puddleCalls?.clear();
     this.parkerCalls?.clear();
+    this.roadClosureCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -820,6 +831,7 @@ export class World {
     if (this.snowbanks?.enabled) auditSnowbanks(this);
     if (this.puddles?.enabled) auditPuddles(this);
     if (this.parkers?.enabled) auditParkers(this);
+    if (this.roadClosures?.enabled) auditRoadClosures(this);
     this.auditKerb();
     leftSpace(this);
   }

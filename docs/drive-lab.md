@@ -18,6 +18,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Bridges freeze first | Saskatoon, Traffic Bridge | Black ice on (`ice`, sim/black-ice.js), at dawn after a frosty night. Northbound over the South Saskatchewan River (one lane each way, 50 km/h): the deck has iced over for 87 m, ending just short of its north end, where traffic queues for the roundabout. Going onto the ice more than 10 km/h over its safe speed (about 28 km/h), or braking, accelerating or skidding on it (`ice_overspeed`), fails the drive. Rules and the cautious agent keep to 40 km/h on the bridge, slow before the ice and cross it steadily |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
+| Road closed | Halifax, Spring Garden Road | Road closures on (`roadClosures`, sim/road-closures.js). The block between Queen Street and Birmingham Street is closed for a street festival, and the route still runs down it. The car learns of it only on seeing the barricades, then re-plans; driving past a barricade (`closure_entries`) fails the drive |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
 | The door zone | Vancouver, Kitsilano | A cyclist and a parked car's opening street-side door |
 | Into the unknown | Victoria, Old Town | A signal-controlled junction with 28 m fog visibility |
@@ -326,6 +327,16 @@ and stops right behind it takes the room it needs: it waits, gives up and drives
 fails (`parking_conflicts`); so does going round it in the oncoming lane while it signals or
 reverses. Traffic parallel parking is on only for this challenge and free drives; the challenge
 places its one parker and no other traffic.
+
+## Road closed
+
+**Road closed** (`road-closed`, Halifax, seed 60042) starts on Spring Garden Road with a route that
+runs down its block between Queen Street and Birmingham Street, closed for a street festival:
+barricades across both ends, ROAD CLOSED and DETOUR signs, tents on the block. The car does not
+know until it sees the barricade past Queen Street. Rules and the cautious agent re-plan at once and
+take the detour by Queen Street and Clyde Street to Birmingham Street. Driving past a barricade onto
+the closed block (`closure_entries`) fails the drive; driving into one is a collision. Road closures
+are on only for this challenge and free drives; the challenge places its one closure and no traffic.
 
 ## Road tests
 

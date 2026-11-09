@@ -307,3 +307,14 @@ or reverses. If you take its room it waits a while, then gives up and drives on.
 room it needs, or going round it, counts as `parking_conflicts`: 20 legality points, a replay marker
 and a coaching tip, reported only once a car has signalled to park ahead of you. Use `?parkers=0` to
 turn it off.
+
+### Road closures
+
+In free drives (and the **Road closed** lesson) a block on your route ahead is now and then closed
+for an event: striped barricades with flashing amber lamps across both ends, ROAD CLOSED and DETOUR
+signs, and festival tents on the block. You find out only when you can see the barricades. The HUD
+says ROAD CLOSED AHEAD · DETOUR, the route line and minimap switch to the detour as soon as it is
+planned, and the coach says to follow it. Driving past a barricade onto the closed block counts as
+`closure_entries`: 20 safety and 25 legality points, a replay marker and a coaching tip, reported
+only once you have come up to a closure; driving into a barricade is a collision. Use
+`?roadclosures=0` to turn them off.

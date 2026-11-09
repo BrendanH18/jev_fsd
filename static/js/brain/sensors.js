@@ -64,6 +64,7 @@ import { EGO_ID, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, THROUGH_M as L
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
+import { STOP_DECEL as CLOSURE_STOP_DECEL, roadClosedSensing } from "../sim/road-closures.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -319,8 +320,9 @@ export function buildSnapshot(world, executing = null) {
     }
     const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, { list: world.crowd.list.filter((p) => visible.includes(p)) });
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
-    // (geese, sim/geese.js, are waited for as a gaggle, never followed or passed)
-    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && !o.goose);
+    // (geese, sim/geese.js, are waited for as a gaggle, never followed or passed; and a closed road's
+    // barricades, sim/road-closures.js, are stopped short of, or gone round by the detour)
+    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && !o.goose && !o.barricade);
     if (world.busLanes) {
       route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
       const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
@@ -383,6 +385,9 @@ export function buildSnapshot(world, executing = null) {
     }
     // (a car ahead parallel parking, and the room it needs behind it, with that option on: sim/parkers.js)
     if (world.parkers?.enabled) snap.parking_ahead = world.parkers.active.length ? parkerSensing(world, p, frontS) : null;
+    // (a block closed for an event, seen at its barricades, with that option on: on the route, with no
+    // detour yet, or beside the detour: sim/road-closures.js)
+    if (world.roadClosures?.enabled) snap.road_closed = roadClosedSensing(world, route, frontS);
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -1612,7 +1617,7 @@ function laneClearS(shift, fromCenter, toCenter) {
 function laneOptions(snap, world) {
   const { route, lane, ego } = snap;
   const p = snap.routeProj, s = p.s, FRONT = ego.front_m, REAR = world.ego.spec.rearOverhang;
-  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian" && !o.goose);
+  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian" && !o.goose && !o.barricade);
   const free = desiredSpeed({ ...snap, following: null }).v;
   const i = snap.intersection;
   const line = snap.control_line_m ?? (i ? i.bumper_to_line_m : Infinity);
@@ -1682,6 +1687,11 @@ export function desiredSpeed(snap) {
   if (snap.turn_restriction?.banned) {
     v = Math.min(v, Math.sqrt(2 * decel * Math.max(0, snap.turn_restriction.distance_m - FRONT - 8)));
     reasons.push("prohibited turn; replan route");
+  }
+  // (a road closed ahead on the route, with no detour yet: be able to stop short of it, sim/road-closures.js)
+  if (snap.road_closed?.on_route) {
+    v = Math.min(v, Math.sqrt(2 * Math.min(decel, CLOSURE_STOP_DECEL) * Math.max(0, snap.road_closed.bumper_to_stop_m)));
+    reasons.push("road closed ahead; replan route");
   }
   if (snap.visibility) {
     const visibleSpeed = snap.visibility.safe_speed_mps ?? visibilitySpeed(snap.visibility.range_m, FRONT);
@@ -2035,6 +2045,7 @@ export function hazardFlags(snap) {
   if (snap.snowbank?.corner) f.push("snowbank corner");
   if (snap.puddle_splash) f.push("puddle by the kerb");
   if (snap.parking_ahead) f.push("car parking ahead");
+  if (snap.road_closed) f.push("road closed");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

@@ -129,8 +129,11 @@ class Router:
     # Search
 
     def astar(self, start_edge: str, start_s: float, goal_edge: str, goal_s: float,
-              extra_cost: Optional[Dict[str, float]] = None, restrictions=False, hour=15.5, weekday=0) -> Optional[Tuple[List[str], float]]:
-        """(edge sequence, cost) from start to goal, or None. Cost is travel time plus turn penalties."""
+              extra_cost: Optional[Dict[str, float]] = None, restrictions=False, hour=15.5, weekday=0,
+              avoid: Optional[frozenset] = None) -> Optional[Tuple[List[str], float]]:
+        """(edge sequence, cost) from start to goal, or None. Cost is travel time plus turn penalties.
+        `avoid`: edges the search never enters (a block closed to traffic, static/js/sim/road-closures.js);
+        the start edge itself is where the car already is."""
         extra_cost = extra_cost or {}
         goal_pt = g.point_at(self.edges[goal_edge]["pts"], goal_s, self._cum[goal_edge])
 
@@ -166,6 +169,8 @@ class Router:
             for nxt in self.successors(cur):
                 if restrictions and banned(self.pack.get("restrictions", {}).get("restrictions", []), cur, nxt, hour, weekday):
                     continue
+                if avoid and nxt in avoid:
+                    continue
                 if nxt in closed:
                     continue
                 cost = best_g[cur] + self.turn_penalty(cur, nxt)
@@ -179,16 +184,21 @@ class Router:
                     counter += 1
         return None
 
-    def routes(self, start: dict, goal: dict, k: int = 1, restrictions=False, hour=15.5, weekday=0) -> List[dict]:
-        """`start` = {x, y, heading?}, `goal` = {x, y}. Up to k distinct routes, best first."""
+    def routes(self, start: dict, goal: dict, k: int = 1, restrictions=False, hour=15.5, weekday=0,
+               avoid: Optional[Sequence[str]] = None) -> List[dict]:
+        """`start` = {x, y, heading?}, `goal` = {x, y}. Up to k distinct routes, best first. `avoid`: edge
+        ids no route may enter (a block closed for an event); empty, the routes are exactly as without it."""
+        avoid = frozenset(avoid) if avoid else None
         s = self.snap(start["x"], start["y"], start.get("heading"))
         goals = self.snap_all(goal["x"], goal["y"])
+        if avoid:
+            goals = [c for c in goals if c["edge"] not in avoid]
         if s is None or not goals:
             return []
         # pick the goal lane (direction) that is cheapest to reach
         t, first = None, None
         for cand in goals:
-            res = self.astar(s["edge"], s["s"], cand["edge"], cand["s"], restrictions=restrictions, hour=hour, weekday=weekday)
+            res = self.astar(s["edge"], s["s"], cand["edge"], cand["s"], restrictions=restrictions, hour=hour, weekday=weekday, avoid=avoid)
             if res and (first is None or res[1] < first[1]):
                 t, first = cand, res
         if t is None:
@@ -196,7 +206,7 @@ class Router:
         found: List[List[str]] = []
         extra: Dict[str, float] = {}
         for i in range(k):
-            res = first if i == 0 else self.astar(s["edge"], s["s"], t["edge"], t["s"], extra_cost=extra, restrictions=restrictions, hour=hour, weekday=weekday)
+            res = first if i == 0 else self.astar(s["edge"], s["s"], t["edge"], t["s"], extra_cost=extra, restrictions=restrictions, hour=hour, weekday=weekday, avoid=avoid)
             if res is None:
                 break
             path = res[0]

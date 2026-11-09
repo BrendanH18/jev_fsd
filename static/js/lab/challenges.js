@@ -13,6 +13,7 @@ import { ballScenario, placeBall } from "./ball-chase-challenge.js";
 import { geeseScenario, placeGeese } from "./geese-challenge.js";
 import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { tailgaterScenario, installTailgater, stepTailgater } from "./tailgater-challenge.js";
+import { roadClosureScenario, installRoadClosure, stepRoadClosure } from "./road-closure-challenge.js";
 import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
 import { snowbankScenario, placeSnowbank, stepSnowbank } from "./snowbank-challenge.js";
 import { puddleScenario, installPuddles, stepPuddles } from "./puddle-challenge.js";
@@ -160,6 +161,8 @@ export const CHALLENGES = [
     description: "Rain on Main Street in Mount Pleasant. You're in the kerb lane, where the gutter has flooded: people wait at the bus stop right beside one puddle, someone is walking up the sidewalk beside a deeper one, and further on a puddle has nobody near it at all.", lesson: "In the rain, watch for puddles by the kerb and for people beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down until you're through. Splashing a pedestrian is careless driving. A puddle with nobody near is just water." },
   { id: "room-to-park", title: "Room to park", map: "kitsilano", weather: "dry", time: "afternoon", seed: 58042, icon: "Ⓟ", difficulty: "Patience", hazard: "parker", parkers: true, street: "Larch Street",
     description: "An afternoon on Larch Street in Kitsilano, a residential street with cars parked along both kerbs. The car ahead of you signals right, slows and pulls up alongside a parked car: there is a gap behind it, and it is about to reverse in.", lesson: "A car ahead signalling and stopping beside a gap is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses." },
+  { id: "road-closed", title: "Road closed", map: "halifax", weather: "dry", time: "afternoon", seed: 60042, icon: "⛔", difficulty: "Navigation", hazard: "road-closure", roadClosures: true, street: "Spring Garden Road",
+    description: "A street festival has closed Spring Garden Road in downtown Halifax between Queen Street and Birmingham Street. Your route still runs down that block, and you won't know until you see the barricades past Queen Street.", lesson: "When you see ROAD CLOSED barricades, never drive past them, however empty the street looks. Slow down early, turn off at the junction before them, and follow the detour. If you see them too late to turn, stop short of the junction and find another way." },
 ];
 // (road tests, lab/road-tests.js, open and play the same way)
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
@@ -1066,6 +1069,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "ball") return ballScenario(map, challenge);
   if (challenge.hazard === "geese") return geeseScenario(map, challenge);
   if (challenge.hazard === "tailgater") return tailgaterScenario(map, challenge);
+  if (challenge.hazard === "road-closure") return roadClosureScenario(map, challenge);
   if (challenge.hazard === "black-ice") return iceScenario(map, challenge);
   if (challenge.hazard === "snowbanks") return snowbankScenario(map, challenge);
   if (challenge.hazard === "puddles") return puddleScenario(map, challenge);
@@ -1296,6 +1300,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.roadTest) installRoadTest(world, fleet, challenge, scenario);
   if (scenario.tailgater) installTailgater(world, fleet, scenario);
   if (scenario.puddles) installPuddles(world, scenario);
+  if (scenario.roadClosure) installRoadClosure(world, fleet, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
@@ -1386,6 +1391,7 @@ export function stepChallenge(world, fleet) {
   if (state.following) { stepFollowing(world, fleet); return; }
   if (state.freshGreen) { stepFreshGreen(world); return; }
   if (state.tailgater) { stepTailgater(world); return; }
+  if (state.roadClosure) { stepRoadClosure(world); return; }
   if (state.blackIce) { stepIce(world, fleet); return; }
   if (state.snowbank) { stepSnowbank(world); return; }
   if (state.puddles) { stepPuddles(world); return; }

@@ -22,6 +22,7 @@ import { coverAfter } from "../sim/ball-chase.js";
 import { TAIL_EASE_MIN_MPS, TAIL_EASE_MPS, TAIL_GENTLEST_SLACK, TAIL_STOP_DECEL } from "../sim/tailgaters.js";
 import { earlySlows, iceSimCheck, iceStopDecel, patchesUnder } from "../sim/black-ice.js";
 import { lawSlows, simSplashes, splashTargets } from "../sim/puddles.js";
+import { STOP_DECEL as CLOSURE_STOP_DECEL } from "../sim/road-closures.js";
 
 export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
@@ -179,6 +180,12 @@ export function sampleCandidates(snap, world) {
       const at = Math.min(snap.routeProj.s + snap.turn_restriction.distance_m - FRONT - 8, snap.intersection && !snap.intersection.entered ? snap.intersection.s_line_route - FRONT - 0.5 : Infinity);
       out.push({ id: "stop_for_turn_restriction", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(at) }),
         steer: "hold lane", speed: "stop before the prohibited turn while navigation finds a legal detour" });
+    }
+    // A road closed ahead on the route, seen at its barricades, with no detour yet (sim/road-closures.js):
+    // stop short of the junction before it (or, past that, of the barricade) while navigation finds a way round.
+    if (snap.road_closed?.on_route) {
+      out.push({ id: "stop_for_closure", laneUntil, law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(snap.road_closed.stop_s_route - FRONT), stopDecel: CLOSURE_STOP_DECEL }),
+        steer: "hold lane", speed: "stop short of the closed road while navigation finds a detour" });
     }
     // Turning left with oncoming traffic coming: wait short of its path, at the line or in the junction.
     const oncoming = snap.intersection?.oncoming;
@@ -560,13 +567,16 @@ export function simulateAll(candidates, snap, world) {
   // a car ahead parallel parking (sim/parkers.js): its hold line (a metre's overshoot, as a short stop
   // makes), never into the room it reverses into, nor round it (no lane change while behind it)
   const parkerHold = snap.parking_ahead?.wait ? snap.parking_ahead.stop_s_route + 1 : null;
+  // a road closed ahead on the route, with no detour yet (sim/road-closures.js): the barricade's line, which
+  // no manoeuvre's front may reach
+  const closedLine = snap.road_closed?.on_route ? snap.road_closed.line_s_route : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
     let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, potholeFast = false, ballFast = false, intoGeese = false, iceCall = null, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
-    let intoNarrowing = false, splashes = false, intoParker = false;
+    let intoNarrowing = false, splashes = false, intoParker = false, intoClosed = false;
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
     const law = { ...c.law, s0: c.law.s0 ?? startS };
@@ -623,6 +633,8 @@ export function simulateAll(candidates, snap, world) {
         if (narrowStop !== null && s + FRONT > narrowStop) intoNarrowing = true;
         // (and a metre past a parking car's hold line)
         if (parkerHold !== null && s + FRONT > parkerHold) intoParker = true;
+        // (and half a metre short of a closed road's barricade)
+        if (closedLine !== null && s + FRONT > closedLine - 0.5) intoClosed = true;
         // (1.5 m past it, as a short stop overshoots)
         if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         // (1.5 m past where it stops, as a short stop overshoots: into the 2 m it leaves behind the bus)
@@ -700,7 +712,9 @@ export function simulateAll(candidates, snap, world) {
             const gap = ahead - box.halfLength - ob.halfLength, closing = Math.max(0, car.v) + Math.max(0, o.n.v);
             if (gap < MEET_M || (closing > 0.5 && gap / closing < MEET_S)) meets = true;
           }
-          if (!collision && obbOverlap(box, ob, 0.3)) collision = { id: o.n.id, t: Math.round(t * 10) / 10, kind: Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4 ? "rear_end" : "crossing" };
+          // (a closed road's barricade stands where it is, like scenery: sim/road-closures.js)
+          if (o.n.barricade && !staticHit && obbOverlap(box, ob, 0.3)) staticHit = { id: o.n.id, t: Math.round(t * 10) / 10, kind: "barricade", static: true };
+          if (!collision && obbOverlap(box, ob, 0.3)) collision = o.n.barricade ? staticHit : { id: o.n.id, t: Math.round(t * 10) / 10, kind: Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4 ? "rear_end" : "crossing" };
         }
       }
       trace.push([car.x, car.y]);
@@ -727,7 +741,9 @@ export function simulateAll(candidates, snap, world) {
     const obliged = c.law.stopAtRoute != null && c.id !== "stop_at_destination"
       && (c.id !== "stop_at_line" || !!mustStop || !!(control?.give_way?.wait_for && control.give_way.hold_s_route === control.s_line_route));
     let reject = null;
-    if (collision) reject = "collision";
+    // (a closed road's barricade ahead: going on into it is, first of all, onto a closed road)
+    if (intoClosed && c.law.kind !== "hard_brake") reject = "enters_closed_road";
+    else if (collision) reject = "collision";
     else if (closesFollowingGap && c.law.kind !== "hard_brake") reject = "following_distance";
     else if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(c.law.laneIdx) && !c.change && c.law.vTarget > 0.1 && !obliged && c.law.kind !== "hard_brake") reject = "bus_lane_driving";
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";

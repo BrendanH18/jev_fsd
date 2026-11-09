@@ -106,6 +106,43 @@ class RouterTests(unittest.TestCase):
             if self.router.turn(e["id"], nxt) == "uturn":
                 self.assertGreaterEqual(self.router.turn_penalty(e["id"], nxt), 1e5)
 
+    # A block closed for an event (static/js/sim/road-closures.js): the route request lists its edges in
+    # `avoid`, and no route enters them; an empty list changes nothing.
+    def test_avoid_empty_leaves_routes_unchanged(self):
+        for start, goal in [((-150.0, -180.0, 0.0), (60.0, 180.0)), ((60.0, 150.0, -math.pi / 2), (-150.0, -60.0))]:
+            a = self.router.routes({"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]}, k=3)
+            for avoid in (None, [], ()):
+                b = self.router.routes({"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]}, k=3, avoid=avoid)
+                self.assertEqual(a, b)
+
+    def test_avoid_routes_round_a_closed_block(self):
+        start, goal = {"x": -150.0, "y": -180.0, "heading": 0.0}, {"x": 60.0, "y": 180.0}
+        first = self.router.routes(start, goal)[0]
+        # close the second street of the best route, both ways
+        closed = first["edges"][1]
+        e = self.router.edges[closed]
+        both = [x["id"] for x in self.pack["edges"] if {x["from"], x["to"]} == {e["from"], e["to"]}]
+        detour = self.router.routes(start, goal, k=3, avoid=both)
+        self.assertTrue(detour)
+        for r in detour:
+            self.assertFalse(set(r["edges"]) & set(both))
+            self.assertAlmostEqual(r["polyline"][-1][0], 60.0, delta=3.0)
+            self.assertAlmostEqual(r["polyline"][-1][1], 180.0, delta=3.0)
+        self.assertNotEqual(detour[0]["edges"], first["edges"])
+        # (the detour is joined like any route: it never backs up at its turns)
+        pl = detour[0]["polyline"]
+        worst = max(abs(g.wrap_angle(math.atan2(pl[i + 1][1] - pl[i][1], pl[i + 1][0] - pl[i][0]) - math.atan2(pl[i][1] - pl[i - 1][1], pl[i][0] - pl[i - 1][0]))) for i in range(1, len(pl) - 1))
+        self.assertLess(math.degrees(worst), 60)
+
+    def test_avoid_everything_out_leaves_no_route(self):
+        start, goal = {"x": -150.0, "y": -180.0, "heading": 0.0}, {"x": 60.0, "y": 180.0}
+        s = self.router.snap(start["x"], start["y"], start["heading"])
+        out = self.router.successors(s["edge"])
+        self.assertEqual(self.router.routes(start, goal, avoid=out), [])
+        # (a destination on a closed block is never routed to)
+        goal_edges = {c["edge"] for c in self.router.snap_all(goal["x"], goal["y"])}
+        self.assertEqual(self.router.routes(start, goal, avoid=sorted(goal_edges)), [])
+
 
 if __name__ == "__main__":
     unittest.main()
