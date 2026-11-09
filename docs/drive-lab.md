@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fifty-seven authored challenges
+## Sixty authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -64,6 +64,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | One car at a time | Montréal, Avenue Laval | Snowbanks on (`snowbanks`, sim/snowbanks.js), in falling snow. The banks have pushed the parked cars out from both kerbs of a 60 m stretch: room for one moving car at a time, and a car coming the other way is already in it. Wait at your end until it is through (`snowbank_conflicts` fails the drive otherwise), keep to the middle, then creep up to the corner at Rue Marie-Anne Est, where someone hidden behind the high pile steps off to cross |
 | Don't splash | Vancouver, Main Street | Puddles on (`puddles`, sim/puddles.js), in the rain. You're in the kerb lane of Mount Pleasant's Main Street, where the gutter has flooded: three people wait at the bus stop beside one puddle (ease left in your lane and your wheels miss it), someone walks up the sidewalk beside a deeper one that fills most of the lane (slow right down, to about 12 km/h), and a last one has nobody near (just water). Splashing anyone (`pedestrians_splashed`) fails the drive |
 | Room to park | Vancouver, Larch Street | Traffic parallel parking on (`parkers`, sim/parkers.js). A residential street in Kitsilano (one lane each way, 50 km/h), both kerbs lined with parked cars. The car ahead of you, already signalling right, stops beside the one gap on the right and reverses into it. Stop well back, about 9 m behind it, and wait until it is in; standing in the room it reverses into, or going round it while it signals or reverses (`parking_conflicts`), fails the drive |
+| Follow the officer | Toronto, Spadina Avenue at Bloor Street West | Police officers on (`officers`, sim/traffic-officer.js). You drive north up Spadina on a green, but an officer in the middle of the junction is holding your way and waving Bloor through against its red. Stop at the line when held, even on the green, and go only when waved on (`officer_violations` fails the drive). |
 
 Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors, clear the tracks, keep the box clear, not your arrow, follow the flagger, lights out, round the van, squeeze in, between the cars, blind left, behind the plow, take turns, give them room, over the humps, all walk, collection day and both ways joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
