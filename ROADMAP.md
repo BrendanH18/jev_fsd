@@ -48,7 +48,7 @@ Sizes are rough: **S** an hour or two, **M** a day, **L** several days.
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it |
 | [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM |
-| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | Three features moved to a shared interface with byte-identical results |
+| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | Three features moved to a shared interface with identical results (timings aside) |
 | [4](#phase-4-a-benchmark-that-separates-drivers) | Scores tell drivers apart | Two different models get measurably different scores for a stated reason |
 | [5](#phase-5-release-and-presentation) | The project presents what it is | 0.3.0 cut; README leads with results |
 | [6](#phase-6-grow-the-world-again) | New scenarios, under the admission rule | Each one passes the [checklist](#admission-rule-for-new-scenarios) |
@@ -154,7 +154,9 @@ Each recent feature edited the same core files: `sim/npc.js` (2,499 lines, with 
   world, its step, what it adds to sensing, its candidates and rejections, its model wording, how
   traffic yields to it, its audit, its metric, its failure text and its "seen" flag. The core loops
   over the registered features. Prove it on three (suggest potholes, geese and road closures), with
-  the seeded suites and every challenge byte-identical before and after.
+  the seeded suites and every challenge giving identical results before and after. "Identical"
+  means every result field but the timings (`wall_ms` and decision latency), as in
+  `docs/rules-baseline.md`.
 - [ ] **3.2 Move the rest across.** (L) A few at a time, each with the same before-and-after record.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step`, the sensing pass and the one-line
   `needsMotionQuestion` test, once the features have moved out of them.
@@ -232,7 +234,8 @@ A scenario is ready when all of these hold:
 
 1. It teaches something no existing challenge does. Say what in one sentence.
 2. It is built on the feature interface of Phase 3, and touches no core file.
-3. The `bare` suite and every existing challenge are byte-identical before and after.
+3. The `bare` suite and every existing challenge give identical results before and after, timings
+   aside.
 4. The `city` suite still passes with it on.
 5. It has one saved model case, checked live, and stays under the decision cost ceiling of 2.2.
 6. Arena storage has been measured again.
