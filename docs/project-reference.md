@@ -2322,7 +2322,7 @@ throws spray, which is render-only.
 
 **Audit.** `auditPuddles` counts each pedestrian within reach (now, exactly) of a puddle or
 water-filled pothole a wheel of the car is in, faster than its splash speed plus 2 km/h, as
-`pedestrians_splashed`, once a person a pass through it, with a `pedestrian_splashed` event (puddle,
+`pedestrians_splashed`, once per person for each pass through it, with a `pedestrian_splashed` event (puddle,
 person, km/h, splash km/h, depth). `World.puddlesSeen` is set once a puddle with someone within reach
 is within 30 m ahead of the car's front, in or beside its lane; only then do the metrics report
 `pedestrians_splashed`, which fails a drive ("splashed a pedestrian from a puddle"; the road-test

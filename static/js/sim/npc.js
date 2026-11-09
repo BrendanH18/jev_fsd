@@ -972,6 +972,8 @@ export class NpcFleet {
         const lineS = e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
         if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id)) amberCap = Math.min(amberCap, choice.speed_mps);
       }
+      // (only an officer holding it at a control ahead this step keeps it from giving up a wait)
+      if (n.officerHeld) n.officerHeld = false;
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
         // (a signal whose lights are out is an all-way stop: sim/outage.js)

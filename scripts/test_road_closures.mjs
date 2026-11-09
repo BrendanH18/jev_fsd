@@ -98,8 +98,8 @@ await test("a closure: both ways along the block, barricades across the street j
   const { world, closure } = rig();
   assert.equal(closure.street, "Spring Garden Road");
   assert.deepEqual([...closure.edges].sort(), [CLOSED, BACK].sort());
-  assert.equal(world.roadClosures.closed.get(CLOSED), closure);
-  assert.equal(world.roadClosures.closed.get(BACK), closure);
+  assert.equal(world.roadClosures.closed.get(CLOSED) === closure, true);
+  assert.equal(world.roadClosures.closed.get(BACK) === closure, true);
   const e = HFX.edges.get(CLOSED), width = e.asphalt[1] - e.asphalt[0];
   for (const end of closure.ends) {
     const boards = closure.boards.filter(b => b.end === end.k);

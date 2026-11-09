@@ -32,7 +32,7 @@ const SPEND_KEYS = ["model", "endpoint", "latency_ms", "input_tokens", "output_t
 // allowing for the pedals' lag so as not to roll over it, while held; as it was once waved on.
 function creepForOfficer(law, snap, world) {
   const i = snap.intersection;
-  const hold = i?.officer?.direction === "stop" && !i.entered && i.bumper_to_line_m > 0.3 ? i.s_line_route - (world.ego.spec.length - world.ego.spec.rearOverhang) - 0.5 : null;
+  const hold = i?.officer?.direction === "stop" && !i.entered ? i.s_line_route - (world.ego.spec.length - world.ego.spec.rearOverhang) - 0.5 : null;
   if (law.kind !== "lane" || (law.officerStop ?? null) === hold) return law;
   const { officerStop, stopAtRoute, stopAt, stopDecel, stopReaction, ...rest } = law;
   return hold === null ? rest : { ...rest, ...officerStopLaw(world.ego.spec), officerStop: hold, stopAtRoute: hold, stopAt: hold - law.s0 };
