@@ -188,8 +188,12 @@ def api_route(body, _query):
     except (KeyError, TypeError, ValueError):
         raise BadRequest("from {x, y, heading?} and to {x, y} are required")
     k = max(1, min(int(body.get("k") or 1), 3))
+    # (edges no route may enter: a block closed for an event, static/js/sim/road-closures.js)
+    avoid = body.get("avoid") or []
+    if not isinstance(avoid, list) or len(avoid) > 200 or not all(isinstance(a, str) and len(a) <= 64 for a in avoid):
+        raise BadRequest("avoid must be a list of edge ids")
     started = time.perf_counter()
-    routes = entry["router"].routes(start, goal, k=k, restrictions=bool(body.get("restrictions")), hour=float(body.get("hour", 15.5)), weekday=int(body.get("weekday", 0)))
+    routes = entry["router"].routes(start, goal, k=k, restrictions=bool(body.get("restrictions")), hour=float(body.get("hour", 15.5)), weekday=int(body.get("weekday", 0)), avoid=avoid)
     return {"routes": routes, "compute_ms": round((time.perf_counter() - started) * 1000, 1)}
 
 

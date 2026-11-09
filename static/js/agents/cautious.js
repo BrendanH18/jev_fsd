@@ -7,7 +7,7 @@ export class CautiousAgent {
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.
     // A legal left on red uses the shared target: zero until stopped and clear.
-    const target = snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12 ? 0 : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
+    const target = (snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12) || (snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 12) ? 0 : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
     const ranked = eligible.map(candidate => ({ candidate, cost:
       Math.abs(candidate.sim.end_speed - target) * 2 + Math.abs(candidate.sim.lane_err_end) * 3
       + Math.max(0, 5 - candidate.sim.min_gap_m) * 6 - candidate.sim.progress_m * 0.3 }));
@@ -28,14 +28,19 @@ export class CautiousAgent {
     // (it already keeps below the limit, so it needs no easing off)
     // black ice seen ahead or under the car (sim/black-ice.js): ease off early and cross it steadily
     // an oncoming car's turn through a stretch narrowed by snowbanks (sim/snowbanks.js): wait short of it
+    // a puddle at the kerb with someone within splash reach, and room to ease round it inside the lane
+    // (sim/puddles.js): round it, at the target speed
+    // a car ahead parallel parking (sim/parkers.js): stop well back, short of the room it reverses into
+    // a road closed ahead with no detour yet (sim/road-closures.js): stop short of it until there is one
+    // a police officer directing traffic holding the car (sim/traffic-officer.js): stop at the line, even on a green
     // in a bus lane while it is in effect, short of the right-turn approach: out of it, after making way for an emergency vehicle
     const inBusLane = snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index);
     const exitBusLane = inBusLane ? eligible.find(c => c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) : null;
     const pxoStop = snap.pxo?.bumper_to_crosswalk_m < 3.5;
-    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "stop_for_turn_restriction") || exitBusLane || (pxoStop && eligible.find(c => c.id === "stop_for_pedestrian")) || eligible.find(c => c.id === "park" || c.id === "pull_out") || eligible.find(c => c.id === "pass_cyclist") || eligible.find(c => c.id === "stop_for_crossing_guard") || (snap.contraflow_cyclist?.wait && eligible.find(c => c.id === "yield_to_contraflow_cyclist")) || (snap.red_light_runner?.wait && eligible.find(c => c.id === "wait_for_runner")) || (snap.reversing_vehicle?.wait && eligible.find(c => c.id === "yield_to_reversing")) || (snap.ball_in_road?.limit_mps != null && !snap.pedestrian && eligible.find(c => c.id === "slow_for_ball")) || (snap.geese_crossing?.wait && eligible.find(c => c.id === "wait_for_geese")) || (snap.tailgater?.can_move_right && eligible.find(c => c.id === "let_tailgater_pass")) || (snap.black_ice && !snap.following && eligible.find(c => c.id === "slow_for_ice")) || (snap.snowbank?.narrowing?.wait && eligible.find(c => c.id === "wait_for_oncoming_narrowing")) || (amberStop && eligible.find(c => c.id === "stop_at_line")) || (snap.pothole?.room && eligible.find(c => c.id === "ease_round_pothole" && Math.abs(c.sim.end_speed - target) < 1.5)) || ranked[0]?.candidate;
+    const candidate = eligible.find(c => c.id === "pull_over") || eligible.find(c => c.id === "stop_for_turn_restriction") || eligible.find(c => c.id === "stop_for_closure") || exitBusLane || (pxoStop && eligible.find(c => c.id === "stop_for_pedestrian")) || eligible.find(c => c.id === "park" || c.id === "pull_out") || eligible.find(c => c.id === "pass_cyclist") || eligible.find(c => c.id === "stop_for_crossing_guard") || (snap.contraflow_cyclist?.wait && eligible.find(c => c.id === "yield_to_contraflow_cyclist")) || (snap.red_light_runner?.wait && eligible.find(c => c.id === "wait_for_runner")) || (snap.reversing_vehicle?.wait && eligible.find(c => c.id === "yield_to_reversing")) || (snap.ball_in_road?.limit_mps != null && !snap.pedestrian && eligible.find(c => c.id === "slow_for_ball")) || (snap.geese_crossing?.wait && eligible.find(c => c.id === "wait_for_geese")) || (snap.tailgater?.can_move_right && eligible.find(c => c.id === "let_tailgater_pass")) || (snap.black_ice && !snap.following && eligible.find(c => c.id === "slow_for_ice")) || (snap.snowbank?.narrowing?.wait && eligible.find(c => c.id === "wait_for_oncoming_narrowing")) || (snap.parking_ahead?.wait && eligible.find(c => c.id === "wait_for_parker")) || (snap.traffic_officer?.direction === "stop" && eligible.find(c => c.id === "wait_for_officer")) || (amberStop && eligible.find(c => c.id === "stop_at_line")) || (snap.pothole?.room && eligible.find(c => c.id === "ease_round_pothole" && Math.abs(c.sim.end_speed - target) < 1.5)) || (snap.puddle_splash?.room && eligible.find(c => c.id === "ease_round_puddle" && Math.abs(c.sim.end_speed - target) < 1.5)) || ranked[0]?.candidate;
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
-    // pulling up to park stops where the car reverses in)
-    return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion: !(amberStop && candidate?.id === "stop_at_line") && candidate?.sim.end_speed < 0.3 && !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) ? "stop" : "drive", candidateId: candidate?.id ?? null,
+    // pulling up to park stops where the car reverses in; and waiting for the officer stops gently at the line)
+    return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion: !(amberStop && candidate?.id === "stop_at_line") && candidate?.sim.end_speed < 0.3 && !["pull_over", "park", "pull_out", "wait_to_park", "wait_for_officer"].includes(candidate.id) ? "stop" : "drive", candidateId: candidate?.id ?? null,
       meta: { source: this.name, model: this.name, latency_ms: 0, input_tokens: 0, cost_usd: 0 } };
   }
   async decide(snap, eligible) { return this.decideSync(snap, eligible); }

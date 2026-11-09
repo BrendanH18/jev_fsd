@@ -2,6 +2,7 @@
 // call this, so a benchmark measures exactly what you watch.
 
 import { stepChallenge } from "../lab/challenges.js";
+import { stepOfficers } from "./traffic-officer.js";
 
 export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   // (black ice, with that option on: whether the weather and the time favour it now, and its grip hook,
@@ -18,9 +19,15 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   world.doubleParked.step(dt);
   world.stepOuts.step(dt);
   world.crossingGuards.step(dt);
+  // (police officers directing traffic, with that option on: sim/traffic-officer.js; before the traffic
+  // takes their directions)
+  if (world.officers?.enabled) stepOfficers(world, dt);
   // (who has come up to each narrowed stretch between snowbanks, and who has gone in, with that option
   // on: sim/snowbanks.js; before the traffic takes its turns)
   if (world.snowbanks?.enabled) world.snowbanks.step(dt);
+  // (a block on the car's way closed for an event now and then, with that option on: sim/road-closures.js;
+  // before the traffic chooses its way)
+  if (world.roadClosures?.enabled) world.roadClosures.step(world, fleet);
   fleet.step(dt);
   // (contraflow cyclists, with that option on: sim/contraflow.js)
   if (world.contraflow.enabled) world.contraflow.step(dt);

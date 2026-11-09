@@ -3,9 +3,19 @@
 import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
 import { egoPlow } from "./snow-plow.js";
 import { followingPolicy } from "./following.js";
+import { officerNotice } from "./traffic-officer.js";
 
+import { knownAhead } from "./road-closures.js";
+// What the coach says coming up to a road closed for an event (sim/road-closures.js).
+const CLOSURE_COACH = "Road closed ahead. Follow the detour; never drive past the barricades.";
 // What the coach says while a tailgater is close behind (sim/tailgaters.js).
 const TAILGATER_COACH = "Someone’s on your bumper. Leave more room ahead, brake early and gently, and let them by.";
+// What the coach says coming up too fast to a puddle at the kerb with someone beside it (sim/puddles.js).
+const PUDDLE_COACH = "Puddle by the kerb, people beside it. Ease left in your lane, or slow right down, so you don’t splash them.";
+// And while waiting behind a car parallel parking ahead (sim/parkers.js).
+const PARKER_COACH = "The car ahead is parallel parking. Stay well back, leave it room to reverse in, and wait.";
+// What the coach says coming up to a police officer directing traffic (sim/traffic-officer.js).
+const OFFICER_COACH = { stop: "The officer is holding your way. Stop at the line, even on a green.", go: "The officer is waving you through. Go, even on a red, and yield to anyone in the junction." };
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
 export const SPEED_GRACE_MPS = 5 / 3.6;
@@ -98,12 +108,24 @@ export class DriveScore {
     // (with tailgaters, sim/tailgaters.js: braking hard with one close behind when nothing ahead called for
     // it; reported only for a drive one followed the car in)
     this.tailgaters = false; this.brakeChecks = 0;
+    // (with police officers directing traffic, sim/traffic-officer.js: going on into the junction while the
+    // officer held the car; reported only for a drive in which the car came up to one)
+    this.officers = false; this.officerViolations = 0;
     // (with black ice, sim/black-ice.js: crossing a patch too fast, or braking, accelerating or skidding
     // on one; reported only for a drive in which the car came near one)
     this.ice = false; this.iceOverspeed = 0;
     // (with snowbanks, sim/snowbanks.js: going into a stretch they narrow to one car while it was the turn
     // of one coming the other way; reported only for a drive in which the car came up to one)
     this.snowbanks = false; this.snowbankConflicts = 0;
+    // (with puddles, sim/puddles.js: each person splashed from one; reported only for a drive in which the
+    // car came up to one with someone near it)
+    this.puddles = false; this.splashes = 0;
+    // (with traffic parallel parking, sim/parkers.js: blocking the room one needs to reverse into, or going
+    // round it; reported only for a drive in which one signalled to park ahead of the car)
+    this.parkers = false; this.parkingConflicts = 0;
+    // (with road closures, sim/road-closures.js: driving past a barricade onto a closed block; reported only
+    // for a drive in which the car came up to one)
+    this.roadClosures = false; this.closureEntries = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.followingEnabled = !!world.followingDistance;
     this.followingState = null; this.followingMessage = null;
@@ -213,8 +235,12 @@ export class DriveScore {
     if (world.ballsSeen) this.balls = true;
     if (world.geeseSeen) this.geese = true;
     if (world.tailgatersSeen) this.tailgaters = true;
+    if (world.officersSeen) this.officers = true;
     if (world.iceSeen) this.ice = true;
     if (world.snowbanksSeen) this.snowbanks = true;
+    if (world.puddlesSeen) this.puddles = true;
+    if (world.parkersSeen) this.parkers = true;
+    if (world.roadClosuresSeen) this.roadClosures = true;
     // (a school crossing guard ahead holding up the STOP sign: sim/crossing-guard.js)
     const guardSign = this.guards && !!world.crossingGuards?.notice()?.stop;
     const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
@@ -250,11 +276,15 @@ export class DriveScore {
       if (ev.type === "hump_hit") { this.humpHits++; this.incident("hump_hit", `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`, { device: ev.device, kmh: ev.kmh }); }
       if (ev.type === "close_pass") { this.closePasses++; this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
       if (ev.type === "failed_to_yield" && ev.cyclist_pass) this.cyclistCutoffs++;
+      if (ev.type === "pedestrian_splashed") { this.splashes++; this.incident("pedestrian_splashed", `Splashed a pedestrian from a puddle at ${Math.round(ev.kmh)} km/h`, { puddle: ev.puddle, person: ev.person, kmh: ev.kmh, splash_kmh: ev.splash_kmh }); }
       if (ev.type === "pothole_hit") { this.potholeHits++; this.incident("pothole_hit", `Hit a pothole at ${Math.round(ev.kmh)} km/h`, { pothole: ev.pothole, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
       if (ev.type === "ball_warning_ignored") { this.ballWarnings++; this.incident("ball_warning_ignored", "Drove on past where a ball rolled out, too fast to stop for a child after it", { ball: ev.ball, kmh: ev.kmh }); }
       if (ev.type === "reversing_conflict") { this.reversingConflicts++; this.incident("reversing_conflict", ev.reason === "close_pass" ? "Squeezed past a car backing out of a driveway" : "Did not stop for a car backing out into the lane", { car: ev.with, clearance_m: ev.clearance_m }); }
+      if (ev.type === "closure_entry") { this.closureEntries++; this.incident("closure_entry", `Drove past a ROAD CLOSED barricade onto ${ev.street || "a closed street"}`, { closure: ev.closure }); }
+      if (ev.type === "officer_violation") { this.officerViolations++; this.incident("officer_violation", "Went on into the junction while the police officer signalled stop", { officer: ev.officer, junction: ev.junction }); }
       if (ev.type === "brake_check") { this.brakeChecks++; this.incident("brake_check", "Braked hard with a tailgater close behind, with nothing ahead calling for it", { with: ev.with, decel_mps2: ev.decel_mps2, need_mps2: ev.need_mps2 }); }
       if (ev.type === "ice_overspeed") { this.iceOverspeed++; this.incident("ice_overspeed", ev.reason === "fast" ? `Crossed black ice at ${Math.round(ev.kmh)} km/h` : ev.reason === "skid" ? "Skidded on black ice" : `${ev.reason === "brake" ? "Braked" : "Accelerated"} hard on black ice`, { patch: ev.patch, reason: ev.reason, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
+      if (ev.type === "parking_conflict") { this.parkingConflicts++; this.incident("parking_conflict", ev.reason === "passed" ? "Went round a car while it was parallel parking" : "Blocked the room a car parallel parking needed to reverse into", { with: ev.with, phase: ev.phase }); }
       if (ev.type === "snowbank_conflict") { this.snowbankConflicts++; this.incident("snowbank_conflict", ev.reason === "oncoming_inside" ? "Drove into the stretch narrowed by snowbanks with an oncoming car already in it" : ev.reason === "forced_to_stop" ? "Drove into the stretch narrowed by snowbanks in front of an oncoming car too close to stop" : "Drove into the stretch narrowed by snowbanks out of turn", { with: ev.with, narrowing: ev.narrowing }); }
       if (ev.type === "wildlife_conflict") { this.wildlifeConflicts++; this.incident("wildlife_conflict", ev.reason === "hit" ? "Hit a goose crossing the road" : "Drove on too close to geese crossing the road", { goose: ev.with, gaggle: ev.gaggle, ...(ev.clearance_m !== undefined ? { clearance_m: ev.clearance_m } : {}) }); }
       if (ev.type === "contraflow_conflict") { this.contraflowMeets++; this.incident("contraflow_meet", "Met a cyclist riding against the one-way with less than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
@@ -294,6 +324,15 @@ export class DriveScore {
       : "Look ahead. Keep your inputs smooth.";
     // (a tailgater close behind, with that option on: sim/tailgaters.js `behind`)
     if (world.tailgaters?.behind && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = TAILGATER_COACH;
+    // (too fast for a puddle at the kerb with someone beside it, with that option on: sim/puddles.js `puddleWarn`)
+    if (world.puddleWarn && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = PUDDLE_COACH;
+    // (behind a car parallel parking ahead, with that option on: sim/parkers.js `behind`)
+    if (world.parkers?.behind && !offRoad && !wrongWay) this.coach = PARKER_COACH;
+    // (a road closed ahead that the car has seen, with that option on: sim/road-closures.js)
+    if (world.roadClosures?.known.size && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5 && knownAhead(world)) this.coach = CLOSURE_COACH;
+    // (a police officer directing traffic at the junction ahead, with that option on: sim/traffic-officer.js)
+    const officer = world.officers?.list.length ? officerNotice(world, null) : null;
+    if (officer && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = OFFICER_COACH[officer.wait ? "stop" : "go"];
 
     this.sample += dt;
     if (this.sample + 1e-9 < 0.1) return;
@@ -366,6 +405,9 @@ export class DriveScore {
     if (!offRoad && !wrongWay && !speeding) {
       if (ttc < 1.5) this.coach = "Brake gently now. The gap is closing.";
       else if (world.tailgaters?.behind) this.coach = TAILGATER_COACH;
+      else if (world.puddleWarn) this.coach = PUDDLE_COACH;
+      else if (world.parkers?.behind) this.coach = PARKER_COACH;
+      else if (officer) this.coach = OFFICER_COACH[officer.wait ? "stop" : "go"];
       else if (this.followingMessage) this.coach = this.followingMessage;
       else if (!this.followingEnabled && gap / Math.max(speed, 0.1) < 1.2) this.coach = "Leave more space to the vehicle ahead.";
     }
@@ -377,16 +419,22 @@ export class DriveScore {
     const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
     const categories = {
       safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20 - this.glareSeconds * 5 - this.runnerConflicts * 25 - this.glareSpeeding * 3 - this.reversingConflicts * 20 - this.ballWarnings * 25 - this.wildlifeConflicts * 20 - this.iceOverspeed * 20)),
-      legality: Math.round(clamp(100 - delta("amber_lights_run") * 25 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25 - this.contraflowMeets * 20 - this.snowbankConflicts * 20)),
+      legality: Math.round(clamp(100 - delta("amber_lights_run") * 25 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25 - this.contraflowMeets * 20 - this.snowbankConflicts * 20 - this.parkingConflicts * 20)),
       comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8 - this.potholeHits * 10)),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
     // (a brake check with a tailgater close behind costs as much safety as a close call: sim/tailgaters.js)
     if (this.brakeChecks) categories.safety = Math.max(0, categories.safety - this.brakeChecks * 20);
+    // (splashing someone from a puddle is careless driving: sim/puddles.js)
+    if (this.splashes) categories.legality = Math.max(0, categories.legality - this.splashes * 20);
+    // (as does driving past a closed road's barricade, and it is against the law: sim/road-closures.js)
+    if (this.closureEntries) { categories.safety = Math.max(0, categories.safety - this.closureEntries * 20); categories.legality = Math.max(0, categories.legality - this.closureEntries * 25); }
+    // (going on while a police officer held the car costs as much as a red light: sim/traffic-officer.js)
+    if (this.officerViolations) categories.legality = Math.max(0, categories.legality - this.officerViolations * 35);
     let score = Math.round(Object.entries(SCORE_WEIGHTS).reduce((sum, [key, weight]) => sum + categories[key] * weight, 0));
     // A collision or a red-light violation cannot be averaged into an excellent drive.
     if (collisions) score = Math.min(score, 59);
-    if (reds || yields || delta("amber_lights_run") || this.runnerConflicts) score = Math.min(score, 69);
+    if (reds || yields || delta("amber_lights_run") || this.runnerConflicts || this.officerViolations) score = Math.min(score, 69);
     const qualified = this.distance >= 100 && this.elapsed >= 10;
     const grade = !qualified ? "—" : score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "E";
     const tips = [];
@@ -407,7 +455,11 @@ export class DriveScore {
     if (this.runnerConflicts) tips.push("When your light turns green, don't just go: look both ways and check that cross traffic has stopped. A driver trying to beat a stale amber may run the red; let anyone who cannot stop clear the junction first.");
     if (this.potholeHits) tips.push("Look well ahead for potholes, especially in spring and when they are full of water. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.");
     if (this.ballWarnings) tips.push("A ball bouncing into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb.");
+    if (this.splashes) tips.push("In the rain, watch for puddles by the kerb, at corners and over drains, and for people on the sidewalk or waiting at a bus stop beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down, below about 20 km/h, until you're through. Splashing someone is careless driving.");
+    if (this.officerViolations) tips.push("Where a police officer is directing traffic, follow the officer, not the lights: stop at the line when they hold you, even on a green, and go when they wave you through, even on a red, still yielding to anyone in the junction.");
     if (this.brakeChecks) tips.push("Never brake-check a tailgater: they can't stop in time. Increase your gap to the car ahead so you can brake early and gently, don't speed up to please them, and let them by: move into the right lane when it's safe, or ease off a little so they can pass.");
+    if (this.parkingConflicts) tips.push("A car ahead signalling and stopping beside a gap in the parked cars is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses.");
+    if (this.closureEntries) tips.push("A ROAD CLOSED barricade closes the whole street to traffic, however empty it looks. Turn off at the junction before it and follow the detour; if you only see it late, stop short of it and find another way.");
     if (this.snowbankConflicts) tips.push("Where snowbanks push the parked cars out and leave room for only one car, take turns: whoever is already in the narrow stretch, or got to it first, goes first. Wait at your end until the oncoming car is through, and keep to the middle, slowly, when it is your turn.");
     if (this.wildlifeConflicts) tips.push("Geese and their goslings cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them or creep toward them.");
     if (this.iceOverspeed) tips.push("Near freezing, expect black ice on bridges, overpasses and shaded stretches, even when the road looks only dry or damp. Slow down before them, on the dry road, and cross the ice steadily: no braking, accelerating or sharp steering on it. If you are already on it, ease off and keep the wheel straight.");
@@ -465,8 +517,12 @@ export class DriveScore {
       ...(this.balls ? { ball_warnings_ignored: this.ballWarnings } : {}),
       ...(this.geese ? { wildlife_conflicts: this.wildlifeConflicts } : {}),
       ...(this.tailgaters ? { brake_checks: this.brakeChecks } : {}),
+      ...(this.officers ? { officer_violations: this.officerViolations } : {}),
       ...(this.ice ? { ice_overspeed: this.iceOverspeed } : {}),
       ...(this.snowbanks ? { snowbank_conflicts: this.snowbankConflicts } : {}),
+      ...(this.puddles ? { pedestrians_splashed: this.splashes } : {}),
+      ...(this.parkers ? { parking_conflicts: this.parkingConflicts } : {}),
+      ...(this.roadClosures ? { closure_entries: this.closureEntries } : {}),
       ...(this.contraflow ? { contraflow_conflicts: this.contraflowMeets + this.contraflowCutoffs, contraflow_meets: this.contraflowMeets, contraflow_cutoffs: this.contraflowCutoffs } : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),

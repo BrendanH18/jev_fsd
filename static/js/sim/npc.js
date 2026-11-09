@@ -38,6 +38,8 @@ import { turnBanned } from "./turn-restrictions.js";
 // With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
 // toward the middle and take turns with traffic coming the other way through the one-car stretch, and
 // cyclists keep clear of the parked cars (sim/snowbanks.js snowbankYield).
+// With `puddles` on, in the rain, drivers ease left inside their lane round a puddle at the kerb with
+// someone within splash reach of it, or otherwise slow below its splash speed (sim/puddles.js npcPuddle).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, DELIVERY_VAN, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -75,9 +77,13 @@ import { reverserYield } from "./driveway-reversers.js";
 import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { ballYield } from "./ball-chase.js";
 import { geeseYield } from "./geese.js";
+import { avoidClosure, closureHold } from "./road-closures.js";
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
+import { manageParkers, parkerConflict, parkerStop, stepParker } from "./parkers.js";
+import { officerDirection } from "./traffic-officer.js";
 import { gentleOnIce, npcIce } from "./black-ice.js";
 import { snowbankYield } from "./snowbanks.js";
+import { NPC_SHIFT_MPS as PD_SHIFT_MPS, npcPuddle } from "./puddles.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
@@ -310,7 +316,9 @@ export class NpcPath {
     // bounded: joining a very short lane after a rounded corner can add almost no length
     for (let guard = 0; guard < 24 && this.length - this.s < LOOK_M * 2.5; guard++) {
       const last = this.edges[this.edges.length - 1];
-      const succ = this.map.successors(last.id).filter(id => !this.restrictionWorld?.restrictions || this.bike || !turnBanned(this.map, last.id, id, this.restrictionWorld.clock));
+      const succ = this.map.successors(last.id).filter(id => !this.restrictionWorld?.restrictions || this.bike || !turnBanned(this.map, last.id, id, this.restrictionWorld.clock))
+        // (never into a block closed for an event: sim/road-closures.js)
+        .filter(id => !this.closures?.closed.has(id));
       if (!succ.length) return false;
       // no U-turns, nor turns so sharp they double back (the tip of a traffic island)
       const noU = succ.filter((e) => Math.abs(this.map.turnAngle(last.id, e)) < SHARP_TURN);
@@ -680,10 +688,14 @@ export class NpcFleet {
     if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
     // (now and then a car behind the driven car tailgates it, with that option on: sim/tailgaters.js)
     if (world.tailgaters?.enabled) manageTailgaters(world, this, dt);
+    // (now and then the car ahead of the driven car parallel parks, with that option on: sim/parkers.js)
+    if (world.parkers?.enabled) manageParkers(world, this);
     const all = [world.ego, ...this.vehicles];
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     const riders = world.contraflow?.riders || [];
     for (const n of [...this.vehicles]) {
+      // (with road closures on, every driver's way keeps out of a closed block: sim/road-closures.js)
+      if (world.roadClosures?.enabled && n.path) n.path.closures = world.roadClosures;
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
       // a garbage truck standing at a stop while its crew empties the bins (sim/collection-truck.js)
       if (n.collect?.phase === "work" && this.collection.work(n, dt)) { n.a = 0; continue; }
@@ -706,6 +718,8 @@ export class NpcFleet {
         else if (!this.pullClear(n)) { n.pull.t = 0; n.pull.wait = 0.5; n.v = 0; continue; }
       }
       if (n.parking) { this.parkStep(n, dt); continue; }
+      // a car parallel parking: stopped where it starts, then reversing in (sim/parkers.js)
+      if (n.parker && stepParker(world, this, n, dt)) continue;
       if (n.backoff) { this.backOff(n, dt); continue; }
       if (n.holdFor > 0) { n.holdFor -= dt; n.step(dt, { steer: n.delta, accel: -3 }); if (n.v < 0) n.v = 0; continue; }
       const path = n.path;
@@ -728,11 +742,17 @@ export class NpcFleet {
           proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
         }
       }
+      // (a way through a block closed for an event is re-planned while there is room: sim/road-closures.js)
+      if (world.roadClosures?.list.length && avoidClosure(world, n)) { proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s; }
       path.extend();
       path.trim();
       const edge = path.currentEdge();
       const spec = n.spec;
       const front = path.s + (spec.length - spec.rearOverhang);
+      // behind a car parallel parking ahead (sim/parkers.js): keep back from the room it reverses into
+      // (below), and don't go round it
+      const pkc = world.parkers?.active.length && !n.parker ? parkerConflict(world, n, path, front) : null;
+      if (pkc) n.lcCooldown = Math.max(n.lcCooldown || 0, 0.5);
       // lane change in progress: the lateral offset eases over the maneuver, then the path moves
       // onto the new lane
       // an emergency vehicle calling on this driver to give way (none while still at the curb)
@@ -812,8 +832,20 @@ export class NpcFleet {
         n.phShift = (n.phShift || 0) + Math.max(-PH_SHIFT_MPS * dt, Math.min(PH_SHIFT_MPS * dt, to - (n.phShift || 0)));
         offset += n.phShift;
       }
+      // a puddle at the kerb with someone within splash reach (sim/puddles.js): ease left inside the lane
+      // where that takes the wheels out of it (not while off the middle of the lane for anything else, or
+      // easing round a pothole), and otherwise slow below its splash speed, wherever in the lane it is going
+      const pdBusy = !!(n.lc || wzShift || dpShift || lzShift || cyc || n.pull || ph?.shift || Math.abs(offset) > 0.05);
+      const pd = world.puddles?.enabled && n.kind !== "bike" && !n.transit?.tram ? npcPuddle(world, n, front, offset, pdBusy, offset + (ph && !n.lc ? ph.shift : 0) - (n.phShift || 0)) : null;
+      if (pd || n.pdShift) {
+        const to = pd && !pdBusy ? pd.shift : 0;
+        n.pdShift = (n.pdShift || 0) + Math.max(-PD_SHIFT_MPS * dt, Math.min(PD_SHIFT_MPS * dt, to - (n.pdShift || 0)));
+        offset += n.pdShift;
+      }
       // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
       if (n.tgPeek) offset += n.tgPeek;
+      // a car about to parallel park easing right toward where it starts (sim/parkers.js)
+      if (n.parker) offset += n.parker.shift;
       // between snowbanks that push the parked cars out from the kerb (sim/snowbanks.js): over toward the
       // middle, clear of them, as far as it has come into the stretch at its pursuit point
       const sb = world.snowbanks?.narrowings.length && !n.transit?.tram ? snowbankYield(world, n, front) : null;
@@ -917,6 +949,9 @@ export class NpcFleet {
           }
         } else n.parkWait = 0;
       } else if (n.parkWait) n.parkWait = 0;
+      // behind a car parallel parking ahead (sim/parkers.js): stop at its hold line, short of the room it
+      // reverses into, until it is in
+      if (pkc && pkc.to_hold_m < gap) { gap = Math.max(0.05, pkc.to_hold_m); leadV = 0; leader = pkc.parker; }
       // a snow plow ahead (sim/snow-plow.js), as far as the distance to stay back from it: in its lane,
       // or in the lane to its left, never passed on the right
       const forPlow = this.plows.length ? this.plowHold(n, path, front, offset, edge.limit) : null;
@@ -937,6 +972,8 @@ export class NpcFleet {
         const lineS = e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
         if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id)) amberCap = Math.min(amberCap, choice.speed_mps);
       }
+      // (only an officer holding it at a control ahead this step keeps it from giving up a wait)
+      if (n.officerHeld) n.officerHeld = false;
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
         // (a signal whose lights are out is an all-way stop: sim/outage.js)
@@ -945,7 +982,11 @@ export class NpcFleet {
         const bumperToLine = lineS - front;
         if (bumperToLine < -1) continue;
         if (bumperToLine > 70) break;
-        if (ctl.type === "signal") {
+        // (a police officer directing traffic there: their direction, not the light's; held, it stays held,
+        // never giving up on the wait: sim/traffic-officer.js)
+        const officer = ctl.type === "signal" && world.officers?.list.length ? officerDirection(world, n, e.id) : null;
+        if (officer) { n.officerHeld = officer === "stop"; if (n.officerHeld) stopAt = bumperToLine; }
+        else if (ctl.type === "signal") {
           // (the light for the way it goes: under a left arrow, only a left turn has a green)
           const after = path.edges[path.edges.indexOf(e) + 1];
           const st = movementSignal(approachPhase(this.map.intersections.get(e.control.id), e.id, world.t), after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight");
@@ -985,6 +1026,9 @@ export class NpcFleet {
       if (n.kind === "bike" && n.stripHold != null) stopAt = stopAt === null ? n.stripHold - front : Math.min(stopAt, n.stripHold - front);
       // giving way to an emergency vehicle: stop where it chose to when the call came
       if (yielding) { const at = this.yieldStop(n, yielding, front); stopAt = stopAt === null ? at : Math.min(stopAt, at); }
+      // about to parallel park: stop where it starts, alongside the car in front of its space (sim/parkers.js)
+      const pStop = n.parker ? parkerStop(n) : null;
+      if (pStop !== null) { const at = pStop + (n.driver || IDM).s0 - 0.3; stopAt = stopAt === null ? at : Math.min(stopAt, at); }
       if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
       // an emergency vehicle ahead going its way, within FOLLOW_M: hang back from it as from a car
       // FOLLOW_M nearer
@@ -997,6 +1041,7 @@ export class NpcFleet {
       const turn = cur && after ? this.map.classifyTurn(this.map.turnAngle(cur.id, after.id)) : "straight";
       n.signal = n.pull ? (n.pull.lat > 0 ? "left" : "right") : n.lc ? (n.lc.dir < 0 ? "left" : "right") : toNode < 35 && (turn === "left" || turn === "right") ? turn : null;
       if (stand && stand.signal !== undefined) n.signal = stand.signal;
+      if (n.parker) n.signal = "right";
       // turning left: yield to oncoming traffic before crossing its lane
       if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
         gap = Math.min(gap, Math.max(0.05, toNode - 5)); leadV = 0;
@@ -1038,7 +1083,7 @@ export class NpcFleet {
       } else n.standoff = 0;
       // After ~15 s stopped at a clear control with no vehicle blocking, abandon the virtual leader.
       if (n.v < 0.2 && gap < 3) n.waiting += dt; else n.waiting = 0;
-      if (n.waiting > 15 && stopAt !== null && stopAt < 1 && leadV === 0 && !this.blockedByVehicle(n) && !(cur && this.crossComing(n, cur.to))) { gap = Infinity; leadV = n.v0; n.waiting = 0; }
+      if (n.waiting > 15 && stopAt !== null && stopAt < 1 && leadV === 0 && !n.officerHeld && !this.blockedByVehicle(n) && !(cur && this.crossComing(n, cur.to))) { gap = Infinity; leadV = n.v0; n.waiting = 0; }
       // a bus at its stop, or pulling in to it; or, behind a bus signalling to pull out from its stop,
       // letting it out (sim/bus.js): after the checks above, which still hold on the way there (a
       // junction before the stop), and not a line the wait at which is ever given up
@@ -1101,6 +1146,13 @@ export class NpcFleet {
         const g = sb.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
       }
+      // short of the barricade across a block closed for an event, on a way that could not be changed in
+      // time (sim/road-closures.js)
+      const rch = world.roadClosures?.list.length ? closureHold(world, n, front) : null;
+      if (rch) {
+        const g = rch.hold - front;
+        if (g > -1 && g < gap) { gap = Math.max(0.05, g); leadV = 0; }
+      }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
       const vCurve = curveSpeed(path, path.s);
@@ -1119,7 +1171,7 @@ export class NpcFleet {
       // (and, with black ice on, slowing for the ice ahead, and for bridges in icy weather, and easing off
       // on it: sim/black-ice.js; a streetcar's steel wheels do not feel it)
       const vIce = this.world.ice?.list.length && !n.transit?.tram ? npcIce(this.world, n, front)?.limit ?? Infinity : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce, sb?.limit ?? Infinity);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce, sb?.limit ?? Infinity, pd?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
@@ -1991,7 +2043,7 @@ export class NpcFleet {
   // smoothly into the bay and stops; it becomes a persistent parked obstacle at its actual pose.
   maybePark() {
     for (const n of this.vehicles) {
-      if (n.kind === "bike" || n.transit || n.school || n.rail || isPlow(n) || n.collect || n.pull || n.parking || n.lc || n.backoff || n.frozen > 0) continue;
+      if (n.kind === "bike" || n.transit || n.school || n.rail || isPlow(n) || n.collect || n.pull || n.parking || n.parker || n.lc || n.backoff || n.frozen > 0) continue;
       const edge = n.path.currentEdge(), lane = this.map.lane(edge.id, edge.lane);
       const e = this.map.edges.get(edge.id);
       const choices = this.world.parked.slots.filter((slot) => {
@@ -2084,7 +2136,7 @@ export class NpcFleet {
     if (cars.length > this.target) {
       let far = null;
       for (const k of cars) {
-        if (k.pull || k.parking) continue;
+        if (k.pull || k.parking || k.parker) continue;
         const d = Math.hypot(k.x - ego.x, k.y - ego.y);
         if (d > 150 && (!far || d > far.d)) far = { k, d };
       }

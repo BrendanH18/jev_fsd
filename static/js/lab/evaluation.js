@@ -22,7 +22,7 @@ const sunClock = (challenge) => ({ ...(challenge.date ? { day: dayOfYear(challen
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
 export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
-  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed, redTurnSigns: !!challenge.redTurnSigns, amberLights: !!challenge.amberLights, followingDistance: !!challenge.followingDistance, redRunners: !!challenge.redRunners, sunGlare: !!challenge.sunGlare, driveways: !!challenge.driveways, potholes: !!challenge.potholes, balls: !!challenge.balls, geese: !!challenge.geese, tailgaters: !!challenge.tailgaters, ice: !!challenge.ice, snowbanks: !!challenge.snowbanks });
+  const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed, redTurnSigns: !!challenge.redTurnSigns, amberLights: !!challenge.amberLights, followingDistance: !!challenge.followingDistance, redRunners: !!challenge.redRunners, sunGlare: !!challenge.sunGlare, driveways: !!challenge.driveways, potholes: !!challenge.potholes, balls: !!challenge.balls, geese: !!challenge.geese, tailgaters: !!challenge.tailgaters, ice: !!challenge.ice, snowbanks: !!challenge.snowbanks, puddles: !!challenge.puddles, parkers: !!challenge.parkers, roadClosures: !!challenge.roadClosures, officers: !!challenge.officers });
   world.visibility.setNight(challenge.time === "night" || challenge.nightFlash ? 1 : 0);
   // (school and playground zones go by the challenge's time of day)
   // (and, for low sun glare, its date and time zone: sim/sun-glare.js)
@@ -61,6 +61,8 @@ export async function evaluateChallenge(map, challenge, { brain = "rules", mode 
     if (!hazardRecorded && world.challenge.triggered) { trace.event("hazard", "Authored hazard triggered", world.t); hazardRecorded = true; }
     trace.measurements(world, score);
     if (mode === "lockstep" && autopilot.firing) await autopilot.firing;
+    // (and a route round a closed road, so the detour comes at the same step every run: sim/road-closures.js)
+    if (mode === "lockstep" && autopilot.closureRouting) await autopilot.closureRouting;
     if (mode === "realtime") {
       const ahead = world.t * 1000 - (performance.now() - start);
       if (ahead > 4) await new Promise(resolve => setTimeout(resolve, ahead));

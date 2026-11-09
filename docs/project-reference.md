@@ -2254,3 +2254,355 @@ arrives in about 75 s and the cautious agent in about 82 s, both waiting at the 
 to the corner and stopping for the person; a driver who keeps going at 3.5 m/s enters with the
 oncoming car in the stretch (`snowbank_conflicts`). Checks: `scripts/test_snowbanks.mjs` (its
 `--write-snapshot` writes the live-model case `data/snapshots/one_car_at_a_time.json`).
+
+## Puddles at the kerb (`sim/puddles.js`)
+
+`World` option `puddles` is on in free drives unless `?puddles=0`, and in the **Don't splash**
+challenge (`puddles: true`). With it off `World.puddles` is an empty, disabled `Puddles`: no random
+stream is created or drawn from, sensing adds no `puddle_splash` field, no law gets a puddle
+`slowTo`, traffic adds no `pdShift`, the audit does not run and no metric key is added.
+
+**Placement.** `new Puddles(map, { enabled, seed })` walks the kerb lane (the rightmost, `lanes - 1`)
+of every main (tertiary and up) and quiet street edge at least 30 m long, not roundabout rings, from
+its own stream (`rng(seed * 2246822519 + 173)`): a corner puddle 6–14 m short of the junction the
+lane runs into (55% of main streets, 30% of quiet ones; 0.9–1.9 m out from the kerb, 2–6 cm deep),
+one over a catch basin every 45 m with a 30% chance (0.6–1.5 m, 2–5 cm), and long shallow ones, on
+average one every 110 m of main street and 200 m of quiet street (0.4–1.0 m, 0.8–2 cm deep, 4–10 m
+long); none within 2 m of another. Each record is a pothole-shaped ellipse, `{ id, edge, lane, s,
+offset, a, b, depth, shape, x, y, heading, lane_w, puddle: true }`, its kerb-side edge against the
+kerb face (`asphalt[1] + GUTTER` from the edge's centreline), so the wheel tests of
+`sim/potholes.js` (`wheelRoom`, `wheelsCross`, `inPothole`, `crossesPothole`) serve for both. Where
+a parking lane lies between the kerb lane and the kerb, no moving wheel reaches one. Mount Pleasant
+gets about 780. `setList` replaces them (a challenge places its own); the recorder shares the
+object between checkpoints.
+
+**When they lie.** `puddlesLie(world)`: while `world.weather` is rain, and, once it has rained this
+drive (`World.puddlesRained`, set by the audit and at construction), on through dry or fog until it
+snows. While they lie, a pothole full of rain water (`sim/potholes.js`, with that option on) is
+treated as a puddle too: the same splash test and speed, though the pothole module keeps its own
+way round it and its own speed.
+
+**Splash speed and reach.** `splashSpeed(h)` is 25 km/h for a 2 cm puddle, scaled by
+`sqrt(0.02 / depth)` within 12–32 km/h (16 km/h at 5 cm). The water lands from 0.6 m inside the
+puddle's kerb-side edge to 2.5 m beyond it, from 1 m behind the puddle to 3 m ahead: the kerb, and
+the sidewalk of a street without a boulevard (a primary street's sidewalk centre is 2.1 m beyond
+the asphalt), but not a residential sidewalk behind its 1.8 m boulevard. `splashRisk(world, h, eta,
+seen)` is the one shared test: the pedestrians within that reach now (`eta` null), or, planning
+ahead, who could be by the time a vehicle `eta` seconds away gets there (the zone grows by 1 m plus
+1.6 m/s of walking along the street, at most 9 m, and 0.2 m across), among those `seen`. Empty means
+the puddle is just water. Sensing, the forward sims (through sensing), traffic, the audit and the
+renderer's flinch all use it.
+
+**Sensing and candidates.** `puddlesAhead` reads the puddles (and water-filled potholes) in the car's
+lane within 60 m (or the visibility range), projected along the route (cached per route), and keeps
+those with someone the car can see within reach: `puddle_splash` is the next, `puddles_ahead` all,
+each with `kind`, `people`, `person_ids`, `splash_mps`, `speed_mps` (90% of the splash speed times
+the weather's speed factor), `room` and `shift_m` (`wheelRoom`, withdrawn when too close to make the
+move), the `slow` window (60% of `comfort().decel`, below the speed 5 m before the front wheels get
+there) and, for a puddle with room, the `detour` (`controller.detourAt`, as for potholes). Every one
+without room caps `snap.limit` (`puddleLimit`) and the target speed names it ("puddle by the kerb:
+people on the sidewalk"). The candidates add `ease_round_puddle` (the detour, at the target speed)
+when there is room and no other detour is under way; every lane law whose lateral target would put a
+wheel in one gets a `slowTo` entry (`lawSlows`). Forward sims sweep each tyre over them
+(`simSplashes`) and reject `splashes_pedestrian` above the splash speed plus 0.3 m/s, `hard_brake`
+excepted; when no other manoeuvre avoids it (someone stepped up too late), the splash rejection is
+lifted rather than force a hard brake. Rules gives easing round a 1.5 bonus; the cautious agent takes
+it when its end speed is near the target. Models get a `puddle` field, a situation clause, outcome
+labels for `ease_round_puddle` and for laws that slow through one, and a line in the system prompt.
+
+**Traffic.** `npcPuddle(world, n, front, base, busy)` reads the puddles (and water-filled potholes)
+on the lanes of an NPC's path within 70 m that its wheels would go through where it keeps in the
+lane, with someone within reach by the time it gets there: the first with room sets an in-lane
+shift once its front wheels are 30 m short (eased at 0.6 m/s, `pdShift`, not while off the middle of
+its lane for anything else: a lane change, work zone, lane closure, van, cyclist, pulling out, a
+pothole or a bus stop), and every other one caps its desired speed at 85% of the splash speed, at
+40% of `comfort().decel`. Cyclists and streetcars do neither. Traffic is kept polite in the sim:
+nobody splashes on purpose. A traffic car that does go through fast (with nobody near, usually)
+throws spray, which is render-only.
+
+**Audit.** `auditPuddles` counts each pedestrian within reach (now, exactly) of a puddle or
+water-filled pothole a wheel of the car is in, faster than its splash speed plus 2 km/h, as
+`pedestrians_splashed`, once per person for each pass through it, with a `pedestrian_splashed` event (puddle,
+person, km/h, splash km/h, depth). `World.puddlesSeen` is set once a puddle with someone within reach
+is within 30 m ahead of the car's front, in or beside its lane; only then do the metrics report
+`pedestrians_splashed`, which fails a drive ("splashed a pedestrian from a puddle"; the road-test
+examiner files it under speed). `World.puddleWarn` names such a puddle while the car is heading
+into it faster than its splash speed, for the coach. The drive score costs 20 legality points per
+person, with an incident, a coaching tip and a replay marker.
+
+**Rendering.** `render/puddles.js` draws every puddle as a coplanar ground fan of standing water on
+`LAYER.patch + 0.7` (above the pothole holes, below the markings; `wetReflective`, gloss 2), shown
+only while they lie. `PuddleView` throws droplets (one instanced mesh, at most 360) to the kerb side
+from the right wheels of any vehicle (not cyclists) going through one faster than its splash speed,
+and anyone within reach flinches away from the kerb for 1.2 s (render-only). The HUD says PUDDLE BY
+THE KERB · PEOPLE ON THE SIDEWALK · EASE 0.3 M LEFT or · SLOW, AI eyes lists the next one, and the
+coach says to ease left or slow down.
+
+**Don't splash** (`dont-splash`, seed 59042, Vancouver, Mount Pleasant, Main Street, rain,
+afternoon): northbound in the kerb lane (lane 2 of three each way, 3.5 m, 50 km/h, no parking lane)
+along `e708` and `e666`. `lab/puddle-challenge.js` replaces the world's puddles with three: one by
+the stop for the 8 and the 19 (46 m along `e708`, 1.3 m out from the kerb, 3 cm deep) where three
+people wait at the kerb, one on the next block (40 m along `e666`, 2.0 m out, 5 cm; no room in the
+lane) as someone walks up the sidewalk beside it, and a long shallow one further on with nobody
+near. The car starts at 11 m/s. Rules and the cautious agent ease about 0.25 m left past the bus stop
+at speed, go through the wide one at about 12.5 km/h, drive on through the empty one and arrive;
+a car holding 40 km/h splashes three people. Checks: `scripts/test_puddles.mjs` (its
+`--write-snapshot` writes the live-model case `data/snapshots/dont_splash.json`).
+
+## Traffic parallel parking (`sim/parkers.js`)
+
+A car ahead that stops to parallel park. `World` option `parkers` is on in free drives unless
+`?parkers=0`, and in the **Room to park** challenge (`parkers: true`). From 25 s into a drive, every
+3 s while none is at it (90 s after one has parked, 30 s after one gave up), the ordinary traffic car
+(not a cyclist, bus, school bus, train, plow, truck at work, emergency vehicle, car pulling out,
+parking, running a light, passing a cyclist, tailgating or changing lanes, nor one that gave up
+before; 5.5 m long at most) right ahead of the driven car in its lane, within 60 m and moving at
+3 m/s or more, is looked at. `parkerPlan` finds it a space with the driven car's own code
+(`sim/parallel-park.js`): `freeStretches` (the legal stretches of its street's right parking lane,
+less what stands there and spaces others have reserved) and `planSpaceOn` (the driven car's
+`planSpace` on the traffic car's own path, without the destination's checks): on its current edge, in
+the lane beside the parking lane, not on the block of a work zone, a lane closure or a double-parked
+van, its start 18–75 m ahead and at least what stopping at 1.8 m/s² needs, nothing in its way up to
+there, and its whole S clear of anything standing (`sClear`, `parkRoom` every 0.25 m of it: the space's
+own check covers the cars in front and behind, but on a narrow street the front swings out over the
+far lane, into cars parked at the other kerb). Where its hold line also lies on the driven car's route (on it, not past its end), far enough
+ahead for the driven car to stop at 2.0 m/s² and 8 m more, it becomes a parker with chance 0.35 (`PARKER_CHANCE`; a draw only
+then, from the feature's own stream). One at a time.
+
+`commitParker` keeps the plan on the car (`n.parker`), reserves the space's slots for it and puts its
+right indicator on. The hold line is `hold` behind the rear bumper it will have where it stops to
+start: the driven car's own `hold` (its reverse's length and 1.5 m, what traffic keeps back from the
+driven car parking, `World.parkHold`) and 1.5 m more (`HOLD_MARGIN_M`); about 9 m for a compact car.
+It drives up to its start (`parkerStop` in its driver's stop, easing up to 0.6 m right in its lane
+over the last 20 m), stops alongside the car parked in front of the space, its rear bumper 0.5 m
+behind that car's, and pauses 2 s (`PAUSE_S`), checking behind. Anyone in the room it really needs
+(the hold, less the margin, across from its lane's far side to the kerb) or coming into it within
+2.5 s keeps it waiting; with someone standing in that room for 12 s (`GIVE_UP_S`) it gives up and
+drives on (also after 75 s before it has started back, or once it is 3 m past its start). Then
+`planParking` and `stepParking` reverse it in, exactly as the driven car parks: legs at walking pace,
+full lock toward the kerb, straight, full lock the other way, square and settle. While it reverses it
+stops for anyone moving in that room and for anything standing within 1 m behind it (the driven car
+included, which the shared manoeuvre's own clearance check leaves out). If the manoeuvre gets stuck (a
+door opening beside it, say) it waits and starts again from where it stands every 1.5 s (`RETRY_S`); it
+gives up only after 12 s of that, or blocked as long, while still within 12° of parallel and 0.8 m of
+its start. Its reverse lamps (`reverseLamps`, drawn by
+`render/driveway-reversers.js` `syncReverseLamps`, render-only) are lit while it backs up. Once in it
+leaves the traffic (`world.npcs`) and is added to `world.parked`, in the nearest of its slots: a
+parked car like any other, so `world.obstaclesNear` keeps returning it through the parked cars'
+grid, and nothing follows it or counts it as moving traffic. (A challenge's parker stays put; one in
+a free drive may later open a door or pull out like any parked car.)
+
+`parkerConflict` is the one test: for a vehicle going along a path (its route, or an `NpcPath`), its
+front bumper `front` along it and `lat` right of it, the nearest parker going its way (headings within
+60°) whose hold line projects onto the path within 1.6 m of its line (`BAND_M`) and 90 m ahead, with
+the vehicle's front still short of the parker's rear bumper (0.5 m slack): `{ parker, phase,
+to_hold_m, gap_m, hold_m, line_s }`. Traffic and cyclists (`sim/npc.js`) stop at the hold line (it is
+their leader there, with their standstill gap on top) and make no lane change while it applies, so
+they neither creep into the room nor go round it, until it is in. Sensing reports `parking_ahead`
+(`id`, `phase` "signalling", "stopped" or "reversing", `signal`, `reverse_lights`, `gap_m`, `hold_m`,
+`bumper_to_stop_m`, `stop_s_route`, `wait`, `in_room`, and `stops_in_m` while it is still on its
+way) for one the car can see; `desiredSpeed` stops at the hold line, and the parker stays the car's
+leader as it swings into the space. The candidate `wait_for_parker` (stop at the hold line) is on
+offer once the hold line is nearer than the queue behind the parker (until then the car follows it);
+the forward sims reject `blocks_parking_car` for any manoeuvre but `hard_brake` that takes the front
+more than 1 m past the hold line, which also rules out going round it. Rules stops at the hold line
+and prefers `wait_for_parker` (−6); the cautious agent takes it while `wait` holds; the deadlock
+detector leaves the car be while it waits there. Models get a `parking_ahead` field (`now`,
+`room_it_needs_m`, `wait_in_m` or `in_its_room`), a situation clause, a stop criterion and a line in
+the system prompt. The HUD says CAR PARKING AHEAD · WAIT (or · REVERSING IN · WAIT); the coach says to
+stay well back and wait; AI eyes draws the parker amber, and the Lab panel lists it with the room it
+needs and where the car waits.
+
+The audit (`auditParkers`) counts, once per parker, the driven car's front more than 0.5 m past the
+hold line while the parker is stopped to start or reversing (it blocks it, whether it drove in then
+or had crept in behind it before), and going past the parker's front after having been behind it in
+its lane while it is still at it, as `parking_conflicts` (event `parking_conflict`, reason
+`blocked` or `passed`). It reaches the metrics and fails a drive (and a road test, under "space")
+only once a parker has signalled ahead of the car (`World.parkersSeen`). The drive score costs 20
+legality points each, with an incident, a coaching tip and a replay marker. A parker backing into the
+stationary driven car is the parker's collision (`fault: "other"`). With the option off nothing is
+computed, no random number is drawn, and the seeded benchmark and the other challenges play out and
+report exactly as before.
+
+**Room to park** (`room-to-park`, seed 58042, Kitsilano, Larch Street, dry afternoon): the first block
+of Larch Street (`e103`, southbound from West 13th Avenue, 426 m, one lane each way, 50 km/h, parking at both kerbs) that is
+straight with room to park all along it (`parkerSites`). Its right kerb is lined with parked cars,
+1.3 m apart, from 70 m behind a gap of 8 m to 30 m past it, and cars line the far kerb too. The car
+sets off at 30 km/h; the parker starts 18 m ahead of it at the same speed, 55 m short of its stop,
+already signalling for the gap; the route ends 60 m past the gap. It stops about 11 s in, pauses and
+reverses in, parked about 29 s in. Rules and the cautious agent stop at the hold line, about 9 m
+behind it, wait, and then drive on (arriving at about 42 and 43 s). A driver who follows it close and
+stops behind it blocks it: it gives up and drives on, and the drive fails (`parking_conflicts`).
+Checks: `scripts/test_parkers.mjs` (its `--write-snapshot` writes the live-model case
+`data/snapshots/room_to_park.json`).
+
+## Road closures (`sim/road-closures.js`)
+
+A whole block closed for an event, and the detour round it. `World` option `roadClosures` is on in
+free drives unless `?roadclosures=0`, and in the **Road closed** challenge (`roadClosures: true`).
+With it off `World.roadClosures` is a disabled `RoadClosures` with no random stream and an empty list,
+and nothing reads it. In a free drive, from 25 s in (`CLOSURE_FIRST_S`), every 3 s while none stands
+and 90 s after the last came down, the blocks of the route whose near junction lies 120–450 m ahead
+(`AHEAD_MIN_M`, `AHEAD_MAX_M`), at least two edges on and at least 40 m long, are candidates: never a
+roundabout ring, the drive's first edge or the destination's (either way), an edge on a transit run,
+or a contraflow street. With one, a draw (chance 0.35, the feature's own stream, seeded
+`seed * 2654435761 + 60042`) closes one of them, but only if the browser router still finds a way to
+the destination avoiding it from the start of the street before it (turning off at that street's end), no board is in the car's sight, and no driver who keeps to a way of its
+own (bus, streetcar, school bus, plow, garbage truck, train) has it on its way. It comes down once it
+has stood 60 s and the car is 200 m from it with neither direction on its route.
+
+`buildClosure` closes the block both ways (the edge and its reverse; one way on a one-way street).
+At each end a barricade line crosses the whole asphalt, `PAST_KERB_M` (4.5 m) beyond the widest
+cross street's asphalt (past its crosswalk), at least 5 m into the block and at most 30% of it, made
+of boards up to 2.6 m wide and 0.5 m deep (`Barricade`, `kind: "barricade"`, static, in
+`world.obstaclesNear`, so the forward sims treat one like scenery and hitting one is a collision at
+the car's fault). Traffic on the block or committed to it (within 15 m of it with no other way) is
+moved, from the feature's stream, to a lane at least 150 m from the car (`relocate`).
+
+`closureAhead(world, way, front, look)` is the one test: the first barricade line across a closed
+block along a way (`routeWay(route)` or `pathWay(path)`) that a front bumper has not passed, within
+150 m. The car learns of a closure (`RoadClosures.known`) only once it sees a board
+(`visibility.sees`: range, darkness, buildings), in the audit. Sensing then reports `road_closed`
+(`street`, `distance_m`, `on_route`, `detour_planned`, and on the route `line_s_route`,
+`stop_s_route`, `bumper_to_stop_m`): with no detour yet, the car stops at the stop line of the
+approach before the block, or `HOLD_BACK_M` short of the cross street's asphalt, or, having run up
+to 3 m past that (`OVERRUN_M`), where it is, or else 3 m short of the barricade; `desiredSpeed`
+caps the target to stop there braking at 1.8 m/s² (`STOP_DECEL`). Once the route avoids it, the
+nearest known barricade ahead within 90 m is reported with `detour_planned`. Candidates:
+`stop_for_closure` (planned at `STOP_DECEL`); any manoeuvre but `hard_brake` whose front reaches
+half a metre short of the barricade line is rejected `enters_closed_road` (checked before a
+collision). Rules prefers `stop_for_closure` (−30) and stops within 1.5 m of the stop; the cautious
+agent takes it and aims for zero within 12 m. The autopilot re-plans (`Autopilot.reroute`, at most
+every 3 s) with `avoid: world.roadClosures.avoid()`, the edges of every closure the car has seen, on
+every reroute while any is known; with no server (Node) the request falls back to `browserRoute`
+with the same `avoid`. A lockstep evaluation waits for that request (`autopilot.closureRouting`), so
+the detour comes at the same step every run. Models get `road_closed`, a situation clause, a motion
+criterion and a system prompt line.
+
+Routing: `jev/routing.py` `Router.routes(..., avoid=)` and `astar(..., avoid=)` never enter an
+avoided edge (the start edge is where the car is) and drop avoided goal lanes; `/api/route` takes
+`avoid`, a list of up to 200 edge ids. An empty or missing list gives exactly the routes as before.
+`demo/routing.js` `browserRoute` takes `avoid` the same way. Mind both copies of the lane-join logic
+and the sharp-turn rule: the detour's polyline is joined like any route.
+
+Traffic: with the option on every driver's path carries `closures` (the World's state, so
+checkpoints keep them together), and `NpcPath.extend` never appends a closed edge. `avoidClosure`
+re-plans a way that runs through a closed block from the street the driver is on while it is more
+than 12 m from its end; `closureHold` holds anyone still headed into one 2 m short of the barricade.
+
+The audit (`auditRoadClosures`) learns what the car sees and watches its front against each
+barricade line: crossing from outside to inside, within the street's width, counts as
+`closure_entries` (event `closure_entry`). It reaches the metrics and fails a drive only once the
+car has come up to a closure (`World.roadClosuresSeen`: seen, or crossed). The drive score costs 20
+safety and 25 legality points each, with an incident, a tip and a replay marker; while a seen
+closure is ahead the coach says to follow the detour. The road-test examiner files it under
+observation. `render/road-closures.js` draws striped Type III barricades with flashing amber lamps,
+ROAD CLOSED and DETOUR signs, kerb cones and festival tents on the block (render-only); the HUD says
+ROAD CLOSED AHEAD · DETOUR. With the option off nothing is computed, no random number is drawn, and
+the seeded benchmark and the other challenges play out and report exactly as before.
+
+**Road closed** (`road-closed`, seed 60042, Halifax, dry afternoon): Spring Garden Road (two-way,
+one lane each way) is closed between Queen Street and Birmingham Street (`e277`/`e278`). The car
+starts at rest 20 m along `e489`, a block and a half before it, on a route down the closed block and
+onto Birmingham Street (`e218`, 60 m along `e172`). It sees the barricade from about 80 m, after
+about 9 s, re-plans, and turns onto Queen Street at its signal, then Clyde Street
+(stop) back to Birmingham Street. Rules and the cautious agent arrive in about 58 and 60 s with no
+entries, collisions or deadlocks. Checks: `scripts/test_road_closures.mjs` (its `--write-snapshot`
+writes the live-model case `data/snapshots/road_closed.json`), `tests/test_routing.py` and
+`tests/test_maps.py` for `avoid`.
+
+## Police officers directing traffic (`sim/traffic-officer.js`)
+
+Every province's highway traffic act puts a police officer's directions above the signals (Ontario's
+HTA s. 134, BC's Motor Vehicle Act s. 123, Québec's Highway Safety Code s. 309). `World` option
+`officers` is on in free drives unless `?officers=0`, and in the **Follow the officer** challenge
+(`officers: true`). The state (`createOfficers`) is a plain object on the World: whether officers come,
+their own random stream (`rng(seed * 2654435761 + 57042)`), the officers standing now and when the next
+may be looked for. From 30 s into a drive (`OFFICER_FIRST_S`), every 8 s while none stands and 90 s
+after the last left, the nearest signal on the car's route 150 to 450 m ahead (`SPAWN_M`) that the car
+cannot see, with nobody within 40 m of it, and that may have one (`officerSite`: three approaches or
+more, no scramble plan, no streetcar run and no level crossing on its streets), gets an officer with
+chance 0.35 (a draw only when there is such a junction). An officer stays 150 to 300 s, then leaves once
+the car is 150 m away and out of sight with nobody within 40 m. `placeOfficer` puts one in the middle
+of the box, facing the traffic it holds, and parks its cruiser (`POLICE_CAR`, `roadside` and `flashing`
+for the renderer, but not in `world.roadside.vehicles`, so the move-over rule does not apply): in the
+first free parking bay on the right of a street leading away from the junction, within 45 m, where
+there is one (parked in `world.parked` like any car, so solid; whoever was parked there leaves, and the
+bay is reserved), else up on the kerb beside one of them, out of the lanes (render-only).
+
+The officer works in phases of their own (`phase` "A" or "B", the signal group waved, or "clear"): a
+wave lasts at least 12 s (`GO_MIN_S`), then ends once someone waits on the held axis (a vehicle up to
+60 m short of a held line, or someone on foot at the kerb to cross alongside it) and nobody on the
+waved axis is too close to stop for the officer turning (`sim/amber.js` stopping distance plus 0.5 m),
+or after 30 s (`GO_MAX_S`) with someone waiting. As it ends, everyone over a waved line already, or
+moving and too close to stop, is waved on for that turn (`committed`, by id, the ego as `"ego"`).
+Everyone is then held for at least 2 s (`CLEAR_S`) and until the box is empty: no vehicle's front,
+middle or rear within `boxR` (the nearest stop line's distance from the centre, less 1.5 m) of the
+centre, no one on foot crossing at the junction, and no vehicle waved on still short of its line (up to
+15 s, `CLEAR_MAX_S`). Then the other axis is waved. A challenge can hold a wave to a time
+(`holdUntil`). People on foot cross alongside the waved axis, starting only in the first 7 s of a wave
+(`officerWalk`, used by `Crowd.mayCross` and `kerbConflict`).
+
+`officerDirection(world, vehicle, edge)` is the one test: for a vehicle on an approach to a junction an
+officer governs, "go" while its group is waved or it was waved on as the officer turned, else "stop";
+null where no officer governs. While an officer stands there, `controlAt` (`sim/outage.js`) keeps the
+junction a signal even in a power cut or overnight flashing, so nobody treats it as an all-way or
+two-way stop; the lights themselves keep cycling (or stay dark) and are drawn as before. Traffic and
+cyclists (`sim/npc.js`) stop at the line when held, on any light, and never give up waiting there
+(`officerHeld`), and take no light, amber call, red-light run or turn on red at the junction when
+waved; the box rule, left turns yielding to oncoming traffic and crosswalk yields apply as ever.
+Contraflow cyclists take the officer's direction too. `World.light()` reports the officer's direction
+as green or red, for the junction-box audit and HUD.
+
+Sensing reports `traffic_officer` (and `intersection.officer`) once the car can see the officer within
+80 m of the line: `direction`, `axis` (the group waved, or null in an all-stop), `approach_group`,
+`phase` ("wave" or "all_stop"), `bumper_to_line_m`, `s_line_route`, `signal` (what the light shows,
+"dark" in a power cut) and `against_light`. With it, the intersection has no amber observation, no
+advance light, no right or left on red, no red-turn ban and no seconds to green, and no red-light
+runner is sensed there; the stop target, `mustStop`, Rules' stop and the deadlock detector (`brain/safety.js`: held at
+the line is a reason to wait, even on a green) all follow the officer. A deadlock creep (`brain/brain.js`
+`creepForOfficer`) takes the officer's direction every step, even while no decision comes: held, it stops
+at the line as `wait_for_officer` does; waved, it goes on. Candidates:
+held, `wait_for_officer` (stop half a metre short of the line, never speeding up on the way, braking at no
+more than `OFFICER_STOP_DECEL`, 2 m/s², and planning the stop `OFFICER_STOP_REACTION_S`, 0.4 s, plus the
+car's pedal lag early, `officerStopLaw`, so that the lag never carries it on toward the line and the stop
+never ends hard); waved,
+`go_on_officer_wave` (on at the target speed); a prediction that crosses the line while held is
+rejected `passes_officer_stop`. Rules prefers `wait_for_officer` (−12) and `go_on_officer_wave` (−1),
+and gives `stop_at_line` no bonus under an officer, and while the car still rolls up to the line with
+`wait_for_officer` eligible it leaves the stop to that law rather than braking hard in its last 1.5 m;
+the cautious agent takes `wait_for_officer` when held, answering motion "drive" for it, since the law
+stops at the line by itself (as for an amber stop or pulling over). Models get a `traffic_officer` field (`direction`, `wait_in_m`, `officer_waves`, `light_shows`,
+`against_the_light`), a situation clause in place of the light's, the motion question's stop criterion
+and a line in the system prompt. The HUD says OFFICER DIRECTING TRAFFIC · STOP or · GO, and the coach
+says to stop even on a green, or to go even on a red.
+
+The audit (`World.auditOfficer`): crossing the line of a junction an officer governs is judged by the
+officer, not the light: while held it counts as `officer_violations` (event `officer_violation`), and
+the red-light, amber, right-on-red, arrow and fresh-green checks are skipped there (a left turn waved
+through is still checked against oncoming traffic). It reaches the metrics and fails a drive and a road
+test (filed under right of way) only once the car has come within 60 m of the line of a junction an
+officer governs and seen them (`World.officersSeen`). The drive score costs 35 legality points each
+and caps the score at 69, with an incident, a coaching tip and a replay marker. With the option off
+nothing is computed, no random number is drawn, and the seeded benchmark and the other challenges play
+out and report exactly as before.
+
+`render/traffic-officer.js` (`OfficerView`) draws each officer: a person in a hi-vis vest with two
+reflective bands, a peaked cap and white gloves, turning (2.5 rad/s) to face the traffic held, the right
+hand up, palm out, toward it, and the left arm out to the side, beckoning the waved traffic on, still
+in an all-stop; and a cruiser up on the kerb with its lights flashing (one in a bay is a parked car,
+drawn with the others and flashed by `syncRoadside`). Officers and cruisers are made and dropped by id,
+so a restored checkpoint shows the right ones.
+
+**Follow the officer** (`follow-the-officer`, seed 57042, Toronto, Spadina Avenue at Bloor Street West
+in the Annex, dry afternoon): Spadina Avenue northbound (`e177`, then its approach `e344`, `sig7`, its
+plan unchanged, group B) and on up Spadina Road (`e221`, `e218`, `e262`), 30 m along the last. The car
+sets off 4 m along `e177` at 8 m/s, in the school zone there, about 80 m short of the line, 6 s into
+its green, with the officer waving Bloor (group A) through against Bloor's red. The officer keeps Bloor
+waved until 29 s after the start (`holdUntil`: the car's light red by then, Bloor's green), then holds
+everyone and waves Spadina through, against its red. Bloor cars come along 2 and 6 s after the start
+(through on their red) and 26 s after (held at their green once Spadina is waved). Rules and the
+cautious agent stop at the line about 10 s in and wait on the green, go about 31 s in on the red, and
+arrive about 15 s later. A driver who goes on while held gets `officer_violations` and fails. Checks:
+`scripts/test_traffic_officers.mjs` (its `--write-snapshot` writes the live-model case
+`data/snapshots/follow_the_officer.json`).

@@ -27,6 +27,7 @@ import { current as weather } from "./weather.js";
 import { purePursuit } from "./controller.js";
 import { minPassM } from "./cyclist-pass.js";
 import { NIGHT_CAUTION_MPS } from "./night-flash.js";
+import { officerDirection } from "./traffic-officer.js";
 
 // How many ride at a time in a free drive, and where they start: on a contraflow street this far
 // from the car (or, failing that, anywhere on the map), and how long until the next one.
@@ -342,8 +343,10 @@ export class ContraflowRiders {
       const st = n.stopState, canStop = toLine > n.v * n.v / (2 * 2.5) + 0.3;
       if (c.type === "signal") {
         // (a dark signal, or one flashing red overnight, is a stop sign; flashing amber is a caution)
-        const light = movementSignal(approachPhase(map.intersections.get(c.id), c.ref, world.t), "straight");
-        const dark = world.outages?.isDark(c.id) || light === "flashing_red";
+        // (a police officer directing traffic there: their direction, not the light's, sim/traffic-officer.js)
+        const officer = world.officers?.list.length ? officerDirection(world, n, c.ref) : null;
+        const light = officer ? (officer === "go" ? "green" : "red") : movementSignal(approachPhase(map.intersections.get(c.id), c.ref, world.t), "straight");
+        const dark = !officer && (world.outages?.isDark(c.id) || light === "flashing_red");
         if (light === "flashing_amber") slow = Math.min(slow, NIGHT_CAUTION_MPS);
         if (dark) {
           if (!st.done) stopAt = toLine;

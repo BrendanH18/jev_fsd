@@ -114,7 +114,7 @@ export function createTailgaters({ enabled = false, seed = 1 } = {}) {
 
 // Ordinary cars only: not cyclists, transit, school buses, trains, trucks at work, emergency vehicles,
 // plows, cars pulling out or parking, running a light, or passing a cyclist.
-const ordinary = (n) => n.kind !== "bike" && !n.transit && !n.school && !n.rail && !n.collect && !n.pull && !n.parking && !n.runner && !n.cyc
+const ordinary = (n) => n.kind !== "bike" && !n.transit && !n.school && !n.rail && !n.collect && !n.pull && !n.parking && !n.parker && !n.runner && !n.cyc
   && !isPlow(n) && !isEmergency(n) && !isEmergencyVehicle(n);
 
 // How far `o` is behind `observer` in its lane, going its way: from its front bumper to the observer's

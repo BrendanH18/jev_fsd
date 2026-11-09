@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fifty-six authored challenges
+## Sixty authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -18,6 +18,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Bridges freeze first | Saskatoon, Traffic Bridge | Black ice on (`ice`, sim/black-ice.js), at dawn after a frosty night. Northbound over the South Saskatchewan River (one lane each way, 50 km/h): the deck has iced over for 87 m, ending just short of its north end, where traffic queues for the roundabout. Going onto the ice more than 10 km/h over its safe speed (about 28 km/h), or braking, accelerating or skidding on it (`ice_overspeed`), fails the drive. Rules and the cautious agent keep to 40 km/h on the bridge, slow before the ice and cross it steadily |
 | Brakes ahead | Vancouver, West 6th Avenue | Rain, a moving start and a lead car that brakes hard, pauses, then resumes. Leave room to slow safely |
 | Make room | Vancouver, West 4th Avenue | An adjacent car merges into the following gap, then accelerates with traffic. Ease off and rebuild room |
+| Road closed | Halifax, Spring Garden Road | Road closures on (`roadClosures`, sim/road-closures.js). The block between Queen Street and Birmingham Street is closed for a street festival, and the route still runs down it. The car learns of it only on seeing the barricades, then re-plans; driving past a barricade (`closure_entries`) fails the drive |
 | Dip your lights | Saskatoon, 13th Street East | Night with a streetlight outage: high on the empty stretch, dip for the approaching car and slower leader; `glare_seconds` fails above 0.8 s |
 | The door zone | Vancouver, Kitsilano | A cyclist and a parked car's opening street-side door |
 | Into the unknown | Victoria, Old Town | A signal-controlled junction with 28 m fog visibility |
@@ -61,6 +62,9 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Both ways | Montréal, Le Plateau | Contraflow cyclists on (`contraflow`, sim/contraflow.js). The car starts from a standstill on Rue Drolet (one-way), its front 45 m short of Rue Villeneuve Est, to turn right into it: one-way for cars, with a painted contraflow lane, at a junction without a sign. A cyclist rides out of Villeneuve toward the junction in that lane at 16 km/h, 65 m from it, from the car's right; it is hidden behind the corner building until the car is close. The street is too narrow to meet it with the minimum passing distance. The route ends 40 m along the next block of Villeneuve, past Avenue Henri-Julien. Cutting the cyclist off (`failed to yield`) or meeting it closer than the minimum passing distance (`contraflow_conflicts`) fails the drive. Rules and the cautious agent stop short of the junction about 8 s in, wait about 5 s while the cyclist comes out, then turn in; a car that does not see it runs into it. |
 | On your bumper | Winnipeg, William Avenue | Tailgaters on (`tailgaters`, sim/tailgaters.js). Two lanes each way, 50 km/h, straight for half a kilometre. A driver in a hurry closes up half a second behind you in the left lane and stays there; the right lane is empty, and the light ahead at Isabel Street turns amber. Move right and let them by, or brake early and gently; braking hard with them close behind (`brake_checks`) fails the drive |
 | One car at a time | Montréal, Avenue Laval | Snowbanks on (`snowbanks`, sim/snowbanks.js), in falling snow. The banks have pushed the parked cars out from both kerbs of a 60 m stretch: room for one moving car at a time, and a car coming the other way is already in it. Wait at your end until it is through (`snowbank_conflicts` fails the drive otherwise), keep to the middle, then creep up to the corner at Rue Marie-Anne Est, where someone hidden behind the high pile steps off to cross |
+| Don't splash | Vancouver, Main Street | Puddles on (`puddles`, sim/puddles.js), in the rain. You're in the kerb lane of Mount Pleasant's Main Street, where the gutter has flooded: three people wait at the bus stop beside one puddle (ease left in your lane and your wheels miss it), someone walks up the sidewalk beside a deeper one that fills most of the lane (slow right down, to about 12 km/h), and a last one has nobody near (just water). Splashing anyone (`pedestrians_splashed`) fails the drive |
+| Room to park | Vancouver, Larch Street | Traffic parallel parking on (`parkers`, sim/parkers.js). A residential street in Kitsilano (one lane each way, 50 km/h), both kerbs lined with parked cars. The car ahead of you, already signalling right, stops beside the one gap on the right and reverses into it. Stop well back, about 9 m behind it, and wait until it is in; standing in the room it reverses into, or going round it while it signals or reverses (`parking_conflicts`), fails the drive |
+| Follow the officer | Toronto, Spadina Avenue at Bloor Street West | Police officers on (`officers`, sim/traffic-officer.js). You drive north up Spadina on a green, but an officer in the middle of the junction is holding your way and waving Bloor through against its red. Stop at the line when held, even on the green, and go only when waved on (`officer_violations` fails the drive). |
 
 Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors, clear the tracks, keep the box clear, not your arrow, follow the flagger, lights out, round the van, squeeze in, between the cars, blind left, behind the plow, take turns, give them room, over the humps, all walk, collection day and both ways joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
@@ -294,6 +298,61 @@ and gently for the amber: braking hard with the tailgater close behind, with not
 for it, is a brake check (`brake_checks`), which fails the drive, and a hard enough one leaves the
 tailgater no room: it rear-ends the car, its own fault. Tailgaters are on only for this challenge and
 free drives; the challenge places its one tailgater and no other traffic.
+
+## Don't splash
+
+**Don't splash** (`dont-splash`, Vancouver, Mount Pleasant, seed 59042) drives Main Street
+northbound in the rain on an afternoon, in the kerb lane (three lanes each way, 50 km/h, no parking
+lane, the sidewalk right at the kerb), along the block past the stop for the 8 and the 19 and on
+along the next (`e708`, `e666`). The car sets off at 11 m/s. Three people wait at the kerb by the
+bus stop, beside a puddle reaching 1.3 m out from the kerb, into the right wheel path: Rules and the
+cautious agent ease about 0.25 m left inside the lane (`ease_round_puddle`) and keep their speed. On
+the next block a deep puddle spreads 2 m out, most of the way across the lane, as someone walks up
+the sidewalk beside it: there is no room to miss it without crossing the lane line, so they slow to
+about 12.5 km/h, below its splash speed of 16 km/h, until they are through. A last, long shallow
+puddle has nobody near it, and they drive on through it. A car that holds 40 km/h splashes three
+people (`pedestrians_splashed`), which fails the drive. Puddles are on only for this challenge and
+free drives; the challenge places its own three puddles and four people, and no traffic.
+
+## Room to park
+
+**Room to park** (`room-to-park`, Kitsilano, seed 58042) drives Larch Street southbound from West
+13th Avenue (`e103`), a straight residential block with one lane each way, a 50 km/h limit and
+parking at both kerbs. The right kerb is lined with parked cars but for one 8 m gap, and cars line
+the far kerb too. The car sets off at 30 km/h with an ordinary car 18 m ahead of it, already
+signalling right: it slows, stops alongside the car parked in front of the gap about 11 s in, pauses
+to check behind and reverses in, on the same geometry and car model the driven car uses to park at
+the end of a free drive. Rules and the cautious agent stop at its hold line, about 9 m behind it (the
+length of its reverse and a margin), wait until it is in and drive on. A driver who follows it close
+and stops right behind it takes the room it needs: it waits, gives up and drives on, and the drive
+fails (`parking_conflicts`); so does going round it in the oncoming lane while it signals or
+reverses. Traffic parallel parking is on only for this challenge and free drives; the challenge
+places its one parker and no other traffic.
+
+## Road closed
+
+**Road closed** (`road-closed`, Halifax, seed 60042) starts on Spring Garden Road with a route that
+runs down its block between Queen Street and Birmingham Street, closed for a street festival:
+barricades across both ends, ROAD CLOSED and DETOUR signs, tents on the block. The car does not
+know until it sees the barricade past Queen Street. Rules and the cautious agent re-plan at once and
+take the detour by Queen Street and Clyde Street to Birmingham Street. Driving past a barricade onto
+the closed block (`closure_entries`) fails the drive; driving into one is a collision. Road closures
+are on only for this challenge and free drives; the challenge places its one closure and no traffic.
+
+## Follow the officer
+
+**Follow the officer** (`follow-the-officer`, Toronto, seed 57042) drives Spadina Avenue northbound up
+to Bloor Street West in the Annex (`sig7`, its plan unchanged), where a police officer is directing
+traffic in the middle of the junction, a cruiser with its lights on beside it. A police officer's
+directions override the lights. The car sets off about 80 m short of the line at 30 km/h, in a school
+zone, on a green, but the officer is waving Bloor through against Bloor's red: Rules and the cautious
+agent stop at the line on their green (`wait_for_officer`) and wait. The car's light turns red; then
+the officer holds everyone for a moment and waves Spadina through, and they go on the red
+(`go_on_officer_wave`), straight on up Spadina Road. Two cars on Bloor go through on their red while
+the car waits, and one coming along once Spadina is waved stops at its green. Going on into the
+junction while the officer holds the car counts as `officer_violations` and fails the drive.
+Officers are on only for this challenge and free drives; the challenge places its one officer and
+the Bloor traffic, and no other.
 
 ## Road tests
 

@@ -55,6 +55,8 @@ export class DriveRecorder {
     if (world.ice?.enabled) shared.add(world.ice);
     // (nor do snowbanks, nor the narrowings they make: sim/snowbanks.js)
     if (world.snowbanks?.enabled) { shared.add(world.snowbanks.geo); shared.add(world.snowbanks.piles); for (const nw of world.snowbanks.narrowings) shared.add(nw); shared.add(world.snowbanks.routeEnds); }
+    // (nor do the puddles: whether they lie follows the weather, sim/puddles.js puddlesLie)
+    if (world.puddles?.enabled) shared.add(world.puddles);
     for (const route of [world.route, autopilot.snap?.route]) if (route) {
       for (const key of ["pts", "cum", "edges", "turns", "controls", "edgeStarts", "limitMarks", "zoneMarks", "calmingMarks"]) shared.add(route[key]);
     }
@@ -65,7 +67,7 @@ export class DriveRecorder {
     if (!force && t - this.at < this.interval - 1e-9) return;
     const shared = this.sharedFor(context);
     // Pending API operations must never be resurrected by a checkpoint.
-    const pilot = { ...context.autopilot, inFlight: null, firing: null, rerouting: false };
+    const pilot = { ...context.autopilot, inFlight: null, firing: null, rerouting: false, ...(context.autopilot.closureRouting !== undefined ? { closureRouting: null } : {}) };
     const state = cloneState({ world: context.world, fleet: context.fleet, drive: context.drive, clock: context.clock, pilot }, shared);
     // The clone's fleet/crowd point at its world. The pilot uses a shallow shell to exclude promises.
     state.pilot.world = state.world;
@@ -75,7 +77,7 @@ export class DriveRecorder {
     this.markers = this.markers.filter(m => m.t >= this.frames[0].t);
   }
   mark(t, type) {
-    if (["collision", "red_light", "amber_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "fresh_green_conflict", "reversing_conflict", "pothole_hit", "ball_warning_ignored", "wildlife_conflict", "ice_overspeed", "snowbank_conflict", "glare", "sun_glare", "safety", "brake_check"].includes(type)) this.markers.push({ t, type });
+    if (["collision", "red_light", "amber_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "fresh_green_conflict", "reversing_conflict", "pothole_hit", "ball_warning_ignored", "wildlife_conflict", "ice_overspeed", "snowbank_conflict", "pedestrian_splashed", "glare", "sun_glare", "safety", "brake_check", "parking_conflict", "closure_entry", "officer_violation"].includes(type)) this.markers.push({ t, type });
   }
   restore(index, target) {
     const frame = this.frames[Math.max(0, Math.min(this.frames.length - 1, Math.round(index)))];
@@ -101,6 +103,8 @@ export class DriveRecorder {
     target.world.npcs = target.fleet.vehicles;
     for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;
     Object.assign(target.autopilot, callbacks, { world: target.world, inFlight: null, firing: null, rerouting: false, epoch: epoch + 1 });
+    // (a route round a closed road still to come is asked for again: sim/road-closures.js)
+    if (target.autopilot.closureRouting) target.autopilot.closureRouting = null;
     target.world.paused = true;
     target.world.visibility.setNight(frame.night);
     target.setDrive(state.drive); Object.assign(target.clock, state.clock);

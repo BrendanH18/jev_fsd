@@ -279,3 +279,56 @@ where the pile hides the sidewalk and the side street, the HUD says SNOWBANK HID
 UP AND LOOK: someone may step out from behind it. Going in while a car you could see coming the other
 way had the way counts as `snowbank_conflicts`: 20 legality points, a replay marker and a coaching
 tip, reported only once you have come up to a narrowed stretch. Use `?snowbanks=0` to turn them off.
+
+### Puddles at the kerb
+
+In the rain (and, once it has rained, until it snows) in free drives and the **Don't splash**
+lesson, puddles stand in the gutter: long, shallow ones along the edge of the kerb lane, and wider,
+deeper ones at the corners and over the drains, some reaching into the right wheel path. They mirror
+the street. Driving through one fast throws a spray of water over the kerb, and anyone on the
+sidewalk or waiting at a bus stop beside it flinches. Where someone is beside a puddle in your lane,
+the HUD says PUDDLE BY THE KERB · PEOPLE ON THE SIDEWALK · EASE 0.3 M LEFT where the lane leaves
+room to keep your wheels out of it, or PUDDLE BY THE KERB · PEOPLE ON THE SIDEWALK · SLOW where it
+doesn't: slow below about 20 km/h (less for a deep one) until you're through. Traffic does the same.
+A puddle with nobody near is just water. Each person you splash counts as `pedestrians_splashed`: 20
+legality points, a replay marker and a coaching tip, reported only once you have come up to a
+puddle with someone beside it; splashing someone is careless driving. Use `?puddles=0` to take them
+off.
+
+### A car parking ahead
+
+In free drives (and the **Room to park** lesson) the car right ahead of you now and then signals
+right, slows and stops alongside a parked car with a gap behind it: it is about to parallel park.
+Its right indicator flashes, and its white reverse lamps come on as it backs in. The HUD says CAR
+PARKING AHEAD · WAIT (· REVERSING IN · WAIT once it backs up), and the coach tells you to stay well
+back. Stop at least the length of its reverse and a margin behind it, about 9 m for a car, leave it
+that room, and wait until it is in; don't creep up behind it and don't go round it while it signals
+or reverses. If you take its room it waits a while, then gives up and drives on. Standing in the
+room it needs, or going round it, counts as `parking_conflicts`: 20 legality points, a replay marker
+and a coaching tip, reported only once a car has signalled to park ahead of you. Use `?parkers=0` to
+turn it off.
+
+### Road closures
+
+In free drives (and the **Road closed** lesson) a block on your route ahead is now and then closed
+for an event: striped barricades with flashing amber lamps across both ends, ROAD CLOSED and DETOUR
+signs, and festival tents on the block. You find out only when you can see the barricades. The HUD
+says ROAD CLOSED AHEAD · DETOUR, the route line and minimap switch to the detour as soon as it is
+planned, and the coach says to follow it. Driving past a barricade onto the closed block counts as
+`closure_entries`: 20 safety and 25 legality points, a replay marker and a coaching tip, reported
+only once you have come up to a closure; driving into a barricade is a collision. Use
+`?roadclosures=0` to turn them off.
+
+### Police officers directing traffic
+
+In free drives (and the **Follow the officer** lesson) a police officer now and then directs traffic
+at a signal on your way: an officer in a hi-vis vest and cap stands in the middle of the junction, a
+cruiser with its lights flashing at the corner. The officer's directions override the lights, which
+keep cycling (or stay dark in a power cut). Facing the traffic they hold, one gloved hand up, palm out,
+they wave the other way through with the other arm, hold everyone for a moment once the junction is
+clear, then switch. The HUD says OFFICER DIRECTING TRAFFIC · STOP or OFFICER DIRECTING TRAFFIC · GO,
+and the coach says the same. Stop at the line when held, even on a green; go when waved, even on a red,
+still yielding to people and traffic in the junction and, turning left, to oncoming traffic. People
+on foot cross with the waved traffic. Crossing the line while the officer holds you counts as
+`officer_violations`: 35 legality points, a replay marker and a coaching tip, reported only once you
+have come up to an officer. Use `?officers=0` to turn them off.

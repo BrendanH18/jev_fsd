@@ -96,6 +96,25 @@ class CanadianMapsTests(unittest.TestCase):
         self.assertTrue(result['routes'])
         self.assertTrue(all(e in router.edges for e in result['routes'][0]['edges']))
 
+    def test_route_api_avoids_listed_edges(self):
+        # (static/js/sim/road-closures.js: a re-plan round a block closed for an event)
+        entry = server.load_map('victoria')
+        router = entry['router']
+        lane = next(l for l in router.lanes.values() if l['length'] > 70)
+        p = g.point_at(lane['pts'], lane['length'] / 3, lane['cum'])
+        start = {'x': p[0], 'y': p[1], 'heading': g.heading_of(lane['pts'][0], lane['pts'][1])}
+        far = next(l for l in router.lanes.values() if l['edge'] != lane['edge'] and g.dist(l['pts'][0], p) > 300 and l['length'] > 50)
+        q = g.point_at(far['pts'], far['length'] / 2, far['cum'])
+        plain = server.api_route({'bbox': 'victoria', 'from': start, 'to': {'x': q[0], 'y': q[1]}}, {})['routes'][0]
+        self.assertEqual(server.api_route({'bbox': 'victoria', 'from': start, 'to': {'x': q[0], 'y': q[1]}, 'avoid': []}, {})['routes'][0], plain)
+        closed = plain['edges'][1]
+        result = server.api_route({'bbox': 'victoria', 'from': start, 'to': {'x': q[0], 'y': q[1]}, 'avoid': [closed]}, {})
+        self.assertTrue(result['routes'])
+        self.assertNotIn(closed, result['routes'][0]['edges'])
+        for bad in ('e1', [1, 2], ['x' * 65]):
+            with self.assertRaises(server.BadRequest):
+                server.api_route({'bbox': 'victoria', 'from': start, 'to': {'x': q[0], 'y': q[1]}, 'avoid': bad}, {})
+
     def test_failed_map_retains_requested_routing_key(self):
         pack = synthetic_pack()
         entry = {'pack': pack, 'bbox': PRESET_BBOXES['victoria'], 'error': 'offline'}

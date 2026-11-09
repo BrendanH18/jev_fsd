@@ -2,6 +2,85 @@
 
 ## Unreleased
 
+- Puddles at the kerb in the rain, and not splashing people, in free drives (`?puddles=0` takes
+  them off). From their own random stream, puddles stand in the gutter of every kerb lane: long,
+  shallow ones along the edge of the lane, and wider, deeper ones at the corners of junctions and
+  over blocked catch basins, some reaching into the right wheel path. They lie on the road while
+  it rains, and stay for the rest of the drive once it has (they drain slowly) until it snows. A
+  wheel through one faster than its splash speed (about 25 km/h for a shallow one, less for a deep
+  one) throws water over anyone on the sidewalk, at the kerb or waiting at a bus stop beside it,
+  which is careless driving. Where someone is within reach, the driven car and traffic ease left
+  inside their lane so their wheels miss it, never crossing a lane line, and otherwise slow below
+  its splash speed; a puddle with nobody near is just water. A pothole full of rain water
+  splashes like a puddle. Sensing reports `puddle_splash`, with the new `ease_round_puddle`
+  candidate and the `splashes_pedestrian` rejection; lane manoeuvres that would go through one
+  slow for it. Each person the car splashes counts as `pedestrians_splashed` and fails a Lab
+  drive, reported only once the car has come up to a puddle with someone near it. Puddles are
+  drawn as standing water mirroring the street, any vehicle going through one fast throws a spray
+  of droplets, a splashed person flinches, and the HUD says PUDDLE BY THE KERB · PEOPLE ON THE
+  SIDEWALK · SLOW.
+- New Lab challenge, **Don't splash** (seed 59042): Main Street in Mount Pleasant, Vancouver, in
+  the rain, past people waiting at a bus stop beside one puddle and someone walking beside a deeper
+  one with no room to miss it.
+
+- Traffic parallel parks ahead in free drives (`?parkers=0` takes it off). Now and then, from its
+  own random stream, the ordinary car right ahead of the driven car in its lane, on a street with a
+  parking lane and a free gap long enough, signals right, slows, stops alongside the car parked in
+  front of the gap, pauses, reverses in and straightens up. It uses the driven car's own parking
+  geometry and manoeuvre (`sim/parallel-park.js`) on the shared car model, and once in it is an
+  ordinary parked car, its slot taken. Everyone behind it (the driven car, traffic and cyclists)
+  stops at its hold line, the length of its reverse and a margin behind where its rear bumper
+  stops, doesn't creep into that room and doesn't go round it until it is in. A car that finds the
+  room blocked waits, then gives up and drives on; reversing, it stops for anyone moving into the
+  room or standing right behind it, and backing into a stationary car is its fault. Sensing reports
+  `parking_ahead`, with the new `wait_for_parker` candidate and the `blocks_parking_car` rejection.
+  Standing inside the room while it waits or reverses, or going round it after being behind it,
+  counts as `parking_conflicts` and fails a Lab drive (and a road test), reported only once a car
+  has signalled to park ahead of the car. The parker shows its right indicator and its reverse
+  lamps; the HUD says CAR PARKING AHEAD · WAIT.
+- New Lab challenge, **Room to park** (seed 58042): Larch Street in Kitsilano, a residential street
+  lined with parked cars, where the car ahead of you stops beside the one gap and reverses into it.
+
+- Road closures in free drives (`?roadclosures=0` takes them off). Now and then, from their own
+  random stream, a whole block on the route ahead is closed for an event: both directions of the
+  street between two junctions, with striped barricades across both ends just past the crosswalks,
+  flashing amber lamps, ROAD CLOSED and DETOUR signs, cones and festival tents. Never the block the
+  car is on, its start or its destination, one already in sight, one a bus or other fixed-route
+  vehicle is due along, or one whose closure would leave no way to the destination. The car learns
+  of it only when it sees a barricade, then re-plans: route requests (`/api/route`, and the browser
+  router used by the public demo and Node) take a new `avoid` list of edges, which changes nothing
+  when empty. Until the detour arrives, or if there is none, the car stops short of the junction
+  before the block. Barricades are obstacles, so driving into one is a collision. Traffic never
+  chooses a closed edge, re-plans round one, and is moved off the block as it closes. Sensing
+  reports `road_closed` (whether a detour is planned), with the new `stop_for_closure` candidate and
+  the `enters_closed_road` rejection; the HUD says ROAD CLOSED AHEAD · DETOUR. Driving past a
+  barricade onto the closed block counts as `closure_entries` and fails a Lab drive, reported only
+  once the car has come up to a closure.
+- New Lab challenge, **Road closed** (seed 60042): Spring Garden Road in downtown Halifax, closed
+  for a street festival between Queen Street and Birmingham Street; the route still runs down it.
+
+- A police officer directs traffic now and then in free drives (`?officers=0` takes them off). From
+  their own random stream, a signalized junction on the car's route, well ahead and out of its
+  sight, gets an officer in a hi-vis vest standing in the middle of the box, with a cruiser, its
+  lights flashing, at a corner: in a parking bay where the street has one, else up on the kerb. A
+  police officer's directions override the lights, so the signals keep cycling (or stay dark in a
+  power cut) while the officer works in phases of their own: one axis waved through, the other
+  held, a short all-stop between, and the switch only once the box is empty; a driver too close to
+  stop when the officer turns is waved on. People on foot cross with the waved axis. The driven
+  car, traffic and cyclists stop at the line when held, even on a green, and go when waved, even on
+  a red, still yielding to whoever is in the junction and, turning left, to oncoming traffic.
+  Junctions with a scramble crossing, a streetcar line or a level crossing never get one. Sensing
+  reports `traffic_officer`, with the new `wait_for_officer` and `go_on_officer_wave` candidates
+  and the `passes_officer_stop` rejection. Under an officer, the red-light, amber, turn-on-red and
+  fresh-green checks no longer fault a wave through a red; crossing the line while held counts as
+  `officer_violations` instead, and fails a Lab drive and a road test, reported only once the car
+  has come up to an officer. The officer is drawn with a cap and white gloves, one hand up toward
+  the traffic held and the other beckoning the waved traffic on, turning to face whoever is held,
+  and the HUD says OFFICER DIRECTING TRAFFIC · STOP or · GO.
+- New Lab challenge, **Follow the officer** (seed 57042): Spadina Avenue up to Bloor Street West
+  in Toronto's Annex, where an officer holds the car at the line on its green and then waves it on
+  through its red.
+
 - Spring potholes in free drives (`?potholes=0` takes them off). From their own random stream,
   potholes are placed in the lanes, many more on busy main streets than on quiet ones, each with a
   position across its lane, a size and a depth. The driven car and traffic ease round one inside
