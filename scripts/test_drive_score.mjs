@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { DriveScore, readHistory, saveDrive } from '../static/js/sim/drive-score.js';
+// (drive-score.js reaches common.js, which reads the page's CSRF meta tag, as every Node test stubs)
+globalThis.document = { querySelector: () => null };
+const { DriveScore, readHistory, saveDrive } = await import('../static/js/sim/drive-score.js');
 
 let passed = 0;
 const test = (name, fn) => { fn(); passed++; console.log(`✓ ${name}`); };
