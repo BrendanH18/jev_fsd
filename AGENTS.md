@@ -108,6 +108,8 @@ Layers beside a pack (`<key>.<layer>.v1.json`: transit, crossings, zones, rail, 
 
 ## Context maintenance
 
+- The plan is `ROADMAP.md`. Read it before proposing what to build next, and update it when an
+  item lands or a priority changes.
 - Keep project rules and durable project knowledge in tracked `AGENTS.md` and
   repository docs; do not store them in agent auto-memory or machine-local notes.
 - `CLAUDE.md` contains only `@AGENTS.md`. Shared hooks, scripts and settings

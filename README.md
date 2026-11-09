@@ -380,6 +380,7 @@ are especially appreciated.
 - [Browser demo build and deployment](docs/browser-demo.md)
 - [Full project reference](docs/project-reference.md)
 - [Changelog](CHANGELOG.md)
+- [Roadmap](ROADMAP.md)
 
 ## Credits
 
