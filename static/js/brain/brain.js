@@ -16,6 +16,7 @@ import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
 import { safetyBrake, DeadlockDetector, DESTINATION_ZONE_M } from "./safety.js";
 import { api } from "../common.js";
 import { Route } from "../map/route.js";
+import { browserRoute } from "../demo/routing.js";
 import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
 
 const INTERVAL_HAZARD_MS = 250;
@@ -167,6 +168,11 @@ export class Autopilot {
     if ((this.offRouteFor > 3 || illegalRoute) && !this.rerouting) {
       if (illegalRoute) this.restrictionReplanAt = world.t + 5;
       this.reroute();
+    }
+    // a road closed ahead on the route, seen at its barricades: a route round it (sim/road-closures.js)
+    if (snap.road_closed?.on_route && !this.rerouting && world.t >= (this.closureReplanAt ?? -Infinity)) {
+      this.closureReplanAt = world.t + 3;
+      this.closureRouting = this.reroute().finally(() => { this.closureRouting = null; });
     }
 
     const s = snap.routeProj ? snap.routeProj.s : 0;
@@ -355,7 +361,11 @@ export class Autopilot {
     const epoch = this.epoch;
     this.rerouting = true;
     try {
-      const res = await api("/api/route", { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
+      // (round the blocks closed for an event that the car has seen: sim/road-closures.js)
+      const avoid = world.roadClosures?.known.size ? world.roadClosures.avoid() : null;
+      const body = { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}), ...(avoid?.length ? { avoid } : {}) };
+      // (without a server, in Node, the browser's router finds the way round: demo/routing.js)
+      const res = avoid?.length ? await api("/api/route", body).catch(() => { const r = browserRoute(world.map, body.from, body.to, body); return { routes: r ? [r] : [] }; }) : await api("/api/route", body);
       if (epoch !== this.epoch) return;
       if (res.routes.length) {
         if (res.routes.length === 1 || this.brainName === "rules") {

@@ -55,6 +55,8 @@ import { ballNotice } from "./sim/ball-chase.js";
 import { geeseNotice } from "./sim/geese.js";
 import { GeeseView } from "./render/geese.js";
 import { tailgaterFlash, tailgaterNotice } from "./sim/tailgaters.js";
+import { roadClosedNotice } from "./sim/road-closures.js";
+import { RoadClosureView } from "./render/road-closures.js";
 import { syncTailgaterFlash } from "./render/tailgaters.js";
 import { IceView } from "./render/black-ice.js";
 import { iceNotice } from "./sim/black-ice.js";
@@ -225,7 +227,7 @@ export async function boot() {
     const contraflow = params.get("contraflow") !== "0";
     // and, now and then, a car behind closes up and tailgates the driven car (`?tailgaters=0` turns that off)
     const tailgaters = params.get("tailgaters") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0", tailgaters, ice: params.get("ice") !== "0", snowbanks: params.get("snowbanks") !== "0" });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0", tailgaters, ice: params.get("ice") !== "0", snowbanks: params.get("snowbanks") !== "0", roadClosures: params.get("roadclosures") !== "0" });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -259,6 +261,9 @@ export async function boot() {
   const ballView = world.balls?.enabled ? new BallView(view.scene) : null;
   // and the Canada geese crossing the road, where the world has them (sim/geese.js)
   const geeseView = world.geese.enabled ? new GeeseView(view.scene) : null;
+  // and the barricades across a block closed for an event, where the world closes one now and then
+  // (sim/road-closures.js; `?roadclosures=0` takes them off in a free drive)
+  const closureView = world.roadClosures?.enabled ? new RoadClosureView(view.scene) : null;
   // and black ice on bridges and in the shade, while the weather and the time favour it, where the world
   // has it (sim/black-ice.js; `?ice=0` takes it off in a free drive)
   const iceView = world.ice?.enabled ? new IceView(view.scene) : null;
@@ -768,7 +773,7 @@ export async function boot() {
   let acc = 0;
   let announcedPothole = null;
   let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null, announcedGlare = null, announcedReversing = null, announcedGeese = null;
-  let announcedTailgater = null;
+  let announcedTailgater = null, announcedRoadClosed = null;
   let announcedBall = null;
   let announcedIce = null;
   let announcedSnowbank = null;
@@ -1000,6 +1005,10 @@ export async function boot() {
     const tailLine = world.tailgaters?.enabled ? tailgaterNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
     if (tailLine && tailLine.key !== announcedTailgater) { announcedTailgater = tailLine.key; hud.badge(tailLine.text, "safety", 2500); }
     if (!tailLine) announcedTailgater = null;
+    // a road closed ahead for an event: follow the detour (sim/road-closures.js)
+    const closedLine = closureView ? roadClosedNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
+    if (closedLine && closedLine.key !== announcedRoadClosed) { announcedRoadClosed = closedLine.key; hud.badge(closedLine.text, closedLine.stop ? "safety" : "", 3000); }
+    if (!closedLine) announcedRoadClosed = null;
     // black ice seen ahead, or under the car, or a bridge coming up while it is near freezing
     // (sim/black-ice.js)
     const iceLine = iceView ? iceNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
@@ -1060,6 +1069,7 @@ export async function boot() {
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
     if (geeseView) geeseView.sync(world, world.t);
+    closureView?.sync(world, world.t);
     iceView?.sync(world);
     if (sunGlareView) sunGlareView.update(view.camera, view.atmosphere, egoGlare(world)?.severity ?? 0);
     ballView?.update(world, view.camera);

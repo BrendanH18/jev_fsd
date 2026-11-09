@@ -74,7 +74,7 @@ export class PerceptionView {
     const reasons = { following_distance: "Leaves too little braking room", collision: "Predicted collision", visibility_stopping_distance: "Beyond stopping sight", passes_cyclist_too_close: "Too close to cyclist", passes_cyclist_without_room: "Cyclist: less than the passing distance", crosses_into_oncoming_traffic: "Oncoming traffic",
       off_road: "Leaves the road", runs_red: "Red light", fails_to_yield: "Must yield", runs_stop: "Missed stop", fails_to_yield_to_pedestrian: "Person crossing",
       fails_to_yield_to_oncoming: "Oncoming traffic", fails_to_yield_to_cyclist: "Cyclist on the right", fails_to_yield_to_emergency: "Emergency vehicle", fails_to_yield_to_bus: "Bus pulling out", passes_car_stopped_at_crosswalk: "Car stopped at crosswalk", passes_stopped_school_bus: "School bus stopped", passes_streetcar_doors: "Streetcar doors open", crosses_in_front_of_train: "Train coming", no_room_past_tracks: "No room past the tracks", blocks_junction: "No room past the junction", runs_flagger_stop: "Flagger showing STOP", passes_crossing_guard: "Crossing guard: STOP", fails_to_yield_to_contraflow_cyclist: "Cyclist against the one-way", passes_contraflow_cyclist_too_close: "Cyclist coming: less than the passing distance", enters_ahead_of_red_light_runner: "Car running the red", no_room_to_go_round: "Too close to pull out round the van", passes_plow_on_right: "Snow plow: never pass on the right", enters_unseen_junction: "Cannot see yet",
-      passes_turn_round_point: "Turns round here", passes_reversing_vehicle_too_close: "Car backing out", hits_pothole_too_fast: "Pothole: too fast", passes_ball_gap_too_fast: "Ball in the road: a child may follow", drives_into_geese: "Geese crossing", brakes_hard_with_tailgater: "Tailgater: brakes too hard", crosses_ice_too_fast: "Black ice: too fast", brakes_on_ice: "Black ice: no hard braking or steering", enters_narrowing_out_of_turn: "Snowbanks: oncoming car's turn" };
+      passes_turn_round_point: "Turns round here", passes_reversing_vehicle_too_close: "Car backing out", hits_pothole_too_fast: "Pothole: too fast", passes_ball_gap_too_fast: "Ball in the road: a child may follow", drives_into_geese: "Geese crossing", enters_closed_road: "Road closed", brakes_hard_with_tailgater: "Tailgater: brakes too hard", crosses_ice_too_fast: "Black ice: too fast", brakes_on_ice: "Black ice: no hard braking or steering", enters_narrowing_out_of_turn: "Snowbanks: oncoming car's turn" };
     const e = snap.emergency;
     const emergency = e ? `${e.kind[0].toUpperCase()}${e.kind.slice(1)} ${e.from === "behind" ? "behind" : e.from === "ahead" ? "ahead" : `from the ${e.from}`}, ${Math.round(e.distance_m)} m${e.seen ? "" : ", heard not seen"}: ${e.lead ? "stuck behind the car, driving on ahead" : `pull over ${e.offset_m.toFixed(1)} m, stop in ${Math.max(0, Math.round(e.bumper_to_stop_m))} m${e.clearing ? " past the junction" : ""}`}` : null;
     const b = snap.bus;
@@ -142,6 +142,9 @@ export class PerceptionView {
     // a ball rolled into the street ahead, a child maybe after it (sim/ball-chase.js)
     const bl = snap.ball_in_road;
     const ball = bl ? `Ball in the road ${Math.max(0, Math.round(bl.gap_m))} m ahead: ${bl.child === "in_road" ? "child after it, stop for them" : bl.child === "clear" ? "child back at the kerb" : bl.limit_mps != null ? `a child may follow, ${Math.round(bl.limit_mps * 3.6)} km/h` : "past it"}` : null;
+    // a road closed ahead for an event, seen at its barricades (sim/road-closures.js)
+    const rc = snap.road_closed;
+    const roadClosed = rc ? `Road closed ${Math.max(0, Math.round(rc.distance_m))} m ahead${rc.street ? ` (${rc.street})` : ""}: ${rc.detour_planned ? "following the detour" : "stopping, finding a detour"}` : null;
     // a car tailgating the driven car, close behind it (sim/tailgaters.js): the rear-view cue
     const tg = snap.tailgater;
     const tailgater = tg ? `Tailgater ${Math.max(0, Math.round(tg.gap_m))} m behind (${tg.headway_s.toFixed(1)} s): ${tg.can_move_right ? "move right, let it by" : "twice the gap ahead, brake gently"}` : null;
@@ -149,7 +152,7 @@ export class PerceptionView {
     const bi = snap.black_ice, ib = snap.ice_caution?.bridge;
     const ice = bi ? `Black ice ${bi.on_ice ? "under the car: hold steady, no braking" : `${Math.round(bi.starts_in_m)} m ahead: ${Math.round(bi.speed_mps * 3.6)} km/h before it`}`
       : ib && ib.starts_in_m < 80 ? `Near freezing: bridge ${ib.on ? "here" : `in ${Math.round(ib.starts_in_m)} m`}, ${Math.round(snap.ice_caution.slow.mps * 3.6)} km/h` : null;
-    return { tailgater, seen, hidden, following, runner, ball, ice, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, guard, contraflow, reversing, pothole, geese, snowbank, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
+    return { roadClosed, tailgater, seen, hidden, following, runner, ball, ice, emergency, bus, crosswalk, school, streetcar, crossing, box, workZone, closure, van, plow, calm, scramble, cyclist, guard, contraflow, reversing, pothole, geese, snowbank, blind, lane, zone, roadside, range: snap.visibility.range_m, safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected: decision?.candidates?.filter(c => !c.eligible).map(c => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [] };
   }
 }

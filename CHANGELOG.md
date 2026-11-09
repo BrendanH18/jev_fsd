@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Road closures in free drives (`?roadclosures=0` takes them off). Now and then, from their own
+  random stream, a whole block on the route ahead is closed for an event: both directions of the
+  street between two junctions, with striped barricades across both ends just past the crosswalks,
+  flashing amber lamps, ROAD CLOSED and DETOUR signs, cones and festival tents. Never the block the
+  car is on, its start or its destination, one already in sight, one a bus or other fixed-route
+  vehicle is due along, or one whose closure would leave no way to the destination. The car learns
+  of it only when it sees a barricade, then re-plans: route requests (`/api/route`, and the browser
+  router used by the public demo and Node) take a new `avoid` list of edges, which changes nothing
+  when empty. Until the detour arrives, or if there is none, the car stops short of the junction
+  before the block. Barricades are obstacles, so driving into one is a collision. Traffic never
+  chooses a closed edge, re-plans round one, and is moved off the block as it closes. Sensing
+  reports `road_closed` (whether a detour is planned), with the new `stop_for_closure` candidate and
+  the `enters_closed_road` rejection; the HUD says ROAD CLOSED AHEAD · DETOUR. Driving past a
+  barricade onto the closed block counts as `closure_entries` and fails a Lab drive, reported only
+  once the car has come up to a closure.
+- New Lab challenge, **Road closed** (seed 60042): Spring Garden Road in downtown Halifax, closed
+  for a street festival between Queen Street and Birmingham Street; the route still runs down it.
+
 - Spring potholes in free drives (`?potholes=0` takes them off). From their own random stream,
   potholes are placed in the lanes, many more on busy main streets than on quiet ones, each with a
   position across its lane, a size and a depth. The driven car and traffic ease round one inside

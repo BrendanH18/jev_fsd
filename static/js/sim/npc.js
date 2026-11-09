@@ -75,6 +75,7 @@ import { reverserYield } from "./driveway-reversers.js";
 import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { ballYield } from "./ball-chase.js";
 import { geeseYield } from "./geese.js";
+import { avoidClosure, closureHold } from "./road-closures.js";
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { gentleOnIce, npcIce } from "./black-ice.js";
 import { snowbankYield } from "./snowbanks.js";
@@ -310,7 +311,9 @@ export class NpcPath {
     // bounded: joining a very short lane after a rounded corner can add almost no length
     for (let guard = 0; guard < 24 && this.length - this.s < LOOK_M * 2.5; guard++) {
       const last = this.edges[this.edges.length - 1];
-      const succ = this.map.successors(last.id).filter(id => !this.restrictionWorld?.restrictions || this.bike || !turnBanned(this.map, last.id, id, this.restrictionWorld.clock));
+      const succ = this.map.successors(last.id).filter(id => !this.restrictionWorld?.restrictions || this.bike || !turnBanned(this.map, last.id, id, this.restrictionWorld.clock))
+        // (never into a block closed for an event: sim/road-closures.js)
+        .filter(id => !this.closures?.closed.has(id));
       if (!succ.length) return false;
       // no U-turns, nor turns so sharp they double back (the tip of a traffic island)
       const noU = succ.filter((e) => Math.abs(this.map.turnAngle(last.id, e)) < SHARP_TURN);
@@ -684,6 +687,8 @@ export class NpcFleet {
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     const riders = world.contraflow?.riders || [];
     for (const n of [...this.vehicles]) {
+      // (with road closures on, every driver's way keeps out of a closed block: sim/road-closures.js)
+      if (world.roadClosures?.enabled && n.path) n.path.closures = world.roadClosures;
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
       // a garbage truck standing at a stop while its crew empties the bins (sim/collection-truck.js)
       if (n.collect?.phase === "work" && this.collection.work(n, dt)) { n.a = 0; continue; }
@@ -728,6 +733,8 @@ export class NpcFleet {
           proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
         }
       }
+      // (a way through a block closed for an event is re-planned while there is room: sim/road-closures.js)
+      if (world.roadClosures?.list.length && avoidClosure(world, n)) { proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s; }
       path.extend();
       path.trim();
       const edge = path.currentEdge();
@@ -1100,6 +1107,13 @@ export class NpcFleet {
       if (sb?.hold != null) {
         const g = sb.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
+      }
+      // short of the barricade across a block closed for an event, on a way that could not be changed in
+      // time (sim/road-closures.js)
+      const rch = world.roadClosures?.list.length ? closureHold(world, n, front) : null;
+      if (rch) {
+        const g = rch.hold - front;
+        if (g > -1 && g < gap) { gap = Math.max(0.05, g); leadV = 0; }
       }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m

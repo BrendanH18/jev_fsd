@@ -13,6 +13,7 @@ import { ballScenario, placeBall } from "./ball-chase-challenge.js";
 import { geeseScenario, placeGeese } from "./geese-challenge.js";
 import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { tailgaterScenario, installTailgater, stepTailgater } from "./tailgater-challenge.js";
+import { roadClosureScenario, installRoadClosure, stepRoadClosure } from "./road-closure-challenge.js";
 import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
 import { snowbankScenario, placeSnowbank, stepSnowbank } from "./snowbank-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
@@ -154,6 +155,8 @@ export const CHALLENGES = [
     description: "Dawn after a clear night just below freezing in Saskatoon. You are heading north over the South Saskatchewan River on the Traffic Bridge, toward downtown. The approach is dry, but the deck has iced over, and traffic is queuing for the roundabout just past the far end.", lesson: "Bridges and overpasses freeze before the road around them, and black ice is nearly invisible. Near freezing, ease off before a bridge and watch for a glossy sheen. Slow down on the dry road before the ice, then cross it steadily: no braking, accelerating or sharp steering on it, and leave extra room to the car ahead." },
   { id: "one-car-at-a-time", title: "One car at a time", map: "montreal", weather: "snow", time: "afternoon", seed: 54042, icon: "❄", difficulty: "Patience", hazard: "snowbanks", snowbanks: true, street: "Avenue Laval",
     description: "Snow is falling on Avenue Laval in the Plateau, and the banks the plows left have pushed the parked cars out from both kerbs: there is room for only one car at a time. A car coming the other way is already in the narrow stretch, and at the corner beyond, the snow is piled higher than a person.", lesson: "Where snowbanks leave room for one car, take turns: whoever is already in the narrow stretch, or got there first, goes first, so wait at your end. Keep to the middle through it, and creep up to corners where the banks are high: someone waiting to cross can be hidden right behind them." },
+  { id: "road-closed", title: "Road closed", map: "halifax", weather: "dry", time: "afternoon", seed: 60042, icon: "⛔", difficulty: "Navigation", hazard: "road-closure", roadClosures: true, street: "Spring Garden Road",
+    description: "A street festival has closed Spring Garden Road in downtown Halifax between Queen Street and Birmingham Street. Your route still runs down that block, and you won't know until you see the barricades past Queen Street.", lesson: "When you see ROAD CLOSED barricades, never drive past them, however empty the street looks. Slow down early, turn off at the junction before them, and follow the detour. If you see them too late to turn, stop short of the junction and find another way." },
 ];
 // (road tests, lab/road-tests.js, open and play the same way)
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
@@ -1060,6 +1063,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "ball") return ballScenario(map, challenge);
   if (challenge.hazard === "geese") return geeseScenario(map, challenge);
   if (challenge.hazard === "tailgater") return tailgaterScenario(map, challenge);
+  if (challenge.hazard === "road-closure") return roadClosureScenario(map, challenge);
   if (challenge.hazard === "black-ice") return iceScenario(map, challenge);
   if (challenge.hazard === "snowbanks") return snowbankScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
@@ -1287,6 +1291,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.freshGreen) installFreshGreen(world, fleet, scenario);
   if (scenario.roadTest) installRoadTest(world, fleet, challenge, scenario);
   if (scenario.tailgater) installTailgater(world, fleet, scenario);
+  if (scenario.roadClosure) installRoadClosure(world, fleet, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
@@ -1376,6 +1381,7 @@ export function stepChallenge(world, fleet) {
   if (state.following) { stepFollowing(world, fleet); return; }
   if (state.freshGreen) { stepFreshGreen(world); return; }
   if (state.tailgater) { stepTailgater(world); return; }
+  if (state.roadClosure) { stepRoadClosure(world); return; }
   if (state.blackIce) { stepIce(world, fleet); return; }
   if (state.snowbank) { stepSnowbank(world); return; }
   const local = world.ego.toLocal(...state.at);

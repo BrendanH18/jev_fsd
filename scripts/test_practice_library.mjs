@@ -54,7 +54,7 @@ test("every existing failure policy blocks a clean completion", () => {
     failed_to_yield: 1, off_road_s: 1, plow_right_passes: 1, merge_cut_ins: 1, close_passes: 1,
     bus_lane_driving: 1.1, glare_seconds: 0.81, glare_speeding_seconds: 1.1, illegal_turns: 1, hump_hits: 1,
     pxo_early_goes: 1, crew_close_passes: 1, guard_violations: 1, contraflow_conflicts: 1, fresh_green_conflicts: 1,
-    reversing_conflicts: 1, pothole_hits: 1, ball_warnings_ignored: 1, wildlife_conflicts: 1, ice_overspeed: 1 })) {
+    reversing_conflicts: 1, pothole_hits: 1, ball_warnings_ignored: 1, wildlife_conflicts: 1, ice_overspeed: 1, closure_entries: 1 })) {
     assert.equal(practiceOutcome(challenge, report(challenge, { [key]: value })), "attempted", key);
   }
   assert.equal(practiceOutcome(challenge, report(challenge, { off_road_s: 0.9, glare_seconds: 0.8, bus_lane_driving: 1 })), "completed");

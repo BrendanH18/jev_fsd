@@ -21,6 +21,9 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   // (who has come up to each narrowed stretch between snowbanks, and who has gone in, with that option
   // on: sim/snowbanks.js; before the traffic takes its turns)
   if (world.snowbanks?.enabled) world.snowbanks.step(dt);
+  // (a block on the car's way closed for an event now and then, with that option on: sim/road-closures.js;
+  // before the traffic chooses its way)
+  if (world.roadClosures?.enabled) world.roadClosures.step(world, fleet);
   fleet.step(dt);
   // (contraflow cyclists, with that option on: sim/contraflow.js)
   if (world.contraflow.enabled) world.contraflow.step(dt);

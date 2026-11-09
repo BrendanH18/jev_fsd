@@ -28,10 +28,14 @@ export function routeFromLanes(map, chain, startS = 0, goalS = null) {
     goal_s: goalS ?? chain.at(-1).length, summary: `${Math.round(length)} m · ${turns.length} turns` };
 }
 
-export function browserRoute(map, from, to, { restrictions = false, hour = 15.5, weekday = 0 } = {}) {
+// `avoid`: edge ids no route may enter (a block closed for an event, sim/road-closures.js), as on the
+// local server (jev/routing.py); empty or absent, the route is exactly as without it.
+export function browserRoute(map, from, to, { restrictions = false, hour = 15.5, weekday = 0, avoid = null } = {}) {
   const start = map.nearestLane(from.x, from.y, from.heading ?? null, 100);
   const goal = map.nearestLane(to.x, to.y, null, 150);
   if (!start || !goal) return null;
+  const closed = avoid?.length ? new Set(avoid) : null;
+  if (closed?.has(goal.lane.edge)) return null;
   if (start.lane.edge === goal.lane.edge && goal.s > start.s + 2) return routeFromLanes(map, [start.lane], start.s, goal.s);
   const distances = new Map([[start.lane.edge, 0]]), parents = new Map(), pending = new Set([start.lane.edge]);
   let found = false;
@@ -42,6 +46,7 @@ export function browserRoute(map, from, to, { restrictions = false, hour = 15.5,
     if (current === goal.lane.edge && current !== start.lane.edge) { found = true; break; }
     for (const next of map.successors(current)) {
       if (restrictions && turnBanned(map, current, next, { hour, weekday })) continue;
+      if (closed?.has(next)) continue;
       const turn = Math.abs(map.turnAngle(current, next));
       if (turn > 130 * Math.PI / 180) continue;
       const edge = map.edges.get(next);

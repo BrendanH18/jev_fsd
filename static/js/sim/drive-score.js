@@ -4,6 +4,9 @@ import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
 import { egoPlow } from "./snow-plow.js";
 import { followingPolicy } from "./following.js";
 
+import { knownAhead } from "./road-closures.js";
+// What the coach says coming up to a road closed for an event (sim/road-closures.js).
+const CLOSURE_COACH = "Road closed ahead. Follow the detour; never drive past the barricades.";
 // What the coach says while a tailgater is close behind (sim/tailgaters.js).
 const TAILGATER_COACH = "Someone’s on your bumper. Leave more room ahead, brake early and gently, and let them by.";
 export const SCORE_VERSION = 1;
@@ -104,6 +107,9 @@ export class DriveScore {
     // (with snowbanks, sim/snowbanks.js: going into a stretch they narrow to one car while it was the turn
     // of one coming the other way; reported only for a drive in which the car came up to one)
     this.snowbanks = false; this.snowbankConflicts = 0;
+    // (with road closures, sim/road-closures.js: driving past a barricade onto a closed block; reported only
+    // for a drive in which the car came up to one)
+    this.roadClosures = false; this.closureEntries = 0;
     this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
     this.followingEnabled = !!world.followingDistance;
     this.followingState = null; this.followingMessage = null;
@@ -215,6 +221,7 @@ export class DriveScore {
     if (world.tailgatersSeen) this.tailgaters = true;
     if (world.iceSeen) this.ice = true;
     if (world.snowbanksSeen) this.snowbanks = true;
+    if (world.roadClosuresSeen) this.roadClosures = true;
     // (a school crossing guard ahead holding up the STOP sign: sim/crossing-guard.js)
     const guardSign = this.guards && !!world.crossingGuards?.notice()?.stop;
     const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
@@ -253,6 +260,7 @@ export class DriveScore {
       if (ev.type === "pothole_hit") { this.potholeHits++; this.incident("pothole_hit", `Hit a pothole at ${Math.round(ev.kmh)} km/h`, { pothole: ev.pothole, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
       if (ev.type === "ball_warning_ignored") { this.ballWarnings++; this.incident("ball_warning_ignored", "Drove on past where a ball rolled out, too fast to stop for a child after it", { ball: ev.ball, kmh: ev.kmh }); }
       if (ev.type === "reversing_conflict") { this.reversingConflicts++; this.incident("reversing_conflict", ev.reason === "close_pass" ? "Squeezed past a car backing out of a driveway" : "Did not stop for a car backing out into the lane", { car: ev.with, clearance_m: ev.clearance_m }); }
+      if (ev.type === "closure_entry") { this.closureEntries++; this.incident("closure_entry", `Drove past a ROAD CLOSED barricade onto ${ev.street || "a closed street"}`, { closure: ev.closure }); }
       if (ev.type === "brake_check") { this.brakeChecks++; this.incident("brake_check", "Braked hard with a tailgater close behind, with nothing ahead calling for it", { with: ev.with, decel_mps2: ev.decel_mps2, need_mps2: ev.need_mps2 }); }
       if (ev.type === "ice_overspeed") { this.iceOverspeed++; this.incident("ice_overspeed", ev.reason === "fast" ? `Crossed black ice at ${Math.round(ev.kmh)} km/h` : ev.reason === "skid" ? "Skidded on black ice" : `${ev.reason === "brake" ? "Braked" : "Accelerated"} hard on black ice`, { patch: ev.patch, reason: ev.reason, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
       if (ev.type === "snowbank_conflict") { this.snowbankConflicts++; this.incident("snowbank_conflict", ev.reason === "oncoming_inside" ? "Drove into the stretch narrowed by snowbanks with an oncoming car already in it" : ev.reason === "forced_to_stop" ? "Drove into the stretch narrowed by snowbanks in front of an oncoming car too close to stop" : "Drove into the stretch narrowed by snowbanks out of turn", { with: ev.with, narrowing: ev.narrowing }); }
@@ -294,6 +302,8 @@ export class DriveScore {
       : "Look ahead. Keep your inputs smooth.";
     // (a tailgater close behind, with that option on: sim/tailgaters.js `behind`)
     if (world.tailgaters?.behind && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = TAILGATER_COACH;
+    // (a road closed ahead that the car has seen, with that option on: sim/road-closures.js)
+    if (world.roadClosures?.known.size && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5 && knownAhead(world)) this.coach = CLOSURE_COACH;
 
     this.sample += dt;
     if (this.sample + 1e-9 < 0.1) return;
@@ -383,6 +393,8 @@ export class DriveScore {
     };
     // (a brake check with a tailgater close behind costs as much safety as a close call: sim/tailgaters.js)
     if (this.brakeChecks) categories.safety = Math.max(0, categories.safety - this.brakeChecks * 20);
+    // (as does driving past a closed road's barricade, and it is against the law: sim/road-closures.js)
+    if (this.closureEntries) { categories.safety = Math.max(0, categories.safety - this.closureEntries * 20); categories.legality = Math.max(0, categories.legality - this.closureEntries * 25); }
     let score = Math.round(Object.entries(SCORE_WEIGHTS).reduce((sum, [key, weight]) => sum + categories[key] * weight, 0));
     // A collision or a red-light violation cannot be averaged into an excellent drive.
     if (collisions) score = Math.min(score, 59);
@@ -408,6 +420,7 @@ export class DriveScore {
     if (this.potholeHits) tips.push("Look well ahead for potholes, especially in spring and when they are full of water. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.");
     if (this.ballWarnings) tips.push("A ball bouncing into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb.");
     if (this.brakeChecks) tips.push("Never brake-check a tailgater: they can't stop in time. Increase your gap to the car ahead so you can brake early and gently, don't speed up to please them, and let them by: move into the right lane when it's safe, or ease off a little so they can pass.");
+    if (this.closureEntries) tips.push("A ROAD CLOSED barricade closes the whole street to traffic, however empty it looks. Turn off at the junction before it and follow the detour; if you only see it late, stop short of it and find another way.");
     if (this.snowbankConflicts) tips.push("Where snowbanks push the parked cars out and leave room for only one car, take turns: whoever is already in the narrow stretch, or got to it first, goes first. Wait at your end until the oncoming car is through, and keep to the middle, slowly, when it is your turn.");
     if (this.wildlifeConflicts) tips.push("Geese and their goslings cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them or creep toward them.");
     if (this.iceOverspeed) tips.push("Near freezing, expect black ice on bridges, overpasses and shaded stretches, even when the road looks only dry or damp. Slow down before them, on the dry road, and cross the ice steadily: no braking, accelerating or sharp steering on it. If you are already on it, ease off and keep the wheel straight.");
@@ -467,6 +480,7 @@ export class DriveScore {
       ...(this.tailgaters ? { brake_checks: this.brakeChecks } : {}),
       ...(this.ice ? { ice_overspeed: this.iceOverspeed } : {}),
       ...(this.snowbanks ? { snowbank_conflicts: this.snowbankConflicts } : {}),
+      ...(this.roadClosures ? { closure_entries: this.closureEntries } : {}),
       ...(this.contraflow ? { contraflow_conflicts: this.contraflowMeets + this.contraflowCutoffs, contraflow_meets: this.contraflowMeets, contraflow_cutoffs: this.contraflowCutoffs } : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
