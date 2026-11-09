@@ -1,4 +1,17 @@
-# Rules benchmark check — 2026-11-05 (following distance)
+# Rules benchmark check — 2026-11-09 (puddles, traffic parking, road closures, officers)
+
+The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4)
+passes 12/12 on base `0e72961` and this change, every per-route field matching except
+wall-clock time. Both have zero collisions, red lights, stop-sign violations, failures to yield
+or deadlocks, 0.2 seconds off road and seven safety brakes. The base is a fresh
+`git archive 0e72961` with its own server; both ran through `bench_node.mjs` on a Raspberry Pi
+(Linux 6.18, arm64). All four new features are off in the seeded benchmark.
+
+All 56 existing challenges, each run with Rules and the cautious agent through
+`evaluateChallenge` in Node, give byte-identical results on the base and this change (112 runs,
+all passing).
+
+## Earlier record: 2026-11-05 (following distance)
 
 The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4)
 passes on base `8672135` and this change. Every per-route field matches except `wall_ms`.
