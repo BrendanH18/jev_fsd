@@ -118,6 +118,8 @@ export class DriveMetrics {
       ...(world.iceSeen ? { ice_overspeed: v.ice_overspeed || 0 } : {}),
       // (only for a drive in which the car came up to a stretch snowbanks narrow to one car: sim/snowbanks.js)
       ...(world.snowbanksSeen ? { snowbank_conflicts: v.snowbank_conflicts || 0 } : {}),
+      // (only for a drive in which a car signalled to parallel park ahead of the car: sim/parkers.js)
+      ...(world.parkersSeen ? { parking_conflicts: v.parking_conflicts || 0 } : {}),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -179,6 +181,7 @@ export function failures(m) {
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
   if (m.ice_overspeed) f.push("crossed black ice too fast, or braked or steered hard on it");
   if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
+  if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

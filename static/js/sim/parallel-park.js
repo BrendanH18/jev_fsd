@@ -252,8 +252,9 @@ export function spacesAlong(world, route, spec, { fromS = 0 } = {}) {
 }
 
 // The plan for the space [a, b] along edge `e` (`spans`: what stands in its parking lane), or null where
-// the car could not reverse into it in one go, or would end past the destination or too far before it.
-function planSpace(world, route, e, a, b, spec, spans) {
+// the car could not reverse into it in one go, or would end past the destination or too far before it
+// (`anywhere`: a traffic car's space, on its own path, with no destination to keep to: sim/parkers.js).
+function planSpace(world, route, e, a, b, spec, spans, anywhere = false) {
   const kerb = e.asphalt[1], R = turnRadius(spec), FRONT = spec.length - spec.rearOverhang;
   const goalW = kerb - KERB_TARGET_M - spec.width / 2;
   // where the car starts: alongside the car in front, its rear bumper START_BACK_M behind that car's (so
@@ -290,7 +291,7 @@ function planSpace(world, route, e, a, b, spec, spans) {
   if (!gp || !sp || sp.distance > LANE_NUDGE_M + 1) return null;
   const goalS = gp.s, stopS = sp.s;
   // (it ends before the destination, near it, and starts before the route's end)
-  if (goalS - spec.rearOverhang < route.length - PARK_NEAR_M || stopS > route.length - 1.5 || goalS + FRONT > route.length + 2) return null;
+  if (!anywhere && (goalS - spec.rearOverhang < route.length - PARK_NEAR_M || stopS > route.length - 1.5 || goalS + FRONT > route.length + 2)) return null;
   // the space's slots, to reserve
   const slots = world.parked.slots.filter((slot) => {
     if (slot.edge !== e.id || slot.curb !== "right") return false;
@@ -303,6 +304,20 @@ function planSpace(world, route, e, a, b, spec, spans) {
     hold: startU - endU + HOLD_EXTRA_M,
   };
 }
+
+// A traffic car parallel parking (sim/parkers.js): the free stretches of edge `e`'s right parking lane
+// long enough for `spec` to look at, each with what stands in that parking lane, and the plan for one of
+// them on the car's own path (`path`: its `pts` and `cum`), the same geometry as the driven car's.
+export function freeStretches(world, e, spec) {
+  const need = spec.length + ROOM_M, out = [];
+  for (const [a, b] of legalStretches(world.map, e)) {
+    if (b - a < need) continue;
+    const spans = taken(world, e, a, b);
+    for (const [fa, fb] of subtract([[a, b]], spans)) if (fb - fa >= need) out.push({ a: fa, b: fb, spans });
+  }
+  return out;
+}
+export const planSpaceOn = (world, path, e, a, b, spec, spans) => planSpace(world, path, e, a, b, spec, spans, true);
 
 // Reversing in, parallel at both ends, from `D` metres out from the kerb (rear axle): full lock toward
 // the kerb up to `phi1`, straight back, full lock the other way until parallel again. The two arcs alone

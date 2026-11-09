@@ -6,6 +6,7 @@ import { ballInRoad } from "../sim/ball-chase.js";
 import { geeseCrossing } from "../sim/geese.js";
 import { iceLimit, iceSensing, iceTurn } from "../sim/black-ice.js";
 import { snowbankAhead } from "../sim/snowbanks.js";
+import { parkerSensing } from "../sim/parkers.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -374,6 +375,8 @@ export function buildSnapshot(world, executing = null) {
     // (snowbanks: a narrowed stretch to take turns through, and corners they hide, with that option on:
     // sim/snowbanks.js)
     if (world.snowbanks?.enabled) snap.snowbank = snowbankAhead(world, p, frontS);
+    // (a car ahead parallel parking, and the room it needs behind it, with that option on: sim/parkers.js)
+    if (world.parkers?.enabled) snap.parking_ahead = world.parkers.active.length ? parkerSensing(world, p, frontS) : null;
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -397,7 +400,7 @@ export function buildSnapshot(world, executing = null) {
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
     const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
     const ahead = corridorQuery(route, p.s + FRONT - 1, p.s + TRAFFIC_RADIUS_M, 3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0), vehicles, p.index, lane.center, frame)
-      .filter((a) => Math.abs(a.lateral - lane.center) <= 1.7 || inOrigin(a) || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking)
+      .filter((a) => Math.abs(a.lateral - lane.center) <= 1.7 || inOrigin(a) || (a.vehicle.pull && a.vehicle.v > 0.2) || a.vehicle.parking || a.vehicle.parker)
       .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > Math.PI * 5 / 6))
       // (a double-parked van the car waits behind, short of where it waits, is a stop, not a car to
       // follow: see doubleParked)
@@ -408,7 +411,7 @@ export function buildSnapshot(world, executing = null) {
       const lead = ahead[0];
       const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
       snap.following = { id: lead.vehicle.id, gap_m: gap, speed: lead.vehicle.v, closing_mps: ego.v - lead.vehicle.v, vehicle: lead.vehicle, s: lead.s,
-        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isTruck(lead.vehicle) ? TRUCK_NAME : isVan(lead.vehicle) ? "double-parked van" : isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car" };
+        kind: lead.vehicle.pull ? "pulling out" : lead.vehicle.parking || lead.vehicle.parker ? "parking car" : lead.vehicle.kind === "door" ? "open door" : lead.vehicle.kind === "bike" ? "cyclist" : isTruck(lead.vehicle) ? TRUCK_NAME : isVan(lead.vehicle) ? "double-parked van" : isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car" };
       if (world.followingDistance) snap.following.policy = followingPolicy(ego, snap.following);
     }
     const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
@@ -1813,6 +1816,13 @@ export function desiredSpeed(snap) {
     if (vn < v) { v = vn; reasons.push("oncoming car's turn between the snowbanks"); }
   } else if (nb?.limit_mps != null && nb.limit_mps <= v + 0.05) reasons.push(nb.squeeze ? "squeezing past an oncoming car between the snowbanks" : "narrowed by snowbanks");
   if (snap.snowbank?.corner && snap.snowbank.corner.limit_mps <= v + 0.05) reasons.push("snowbank hides the corner");
+  // a car ahead parallel parking (sim/parkers.js): stop at its hold line, short of the room it reverses
+  // into, until it is in
+  const pa = snap.parking_ahead;
+  if (pa?.wait) {
+    const vp = pa.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(pa.bumper_to_stop_m - 0.5, decel);
+    if (vp < v) { v = vp; reasons.push("car parking ahead"); }
+  }
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -2010,6 +2020,7 @@ export function hazardFlags(snap) {
   if (snap.black_ice || (snap.ice_caution?.bridge && snap.ice_caution.bridge.starts_in_m < 80)) f.push("black ice");
   if (snap.snowbank?.narrowing) f.push("snowbank narrowing");
   if (snap.snowbank?.corner) f.push("snowbank corner");
+  if (snap.parking_ahead) f.push("car parking ahead");
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

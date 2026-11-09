@@ -5,7 +5,7 @@ The world pauses while the welcome screen is open. You can return through **Driv
 the trip card. The default HUD emphasizes the road, navigation and instruments; **Telemetry**
 expands the pilot decision and incident cards. **Settings** and keyboard help stay accessible.
 
-## Fifty-six authored challenges
+## Fifty-seven authored challenges
 
 | Challenge | City | Situation |
 |---|---|---|
@@ -61,6 +61,7 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 | Both ways | Montréal, Le Plateau | Contraflow cyclists on (`contraflow`, sim/contraflow.js). The car starts from a standstill on Rue Drolet (one-way), its front 45 m short of Rue Villeneuve Est, to turn right into it: one-way for cars, with a painted contraflow lane, at a junction without a sign. A cyclist rides out of Villeneuve toward the junction in that lane at 16 km/h, 65 m from it, from the car's right; it is hidden behind the corner building until the car is close. The street is too narrow to meet it with the minimum passing distance. The route ends 40 m along the next block of Villeneuve, past Avenue Henri-Julien. Cutting the cyclist off (`failed to yield`) or meeting it closer than the minimum passing distance (`contraflow_conflicts`) fails the drive. Rules and the cautious agent stop short of the junction about 8 s in, wait about 5 s while the cyclist comes out, then turn in; a car that does not see it runs into it. |
 | On your bumper | Winnipeg, William Avenue | Tailgaters on (`tailgaters`, sim/tailgaters.js). Two lanes each way, 50 km/h, straight for half a kilometre. A driver in a hurry closes up half a second behind you in the left lane and stays there; the right lane is empty, and the light ahead at Isabel Street turns amber. Move right and let them by, or brake early and gently; braking hard with them close behind (`brake_checks`) fails the drive |
 | One car at a time | Montréal, Avenue Laval | Snowbanks on (`snowbanks`, sim/snowbanks.js), in falling snow. The banks have pushed the parked cars out from both kerbs of a 60 m stretch: room for one moving car at a time, and a car coming the other way is already in it. Wait at your end until it is through (`snowbank_conflicts` fails the drive otherwise), keep to the middle, then creep up to the corner at Rue Marie-Anne Est, where someone hidden behind the high pile steps off to cross |
+| Room to park | Vancouver, Larch Street | Traffic parallel parking on (`parkers`, sim/parkers.js). A residential street in Kitsilano (one lane each way, 50 km/h), both kerbs lined with parked cars. The car ahead of you, already signalling right, stops beside the one gap on the right and reverses into it. Stop well back, about 9 m behind it, and wait until it is in; standing in the room it reverses into, or going round it while it signals or reverses (`parking_conflicts`), fails the drive |
 
 Suite version 2 adds the merge and obstructed crossing; the unprotected left, right on red, four-way stop, blind corner, right hook, lights and sirens, pulling out, the multiple threat, flashing reds, the school zone, move over, behind the doors, clear the tracks, keep the box clear, not your arrow, follow the flagger, lights out, round the van, squeeze in, between the cars, blind left, behind the plow, take turns, give them room, over the humps, all walk, collection day and both ways joined it later, at version 1. Each challenge separately versions
 its map, seed, weather, time, vehicle, background traffic and route. The original door, fog
@@ -294,6 +295,21 @@ and gently for the amber: braking hard with the tailgater close behind, with not
 for it, is a brake check (`brake_checks`), which fails the drive, and a hard enough one leaves the
 tailgater no room: it rear-ends the car, its own fault. Tailgaters are on only for this challenge and
 free drives; the challenge places its one tailgater and no other traffic.
+
+## Room to park
+
+**Room to park** (`room-to-park`, Kitsilano, seed 58042) drives Larch Street southbound from West
+13th Avenue (`e103`), a straight residential block with one lane each way, a 50 km/h limit and
+parking at both kerbs. The right kerb is lined with parked cars but for one 8 m gap, and cars line
+the far kerb too. The car sets off at 30 km/h with an ordinary car 18 m ahead of it, already
+signalling right: it slows, stops alongside the car parked in front of the gap about 11 s in, pauses
+to check behind and reverses in, on the same geometry and car model the driven car uses to park at
+the end of a free drive. Rules and the cautious agent stop at its hold line, about 9 m behind it (the
+length of its reverse and a margin), wait until it is in and drive on. A driver who follows it close
+and stops right behind it takes the room it needs: it waits, gives up and drives on, and the drive
+fails (`parking_conflicts`); so does going round it in the oncoming lane while it signals or
+reverses. Traffic parallel parking is on only for this challenge and free drives; the challenge
+places its one parker and no other traffic.
 
 ## Road tests
 
