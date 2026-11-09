@@ -1,4 +1,4 @@
-// Puddles at the kerb (sim/puddles.js), drawn as standing water on the asphalt in the gutter: a smooth,
+// Puddles at the kerb (sim/puddles.js), drawn as standing water on the asphalt in the gutter: a smooth, pale,
 // irregular sheet that mirrors the sky and the street as the wet road does, but much more sharply. And
 // the water they throw: a spray of droplets from the wheels of any vehicle (the car or traffic) going
 // through one faster than its splash speed, and anyone standing within reach of it flinching away from
@@ -50,7 +50,7 @@ export function buildPuddles(world) {
     g.setAttribute("uv", new THREE.Float32BufferAttribute(U, 2));
     g.setIndex(I);
     g.computeVertexNormals();
-    group.add(groundLayer(new THREE.Mesh(g, wetReflective(new THREE.MeshStandardMaterial({ color: 0x353b42, roughness: 0.03, metalness: 0.1, envMapIntensity: 1.8, side: THREE.DoubleSide }), 2)), LAYER.patch + 0.7));
+    group.add(groundLayer(new THREE.Mesh(g, wetReflective(new THREE.MeshStandardMaterial({ color: 0x8f9ba6, roughness: 0.02, metalness: 0.25, envMapIntensity: 2.4, side: THREE.DoubleSide }), 2.2)), LAYER.patch + 0.7));
   }
   group.visible = puddlesLie(world);
   return group;
