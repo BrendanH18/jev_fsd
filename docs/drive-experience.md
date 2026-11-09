@@ -279,3 +279,18 @@ where the pile hides the sidewalk and the side street, the HUD says SNOWBANK HID
 UP AND LOOK: someone may step out from behind it. Going in while a car you could see coming the other
 way had the way counts as `snowbank_conflicts`: 20 legality points, a replay marker and a coaching
 tip, reported only once you have come up to a narrowed stretch. Use `?snowbanks=0` to turn them off.
+
+### Puddles at the kerb
+
+In the rain (and, once it has rained, until it snows) in free drives and the **Don't splash**
+lesson, puddles stand in the gutter: long, shallow ones along the edge of the kerb lane, and wider,
+deeper ones at the corners and over the drains, some reaching into the right wheel path. They mirror
+the street. Driving through one fast throws a spray of water over the kerb, and anyone on the
+sidewalk or waiting at a bus stop beside it flinches. Where someone is beside a puddle in your lane,
+the HUD says PUDDLE BY THE KERB · PEOPLE ON THE SIDEWALK · EASE 0.3 M LEFT where the lane leaves
+room to keep your wheels out of it, or PUDDLE BY THE KERB · PEOPLE ON THE SIDEWALK · SLOW where it
+doesn't: slow below about 20 km/h (less for a deep one) until you're through. Traffic does the same.
+A puddle with nobody near is just water. Each person you splash counts as `pedestrians_splashed`: 20
+legality points, a replay marker and a coaching tip, reported only once you have come up to a
+puddle with someone beside it; splashing someone is careless driving. Use `?puddles=0` to take them
+off.

@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Puddles at the kerb in the rain, and not splashing people, in free drives (`?puddles=0` takes
+  them off). From their own random stream, puddles stand in the gutter of every kerb lane: long,
+  shallow ones along the edge of the lane, and wider, deeper ones at the corners of junctions and
+  over blocked catch basins, some reaching into the right wheel path. They lie on the road while
+  it rains, and stay for the rest of the drive once it has (they drain slowly) until it snows. A
+  wheel through one faster than its splash speed (about 25 km/h for a shallow one, less for a deep
+  one) throws water over anyone on the sidewalk, at the kerb or waiting at a bus stop beside it,
+  which is careless driving. Where someone is within reach, the driven car and traffic ease left
+  inside their lane so their wheels miss it, never crossing a lane line, and otherwise slow below
+  its splash speed; a puddle with nobody near is just water. A pothole full of rain water
+  splashes like a puddle. Sensing reports `puddle_splash`, with the new `ease_round_puddle`
+  candidate and the `splashes_pedestrian` rejection; lane manoeuvres that would go through one
+  slow for it. Each person the car splashes counts as `pedestrians_splashed` and fails a Lab
+  drive, reported only once the car has come up to a puddle with someone near it. Puddles are
+  drawn as standing water mirroring the street, any vehicle going through one fast throws a spray
+  of droplets, a splashed person flinches, and the HUD says PUDDLE BY THE KERB · PEOPLE ON THE
+  SIDEWALK · SLOW.
+- New Lab challenge, **Don't splash** (seed 59042): Main Street in Mount Pleasant, Vancouver, in
+  the rain, past people waiting at a bus stop beside one puddle and someone walking beside a deeper
+  one with no room to miss it.
+
 - Spring potholes in free drives (`?potholes=0` takes them off). From their own random stream,
   potholes are placed in the lanes, many more on busy main streets than on quiet ones, each with a
   position across its lane, a size and a depth. The driven car and traffic ease round one inside
