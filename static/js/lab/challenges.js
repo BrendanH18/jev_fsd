@@ -18,6 +18,7 @@ import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
 import { snowbankScenario, placeSnowbank, stepSnowbank } from "./snowbank-challenge.js";
 import { puddleScenario, installPuddles, stepPuddles } from "./puddle-challenge.js";
 import { parkerScenario, placeParker, stepParkerChallenge } from "./parker-challenge.js";
+import { officerScenario, installOfficer, stepOfficerChallenge } from "./officer-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -163,6 +164,8 @@ export const CHALLENGES = [
     description: "An afternoon on Larch Street in Kitsilano, a residential street with cars parked along both kerbs. The car ahead of you signals right, slows and pulls up alongside a parked car: there is a gap behind it, and it is about to reverse in.", lesson: "A car ahead signalling and stopping beside a gap is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses." },
   { id: "road-closed", title: "Road closed", map: "halifax", weather: "dry", time: "afternoon", seed: 60042, icon: "⛔", difficulty: "Navigation", hazard: "road-closure", roadClosures: true, street: "Spring Garden Road",
     description: "A street festival has closed Spring Garden Road in downtown Halifax between Queen Street and Birmingham Street. Your route still runs down that block, and you won't know until you see the barricades past Queen Street.", lesson: "When you see ROAD CLOSED barricades, never drive past them, however empty the street looks. Slow down early, turn off at the junction before them, and follow the detour. If you see them too late to turn, stop short of the junction and find another way." },
+  { id: "follow-the-officer", title: "Follow the officer", map: "toronto", weather: "dry", time: "afternoon", seed: 57042, icon: "✋", difficulty: "Judgement", hazard: "officer", officers: true, street: "Spadina Avenue",
+    description: "A police officer is directing traffic in the middle of Bloor Street West at Spadina Avenue, in the Annex, a cruiser with its lights on at the corner. You're heading north up Spadina on a green light, but the officer is waving Bloor through.", lesson: "A police officer's directions override the traffic lights. Stop at the line when the officer holds you, even on a green, and go when they wave you through, even on a red, still yielding to anyone already in the junction. Canadian highway traffic acts and driver's handbooks all say so." },
 ];
 // (road tests, lab/road-tests.js, open and play the same way)
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
@@ -1074,6 +1077,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "snowbanks") return snowbankScenario(map, challenge);
   if (challenge.hazard === "puddles") return puddleScenario(map, challenge);
   if (challenge.hazard === "parker") return parkerScenario(map, challenge);
+  if (challenge.hazard === "officer") return officerScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1301,6 +1305,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.tailgater) installTailgater(world, fleet, scenario);
   if (scenario.puddles) installPuddles(world, scenario);
   if (scenario.roadClosure) installRoadClosure(world, fleet, scenario);
+  if (scenario.officer) installOfficer(world, fleet, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
@@ -1396,6 +1401,7 @@ export function stepChallenge(world, fleet) {
   if (state.snowbank) { stepSnowbank(world); return; }
   if (state.puddles) { stepPuddles(world); return; }
   if (state.parker) { stepParkerChallenge(world); return; }
+  if (state.officer) { stepOfficerChallenge(world, fleet); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang

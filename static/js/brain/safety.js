@@ -75,6 +75,8 @@ export class DeadlockDetector {
     const ego = world.ego;
     const legit = (snap && snap.intersection && (
       (snap.intersection.control === "signal" && snap.intersection.signal !== "green" && snap.intersection.bumper_to_line_m < 12 && snap.intersection.bumper_to_line_m > -CLEARING_M) ||
+      // (held by a police officer directing traffic, on any light: sim/traffic-officer.js)
+      (snap.intersection.officer?.direction === "stop" && snap.intersection.bumper_to_line_m < 12 && snap.intersection.bumper_to_line_m > -CLEARING_M) ||
       // A left-turn stop can stay in sensing after its stop memory is cleared. Once well past
       // its line it is no longer a reason to hold; an actual oncoming conflict still is below.
       (snap.intersection.control === "stop" && !snap.intersection.stop_completed && snap.intersection.bumper_to_line_m < 12 && snap.intersection.bumper_to_line_m > -CLEARING_M) ||

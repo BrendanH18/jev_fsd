@@ -59,6 +59,28 @@
 - New Lab challenge, **Road closed** (seed 60042): Spring Garden Road in downtown Halifax, closed
   for a street festival between Queen Street and Birmingham Street; the route still runs down it.
 
+- A police officer directs traffic now and then in free drives (`?officers=0` takes them off). From
+  their own random stream, a signalized junction on the car's route, well ahead and out of its
+  sight, gets an officer in a hi-vis vest standing in the middle of the box, with a cruiser, its
+  lights flashing, at a corner: in a parking bay where the street has one, else up on the kerb. A
+  police officer's directions override the lights, so the signals keep cycling (or stay dark in a
+  power cut) while the officer works in phases of their own: one axis waved through, the other
+  held, a short all-stop between, and the switch only once the box is empty; a driver too close to
+  stop when the officer turns is waved on. People on foot cross with the waved axis. The driven
+  car, traffic and cyclists stop at the line when held, even on a green, and go when waved, even on
+  a red, still yielding to whoever is in the junction and, turning left, to oncoming traffic.
+  Junctions with a scramble crossing, a streetcar line or a level crossing never get one. Sensing
+  reports `traffic_officer`, with the new `wait_for_officer` and `go_on_officer_wave` candidates
+  and the `passes_officer_stop` rejection. Under an officer, the red-light, amber, turn-on-red and
+  fresh-green checks no longer fault a wave through a red; crossing the line while held counts as
+  `officer_violations` instead, and fails a Lab drive and a road test, reported only once the car
+  has come up to an officer. The officer is drawn with a cap and white gloves, one hand up toward
+  the traffic held and the other beckoning the waved traffic on, turning to face whoever is held,
+  and the HUD says OFFICER DIRECTING TRAFFIC · STOP or · GO.
+- New Lab challenge, **Follow the officer** (seed 57042): Spadina Avenue up to Bloor Street West
+  in Toronto's Annex, where an officer holds the car at the line on its green and then waves it on
+  through its red.
+
 - Spring potholes in free drives (`?potholes=0` takes them off). From their own random stream,
   potholes are placed in the lanes, many more on busy main streets than on quiet ones, each with a
   position across its lane, a size and a depth. The driven car and traffic ease round one inside

@@ -338,6 +338,21 @@ take the detour by Queen Street and Clyde Street to Birmingham Street. Driving p
 the closed block (`closure_entries`) fails the drive; driving into one is a collision. Road closures
 are on only for this challenge and free drives; the challenge places its one closure and no traffic.
 
+## Follow the officer
+
+**Follow the officer** (`follow-the-officer`, Toronto, seed 57042) drives Spadina Avenue northbound up
+to Bloor Street West in the Annex (`sig7`, its plan unchanged), where a police officer is directing
+traffic in the middle of the junction, a cruiser with its lights on beside it. A police officer's
+directions override the lights. The car sets off about 80 m short of the line at 30 km/h, in a school
+zone, on a green, but the officer is waving Bloor through against Bloor's red: Rules and the cautious
+agent stop at the line on their green (`wait_for_officer`) and wait. The car's light turns red; then
+the officer holds everyone for a moment and waves Spadina through, and they go on the red
+(`go_on_officer_wave`), straight on up Spadina Road. Two cars on Bloor go through on their red while
+the car waits, and one coming along once Spadina is waved stops at its green. Going on into the
+junction while the officer holds the car counts as `officer_violations` and fails the drive.
+Officers are on only for this challenge and free drives; the challenge places its one officer and
+the Bloor traffic, and no other.
+
 ## Road tests
 
 A road test is one longer drive on a fixed, seeded route that strings everyday situations together,

@@ -50,6 +50,7 @@ import { Geese, auditGeese } from "./geese.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers } from "./parkers.js";
 import { RoadClosures, auditRoadClosures } from "./road-closures.js";
+import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
 import { BlackIce, auditIce } from "./black-ice.js";
 import { Snowbanks, auditSnowbanks, bankHidden } from "./snowbanks.js";
 import { Puddles, auditPuddles } from "./puddles.js";
@@ -251,7 +252,9 @@ export class World {
   // it stops well back and waits until it is in (sim/parkers.js).
   // `roadClosures`: now and then a block on the car's route ahead is closed for an event, barricaded at
   // both ends; the car re-plans round it once it sees a barricade (sim/road-closures.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false, ice = false, snowbanks = false, puddles = false, parkers = false, roadClosures = false } = {}) {
+  // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
+  // obeys the officer rather than the lights (sim/traffic-officer.js).
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false, ice = false, snowbanks = false, puddles = false, parkers = false, roadClosures = false, officers = false } = {}) {
     this.map = map;
     // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
     // fresh red, whether one has committed near the car this drive, and the junction the audit watches
@@ -420,6 +423,10 @@ export class World {
     this.roadClosures = new RoadClosures({ enabled: roadClosures, seed });
     this.roadClosuresSeen = false;
     this.roadClosureCalls = new Map();
+    // police officers directing traffic (sim/traffic-officer.js): whether they come, and whether the car has
+    // come up to a junction one governs this drive
+    this.officers = createOfficers({ enabled: officers, seed });
+    this.officersSeen = false;
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -501,6 +508,9 @@ export class World {
   // (sim/signals.js: under a left arrow only a left turn has a green), or "dark" while its lights are
   // out (sim/outage.js).
   light(intersectionId, edgeId, turn = "straight") {
+    // (a police officer directing traffic there: the car's light is their direction, sim/traffic-officer.js)
+    const officer = this.officers.list.length ? officerDirection(this, this.ego, edgeId) : null;
+    if (officer) return officer === "go" ? "green" : "red";
     if (this.outages?.isDark(intersectionId)) return "dark";
     const inter = this.map.intersections.get(intersectionId);
     const flash = flashState(inter, this.map.edges.get(edgeId)?.control?.group, this);
@@ -703,8 +713,11 @@ export class World {
       if (this.nightFlash && Math.abs(past) < 60 && (control.night_flash || (control.type === "signal" && flashState(this.map.intersections.get(control.id), control.group, this)))) this.nightFlashSeen = true;
       const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
+      // (a police officer directing traffic there: their directions, not the light's, sim/traffic-officer.js)
+      const officer = control.type === "signal" && this.officers.list.length ? officerAt(this, control.id) : null;
+      if (officer && Math.abs(past) < OFFICER_SEEN_M && this.visibility.canSee(this.ego, officer.x, officer.y)) this.officersSeen = true;
       // Observe independently of the selected manoeuvre, before auditing the real line crossing.
-      const amberInter = this.amberLights && control.type === "signal" ? this.map.intersections.get(control.id) : null;
+      const amberInter = this.amberLights && control.type === "signal" && !officer ? this.map.intersections.get(control.id) : null;
       const amberShows = amberInter ? approachPhase(amberInter, edge.id, this.t) : null;
       // A manual takeover can keep navigation for a different turn. Observe the
       // physical arrow independently; auditArrow judges the actual exit.
@@ -714,10 +727,11 @@ export class World {
         ? observeAmber(this.ego, `${edge.id}:${control.id}${amberArrow ? ":arrow" : ""}`, amberSignal, -past, amberInter, amberShows, this.t) : null;
       if (amber && !crossed) this.amberLightsSeen = true;
       // a car running the red across the car's way as it enters on green (sim/red-light-runner.js)
-      const runner = this.redRunners.enabled && control.type === "signal"
+      const runner = this.redRunners.enabled && control.type === "signal" && !officer
         ? auditRunner(this, control.id, edge.id, rc?.turn || "straight", rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id), past) : null;
       if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
-        if (control.type === "signal") {
+        if (officer) this.auditOfficer(officer, control, edge, rc);
+        else if (control.type === "signal") {
           if (runner) {
             this.violations.fresh_green_conflicts = (this.violations.fresh_green_conflicts || 0) + 1;
             this.events.push({ type: "fresh_green_conflict", with: runner.vehicle.id ?? null });
@@ -834,6 +848,22 @@ export class World {
     if (this.roadClosures?.enabled) auditRoadClosures(this);
     this.auditKerb();
     leftSpace(this);
+  }
+
+  // Crossing the line of a junction a police officer governs while they hold the car (sim/traffic-officer.js):
+  // counted in place of the light's checks (red, amber, right on red, a car running the red), which do not
+  // apply under an officer; a left turn waved through still yields to oncoming traffic (auditOncoming).
+  auditOfficer(officer, control, edge, rc) {
+    if (officerDirection(this, this.ego, edge.id) === "stop") {
+      this.violations.officer_violations = (this.violations.officer_violations || 0) + 1;
+      this.events.push({ type: "officer_violation", officer: officer.id, junction: control.id });
+    }
+    this.arrowCheck = null;
+    const inter = this.map.intersections.get(control.id);
+    if (!inter) return;
+    const exit = rc && rc.sJunction !== null ? this.route.headingAt(Math.min(this.route.length, rc.sJunction + 15)) : null;
+    const approach = rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id);
+    this.lastSignal = { centre: [inter.x, inter.y], nodes: this.map.junctionNodes(inter), approaches: new Set(inter.approaches.map((a) => a.edge)), facing: approach + Math.PI, exit, counted: false };
   }
 
   // Parking or pulling out (sim/parallel-park.js), a tyre on the kerb is a kerb strike: counted once a

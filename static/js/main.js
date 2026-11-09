@@ -59,6 +59,8 @@ import { parkerNotice } from "./sim/parkers.js";
 import { roadClosedNotice } from "./sim/road-closures.js";
 import { RoadClosureView } from "./render/road-closures.js";
 import { syncTailgaterFlash } from "./render/tailgaters.js";
+import { officerNotice } from "./sim/traffic-officer.js";
+import { OfficerView } from "./render/traffic-officer.js";
 import { IceView } from "./render/black-ice.js";
 import { iceNotice } from "./sim/black-ice.js";
 import { PuddleView, buildPuddles } from "./render/puddles.js";
@@ -232,7 +234,9 @@ export async function boot() {
     const tailgaters = params.get("tailgaters") !== "0";
     // and, now and then, the car ahead parallel parks, and everyone waits (`?parkers=0` turns that off)
     const parkers = params.get("parkers") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0", tailgaters, ice: params.get("ice") !== "0", snowbanks: params.get("snowbanks") !== "0", puddles: params.get("puddles") !== "0", parkers, roadClosures: params.get("roadclosures") !== "0" });
+    // and, now and then, a police officer directs traffic at a signal on the car's way (`?officers=0` turns that off)
+    const officers = params.get("officers") !== "0";
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0", tailgaters, ice: params.get("ice") !== "0", snowbanks: params.get("snowbanks") !== "0", puddles: params.get("puddles") !== "0", parkers, roadClosures: params.get("roadclosures") !== "0", officers });
     // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
     // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
     const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
@@ -277,6 +281,9 @@ export async function boot() {
   const puddleGroup = world.puddles?.enabled ? buildPuddles(world) : null;
   if (puddleGroup) view.scene.add(puddleGroup);
   const puddleView = puddleGroup ? new PuddleView(view.scene, puddleGroup) : null;
+  // and police officers directing traffic, and their cruisers up on the kerb, where the world has them
+  // (sim/traffic-officer.js; `?officers=0` takes them off in a free drive)
+  const officerView = world.officers?.enabled ? new OfficerView(view.scene) : null;
   // and snowbanks along the kerbs, where the world has them (sim/snowbanks.js; `?snowbanks=0` takes them off
   // in a free drive)
   if (world.snowbanks?.geo.runs.length) view.scene.add(buildSnowbanks(world));
@@ -784,6 +791,7 @@ export async function boot() {
   let announcedPothole = null;
   let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null, announcedGlare = null, announcedReversing = null, announcedGeese = null;
   let announcedTailgater = null, announcedRoadClosed = null;
+  let announcedOfficer = null;
   let announcedBall = null;
   let announcedIce = null;
   let announcedSnowbank = null;
@@ -829,6 +837,7 @@ export async function boot() {
           else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
           else if (ev.type === "close_pass") hud.badge("PASSED A CYCLIST TOO CLOSE", "alert", 1500);
           else if (ev.type === "contraflow_conflict") hud.badge("MET A CONTRAFLOW CYCLIST TOO CLOSE", "alert", 1500);
+          else if (ev.type === "officer_violation") hud.badge("WENT ON WHILE THE OFFICER SIGNALLED STOP", "alert", 1500);
           else if (ev.type === "fresh_green_conflict") hud.badge("ENTERED AHEAD OF A CAR RUNNING THE RED", "alert", 1500);
           else if (ev.type === "pothole_hit") hud.badge(`HIT A POTHOLE AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
           else if (ev.type === "ball_warning_ignored") hud.badge("TOO FAST PAST WHERE A BALL ROLLED OUT", "alert", 1500);
@@ -906,6 +915,8 @@ export async function boot() {
       if (npcMeshes.has(n.id)) { syncCar(npcMeshes.get(n.id), pose, dt, world.t, lightsOn); syncReverseLamps(npcMeshes.get(n.id), n); }
     }
     for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
+    // (a police officer's cruiser parked in a bay at the corner, its lights on: sim/traffic-officer.js)
+    for (const o of world.officers?.list || []) if (o.cruiser?.parked) syncRoadside(parkedMeshes.get(o.cruiser.id), o.cruiser.vehicle, dt, world.t, lightsOn);
     for (const z of world.workZones.zones) syncWorkZone(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
     for (const z of world.laneClosures.zones) syncLaneClosure(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
     // (a garbage truck at a stop is in traffic, and drawn there: sim/collection-truck.js)
@@ -1025,6 +1036,10 @@ export async function boot() {
     const closedLine = closureView ? roadClosedNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
     if (closedLine && closedLine.key !== announcedRoadClosed) { announcedRoadClosed = closedLine.key; hud.badge(closedLine.text, closedLine.stop ? "safety" : "", 3000); }
     if (!closedLine) announcedRoadClosed = null;
+    // a police officer directing traffic at the junction ahead: their direction, not the light's (sim/traffic-officer.js)
+    const officerLine = world.officers?.enabled ? officerNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
+    if (officerLine && officerLine.key !== announcedOfficer) { announcedOfficer = officerLine.key; hud.badge(officerLine.text, officerLine.wait ? "alert" : "safety", 2500); }
+    if (!officerLine) announcedOfficer = null;
     // black ice seen ahead, or under the car, or a bridge coming up while it is near freezing
     // (sim/black-ice.js)
     const iceLine = iceView ? iceNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
@@ -1096,6 +1111,7 @@ export async function boot() {
     closureView?.sync(world, world.t);
     iceView?.sync(world);
     puddleView?.update(world, [world.ego, ...fleet.vehicles], pedMeshes, view.camera, dt);
+    officerView?.sync(world, dt, view.camera, lightsOn);
     if (sunGlareView) sunGlareView.update(view.camera, view.atmosphere, egoGlare(world)?.severity ?? 0);
     ballView?.update(world, view.camera);
     view.render(dt);

@@ -15,6 +15,7 @@ import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
 import { safetyBrake, DeadlockDetector, DESTINATION_ZONE_M } from "./safety.js";
 import { api } from "../common.js";
+import { officerStopLaw } from "../sim/traffic-officer.js";
 import { Route } from "../map/route.js";
 import { browserRoute } from "../demo/routing.js";
 import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
@@ -25,6 +26,17 @@ const TIMEOUT_MS = 1500;
 const GOAL_LATERAL_M = 1.5;   // a blocked destination counts only this close to the route lane's centre
 const TURN_ROUND_AWAY_M = 25;
 const SPEND_KEYS = ["model", "endpoint", "latency_ms", "input_tokens", "output_tokens", "cost_usd", "cost_known", "live_call"];
+
+// A deadlock creep's law `law` (with its s0) where a police officer directing traffic at the junction ahead
+// holds the car, or no longer does (sim/traffic-officer.js): stopping at the line, braking gently and
+// allowing for the pedals' lag so as not to roll over it, while held; as it was once waved on.
+function creepForOfficer(law, snap, world) {
+  const i = snap.intersection;
+  const hold = i?.officer?.direction === "stop" && !i.entered && i.bumper_to_line_m > 0.3 ? i.s_line_route - (world.ego.spec.length - world.ego.spec.rearOverhang) - 0.5 : null;
+  if (law.kind !== "lane" || (law.officerStop ?? null) === hold) return law;
+  const { officerStop, stopAtRoute, stopAt, stopDecel, stopReaction, ...rest } = law;
+  return hold === null ? rest : { ...rest, ...officerStopLaw(world.ego.spec), officerStop: hold, stopAtRoute: hold, stopAt: hold - law.s0 };
+}
 
 export class Autopilot {
   constructor(world, { onDecision = () => {}, onEvent = () => {} } = {}) {
@@ -213,7 +225,7 @@ export class Autopilot {
       // scenery: a creep cannot push a post or a wall aside, so it would only add a collision.
       const l = snap.lane, center = l ? l.route_center : 0;
       const back = l && l.delta !== 0 ? { shift: { from: snap.routeProj.lateral, start: s, len: 18 } } : {};
-      const law = { kind: "lane", offset: center, center, lane: 0, ...(l ? { laneIdx: l.route_index, chain: l.chain } : {}), vTarget: 2, ...back };
+      const law = creepForOfficer({ kind: "lane", offset: center, center, lane: 0, ...(l ? { laneIdx: l.route_index, chain: l.chain } : {}), vTarget: 2, ...back, s0: s }, snap, world);
       const creep = { id: "creep", law };
       simulateAll([creep], snap, world);
       if (creep.sim.static_collision) this.creepBlockedAt = now;   // look again in a second
@@ -223,6 +235,11 @@ export class Autopilot {
         world.violations.deadlock_overrides++;
         this.onEvent({ type: "deadlock", ...stallContext(snap, this.lastDecision, world.stuckFor) });
       }
+    }
+    // (a creep stops at the line while a police officer directing traffic holds the car, every step)
+    if (this.executing?.override) {
+      const law = creepForOfficer(this.executing.law, snap, world);
+      if (law !== this.executing.law) this.executing = { ...this.executing, law, candidate: { ...this.executing.candidate, law } };
     }
     if (this.executing?.override && now - this.creepCheckedAt >= 1000) {
       // A creep runs until the next decision, which a slow model answer can delay past the 3 s it

@@ -77,7 +77,7 @@ export class DriveRecorder {
     this.markers = this.markers.filter(m => m.t >= this.frames[0].t);
   }
   mark(t, type) {
-    if (["collision", "red_light", "amber_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "fresh_green_conflict", "reversing_conflict", "pothole_hit", "ball_warning_ignored", "wildlife_conflict", "ice_overspeed", "snowbank_conflict", "pedestrian_splashed", "glare", "sun_glare", "safety", "brake_check", "parking_conflict", "closure_entry"].includes(type)) this.markers.push({ t, type });
+    if (["collision", "red_light", "amber_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "fresh_green_conflict", "reversing_conflict", "pothole_hit", "ball_warning_ignored", "wildlife_conflict", "ice_overspeed", "snowbank_conflict", "pedestrian_splashed", "glare", "sun_glare", "safety", "brake_check", "parking_conflict", "closure_entry", "officer_violation"].includes(type)) this.markers.push({ t, type });
   }
   restore(index, target) {
     const frame = this.frames[Math.max(0, Math.min(this.frames.length - 1, Math.round(index)))];

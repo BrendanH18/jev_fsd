@@ -20,6 +20,7 @@ import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 import { SIM_OVER_MPS, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
 import { coverAfter } from "../sim/ball-chase.js";
 import { TAIL_EASE_MIN_MPS, TAIL_EASE_MPS, TAIL_GENTLEST_SLACK, TAIL_STOP_DECEL } from "../sim/tailgaters.js";
+import { officerStopLaw } from "../sim/traffic-officer.js";
 import { earlySlows, iceSimCheck, iceStopDecel, patchesUnder } from "../sim/black-ice.js";
 import { lawSlows, simSplashes, splashTargets } from "../sim/puddles.js";
 import { STOP_DECEL as CLOSURE_STOP_DECEL } from "../sim/road-closures.js";
@@ -166,6 +167,19 @@ export function sampleCandidates(snap, world) {
       const gently = snap.tailgater && !snap.intersection.amber?.stop ? { stopDecel: TAIL_STOP_DECEL } : {};
       out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, ...(snap.intersection.amber?.stop ? { stopDecel: snap.intersection.amber.stop_decel, stopReaction: snap.intersection.amber.reaction_s } : {}), ...gently, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "approach and stop at the line" });
+    }
+    // A police officer directing traffic at the junction ahead (sim/traffic-officer.js): held, stop at the
+    // line and wait there, even on a green, never speeding up on the way and braking early and gently; waved
+    // through, go, even on a red
+    // (still giving way to whoever is in the junction, and to oncoming traffic turning left, as ever).
+    const officer = snap.intersection?.officer;
+    if (officer?.direction === "stop" && snap.intersection.bumper_to_line_m > 0.3) {
+      out.push({ id: "wait_for_officer", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: Math.min(approach, Math.max(v, 3)), ...officerStopLaw(world.ego.spec, snap.tailgater ? TAIL_STOP_DECEL : Infinity), stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
+        steer: "hold lane", speed: "stop at the line and wait for the officer's wave" });
+    }
+    if (officer?.direction === "go" && !snap.intersection.entered) {
+      out.push({ id: "go_on_officer_wave", laneUntil, law: inLane({ kind: "lane", vTarget: target }), steer: "hold lane",
+        speed: `go on the officer's wave${officer.against_light ? `, though the light is ${officer.signal}` : ""}` });
     }
     // Giving way at a two-way stop or a junction without a sign: past the line, wait where the car
     // looks from; to look along a street it cannot see, creep up to that point.
@@ -483,8 +497,10 @@ export function simulateAll(candidates, snap, world) {
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
+  // (a police officer directing traffic there decides, not the light: sim/traffic-officer.js)
   const mustStop = control && !control.clear_entered && control.bumper_to_line_m > -CLEARING_M && (
-    (control.control === "signal" && ((control.signal === "red" && !(control.right_on_red?.go || control.left_on_red?.go)) || control.signal === "unknown" || (control.signal === "yellow" && (control.amber ? control.amber.stop : control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2)))) ||
+    (control.control === "signal" && control.officer?.direction === "stop") ||
+    (control.control === "signal" && !control.officer && ((control.signal === "red" && !(control.right_on_red?.go || control.left_on_red?.go)) || control.signal === "unknown" || (control.signal === "yellow" && (control.amber ? control.amber.stop : control.bumper_to_line_m > snap.ego.v * snap.ego.v / (2 * comfort().hardDecel) + 2)))) ||
     (control.control === "stop" && !control.stop_completed) || waitsItsTurn(control) ||
     (control.control === "yield" && control.cross_traffic_moving && !control.entered));
   const currentlyOffRoad = !snap.road.on_road;
@@ -753,7 +769,7 @@ export function simulateAll(candidates, snap, world) {
     else if (closePass && c.law.kind !== "hard_brake") reject = world.passCyclists ? "passes_cyclist_without_room" : "passes_cyclist_too_close";
     else if (meets && c.law.kind !== "hard_brake") reject = "crosses_into_oncoming_traffic";
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
-    else if (crosses) reject = control.control === "signal" ? "runs_red" : control.control === "yield" || control.stop_completed ? "fails_to_yield" : "runs_stop";
+    else if (crosses) reject = control.officer ? "passes_officer_stop" : control.control === "signal" ? "runs_red" : control.control === "yield" || control.stop_completed ? "fails_to_yield" : "runs_stop";
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";
