@@ -62,6 +62,7 @@ import { EGO_ID, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, THROUGH_M as L
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
+import { officerLight, officerSensing } from "../sim/traffic-officer.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -236,8 +237,11 @@ export function buildSnapshot(world, executing = null) {
       // sim/outage.js; until then it is a signal it cannot see)
       const inter = c.control.type === "signal" ? map.intersections.get(c.control.id) : null;
       const junction = inter ? [inter.x, inter.y] : c.junction;
-      const dark = !!inter && world.outages?.isDark(inter.id) && !!junction && world.visibility.canSee(ego, ...junction);
-      const seenFlash = inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction) ? flashState(inter, c.control.group, world) : null;
+      // (a police officer directing traffic there, once the car can see them: their directions, not the
+      // light's, even in a power cut or overnight: sim/traffic-officer.js)
+      const officer = inter && world.officers?.list.length ? officerSensing(world, c, frontS) : null;
+      const dark = !officer && !!inter && world.outages?.isDark(inter.id) && !!junction && world.visibility.canSee(ego, ...junction);
+      const seenFlash = !officer && inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction) ? flashState(inter, c.control.group, world) : null;
       const control = dark ? darkControl(c.control, c.edge) : seenFlash ? flashControl(world, c.control, c.edge) : c.control;
       const leftTurn = (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") && (c.turn === "left" || c.turn === "uturn") && c.sJunction !== null;
       // already through this one (a left turn stays in view until the car is past oncoming traffic,
@@ -252,7 +256,8 @@ export function buildSnapshot(world, executing = null) {
       const shows = inter && !dark && junction && world.visibility.canSee(ego, ...junction) ? approachPhase(inter, c.edge, world.t) : null;
       if (seenFlash === "flashing_amber") snap.limit = Math.min(snap.limit, NIGHT_CAUTION_MPS);
       const signal = seenFlash || (control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null);
-      const advance = !shows ? null : ADVANCE_LIGHTS[shows] ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
+      if (officer) officerLight(officer, world.outages?.isDark(inter.id) ? "dark" : signal);
+      const advance = !shows || officer ? null : ADVANCE_LIGHTS[shows] ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
         : shows === "red" && advanceHolds(inter, c.edge, world.t) ? { light: "held", protected: false } : null;
       let crossTraffic = false;
       const rb = control.type === "yield" ? map.roundabouts.get(control.roundabout) : null;
@@ -276,7 +281,7 @@ export function buildSnapshot(world, executing = null) {
       const priority = control.type === "stop" && control.all_way ? allWayPriority(world, control, visible) : null;
       // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn;
       // without a sign or signal, always
-      const turnNow = control.type === "stop" ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
+      const turnNow = officer ? entered || officer.direction === "go" : control.type === "stop" ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
         : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow" || signal === "flashing_amber";
       // Amber gives way only to traffic already crossing; red reuses two-way-stop gap and sight checks.
       const giveWay = seenFlash === "flashing_amber" ? giveWayAt(world, { ...c, control: { ...control, type: "uncontrolled", rule: "major" } }, frontS) : (control.type === "uncontrolled" && control.rule !== "major") || (control.type === "stop" && !control.all_way && stopCompleted)
@@ -284,24 +289,25 @@ export function buildSnapshot(world, executing = null) {
       // (a left turn under an advance green is protected: oncoming traffic is held on its red; and
       // inside the junction once the light has changed, the car clears it as soon as the traffic it can
       // see allows, without waiting to see along the oncoming lanes)
-      const oncoming = leftTurn && turnNow && !advance?.protected ? oncomingYield(world, c, frontS, !(control.type === "signal" && entered && signal !== "green")) : null;
+      const oncoming = leftTurn && turnNow && !advance?.protected ? oncomingYield(world, c, frontS, !(control.type === "signal" && entered && signal !== "green" && officer?.direction !== "go")) : null;
       // A junction without a sign that asks nothing of the car right now (it has the right of way,
       // or nothing it gives way to is coming and it can see) does not hide a control further on:
       // a signal just beyond it, say.
       if (control.type === "uncontrolled" && (!giveWay || giveWay.go) && !oncoming && next && next.sRoute - frontS <= LOOK_AHEAD_CONTROL_M) continue;
-      const redTurnBan = control.type === "signal" && routeRedTurnBanned(world, c);
+      const redTurnBan = control.type === "signal" && !officer && routeRedTurnBanned(world, c);
       snap.intersection = {
         id: control.id, control: control.type, signal, group: control.group || null, advance,
-        ...(world.amberLights && control.type === "signal" && inter ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) } : {}),
+        ...(officer ? { officer } : {}),
+        ...(world.amberLights && control.type === "signal" && inter && !officer ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) } : {}),
         bumper_to_line_m: bumperToLine, s_line_route: c.sRoute,
         entered, ...(world.amberLights && entered && control.type === "signal" ? { clear_entered: true } : {}), turn: c.turn || "straight",
         oncoming,
         // (never at a scramble crossing, sim/signals.js: `scramble` says so)
-        right_on_red: control.type === "signal" && map.rightOnRed && !redTurnBan && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
+        right_on_red: control.type === "signal" && !officer && map.rightOnRed && !redTurnBan && !isScramble(inter) && c.turn === "right" && signal === "red" && bumperToLine > -CLEARING_M && inter
           ? turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") : null,
         ...(redTurnBan ? { no_turn_on_red: true } : {}),
         ...(control.type === "signal" && isScramble(inter) && !dark && !seenFlash ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } } : {}),
-        ...(world.leftOnRed && control.type === "signal" && signal === "red" && c.turn === "left" && inter && !isScramble(inter) && bumperToLine > -CLEARING_M && leftOnRedExit(world, c)
+        ...(world.leftOnRed && !officer && control.type === "signal" && signal === "red" && c.turn === "left" && inter && !isScramble(inter) && bumperToLine > -CLEARING_M && leftOnRedExit(world, c)
           ? { left_on_red: turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") } : {}),
         stop_completed: stopCompleted,
         all_way: control.type === "stop" ? !!control.all_way : null,
@@ -311,7 +317,7 @@ export function buildSnapshot(world, executing = null) {
         give_way: giveWay,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
         cross_traffic_moving: crossTraffic,
-        seconds_to_green: c.secondsToGreen && !dark && !seenFlash ? c.secondsToGreen(world.t) : null,
+        seconds_to_green: c.secondsToGreen && !dark && !seenFlash && !officer ? c.secondsToGreen(world.t) : null,
       };
       break;
     }
@@ -353,7 +359,7 @@ export function buildSnapshot(world, executing = null) {
     if (world.contraflow?.riders.length) snap.contraflow_cyclist = contraflowCyclist(world, p, frontS, lane, road, executing);
     // (a car running the red across the car's way as its light is green, with that option on:
     // sim/red-light-runner.js)
-    if (world.redRunners?.enabled && snap.intersection?.control === "signal") {
+    if (world.redRunners?.enabled && snap.intersection?.control === "signal" && !snap.intersection.officer) {
       const runner = redLightRunner(world, snap.intersection, route.headingAt(snap.intersection.s_line_route));
       if (runner) snap.red_light_runner = runner;
     }
@@ -374,6 +380,8 @@ export function buildSnapshot(world, executing = null) {
     // (snowbanks: a narrowed stretch to take turns through, and corners they hide, with that option on:
     // sim/snowbanks.js)
     if (world.snowbanks?.enabled) snap.snowbank = snowbankAhead(world, p, frontS);
+    // (a police officer directing traffic at the junction ahead, with that option on: sim/traffic-officer.js)
+    if (world.officers?.enabled) snap.traffic_officer = snap.intersection?.officer || null;
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -1732,11 +1740,11 @@ export function desiredSpeed(snap) {
   const i = snap.intersection;
   // (a car just past a signal's line, short of CLEARING_M, still stops for it, unless it is turning
   // right or left on red)
-  if (i && !i.clear_entered && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.control === "stop" && !i.stop_completed))) {
+  if (i && !i.clear_entered && (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) && ((i.control === "signal" && i.officer && i.officer.direction === "stop") || (i.control === "signal" && !i.officer && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.control === "stop" && !i.stop_completed))) {
     // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line
     const vs = i.amber?.stop ? stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5 - Math.max(0, snap.ego.v) * i.amber.reaction_s), i.amber.stop_decel)
       : i.bumper_to_line_m < STOP_ZONE_M ? 0 : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
-    if (vs < v) { v = vs; reasons.push(i.control === "signal" ? `${i.signal} light` : "stop sign"); }
+    if (vs < v) { v = vs; reasons.push(i.officer ? "police officer: stop" : i.control === "signal" ? `${i.signal} light` : "stop sign"); }
   }
   const amber = snap.amber_clear || i?.amber;
   if (amber && !amber.stop) {
@@ -2007,6 +2015,7 @@ export function hazardFlags(snap) {
   if (snap.ball_in_road) f.push("ball in the road");
   if (snap.geese_crossing) f.push("geese");
   if (snap.tailgater) f.push("tailgater");
+  if (snap.traffic_officer) f.push("traffic officer");
   if (snap.black_ice || (snap.ice_caution?.bridge && snap.ice_caution.bridge.starts_in_m < 80)) f.push("black ice");
   if (snap.snowbank?.narrowing) f.push("snowbank narrowing");
   if (snap.snowbank?.corner) f.push("snowbank corner");

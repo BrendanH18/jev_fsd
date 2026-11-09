@@ -21,7 +21,10 @@ export class RulesBrain {
     let stop = !!snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12;
     if (i) {
       const brakeDist = v * v / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
-      if (i.control === "signal" && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go) && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
+      // (a police officer directing traffic there decides, not the light: sim/traffic-officer.js; still rolling
+      // up to the line, waiting for the officer brakes gently to a stop there by itself)
+      if (i.officer?.direction === "stop" && !i.entered && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -1 && (v < 0.5 || !eligible.some(c => c.id === "wait_for_officer"))) stop = true;
+      if (i.control === "signal" && !i.officer && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go) && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
       if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) stop = true;
       if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) stop = true;
       if (waitsItsTurn(i) && i.bumper_to_line_m < 1.5) stop = true;
@@ -72,7 +75,7 @@ export class RulesBrain {
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
       if (c.id === "stop_at_line" && amberStop && !snap.emergency) cost -= 12;
-      if (c.id === "stop_at_line" && i && !i.entered && ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
+      if (c.id === "stop_at_line" && i && !i.entered && !i.officer && ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_turn_restriction") cost -= 30;
@@ -94,6 +97,10 @@ export class RulesBrain {
       // (black ice seen ahead: easing off early, to cross it steadily, sim/black-ice.js)
       if (c.id === "slow_for_ice" && snap.black_ice) cost -= 2;
       if (c.id === "wait_for_oncoming_narrowing") cost -= 6;
+      // a police officer directing traffic at the junction ahead (sim/traffic-officer.js): held, stop at the
+      // line, even on a green; waved through, go, even on a red
+      if (c.id === "wait_for_officer") cost -= 12;
+      if (c.id === "go_on_officer_wave") cost -= 1;
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;

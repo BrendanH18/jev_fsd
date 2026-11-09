@@ -279,3 +279,17 @@ where the pile hides the sidewalk and the side street, the HUD says SNOWBANK HID
 UP AND LOOK: someone may step out from behind it. Going in while a car you could see coming the other
 way had the way counts as `snowbank_conflicts`: 20 legality points, a replay marker and a coaching
 tip, reported only once you have come up to a narrowed stretch. Use `?snowbanks=0` to turn them off.
+
+### Police officers directing traffic
+
+In free drives (and the **Follow the officer** lesson) a police officer now and then directs traffic
+at a signal on your way: an officer in a hi-vis vest and cap stands in the middle of the junction, a
+cruiser with its lights flashing at the corner. The officer's directions override the lights, which
+keep cycling (or stay dark in a power cut). Facing the traffic they hold, one gloved hand up, palm out,
+they wave the other way through with the other arm, hold everyone for a moment once the junction is
+clear, then switch. The HUD says OFFICER DIRECTING TRAFFIC · STOP or OFFICER DIRECTING TRAFFIC · GO,
+and the coach says the same. Stop at the line when held, even on a green; go when waved, even on a red,
+still yielding to people and traffic in the junction and, turning left, to oncoming traffic. People
+on foot cross with the waved traffic. Crossing the line while the officer holds you counts as
+`officer_violations`: 35 legality points, a replay marker and a coaching tip, reported only once you
+have come up to an officer. Use `?officers=0` to turn them off.

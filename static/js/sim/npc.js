@@ -76,6 +76,7 @@ import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { ballYield } from "./ball-chase.js";
 import { geeseYield } from "./geese.js";
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
+import { officerDirection } from "./traffic-officer.js";
 import { gentleOnIce, npcIce } from "./black-ice.js";
 import { snowbankYield } from "./snowbanks.js";
 import { AMBER_M, KID_CROSS_P, KID_EVERY_S, KIDS, LEAVE_S, RED_MAX_S, RED_S, STOP_EVERY_M, canStopFor as canStopForSchool, firstStop, isSchoolBus, redsOn, schoolBusHold, stopRange } from "./school-bus.js";
@@ -945,7 +946,11 @@ export class NpcFleet {
         const bumperToLine = lineS - front;
         if (bumperToLine < -1) continue;
         if (bumperToLine > 70) break;
-        if (ctl.type === "signal") {
+        // (a police officer directing traffic there: their direction, not the light's; held, it stays held,
+        // never giving up on the wait: sim/traffic-officer.js)
+        const officer = ctl.type === "signal" && world.officers?.list.length ? officerDirection(world, n, e.id) : null;
+        if (officer) { n.officerHeld = officer === "stop"; if (n.officerHeld) stopAt = bumperToLine; }
+        else if (ctl.type === "signal") {
           // (the light for the way it goes: under a left arrow, only a left turn has a green)
           const after = path.edges[path.edges.indexOf(e) + 1];
           const st = movementSignal(approachPhase(this.map.intersections.get(e.control.id), e.id, world.t), after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight");
@@ -1038,7 +1043,7 @@ export class NpcFleet {
       } else n.standoff = 0;
       // After ~15 s stopped at a clear control with no vehicle blocking, abandon the virtual leader.
       if (n.v < 0.2 && gap < 3) n.waiting += dt; else n.waiting = 0;
-      if (n.waiting > 15 && stopAt !== null && stopAt < 1 && leadV === 0 && !this.blockedByVehicle(n) && !(cur && this.crossComing(n, cur.to))) { gap = Infinity; leadV = n.v0; n.waiting = 0; }
+      if (n.waiting > 15 && stopAt !== null && stopAt < 1 && leadV === 0 && !n.officerHeld && !this.blockedByVehicle(n) && !(cur && this.crossComing(n, cur.to))) { gap = Infinity; leadV = n.v0; n.waiting = 0; }
       // a bus at its stop, or pulling in to it; or, behind a bus signalling to pull out from its stop,
       // letting it out (sim/bus.js): after the checks above, which still hold on the way there (a
       // junction before the stop), and not a line the wait at which is ever given up

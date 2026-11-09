@@ -18,6 +18,7 @@ import { pxoPedestrian } from "./pxo.js";
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
 import { isScramble, pedPhase } from "./signals.js";
+import { officerWalk } from "./traffic-officer.js";
 import { rng } from "../common.js";
 import { CROSS_AHEAD_M, redsOn } from "./school-bus.js";
 import { doorPoints, doorsOpen } from "./streetcar.js";
@@ -392,6 +393,9 @@ export class Crowd {
     if (cross.jaywalk) return this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.marked) return this.canStopFor(cross);
     const info = this.legsAt.get(cross.node);
+    // (a police officer directing traffic there: walk with the axis they wave, sim/traffic-officer.js)
+    const officer = info.inter && cross.leg.group && this.world.officers?.list.length ? officerWalk(this.world, info.inter.id, cross.leg.group === "A" ? "B" : "A") : null;
+    if (officer !== null) return officer;
     // (with a signal's lights out, its walk signals are out too: cross on a gap, as where there is none)
     if (info.inter && cross.leg.group && !this.world.outages?.isDark(info.inter.id) && !flashing(info.inter, this.world)) {
       // walk with the parallel traffic, and only step off on the walk signal
@@ -479,7 +483,10 @@ export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
     const info = crowd.legsAt.get(c.node);
     if (!info?.inter || !c.leg?.group || crowd.world?.outages?.isDark(info.inter.id)) continue;
     const group = c.leg.group === "A" ? "B" : "A";
-    if (pedPhase(info.inter, group, t) !== "walk" && pedPhase(info.inter, group, t + within) !== "walk") continue;
+    // (a police officer directing traffic there: they walk with the axis waved, sim/traffic-officer.js)
+    const officer = crowd.world?.officers?.list.length ? officerWalk(crowd.world, info.inter.id, group) : null;
+    if (officer === false) continue;
+    if (officer === null && pedPhase(info.inter, group, t) !== "walk" && pedPhase(info.inter, group, t + within) !== "walk") continue;
     if (segmentCrossing(pts, cum, sFrom, sTo, c.from, c.to)) return ped;
   }
   return null;

@@ -15,6 +15,7 @@ import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { tailgaterScenario, installTailgater, stepTailgater } from "./tailgater-challenge.js";
 import { iceScenario, installIce, stepIce } from "./black-ice-challenge.js";
 import { snowbankScenario, placeSnowbank, stepSnowbank } from "./snowbank-challenge.js";
+import { officerScenario, installOfficer, stepOfficerChallenge } from "./officer-challenge.js";
 import { browserRoute, routeFromLanes } from "../demo/routing.js";
 import { cumulative, pointAt, headingAt, wrapAngle, projectPoint } from "../map/mapdata.js";
 import { Vehicle, BIKE, BUS, CAR, COLLECTION_TRUCK, DELIVERY_VAN, SCHOOL_BUS, SNOW_PLOW, STREETCAR, TOW_TRUCK } from "../sim/vehicle.js";
@@ -154,6 +155,8 @@ export const CHALLENGES = [
     description: "Dawn after a clear night just below freezing in Saskatoon. You are heading north over the South Saskatchewan River on the Traffic Bridge, toward downtown. The approach is dry, but the deck has iced over, and traffic is queuing for the roundabout just past the far end.", lesson: "Bridges and overpasses freeze before the road around them, and black ice is nearly invisible. Near freezing, ease off before a bridge and watch for a glossy sheen. Slow down on the dry road before the ice, then cross it steadily: no braking, accelerating or sharp steering on it, and leave extra room to the car ahead." },
   { id: "one-car-at-a-time", title: "One car at a time", map: "montreal", weather: "snow", time: "afternoon", seed: 54042, icon: "❄", difficulty: "Patience", hazard: "snowbanks", snowbanks: true, street: "Avenue Laval",
     description: "Snow is falling on Avenue Laval in the Plateau, and the banks the plows left have pushed the parked cars out from both kerbs: there is room for only one car at a time. A car coming the other way is already in the narrow stretch, and at the corner beyond, the snow is piled higher than a person.", lesson: "Where snowbanks leave room for one car, take turns: whoever is already in the narrow stretch, or got there first, goes first, so wait at your end. Keep to the middle through it, and creep up to corners where the banks are high: someone waiting to cross can be hidden right behind them." },
+  { id: "follow-the-officer", title: "Follow the officer", map: "toronto", weather: "dry", time: "afternoon", seed: 57042, icon: "✋", difficulty: "Judgement", hazard: "officer", officers: true, street: "Spadina Avenue",
+    description: "A police officer is directing traffic in the middle of Bloor Street West at Spadina Avenue, in the Annex, a cruiser with its lights on at the corner. You're heading north up Spadina on a green light, but the officer is waving Bloor through.", lesson: "A police officer's directions override the traffic lights. Stop at the line when the officer holds you, even on a green, and go when they wave you through, even on a red, still yielding to anyone already in the junction. Canadian highway traffic acts and driver's handbooks all say so." },
 ];
 // (road tests, lab/road-tests.js, open and play the same way)
 export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
@@ -1062,6 +1065,7 @@ export function challengeScenario(map, challenge) {
   if (challenge.hazard === "tailgater") return tailgaterScenario(map, challenge);
   if (challenge.hazard === "black-ice") return iceScenario(map, challenge);
   if (challenge.hazard === "snowbanks") return snowbankScenario(map, challenge);
+  if (challenge.hazard === "officer") return officerScenario(map, challenge);
   if (challenge.hazard === "amber") return amberScenario(map, challenge);
   if (challenge.hazard === "red-turn-sign") return redTurnScenario(map, challenge);
   if (challenge.highBeams) {
@@ -1287,6 +1291,7 @@ export function installChallenge(world, fleet, challenge, scenario) {
   if (scenario.freshGreen) installFreshGreen(world, fleet, scenario);
   if (scenario.roadTest) installRoadTest(world, fleet, challenge, scenario);
   if (scenario.tailgater) installTailgater(world, fleet, scenario);
+  if (scenario.officer) installOfficer(world, fleet, scenario);
   if (scenario.beamTraffic) {
     world.streetLightsOut = true;
     for (const [edge, s, v, id] of [[lane.edge, 370, 4, "beam_leader"], [scenario.beamTraffic.reverse, lane.length - 430, 9, "beam_oncoming"]]) {
@@ -1378,6 +1383,7 @@ export function stepChallenge(world, fleet) {
   if (state.tailgater) { stepTailgater(world); return; }
   if (state.blackIce) { stepIce(world, fleet); return; }
   if (state.snowbank) { stepSnowbank(world); return; }
+  if (state.officer) { stepOfficerChallenge(world, fleet); return; }
   const local = world.ego.toLocal(...state.at);
   // (at a two-way stop, once the car has stopped at the line, or its front is past it)
   const trigger = state.hazard === "two-way" ? (world.egoStop.completed && world.egoStop.controlId === state.stopId) || local.ahead < world.ego.spec.length - world.ego.spec.rearOverhang
