@@ -1,6 +1,7 @@
 // A reproducible scenario suite: seeded start points and destinations on the loaded map, routed by
 // the server. The same map, seed, and count always give the same suite, and each scenario carries
-// its own traffic seed so reruns see the same traffic.
+// its own traffic seed so reruns see the same traffic. With `restrictions` (the `city` world: bench/runner.js)
+// routes keep to the map's turn restrictions at the city clock's time, as the app plans them.
 
 import { api, rng } from "../common.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
@@ -8,7 +9,7 @@ import { Route } from "../map/route.js";
 
 const MIN_ROUTE_M = 350, MAX_ROUTE_M = 1400;
 
-export async function buildSuite(map, { count = 12, seed = 1 } = {}) {
+export async function buildSuite(map, { count = 12, seed = 1, restrictions = null } = {}) {
   const random = rng(seed * 7919 + 17);
   const lanes = map.laneList.filter((l) => l.length > 40 && !l.edgeRef.control);
   const allLanes = map.laneList.filter((l) => l.length > 40);
@@ -27,7 +28,7 @@ export async function buildSuite(map, { count = 12, seed = 1 } = {}) {
     const goal = [p[0] + Math.cos(angle) * reach, p[1] + Math.sin(angle) * reach];
     if (!inset(p[0], p[1]) || !inset(goal[0], goal[1])) continue;
     let res;
-    try { res = await api("/api/route", { bbox: map.routingBbox.join(","), from: { x: p[0], y: p[1], heading: psi }, to: { x: goal[0], y: goal[1] }, k: 1 }); } catch { continue; }
+    try { res = await api("/api/route", { bbox: map.routingBbox.join(","), from: { x: p[0], y: p[1], heading: psi }, to: { x: goal[0], y: goal[1] }, k: 1, ...(restrictions ? { restrictions: true, hour: restrictions.hour, weekday: restrictions.weekday } : {}) }); } catch { continue; }
     const data = res.routes && res.routes[0];
     if (!data) continue;
     const route = new Route(data, map);
