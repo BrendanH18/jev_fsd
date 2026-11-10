@@ -106,6 +106,15 @@ export function sampleCandidates(snap, world) {
   const nudge = scenery ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : 0;
 
   if (!lost && !offRoad) {
+    // Moving back from a pull-over can swing the tail into a kerbside car. Keep the exact
+    // present line available at a crawl, until there is room to steer back; the same forward
+    // simulations and clearance margins judge it. The city following policy enables this recovery.
+    if (world.followingDistance && !shifting && lane && v < 3 && Math.abs(lane.lateral) > 0.2
+      && Math.abs(lane.lateral) < ((snap.road.edge?.lane_width || 0) - world.ego.spec.width) / 2
+      && world.parked.near(world.ego.x, world.ego.y, 8).length) {
+      out.push({ id: "keep_present_line", laneUntil, law: inLane({ kind: "lane", offset: lane.lateral, vTarget: Math.min(2, snap.target?.v ?? limit) }),
+        steer: "hold the present line within the lane", speed: "ease forward until there is room to steer back" });
+    }
     // (with scenery in the lane the full-metre nudges come first, so the cap on candidates below
     // cuts half-metre ones rather than either of them)
     const offsets = shifting ? [0] : scenery ? [0, -1.0, 1.0, -0.5, 0.5] : [0, -0.5, 0.5];
@@ -165,7 +174,7 @@ export function sampleCandidates(snap, world) {
     if (snap.intersection && snap.intersection.bumper_to_line_m > 0.3) {
       // (tailgated, it starts braking earlier and more gently: sim/tailgaters.js)
       const gently = snap.tailgater && !snap.intersection.amber?.stop ? { stopDecel: TAIL_STOP_DECEL } : {};
-      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, ...(snap.intersection.amber?.stop ? { stopDecel: snap.intersection.amber.stop_decel, stopReaction: snap.intersection.amber.reaction_s } : {}), ...gently, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
+      out.push({ id: "stop_at_line", laneUntil, law: inLane({ kind: "lane", offset: nudge, vTarget: approach, ...(snap.intersection.amber?.stop ? { stopDecel: snap.intersection.amber.stop_decel, stopReaction: snap.intersection.amber.reaction_s, ...(snap.intersection.amber.firm ? { stopFirm: true } : {}) } : {}), ...gently, stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5) }),
         steer: "hold lane", speed: "approach and stop at the line" });
     }
     // A police officer directing traffic at the junction ahead (sim/traffic-officer.js): held, stop at the
@@ -299,7 +308,10 @@ export function sampleCandidates(snap, world) {
     // braking as gently as the stop was planned for.
     const ev = snap.emergency;
     if (ev && ev.stop_s_route !== null) {
-      out.push({ id: "pull_over", laneUntil, law: inLane({ kind: "lane", offset: ev.offset_m, vTarget: Math.min(approach, ev.max_speed_mps), stopAtRoute: stopAt(ev.stop_s_route - FRONT - 0.5), stopDecel: EV_STOP_DECEL }),
+      out.push({ id: "pull_over", laneUntil, law: { ...inLane({ kind: "lane", offset: ev.offset_m, vTarget: Math.min(approach, ev.max_speed_mps), stopAtRoute: stopAt(ev.stop_s_route - FRONT - 0.5), stopDecel: EV_STOP_DECEL, ...(ev.steer_at_stop ? { steerAtStop: true } : {}) }),
+          // Stopping before the narrowed stretch: pull right here, rather than pursuing its
+          // upcoming move left into the shared corridor while trying to pull over.
+          ...(detour.detour?.id?.startsWith("sb:") && ev.stop_s_route < snap.snowbank.narrowing.entry_s_route ? { detour: null } : {}) },
         steer: `pull over ${ev.offset_m.toFixed(1)} m to the right`, speed: ev.bumper_to_stop_m > 0.3 ? `stop at the side of the road${ev.clearing ? ", past the junction" : ""}` : "hold still at the side of the road" });
     }
     // A bus pulling out from its stop ahead, with the right of way: stop behind it and let it out.
@@ -446,6 +458,17 @@ export function sampleCandidates(snap, world) {
   // drops back in behind it: nothing else would get it by in the time the way round was clear for)
   const going = snap.cyclist_pass?.going ? out.filter((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist") : out;
   const list = dedupe(going).sort((a, b) => priority(a) - priority(b)).slice(0, 15);
+  // Rounded cruise speeds must not exceed the siren response ceiling when a
+  // different lane manoeuvre wins. Driving on ahead of the emergency vehicle is exempt.
+  const emergency = snap.emergency;
+  if (emergency && !emergency.lead && emergency.max_speed_mps != null) for (const c of list) if (c.law.kind === "lane") c.law.vTarget = Math.min(c.law.vTarget, emergency.max_speed_mps);
+  // A competing stop (for the child, a sign, or a closure) must still anticipate the
+  // ball's falling cover speed, rather than chasing its instantaneous ceiling late.
+  const ball = snap.ball_in_road;
+  if (ball?.limit_mps != null && ball.gap_m > 0) {
+    const cap = coverAfter(ball.gap_m, v, HORIZON_S);
+    for (const c of list) if (c.law.kind === "lane") c.law.vTarget = Math.min(c.law.vTarget, cap);
+  }
   // (every lane manoeuvre whose wheels would cross a pothole ahead slows to the speed to drive over it
   // at, by then: sim/potholes.js)
   if (snap.potholes_ahead && snap.route && snap.routeProj) {

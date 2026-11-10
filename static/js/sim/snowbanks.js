@@ -582,7 +582,27 @@ export function snowbankYield(world, n, front) {
     const c = sb.claims(nw).find((x) => x.v === n) || sb.claimFor(nw, n);
     if (!c) return { hold: null, limit: Infinity, keep, at };
     const turn = narrowingTurn(sb, nw, c);
-    return { hold: turn.mayEnter ? null : waitPoint(en, front), limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)), keep, at, turn };
+    let hold = turn.mayEnter ? null : waitPoint(en, front);
+    // Turning into a narrow street, leave its exit clear for the oncoming driver.
+    // Waiting at the bank itself can put a long nose across that driver's way.
+    const prev = n.path.edges[n.path.edges.indexOf(pe) - 1];
+    const roomToWait = en - pe.sStart >= (n.spec || CAR).length + map.crossingHalfWidth(pe.id) + WAIT_M;
+    if (prev && !roomToWait && Math.abs(map.turnAngle(prev.id, pe.id)) > Math.PI / 6) {
+      // The last car can be clear of the banks but still at the junction's stop
+      // line. Keep its way out open until it has left the approach too.
+      const edge = map.edges.get(pe.id), entry = entryOf(nw, dir);
+      const exiting = [world.ego, ...world.npcs].some(o => {
+        if (o === n || !narrowable(o) || (o.pull && !o.pull.moving)) return false;
+        const p = onStreet(edge, o);
+        return p?.opposite && p.s < entry;
+      });
+      const before = pe.sStart - map.crossingHalfWidth(prev.id) - WAIT_M;
+      if ((hold !== null || exiting) && front <= before + 1) hold = Math.min(hold ?? Infinity, before);
+    }
+    // Leave the exit lane open while waiting outside the banks. Moving toward
+    // the middle before our turn can strand a long oncoming vehicle in the corridor.
+    return { hold, limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)), keep,
+      at: hold !== null && front <= en - NARROW_FULL_M ? () => 0 : at, turn };
   }
   return null;
 }
@@ -638,7 +658,7 @@ function egoNarrowing(world, frontS) {
     oncoming: o ? { id: o.id, inside: o.inside, gap_m: r1(Math.max(0, o.gap)), speed: r1(o.speed) } : null,
     wait, stop_s_route: stop, bumper_to_stop_m: wait ? stop - frontS : null, entry_s_route: c.en,
     limit_mps: limit, squeeze: !!squeeze && squeeze.v !== ego,
-    detour: shift < 0 ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - NARROW_FULL_M, back: c.ex + NARROW_FULL_M, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
+    detour: shift < 0 && !(wait && frontS <= c.en - NARROW_FULL_M) ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - NARROW_FULL_M, back: c.ex + NARROW_FULL_M, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
 }
 
 // The corner the car comes to next on its route: at the end of the street it is on (a junction), with a

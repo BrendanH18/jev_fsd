@@ -86,6 +86,22 @@ console.log("✓ a car already stopped at a signal or stop line may hold that st
   world.auditEmergency(world.roadInfo());
   assert.equal(world.violations.failed_to_yield, 1, "holding up the ambulance is still audited");
 }
+// Lateral lane control and the pull-over audit use the rear axle. Yaw alone must
+// neither create nor erase that lateral move; swept bodies are checked separately.
+for (const [axleRight, heading, expected] of [[0.1, -0.2, 1], [0.3, 0.2, 0]]) {
+  const { world, ev } = setup("signal", { midblock: true });
+  world.ego.y -= axleRight; world.ego.psi = heading;
+  world.evCalls.clear(); world.auditEmergency(world.roadInfo());
+  const [cx, cy] = world.ego.center;
+  for (const [t, along] of [[9.9, 0.1], [10, -0.1]]) {
+    ev.x = cx + along * Math.cos(heading) - 3.2 * Math.sin(heading) + ev.spec.length / 2 - ev.spec.rearOverhang;
+    ev.y = cy + along * Math.sin(heading) + 3.2 * Math.cos(heading);
+    ev.path.s = 100 - ev.x; world.t = t;
+    world.auditEmergency(world.roadInfo());
+  }
+  assert.equal(world.violations.failed_to_yield, expected,
+    `rear-axle pull-over with axle ${axleRight} and heading ${heading}`);
+}
 console.log("✓ late stops, mid-block stops, moving away and holding up the ambulance still fail the audit");
 // The siren can begin during the last crawl into a stop, not only after v reaches zero.
 for (const [speed, gap, travel] of [[0.784, 2.323, 1.45], [1.254, 1.5, 0.9], [2.255, 3.295, 3.716]]) {
@@ -139,10 +155,10 @@ for (const queueGap of [2.8, 8]) {
   assert.equal(world.violations.failed_to_yield, 0, "the authorization survives the queue opening and the car starting to move");
 }
 console.log("✓ a close existing queue and a second blocker are distinguished from an avoidable obstruction");
-for (const offset of [-0.4, -1]) {
+for (const offset of [-0.4, -0.407, -0.49, -0.51, -1]) {
   const { world, ev } = setup("signal", { midblock: true, narrowing: offset });
   pass(world, ev);
-  assert.equal(world.violations.failed_to_yield, offset === -0.4 ? 0 : 1, "the usable right edge of a narrowing replaces the old lane centre");
+  assert.equal(world.violations.failed_to_yield, offset >= -0.5 ? 0 : 1, "the narrowed target retains the normal pull-over settling allowance, but no more");
 }
 {
   const { world, ev } = setup("signal", { midblock: true, narrowing: -0.4 });

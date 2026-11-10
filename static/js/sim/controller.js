@@ -11,8 +11,7 @@ import { slowCap } from "./potholes.js";
 export function lookahead(v) { return clamp(0.8 * Math.abs(v), 4, 15); }
 
 // steer command to reach the route point `Ld` ahead, shifted `offset` meters to the right
-export function purePursuit(vehicle, route, s, offset = 0) {
-  const Ld = lookahead(vehicle.v);
+export function purePursuit(vehicle, route, s, offset = 0, Ld = lookahead(vehicle.v)) {
   const target = route.offsetPointAt(Math.min(s + Ld, route.length), offset);
   const dx = target[0] - vehicle.x, dy = target[1] - vehicle.y;
   const alpha = Math.atan2(dy, dx) - vehicle.psi;
@@ -98,7 +97,9 @@ export function curveProfileSpeed(route, s) {
 // The "law" a candidate or the autopilot executes between decisions. A lane law's vTarget is a
 // ceiling: the curve profile lowers it through turns, the way a real speed controller would.
 //   kind: "lane" (follow route with offset, target speed, and a stop at `stopAt`, braking at up to
-//         `stopDecel` if given; `stopReaction` reserves seconds of travel for response lag; `slowTo`,
+//         `stopDecel` if given (`stopFirm` permits grip-bounded amber braking); `stopReaction`
+//         reserves seconds of travel for response lag; `steerAtStop` finishes a short pull-over
+//         within its stopping room; `slowTo`,
 //         potholes and black ice to slow for, sim/potholes.js; `ice`, black ice seen, on which the
 //         inputs are gentle, sim/black-ice.js gentleOnIce) | "hard_brake" | "reverse" | "steer" (fixed angle)
 //         | "turnaround" (a three-point turn at a U-turn, sim/turnaround.js; it needs `world`)
@@ -127,11 +128,14 @@ export function applyLaw(vehicle, law, route, s, dt, world = null) {
     default: {
       const stopAt = law.stopAt;
       let vTarget = Math.min(law.vTarget, curveProfileSpeed(route, s).v);
-      if (stopAt !== undefined && stopAt !== null) vTarget = Math.min(vTarget, stopSpeedFor(stopAt - (s - (law.s0 ?? s)) - Math.max(0, vehicle.v) * (law.stopReaction || 0), law.stopDecel ? Math.min(law.stopDecel, comfort().decel) : undefined));
+      if (stopAt !== undefined && stopAt !== null) vTarget = Math.min(vTarget, stopSpeedFor(stopAt - (s - (law.s0 ?? s)) - Math.max(0, vehicle.v) * (law.stopReaction || 0), law.stopDecel ? Math.min(law.stopDecel, law.stopFirm ? comfort().hardDecel : comfort().decel) : undefined));
       // (down to the speed to drive over each pothole its wheels cross, by then, and no faster until its
       // rear wheels are over: sim/potholes.js; route arc lengths)
       if (law.slowTo) for (const slow of law.slowTo) vTarget = Math.min(vTarget, slowCap(slow, s));
-      const steer = purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)), accel = speedControl(vehicle.v, vTarget);
+      // A short pull-over must finish steering within the room before its stop,
+      // rather than aiming four metres ahead beyond the control line.
+      const Ld = law.steerAtStop && stopAt != null ? Math.max(1, Math.min(lookahead(vehicle.v), (stopAt - (s - (law.s0 ?? s))) / 2)) : lookahead(vehicle.v);
+      const steer = purePursuit(vehicle, route, s, lateralAt(law, s + Ld, route), Ld), accel = speedControl(vehicle.v, vTarget);
       // (on black ice it has seen, the driver only eases the pedals and the wheel: sim/black-ice.js)
       if (law.ice && ROAD.gripAt) return vehicle.step(dt, gentleOnIce(vehicle, steer, accel, dt));
       return vehicle.step(dt, { steer, accel });

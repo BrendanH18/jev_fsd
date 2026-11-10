@@ -1,9 +1,10 @@
 // Steady amber: stop if a safe stop was possible when the light was first seen.
 // This is a conservative simulator stopping model, not a statutory distance: allow one
 // decision interval and actuator lag, then brake at the current grip's comfortable rate.
+// A dilemma that cannot clear before red uses firmer braking only when it safely fits.
 // Drivers and the independent line-crossing audit use the same latched observation.
-import { comfort } from "./vehicle.js";
-import { phaseOf, secondsToGreen } from "./signals.js";
+import { comfort, ROAD } from "./vehicle.js";
+import { phaseOf, secondsToGreen, amberTimeLeft } from "./signals.js";
 
 export const AMBER_REACTION_S = 0.4;
 export const AMBER_SPEED_SLACK_MPS = 0.5;
@@ -40,10 +41,21 @@ export function observeAmber(vehicle, key, signal, distance, intersection, shows
     const group = arrow ? arrow.group : phases.A === "yellow" ? "A" : "B";
     const untilGreen = secondsToGreen(intersection, group, t, arrow?.edge ?? null, arrow ? "left" : "straight");
     const room = Math.max(0.5, distance - 0.5 - speed * (AMBER_REACTION_S + (vehicle.spec.accelLag || 0)));
-    choice = { phase, stop: (speed < 0.2 && distance >= 0) || distance >= stopping, speed_mps: speed, distance_m: distance, stopping_distance_m: stopping,
+    // On low grip there can be a dilemma zone: a comfortable stop takes longer
+    // than the amber, yet coasting cannot reach the line before red. Prefer a
+    // firmer, physically safe stop to a clearing commitment that needs speeding up.
+    const required = speed * speed / (2 * room);
+    const cannotClear = speed > 0.2 && distance / speed >= amberTimeLeft(intersection, shows, t);
+    const firmRoom = distance - 0.5 - speed * (AMBER_REACTION_S + (vehicle.spec.accelLag || 0));
+    const firmDecel = speed * speed / (2 * firmRoom) * 1.1;
+    const onIce = ROAD.gripAt && [0, vehicle.spec.wheelbase].some(d =>
+      (ROAD.gripAt(vehicle.x + Math.cos(vehicle.psi) * d, vehicle.y + Math.sin(vehicle.psi) * d, vehicle.spec) ?? ROAD.mu) < ROAD.mu);
+    const firm = !onIce && distance < stopping && cannotClear && firmRoom > 0 && firmDecel <= Math.min(vehicle.spec.maxBrake, comfort().hardDecel);
+    choice = { phase, stop: (speed < 0.2 && distance >= 0) || distance >= stopping || firm, speed_mps: speed, distance_m: distance, stopping_distance_m: stopping,
       stop_until: t + untilGreen,
       reaction_s: AMBER_REACTION_S + (vehicle.spec.accelLag || 0),
-      stop_decel: Math.min(comfort().decel, Math.max(0.3, speed * speed / (2 * room))) };
+      stop_decel: firm ? Math.max(comfort().decel, firmDecel) : Math.min(comfort().decel, Math.max(0.3, required)),
+      ...(firm ? { firm: true } : {}) };
     vehicle.amberChoices.set(key, choice);
   }
   choice.max_speed_mps = Math.max(choice.max_speed_mps || choice.speed_mps, Math.max(0, vehicle.v));

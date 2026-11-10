@@ -6,7 +6,7 @@ import { puddleLimit, puddlesAhead } from "../sim/puddles.js";
 import { ballInRoad } from "../sim/ball-chase.js";
 import { geeseCrossing } from "../sim/geese.js";
 import { iceLimit, iceSensing, iceTurn } from "../sim/black-ice.js";
-import { snowbankAhead } from "../sim/snowbanks.js";
+import { snowbankAhead, WAIT_M as SNOWBANK_WAIT_M } from "../sim/snowbanks.js";
 import { parkerSensing } from "../sim/parkers.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
@@ -174,7 +174,7 @@ const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
 // rest; chosen again from where it is if it could no longer stop there even braking at 6 m/s^2),
 // or short of the next junction (2.5 m short
 // of the crossing street, or of the stop line) if it can stop there braking at up to 3.5 m/s^2,
-// else past it with its rear 1 m clear (and likewise clear of a junction it is in). It pulls over
+// else past it, leaving 8 m to finish steering once its rear clears the junction. It pulls over
 // to the right as it stops (across into the curb lane where there are several, then into an empty
 // parking lane beside it, see pullOverOffset)
 // and waits there until the vehicle has gone by. If the vehicle is stuck behind the car for 3 s,
@@ -182,6 +182,8 @@ const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
 export const EV_STOP_DECEL = 1.5;
 const EV_FIRM_DECEL = 3.5;
 const EV_SHORT_M = 2.5;
+const EV_STEER_M = 8;
+const EV_CLEAR_MPS = 10 / 3.6; // keep moving slowly enough to yield while finishing the lateral move
 const EV_HARD_DECEL = 6;
 
 export function buildSnapshot(world, executing = null) {
@@ -717,14 +719,14 @@ function oncomingYield(world, c, frontS, look = true) {
   // Hidden traffic (World option hazards, sim/hidden-traffic.js): along each oncoming lane, as far as
   // traffic at its street's limit covers in that time, a vehicle's body (one waiting to turn left
   // opposite, say) may hide what is coming. Until the car can see that far, it waits short of that
-  // lane's path, as it would for a vehicle there, but no further in than the near edge of the street it
-  // crosses (so that a vehicle waiting to turn left opposite has room to turn in front of it), or, past
+  // lane's path, as it would for a vehicle there, but ONCOMING_STOP_M short of the near edge
+  // of the street it crosses (so that a vehicle waiting to turn left opposite has room to turn in front of it), or, past
   // that, where it can stop braking gently.
   const view = look && world.hazards ? oncomingView(world, c, need) : null;
   if (view) {
     const hit = pathHit(world, c, frontS, view.at[0], view.at[1], view.heading, CAR, view.lane);
     if (hit !== null) {
-      const edge = c.sJunction - world.map.crossingHalfWidth(c.edge), soonest = frontS + ego.v * ego.v / (2 * comfort().decel);
+      const edge = c.sJunction - world.map.crossingHalfWidth(c.edge) - ONCOMING_STOP_M, soonest = frontS + ego.v * ego.v / (2 * comfort().decel);
       const at = Math.min(hit - ONCOMING_STOP_M, Math.max(edge, soonest)), hidden = { hidden_by: view.hidden_by, sight_m: view.sight_m, lane: view.lane.idx };
       if (!best || at < best.yield_s_route) best = { id: null, eta_s: null, need_s: need, yield_s_route: at, bumper_to_yield_m: at - frontS, view: hidden, path_s: hit };
       else best.view = hidden;
@@ -798,7 +800,7 @@ function emergencyYield(world, p, frontS, lane, visible) {
   // even braking hard, having been slow to start)
   // (well past it is handled below)
   if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + 1.5 && (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v)) {
-    let stop = frontS + Math.max(8, v * v / (2 * EV_STOP_DECEL)), clearing = false;
+    let stop = frontS + Math.max(EV_STEER_M, v * v / (2 * EV_STOP_DECEL)), clearing = false;
     // junctions along the route from here to there: stop short of the first, or clear it
     // (from the street before this one: the car may still be in the junction it has just come through)
     for (let i = Math.max(0, route.edgeIndexAt(p.s) - 1); i < route.edges.length - 1; i++) {
@@ -807,14 +809,21 @@ function emergencyYield(world, p, frontS, lane, visible) {
       if (!isJunction(map, e.to)) continue;
       const half = map.crossingHalfWidth(e.id), line = route.controls.find((c) => c.edge === e.id);
       const short = Math.min(sNode - half - EV_SHORT_M, line ? line.sRoute - 0.5 : Infinity);
-      const clear = sNode + half + ego.spec.length + 1;
+      const clear = sNode + half + ego.spec.length + 1 + EV_STEER_M;
       if (frontS > short && frontS < clear) { stop = Math.max(stop, clear); clearing = true; continue; }
       if (short >= stop || short < frontS) continue;
       if (short - frontS >= v * v / (2 * EV_FIRM_DECEL)) stop = Math.max(frontS + 0.3, short);
       else { stop = Math.max(stop, clear); clearing = true; }
       break;
     }
-    plan = world.evYield = { id: ev.id, route, stop: Math.min(stop, route.length - 1), speed: v, clearing, lead: plan?.id === ev.id && plan.lead };
+    // Finish steering after a corner, while remaining short of a one-car snowbank corridor.
+    // That corridor's approach detour is not a place to stop while pulling right.
+    for (const nw of world.snowbanks?.narrowings || []) {
+      const ends = world.snowbanks.alongRoute(route, nw);
+      if (ends && ends.en - SNOWBANK_WAIT_M - frontS >= v * v / (2 * EV_FIRM_DECEL) && stop >= ends.en - SNOWBANK_WAIT_M) stop = Math.min(stop, ends.en - SNOWBANK_WAIT_M);
+    }
+    stop = Math.min(stop, route.length - 1);
+    plan = world.evYield = { id: ev.id, route, stop, speed: v, since: world.t, tight: stop - frontS < EV_STEER_M - 1e-6, clearing, lead: plan?.id === ev.id && plan.lead };
   }
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
@@ -833,10 +842,11 @@ function emergencyYield(world, p, frontS, lane, visible) {
   const across = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width;
   const offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
   return { id: ev.id, kind: EMERGENCY_NAMES[ev.kind] || ev.kind, from: call.relation, distance_m: call.distance_m, eta_s: call.eta_s, seen: visible.includes(ev),
-    stop_s_route: lead ? null : plan.stop, bumper_to_stop_m: lead ? null : plan.stop - frontS, offset_m: lead ? 0 : offset,
+    stop_s_route: lead ? null : plan.stop, bumper_to_stop_m: lead ? null : plan.stop - frontS, offset_m: lead ? 0 : offset, steer_at_stop: !!plan.tight,
     // A car already slow or stopped only crawls forward to steer over; the extra steering room
-    // must not make it accelerate into the emergency vehicle's way. Keep the observation speed.
-    max_speed_mps: Math.max(2, plan.speed ?? v), clearing: plan.clearing, lead };
+    // must not make it hold its observation speed indefinitely. Slow at the stopping
+    // deceleration to a crawl while steering over, even if clearing leaves a longer run.
+    max_speed_mps: Math.min(Math.max(2, plan.speed ?? v), Math.max(EV_CLEAR_MPS, (plan.speed ?? v) - EV_STOP_DECEL * Math.max(0, world.t - (plan.since ?? world.t)))), clearing: plan.clearing, lead };
 }
 
 // A bus ahead signalling to pull out from its stop that the car must let out (sim/bus.js, BC MVA

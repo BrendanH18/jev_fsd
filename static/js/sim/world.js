@@ -22,7 +22,7 @@ import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
 import { AllWayStops } from "./all-way.js";
 import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
-import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency } from "./emergency.js";
+import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency, pullOverOffset } from "./emergency.js";
 import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { BEHIND_M, ONCOMING_M, SIDE_M, canStopFor as canStopForSchool, redsOn, schoolBusRelation } from "./school-bus.js";
@@ -1317,7 +1317,12 @@ export class World {
     const exit = narrowed && (narrowed.dir > 0 ? narrowed.nw.b : narrowed.nw.L - narrowed.nw.a);
     const rightmost = narrowed && road.s + FRONT >= entry - NARROW_FULL_M && road.s - ego.spec.rearOverhang <= exit + NARROW_FULL_M
       ? keepAt(road.edge, ego.spec) - road.lane.offset : Infinity;
-    const pulled = road.lane && road.lateral + 1e-6 >= Math.min(AUDIT_EV_PULLED_M, rightmost);
+    // The normal target leaves a settling allowance before this audit's minimum
+    // (0.3 m versus 0.2 m for the standard car). Preserve that allowance when banks
+    // move the target left; requiring exact equality with keepAt has no feasible
+    // range between the audit and the parked-car clearance policy.
+    const settling = road.lane ? Math.max(0, pullOverOffset(road.edge, road.lane.idx, ego.spec.width, false) - AUDIT_EV_PULLED_M) : 0;
+    const pulled = road.lane && road.lateral + 1e-6 >= Math.min(AUDIT_EV_PULLED_M, rightmost - settling);
     const control = road.edge?.control, toLine = control ? control.s_line - road.s - FRONT : Infinity;
     // An existing queue can leave less steering room than a control line. Measure
     // real bodies here, including a bus standing at an angle, independently of the plan.
