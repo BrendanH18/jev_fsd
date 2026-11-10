@@ -35,6 +35,11 @@ export function auditRestrictions(world) {
   if (!edge) return;
   const prior = world.restrictionEdge;
   if ((world.map.restrictions || []).some(r => r.from === edge.id && restrictionActive(r, world.clock))) world.restrictionsSeen = true;
+  // Inside a junction, a turning car can be nearest the start of a different exit. Keep the
+  // approach until it is aligned with, and a little way along, the actual outgoing lane.
+  // Short links still confirm by their midpoint. This uses the driven path, not navigation.
+  if (prior && prior !== edge.id && (near.s < Math.min(8, near.lane.length / 2)
+    || Math.cos(world.ego.psi - near.heading) < 0.5)) return;
   if (prior && prior !== edge.id && world.map.edges.get(prior)?.to === edge.from && turnBanned(world.map, prior, edge.id, world.clock)) {
     world.restrictionsSeen = true;
     world.violations.illegal_turns = (world.violations.illegal_turns || 0) + 1;
