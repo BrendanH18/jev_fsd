@@ -299,7 +299,7 @@ export function sampleCandidates(snap, world) {
     // braking as gently as the stop was planned for.
     const ev = snap.emergency;
     if (ev && ev.stop_s_route !== null) {
-      out.push({ id: "pull_over", laneUntil, law: inLane({ kind: "lane", offset: ev.offset_m, vTarget: approach, stopAtRoute: stopAt(ev.stop_s_route - FRONT - 0.5), stopDecel: EV_STOP_DECEL }),
+      out.push({ id: "pull_over", laneUntil, law: inLane({ kind: "lane", offset: ev.offset_m, vTarget: Math.min(approach, ev.max_speed_mps), stopAtRoute: stopAt(ev.stop_s_route - FRONT - 0.5), stopDecel: EV_STOP_DECEL }),
         steer: `pull over ${ev.offset_m.toFixed(1)} m to the right`, speed: ev.bumper_to_stop_m > 0.3 ? `stop at the side of the road${ev.clearing ? ", past the junction" : ""}` : "hold still at the side of the road" });
     }
     // A bus pulling out from its stop ahead, with the right of way: stop behind it and let it out.

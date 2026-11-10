@@ -170,8 +170,9 @@ export const HOOK_STOP_M = 1.0;
 const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
 // Giving way to an emergency vehicle (sim/emergency.js) calling on the car: it hears the siren
 // within 100 m whether or not it can see the vehicle. When the call comes it picks where to stop:
-// its stopping distance braking at 1.5 m/s^2 (at least 4 m on; chosen again from where it is if it
-// could no longer stop there even braking at 6 m/s^2), or short of the next junction (2.5 m short
+// its stopping distance braking at 1.5 m/s^2 (at least 8 m on, leaving room to steer over even from
+// rest; chosen again from where it is if it could no longer stop there even braking at 6 m/s^2),
+// or short of the next junction (2.5 m short
 // of the crossing street, or of the stop line) if it can stop there braking at up to 3.5 m/s^2,
 // else past it with its rear 1 m clear (and likewise clear of a junction it is in). It pulls over
 // to the right as it stops (across into the curb lane where there are several, then into an empty
@@ -787,7 +788,7 @@ function emergencyYield(world, p, frontS, lane, visible) {
   // even braking hard, having been slow to start)
   // (well past it is handled below)
   if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + 1.5 && (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v)) {
-    let stop = frontS + Math.max(4, v * v / (2 * EV_STOP_DECEL)), clearing = false;
+    let stop = frontS + Math.max(8, v * v / (2 * EV_STOP_DECEL)), clearing = false;
     // junctions along the route from here to there: stop short of the first, or clear it
     // (from the street before this one: the car may still be in the junction it has just come through)
     for (let i = Math.max(0, route.edgeIndexAt(p.s) - 1); i < route.edges.length - 1; i++) {
@@ -803,7 +804,7 @@ function emergencyYield(world, p, frontS, lane, visible) {
       else { stop = Math.max(stop, clear); clearing = true; }
       break;
     }
-    plan = world.evYield = { id: ev.id, route, stop: Math.min(stop, route.length - 1), clearing, lead: plan?.id === ev.id && plan.lead };
+    plan = world.evYield = { id: ev.id, route, stop: Math.min(stop, route.length - 1), speed: v, clearing, lead: plan?.id === ev.id && plan.lead };
   }
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
@@ -822,7 +823,10 @@ function emergencyYield(world, p, frontS, lane, visible) {
   const across = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width;
   const offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
   return { id: ev.id, kind: EMERGENCY_NAMES[ev.kind] || ev.kind, from: call.relation, distance_m: call.distance_m, eta_s: call.eta_s, seen: visible.includes(ev),
-    stop_s_route: lead ? null : plan.stop, bumper_to_stop_m: lead ? null : plan.stop - frontS, offset_m: lead ? 0 : offset, clearing: plan.clearing, lead };
+    stop_s_route: lead ? null : plan.stop, bumper_to_stop_m: lead ? null : plan.stop - frontS, offset_m: lead ? 0 : offset,
+    // A car already slow or stopped only crawls forward to steer over; the extra steering room
+    // must not make it accelerate into the emergency vehicle's way. Keep the observation speed.
+    max_speed_mps: Math.max(2, plan.speed ?? v), clearing: plan.clearing, lead };
 }
 
 // A bus ahead signalling to pull out from its stop that the car must let out (sim/bus.js, BC MVA
@@ -1863,7 +1867,7 @@ export function desiredSpeed(snap) {
   if (ev && ev.bumper_to_stop_m !== null) {
     const room = ev.bumper_to_stop_m;
     // (slowing from the start, as gently as it planned to)
-    const ve = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, Math.min(decel, EV_STOP_DECEL));
+    const ve = room < 1.0 ? 0 : Math.min(ev.max_speed_mps, stopSpeedFor(room - 0.5, Math.min(decel, EV_STOP_DECEL)));
     if (ve < v) { v = ve; reasons.push(`pulling over for the ${ev.kind}`); }
   }
   // an emergency vehicle it let go by: drop back to FOLLOW_M behind it (standing still within 30 m)

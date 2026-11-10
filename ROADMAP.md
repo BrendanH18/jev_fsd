@@ -106,6 +106,14 @@ Free drives turn nearly all of them on together. Nothing checks that combination
     the audit is wrong.
   - `s1-12`: a hard brake with a tailgater behind.
   - `s1-4`, `s1-9`: the crash in 0.1.
+
+  Investigated 10 November against the city preset at `339e030`: `s1-7` held an existing stop at
+  a dark signal when an ambulance passed, which the emergency audit incorrectly penalized;
+  `s1-12` needed more distance, at a crawl, to pull over after waiting for a parallel parker.
+  Both now pass, the 12-route bare suite is unchanged apart from timings, and all 60 challenges
+  still pass with Rules and the cautious agent. City dry is 9/12: `s1-4` and `s1-11` still time
+  out, and `s1-9` makes a prohibited turn. See the
+  [incident evidence and validation](docs/validation/city-yields-2026-11-10.json).
 - [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
   `docs/rules-baseline.md`.

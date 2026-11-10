@@ -216,6 +216,27 @@ function drive(world, fleet, seconds, each = () => {}) {
   console.log(`✓ Rules pulls over and stops (${stoppedAt.toFixed(1)} s), the ambulance goes by (${passedAt.toFixed(1)} s), and the car arrives (${out.t.toFixed(1)} s)`);
 }
 
+{
+  // City s1-12: the siren reaches a stationary car (waiting for a parallel parker). With cars
+  // parked at the kerb it can move only 0.3 m right. Four metres of forward travel stopped it
+  // before pure pursuit had completed even that small shift, so the ambulance passed a car
+  // still in the lane. Leave steering room in the low-speed stop plan.
+  const { world, fleet } = setup({ front: -120, v: 0 });
+  for (let x = -150; x < -60; x += 6.5) world.parked.add(Object.assign(new Vehicle(x, -HALF - 2.65, 0, 0), { id: `kerb_${x}`, edge: "w_in", curb: "right" }));
+  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  assert.equal(ev?.kind, "ambulance");
+  let stoppedRight = null, fastest = 0;
+  const out = drive(world, fleet, 8, (w) => {
+    if (stoppedRight === null) fastest = Math.max(fastest, w.ego.v);
+    if (w.t > 2 && w.ego.v < 0.05 && stoppedRight === null) stoppedRight = w.roadInfo().lateral;
+  });
+  assert.ok(stoppedRight >= 0.25, `pulled toward the 0.3 m lane-edge target before stopping: ${stoppedRight}`);
+  assert.ok(fastest < 3, `only crawls forward to steer over: ${fastest} m/s`);
+  assert.equal(out.failed, 0);
+  assert.equal(out.collisions, 0);
+  console.log("✓ from rest beside parked cars, Rules leaves room to steer to the lane edge before stopping for the ambulance");
+}
+
 // A traffic car with its rear axle at x (on West Street, going east unless `west`), straight on.
 function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   const edge = !west ? "w_in" : x > 0 ? "e_in" : "w_out", lane = world.map.lane(edge, 0), s = !west ? ARM + x : x > 0 ? ARM - x : -x;
@@ -407,3 +428,5 @@ function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   assert.equal(touched, false, "the ambulance never touches the cyclist");
   console.log("✓ an ambulance keeps clear of a contraflow cyclist in its way");
 }
+
+process.exit(0);

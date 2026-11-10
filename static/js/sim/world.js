@@ -107,7 +107,8 @@ const AUDIT_HOOK_AGAIN_S = 10;
 // if its front enters a junction (8 m of its centre) that a vehicle coming from the side is due
 // across, 3 s or more after the call came; if, 4 s or more after the call came, the vehicle draws
 // level with it along its street (within 8 m to the side) while it is not pulled over and not in a
-// junction; or if the vehicle has been stuck behind it for 6 s while
+// junction (unless it is holding a control-line stop it had already made when the call came);
+// or if the vehicle has been stuck behind it for 6 s while
 // it is not pulled over (at least 0.2 m right of its lane's centre) and has not been told to drive on
 // ahead of it. Counted once a vehicle.
 const AUDIT_EV_MOVING_MPS = 3;
@@ -119,6 +120,7 @@ const AUDIT_EV_BLOCK_S = 6;
 const AUDIT_EV_PULLED_M = 0.2;
 const AUDIT_EV_PULL_S = 4;
 const AUDIT_EV_SIDE_M = 8;
+const AUDIT_EV_LINE_M = 2;
 // Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
 // lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
 // or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
@@ -1300,11 +1302,21 @@ export class World {
     const entered = junction !== null && junction !== this.evJunction && ego.v > 1;
     this.evJunction = junction;
     const pulled = road.lane && road.lateral >= AUDIT_EV_PULLED_M;
+    const control = road.edge?.control, toLine = control ? control.s_line - road.s - FRONT : Infinity;
     for (const ev of evs) {
       const call = emergencyCall(ego, ev);
       let rec = this.evCalls.get(ev.id);
       if (!call) { if (rec) this.evCalls.delete(ev.id); continue; }
-      if (!rec) this.evCalls.set(ev.id, rec = { since: this.t, v0: Math.max(0, ego.v), lead: false, ahead: null });
+      if (!rec) {
+        // Already stopped at a control line when the siren reached it: there is no room to steer
+        // sideways without entering the junction. Holding that stop as the vehicle passes is
+        // yielding too. Capture this at the call, so stopping here later cannot excuse a missed
+        // opportunity to pull over. Moving on ends the exception; blocking the vehicle is still
+        // judged independently below.
+        const atLine = (control?.type === "stop" || control?.type === "signal") && Math.abs(ego.v) < 0.3 && toLine >= 0 && toLine <= AUDIT_EV_LINE_M;
+        this.evCalls.set(ev.id, rec = { since: this.t, v0: Math.max(0, ego.v), lead: false, ahead: null, ...(atLine ? { stoppedAtLine: [ego.x, ego.y] } : {}) });
+      }
+      if (rec.stoppedAtLine && (toLine < 0 || toLine > AUDIT_EV_LINE_M || Math.hypot(ego.x - rec.stoppedAtLine[0], ego.y - rec.stoppedAtLine[1]) > AUDIT_EV_LINE_M)) delete rec.stoppedAtLine;
       // (where its middle is along the car, from the car's middle)
       const [cx, cy] = ev.center, local = ego.toLocal(cx, cy), ahead = local.ahead - (ego.spec.length / 2 - ego.spec.rearOverhang), before = rec.ahead;
       rec.ahead = ahead;
@@ -1315,7 +1327,8 @@ export class World {
       const late = !rec.lead && after > AUDIT_EV_REACT_S && ego.v > Math.max(AUDIT_EV_MOVING_MPS, rec.v0 - AUDIT_EV_DECEL * (after - AUDIT_EV_REACT_S));
       const crossing = call.relation === "left" || call.relation === "right";
       const level = !crossing && before !== null && Math.sign(before) !== Math.sign(ahead) && Math.abs(local.right) < AUDIT_EV_SIDE_M;
-      const unmoved = level && after >= AUDIT_EV_PULL_S && !pulled && !rec.lead && junction === null;
+      const holdingLine = rec.stoppedAtLine && Math.abs(ego.v) < 0.3;
+      const unmoved = level && after >= AUDIT_EV_PULL_S && !pulled && !rec.lead && !holdingLine && junction === null;
       if (late || unmoved || (entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !rec.lead)) {
         this.evCounted.add(ev.id);
         this.violations.failed_to_yield++;
