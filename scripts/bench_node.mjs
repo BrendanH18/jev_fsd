@@ -5,7 +5,8 @@
 // node --experimental-default-type=module scripts/bench_node.mjs --map calgary --count 2
 // Options: --map (a preset id or W,S,E,N), --count, --seed, --npcs, --brain, --weather, --port,
 // --features (bare, the default, with every opt-in feature off; or city, the free drive's: bench/runner.js),
-// --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
+// --park 1, --hour 23.5 (both presets), --without geese,ice (city), --cover 0 (city pairwise row),
+// --diagnostics 1 (incident positions and actors), --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
 // (exit with status 1 if any route fails, as CI does).
 const args = Object.fromEntries(process.argv.slice(2).reduce((out, a, i, all) => {
   if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
@@ -14,7 +15,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((out, a, i, all) =>
 const fail = (message) => { console.error(message); process.exit(1); };
 // Every option takes a value; one without (parsed as `true`) or a misspelled one would otherwise
 // run the defaults.
-const OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "port", "only", "json", "check"];
+const OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "port", "only", "json", "check", "park", "hour", "without", "cover", "diagnostics"];
 for (const [name, value] of Object.entries(args)) {
   if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
   if (value === true) fail(`--${name} needs a value.`);
@@ -29,7 +30,7 @@ globalThis.fetch = (path, opts) => nativeFetch(String(path).startsWith("/") ? ba
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
 const { buildSuite } = await import("../static/js/bench/scenarios.js");
-const { runScenario, suiteOptions, FEATURE_PRESETS } = await import("../static/js/bench/runner.js");
+const { runScenario, suiteOptions, FEATURE_PRESETS, benchmarkConfig } = await import("../static/js/bench/runner.js");
 const { aggregate } = await import("../static/js/bench/metrics.js");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { agentDefinitions } = await import("../static/js/brain/registry.js");
@@ -54,10 +55,18 @@ const integer = (name, fallback, min) => {
   if (!Number.isSafeInteger(v) || v < min) fail(`--${name} must be a whole number of at least ${min}, not "${args[name]}".`);
   return v;
 };
+for (const name of ["park", "diagnostics"]) if (args[name] !== undefined && !["0", "1"].includes(args[name])) fail(`--${name} must be 0 or 1.`);
+if (args.hour !== undefined && !/^\d+(?:\.\d+)?$/.test(args.hour)) fail("--hour must be a number from 0 inclusive to 24 exclusive.");
+let options;
+try {
+  options = benchmarkConfig({ features: args.features || "bare", park: args.park === "1",
+    ...(args.hour !== undefined ? { hour: Number(args.hour) } : {}), without: args.without || [],
+    ...(args.cover !== undefined ? { cover: integer("cover", 0, 0) } : {}) });
+} catch (error) { fail(error.message); }
 const config = { brain: String(args.brain || "rules"), count: integer("count", 12, 1), seed: integer("seed", 1, 0), npcs: integer("npcs", 40, 0),
-  mode: "lockstep", weather: String(args.weather || "dry"), ...(args.features && args.features !== "bare" ? { features: String(args.features) } : {}), map: preset, bbox: map.routingBbox, pack: map.pack.pack_version, engine: `node ${process.version}` };
+  mode: "lockstep", weather: String(args.weather || "dry"), ...options, map: preset, bbox: map.routingBbox, pack: map.pack.pack_version, engine: `node ${process.version}` };
 const features = config.features || "bare";
-const suite = await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features) });
+const suite = await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features, options) });
 if (!suite.length) fail(`No routable scenarios on "${preset}".`);
 const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
@@ -65,7 +74,7 @@ if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${sui
 const results = [];
 for (const sc of suite) {
   if (only && !only.includes(sc.id)) continue;
-  const r = await runScenario(map, sc, { brain: config.brain, npcs: config.npcs, mode: config.mode, weather: config.weather, features });
+  const r = await runScenario(map, sc, { brain: config.brain, npcs: config.npcs, mode: config.mode, weather: config.weather, ...options, diagnostics: args.diagnostics === "1" });
   results.push(r);
   const hits = r.events.filter((e) => e.type === "collision").map((e) => `${e.with}:${e.kind}@${e.t}`).join(" ");
   console.log(`${r.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} coll=${r.collisions}/${r.at_fault} off=${r.off_road_s} dl=${r.deadlocks} safety=${r.safety_brakes} lc=${r.lane_changes ?? "-"} ${hits}${r.pass ? "" : ` failures=${r.failures.join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}`);

@@ -11,22 +11,17 @@ import { stepWorld } from "../sim/step.js";
 import { Autopilot } from "../brain/brain.js";
 import { Route } from "../map/route.js";
 import { DriveMetrics, failures } from "./metrics.js";
-import { freeDriveOptions } from "../sim/free-drive.js";
-import { mapClock } from "../sim/speed-zones.js";
+import { mapClock, sunAngles } from "../sim/speed-zones.js";
 import { WEATHER } from "../sim/weather.js";
 
-// Which world a scenario plays in:
-//   bare  every opt-in feature off, as the seeded benchmark always was, so earlier records compare
-//   city  the free drive's features (sim/free-drive.js), on the app's default afternoon clock, without
-//         parking at the destination (the benchmark scores arrival, not parking)
-export const FEATURE_PRESETS = ["bare", "city"];
-export const CITY_HOUR = 15.5, CITY_WEEKDAY = 0;
-// What buildSuite needs for a preset: a city suite routes as the app does, keeping to turn restrictions.
-export const suiteOptions = (features = "bare") => (presetOptions(features).world.restrictions ? { restrictions: { hour: CITY_HOUR, weekday: CITY_WEEKDAY } } : {});
-export function presetOptions(features = "bare") {
-  if (!FEATURE_PRESETS.includes(features)) throw new Error(`Unknown feature preset "${features}": use ${FEATURE_PRESETS.join(" or ")}.`);
-  if (features === "bare") return { world: {}, fleet: {} };
-  return freeDriveOptions(new URLSearchParams({ park: "0" }), { hour: CITY_HOUR });
+// Defaults preserve the historical bare and city suites; parking and a clock can also be
+// exercised independently in the bare world. Feature subsets still come from freeDriveOptions.
+export { FEATURE_PRESETS, CITY_HOUR, CITY_WEEKDAY, presetOptions, benchmarkConfig } from "./options.js";
+import { CITY_HOUR, CITY_WEEKDAY, presetOptions, benchmarkConfig } from "./options.js";
+export function suiteOptions(features = "bare", options = {}) {
+  const config = benchmarkConfig({ ...options, features });
+  return presetOptions(features, config).world.restrictions
+    ? { restrictions: { hour: config.hour ?? CITY_HOUR, weekday: CITY_WEEKDAY } } : {};
 }
 
 const DT = 1 / 60;
@@ -46,11 +41,20 @@ export function scenarioTimeLimit(sc, { features = "bare", weather = "dry" } = {
 }
 
 // A world set up for a scenario, ready to step. The app uses this to replay a scenario in 3D.
-export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "dry", features = "bare", style = null, vehicleSpec = undefined, onDecision = null, onEvent = null } = {}) {
-  const preset = presetOptions(features);
+export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, style = null, vehicleSpec = undefined, onDecision = null, onEvent = null } = {}) {
+  const options = benchmarkConfig({ features, park, hour, without, cover });
+  const preset = presetOptions(features, options);
   const world = new World(map, { seed: sc.traffic_seed, weather, vehicleSpec, ...preset.world });
   // (a city world keeps the app's clock: school zones, bus lane hours, turn restrictions and the sun go by it)
-  if (features === "city") world.setClock({ ...mapClock(CITY_HOUR, map), weekday: CITY_WEEKDAY, utc_offset: map.utcOffset ?? -7 });
+  if (features === "city" || hour !== undefined) world.setClock({ ...mapClock(options.hour ?? CITY_HOUR, map), weekday: CITY_WEEKDAY, utc_offset: map.utcOffset ?? -7 });
+  if (hour !== undefined) {
+    // Match atmosphereFor's street-light transition without loading Three.js in Node. Historical
+    // presets never set darkness here; only an explicit hour opts into the night simulation.
+    const origin = map.pack.origin;
+    const degrees = sunAngles(hour, { latitude: origin.lat, longitude: origin.lon, utcOffset: map.utcOffset ?? -7 }).elevation * 180 / Math.PI;
+    const t = Math.max(0, Math.min(1, (degrees + 3) / 8));
+    world.visibility.setNight(1 - t * t * (3 - 2 * t));
+  }
   const lane = map.lane(sc.start.edge, sc.start.lane);
   world.placeOnLane(lane, sc.start.s);
   const fleet = new NpcFleet(world, { count: npcs, seed: sc.traffic_seed, ...preset.fleet });
@@ -82,12 +86,21 @@ export function watchClosureReplans(autopilot, world, metrics, onDetour) {
   };
 }
 
-export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", features = "bare", style = null, vehicleSpec = undefined, shouldStop = () => false } = {}) {
+export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, style = null, vehicleSpec = undefined, diagnostics = false, shouldStop = () => false } = {}) {
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
-  const ctx = setupScenario(map, sc, { brain, npcs, weather, features, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
+  const ctx = setupScenario(map, sc, { brain, npcs, weather, features, park, hour, without, cover, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
   const { world, autopilot, events } = ctx;
   let limit = scenarioTimeLimit(sc, { features, weather });
   const wallStart = performance.now();
+  const incidents = [], previous = diagnostics ? { ...world.violations } : null;
+  const context = () => {
+    const road = world.roadInfo(), car = world.ego;
+    return { t: Math.round(world.t * 10) / 10, x: Math.round(car.x), y: Math.round(car.y),
+      street: road.name, edge: road.edge?.id, speed: Math.round(car.v * 10) / 10,
+      following: autopilot.snap?.following ? { id: autopilot.snap.following.id, gap_m: autopilot.snap.following.gap_m } : null,
+      nearby: world.obstaclesNear(car.x, car.y, 20).map(n => ({ id: n.id, kind: n.kind,
+        x: Math.round(n.x), y: Math.round(n.y), speed: Math.round((n.v || 0) * 10) / 10 })).slice(0, 12) };
+  };
   let arrived = false, steps = 0, simulationError = null;
   const closureReplans = watchClosureReplans(autopilot, world, metrics, (length_m) => { limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m } }, { features, weather })); });
   try {
@@ -96,6 +109,11 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
       closureReplans();
       for (const e of world.events) if (e.type === "collision") events.push(e);
       metrics.record(world, autopilot.snap, road, DT);
+      if (diagnostics) for (const [audit, value] of Object.entries(world.violations)) {
+        if (value > (previous[audit] || 0) && incidents.filter(e => e.audit === audit).length < 8)
+          incidents.push({ audit, value, ...context(), events: world.events.map(e => ({ ...e })) });
+        previous[audit] = value;
+      }
       steps++;
       if (!autopilot.enabled) { arrived = events.some((e) => e.type === "arrived"); break; }
       if (mode === "lockstep") {
@@ -117,10 +135,15 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
     events.push({ type: "simulation_error", t: Math.round(world.t * 10) / 10, message: simulationError });
   }
   const result = metrics.summary(world, autopilot, arrived);
-  if (simulationError) {
-    result.simulation_error = simulationError;
-    result.failures = failures(result);
-    result.pass = false;
+  // Reuse the challenge verdict: arrival alone is insufficient when parking was requested.
+  if (world.parkAtGoal) {
+    const arrival = events.find((e) => e.type === "arrived");
+    result.parked = arrival?.parked === true && arrival.within_kerb === true;
   }
-  return { id: sc.id, tags: sc.tags, ...result, events: events.slice(0, 50), wall_ms: Math.round(performance.now() - wallStart) };
+  if (simulationError) result.simulation_error = simulationError;
+  if (world.parkAtGoal || simulationError) {
+    result.failures = failures(result);
+    result.pass = result.failures.length === 0;
+  }
+  return { id: sc.id, tags: sc.tags, ...result, ...(diagnostics ? { diagnostics: { incidents, final: context() } } : {}), events: events.slice(0, 50), wall_ms: Math.round(performance.now() - wallStart) };
 }
