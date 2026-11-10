@@ -74,6 +74,8 @@ assert.equal(categories.collisions.join(), "collision"); assert.equal(categories
 assert.equal(soakFailed(categories), true);
 assert.equal(soakFailed(classifyResults([{ id: "audit", arrived: true, failures: ["red light"] }])), false);
 assert.equal(failures({ arrived: true, parked: false }).join(), "not parked");
+// (no space near the destination: the car stops in its lane, as a free drive does, and that is no failure)
+assert.equal(failures({ arrived: true, parked: null, no_space: true }).join(), "");
 console.log("✓ soak shards are exhaustive/disjoint; fatal failures and report-only audits stay separate");
 
 const key = "623b012bc8b5", base = new URL("../data/maps/", import.meta.url);

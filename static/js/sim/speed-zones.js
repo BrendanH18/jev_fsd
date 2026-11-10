@@ -28,6 +28,14 @@ export function sunAngles(hour, location = null) {
   return { elevation: Math.asin(sinEl), H, latitude, declination: DECLINATION };
 }
 
+// How dark it is for a sun elevation (rad): 0 by day, 1 once the street lights are fully on, between
+// 5 degrees up and 3 below the horizon. The sky (render/atmosphere.js) and the benchmark's clock hours
+// (bench/runner.js) both use it.
+export function nightLevel(elevation) {
+  const t = Math.max(0, Math.min(1, (elevation * 180 / Math.PI + 3) / 8));
+  return 1 - t * t * (3 - 2 * t);
+}
+
 // The world's clock at a local hour in a place ({ latitude, longitude, utcOffset }).
 export function zoneClock(hour, location = null) {
   return { hour, sun_deg: Math.round(sunAngles(hour, location).elevation * 1800 / Math.PI) / 10 };

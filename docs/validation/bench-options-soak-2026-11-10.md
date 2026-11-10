@@ -12,7 +12,7 @@ map, router or ROADMAP files changed. No dependencies or tools were added.
   darkness using the renderer's sun-elevation transition, pedestrian populations and school-bus
   options through `freeDriveOptions`, plus restriction-aware route queries. Defaults serialize
   exactly as before: `park: false` is omitted, city `hour: 15.5` is omitted, and bare keeps its absent
-  clock. Parking uses the authored challenge verdict: an arrival requires `parked` and `within_kerb`.
+  clock. Parking uses the authored challenge verdict: an arrival requires `parked` and `within_kerb`. An arrival with no space to be had near the destination (the parking planner's status `none`: the car stops in its lane, as a free drive does) records `parked: null`, `no_space: true` and is not a failure. The first run counted those arrivals as `not parked`; the parking suite and the covering array below were re-run with this verdict.
 - `--without geese,ice` uses canonical World/fleet option names. `--cover INDEX` selects a generated
   configuration; it can be combined with `--without` to narrow failures. Both require city.
   The browser, CLI and replay share option validation/storage.
@@ -80,19 +80,19 @@ beside this report; failure descriptions follow the logs.
 ### --features city --weather dry --park 1
 
 ```text
-s1-1 FAIL arrived=true t=88.1 coll=0/0 off=0 dl=0 safety=0 lc=0  failures=not parked
-s1-2 FAIL arrived=true t=155.4 coll=0/0 off=0 dl=0 safety=2 lc=1  failures=not parked
-s1-3 PASS arrived=true t=176.6 coll=0/0 off=0 dl=0 safety=0 lc=0
-s1-4 PASS arrived=true t=324.7 coll=0/0 off=0 dl=0 safety=2 lc=1
-s1-5 FAIL arrived=true t=194.4 coll=0/0 off=0 dl=0 safety=3 lc=0  failures=not parked
-s1-6 PASS arrived=true t=238.7 coll=0/0 off=0 dl=0 safety=1 lc=0
-s1-7 PASS arrived=true t=262 coll=0/0 off=0 dl=0 safety=1 lc=0
-s1-8 PASS arrived=true t=226.6 coll=0/0 off=0 dl=0 safety=0 lc=0
-s1-9 FAIL arrived=true t=219.7 coll=0/0 off=0.2 dl=0 safety=0 lc=0  failures=not parked
-s1-10 PASS arrived=true t=235.4 coll=0/0 off=0 dl=0 safety=0 lc=0
+s1-1 PASS arrived=true t=88.1 coll=0/0 off=0 dl=0 safety=0 lc=0 
+s1-2 PASS arrived=true t=155.4 coll=0/0 off=0 dl=0 safety=2 lc=1 
+s1-3 PASS arrived=true t=176.6 coll=0/0 off=0 dl=0 safety=0 lc=0 
+s1-4 PASS arrived=true t=324.7 coll=0/0 off=0 dl=0 safety=2 lc=1 
+s1-5 PASS arrived=true t=194.4 coll=0/0 off=0 dl=0 safety=3 lc=0 
+s1-6 PASS arrived=true t=238.7 coll=0/0 off=0 dl=0 safety=1 lc=0 
+s1-7 PASS arrived=true t=262 coll=0/0 off=0 dl=0 safety=1 lc=0 
+s1-8 PASS arrived=true t=226.6 coll=0/0 off=0 dl=0 safety=0 lc=0 
+s1-9 PASS arrived=true t=219.7 coll=0/0 off=0.2 dl=0 safety=0 lc=0 
+s1-10 PASS arrived=true t=235.4 coll=0/0 off=0 dl=0 safety=0 lc=0 
 s1-11 FAIL arrived=false t=247.6 coll=0/0 off=0 dl=0 safety=2 lc=0  failures=timeout,failed to yield
-s1-12 PASS arrived=true t=342.4 coll=0/0 off=0 dl=0 safety=1 lc=0
-{"config":{"brain":"rules","count":12,"seed":1,"npcs":40,"mode":"lockstep","weather":"dry","features":"city","park":true,"map":"kitsilano","bbox":[-123.17,49.26,-123.15,49.27],"pack":"6","engine":"node v22.23.4"},"summary":{"scenarios":12,"pass_rate":0.583,"arrived_rate":0.917,"km":12.47,"collisions":0,"at_fault":0,"red_lights":0,"stop_signs":0,"failed_to_yield":1,"off_road_s":0.2,"safety_brakes":12,"deadlocks":0,"fallbacks":0,"violations_per_km":0.08,"avg_kmh":17.08,"min_gap_m":1.9,"min_ttc_s":1.1,"hard_brakes":0,"rms_jerk":3.22,"max_lat_accel":5.5,"lane_rms_m":0.46,"lane_changes":2,"speeding_s":0,"decisions":10375,"calls":0,"tokens":0,"cost_usd":0}}
+s1-12 PASS arrived=true t=342.4 coll=0/0 off=0 dl=0 safety=1 lc=0 
+{"config":{"brain":"rules","count":12,"seed":1,"npcs":40,"mode":"lockstep","weather":"dry","features":"city","park":true,"map":"kitsilano","bbox":[-123.17,49.26,-123.15,49.27],"pack":"6","engine":"node v22.23.4"},"summary":{"scenarios":12,"pass_rate":0.917,"arrived_rate":0.917,"km":12.47,"collisions":0,"at_fault":0,"red_lights":0,"stop_signs":0,"failed_to_yield":1,"off_road_s":0.2,"safety_brakes":12,"deadlocks":0,"fallbacks":0,"violations_per_km":0.08,"avg_kmh":17.08,"min_gap_m":1.9,"min_ttc_s":1.1,"hard_brakes":0,"rms_jerk":3.22,"max_lat_accel":5.5,"lane_rms_m":0.46,"lane_changes":2,"speeding_s":0,"decisions":10375,"calls":0,"tokens":0,"cost_usd":0}}
 ```
 
 ### --features city --weather dry --hour 23.5
@@ -151,10 +151,7 @@ s1-12 PASS arrived=true t=292.7 coll=0/0 off=0 dl=0 safety=1 lc=0
 
 ## Park and night diagnoses
 
-- **park, s1-1**: 88.1 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **park, s1-2**: 155.4 s, West 10th Avenue (e445, -303,-218): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **park, s1-5**: 194.4 s, West Broadway (e247, -105,-119): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **park, s1-9**: 219.7 s, West 4th Avenue (e200, 278,358): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
+- **park, s1-1, s1-2, s1-5, s1-9**: arrived in lane with no space to be had near the destination (`no_space`); not failures.
 - **park, s1-11**: 247.6 s, Balsam Street (e453, -11,-462): drive deadline reached at 6.3 m/s, with no reported leader; `timeout`. 107.8 s, Larch Street (e574, -185,-436): `failed_to_yield`; [{"type":"failed_to_yield","to":"emergency vehicle","with":"ambulance_1"}].
 - **night, s1-9**: 235.3 s, Yew Street (e338, 354,344): `failed_to_yield`; [{"type":"failed_to_yield","to":"emergency vehicle","with":"ambulance_2"}].
 - **dawn, s1-2**: 264.8 s, West Broadway (e246, -332,-107): drive deadline reached at 0 m/s, behind `car_34` (2.8 m gap); `timeout`.
@@ -175,42 +172,30 @@ node --experimental-default-type=module scripts/soak.mjs --port 8381 --mode pair
 ```
 
 All 26 drives finish without a throw. One route times out with five other-at-fault contacts;
-13 routes have other audit failures (12 parking verdicts, one emergency yield, and one ball warning
-that overlaps a parking verdict). Shard 0 exits 1; shard 1 exits 0 under the documented audit policy. All configurations are
+two routes have other audit failures (one emergency yield and one ball warning). Shard 0 exits 1;
+shard 1 exits 0 under the documented audit policy. All configurations are
 `pairwise-v1-1-INDEX/kitsilano/seed-1`; the exact enabled/disabled lists are also retained in JSON.
 
 | Index (`--cover`) | Park | Exact `--without` list | Throws | Stuck/timeouts | Collision routes | Other audit routes |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | 1 | `amberLights,balls,buses,closures,collection,contraflow,driveways,geese,hazards,highBeams,leftOnRed,officers,passCyclists,potholes,puddles,redRunners,redTurnSigns,roadClosures,schoolBuses,snowbanks,stepOuts,sunGlare,tailgaters,trains,vans` | 0 | 0 | 0 | s1-1,s1-2 |
+| 0 | 1 | `amberLights,balls,buses,closures,collection,contraflow,driveways,geese,hazards,highBeams,leftOnRed,officers,passCyclists,potholes,puddles,redRunners,redTurnSigns,roadClosures,schoolBuses,snowbanks,stepOuts,sunGlare,tailgaters,trains,vans` | 0 | 0 | 0 | 0 |
 | 1 | 0 | `amberLights,busLanes,calming,emergency,followingDistance,guards,ice,nightFlash,officers,park,parkers,plows,pxo,tailgaters,trains` | 0 | 0 | 0 | 0 |
 | 2 | 0 | `buses,collection,driveways,emergency,followingDistance,guards,hazards,highBeams,nightFlash,park,plows,potholes,pxo,redRunners,redTurnSigns,restrictions,roadClosures,roadside,scrambles,snowbanks,stepOuts,streetcars,vans,workZones` | 0 | 0 | 0 | 0 |
-| 3 | 1 | `amberLights,balls,calming,contraflow,guards,highBeams,leftOnRed,nightFlash,outages,parkers,passCyclists,potholes,puddles,redRunners,roadside,scrambles,streetcars,workZones` | 0 | 0 | 0 | s1-1,s1-2 |
+| 3 | 1 | `amberLights,balls,calming,contraflow,guards,highBeams,leftOnRed,nightFlash,outages,parkers,passCyclists,potholes,puddles,redRunners,roadside,scrambles,streetcars,workZones` | 0 | 0 | 0 | s1-2 |
 | 4 | 0 | `balls,closures,followingDistance,geese,ice,leftOnRed,officers,outages,park,pxo,redTurnSigns,restrictions,roadClosures,roadside,schoolBuses,snowbanks,stepOuts,workZones` | 0 | s1-2 | s1-2 | 0 |
-| 5 | 1 | `amberLights,balls,busLanes,buses,calming,closures,collection,driveways,emergency,hazards,ice,officers,parkers,passCyclists,plows,pxo,redRunners,restrictions,roadside,schoolBuses,stepOuts,streetcars,sunGlare,tailgaters,vans` | 0 | 0 | 0 | s1-1,s1-2 |
+| 5 | 1 | `amberLights,balls,busLanes,buses,calming,closures,collection,driveways,emergency,hazards,ice,officers,parkers,passCyclists,plows,pxo,redRunners,restrictions,roadside,schoolBuses,stepOuts,streetcars,sunGlare,tailgaters,vans` | 0 | 0 | 0 | 0 |
 | 6 | 0 | `amberLights,busLanes,buses,closures,contraflow,emergency,geese,guards,ice,nightFlash,park,parkers,potholes,redTurnSigns,schoolBuses,scrambles,streetcars,sunGlare,trains,vans,workZones` | 0 | 0 | 0 | 0 |
-| 7 | 1 | `busLanes,closures,driveways,emergency,hazards,nightFlash,officers,outages,parkers,passCyclists,plows,puddles,restrictions,roadClosures,scrambles,stepOuts,trains,vans` | 0 | 0 | 0 | s1-1,s1-2 |
-| 8 | 1 | `balls,busLanes,buses,calming,contraflow,followingDistance,geese,guards,ice,leftOnRed,outages,potholes,puddles,restrictions,roadClosures,roadside,schoolBuses,scrambles,snowbanks,sunGlare,tailgaters,trains,vans,workZones` | 0 | 0 | 0 | s1-1 |
-| 9 | 1 | `busLanes,buses,calming,collection,driveways,geese,highBeams,ice,outages,plows,potholes,puddles,pxo,redTurnSigns,restrictions,roadside,schoolBuses,scrambles,tailgaters,trains,workZones` | 0 | 0 | 0 | s1-1 |
-| 10 | 1 | `amberLights,balls,collection,contraflow,followingDistance,geese,guards,hazards,highBeams,ice,nightFlash,outages,parkers,passCyclists,plows,pxo,redRunners,redTurnSigns,restrictions,roadside,snowbanks,stepOuts,streetcars,sunGlare,vans,workZones` | 0 | 0 | 0 | s1-1 |
+| 7 | 1 | `busLanes,closures,driveways,emergency,hazards,nightFlash,officers,outages,parkers,passCyclists,plows,puddles,restrictions,roadClosures,scrambles,stepOuts,trains,vans` | 0 | 0 | 0 | s1-2 |
+| 8 | 1 | `balls,busLanes,buses,calming,contraflow,followingDistance,geese,guards,ice,leftOnRed,outages,potholes,puddles,restrictions,roadClosures,roadside,schoolBuses,scrambles,snowbanks,sunGlare,tailgaters,trains,vans,workZones` | 0 | 0 | 0 | 0 |
+| 9 | 1 | `busLanes,buses,calming,collection,driveways,geese,highBeams,ice,outages,plows,potholes,puddles,pxo,redTurnSigns,restrictions,roadside,schoolBuses,scrambles,tailgaters,trains,workZones` | 0 | 0 | 0 | 0 |
+| 10 | 1 | `amberLights,balls,collection,contraflow,followingDistance,geese,guards,hazards,highBeams,ice,nightFlash,outages,parkers,passCyclists,plows,pxo,redRunners,redTurnSigns,restrictions,roadside,snowbanks,stepOuts,streetcars,sunGlare,vans,workZones` | 0 | 0 | 0 | 0 |
 | 11 | 0 | `busLanes,buses,calming,collection,contraflow,emergency,followingDistance,geese,hazards,leftOnRed,park,parkers,passCyclists,plows,potholes,puddles,redTurnSigns,roadClosures,roadside,schoolBuses,scrambles,stepOuts,streetcars,sunGlare,tailgaters,trains,vans` | 0 | 0 | 0 | 0 |
-| 12 | 1 | `amberLights,balls,buses,calming,closures,collection,contraflow,driveways,guards,hazards,ice,leftOnRed,officers,outages,plows,puddles,redTurnSigns,restrictions,scrambles,snowbanks,stepOuts,streetcars,sunGlare` | 0 | 0 | 0 | s1-1,s1-2 |
+| 12 | 1 | `amberLights,balls,buses,calming,closures,collection,contraflow,driveways,guards,hazards,ice,leftOnRed,officers,outages,plows,puddles,redTurnSigns,restrictions,scrambles,snowbanks,stepOuts,streetcars,sunGlare` | 0 | 0 | 0 | 0 |
 
 Every failure (including recovered deadlocks):
 
-- **pairwise-v1-1-0/kitsilano/seed-1, s1-1**: 87.1 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-0/kitsilano/seed-1, s1-2**: 90 s, West 10th Avenue (e445, -303,-218): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-3/kitsilano/seed-1, s1-1**: 78 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
 - **pairwise-v1-1-3/kitsilano/seed-1, s1-2**: 70.2 s, West Broadway (e244, -361,-103): `failed_to_yield`; [{"type":"failed_to_yield","to":"emergency vehicle","with":"ambulance_1"}].
 - **pairwise-v1-1-4/kitsilano/seed-1, s1-2**: 264.8 s, Trafalgar Street (e350, -343,-148): drive deadline reached at 0 m/s, behind `car_30` (2.5 m gap); `timeout`. 79.6 s, Trafalgar Street (e350, -343,-144): `car_30` contacts ego (0 vs 0.7 m/s; fault `other`); 5 contacts total, 0 ego-at-fault.
-- **pairwise-v1-1-5/kitsilano/seed-1, s1-1**: 87.6 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-5/kitsilano/seed-1, s1-2**: 145.1 s, West 10th Avenue (e445, -302,-218): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-7/kitsilano/seed-1, s1-1**: 87.6 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-7/kitsilano/seed-1, s1-2**: 83.4 s, Trafalgar Street (e350, -344,-176): `ball_warnings_ignored`; [{"type":"ball_warning_ignored","ball":"ball_1","kmh":5.4,"over_kmh":3.8}]. 98.2 s, West 10th Avenue (e445, -302,-218): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-8/kitsilano/seed-1, s1-1**: 78.1 s, West Broadway (e247, -134,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-9/kitsilano/seed-1, s1-1**: 78 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-10/kitsilano/seed-1, s1-1**: 79.4 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-12/kitsilano/seed-1, s1-1**: 87.6 s, West Broadway (e247, -133,-118): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
-- **pairwise-v1-1-12/kitsilano/seed-1, s1-2**: 144.8 s, West 10th Avenue (e445, -303,-218): arrival was in lane, without a completed kerb parking manoeuvre; `parked=false`.
 
 **Narrowing row 4.** The stopped ego is on Trafalgar Street beside `van_1`. Oncoming `car_30`,
 apparently going around the van, repeatedly contacts it at 79.6, 101.1, 120.2, 137.4 and 153.1 s.

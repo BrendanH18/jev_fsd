@@ -11,7 +11,7 @@ import { stepWorld } from "../sim/step.js";
 import { Autopilot } from "../brain/brain.js";
 import { Route } from "../map/route.js";
 import { DriveMetrics, failures } from "./metrics.js";
-import { mapClock, sunAngles } from "../sim/speed-zones.js";
+import { mapClock, sunAngles, nightLevel } from "../sim/speed-zones.js";
 import { WEATHER } from "../sim/weather.js";
 
 // Defaults preserve the historical bare and city suites; parking and a clock can also be
@@ -48,12 +48,10 @@ export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "
   // (a city world keeps the app's clock: school zones, bus lane hours, turn restrictions and the sun go by it)
   if (features === "city" || hour !== undefined) world.setClock({ ...mapClock(options.hour ?? CITY_HOUR, map), weekday: CITY_WEEKDAY, utc_offset: map.utcOffset ?? -7 });
   if (hour !== undefined) {
-    // Match atmosphereFor's street-light transition without loading Three.js in Node. Historical
-    // presets never set darkness here; only an explicit hour opts into the night simulation.
+    // The sky's street-light darkness (render/atmosphere.js) at that hour. Historical presets never
+    // set darkness here; only an explicit hour opts into the night simulation.
     const origin = map.pack.origin;
-    const degrees = sunAngles(hour, { latitude: origin.lat, longitude: origin.lon, utcOffset: map.utcOffset ?? -7 }).elevation * 180 / Math.PI;
-    const t = Math.max(0, Math.min(1, (degrees + 3) / 8));
-    world.visibility.setNight(1 - t * t * (3 - 2 * t));
+    world.visibility.setNight(nightLevel(sunAngles(hour, { latitude: origin.lat, longitude: origin.lon, utcOffset: map.utcOffset ?? -7 }).elevation));
   }
   const lane = map.lane(sc.start.edge, sc.start.lane);
   world.placeOnLane(lane, sc.start.s);
@@ -101,12 +99,14 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
       nearby: world.obstaclesNear(car.x, car.y, 20).map(n => ({ id: n.id, kind: n.kind,
         x: Math.round(n.x), y: Math.round(n.y), speed: Math.round((n.v || 0) * 10) / 10 })).slice(0, 12) };
   };
-  let arrived = false, steps = 0, simulationError = null;
+  let arrived = false, steps = 0, simulationError = null, parkStatus = null;
   const closureReplans = watchClosureReplans(autopilot, world, metrics, (length_m) => { limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m } }, { features, weather })); });
   try {
     while (world.t < limit && !shouldStop()) {
       const road = stepWorld(ctx, DT, world.t * 1000);
       closureReplans();
+      // (the parking plan's last status before arrival clears it: "none" means no space was to be had)
+      if (world.park) parkStatus = world.park.status;
       for (const e of world.events) if (e.type === "collision") events.push(e);
       metrics.record(world, autopilot.snap, road, DT);
       if (diagnostics) for (const [audit, value] of Object.entries(world.violations)) {
@@ -135,10 +135,13 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
     events.push({ type: "simulation_error", t: Math.round(world.t * 10) / 10, message: simulationError });
   }
   const result = metrics.summary(world, autopilot, arrived);
-  // Reuse the challenge verdict: arrival alone is insufficient when parking was requested.
+  // Reuse the challenge verdict: arrival alone is insufficient when parking was requested. With no
+  // space to be had near the destination the car stops in its lane, as a free drive does
+  // (sim/parallel-park.js), and that arrival is not a parking failure.
   if (world.parkAtGoal) {
     const arrival = events.find((e) => e.type === "arrived");
-    result.parked = arrival?.parked === true && arrival.within_kerb === true;
+    const parked = arrival?.parked === true && arrival.within_kerb === true;
+    if (!parked && parkStatus === "none") { result.parked = null; result.no_space = true; } else result.parked = parked;
   }
   if (simulationError) result.simulation_error = simulationError;
   if (world.parkAtGoal || simulationError) {

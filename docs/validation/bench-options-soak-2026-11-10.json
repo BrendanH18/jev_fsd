@@ -91,20 +91,7 @@
    "throws": [],
    "stuck": [],
    "collisions": [],
-   "audits": [
-    {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    },
-    {
-     "id": "s1-2",
-     "failures": [
-      "not parked"
-     ]
-    }
-   ],
+   "audits": [],
    "results": [
     {
      "id": "s1-1",
@@ -149,11 +136,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -174,7 +160,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 19787
+     "wall_ms": 14669
     },
     {
      "id": "s1-2",
@@ -219,11 +205,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [
        {
@@ -345,7 +330,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 18604
+     "wall_ms": 13421
     }
    ]
   },
@@ -490,7 +475,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 25016
+     "wall_ms": 17725
     },
     {
      "id": "s1-2",
@@ -684,7 +669,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 52263
+     "wall_ms": 41383
     }
    ]
   },
@@ -840,7 +825,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 15931
+     "wall_ms": 12982
     },
     {
      "id": "s1-2",
@@ -1015,7 +1000,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 15536
+     "wall_ms": 13825
     }
    ]
   },
@@ -1094,12 +1079,6 @@
    "collisions": [],
    "audits": [
     {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    },
-    {
      "id": "s1-2",
      "failures": [
       "failed to yield"
@@ -1152,11 +1131,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -1177,7 +1155,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 23603
+     "wall_ms": 15055
     },
     {
      "id": "s1-2",
@@ -1383,7 +1361,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 45549
+     "wall_ms": 33928
     }
    ]
   },
@@ -1531,7 +1509,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 23995
+     "wall_ms": 15818
     },
     {
      "id": "s1-2",
@@ -2129,7 +2107,7 @@
        "relative_heading_deg": 169
       }
      ],
-     "wall_ms": 74740
+     "wall_ms": 53748
     }
    ]
   },
@@ -2220,20 +2198,7 @@
    "throws": [],
    "stuck": [],
    "collisions": [],
-   "audits": [
-    {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    },
-    {
-     "id": "s1-2",
-     "failures": [
-      "not parked"
-     ]
-    }
-   ],
+   "audits": [],
    "results": [
     {
      "id": "s1-1",
@@ -2279,11 +2244,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -2304,7 +2268,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 20866
+     "wall_ms": 14523
     },
     {
      "id": "s1-2",
@@ -2351,11 +2315,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [
        {
@@ -2490,7 +2453,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 34077
+     "wall_ms": 20015
     }
    ]
   },
@@ -2640,7 +2603,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 26167
+     "wall_ms": 15377
     },
     {
      "id": "s1-2",
@@ -2770,7 +2733,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 33339
+     "wall_ms": 24096
     }
    ]
   },
@@ -2849,16 +2812,9 @@
    "collisions": [],
    "audits": [
     {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    },
-    {
      "id": "s1-2",
      "failures": [
-      "ignored a ball rolling into the street",
-      "not parked"
+      "ignored a ball rolling into the street"
      ]
     }
    ],
@@ -2909,11 +2865,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -2934,7 +2889,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 24178
+     "wall_ms": 18617
     },
     {
      "id": "s1-2",
@@ -2984,11 +2939,11 @@
      "latency_p50_ms": null,
      "latency_p95_ms": null,
      "failures": [
-      "ignored a ball rolling into the street",
-      "not parked"
+      "ignored a ball rolling into the street"
      ],
      "pass": false,
-     "parked": false,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [
        {
@@ -3170,7 +3125,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 24114
+     "wall_ms": 23342
     }
    ]
   },
@@ -3259,14 +3214,7 @@
    "throws": [],
    "stuck": [],
    "collisions": [],
-   "audits": [
-    {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    }
-   ],
+   "audits": [],
    "results": [
     {
      "id": "s1-1",
@@ -3314,11 +3262,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -3339,7 +3286,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 16861
+     "wall_ms": 16302
     },
     {
      "id": "s1-2",
@@ -3535,7 +3482,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 24955
+     "wall_ms": 23068
     }
    ]
   },
@@ -3618,14 +3565,7 @@
    "throws": [],
    "stuck": [],
    "collisions": [],
-   "audits": [
-    {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    }
-   ],
+   "audits": [],
    "results": [
     {
      "id": "s1-1",
@@ -3672,11 +3612,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -3697,7 +3636,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 17236
+     "wall_ms": 17042
     },
     {
      "id": "s1-2",
@@ -3923,7 +3862,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 35049
+     "wall_ms": 28996
     }
    ]
   },
@@ -4016,14 +3955,7 @@
    "throws": [],
    "stuck": [],
    "collisions": [],
-   "audits": [
-    {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    }
-   ],
+   "audits": [],
    "results": [
     {
      "id": "s1-1",
@@ -4070,11 +4002,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -4095,7 +4026,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 20186
+     "wall_ms": 17487
     },
     {
      "id": "s1-2",
@@ -4422,7 +4353,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 36762
+     "wall_ms": 27814
     }
    ]
   },
@@ -4583,7 +4514,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 14786
+     "wall_ms": 11022
     },
     {
      "id": "s1-2",
@@ -4750,7 +4681,7 @@
        "type": "arrived"
       }
      ],
-     "wall_ms": 15677
+     "wall_ms": 12737
     }
    ]
   },
@@ -4837,20 +4768,7 @@
    "throws": [],
    "stuck": [],
    "collisions": [],
-   "audits": [
-    {
-     "id": "s1-1",
-     "failures": [
-      "not parked"
-     ]
-    },
-    {
-     "id": "s1-2",
-     "failures": [
-      "not parked"
-     ]
-    }
-   ],
+   "audits": [],
    "results": [
     {
      "id": "s1-1",
@@ -4897,11 +4815,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [],
       "final": {
@@ -4922,7 +4839,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 16547
+     "wall_ms": 13545
     },
     {
      "id": "s1-2",
@@ -4970,11 +4887,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "diagnostics": {
       "incidents": [
        {
@@ -5112,7 +5028,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 33254
+     "wall_ms": 19999
     }
    ]
   }
@@ -11949,7 +11865,7 @@
    },
    "summary": {
     "scenarios": 12,
-    "pass_rate": 0.583,
+    "pass_rate": 0.917,
     "arrived_rate": 0.917,
     "km": 12.47,
     "collisions": 0,
@@ -12024,24 +11940,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
-     "diagnostics": {
-      "incidents": [],
-      "final": {
-       "t": 88.1,
-       "x": -133,
-       "y": -118,
-       "street": "West Broadway",
-       "edge": "e247",
-       "speed": 0.2,
-       "following": null,
-       "nearby": []
-      }
-     },
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "events": [
       {
        "t": 88.1,
@@ -12049,7 +11951,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 14027
+     "wall_ms": 11462
     },
     {
      "id": "s1-2",
@@ -12100,121 +12002,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "safety_brakes",
-        "value": 1,
-        "t": 95.3,
-        "x": -475,
-        "y": -116,
-        "street": "Stephens Street",
-        "edge": "e292",
-        "speed": 5.9,
-        "following": null,
-        "nearby": [
-         {
-          "id": "parked_1746",
-          "x": -465,
-          "y": -127,
-          "speed": 0
-         },
-         {
-          "id": "parked_1747",
-          "x": -474,
-          "y": -126,
-          "speed": 0
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "safety_brakes",
-        "value": 2,
-        "t": 148,
-        "x": -335,
-        "y": -215,
-        "street": "West 10th Avenue",
-        "edge": "e445",
-        "speed": 5,
-        "following": {
-         "id": "bike_5",
-         "gap_m": 30.293902338542566
-        },
-        "nearby": [
-         {
-          "id": "parked_880",
-          "x": -347,
-          "y": -222,
-          "speed": 0
-         },
-         {
-          "id": "parked_2715",
-          "x": -333,
-          "y": -219,
-          "speed": 0
-         },
-         {
-          "id": "parked_2716",
-          "x": -326,
-          "y": -220,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b1_0",
-          "kind": "barricade",
-          "x": -347,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b1_1",
-          "kind": "barricade",
-          "x": -345,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b1_2",
-          "kind": "barricade",
-          "x": -343,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b1_3",
-          "kind": "barricade",
-          "x": -341,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b1_4",
-          "kind": "barricade",
-          "x": -338,
-          "y": -200,
-          "speed": 0
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 155.4,
-       "x": -303,
-       "y": -218,
-       "street": "West 10th Avenue",
-       "edge": "e445",
-       "speed": 0.2,
-       "following": null,
-       "nearby": []
-      }
-     },
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "events": [
       {
        "t": 58.2,
@@ -12245,7 +12036,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 38080
+     "wall_ms": 17058
     },
     {
      "id": "s1-3",
@@ -12298,63 +12089,6 @@
      "failures": [],
      "pass": true,
      "parked": true,
-     "diagnostics": {
-      "incidents": [],
-      "final": {
-       "t": 176.6,
-       "x": -174,
-       "y": 147,
-       "street": "Larch Street",
-       "edge": "e109",
-       "speed": 0,
-       "following": null,
-       "nearby": [
-        {
-         "id": "parked_832",
-         "x": -174,
-         "y": 142,
-         "speed": 0
-        },
-        {
-         "id": "parked_833",
-         "x": -174,
-         "y": 136,
-         "speed": 0
-        },
-        {
-         "id": "parked_834",
-         "x": -174,
-         "y": 130,
-         "speed": 0
-        },
-        {
-         "id": "parked_839",
-         "x": -165,
-         "y": 132,
-         "speed": 0
-        },
-        {
-         "id": "parked_840",
-         "x": -165,
-         "y": 139,
-         "speed": 0
-        },
-        {
-         "id": "parked_841",
-         "x": -165,
-         "y": 145,
-         "speed": 0
-        },
-        {
-         "id": "ped_30",
-         "kind": "pedestrian",
-         "x": -178,
-         "y": 150,
-         "speed": 1.2
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 58.3,
@@ -12372,7 +12106,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 46309
+     "wall_ms": 17111
     },
     {
      "id": "s1-4",
@@ -12431,174 +12165,6 @@
      "failures": [],
      "pass": true,
      "parked": true,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "safety_brakes",
-        "value": 1,
-        "t": 267.5,
-        "x": 178,
-        "y": -23,
-        "street": "West 8th Avenue",
-        "edge": "e582",
-        "speed": 6.8,
-        "following": null,
-        "nearby": [
-         {
-          "id": "school_bus_5",
-          "kind": "school_bus",
-          "x": 190,
-          "y": -19,
-          "speed": 0
-         },
-         {
-          "id": "parked_2990",
-          "x": 166,
-          "y": -36,
-          "speed": 0
-         },
-         {
-          "id": "parked_2977",
-          "x": 196,
-          "y": -16,
-          "speed": 0
-         },
-         {
-          "id": "parked_2978",
-          "x": 190,
-          "y": -16,
-          "speed": 0
-         },
-         {
-          "id": "parked_2979",
-          "x": 194,
-          "y": -24,
-          "speed": 0
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "safety_brakes",
-        "value": 2,
-        "t": 296.5,
-        "x": 272,
-        "y": -24,
-        "street": "West 8th Avenue",
-        "edge": "e582",
-        "speed": 1.3,
-        "following": {
-         "id": "parked_2985_door",
-         "gap_m": 2.1129682904635043
-        },
-        "nearby": [
-         {
-          "id": "car_p12",
-          "x": 295,
-          "y": -27,
-          "speed": 0
-         },
-         {
-          "id": "parked_2983",
-          "x": 258,
-          "y": -26,
-          "speed": 0
-         },
-         {
-          "id": "parked_2984",
-          "x": 264,
-          "y": -26,
-          "speed": 0
-         },
-         {
-          "id": "parked_2971",
-          "x": 273,
-          "y": -18,
-          "speed": 0
-         },
-         {
-          "id": "parked_2985",
-          "x": 277,
-          "y": -27,
-          "speed": 0
-         },
-         {
-          "id": "parked_2986",
-          "x": 282,
-          "y": -27,
-          "speed": 0
-         },
-         {
-          "id": "parked_2987",
-          "x": 289,
-          "y": -27,
-          "speed": 0
-         },
-         {
-          "id": "parked_2969",
-          "x": 293,
-          "y": -19,
-          "speed": 0
-         },
-         {
-          "id": "parked_2970",
-          "x": 286,
-          "y": -19,
-          "speed": 0
-         },
-         {
-          "id": "parked_2985_door",
-          "kind": "door",
-          "x": 278,
-          "y": -26,
-          "speed": 0
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 324.7,
-       "x": 303,
-       "y": -27,
-       "street": "West 8th Avenue",
-       "edge": "e582",
-       "speed": 0,
-       "following": null,
-       "nearby": [
-        {
-         "id": "car_p12",
-         "x": 295,
-         "y": -27,
-         "speed": 0
-        },
-        {
-         "id": "parked_2986",
-         "x": 282,
-         "y": -27,
-         "speed": 0
-        },
-        {
-         "id": "parked_2987",
-         "x": 289,
-         "y": -27,
-         "speed": 0
-        },
-        {
-         "id": "parked_2969",
-         "x": 293,
-         "y": -19,
-         "speed": 0
-        },
-        {
-         "id": "parked_2970",
-         "x": 286,
-         "y": -19,
-         "speed": 0
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 89.2,
@@ -12632,7 +12198,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 110394
+     "wall_ms": 31555
     },
     {
      "id": "s1-5",
@@ -12683,196 +12249,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "safety_brakes",
-        "value": 1,
-        "t": 8.2,
-        "x": -466,
-        "y": 267,
-        "street": "Stephens Street",
-        "edge": "e288",
-        "speed": 4.2,
-        "following": null,
-        "nearby": [
-         {
-          "id": "parked_1213",
-          "x": -486,
-          "y": 267,
-          "speed": 0
-         },
-         {
-          "id": "parked_1214",
-          "x": -477,
-          "y": 275,
-          "speed": 0
-         },
-         {
-          "id": "parked_1221",
-          "x": -452,
-          "y": 267,
-          "speed": 0
-         },
-         {
-          "id": "parked_1704",
-          "x": -461,
-          "y": 249,
-          "speed": 0
-         },
-         {
-          "id": "parked_1705",
-          "x": -469,
-          "y": 259,
-          "speed": 0
-         },
-         {
-          "id": "parked_1706",
-          "x": -469,
-          "y": 253,
-          "speed": 0
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "safety_brakes",
-        "value": 2,
-        "t": 73.7,
-        "x": -466,
-        "y": -8,
-        "street": "West 8th Avenue",
-        "edge": "e408",
-        "speed": 4.3,
-        "following": null,
-        "nearby": [
-         {
-          "id": "parked_2502",
-          "x": -482,
-          "y": -2,
-          "speed": 0
-         },
-         {
-          "id": "parked_1670",
-          "x": -475,
-          "y": -24,
-          "speed": 0
-         },
-         {
-          "id": "parked_2492",
-          "x": -451,
-          "y": -2,
-          "speed": 0
-         },
-         {
-          "id": "parked_2493",
-          "x": -458,
-          "y": -11,
-          "speed": 0
-         },
-         {
-          "id": "parked_1676",
-          "x": -466,
-          "y": 7,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_0",
-          "kind": "barricade",
-          "x": -466,
-          "y": -16,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_1",
-          "kind": "barricade",
-          "x": -468,
-          "y": -16,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_2",
-          "kind": "barricade",
-          "x": -471,
-          "y": -16,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_3",
-          "kind": "barricade",
-          "x": -473,
-          "y": -16,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_4",
-          "kind": "barricade",
-          "x": -475,
-          "y": -16,
-          "speed": 0
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "safety_brakes",
-        "value": 3,
-        "t": 136.5,
-        "x": -341,
-        "y": -76,
-        "street": "Trafalgar Street",
-        "edge": "e553",
-        "speed": 2.9,
-        "following": {
-         "id": "school_bus_1",
-         "gap_m": 3.4712012790226825
-        },
-        "nearby": [
-         {
-          "id": "school_bus_1",
-          "kind": "school_bus",
-          "x": -341,
-          "y": -86,
-          "speed": 0
-         },
-         {
-          "id": "parked_2975",
-          "x": -336,
-          "y": -94,
-          "speed": 0
-         },
-         {
-          "id": "parked_2976",
-          "x": -336,
-          "y": -89,
-          "speed": 0
-         },
-         {
-          "id": "parked_2977",
-          "x": -335,
-          "y": -75,
-          "speed": 0
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 194.4,
-       "x": -105,
-       "y": -119,
-       "street": "West Broadway",
-       "edge": "e247",
-       "speed": 0.2,
-       "following": null,
-       "nearby": []
-      }
-     },
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "events": [
       {
        "t": 8.2,
@@ -12912,7 +12292,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 59695
+     "wall_ms": 17529
     },
     {
      "id": "s1-6",
@@ -12968,124 +12348,6 @@
      "failures": [],
      "pass": true,
      "parked": true,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "safety_brakes",
-        "value": 1,
-        "t": 110.1,
-        "x": -330,
-        "y": -216,
-        "street": "West 10th Avenue",
-        "edge": "e445",
-        "speed": 6.2,
-        "following": null,
-        "nearby": [
-         {
-          "id": "parked_2738",
-          "x": -333,
-          "y": -220,
-          "speed": 0
-         },
-         {
-          "id": "parked_2737",
-          "x": -318,
-          "y": -211,
-          "speed": 0
-         },
-         {
-          "id": "parked_2739",
-          "x": -320,
-          "y": -220,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_0",
-          "kind": "barricade",
-          "x": -347,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_1",
-          "kind": "barricade",
-          "x": -345,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_2",
-          "kind": "barricade",
-          "x": -343,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_3",
-          "kind": "barricade",
-          "x": -341,
-          "y": -200,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_4",
-          "kind": "barricade",
-          "x": -338,
-          "y": -200,
-          "speed": 0
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 238.7,
-       "x": 7,
-       "y": 141,
-       "street": "Balsam Street",
-       "edge": "e192",
-       "speed": 0,
-       "following": null,
-       "nearby": [
-        {
-         "id": "parked_1178",
-         "x": -2,
-         "y": 126,
-         "speed": 0
-        },
-        {
-         "id": "parked_1177",
-         "x": -1,
-         "y": 151,
-         "speed": 0
-        },
-        {
-         "id": "parked_1176",
-         "x": -1,
-         "y": 158,
-         "speed": 0
-        },
-        {
-         "id": "parked_1184",
-         "x": 6,
-         "y": 121,
-         "speed": 0
-        },
-        {
-         "id": "parked_1185",
-         "x": 7,
-         "y": 128,
-         "speed": 0
-        },
-        {
-         "id": "parked_1186",
-         "x": 7,
-         "y": 146,
-         "speed": 0
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 97.9,
@@ -13112,7 +12374,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 66983
+     "wall_ms": 21288
     },
     {
      "id": "s1-7",
@@ -13169,133 +12431,6 @@
      "failures": [],
      "pass": true,
      "parked": true,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "safety_brakes",
-        "value": 1,
-        "t": 75.3,
-        "x": 513,
-        "y": -32,
-        "street": "Arbutus Street",
-        "edge": "e153",
-        "speed": 4.3,
-        "following": {
-         "id": "car_p3",
-         "gap_m": 23.050546777208524
-        },
-        "nearby": [
-         {
-          "id": "parked_1027",
-          "x": 510,
-          "y": -40,
-          "speed": 0
-         },
-         {
-          "id": "parked_1037",
-          "x": 517,
-          "y": -51,
-          "speed": 0
-         },
-         {
-          "id": "parked_1493",
-          "x": 527,
-          "y": -33,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_0",
-          "kind": "barricade",
-          "x": 505,
-          "y": -33,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_1",
-          "kind": "barricade",
-          "x": 505,
-          "y": -30,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_2",
-          "kind": "barricade",
-          "x": 505,
-          "y": -28,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_3",
-          "kind": "barricade",
-          "x": 505,
-          "y": -26,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_4",
-          "kind": "barricade",
-          "x": 505,
-          "y": -24,
-          "speed": 0
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 262,
-       "x": -165,
-       "y": 152,
-       "street": "Larch Street",
-       "edge": "e110",
-       "speed": 0,
-       "following": null,
-       "nearby": [
-        {
-         "id": "car_p7",
-         "x": -168,
-         "y": 133,
-         "speed": 0.8
-        },
-        {
-         "id": "parked_771",
-         "x": -174,
-         "y": 143,
-         "speed": 0
-        },
-        {
-         "id": "parked_772",
-         "x": -174,
-         "y": 136,
-         "speed": 0
-        },
-        {
-         "id": "parked_781",
-         "x": -165,
-         "y": 144,
-         "speed": 0
-        },
-        {
-         "id": "parked_770",
-         "x": -174,
-         "y": 155,
-         "speed": 0
-        },
-        {
-         "id": "parked_782",
-         "x": -165,
-         "y": 157,
-         "speed": 0
-        },
-        {
-         "id": "parked_1318",
-         "x": -157,
-         "y": 169,
-         "speed": 0
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 57.6,
@@ -13322,7 +12457,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 74223
+     "wall_ms": 28733
     },
     {
      "id": "s1-8",
@@ -13375,44 +12510,6 @@
      "failures": [],
      "pass": true,
      "parked": true,
-     "diagnostics": {
-      "incidents": [],
-      "final": {
-       "t": 226.6,
-       "x": -170,
-       "y": -71,
-       "street": "Larch Street",
-       "edge": "e114",
-       "speed": 0,
-       "following": null,
-       "nearby": [
-        {
-         "id": "parked_819",
-         "x": -179,
-         "y": -74,
-         "speed": 0
-        },
-        {
-         "id": "parked_818",
-         "x": -179,
-         "y": -68,
-         "speed": 0
-        },
-        {
-         "id": "parked_821",
-         "x": -171,
-         "y": -92,
-         "speed": 0
-        },
-        {
-         "id": "parked_822",
-         "x": -170,
-         "y": -66,
-         "speed": 0
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 74.1,
@@ -13430,7 +12527,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 55757
+     "wall_ms": 51381
     },
     {
      "id": "s1-9",
@@ -13483,193 +12580,10 @@
      "cost_usd": 0,
      "latency_p50_ms": null,
      "latency_p95_ms": null,
-     "failures": [
-      "not parked"
-     ],
-     "pass": false,
-     "parked": false,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "off_road_s",
-        "value": 0.016666666666666666,
-        "t": 11.6,
-        "x": 503,
-        "y": -266,
-        "street": "Arbutus Street",
-        "edge": "e423",
-        "speed": 12.2,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -263,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "off_road_s",
-        "value": 0.03333333333333333,
-        "t": 11.6,
-        "x": 503,
-        "y": -266,
-        "street": "Arbutus Street",
-        "edge": "e423",
-        "speed": 12.1,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -263,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "off_road_s",
-        "value": 0.05,
-        "t": 11.7,
-        "x": 503,
-        "y": -266,
-        "street": "Arbutus Street",
-        "edge": "e423",
-        "speed": 12.1,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -263,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "off_road_s",
-        "value": 0.06666666666666667,
-        "t": 11.7,
-        "x": 503,
-        "y": -266,
-        "street": "Arbutus Street",
-        "edge": "e423",
-        "speed": 12.1,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -263,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "off_road_s",
-        "value": 0.08333333333333333,
-        "t": 11.7,
-        "x": 503,
-        "y": -267,
-        "street": "Arbutus Street",
-        "edge": "e423",
-        "speed": 12.1,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -263,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "off_road_s",
-        "value": 0.09999999999999999,
-        "t": 33.8,
-        "x": 514,
-        "y": -267,
-        "street": "Arbutus Street",
-        "edge": "e424",
-        "speed": 13.4,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -282,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "off_road_s",
-        "value": 0.11666666666666665,
-        "t": 33.8,
-        "x": 514,
-        "y": -267,
-        "street": "Arbutus Street",
-        "edge": "e424",
-        "speed": 13.3,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -282,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "off_road_s",
-        "value": 0.13333333333333333,
-        "t": 33.8,
-        "x": 514,
-        "y": -266,
-        "street": "Arbutus Street",
-        "edge": "e424",
-        "speed": 13.3,
-        "following": null,
-        "nearby": [
-         {
-          "id": "ped_13",
-          "kind": "pedestrian",
-          "x": 517,
-          "y": -282,
-          "speed": 0.8
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 219.7,
-       "x": 278,
-       "y": 358,
-       "street": "West 4th Avenue",
-       "edge": "e200",
-       "speed": 0.2,
-       "following": null,
-       "nearby": []
-      }
-     },
+     "failures": [],
+     "pass": true,
+     "parked": null,
+     "no_space": true,
      "events": [
       {
        "t": 68.3,
@@ -13682,7 +12596,7 @@
        "parked": false
       }
      ],
-     "wall_ms": 46811
+     "wall_ms": 48781
     },
     {
      "id": "s1-10",
@@ -13740,59 +12654,6 @@
      "failures": [],
      "pass": true,
      "parked": true,
-     "diagnostics": {
-      "incidents": [],
-      "final": {
-       "t": 235.4,
-       "x": -464,
-       "y": 98,
-       "street": "Stephens Street",
-       "edge": "e285",
-       "speed": 0,
-       "following": {
-        "id": "parked_1663_door",
-        "gap_m": 21.963379055354924
-       },
-       "nearby": [
-        {
-         "id": "parked_2255",
-         "x": -480,
-         "y": 90,
-         "speed": 0
-        },
-        {
-         "id": "parked_2245",
-         "x": -450,
-         "y": 90,
-         "speed": 0
-        },
-        {
-         "id": "parked_1661",
-         "x": -464,
-         "y": 104,
-         "speed": 0
-        },
-        {
-         "id": "parked_1662",
-         "x": -464,
-         "y": 117,
-         "speed": 0
-        },
-        {
-         "id": "parked_1670",
-         "x": -472,
-         "y": 116,
-         "speed": 0
-        },
-        {
-         "id": "parked_1671",
-         "x": -472,
-         "y": 109,
-         "speed": 0
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 97.9,
@@ -13810,7 +12671,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 47942
+     "wall_ms": 50658
     },
     {
      "id": "s1-11",
@@ -13869,248 +12730,6 @@
      ],
      "pass": false,
      "parked": false,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "failed_to_yield",
-        "value": 1,
-        "t": 107.8,
-        "x": -185,
-        "y": -436,
-        "street": "Larch Street",
-        "edge": "e574",
-        "speed": 0,
-        "following": {
-         "id": "car_p3",
-         "gap_m": 2.2956414433532615
-        },
-        "nearby": [
-         {
-          "id": "car_p3",
-          "x": -185,
-          "y": -443,
-          "speed": 0
-         },
-         {
-          "id": "ambulance_1",
-          "kind": "ambulance",
-          "x": -183,
-          "y": -436,
-          "speed": 4
-         },
-         {
-          "id": "parked_3006",
-          "x": -188,
-          "y": -436,
-          "speed": 0
-         },
-         {
-          "id": "gaggle_1_goose_1",
-          "kind": "goose",
-          "x": -166,
-          "y": -416,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_0",
-          "kind": "barricade",
-          "x": -173,
-          "y": -422,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_1",
-          "kind": "barricade",
-          "x": -173,
-          "y": -424,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_2",
-          "kind": "barricade",
-          "x": -173,
-          "y": -427,
-          "speed": 0
-         }
-        ],
-        "events": [
-         {
-          "type": "failed_to_yield",
-          "to": "emergency vehicle",
-          "with": "ambulance_1"
-         }
-        ]
-       },
-       {
-        "audit": "safety_brakes",
-        "value": 1,
-        "t": 204.7,
-        "x": -183,
-        "y": -530,
-        "street": "West 13th Avenue",
-        "edge": "e386",
-        "speed": 4.3,
-        "following": null,
-        "nearby": [
-         {
-          "id": "car_20",
-          "x": -188,
-          "y": -513,
-          "speed": 0.9
-         },
-         {
-          "id": "car_p8",
-          "x": -175,
-          "y": -533,
-          "speed": 0
-         },
-         {
-          "id": "parked_714",
-          "x": -191,
-          "y": -541,
-          "speed": 0
-         },
-         {
-          "id": "parked_2452",
-          "x": -198,
-          "y": -524,
-          "speed": 0
-         },
-         {
-          "id": "parked_3012",
-          "x": -182,
-          "y": -516,
-          "speed": 0
-         },
-         {
-          "id": "parked_2441",
-          "x": -168,
-          "y": -533,
-          "speed": 0
-         },
-         {
-          "id": "parked_2439",
-          "x": -167,
-          "y": -524,
-          "speed": 0
-         },
-         {
-          "id": "parked_714_door",
-          "kind": "door",
-          "x": -190,
-          "y": -543,
-          "speed": 0
-         }
-        ],
-        "events": []
-       },
-       {
-        "audit": "safety_brakes",
-        "value": 2,
-        "t": 235.8,
-        "x": -12,
-        "y": -529,
-        "street": "Balsam Street",
-        "edge": "e453",
-        "speed": 4.3,
-        "following": null,
-        "nearby": [
-         {
-          "id": "parked_2425",
-          "x": -27,
-          "y": -528,
-          "speed": 0
-         },
-         {
-          "id": "parked_2729",
-          "x": -18,
-          "y": -512,
-          "speed": 0
-         },
-         {
-          "id": "parked_2730",
-          "x": -9,
-          "y": -521,
-          "speed": 0
-         },
-         {
-          "id": "parked_2731",
-          "x": -9,
-          "y": -514,
-          "speed": 0
-         },
-         {
-          "id": "parked_2418",
-          "x": 5,
-          "y": -537,
-          "speed": 0
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 247.6,
-       "x": -11,
-       "y": -462,
-       "street": "Balsam Street",
-       "edge": "e453",
-       "speed": 6.3,
-       "following": null,
-       "nearby": [
-        {
-         "id": "parked_2726",
-         "x": -17,
-         "y": -479,
-         "speed": 0
-        },
-        {
-         "id": "parked_2724",
-         "x": -17,
-         "y": -460,
-         "speed": 0
-        },
-        {
-         "id": "parked_2725",
-         "x": -17,
-         "y": -473,
-         "speed": 0
-        },
-        {
-         "id": "parked_2734",
-         "x": -8,
-         "y": -469,
-         "speed": 0
-        },
-        {
-         "id": "parked_2735",
-         "x": -8,
-         "y": -463,
-         "speed": 0
-        },
-        {
-         "id": "parked_2736",
-         "x": -8,
-         "y": -457,
-         "speed": 0
-        },
-        {
-         "id": "parked_2724_door",
-         "kind": "door",
-         "x": -15,
-         "y": -462,
-         "speed": 0
-        },
-        {
-         "id": "stepout_2",
-         "kind": "pedestrian",
-         "x": -16,
-         "y": -459,
-         "speed": 1.8
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 84.6,
@@ -14136,7 +12755,7 @@
        }
       }
      ],
-     "wall_ms": 68092
+     "wall_ms": 51687
     },
     {
      "id": "s1-12",
@@ -14193,137 +12812,6 @@
      "failures": [],
      "pass": true,
      "parked": true,
-     "diagnostics": {
-      "incidents": [
-       {
-        "audit": "safety_brakes",
-        "value": 1,
-        "t": 122.9,
-        "x": 9,
-        "y": 263,
-        "street": "West 5th Avenue",
-        "edge": "e217",
-        "speed": 4.2,
-        "following": null,
-        "nearby": [
-         {
-          "id": "parked_1254",
-          "x": -7,
-          "y": 269,
-          "speed": 0
-         },
-         {
-          "id": "parked_1127",
-          "x": 9,
-          "y": 246,
-          "speed": 0
-         },
-         {
-          "id": "parked_1262",
-          "x": 17,
-          "y": 260,
-          "speed": 0
-         },
-         {
-          "id": "parked_1111",
-          "x": 2,
-          "y": 282,
-          "speed": 0
-         },
-         {
-          "id": "parked_1263",
-          "x": 24,
-          "y": 260,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_0",
-          "kind": "barricade",
-          "x": 9,
-          "y": 255,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_1",
-          "kind": "barricade",
-          "x": 7,
-          "y": 255,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_2",
-          "kind": "barricade",
-          "x": 5,
-          "y": 255,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_3",
-          "kind": "barricade",
-          "x": 3,
-          "y": 255,
-          "speed": 0
-         },
-         {
-          "id": "closure_1_b0_4",
-          "kind": "barricade",
-          "x": 1,
-          "y": 255,
-          "speed": 0
-         }
-        ],
-        "events": []
-       }
-      ],
-      "final": {
-       "t": 342.4,
-       "x": 174,
-       "y": -93,
-       "street": "Vine Street",
-       "edge": "e584",
-       "speed": 0,
-       "following": null,
-       "nearby": [
-        {
-         "id": "car_p7",
-         "x": 172,
-         "y": -111,
-         "speed": 0.4
-        },
-        {
-         "id": "car_p15",
-         "x": 168,
-         "y": -103,
-         "speed": 0
-        },
-        {
-         "id": "officer_1_cruiser",
-         "kind": "police",
-         "x": 174,
-         "y": -107,
-         "speed": 0
-        },
-        {
-         "id": "parked_3082",
-         "x": 166,
-         "y": -74,
-         "speed": 0
-        },
-        {
-         "id": "parked_3086",
-         "x": 174,
-         "y": -100,
-         "speed": 0
-        },
-        {
-         "id": "parked_3087",
-         "x": 174,
-         "y": -88,
-         "speed": 0
-        }
-       ]
-      }
-     },
      "events": [
       {
        "t": 100,
@@ -14350,7 +12838,7 @@
        "within_kerb": true
       }
      ],
-     "wall_ms": 81808
+     "wall_ms": 91668
     }
    ]
   },
@@ -21814,5 +20302,6 @@
    "latency_p50_ms",
    "latency_p95_ms"
   ]
- }
+ },
+ "parking_verdict": "An arrival with no space to be had near the destination (ParkPlanner status none) records parked null and no_space true and is not a failure; park and pairs re-run with that verdict."
 }
