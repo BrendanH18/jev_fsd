@@ -107,38 +107,37 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   - `s1-12`: a hard brake with a tailgater behind.
   - `s1-4`, `s1-9`: the crash in 0.1.
 
-  Status, 10 November (Rules, Kitsilano, seed 1, at the city preset of 1.2): the probe's
-  failures were fixed: a prohibited-turn audit misreading a legal left, the emergency-vehicle audit
-  penalising stops the car could not improve on, two missed sirens on turns, a slow left ignoring a
-  stopped oncoming car, traffic boxed in by pothole moves and a garbage truck, snowbank narrowings
-  lost on partial routes, and traffic driving into the stopped car. Each has a Node check, and the
-  bare suite and all 60 challenges are unchanged. City results: **dry 11/12, fog 10/12, rain 7/12,
-  snow 9/12** (city snow runs get a deadline scaled by the weather's speed). Still open:
-  - `s1-11` dry and snow: timeout and a failure to yield since the traffic-clearance fix (it
-    passed dry before it); rain: collisions with `car_p2`/`car_p3` pulling out.
-  - `s1-4` fog, rain and snow, fog `s1-9`, rain `s1-10`, snow `s1-5`: timeouts.
-  - Rain `s1-5`: `car_23` hits the car; rain `s1-6`: a red light; rain `s1-10`: a ball warning
-    ignored.
-  Evidence: `docs/validation/city-yields-2026-11-10.json`, `city-snow-2026-11-10.json`,
-  `traffic-clearance-2026-11-10.md`.
+  Status, 10 November (Rules, Kitsilano, seed 1, at the city preset of 1.2): **dry 12/12, fog
+  11/12, rain 11/12, snow 11/12**, up from 7/12, 5/12, 4/12 and 1/12 at the first probe, with no
+  route that passed before failing since. Fixed along the way, each with a Node check:
+  - Audits: a prohibited-turn audit misreading a legal left; the emergency-vehicle audit penalising
+    stops the car could not improve on, and an exact-target comparison inside a snowbank narrowing.
+  - Emergency vehicles: two missed sirens on turns; pull-overs that could not finish steering before
+    a short stop, or approached it too fast; a stood-down vehicle that kept its passing controller;
+    gap searches blocked by what was behind them.
+  - Traffic: boxed in by pothole moves and a garbage truck; driving into the stopped car; turning
+    bodies swinging across it; a pedestrian and a cyclist waiting on each other at a crossing;
+    buses blocking a narrowing's exit.
+  - The car: a slow left ignoring a stopped oncoming car; a ball warning missed behind a competing
+    stop; a red light from a wet amber dilemma; no way back from a pull-over beside parked cars.
+  - Snowbank narrowings lost on partial routes.
+  Still open: `s1-4` in fog, rain and snow times out. It arrives in dry weather in 353 s of its
+  357.6 s; in the wet a road-closure detour makes it about 1,400 m against the 894 m planned, with
+  legitimate waits for geese, a parker and traffic, and no collision or rule failure.
+  Evidence: `docs/validation/city-round3-2026-11-10.json`, `city-yields-2026-11-10.json`,
+  `city-snow-2026-11-10.json`, `traffic-clearance-2026-11-10.md`.
 - [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
   `docs/rules-baseline.md`.
-- [ ] **1.5 Run it in CI.** (S) The city suite for Kitsilano dry on every change; the full matrix
-  on a schedule. `.github/workflows/bench.yml` runs bare dry (blocking) and city dry on every change
-  and the city matrix weekly; the city jobs report without blocking until dry passes 12/12.
+- [x] **1.5 Run it in CI.** (S) The city suite for Kitsilano dry on every change; the full matrix
+  on a schedule. `.github/workflows/bench.yml` runs bare dry and city dry on every change, both blocking,
+  and the city matrix weekly; fog, rain and snow report without blocking until they pass.
 - [ ] **1.6 Look for interactions on purpose.** (M) A scheduled soak over several seeds and maps,
   and a run over pairs of features, since the bugs found so far are all pairs (parkers with
   driveways, closures with detours, pull-outs with emergency vehicles). A throw, a stuck car or a
   collision fails it.
 - [ ] **1.7 Park and night.** (M) The benchmark has no parking at the destination and no time of
   day. Add both as suite options so the overnight and parking features are covered by a seeded run.
-
-Snow triage, 10 November: partial routes and spawns now respect snowbank corridors, kerb pull-outs
-wait for their turn, and traffic clearance includes a pothole move that already clears a narrowing.
-The city snow suite reaches 9/12 destinations (previously 1/12), with zero deadlocks and zero
-snowbank conflicts; only 3/12 pass cleanly. Traffic/bus holds, yielding and the prohibited turn
-still prevent this phase from exiting. See the [validation record](docs/validation/city-snow-2026-11-10.json).
 
 Exit: Rules passes the city suite on Kitsilano in all four weathers with no throw and no stuck car,
 and CI runs it.
