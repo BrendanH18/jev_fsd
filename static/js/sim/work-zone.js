@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 // Work zones with a flagger (Ontario Highway Traffic Act s. 146.1; the Ontario Traffic Manual, Book 7):
 // a road crew closes one lane of a two-way street with one lane each way, and two traffic control
 // persons, one at each end of the work, take turns letting each direction through the lane that is
@@ -264,7 +265,7 @@ export class WorkZones {
     };
     for (const slot of this.bays(closed, open, a - 5, b + 5)) {
       if (slot.occupant) world.parked.remove(slot.occupant);
-      slot.reserved = closure;
+      reserveSlot(map, slot, closure);
       z.bays.push(slot);
     }
     world.parked.add(closure);
@@ -274,7 +275,7 @@ export class WorkZones {
 
   retire(z) {
     this.world.parked.remove(z.closure);
-    for (const slot of z.bays) if (slot.reserved === z.closure) slot.reserved = null;
+    for (const slot of z.bays) if (slot.reserved?.owner === z.closure) slot.reserved = null;
     this.zones.splice(this.zones.indexOf(z), 1);
   }
 

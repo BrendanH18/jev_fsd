@@ -99,7 +99,7 @@ test("in a free drive two stand in bays at the right curb, out of the car's sigh
     assert.ok(v.flashing && v.stay && car.stay && v.curb === "right");
     const d = Math.hypot(v.x - world.ego.x, v.y - world.ego.y);
     assert.ok(d >= 150 && d <= 460 && !world.visibility.canSee(world.ego, v.x, v.y), `${Math.round(d)} m away, out of sight`);
-    assert.ok(stop.bays.length === 2 && stop.bays.every((b) => b.reserved === v), "its two bays are taken");
+    assert.ok(stop.bays.length === 2 && stop.bays.every((b) => b.reserved?.owner === v), "its two bays are taken");
     // (and nothing else is parked across them)
     for (const o of world.parked.near(v.x, v.y, 15)) if (o !== v && o !== car) assert.ok(Math.hypot(o.x - v.x, o.y - v.y) > 5.5, `${o.id} clear of ${v.id}`);
   }

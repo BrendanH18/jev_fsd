@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 // Cars backing out of driveways (World option `driveways`). Now and then, from its own random stream, a
 // car parked nose-in in a driveway (jev/osm/driveways.py) near the driven car's way backs out: reverse
 // lamps on, it creeps back across the sidewalk at walking pace (CREEP_MPS), stops with its rear just
@@ -238,9 +239,9 @@ export class DrivewayReversers {
         const b = poseBox(geo.path, s, CAR);
         for (const c of near) if (!c.stay && parked.list.includes(c) && obbOverlap(b, c.obb(), 0.3)) {
           parked.remove(c);
-          if (c.slot) c.slot.reserved = "driveway";
+          if (c.slot) reserveSlot(this.world.map, c.slot, d);
         }
-        for (const bay of bays) if (!bay.slot.reserved && obbOverlap(b, bay.box, 0.3)) bay.slot.reserved = "driveway";
+        for (const bay of bays) if (!bay.slot.reserved && obbOverlap(b, bay.box, 0.3)) reserveSlot(this.world.map, bay.slot, d);
       }
     }
     parked.removed.length = 0;

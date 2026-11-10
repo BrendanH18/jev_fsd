@@ -49,7 +49,8 @@ export function validateEvaluation(value) {
       || !COUNTERS.every(k => finite(r[k])) || typeof r.arrived !== "boolean" || typeof r.stopped !== "boolean"
       || (r.latency_p50_ms !== null && !finite(r.latency_p50_ms))
       || !r.report || !finite(r.report.score) || r.report.score > 100 || typeof r.report.qualified !== "boolean"
-      || r.report.status !== (r.stopped ? "stopped" : r.arrived ? "arrived" : "timeout")
+      || (r.simulation_error !== undefined && !text(r.simulation_error))
+      || r.report.status !== (r.simulation_error ? "error" : r.stopped ? "stopped" : r.arrived ? "arrived" : "timeout")
       || !Number.isInteger(r.report.model_version) || !Array.isArray(r.report.incidents) || r.report.incidents.length > 100
       || r.report.incidents.some(e => !e || !finite(e.at_s) || !text(e.type) || !text(e.message))) throw new Error("The export contains an invalid evaluation result.");
     if (value.schema !== SCHEMAS[0] && (!finite(r.limit_s) || r.limit_s === 0 || !text(r.engine_version))) throw new Error("The export is missing its evaluation conditions.");

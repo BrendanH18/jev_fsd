@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed free drives freezing when a traffic car looked for parking beside a driveway. Every parking
+  reservation now records its owner and the stretch of kerb it occupies, so driveways, work zones,
+  lane closures, roadside stops and parking cars share the same free-space checks and release rules.
+- A simulation-step error now pauses the drive with the error and a **Restart drive** button while
+  rendering and page controls remain available. Benchmarks and arena evaluations record the error
+  as a failed route and continue to the next attempt; saved evaluations retain the error.
+
 - Puddles at the kerb in the rain, and not splashing people, in free drives (`?puddles=0` takes
   them off). From their own random stream, puddles stand in the gutter of every kerb lane: long,
   shallow ones along the edge of the lane, and wider, deeper ones at the corners of junctions and

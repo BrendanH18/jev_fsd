@@ -73,6 +73,15 @@ test('finished reports are immutable and finish is idempotent', () => {
   const w = world(), s = new DriveScore(w); drive(w, s); const r = s.finish('arrived');
   drive(w, s); assert.deepEqual(s.finish('finished'), r); r.incidents.push({}); assert.equal(s.snapshot().incidents.length, 0);
 });
+test('a simulation error remains a failed report when a parked drive is finished', () => {
+  const w = world(), s = new DriveScore(w);
+  s.incident('simulation_error', 'Injected step failure');
+  s.noteArrival({ parked: true, within_kerb: true, kerb_m: 0.1 });
+  const report = s.finish('arrived');
+  assert.equal(report.status, 'error');
+  assert.equal(report.simulation_error, 'Injected step failure');
+  assert.equal(JSON.parse(JSON.stringify(report)).simulation_error, 'Injected step failure');
+});
 test('wrong-way scoring uses the physical lane rather than a heading-biased navigation lane', () => {
   const w = world(), s = new DriveScore(w); w.ego.psi = Math.PI;
   w.map = { nearestLane: () => ({ distance: 0.1, s: 40, heading: 0, lane: { length: 100 } }) };

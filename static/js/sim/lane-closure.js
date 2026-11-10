@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 // Lane closures and the zipper merge. A road crew closes the curb lane of a street with two lanes going
 // its way, with cones, a truck and a flashing arrow board but no flagger, and traffic from the closed lane
 // merges into the open one where the lane ends. Manitoba's driver's handbook (Manitoba Public Insurance)
@@ -309,7 +310,7 @@ export class LaneClosures {
     };
     for (const slot of this.bays(edge, m - 5, to + 5)) {
       if (slot.occupant) world.parked.remove(slot.occupant);
-      slot.reserved = closure;
+      reserveSlot(map, slot, closure);
       z.bays.push(slot);
     }
     world.parked.add(closure);
@@ -319,7 +320,7 @@ export class LaneClosures {
 
   retire(z) {
     this.world.parked.remove(z.closure);
-    for (const slot of z.bays) if (slot.reserved === z.closure) slot.reserved = null;
+    for (const slot of z.bays) if (slot.reserved?.owner === z.closure) slot.reserved = null;
     this.zones.splice(this.zones.indexOf(z), 1);
   }
 

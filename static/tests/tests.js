@@ -303,7 +303,7 @@ async function run() {
       n = fleet.maybePark();
     }
     const slot = n?.parking.slot;
-    check("traffic reserves a vacant curb bay", n && slot.reserved === n && !slot.occupant);
+    check("traffic reserves a vacant curb bay", n && slot.reserved?.owner === n && !slot.occupant);
     if (n) {
       world.npcs = fleet.vehicles = [n]; world.ego.x = -1e5;
       let clear = true, maxSpeed = 0;

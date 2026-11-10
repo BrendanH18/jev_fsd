@@ -103,7 +103,7 @@ await test("the layout: a stop line at each end, a 30 m taper each way, and the 
   assert.ok(!inside(local((zone.r + zone.f) / 2, -0.3)) && !inside(local(zone.r - 1, lane)), "not the open lane, nor short of the work");
   assert.ok(world.parked.list.includes(zone.closure));
   const bays = world.parked.slots.filter((slot) => zone.bays.includes(slot));
-  assert.ok(bays.length > 4 && bays.every((b) => b.reserved === zone.closure && !b.occupant), "nobody parked along it, and nobody parks there");
+  assert.ok(bays.length > 4 && bays.every((b) => b.reserved?.owner === zone.closure && !b.occupant), "nobody parked along it, and nobody parks there");
   world.workZones.retire(zone);
   assert.ok(!world.parked.list.includes(zone.closure) && bays.every((b) => !b.reserved));
 });

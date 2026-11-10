@@ -416,7 +416,7 @@ await test("a cruiser in a parking bay is parked like any car, and goes with the
   const o = O.placeOfficer(w, "sig8", { phase: "A" });
   assert.equal(o.cruiser?.parked, true);
   assert.equal(w.parked.list.includes(o.cruiser.vehicle), true);
-  assert.equal(o.cruiser.slot.reserved, o.cruiser.vehicle);
+  assert.equal(o.cruiser.slot.reserved?.owner === o.cruiser.vehicle, true);
   assert.equal(w.obstaclesNear(o.cruiser.vehicle.x, o.cruiser.vehicle.y, 3).includes(o.cruiser.vehicle), true);
   O.removeOfficer(w, o);
   assert.equal(w.parked.list.includes(o.cruiser.vehicle), false);

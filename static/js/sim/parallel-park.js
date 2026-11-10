@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 // Parallel parking at the destination. Near the end of a free drive the car looks for an empty, legal
 // space in the parking lane on its right, before the destination, that it can see and that is long
 // enough for it, and parks there the way every province's driver's handbook teaches: signal, pull up
@@ -206,9 +207,8 @@ function taken(world, e, a, b) {
     if (wMax > inner && wMin < kerb + 1 && s1 > a - 1 && s0 < b + 1) out.push([s0, s1, wMin]);
   }
   for (const slot of world.parked.slots) {
-    if (slot.edge !== e.id || slot.curb !== "right" || !slot.reserved || slot.reserved === world.ego) continue;
-    const s = projectPoint(e.pts, e.cum, [slot.x, slot.y]).s, spec = slot.reserved.spec;
-    out.push([s - spec.rearOverhang - 0.5, s - spec.rearOverhang + spec.length + 0.5, kerb - e.parking[1] + LANE_SIDE_M]);
+    if (slot.edge !== e.id || slot.curb !== "right" || !slot.reserved || slot.reserved?.owner === world.ego) continue;
+    out.push([slot.reserved.sFrom, slot.reserved.sTo, kerb - e.parking[1] + LANE_SIDE_M]);
   }
   return out;
 }
@@ -350,8 +350,8 @@ function stillFree(world, plan) {
 
 function reserve(world, plan, on) {
   for (const slot of plan.slots) {
-    if (on && !slot.reserved && !slot.occupant) slot.reserved = world.ego;
-    else if (!on && slot.reserved === world.ego) slot.reserved = null;
+    if (on && !slot.reserved && !slot.occupant) reserveSlot(world.map, slot, world.ego);
+    else if (!on && slot.reserved?.owner === world.ego) slot.reserved = null;
   }
 }
 
@@ -489,7 +489,7 @@ export class ParkPlanner {
 export function leftSpace(world) {
   const spot = world.parkedIn;
   if (!spot || Math.hypot(world.ego.x - spot.at[0], world.ego.y - spot.at[1]) < LEFT_M) return;
-  for (const slot of spot.slots) if (slot.reserved === world.ego) slot.reserved = null;
+  for (const slot of spot.slots) if (slot.reserved?.owner === world.ego) slot.reserved = null;
   world.parkedIn = null;
 }
 

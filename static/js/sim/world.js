@@ -566,7 +566,7 @@ export class World {
     this.parkerCalls?.clear();
     this.roadClosureCalls?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
-    for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved === this.ego) slot.reserved = null;
+    for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved?.owner === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
     this.schoolYields?.clear();
     this.crosswalkCalls.clear();

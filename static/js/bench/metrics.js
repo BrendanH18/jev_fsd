@@ -160,7 +160,8 @@ export class DriveMetrics {
 // What makes a drive fail. Comfort metrics are reported, not failed on.
 export function failures(m) {
   const f = [];
-  if (!m.arrived) f.push(m.deadlocks ? "stuck" : "timeout");
+  if (m.simulation_error) f.push("simulation error");
+  else if (!m.arrived) f.push(m.deadlocks ? "stuck" : "timeout");
   if (m.collisions) f.push("collision");
   if (m.red_lights) f.push("red light");
   if (m.amber_lights_run) f.push("failed to stop safely for amber");

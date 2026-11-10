@@ -6,7 +6,7 @@
 // stop, sim/roadside.js) neither opens a door nor pulls out.
 
 import { Vehicle, CAR } from "./vehicle.js";
-import { pointAt, headingAt } from "../map/mapdata.js";
+import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { rng } from "../common.js";
 
 const SLOT_M = 6.4;            // curb length per parked car
@@ -17,6 +17,15 @@ const CELL = 25;
 const PALETTE = [0xeeeeea, 0x8d9299, 0x1a1c20, 0xc4c8cc, 0x2b3a55, 0x9b1e1e, 0xf2f2ee, 0x4a4f57, 0x0f1114, 0x6b7f5e, 0xb9b3a5, 0x6e5a44];
 
 export const PARKED_DENSITY = 0.5;
+
+// Every reserved bay has one shape: who holds it and the stretch of its own edge's kerb it takes.
+// Vehicle reservations keep the same half-metre bumper room as parking's free-space check. A driveway
+// has no vehicle of its own, so it keeps an ordinary car's footprint clear in each bay it crosses.
+export function reserveSlot(map, slot, owner, { spec = owner.spec || CAR, sFrom, sTo } = {}) {
+  const e = map.edges.get(slot.edge), s = projectPoint(e.pts, e.cum, [slot.x, slot.y]).s;
+  slot.reserved = { owner, sFrom: sFrom ?? s - spec.rearOverhang - 0.5, sTo: sTo ?? s - spec.rearOverhang + spec.length + 0.5 };
+  return slot.reserved;
+}
 
 export class ParkedCars {
   constructor(map, { seed = 1, density = PARKED_DENSITY, zones = null } = {}) {

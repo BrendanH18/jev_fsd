@@ -1,4 +1,20 @@
-# Rules benchmark check — 2026-11-09 (puddles, traffic parking, road closures, officers)
+# Rules benchmark check — 2026-11-09 (free-drive freezes)
+
+The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4,
+macOS arm64) passes 12/12 on untouched base `a9977b6` and this change. Every per-route field
+except `wall_ms` is identical; the aggregate summaries are identical, including seven safety
+brakes, 0.2 seconds off road, and zero collisions, red lights, stop-sign violations, failures
+to yield or deadlocks. The base was verified file for file against `git archive a9977b6` and
+served separately. Both runs used `scripts/bench_node.mjs`; the
+[machine-readable record](validation/free-drive-freezes-2026-11-09.json) contains both results.
+
+The newest committed historical run, `data/runs/20261022-092538-rules.json`, also passes 12/12
+with the same zero violation counts and off-road time. Its eight safety brakes and detailed
+values already differ on the untouched base, so it is not an exact current-engine baseline.
+This check covers the existing feature-off dry suite; it does not establish the Phase 1 city
+baseline. Real driveway reservations with traffic parking are covered by the focused regression.
+
+## Earlier record: 2026-11-09 (puddles, traffic parking, road closures, officers)
 
 The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4)
 passes 12/12 on base `0e72961` and this change, every per-route field matching except
