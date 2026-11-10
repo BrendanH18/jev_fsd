@@ -1,0 +1,68 @@
+name: Seeded benchmark
+# Rules over the seeded Kitsilano suite, in the bare world (every opt-in feature off, as the
+# benchmark always was) and the city world (the free drive's features: static/js/sim/free-drive.js).
+# Every change runs both in dry weather; the weekly run adds the city world in fog, rain and snow.
+# Any route that fails, throws or gets stuck fails the job (scripts/bench_node.mjs --check 1).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  suite:
+    name: ${{ matrix.features }} world, ${{ matrix.weather }}
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [bare, city]
+        weather: [dry, fog, rain, snow]
+        scheduled:
+          - ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        exclude:
+          # every change: dry only; the bare world's other weathers stay as recorded in docs/rules-baseline.md
+          - features: bare
+            weather: fog
+          - features: bare
+            weather: rain
+          - features: bare
+            weather: snow
+          - scheduled: false
+            weather: fog
+          - scheduled: false
+            weather: rain
+          - scheduled: false
+            weather: snow
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Start the local server
+        run: |
+          PORT=8331 uv run --locked server.py > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8331/bench && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: Rules, Kitsilano, suite seed 1
+        run: >
+          node --experimental-default-type=module scripts/bench_node.mjs --port 8331 --map kitsilano
+          --features ${{ matrix.features }} --weather ${{ matrix.weather }} --check 1
+      - name: Server log
+        if: failure()
+        run: tail -n 200 server.log

@@ -5,7 +5,8 @@
 // node --experimental-default-type=module scripts/bench_node.mjs --map calgary --count 2
 // Options: --map (a preset id or W,S,E,N), --count, --seed, --npcs, --brain, --weather, --port,
 // --features (bare, the default, with every opt-in feature off; or city, the free drive's: bench/runner.js),
-// --only s1-1,s1-2 (run just these scenarios) and --json out.json (write the full results).
+// --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
+// (exit with status 1 if any route fails, as CI does).
 const args = Object.fromEntries(process.argv.slice(2).reduce((out, a, i, all) => {
   if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
   return out;
@@ -13,7 +14,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((out, a, i, all) =>
 const fail = (message) => { console.error(message); process.exit(1); };
 // Every option takes a value; one without (parsed as `true`) or a misspelled one would otherwise
 // run the defaults.
-const OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "port", "only", "json"];
+const OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "port", "only", "json", "check"];
 for (const [name, value] of Object.entries(args)) {
   if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
   if (value === true) fail(`--${name} needs a value.`);
@@ -67,9 +68,11 @@ for (const sc of suite) {
   const r = await runScenario(map, sc, { brain: config.brain, npcs: config.npcs, mode: config.mode, weather: config.weather, features });
   results.push(r);
   const hits = r.events.filter((e) => e.type === "collision").map((e) => `${e.with}:${e.kind}@${e.t}`).join(" ");
-  console.log(`${r.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} coll=${r.collisions}/${r.at_fault} off=${r.off_road_s} dl=${r.deadlocks} safety=${r.safety_brakes} lc=${r.lane_changes ?? "-"} ${hits}`);
+  console.log(`${r.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} coll=${r.collisions}/${r.at_fault} off=${r.off_road_s} dl=${r.deadlocks} safety=${r.safety_brakes} lc=${r.lane_changes ?? "-"} ${hits}${r.pass ? "" : ` failures=${r.failures.join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}`);
 }
 const summary = aggregate(results);
 if (args.json) (await import("node:fs")).writeFileSync(args.json, JSON.stringify({ config, summary, results }, null, 1));
 // The runner's MessageChannel would keep Node alive; exit once the summary has been written out.
-process.stdout.write(`${JSON.stringify({ config, summary })}\n`, () => process.exit(0));
+const failed = args.check && args.check !== "0" ? results.filter((r) => !r.pass).map((r) => r.id) : [];
+if (failed.length) console.error(`${failed.length} of ${results.length} routes failed: ${failed.join(", ")}`);
+process.stdout.write(`${JSON.stringify({ config, summary })}\n`, () => process.exit(failed.length ? 1 : 0));
