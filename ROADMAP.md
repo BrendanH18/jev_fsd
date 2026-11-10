@@ -90,11 +90,11 @@ and all 199 browser unit checks passed. The existing 12-route dry suite is uncha
 Every opt-in feature is off in the seeded benchmark, and each is tested alone by its own challenge.
 Free drives turn nearly all of them on together. Nothing checks that combination.
 
-- [ ] **1.1 One definition of a free drive.** (M) `main.js` builds about forty `World` and
+- [x] **1.1 One definition of a free drive.** (M) `main.js` builds about forty `World` and
   `NpcFleet` options inline from query parameters. Move that into one function that the app, the
   benchmark and the Node runner all call, so the benchmark's "city" world cannot drift from the
   app's.
-- [ ] **1.2 A "city" suite beside the current one.** (M) Add a feature preset to
+- [x] **1.2 A "city" suite beside the current one.** (M) Add a feature preset to
   `bench/runner.js` and `scripts/bench_node.mjs`: `bare` (today's behaviour, so every earlier
   record stays comparable) and `city` (the free-drive defaults, with routes planned the way the app
   plans them, turn restrictions included). The 9 November probe script is the starting point.
@@ -107,41 +107,26 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   - `s1-12`: a hard brake with a tailgater behind.
   - `s1-4`, `s1-9`: the crash in 0.1.
 
-  Investigated 10 November against the city preset at `339e030`: `s1-7` held an existing stop at
-  a dark signal when an ambulance passed, which the emergency audit incorrectly penalized;
-  `s1-12` needed more distance, at a crawl, to pull over after waiting for a parallel parker.
-  Both now pass, the 12-route bare suite is unchanged apart from timings, and all 60 challenges
-  still pass with Rules and the cautious agent. City dry is 9/12: `s1-4` and `s1-11` still time
-  out, and `s1-9` makes a prohibited turn. See the
-  [incident evidence and validation](docs/validation/city-yields-2026-11-10.json).
-
-  Follow-up, 10 November (`city`, Kitsilano dry, seed 1): `s1-4` queued behind a traffic car
-  whose pothole avoidance shift left it blocked by a parked car. Traffic now slows over the hole
-  when the shift is occupied. The current `s1-11` stall was a collection truck held just inside its
-  parked-car clearance, hiding the oncoming lane at the driven car's left turn; the truck now uses
-  the existing bounded in-lane nudge and retains its clearance. Neither wait was a spurious ego
-  deadlock: the car was correctly waiting for the traffic to move. Focused offline checks are
-  `test_pothole_traffic_clearance.mjs` and `test_collection_clearance.mjs`. The two routes now arrive
-  cleanly (332.0 s and 222.1 s). The 12-route bare results match the supplied pre-change record
-  field-for-field except wall/latency timings; all 331 Drive Lab checks pass (60 challenges with
-  Rules and cautious). The final city dry sweep is 8/12, with every route arriving. The prior
-  failures on `s1-7`, `s1-9` and `s1-12` remain, and changed traffic timing exposes an additional
-  emergency-yield failure on `s1-8`: the car is stopped near the signal line when a fire truck
-  passes. Both fixes independently expose that failure; limiting pothole checks to parked cars
-  does too. This emergency-yield interaction still needs triage.
-
-
-  - Traffic collision triage, 10 November: the six reported city cases in dry, fog, rain and
-    snow now have no collisions. Reversing traffic sees the driven car, long vehicles predict
-    their real swept bodies, parking-in respects the following-distance policy, and pedestrians
-    wait for stopped cars. The bare suite is field-for-field unchanged apart from timings;
-    other city timeouts and yielding failures remain. See the
-    [investigation and validation](docs/validation/traffic-clearance-2026-11-10.md).
+  Status, 10 November (Rules, Kitsilano, seed 1, at the city preset of 1.2): the probe's
+  failures were fixed: a prohibited-turn audit misreading a legal left, the emergency-vehicle audit
+  penalising stops the car could not improve on, two missed sirens on turns, a slow left ignoring a
+  stopped oncoming car, traffic boxed in by pothole moves and a garbage truck, snowbank narrowings
+  lost on partial routes, and traffic driving into the stopped car. Each has a Node check, and the
+  bare suite and all 60 challenges are unchanged. City results: **dry 11/12, fog 10/12, rain 7/12,
+  snow 9/12** (city snow runs get a deadline scaled by the weather's speed). Still open:
+  - `s1-11` dry and snow: timeout and a failure to yield since the traffic-clearance fix (it
+    passed dry before it); rain: collisions with `car_p2`/`car_p3` pulling out.
+  - `s1-4` fog, rain and snow, fog `s1-9`, rain `s1-10`, snow `s1-5`: timeouts.
+  - Rain `s1-5`: `car_23` hits the car; rain `s1-6`: a red light; rain `s1-10`: a ball warning
+    ignored.
+  Evidence: `docs/validation/city-yields-2026-11-10.json`, `city-snow-2026-11-10.json`,
+  `traffic-clearance-2026-11-10.md`.
 - [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
   `docs/rules-baseline.md`.
 - [ ] **1.5 Run it in CI.** (S) The city suite for Kitsilano dry on every change; the full matrix
-  on a schedule.
+  on a schedule. `.github/workflows/bench.yml` runs bare dry (blocking) and city dry on every change
+  and the city matrix weekly; the city jobs report without blocking until dry passes 12/12.
 - [ ] **1.6 Look for interactions on purpose.** (M) A scheduled soak over several seeds and maps,
   and a run over pairs of features, since the bugs found so far are all pairs (parkers with
   driveways, closures with detours, pull-outs with emergency vehicles). A throw, a stuck car or a
