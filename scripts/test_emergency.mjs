@@ -429,4 +429,23 @@ function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   console.log("✓ an ambulance keeps clear of a contraflow cyclist in its way");
 }
 
+{
+  // City rain s1-9: route lookahead has rounded away, but the physical
+  // approach still leads across the siren's path until the car begins its turn.
+  const { world } = setup({ front: -20, v: 0 });
+  const { AMBULANCE } = await import("../static/js/sim/vehicle.js");
+  const ev = Object.assign(new Vehicle(0, 30, -Math.PI / 2, 4, AMBULANCE), {
+    id: "crossing_siren", kind: "ambulance", siren: true,
+    path: { pts: [[0, 100], [0, -100]], cum: [0, 200], length: 200, s: 70 },
+  });
+  world.npcs.push(ev);
+  const offsetPoint = world.route.offsetPointAt.bind(world.route);
+  const turn = world.route.project(world.ego.x, world.ego.y, 0).s;
+  world.route.offsetPointAt = (s, offset) => s > turn + 5 ? [world.ego.x, -50] : offsetPoint(s, offset);
+  assert.equal(emergencyCall(world.ego, ev) !== null, true, "the physical approach still intersects the siren's way");
+  assert.equal(buildSnapshot(world).emergency?.id, ev.id, "planned corners must not release the obligation early");
+  world.ego.psi = -Math.PI / 2;
+  assert.equal(buildSnapshot(world).emergency === null, true, "turning away physically ends the call");
+  console.log("✓ a rounded route corner cannot hide a siren still crossing the physical approach");
+}
 process.exit(0);

@@ -65,7 +65,7 @@ import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, det
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
 import { STOP_DECEL as CLOSURE_STOP_DECEL, roadClosedSensing } from "../sim/road-closures.js";
-import { officerLight, officerSensing } from "../sim/traffic-officer.js";
+import { officerDirection, officerLight, officerSensing } from "../sim/traffic-officer.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -685,13 +685,20 @@ function oncomingYield(world, c, frontS, look = true) {
   let best = null;
   for (const n of world.npcs) {
     // (moving, or pulling away from its own line on the green)
-    if (n.v < 1 && !(n.v > 0.05 && n.a > 0.3)) continue;
     const dx = centre[0] - n.x, dy = centre[1] - n.y, d = Math.hypot(dx, dy);
     if (d > ONCOMING_LOOK_M) continue;
     // A left indicator means a left turn only from the leftmost lane near the junction: further
     // out, or from another lane, it is a lane change and the vehicle may well come straight on. A
     // car pulling out from the curb signals the pull-out, not a turn.
     const lane = world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane;
+    // A visible queue on its green can start as soon as the vehicle hiding it
+    // clears. Waiting for its first acceleration sample loses the gap on a slow turn.
+    const ctl = lane?.edgeRef.control;
+    const starting = world.hazards && n.v < 1 && n.a >= -0.5 && ctl?.type === "signal" && ctl.id === c.control.id
+      && !world.outages.isDark(ctl.id) && !flashState(world.map.intersections.get(ctl.id), ctl.group, world)
+      && officerDirection(world, n, lane.edge) !== "stop"
+      && movementSignal(approachPhase(world.map.intersections.get(ctl.id), lane.edge, world.t), "straight") === "green";
+    if (n.v < 1 && !(n.v > 0.05 && n.a > 0.3) && !starting) continue;
     if (n.signal === "left" && !n.pull && d < LEFT_SIGNAL_M && lane && lane.idx === 0) continue;
     const rel = Math.abs(wrap(n.psi - facing));
     const closing = (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6);
@@ -700,7 +707,7 @@ function oncomingYield(world, c, frontS, look = true) {
     if (Math.abs(wrap(n.psi - down)) < rel) continue;
     // brake lights: a vehicle that will stop well short of the junction is not coming through
     if (!inBox && n.a < -0.5 && n.v * n.v / (-2 * n.a) < d - JUNCTION_BOX_M) continue;
-    const eta = inBox ? 0 : etaOf(world, n, d - JUNCTION_BOX_M / 2);
+    const eta = inBox ? 0 : etaOf(world, n, d - JUNCTION_BOX_M / 2, starting);
     if (eta >= need || !world.sees(ego, n)) continue;
     const hit = pathHit(world, c, frontS, n.x, n.y, n.psi, n.spec || CAR, lane);
     if (hit === null) continue;
@@ -779,6 +786,9 @@ function emergencyYield(world, p, frontS, lane, visible) {
   const mid = ego.spec.length / 2 - ego.spec.rearOverhang;
   const pts = [0, 10, 20].map((d) => route.offsetPointAt(Math.min(route.length, p.s + mid + d), lane.center));
   pts[0] = [ego.x + Math.cos(ego.psi) * mid, ego.y + Math.sin(ego.psi) * mid];
+  // Keep the obligation while the physical approach still leads into the siren's path.
+  // A rounded route corner can already turn away while the car has not begun turning.
+  for (const d of [10, 20]) pts.push([pts[0][0] + Math.cos(ego.psi) * d, pts[0][1] + Math.sin(ego.psi) * d]);
   const call = evs.length ? nearestCall(ego, evs, pts) : null;
   if (!call) { world.evYield = null; return null; }
   const ev = call.ev;
@@ -1436,9 +1446,9 @@ function clearTime(v, distance, vMax = TURN_MPS, world = null, frontS = 0) {
 
 // Seconds until a vehicle covers `distance`: at its speed, or, while it speeds up, accelerating as it
 // is now (at most ETA_ACCEL_MAX) until it reaches its street's limit.
-function etaOf(world, n, distance) {
+function etaOf(world, n, distance, starting = false) {
   if (distance <= 0) return 0;
-  const v = Math.max(0, n.v), a = Math.min(ETA_ACCEL_MAX, Math.max(0, n.a || 0));
+  const v = Math.max(0, n.v), a = starting ? ETA_ACCEL_MAX : Math.min(ETA_ACCEL_MAX, Math.max(0, n.a || 0));
   if (a < 0.05) return v > 0.05 ? distance / v : Infinity;
   const vMax = Math.max(v, Math.min(n.spec?.maxSpeed ?? Infinity, world.map.nearestLane(n.x, n.y, n.psi, 6)?.lane.edgeRef.limit || 13.9));
   const tTop = (vMax - v) / a, dTop = (v + vMax) / 2 * tTop;

@@ -59,6 +59,8 @@ const BANKED = new Set(["residential", "unclassified", "living_street", "tertiar
 // further out; others keep SIDE_CLEAR_M clear of them.
 export const PUSH_M = 0.6;
 export const SIDE_CLEAR_M = 0.5;
+// The full narrowed corridor starts this far before its entry and ends this far after its exit.
+export const NARROW_FULL_M = 1;
 export const NARROW_P = 0.7;
 export const NARROW_LEN_M = [40, 100];
 const MIN_NARROW_M = 30;
@@ -559,7 +561,7 @@ function keepRel(map, nw, dir, spec) {
 
 // How far into the move over toward the middle a driver is at arc length `s` of its way, for a narrowing
 // it comes into at `en` and leaves at `ex` (0 to 1).
-const moveAt = (s, en, ex) => (s < en - EASE_IN_M || s > ex + EASE_OUT_M ? 0 : s < en - 1 ? ease((s - en + EASE_IN_M) / (EASE_IN_M - 1)) : s > ex + 1 ? ease((ex + EASE_OUT_M - s) / (EASE_OUT_M - 1)) : 1);
+const moveAt = (s, en, ex) => (s < en - EASE_IN_M || s > ex + EASE_OUT_M ? 0 : s < en - NARROW_FULL_M ? ease((s - en + EASE_IN_M) / (EASE_IN_M - NARROW_FULL_M)) : s > ex + NARROW_FULL_M ? ease((ex + EASE_OUT_M - s) / (EASE_OUT_M - NARROW_FULL_M)) : 1);
 
 // Traffic (sim/npc.js): for driver `n`, whose front is `front` along its path, the first narrowing ahead
 // on it: { hold (its front's arc length where it waits, or null), limit, keep (how far over from its
@@ -636,7 +638,7 @@ function egoNarrowing(world, frontS) {
     oncoming: o ? { id: o.id, inside: o.inside, gap_m: r1(Math.max(0, o.gap)), speed: r1(o.speed) } : null,
     wait, stop_s_route: stop, bumper_to_stop_m: wait ? stop - frontS : null, entry_s_route: c.en,
     limit_mps: limit, squeeze: !!squeeze && squeeze.v !== ego,
-    detour: shift < 0 ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - 1, back: c.ex + 1, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
+    detour: shift < 0 ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - NARROW_FULL_M, back: c.ex + NARROW_FULL_M, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
 }
 
 // The corner the car comes to next on its route: at the end of the street it is on (a junction), with a
