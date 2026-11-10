@@ -49,7 +49,13 @@ async function boot() {
   endpointOptions();
   if (decisions.length) checkDecisionEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
   if (endpoints.length) checkLlmEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
-  $("#run").addEventListener("click", () => (running ? (stopRequested = true) : runFromForm()));
+  $("#run").addEventListener("click", () => {
+    if (running) { stopRequested = true; return; }
+    runFromForm().catch(err => {
+      running = false; $("#run").textContent = "Run";
+      $("#status").textContent = `Failed to run: ${err.message}`;
+    });
+  });
   $("#compare").addEventListener("change", () => lastRun && render(lastRun));
   await loadRuns();
 }

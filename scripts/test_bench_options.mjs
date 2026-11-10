@@ -84,7 +84,7 @@ const night = setupScenario(map, scenario, { npcs: 0, features: "city", hour: 23
 assert.equal(night.world.clock.hour, 23.5); assert.equal(night.world.clock.weekday, 0);
 assert.equal(night.world.visibility.night, 1); assert.equal(night.world.parkAtGoal, true);
 const bare = setupScenario(map, scenario, { npcs: 0 });
-assert.equal(bare.world.clock, null); assert.equal(bare.world.visibility.night, 0); assert.equal(bare.world.parkAtGoal, false);
+assert.equal(bare.world.clock === null, true); assert.equal(bare.world.visibility.night, 0); assert.equal(bare.world.parkAtGoal, false);
 const stopped = await runScenario(map, scenario, { npcs: 0, park: true, shouldStop: () => true });
 assert.equal(stopped.parked, false); assert.equal(stopped.pass, false);
 const historical = await runScenario(map, scenario, { npcs: 0, shouldStop: () => true });
