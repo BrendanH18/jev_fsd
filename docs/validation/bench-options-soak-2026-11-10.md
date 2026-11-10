@@ -12,7 +12,7 @@ map, router or ROADMAP files changed. No dependencies or tools were added.
   darkness using the renderer's sun-elevation transition, pedestrian populations and school-bus
   options through `freeDriveOptions`, plus restriction-aware route queries. Defaults serialize
   exactly as before: `park: false` is omitted, city `hour: 15.5` is omitted, and bare keeps its absent
-  clock. Parking uses the authored challenge verdict: an arrival requires `parked` and `within_kerb`. An arrival with no space to be had near the destination (the parking planner's status `none`: the car stops in its lane, as a free drive does) records `parked: null`, `no_space: true` and is not a failure. The first run counted those arrivals as `not parked`; the parking suite and the covering array below were re-run with this verdict.
+  clock. Parking uses the authored challenge verdict: an arrival requires `parked` and `within_kerb`. An arrival with no space ever planned and none to be had near the destination (the parking planner's status `none`: the car stops in its lane, as a free drive does) records `parked: null`, `no_space: true` and is not a failure; a space the car had and gave up (also `none`) still fails. The first run counted those arrivals as `not parked`; the parking suite and the covering array below were re-run with this verdict.
 - `--without geese,ice` uses canonical World/fleet option names. `--cover INDEX` selects a generated
   configuration; it can be combined with `--without` to narrow failures. Both require city.
   The browser, CLI and replay share option validation/storage.

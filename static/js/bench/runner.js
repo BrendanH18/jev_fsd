@@ -84,6 +84,13 @@ export function watchClosureReplans(autopilot, world, metrics, onDetour) {
   };
 }
 
+// A drive that was to park at the destination: parked within the kerb, or (with no space ever planned
+// and the planner finding none, sim/parallel-park.js) stopped in its lane as a free drive does.
+export function parkingVerdict(arrival, { status = null, planned = false } = {}) {
+  const parked = arrival?.parked === true && arrival.within_kerb === true;
+  return !parked && status === "none" && !planned ? { parked: null, no_space: true } : { parked };
+}
+
 export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, style = null, vehicleSpec = undefined, diagnostics = false, shouldStop = () => false } = {}) {
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
   const ctx = setupScenario(map, sc, { brain, npcs, weather, features, park, hour, without, cover, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
@@ -99,14 +106,16 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
       nearby: world.obstaclesNear(car.x, car.y, 20).map(n => ({ id: n.id, kind: n.kind,
         x: Math.round(n.x), y: Math.round(n.y), speed: Math.round((n.v || 0) * 10) / 10 })).slice(0, 12) };
   };
-  let arrived = false, steps = 0, simulationError = null, parkStatus = null;
+  let arrived = false, steps = 0, simulationError = null, parkStatus = null, parkPlanned = false;
   const closureReplans = watchClosureReplans(autopilot, world, metrics, (length_m) => { limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m } }, { features, weather })); });
   try {
     while (world.t < limit && !shouldStop()) {
       const road = stepWorld(ctx, DT, world.t * 1000);
       closureReplans();
-      // (the parking plan's last status before arrival clears it: "none" means no space was to be had)
-      if (world.park) parkStatus = world.park.status;
+      // (the parking plan's last status before arrival clears it, and whether the car ever had a space
+      // to try: "none" with no space ever planned means none was to be had, while "none" after a plan
+      // is a space given up, sim/parallel-park.js)
+      if (world.park) { parkStatus = world.park.status; if (world.park.mode === "in") parkPlanned = true; }
       for (const e of world.events) if (e.type === "collision") events.push(e);
       metrics.record(world, autopilot.snap, road, DT);
       if (diagnostics) for (const [audit, value] of Object.entries(world.violations)) {
@@ -137,12 +146,8 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
   const result = metrics.summary(world, autopilot, arrived);
   // Reuse the challenge verdict: arrival alone is insufficient when parking was requested. With no
   // space to be had near the destination the car stops in its lane, as a free drive does
-  // (sim/parallel-park.js), and that arrival is not a parking failure.
-  if (world.parkAtGoal) {
-    const arrival = events.find((e) => e.type === "arrived");
-    const parked = arrival?.parked === true && arrival.within_kerb === true;
-    if (!parked && parkStatus === "none") { result.parked = null; result.no_space = true; } else result.parked = parked;
-  }
+  // (sim/parallel-park.js), and that arrival is not a parking failure; giving up a space it had is.
+  if (world.parkAtGoal) Object.assign(result, parkingVerdict(events.find((e) => e.type === "arrived"), { status: parkStatus, planned: parkPlanned }));
   if (simulationError) result.simulation_error = simulationError;
   if (world.parkAtGoal || simulationError) {
     result.failures = failures(result);

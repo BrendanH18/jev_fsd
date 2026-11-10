@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 globalThis.document = { querySelector: () => null };
 const { freeDriveOptions } = await import("../static/js/sim/free-drive.js");
 const { FEATURE_NAMES, coveringArray, validFeatureSet } = await import("../static/js/bench/features.js");
-const { benchmarkConfig, presetOptions, setupScenario, runScenario, suiteOptions } = await import("../static/js/bench/runner.js");
+const { benchmarkConfig, presetOptions, setupScenario, runScenario, suiteOptions, parkingVerdict } = await import("../static/js/bench/runner.js");
 const { soakPlan, classifyResults, soakFailed } = await import("./soak.mjs");
 const { failures } = await import("../static/js/bench/metrics.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
@@ -76,6 +76,11 @@ assert.equal(soakFailed(classifyResults([{ id: "audit", arrived: true, failures:
 assert.equal(failures({ arrived: true, parked: false }).join(), "not parked");
 // (no space near the destination: the car stops in its lane, as a free drive does, and that is no failure)
 assert.equal(failures({ arrived: true, parked: null, no_space: true }).join(), "");
+assert.equal(parkingVerdict({ parked: false }, { status: "none", planned: false }).no_space, true);
+// (a space the car had and gave up after waiting is a failed parking, not "no space")
+assert.equal(parkingVerdict({ parked: false }, { status: "none", planned: true }).parked, false);
+assert.equal(parkingVerdict({ parked: true, within_kerb: true }, { status: "none", planned: true }).parked, true);
+assert.equal(parkingVerdict({ parked: true, within_kerb: false }, { status: "parked", planned: true }).parked, false);
 console.log("✓ soak shards are exhaustive/disjoint; fatal failures and report-only audits stay separate");
 
 const key = "623b012bc8b5", base = new URL("../data/maps/", import.meta.url);
