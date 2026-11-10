@@ -606,6 +606,7 @@ export async function boot() {
   function finishDrive(reason) {
     if (lab?.reviewing) return;
     if (!drive || drive.finished) return;
+    if (simulationError) reason = "error";
     // A manual driver finishes parking with the review button; the AI reports its own arrival.
     if (reason === "finished" && challenge?.park && drive.driver === "manual" && world.route && Math.abs(world.ego.v) < 0.05) {
       const car = world.ego, spec = car.spec;

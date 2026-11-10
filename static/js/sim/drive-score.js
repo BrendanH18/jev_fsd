@@ -151,6 +151,7 @@ export class DriveScore {
   }
 
   incident(type, message, extra = {}) {
+    if (type === "simulation_error" && !this.finished) this.simulationError = message;
     if (this.incidents.length < 100) this.incidents.push({ type, message, at_s: round(this.elapsed), at_m: Math.round(this.distance), ...extra });
   }
 
@@ -491,7 +492,8 @@ export class DriveScore {
     if (!qualified) tips.push("Drive at least 100 m and 10 seconds to receive a grade.");
     if (!tips.length) tips.push("A composed drive. Keep scanning ahead and make room for people crossing.");
     return { model_version: SCORE_VERSION, title: this.title, map: this.map, driver: this.driver,
-      started_at: this.startedAt, status: this.finished || "active", score, grade, qualified, categories,
+      started_at: this.startedAt, status: this.simulationError ? "error" : this.finished || "active", score, grade, qualified, categories,
+      ...(this.simulationError ? { simulation_error: this.simulationError } : {}),
       elapsed_s: round(this.elapsed), distance_m: Math.round(this.distance), moving_s: round(this.moving),
       max_kmh: round(this.maxSpeed * 3.6), progress: round(clamp(this.progress, 0, 1), 3),
       collisions, at_fault: atFault, red_lights: reds, stop_signs: stops, failed_to_yield: yields,

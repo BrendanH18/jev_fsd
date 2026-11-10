@@ -1538,7 +1538,9 @@
       "persistent_alert": true,
       "stays_paused_after_resume": true,
       "camera_control_usable": true,
-      "restart_clears_error_and_advances": true
+      "restart_clears_error_and_advances": true,
+      "errored_parking_report_preserves_failure": true,
+      "normal_manual_parking_still_completes": true
     },
     "unit_tests_passed": 199,
     "unit_tests_total": 199
@@ -1551,6 +1553,8 @@
     "arena_history_checks_passed": 21,
     "offline_snapshots_valid": 39,
     "stale_fixtures": 0,
-    "demo_maps_built": 12
+    "demo_maps_built": 12,
+    "drive_score_checks_passed": 20,
+    "practice_library_checks_passed": 14
   }
 }

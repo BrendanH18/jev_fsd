@@ -28,7 +28,7 @@ PILOT_ROW_FITS = """() => {
 
 # Exercise the real finish hook, using fresh authored challenges rather than synthetic reports.
 PRACTICE_FINISH = """async kind => {
-  const { PRACTICE_KEY, readPractice } = await import('/js/lab/practice.js');
+  const { PRACTICE_KEY, readPractice, challengeFailures } = await import('/js/lab/practice.js');
   const { HISTORY_KEY } = await import('/js/sim/drive-score.js');
   const keys = [PRACTICE_KEY, HISTORY_KEY], before = keys.map(key => localStorage.getItem(key));
   try {
@@ -55,7 +55,7 @@ PRACTICE_FINISH = """async kind => {
         && reports[0].modified === true && record?.attempts === 1 && record.completed === false,
         detail: JSON.stringify({ reports: reports.map(r => ({ title: r.title, status: r.status, modified: r.modified, collisions: r.collisions })), record }) }];
     }
-    const parking = ['parked', 'wide-kerb', 'outside-space'].includes(kind);
+    const parking = ['parked', 'wide-kerb', 'outside-space', 'simulation-error'].includes(kind);
     if (kind === 'modified') app.setTime('morning');
     if (kind === 'branched') app.recorder.branched = true;
     if (parking) {
@@ -65,6 +65,10 @@ PRACTICE_FINISH = """async kind => {
       const w = space.goalW - (kind === 'wide-kerb' ? 1 : 0);
       Object.assign(car, { x: space.ox + u * Math.cos(space.h) + w * Math.sin(space.h),
         y: space.oy + u * Math.sin(space.h) - w * Math.cos(space.h), psi: space.h, v: 0 });
+      if (kind === 'simulation-error') {
+        app.world.parked.step = () => { throw new Error('Injected parked drive failure'); };
+        app.world.paused = false; app.advance(0.1);
+      }
       app.finishDrive('finished');
     } else if (kind === 'arrived') {
       const route = app.world.route, [x, y] = route.pointAt(route.length);
@@ -74,11 +78,13 @@ PRACTICE_FINISH = """async kind => {
     } else app.finishDrive(kind === 'early' ? 'finished' : 'arrived');
     const report = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')[0];
     const record = readPractice().records[parking ? 'parallel-park' : 'pothole-season'];
-    const allowed = ['early', 'arrived'].includes(kind) || parking;
+    const allowed = (['early', 'arrived'].includes(kind) || parking) && kind !== 'simulation-error';
     const completed = ['arrived', 'parked'].includes(kind);
     return [{ name: `Manual practice finish integration: ${kind}`, ok: !!report
-      && report.status === (kind === 'early' || parking && !completed ? 'finished' : 'arrived')
+      && report.status === (kind === 'simulation-error' ? 'error' : kind === 'early' || parking && !completed ? 'finished' : 'arrived')
       && (allowed ? record?.attempts === 1 && record.completed === completed : !record)
+      && (kind !== 'simulation-error' || report.simulation_error === 'Injected parked drive failure'
+        && report.parking?.result !== 'parked' && challengeFailures({ park: true }, report).includes('simulation error'))
       && (kind !== 'modified' || report.modified === true)
       && (kind !== 'branched' || report.branched === true)
       && (kind !== 'rules' || report.driver === 'rules'),
@@ -153,11 +159,11 @@ def check(url, chromium=None):
         ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
         page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
 
-        for kind in ["early", "arrived", "rules", "modified", "branched", "parked", "wide-kerb", "outside-space", "resume"]:
+        for kind in ["early", "arrived", "rules", "modified", "branched", "parked", "wide-kerb", "outside-space", "simulation-error", "resume"]:
             page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
             page.on("pageerror", lambda error: errors.append(str(error)))
             driver = "rules" if kind == "rules" else "manual"
-            challenge = "parallel-park" if kind in ["parked", "wide-kerb", "outside-space"] else "pothole-season"
+            challenge = "parallel-park" if kind in ["parked", "wide-kerb", "outside-space", "simulation-error"] else "pothole-season"
             page.goto(url.rstrip("/") + f"/?challenge={challenge}&drive={driver}&quality=low",
                       wait_until="domcontentloaded", timeout=TIMEOUT_MS)
             page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
