@@ -114,6 +114,22 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   still pass with Rules and the cautious agent. City dry is 9/12: `s1-4` and `s1-11` still time
   out, and `s1-9` makes a prohibited turn. See the
   [incident evidence and validation](docs/validation/city-yields-2026-11-10.json).
+
+  Follow-up, 10 November (`city`, Kitsilano dry, seed 1): `s1-4` queued behind a traffic car
+  whose pothole avoidance shift left it blocked by a parked car. Traffic now slows over the hole
+  when the shift is occupied. The current `s1-11` stall was a collection truck held just inside its
+  parked-car clearance, hiding the oncoming lane at the driven car's left turn; the truck now uses
+  the existing bounded in-lane nudge and retains its clearance. Neither wait was a spurious ego
+  deadlock: the car was correctly waiting for the traffic to move. Focused offline checks are
+  `test_pothole_traffic_clearance.mjs` and `test_collection_clearance.mjs`. The two routes now arrive
+  cleanly (332.0 s and 222.1 s). The 12-route bare results match the supplied pre-change record
+  field-for-field except wall/latency timings; all 331 Drive Lab checks pass (60 challenges with
+  Rules and cautious). The final city dry sweep is 8/12, with every route arriving. The prior
+  failures on `s1-7`, `s1-9` and `s1-12` remain, and changed traffic timing exposes an additional
+  emergency-yield failure on `s1-8`: the car is stopped near the signal line when a fire truck
+  passes. Both fixes independently expose that failure; limiting pothole checks to parked cars
+  does too. This emergency-yield interaction still needs triage.
+
 - [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
   `docs/rules-baseline.md`.

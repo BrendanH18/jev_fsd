@@ -27,7 +27,7 @@
 //     come near one (World.potholesSeen).
 
 import { rng } from "../common.js";
-import { pointAt, headingAt, wrapAngle } from "../map/mapdata.js";
+import { pointAt, headingAt, projectPoint, wrapAngle } from "../map/mapdata.js";
 import { comfort, CAR } from "./vehicle.js";
 import { current as weather } from "./weather.js";
 
@@ -303,7 +303,23 @@ export function npcPothole(world, n, front) {
       const at = pe.sStart + h.s * k;
       if (at + h.a < s - 0.5) continue;
       if (at - h.a > front + NPC_LOOK_M) break;
-      const room = wheelRoom(h.offset, h, h.lane_w, spec), ahead = at - h.a - (s + wb);
+      let room = wheelRoom(h.offset, h, h.lane_w, spec);
+      const ahead = at - h.a - (s + wb);
+      // Staying inside the paint is not enough: a shift toward the kerb can leave the car
+      // waiting forever behind a parked car. Keep the usual traffic clearance, and slow over
+      // the hole instead when the way across is occupied.
+      if (room && ahead < NPC_EASE_M) {
+        const reach = Math.max(0, at - s) + spec.length + 5;
+        const blocked = world.obstaclesNear(n.x, n.y, reach).concat(world.ego).some(o => {
+          if (o === n) return false;
+          const box = o.obb(), p = projectPoint(path.pts, path.cum, box.center);
+          if (p.s + box.halfLength < s - spec.rearOverhang || p.s - box.halfLength > at + h.a + 5) return false;
+          const angle = box.heading - p.heading;
+          const half = Math.abs(Math.sin(angle)) * box.halfLength + Math.abs(Math.cos(angle)) * box.halfWidth;
+          return Math.abs(p.lateral - room) < spec.width / 2 + half + 0.3;
+        });
+        if (blocked) room = null;
+      }
       // (one it can get round only if it gets there in time: over at NPC_SHIFT_MPS from where it is
       // before its front wheels reach it, or, past the one it is easing round, clear of it where it is going)
       let round = false;

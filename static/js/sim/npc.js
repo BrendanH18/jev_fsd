@@ -795,8 +795,9 @@ export class NpcFleet {
       // pulling over for an emergency vehicle (a cyclist already keeps right)
       const pullTo = yielding && n.kind !== "bike" && !n.transit?.tram ? this.pullOverTo(n, edge, front) : 0;
       n.evShift = (n.evShift || 0) + Math.max(-EV_SHIFT_MPS * dt, Math.min(EV_SHIFT_MPS * dt, pullTo - (n.evShift || 0)));
-      // easing left in its lane to pass a bus standing at its stop (see busNudge)
-      if (this.buses.length && n.kind !== "bike" && !n.transit) {
+      // easing left in its lane to pass a bus standing at its stop (see busNudge); a wide
+      // collection truck also leaves that clearance beside cars parked at the kerb
+      if ((this.buses.length || n.collect) && n.kind !== "bike" && !n.transit) {
         const to = this.busNudge(n, edge);
         n.nudge = (n.nudge || 0) + Math.max(-NUDGE_MPS * dt, Math.min(NUDGE_MPS * dt, to - (n.nudge || 0)));
       }
@@ -1729,14 +1730,15 @@ export class NpcFleet {
   }
 
   // How far left of its lane's path (negative) a driver eases to pass a bus standing at its stop just
-  // ahead or beside it (see NUDGE_MPS), or 0.
+  // ahead or beside it (see NUDGE_MPS), or 0. A collection truck also eases past parked
+  // cars whose parking jitter leaves slightly less than its usual leader margin.
   busNudge(n, pe) {
     const e = this.map.edges.get(pe.id), path = n.path, spec = n.spec;
     const room = e.lane_width / 2 - spec.width / 2 - 0.1;
     let nudge = 0;
-    for (const bus of this.buses) {
+    for (const bus of this.buses.concat(n.collect ? this.world.parked.near(n.x, n.y, NUDGE_LOOK_M + 15) : [])) {
       const t = bus.transit;
-      if (!(t.phase === "dwell" || t.phase === "leaving" || (t.phase === "in" && t.shift > 1)) || Math.abs(bus.x - n.x) > NUDGE_LOOK_M + 15 || Math.abs(bus.y - n.y) > NUDGE_LOOK_M + 15) continue;
+      if ((!bus.parked && !(t.phase === "dwell" || t.phase === "leaving" || (t.phase === "in" && t.shift > 1))) || Math.abs(bus.x - n.x) > NUDGE_LOOK_M + 15 || Math.abs(bus.y - n.y) > NUDGE_LOOK_M + 15) continue;
       const [cx, cy] = bus.center, p = projectPoint(path.pts, path.cum, [cx, cy], null);
       // (until the car's rear is past the bus's front)
       if (!p || p.s - path.s < -(bus.spec.length / 2 + spec.rearOverhang) || p.s - path.s > NUDGE_LOOK_M + bus.spec.length || p.lateral <= 0) continue;
