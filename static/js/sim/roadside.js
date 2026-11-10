@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 // Slow down, move over (BC Motor Vehicle Act Regulations s. 47.02): a driver coming up to a vehicle
 // stopped at the roadside with its flashing lights on (a police car, an ambulance or fire truck, a tow
 // truck, a road crew's or a utility's truck; not a school bus) must slow to 40 km/h where the limit is
@@ -120,7 +121,7 @@ export class RoadsideStops {
       const kind = this.random() < 0.6 ? "tow_truck" : "police";
       const stop = this.place({ edge: pair.edge.id, from: pair.from, to: pair.to, kind });
       stop.bays = pair.bays;
-      for (const b of pair.bays) b.reserved = stop.vehicle;
+      for (const b of pair.bays) reserveSlot(map, b, stop.vehicle);
       stop.left = STAY_S[0] + this.random() * (STAY_S[1] - STAY_S[0]);
       return stop;
     }
@@ -173,7 +174,7 @@ export class RoadsideStops {
   retire(stop) {
     this.world.parked.remove(stop.vehicle);
     this.world.parked.remove(stop.car);
-    for (const b of stop.bays) if (b.reserved === stop.vehicle) b.reserved = null;
+    for (const b of stop.bays) if (b.reserved?.owner === stop.vehicle) b.reserved = null;
     this.stops.splice(this.stops.indexOf(stop), 1);
     this.vehicles.splice(this.vehicles.indexOf(stop.vehicle), 1);
   }

@@ -35,6 +35,14 @@ Layers beside a pack (`<key>.<layer>.v1.json`: transit, crossings, zones, rail, 
 **One decision cycle** (`static/js/brain/brain.js`, `Autopilot`): `sensors.buildSnapshot` → `candidates.sampleCandidates` → `simulateAll` (3 s forward sims) → `state.toJevState` + `buildQuestions` → brain → `apply`. The only difference between the Jev and Rules brains is the "brain" step: `rules.js` scores the surviving candidates; `jev.js` posts to `/api/decide`. Timeouts and invalid answers fall back to Rules and increment `world.violations.fallbacks`.
 
 **Invariants that span files:**
+- **Parking reservations have one shape.** Use `reserveSlot` in `sim/parking.js` to write
+  `slot.reserved = { owner, sFrom, sTo }`; the span is measured along the slot's own edge. Test
+  `reserved?.owner` when releasing a reservation. Never infer a reserved span from the owner's spec:
+  driveway owners are map records. Check `scripts/test_parking_reservations.mjs` after changes.
+- **A thrown simulation step fails its drive.** The app pauses with a persistent error and restart
+  control, while frames keep rendering. Benchmark and arena results add `simulation_error` only on
+  failure; `failures()` and saved evaluation validation must retain that verdict. Successful result
+  shapes stay unchanged. Checks: `scripts/test_simulation_errors.mjs` and the browser recovery case.
 - **One car model everywhere.** `sim/vehicle.js` (dynamic bicycle with Fiala tires and weight transfer above 3 m/s, kinematic below; actuator lag and jerk limit; ABS/stability control; grip `ROAD.mu`) and `controller.applyLaw` drive the ego car, every NPC, every cyclist (`BIKE` spec, no mass, so always kinematic), and every candidate forward sim. A physics change changes predictions, candidate eligibility, and test geometry together. Size-dependent code must read `vehicle.spec`, not `CAR`.
 - **Grip is global.** `ROAD.mu` is module state set by `setWeather` (`sim/weather.js`), which `new World()` calls. `comfort()` in `vehicle.js` derives cornering/braking targets from it; never hard-code 2.5 m/s^2 style constants again.
 - **`Route.project(x, y)` without a hint tracks the ego and updates `route.hint`; with a hint it must not.** Projecting other vehicles or forward sims without a hint corrupts the ego's route position.

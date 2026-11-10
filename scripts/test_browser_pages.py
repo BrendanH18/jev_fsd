@@ -173,6 +173,44 @@ def check(url, chromium=None):
         ok &= report("debrief replay integration", page.evaluate(DEBRIEF_REPLAY))
         page.close()
 
+        page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(url.rstrip("/") + "/?challenge=door-zone&drive=rules&quality=low",
+                  wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+        page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+        page.evaluate("""() => {
+          const app = window.__jev, render = app.view.render.bind(app.view);
+          window.__containedRenders = 0;
+          app.view.render = (...args) => { window.__containedRenders++; return render(...args); };
+          app.world.parked.step = () => { throw new Error('Injected simulation step failure'); };
+          app.world.paused = false;
+        }""")
+        # Let the actual animation loop encounter the throw, and prove it keeps rendering afterwards.
+        page.wait_for_selector("#simulation-error", timeout=TIMEOUT_MS)
+        page.wait_for_function("window.__containedRenders >= 3", timeout=TIMEOUT_MS)
+        ok &= report("simulation error containment", page.evaluate("""() => {
+          const app = window.__jev, tick = app.world.tick;
+          document.querySelector('#pause-world').click();
+          document.querySelector('#autopilot').click();
+          app.advance(0.1);
+          document.querySelector('#settings-toggle').click();
+          return [{ name: 'A thrown step pauses the drive, explains the error and leaves controls usable',
+            ok: app.world.paused && !app.autopilot.enabled && app.world.tick === tick
+              && app.simulationError === 'Injected simulation step failure'
+              && document.querySelector('#simulation-error').textContent.includes(app.simulationError)
+              && !document.querySelector('#settings').hidden,
+            detail: JSON.stringify({ tick, after: app.world.tick, paused: app.world.paused, error: app.simulationError }) }];
+        }"""))
+        page.get_by_role("button", name="Restart drive", exact=True).click()
+        page.wait_for_function("!!window.__jev?.advance && !window.__jev.simulationError", timeout=TIMEOUT_MS)
+        ok &= report("simulation error restart", page.evaluate("""() => {
+          const app = window.__jev, tick = app.world.tick;
+          app.world.paused = false; app.advance(0.1);
+          return [{ name: 'Restart replaces the broken world with a drive that steps again',
+            ok: app.world.tick > tick && !app.simulationError && !document.querySelector('#simulation-error') }];
+        }"""))
+        page.close()
+
         if errors:
             ok = False
             print("Page errors:\n  " + "\n  ".join(errors))

@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 // Traffic parallel parking (World option `parkers`): now and then, from the feature's own seeded random
 // stream, the ordinary traffic car right ahead of the driven car in its lane, on a street with a parking
 // lane and a free gap long enough to parallel park in, becomes a parker. It signals right, slows, stops
@@ -164,7 +165,7 @@ export function commitParker(world, n, plan, { stay = false } = {}) {
     // where its rear axle stops to start, the hold line (at its lane's centre), and its rear bumper there
     start: at(plan, plan.startU, plan.startW), line: at(plan, rearU - hold, plan.laneW), lineU: rearU - hold,
   };
-  for (const slot of plan.slots) if (!slot.reserved && !slot.occupant) slot.reserved = n;
+  for (const slot of plan.slots) if (!slot.reserved && !slot.occupant) reserveSlot(world.map, slot, n);
   n.signal = "right";
   state.active.push(n); state.committed++;
   return n.parker;
@@ -173,7 +174,7 @@ export function commitParker(world, n, plan, { stay = false } = {}) {
 // Let a parker go: its slots, its indicator and reverse lamps; it carries on as ordinary traffic.
 function release(world, n, gaveUp) {
   const state = world.parkers, pk = n.parker;
-  for (const slot of pk?.plan.slots || []) if (slot.reserved === n) slot.reserved = null;
+  for (const slot of pk?.plan.slots || []) if (slot.reserved?.owner === n) slot.reserved = null;
   delete n.parker;
   n.signal = null; n.reverseLamps = false;
   state.active = state.active.filter((o) => o !== n);
@@ -187,7 +188,7 @@ function settle(world, fleet, n) {
   let slot = null, best = Infinity;
   for (const s of pk.plan.slots) {
     const d = Math.hypot(s.x - n.x, s.y - n.y);
-    if (!s.occupant && (s.reserved === n || !s.reserved) && d < best) { best = d; slot = s; }
+    if (!s.occupant && (s.reserved?.owner === n || !s.reserved) && d < best) { best = d; slot = s; }
   }
   const stay = pk.stay;
   release(world, n, false);

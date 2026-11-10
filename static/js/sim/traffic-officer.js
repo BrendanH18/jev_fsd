@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 // A police officer directing traffic at a signalized junction (World option `officers`). Every
 // province's highway traffic act puts a police officer's directions above the signals (Ontario's HTA
 // s. 134, BC's Motor Vehicle Act s. 123, Québec's Highway Safety Code s. 309): stop when the officer
@@ -266,7 +267,7 @@ function parkCruiser(world, o, inter) {
     if (slot.occupant) world.parked.remove(slot.occupant);
     const car = new Vehicle(slot.x, slot.y, slot.psi, 0, POLICE_CAR);
     Object.assign(car, { id, kind: "police", roadside: true, flashing: true, stay: true, officer: o.id, edge: slot.edge, curb: "right", color: 0xf4f4f0, slot: null });
-    slot.reserved = car;
+    reserveSlot(map, slot, car);
     world.parked.add(car);
     return { id, parked: true, slot, vehicle: car };
   }
@@ -307,7 +308,7 @@ export function removeOfficer(world, o) {
   const state = world.officers, cruiser = o.cruiser;
   if (cruiser?.parked) {
     world.parked.remove(cruiser.vehicle);
-    if (cruiser.slot?.reserved === cruiser.vehicle) cruiser.slot.reserved = null;
+    if (cruiser.slot?.reserved?.owner === cruiser.vehicle) cruiser.slot.reserved = null;
   }
   state.list.splice(state.list.indexOf(o), 1);
 }

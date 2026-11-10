@@ -209,7 +209,7 @@ await test("free drive: from the feature's own stream, the traffic car ahead bec
   assert.equal(w.parkers.committed, 1);
   assert.equal(w.parked.list.includes(n), true, "parked");
   assert.equal(n.slot?.occupant === n, true, "its slot taken");
-  assert.equal(w.parked.slots.some(s => s.reserved === n), false, "its other slots let go");
+  assert.equal(w.parked.slots.some(s => s.reserved?.owner === n), false, "its other slots let go");
   assert.equal(slack > -0.3, true, String(slack));
   assert.equal(w.violations.parking_conflicts || 0, 0);
   assert.equal(w.violations.collisions, 0);
@@ -219,7 +219,7 @@ await test("free drive: from the feature's own stream, the traffic car ahead bec
 
 await test("no parker whose hold line lies past the end of the driven car's route (found in a free-drive soak)", () => {
   const ctx = challenge(), w = ctx.world, n = parkerOf(w);
-  for (const slot of n.parker.plan.slots) if (slot.reserved === n) slot.reserved = null;
+  for (const slot of n.parker.plan.slots) if (slot.reserved?.owner === n) slot.reserved = null;
   delete n.parker; n.signal = null; w.parkers.active = [];
   w.parkers.random = () => 0;
   const pick = () => { w.parkers.next = 0; w.parkers.checkAt = 0; P.manageParkers(w, ctx.fleet); return !!n.parker; };
@@ -236,7 +236,7 @@ await test("no parker whose hold line lies past the end of the driven car's rout
 
 await test("a space whose S would swing the front into a car standing across the street is not chosen (found in a free-drive soak)", () => {
   const ctx = challenge(), w = ctx.world, n = parkerOf(w);
-  for (const slot of n.parker.plan.slots) if (slot.reserved === n) slot.reserved = null;
+  for (const slot of n.parker.plan.slots) if (slot.reserved?.owner === n) slot.reserved = null;
   delete n.parker; n.signal = null; w.parkers.active = [];
   const found = P.parkerPlan(w, n);
   assert.equal(found?.plan.sTo === undefined, false);
@@ -278,7 +278,7 @@ await test("blocked: with the driven car standing in its room, it waits, gives u
   assert.equal(n.parkerTried, true);
   assert.equal(n.signal === "right", false);
   assert.equal(w.npcs.includes(n), true, "drives on as traffic");
-  assert.equal(n.parker === undefined && w.parked.slots.some(s => s.reserved === n), false, "slots let go");
+  assert.equal(n.parker === undefined && w.parked.slots.some(s => s.reserved?.owner === n), false, "slots let go");
   assert.equal(w.parkers.gaveUp, 1);
   // (and the audit counted the driver who blocked it)
   assert.equal(w.violations.parking_conflicts, 1);

@@ -203,7 +203,7 @@ await test("Rules, closed loop: it signals right, stops alongside the car in fro
   assert.equal(world.ego.signal, null, "the signal is off once parked");
   assert.equal(r.contacts + r.kerb, 0);
   // the space stays the car's while it stands there
-  assert.ok(world.parkedIn && world.parked.slots.filter((s) => s.reserved === world.ego).length >= 1);
+  assert.ok(world.parkedIn && world.parked.slots.filter((s) => s.reserved?.owner === world.ego).length >= 1);
   process.stdout.write(`  (parked at ${world.t.toFixed(1)} s, ${arrived.kerb_m} m from the kerb, ${arrived.legs} legs)\n`);
 });
 
@@ -295,7 +295,7 @@ await test("pulling out: it backs up, waits for traffic coming up the lane, pull
   assert.equal(r.contacts + r.kerb, 0);
   assert.ok(first.events.filter((e) => e.type === "arrived").length === 2, "and drove on to the next destination");
   assert.ok(world.parkedIn?.id !== firstSpace, "parked somewhere else, or in its lane, at the next destination");
-  assert.ok(reserved.every((s) => s.reserved !== world.ego), "the first space is let go");
+  assert.ok(reserved.every((s) => s.reserved?.owner !== world.ego), "the first space is let go");
   assert.equal(wentFirst, true, "the car coming went first");
 });
 
@@ -359,7 +359,7 @@ await test("a checkpoint taken partway in restores the space, the manoeuvre and 
   recorder.restore(0, { world, fleet, autopilot, clock: {}, setDrive: () => {} });
   assert.equal(world.parking.phase, phase);
   assert.equal(world.ego.x, x);
-  assert.ok(world.park.slots.length > 0 && world.park.slots.every((s) => s.reserved === world.ego), "the slots are reserved for this world's car");
+  assert.ok(world.park.slots.length > 0 && world.park.slots.every((s) => s.reserved?.owner === world.ego), "the slots are reserved for this world's car");
   assert.ok(world.park.slots.every((s) => world.parked.slots.includes(s)), "and they are this world's slots");
   world.paused = false;
   const r = await run({ world, fleet, autopilot }, 60);

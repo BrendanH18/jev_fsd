@@ -1,3 +1,4 @@
+import { reserveSlot } from "./parking.js";
 import { followingPolicy } from "./following.js";
 import { runnerCap, runnerHold, runsLight } from "./red-light-runner.js";
 import { observeAmber } from "./amber.js";
@@ -2057,7 +2058,7 @@ export class NpcFleet {
       if (!lane || !choices.length) continue;
       const slot = choices[Math.floor(this.parkingEvents() * choices.length)];
       const p = projectPoint(n.path.pts, n.path.cum, [slot.x, slot.y]);
-      slot.reserved = n;
+      reserveSlot(this.map, slot, n);
       n.parking = { slot, start: n.path.s, end: p.s, lat: p.lateral, t: 0 };
       n.signal = slot.curb;
       return n;

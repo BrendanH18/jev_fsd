@@ -54,26 +54,37 @@ export async function evaluateChallenge(map, challenge, { brain = "rules", mode 
   if (challenge.roadTest) score.observer = new RoadTestObserver();
   const metrics = new DriveMetrics(world.route.length), start = performance.now();
   metrics.latencies = latencies;
-  let hazardRecorded = false;
-  while (world.t < limit && autopilot.enabled && !shouldStop()) {
-    const road = stepWorld({ world, fleet, autopilot }, 1 / 60, world.t * 1000);
-    score.record(world, road, 1 / 60); metrics.record(world, autopilot.snap, road, 1 / 60);
-    if (!hazardRecorded && world.challenge.triggered) { trace.event("hazard", "Authored hazard triggered", world.t); hazardRecorded = true; }
-    trace.measurements(world, score);
-    if (mode === "lockstep" && autopilot.firing) await autopilot.firing;
-    // (and a route round a closed road, so the detour comes at the same step every run: sim/road-closures.js)
-    if (mode === "lockstep" && autopilot.closureRouting) await autopilot.closureRouting;
-    if (mode === "realtime") {
-      const ahead = world.t * 1000 - (performance.now() - start);
-      if (ahead > 4) await new Promise(resolve => setTimeout(resolve, ahead));
+  let hazardRecorded = false, simulationError = null;
+  try {
+    while (world.t < limit && autopilot.enabled && !shouldStop()) {
+      const road = stepWorld({ world, fleet, autopilot }, 1 / 60, world.t * 1000);
+      score.record(world, road, 1 / 60); metrics.record(world, autopilot.snap, road, 1 / 60);
+      if (!hazardRecorded && world.challenge.triggered) { trace.event("hazard", "Authored hazard triggered", world.t); hazardRecorded = true; }
+      trace.measurements(world, score);
+      if (mode === "lockstep" && autopilot.firing) await autopilot.firing;
+      // (and a route round a closed road, so the detour comes at the same step every run: sim/road-closures.js)
+      if (mode === "lockstep" && autopilot.closureRouting) await autopilot.closureRouting;
+      if (mode === "realtime") {
+        const ahead = world.t * 1000 - (performance.now() - start);
+        if (ahead > 4) await new Promise(resolve => setTimeout(resolve, ahead));
+      }
+      if (world.tick % 120 === 0) await yieldNow();
     }
-    if (world.tick % 120 === 0) await yieldNow();
+  } catch (error) {
+    simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
+    trace.event("simulation_error", simulationError, world.t);
+    score.incident("simulation_error", simulationError);
   }
-  const stopped = !arrived && shouldStop();
-  const status = arrived ? "arrived" : stopped ? "stopped" : "timeout";
-  if (!arrived) trace.event(status, stopped ? "Evaluation stopped before arrival" : "Time limit reached before arrival", world.t);
+  const stopped = !simulationError && !arrived && shouldStop();
+  const status = simulationError ? "error" : arrived ? "arrived" : stopped ? "stopped" : "timeout";
+  if (!arrived && !simulationError) trace.event(status, stopped ? "Evaluation stopped before arrival" : "Time limit reached before arrival", world.t);
   autopilot.setEnabled(false); // Abort outstanding decisions before saving this completed attempt.
   const summary = metrics.summary(world, autopilot, arrived);
+  if (simulationError) {
+    summary.simulation_error = simulationError;
+    summary.failures = failures(summary);
+    summary.pass = false;
+  }
   // (a challenge that parks at the destination is passed only once the car is parked, within 30 cm
   // of the kerb: sim/parallel-park.js)
   if (world.parkAtGoal) {
@@ -83,6 +94,7 @@ export async function evaluateChallenge(map, challenge, { brain = "rules", mode 
     summary.pass = summary.failures.length === 0;
   }
   const report = score.finish(status);
+  if (simulationError) report.simulation_error = simulationError;
   return { challenge: challenge.id, version: challenge.version || 1, map: challenge.map, pack: map.pack.pack_version,
     seed: challenge.seed, weather: challenge.weather, time: challenge.time, car: "compact", brain, mode,
     engine_version: EVALUATION_ENGINE_VERSION, limit_s: limit,

@@ -60,21 +60,30 @@ anything in Phases 0 to 2 are not frozen.
 
 ## Phase 0: stop the freeze
 
-- [ ] **0.1 Fix the parking-slot crash.** (S) `taken()` in `static/js/sim/parallel-park.js` reads
+- [x] **0.1 Fix the parking-slot crash.** (S) `taken()` in `static/js/sim/parallel-park.js` reads
   `slot.reserved.spec`, but `sim/driveway-reversers.js` reserves slots with the string
   `"driveway"`, and `sim/lane-closure.js` and `sim/work-zone.js` with a closure record. Since
   traffic cars parallel park (#67), every one of them reaches this code. Add a regression check
   that builds a world with driveways and parkers on and plans a space on a block with a reserved
   slot.
-- [ ] **0.2 Give slot reservations one shape.** (S) Six modules write `slot.reserved` in three
+- [x] **0.2 Give slot reservations one shape.** (S) Nine modules write `slot.reserved` in three
   shapes. Decide one (an object that can say what stretch of kerb it takes) and make every writer
   and reader use it.
-- [ ] **0.3 Contain a thrown step.** (S) The frame loop in `static/js/main.js` asks for the next
+- [x] **0.3 Contain a thrown step.** (S) The frame loop in `static/js/main.js` asks for the next
   frame only at its end, so one exception in `stepWorld` stops the app for good. Catch it, show
   what failed, and keep the page usable. In the benchmark and the arena a throw stays a failed
   route, with the error recorded.
-- [ ] **0.4 Confirm in the browser.** (S) Reproduce the freeze on the live demo before the fix and
+- [x] **0.4 Confirm in the browser.** (S) Reproduce the freeze on the live demo before the fix and
   confirm it is gone after, so the Node finding is known to match what a visitor sees.
+
+Completed 9 November: all reservations use `{ owner, sFrom, sTo }`, and a thrown step pauses the
+app with an error and restart control while benchmark/arena attempts retain a failed result.
+WebKit reproduced the first-step freeze with real driveway reservations on a frozen `a9977b6`
+build and advanced normally with the fix. The public demo's preview timed out twice, so the
+browser comparison used that identical local build. Error recovery, camera controls, restart,
+and all 199 browser unit checks passed. The existing 12-route dry suite is unchanged; see the
+[validation record](docs/validation/free-drive-freezes-2026-11-09.json) and
+[baseline notes](docs/rules-baseline.md). Phase 1 remains next; no new scenarios were added.
 
 ## Phase 1: make the default world pass
 

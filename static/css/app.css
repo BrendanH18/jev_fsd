@@ -221,6 +221,9 @@ select option { background: var(--panel-solid); color: var(--text); }
 .badge.stop { border-color: rgba(87, 210, 127, 0.5); }
 .badge.alert { background: rgba(120, 18, 24, 0.9); border-color: rgba(255, 107, 107, 0.7); }
 .badge.alert::before { background: var(--bad); }
+.simulation-error { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 60; width: min(440px, calc(100vw - 32px)); padding: 18px; border: 1px solid var(--bad); border-radius: 14px; background: #29171e; color: var(--text); box-shadow: 0 12px 40px #0008; }
+.simulation-error p { margin: 10px 0; overflow-wrap: anywhere; font-size: 13px; }
+.simulation-error button { margin-top: 2px; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -6px); } }
 
 /* Keyboard help */

@@ -10,7 +10,7 @@ import { NpcFleet } from "../sim/npc.js";
 import { stepWorld } from "../sim/step.js";
 import { Autopilot } from "../brain/brain.js";
 import { Route } from "../map/route.js";
-import { DriveMetrics } from "./metrics.js";
+import { DriveMetrics, failures } from "./metrics.js";
 
 const DT = 1 / 60;
 
@@ -46,24 +46,35 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
   const { world, autopilot, events } = ctx;
   const limit = Math.max(120, sc.tags.length_m / 2.5);
   const wallStart = performance.now();
-  let arrived = false, steps = 0;
-  while (world.t < limit && !shouldStop()) {
-    const road = stepWorld(ctx, DT, world.t * 1000);
-    for (const e of world.events) if (e.type === "collision") events.push(e);
-    metrics.record(world, autopilot.snap, road, DT);
-    steps++;
-    if (!autopilot.enabled) { arrived = events.some((e) => e.type === "arrived"); break; }
-    if (mode === "lockstep") {
-      if (autopilot.inFlight && autopilot.firing) await autopilot.firing;
-      while (autopilot.rerouting) await sleep(5);
-      if (steps % 240 === 0) await yieldNow();
-    } else {
-      // keep sim time from running ahead of the wall clock
-      const ahead = world.t * 1000 - (performance.now() - wallStart);
-      if (ahead > 4) await sleep(ahead);
-      else if (steps % 60 === 0) await yieldNow();
+  let arrived = false, steps = 0, simulationError = null;
+  try {
+    while (world.t < limit && !shouldStop()) {
+      const road = stepWorld(ctx, DT, world.t * 1000);
+      for (const e of world.events) if (e.type === "collision") events.push(e);
+      metrics.record(world, autopilot.snap, road, DT);
+      steps++;
+      if (!autopilot.enabled) { arrived = events.some((e) => e.type === "arrived"); break; }
+      if (mode === "lockstep") {
+        if (autopilot.inFlight && autopilot.firing) await autopilot.firing;
+        while (autopilot.rerouting) await sleep(5);
+        if (steps % 240 === 0) await yieldNow();
+      } else {
+        // keep sim time from running ahead of the wall clock
+        const ahead = world.t * 1000 - (performance.now() - wallStart);
+        if (ahead > 4) await sleep(ahead);
+        else if (steps % 60 === 0) await yieldNow();
+      }
     }
+  } catch (error) {
+    simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
+    autopilot.setEnabled(false);
+    events.push({ type: "simulation_error", t: Math.round(world.t * 10) / 10, message: simulationError });
   }
   const result = metrics.summary(world, autopilot, arrived);
+  if (simulationError) {
+    result.simulation_error = simulationError;
+    result.failures = failures(result);
+    result.pass = false;
+  }
   return { id: sc.id, tags: sc.tags, ...result, events: events.slice(0, 50), wall_ms: Math.round(performance.now() - wallStart) };
 }

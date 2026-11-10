@@ -124,6 +124,7 @@ const loadingText = $("#loading-text");
 
 export async function boot() {
   loadingText.textContent = "Loading map…";
+  let simulationError = null;
   const params = new URLSearchParams(location.search);
   const challenge = challengeById(params.get("challenge"));
   if (params.has("challenge") && !challenge) throw new Error("Unknown challenge. Open the drive lab to choose an available challenge.");
@@ -439,7 +440,7 @@ export async function boot() {
   showMapNote();
 
   function toggleAutopilot() {
-    if (photo?.active) return;
+    if (simulationError || photo?.active) return;
     if (lab?.reviewing) { lab.branch("manual"); return; }
     if (!autopilot.enabled && !world.route) { hud.badge("set a destination first (click the minimap)", "", 1500); return; }
     autopilot.setEnabled(!autopilot.enabled);
@@ -556,7 +557,7 @@ export async function boot() {
   $("#photo-mode").addEventListener("click", () => photo.enter());
   let manualSignal = null;
   function togglePause() {
-    if (photo?.active) return;   // photo mode holds the world still until it closes
+    if (simulationError || photo?.active) return;   // photo mode holds the world still until it closes
     if (lab?.reviewing) { lab.live(); return; }
     world.paused = !world.paused;
     hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700);
@@ -782,7 +783,7 @@ export async function boot() {
   }
   showPillars();
   checkEndpoints();
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, get drive() { return drive; }, finishDrive, setTime: setHour };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, get drive() { return drive; }, get simulationError() { return simulationError; }, finishDrive, setTime: setHour };
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();
 
@@ -799,11 +800,14 @@ export async function boot() {
   let announcedParker = null;
   let lastConditions = "", skyAt = world.t;
   function frame(now) {
+    // Schedule before stepping: a failed simulation must not permanently stop rendering or controls.
+    if (!manual) requestAnimationFrame(frame);
+    if (simulationError) world.paused = true;
     lab.update(recorder, now);
     // never negative: headless runs advance the clock by hand, ahead of requestAnimationFrame
     const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
     last = now;
-    if (!world.paused && !photo.active) {
+    if (!simulationError && !world.paused && !photo.active) {
       acc = Math.min(acc + dt, FIXED_DT * 5);
       let steps = 0;
       while (acc >= FIXED_DT && steps < 5) {
@@ -818,7 +822,21 @@ export async function boot() {
         for (const bike of world.contraflow.riders) previousCars.set(bike.id, capturePose(bike, previousCars.get(bike.id)));
         for (const car of world.driveways.cars) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
         for (const p of world.crowd.list) previousPeople.set(p.id, capturePose(p, previousPeople.get(p.id)));
-        stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
+        try {
+          stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
+        } catch (error) {
+          simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
+          console.error("Simulation stopped", error);
+          world.paused = true;
+          autopilot.setEnabled(false); hud.setAutopilot(false);
+          input.keys.clear(); acc = 0;
+          drive?.incident("simulation_error", simulationError);
+          document.body.append(h("div", { id: "simulation-error", class: "simulation-error", role: "alert" },
+            h("strong", {}, "Drive stopped after a simulation error"),
+            h("p", {}, simulationError),
+            h("button", { class: "chip-button", onclick: () => location.reload() }, "Restart drive")));
+          break;
+        }
         if (drive && !drive.finished && !autopilot.enabled && world.route && Math.abs(world.ego.v) < 0.5) {
           const projection = world.route.project(world.ego.x, world.ego.y);
           if (projection.distance < 4 && world.route.remaining(projection.s) < 3.5) {
@@ -1130,15 +1148,14 @@ export async function boot() {
     driveReport.update(drive, now);
     examinerPrompt?.update(world, drive, now);
     if (lab.reviewing) driveReport.finishButton.disabled = true;
-    if (!manual) requestAnimationFrame(frame);
   }
   // Headless screenshots run in a hidden page where requestAnimationFrame never fires; they advance
   // frames by hand through window.__jev.advance(seconds).
   let manual = false;
   window.__jev.advance = (seconds, fps = 30) => {
     manual = true;
-    for (let t = 0; t < seconds; t += 1 / fps) frame(last + 1000 / fps);
-    manual = false;
+    try { for (let t = 0; t < seconds; t += 1 / fps) frame(last + 1000 / fps); }
+    finally { manual = false; }
   };
   requestAnimationFrame(frame);
 }
