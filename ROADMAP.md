@@ -130,6 +130,13 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   passes. Both fixes independently expose that failure; limiting pothole checks to parked cars
   does too. This emergency-yield interaction still needs triage.
 
+
+  - Traffic collision triage, 10 November: the six reported city cases in dry, fog, rain and
+    snow now have no collisions. Reversing traffic sees the driven car, long vehicles predict
+    their real swept bodies, parking-in respects the following-distance policy, and pedestrians
+    wait for stopped cars. The bare suite is field-for-field unchanged apart from timings;
+    other city timeouts and yielding failures remain. See the
+    [investigation and validation](docs/validation/traffic-clearance-2026-11-10.md).
 - [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
   `docs/rules-baseline.md`.

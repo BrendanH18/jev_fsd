@@ -22,6 +22,7 @@ import { officerWalk } from "./traffic-officer.js";
 import { rng } from "../common.js";
 import { CROSS_AHEAD_M, redsOn } from "./school-bus.js";
 import { doorPoints, doorsOpen } from "./streetcar.js";
+import { obbOverlap } from "./collision.js";
 
 export const PEDESTRIANS = 60;
 export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 };   // footprint for collisions
@@ -356,9 +357,16 @@ export class Crowd {
   }
 
   // A car bearing down that will not stop in time: "hurry" out of its path if already in it, "wait"
-  // if about to step into it, else null.
+  // if about to step into it. Also wait before walking into a stationary car's body; else null.
   threat(ped, ux, uy) {
     for (const o of [this.world.ego, ...this.world.npcs]) {
+      // A stopped car has no arrival time, but still occupies the crosswalk. Wait short of its
+      // body; someone already caught beside/in it can continue out instead of being trapped.
+      // A boarding rider deliberately enters their own streetcar through its open door.
+      if (!(ped.boarding && ped.streetcar === o.id) && Math.abs(o.v) < 0.5 && Math.abs(o.x - ped.x) < 15 && Math.abs(o.y - ped.y) < 15) {
+        const body = ped.obb(), ahead = { ...body, heading: Math.atan2(uy, ux), center: [ped.x + ux * 0.4, ped.y + uy * 0.4] };
+        if (obbOverlap(ahead, o.obb(), 0.1) && !obbOverlap(body, o.obb())) return "wait";
+      }
       if (o.v < 2 || Math.abs(o.x - ped.x) > 40 || Math.abs(o.y - ped.y) > 40) continue;
       const local = o.toLocal(ped.x, ped.y);
       const front = (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6);

@@ -258,6 +258,24 @@ function bodyOnPath(n, o, front, from, side) {
   return null;
 }
 
+// A long vehicle's nose swings outside its rear axle's lane through a turn. Predict the body
+// with the same steering and vehicle model it drives with, rather than laying it on the lane's
+// tangent. Look far enough to brake, including actuator response, even on a slippery road.
+function sweptBodyGap(n, obstacle, offset, least) {
+  const look = Math.max(least, n.v * 0.8 + n.v * n.v / (2 * comfort().decel));
+  const body = obstacle.obb();
+  if (Math.hypot(obstacle.x - n.x, obstacle.y - n.y) >= n.spec.length + look + 6 || obbOverlap(n.obb(), body, 0.05)) return null;
+  const car = n.clone(), speed = Math.max(1, n.v), dt = Math.min(0.1, 0.5 / speed);
+  for (let d = 0; d <= look; d += speed * dt) {
+    if (d > 0 && obbOverlap(car.obb(), body, 0.1)) return Math.max(0, d - speed * dt);
+    const p = projectPoint(n.path.pts, n.path.cum, [car.x, car.y], null);
+    // Hold the observation speed: braking must not shorten the path we check for a reason to brake.
+    car.v = speed; car.a = 0;
+    car.step(dt, { steer: purePursuit(car, n.path, p.s, offset), accel: 0 });
+  }
+  return null;
+}
+
 // How far right of a lane's centre a cyclist rides in the street's parking lane, or null when the
 // lane is not beside the right curb or has no parking lane wide enough.
 export function stripOffset(e, laneIdx) {
@@ -936,6 +954,10 @@ export class NpcFleet {
           const hit = close.find((o) => obbOverlap({ ...body, center: [x, y], heading: path.headingAt(mid) }, o.obb(), 0.05));
           if (hit) { gap = d - 0.5; leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi)); leader = hit; break; }
         }
+        // The driven car can stand across the lane or outside its axle corridor. Its actual body
+        // also needs a steering/actuator forecast through the stopping distance.
+        const ego = world.ego, g = n.school && n.toLocal(ego.x, ego.y).ahead < nose ? null : sweptBodyGap(n, ego, offset, BUS_BODY_LOOK_M);
+        if (g !== null && g < gap) { gap = g; leader = ego; leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi)); }
       }
       // behind the driven car while it pulls up to a space and reverses into it (sim/parallel-park.js),
       // wherever its body is, in the lane or partway into the space: keep back the room it reverses
@@ -1277,7 +1299,8 @@ export class NpcFleet {
       return [p.lateral - h, p.lateral + h];
     });
     const preferred = evOffset(e, pe.lane, spec);
-    const target = threadGap(e, pe.lane, spec, preferred, spans) ?? preferred;
+    // No gap is a reason to wait on the line we hold, not steer back into an occupied one.
+    const opening = threadGap(e, pe.lane, spec, preferred, spans), target = opening ?? n.side;
     n.side += Math.max(-dt, Math.min(dt, target - n.side));
     const offset = n.side;
     let gap = Infinity, leadV = n.v0, leader = null, squeeze = false;
@@ -1288,10 +1311,11 @@ export class NpcFleet {
       // where it is)
       const across = Math.abs(o.v) > 0.3 && Math.cos(o.psi - path.headingAt(p.s)) < 0.85;
       const os = o.spec || CAR, clear = Math.abs(p.lateral - offset) - (spec.width + os.width) / 2;
-      if (clear >= (across ? EV_CROSSING_M : EV_SQUEEZE_M - 1e-6)) { if (clear < 0.6 && p.s - path.s < 25) squeeze = true; continue; }
       // (from its middle; coming the other way, it closes the gap)
       const g = p.s - path.s - (spec.length - spec.rearOverhang) - os.length / 2;
-      if (g < 15 && !o.parked) blocking.push(o);
+      const inWay = opening === null || clear < (across ? EV_CROSSING_M : EV_SQUEEZE_M - 1e-6);
+      if (inWay && g < 15 && !o.parked) blocking.push(o);
+      if (!inWay) { if (clear < 0.6 && p.s - path.s < 25) squeeze = true; continue; }
       if (g < gap) { gap = g; leadV = o.v * Math.cos(o.psi - path.headingAt(p.s)); leader = o; }
     }
     // any part of a body in its way over the next few metres, its own body laid along its path there
@@ -1305,6 +1329,9 @@ export class NpcFleet {
       const hit = close.find((o) => obbOverlap(ahead, o.obb(), 0.05) && !obbOverlap(body, o.obb(), 0.05));
       if (hit) { gap = Math.min(gap, d - 0.5); leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi)); leader = hit; break; }
     }
+    // The requested offset can clear the driven car while the real nose is still steering into it.
+    const ego = world.ego, g = sweptBodyGap(n, ego, offset, EV_BODY_LOOK_M);
+    if (g !== null && g < gap) { gap = g; leader = ego; leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi)); }
     // stuck behind something it cannot get past
     // (`blocking`: everything in its way within 15 m, but what is parked)
     if (blocking.length && n.v < 1) { n.blockedFor += dt; n.blockedBy = blocking; }
@@ -2034,7 +2061,8 @@ export class NpcFleet {
     b.t += dt;
     b.left -= Math.abs(n.v) * dt;
     let behind = Infinity;
-    for (const o of this.world.obstaclesNear(n.x, n.y, 12)) {
+    // obstaclesNear lists the rest of the world, not the driven car.
+    for (const o of this.world.obstaclesNear(n.x, n.y, 12).concat(this.world.ego)) {
       if (o === n) continue;
       const l = n.toLocal(o.x, o.y);
       if (l.ahead < 0 && Math.abs(l.right) < 1.6) behind = Math.min(behind, -l.ahead - n.spec.rearOverhang - (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6));
@@ -2079,9 +2107,10 @@ export class NpcFleet {
     const room = park.end - p.s;
     const offset = park.lat * smooth((14 - room) / 9);
     const target = Math.min(3, Math.sqrt(2 * comfort().decel * Math.max(0, room - 0.2)));
-    // Check a short swept envelope, including pedestrians, before moving into the bay.
+    // With following-distance policy on, parking still needs grip-dependent stopping room.
+    // Keep the legacy envelope when it is off, as for ordinary traffic's following policy.
     const box = n.obb();
-    const reach = Math.max(0.5, n.v * 0.8);
+    const reach = this.world.followingDistance ? Math.max(0.5, n.v * 0.8 + n.v * n.v / (2 * comfort().decel)) : Math.max(0.5, n.v * 0.8);
     box.center = [box.center[0] + Math.cos(n.psi) * reach / 2, box.center[1] + Math.sin(n.psi) * reach / 2];
     box.halfLength += reach / 2;
     box.halfWidth += 0.15;
