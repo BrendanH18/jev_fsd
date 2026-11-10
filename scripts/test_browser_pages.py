@@ -98,6 +98,11 @@ PRACTICE_FINISH = """async kind => {
 # Exercise the actual report wiring, including a button rendered before a branch.
 DEBRIEF_REPLAY = """async () => {
   const app = window.__jev;
+  // Renderer assertions run separately. Avoid queuing software-GPU draws while stepping and
+  // restoring checkpoints in this report-wiring fixture; leave the replay handlers intact.
+  const render = app.view.render;
+  app.view.render = () => {};
+  try {
   app.world.paused = false; app.advance(8);
   app.drive.incident('test', 'Test incident');
   app.advance(2); app.finishDrive('finished');
@@ -126,14 +131,17 @@ DEBRIEF_REPLAY = """async () => {
     detail: JSON.stringify({ focused, eventTime, chosen }) },
     { name: 'A stale incident button revalidates after branching', ok: revalidated },
     { name: 'History and replaced recordings do not seek discarded events', ok: history && replaced }];
+  } finally {
+    app.view.render = render;
+  }
 }"""
 
 
 def report(label, results):
     failed = [r for r in results if not r.get("ok")]
     for r in failed:
-        print("FAIL %s: %s %s" % (label, r.get("name"), r.get("detail") or ""))
-    print("%s: %d/%d passed" % (label, len(results) - len(failed), len(results)))
+        print("FAIL %s: %s %s" % (label, r.get("name"), r.get("detail") or ""), flush=True)
+    print("%s: %d/%d passed" % (label, len(results) - len(failed), len(results)), flush=True)
     return not failed and len(results) > 0
 
 
@@ -207,7 +215,7 @@ def check(url, chromium=None):
               && !document.querySelector('#settings').hidden,
             detail: JSON.stringify({ tick, after: app.world.tick, paused: app.world.paused, error: app.simulationError }) }];
         }"""))
-        page.get_by_role("button", name="Restart drive", exact=True).click()
+        page.get_by_role("button", name="Restart drive", exact=True).click(timeout=TIMEOUT_MS)
         page.wait_for_function("!!window.__jev?.advance && !window.__jev.simulationError", timeout=TIMEOUT_MS)
         ok &= report("simulation error restart", page.evaluate("""() => {
           const app = window.__jev, tick = app.world.tick;

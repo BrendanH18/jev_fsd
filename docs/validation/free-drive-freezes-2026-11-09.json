@@ -1543,7 +1543,19 @@
       "normal_manual_parking_still_completes": true
     },
     "unit_tests_passed": 199,
-    "unit_tests_total": 199
+    "unit_tests_total": 199,
+    "chromium": {
+      "runtime": "existing cached Playwright 1.64.0 / Chromium headless shell 1234 / Python 3.14.7",
+      "unit_tests_passed": 199,
+      "renderer_tests_passed": 106,
+      "hud_checks_passed": 1,
+      "practice_fixtures_passed": 10,
+      "debrief_checks_passed": 3,
+      "animation_loop_containment_passed": 1,
+      "restart_passed": 1,
+      "wall_s": 533.3,
+      "replay_fixture": "Frozen base also stalled at incident replay click with SwiftShader busy; temporarily suppress drawing in this wiring fixture and restore in finally. Separate renderer assertions retained."
+    }
   },
   "checks": {
     "python_passed": 268,
