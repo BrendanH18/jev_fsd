@@ -1,6 +1,7 @@
 // Focused, offline tooling checks; assertions only receive primitives and small option records.
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 globalThis.document = { querySelector: () => null };
 const { freeDriveOptions } = await import("../static/js/sim/free-drive.js");
 const { FEATURE_NAMES, coveringArray, validFeatureSet } = await import("../static/js/bench/features.js");
@@ -35,6 +36,10 @@ console.log("✓ defaults, independent parking/hour, route hours, dependencies a
 const rows = coveringArray();
 assert.ok(rows.length < 24, `${rows.length} rows should remain a small covering array`);
 assert.equal(JSON.stringify(rows), JSON.stringify(coveringArray()));
+const fresh = spawnSync(process.execPath, ["--experimental-default-type=module", "--input-type=module", "-e",
+  `globalThis.document = { querySelector: () => null }; const { coveringArray } = await import(${JSON.stringify(new URL("../static/js/bench/features.js", import.meta.url).href)}); process.stdout.write(JSON.stringify(coveringArray()), () => process.exit(0));`], { encoding: "utf8", timeout: 10000 });
+assert.equal(fresh.status, 0, fresh.stderr);
+assert.equal(fresh.stdout, JSON.stringify(rows), "a fresh process generates the same rows");
 assert.notEqual(JSON.stringify(rows), JSON.stringify(coveringArray(2)));
 const bits = rows.map(row => FEATURE_NAMES.filter(name => !row.without.includes(name)));
 for (const [i, row] of rows.entries()) {
