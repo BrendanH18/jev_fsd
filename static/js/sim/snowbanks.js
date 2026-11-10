@@ -325,6 +325,9 @@ export class Snowbanks {
   // null when it is not coming to it within LOOK_M, or is through it.
   claimFor(nw, v) {
     if (!narrowable(v)) return null;
+    // Until a pull-out has a gap and starts moving it is still parked at the kerb, outside the
+    // shared corridor. Its longitudinal position alone does not give it the narrowing.
+    if (v.pull && !v.pull.moving) return null;
     const world = this.world, map = world.map, spec = v.spec || CAR, fr = spec.length - spec.rearOverhang;
     if (Math.abs(v.x - nw.x) > nw.reach + LOOK_M || Math.abs(v.y - nw.y) > nw.reach + LOOK_M) return null;
     const make = (dir, gap, en = null, ex = null) => {
@@ -361,7 +364,20 @@ export class Snowbanks {
     const i = route.edges.findIndex((id) => id === nw.edge || id === nw.opposite);
     if (i >= 0) {
       const map = this.world.map, dir = route.edges[i] === nw.edge ? 1 : -1, e = map.edges.get(route.edges[i]), lat = e.lane_offsets?.[0] ?? e.lane_width / 2;
-      const at = (s) => { const q = offsetPoint(e, s, lat), p = projectPoint(route.pts, route.cum, q, null); return p && p.distance < 3 ? p.s : null; };
+      const at = (s) => {
+        // A drive can start or finish inside the stretch. Its truncated polyline cannot project
+        // the missing end: keep that end beyond the route boundary in the same street's frame.
+        if (i === 0) {
+          const start = projectPoint(e.pts, e.cum, route.pts[0], null);
+          if (start && s < start.s) return s - start.s;
+        }
+        if (i === route.edges.length - 1) {
+          const end = projectPoint(e.pts, e.cum, route.pts[route.pts.length - 1], null);
+          if (end && s > end.s) return route.length + s - end.s;
+        }
+        const q = offsetPoint(e, s, lat), p = projectPoint(route.pts, route.cum, q, null);
+        return p && p.distance < 3 ? p.s : null;
+      };
       const en = at(entryOf(nw, dir)), ex = at(exitOf(nw, dir));
       if (en !== null && ex !== null && ex > en) out = { dir, en, ex, edge: e.id };
     }
@@ -400,7 +416,7 @@ export class Snowbanks {
   // stop short of it even braking hard, on the grip under its wheels (black ice too), so that one already
   // in, coming the other way, outranks a late claim from a driver still outside that could still stop.
   committed(nw, c, self = false) {
-    if (c.inside || this.go.get(keyOf(c.v, nw))) return true;
+    if (c.inside || (!self && this.go.get(keyOf(c.v, nw)))) return true;
     if (c.speed <= 0.3) return false;
     if (!self) return c.gap < c.speed * c.speed / (2 * comfort().decel) + COMMIT_M;
     // (after the brakes' response, and the ramp to full braking, then braking hard)
@@ -445,6 +461,27 @@ export class Snowbanks {
 
   // The narrowings edge `id` runs through, with the way along it.
   on(id) { return this.geo.byEdge.get(id) || null; }
+
+  // Joining the shared corridor from a parking space is an entry, even halfway along the block.
+  canPullOut(v) {
+    const pe = v.path?.currentEdge(), on = pe && this.on(pe.id);
+    if (!on) return true;
+    const e = this.world.map.edges.get(pe.id), p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
+    if (!p || p.s < entryOf(on.nw, on.dir) || p.s > exitOf(on.nw, on.dir)) return true;
+    const c = { v, id: v.id, dir: on.dir, gap: 0, inside: false, speed: 0 };
+    return narrowingTurn(this, on.nw, c).mayEnter;
+  }
+
+  // Spawning or resetting in a narrowed lane must start in its drivable corridor, clear of the
+  // cars the banks pushed out. Use the same move over as traffic and the driven car's lane laws.
+  place(v, lane) {
+    const on = this.on(lane.edge);
+    if (!on) return;
+    const e = this.world.map.edges.get(lane.edge), p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
+    if (!p) return;
+    const shift = keepRel(this.world.map, on.nw, on.dir, v.spec || CAR) * moveAt(p.s, entryOf(on.nw, on.dir), exitOf(on.nw, on.dir));
+    v.x += Math.sin(v.psi) * shift; v.y -= Math.cos(v.psi) * shift;
+  }
 }
 
 // Whose turn it is in narrowing `nw` for claim `c` (Snowbanks.claimFor): { mayEnter, committed (it has
@@ -452,7 +489,6 @@ export class Snowbanks {
 // first), reason ("inside", "committed", "turn") }. `seen(vehicle)`: only those (the driven car: what it
 // can see); traffic sees what is there.
 export function narrowingTurn(sb, nw, c, seen = null) {
-  const self = sb.committed(nw, c, true);
   let first = null, reason = null;
   for (const o of sb.claims(nw)) {
     if (o.dir === c.dir || o.v === c.v || (seen && !seen(o.v)) || !sb.committed(nw, o)) continue;
@@ -462,6 +498,10 @@ export function narrowingTurn(sb, nw, c, seen = null) {
     if (o.dir === c.dir || o.v === c.v || (seen && !seen(o.v)) || !sb.precedes(nw, o, c)) continue;
     if (!first || o.gap < first.gap) { first = o; reason = "turn"; }
   }
+  // A latched turn keeps two waiting approaches from swapping priority. It cannot outrank a
+  // vehicle that has since appeared inside (pulling out from the kerb, for example), while this
+  // driver is still outside and can stop. Only physical inability to stop allows it to continue.
+  const self = sb.committed(nw, c, true) || (first?.inside !== true && !!sb.go.get(keyOf(c.v, nw)));
   return { mayEnter: self || !first, committed: self, oncoming: first, reason };
 }
 

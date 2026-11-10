@@ -13,6 +13,7 @@ import { Route } from "../map/route.js";
 import { DriveMetrics, failures } from "./metrics.js";
 import { freeDriveOptions } from "../sim/free-drive.js";
 import { mapClock } from "../sim/speed-zones.js";
+import { WEATHER } from "../sim/weather.js";
 
 // Which world a scenario plays in:
 //   bare  every opt-in feature off, as the seeded benchmark always was, so earlier records compare
@@ -36,6 +37,13 @@ const waiting = [];
 channel.port1.onmessage = () => { const r = waiting.shift(); if (r) r(); };
 export const yieldNow = () => new Promise((r) => { waiting.push(r); channel.port2.postMessage(0); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export function scenarioTimeLimit(sc, { features = "bare", weather = "dry" } = {}) {
+  const limit = Math.max(120, sc.tags.length_m / 2.5);
+  // The city adds single-file snowbank stretches and blind-corner creeps to the slower winter
+  // cruise. Allow that weather's speed factor in its deadline too; keep historical bare limits.
+  return features === "city" && weather === "snow" ? limit / WEATHER.snow.speed : limit;
+}
 
 // A world set up for a scenario, ready to step. The app uses this to replay a scenario in 3D.
 export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "dry", features = "bare", style = null, vehicleSpec = undefined, onDecision = null, onEvent = null } = {}) {
@@ -63,7 +71,7 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
   const ctx = setupScenario(map, sc, { brain, npcs, weather, features, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
   const { world, autopilot, events } = ctx;
-  const limit = Math.max(120, sc.tags.length_m / 2.5);
+  const limit = scenarioTimeLimit(sc, { features, weather });
   const wallStart = performance.now();
   let arrived = false, steps = 0, simulationError = null;
   try {

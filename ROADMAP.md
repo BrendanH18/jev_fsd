@@ -142,6 +142,12 @@ Free drives turn nearly all of them on together. Nothing checks that combination
 - [ ] **1.7 Park and night.** (M) The benchmark has no parking at the destination and no time of
   day. Add both as suite options so the overnight and parking features are covered by a seeded run.
 
+Snow triage, 10 November: partial routes and spawns now respect snowbank corridors, kerb pull-outs
+wait for their turn, and traffic clearance includes a pothole move that already clears a narrowing.
+The city snow suite reaches 9/12 destinations (previously 1/12), with zero deadlocks and zero
+snowbank conflicts; only 3/12 pass cleanly. Traffic/bus holds, yielding and the prohibited turn
+still prevent this phase from exiting. See the [validation record](docs/validation/city-snow-2026-11-10.json).
+
 Exit: Rules passes the city suite on Kitsilano in all four weathers with no throw and no stuck car,
 and CI runs it.
 

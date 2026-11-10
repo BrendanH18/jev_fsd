@@ -1,0 +1,1599 @@
+{
+  "date": "2026-11-10",
+  "base_commit": "339e030",
+  "config": {
+    "brain": "rules",
+    "count": 12,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "snow",
+    "features": "city",
+    "map": "kitsilano",
+    "bbox": [
+      -123.17,
+      49.26,
+      -123.15,
+      49.27
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+  },
+  "scope": "Snowbank route boundaries, initial placement, priority and kerb pull-outs; weather allowance for city snow. Phase 1 remains incomplete.",
+  "root_causes": [
+    {
+      "finding": "s1-3 and s1-10 start inside narrowings whose entry lies behind the truncated route. alongRoute returned null, hiding the narrowing and its detour; lane-centre spawns were beside pushed parked cars, rejecting even stopped candidates as collisions.",
+      "evidence": "At t=0 through t=12: speed 0, hold, all 10 candidates rejected as collision, snowbank=null. Untouched s1-3 reproduced the supplied before result field-for-field except timings.",
+      "fix": "Retain narrowing ends outside partial routes; place spawns and resets in the same corridor used by the driving policy."
+    },
+    {
+      "finding": "Waiting pull-outs were counted as already inside the narrowing from their longitudinal position, although still at the kerb. Pull-outs did not check the narrowing turn before merging. A latched turn also outranked newly visible inside traffic while the approaching driver could still stop.",
+      "evidence": "Probe after the boundary fix: on s1-6 car_p3 appeared at t=65.7 with ego gap 5.5 m and speed 2.24 m/s; car_p7 appeared waiting at the kerb at t=162.3. Both produced oncoming_inside conflicts. The later queue disappeared after requiring pull-outs to wait for the corridor.",
+      "fix": "Exclude waiting kerb pull-outs from occupancy claims; check the shared policy before pulling out; yield a latched approach to newly visible inside traffic when stopping remains possible. auditSnowbanks and safety thresholds are unchanged."
+    },
+    {
+      "finding": "Traffic already shifted left round a pothole could have sbShift=0 because it was already clear of snowbank-pushed parked cars. A secondary leader check omitted the pothole move and checked the unshifted lane too, falsely treating a kerb car as a leader.",
+      "evidence": "After the first fixes s1-8 remained stopped through 609.7 s behind car_24 (phShift=-0.52, sbShift=0), and s1-12 was held by car_39 (phShift=-0.48, sbShift=0). The focused regression failed before the fix; after it s1-8 arrived at 368.5 s with no collision or deadlock.",
+      "fix": "While snowbank policy is active, use the combined corridor offset for the secondary leader check. Keep all clearance margins and actual-obstacle checks; the regression also verifies stopping for a car genuinely in the corridor."
+    },
+    {
+      "finding": "Some drives progress safely beyond the old snow deadline.",
+      "evidence": "In the initial fixed-world probe s1-2 arrives at 293.1 s versus its old 264.8 s deadline; s1-3 arrives at 282.3 s versus 208 s, with zero deadlocks. Low-speed snowbank approaches and weather/hidden-hazard speed caps remain enforced.",
+      "fix": "Only city snow deadlines are divided by WEATHER.snow.speed (0.62). Bare deadlines in every weather and city dry/rain/fog deadlines are unchanged. Persistent traffic queues still time out."
+    }
+  ],
+  "city_snow": {
+    "before_summary": {
+      "scenarios": 12,
+      "pass_rate": 0.083,
+      "arrived_rate": 0.083,
+      "km": 6.05,
+      "collisions": 2,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 8,
+      "off_road_s": 0.4,
+      "safety_brakes": 3,
+      "deadlocks": 38,
+      "fallbacks": 0,
+      "violations_per_km": 1.65,
+      "avg_kmh": 5.49,
+      "min_gap_m": 1.8,
+      "min_ttc_s": 1.5,
+      "hard_brakes": 0,
+      "rms_jerk": 1.29,
+      "max_lat_accel": 1.73,
+      "lane_rms_m": 0.23,
+      "lane_changes": 2,
+      "speeding_s": 0,
+      "decisions": 15770,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "after_summary": {
+      "scenarios": 12,
+      "pass_rate": 0.25,
+      "arrived_rate": 0.75,
+      "km": 12.29,
+      "collisions": 3,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 13,
+      "off_road_s": 0.4,
+      "safety_brakes": 2,
+      "deadlocks": 0,
+      "fallbacks": 0,
+      "violations_per_km": 1.3,
+      "avg_kmh": 9.56,
+      "min_gap_m": 1.8,
+      "min_ttc_s": 1.6,
+      "hard_brakes": 0,
+      "rms_jerk": 2.1,
+      "max_lat_accel": 1.87,
+      "lane_rms_m": 0.25,
+      "lane_changes": 3,
+      "speeding_s": 0,
+      "decisions": 18747,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "before": [
+      {
+        "id": "s1-1",
+        "pass": true,
+        "arrived": true,
+        "time_s": 156.8,
+        "distance_m": 563,
+        "progress": 0.998,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-2",
+        "pass": false,
+        "arrived": false,
+        "time_s": 264.8,
+        "distance_m": 729,
+        "progress": 0.713,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 2,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-3",
+        "pass": false,
+        "arrived": false,
+        "time_s": 208,
+        "distance_m": 73,
+        "progress": 0.14,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 26,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "stuck",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-4",
+        "pass": false,
+        "arrived": false,
+        "time_s": 357.6,
+        "distance_m": 250,
+        "progress": 0.281,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "failures": [
+          "timeout",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-5",
+        "pass": false,
+        "arrived": false,
+        "time_s": 317.6,
+        "distance_m": 500,
+        "progress": 0.381,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout"
+        ]
+      },
+      {
+        "id": "s1-6",
+        "pass": false,
+        "arrived": false,
+        "time_s": 462.8,
+        "distance_m": 481,
+        "progress": 0.335,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 1,
+        "failures": [
+          "timeout",
+          "entered a stretch narrowed by snowbanks out of turn"
+        ]
+      },
+      {
+        "id": "s1-7",
+        "pass": false,
+        "arrived": false,
+        "time_s": 497.2,
+        "distance_m": 1126,
+        "progress": 0.459,
+        "collisions": 1,
+        "at_fault": 0,
+        "failed_to_yield": 2,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "collision",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-8",
+        "pass": false,
+        "arrived": false,
+        "time_s": 378,
+        "distance_m": 290,
+        "progress": 0.308,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout"
+        ]
+      },
+      {
+        "id": "s1-9",
+        "pass": false,
+        "arrived": false,
+        "time_s": 464.4,
+        "distance_m": 1196,
+        "progress": 0.544,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "failed to yield",
+          "made a prohibited turn"
+        ]
+      },
+      {
+        "id": "s1-10",
+        "pass": false,
+        "arrived": false,
+        "time_s": 363.2,
+        "distance_m": 152,
+        "progress": 0.168,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 12,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "stuck"
+        ]
+      },
+      {
+        "id": "s1-11",
+        "pass": false,
+        "arrived": false,
+        "time_s": 247.6,
+        "distance_m": 382,
+        "progress": 0.498,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-12",
+        "pass": false,
+        "arrived": false,
+        "time_s": 434.8,
+        "distance_m": 309,
+        "progress": 0.209,
+        "collisions": 1,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "collision"
+        ]
+      }
+    ],
+    "after": [
+      {
+        "id": "s1-1",
+        "pass": true,
+        "arrived": true,
+        "time_s": 156.8,
+        "distance_m": 563,
+        "progress": 0.998,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-2",
+        "pass": false,
+        "arrived": true,
+        "time_s": 292.5,
+        "distance_m": 902,
+        "progress": 0.713,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-3",
+        "pass": false,
+        "arrived": true,
+        "time_s": 328.5,
+        "distance_m": 710,
+        "progress": 0.84,
+        "collisions": 1,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "collision",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-4",
+        "pass": false,
+        "arrived": false,
+        "time_s": 576.8,
+        "distance_m": 1516,
+        "progress": 0.725,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 3,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-5",
+        "pass": false,
+        "arrived": false,
+        "time_s": 512.3,
+        "distance_m": 518,
+        "progress": 0.404,
+        "collisions": 1,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "collision",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-6",
+        "pass": true,
+        "arrived": true,
+        "time_s": 415.6,
+        "distance_m": 1155,
+        "progress": 0.665,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-7",
+        "pass": false,
+        "arrived": true,
+        "time_s": 583.4,
+        "distance_m": 1429,
+        "progress": 0.704,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 2,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-8",
+        "pass": false,
+        "arrived": true,
+        "time_s": 368.5,
+        "distance_m": 931,
+        "progress": 0.539,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-9",
+        "pass": false,
+        "arrived": true,
+        "time_s": 460,
+        "distance_m": 1491,
+        "progress": 0.799,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "failed to yield",
+          "made a prohibited turn"
+        ]
+      },
+      {
+        "id": "s1-10",
+        "pass": true,
+        "arrived": true,
+        "time_s": 284.6,
+        "distance_m": 1169,
+        "progress": 0.699,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-11",
+        "pass": false,
+        "arrived": true,
+        "time_s": 300.7,
+        "distance_m": 815,
+        "progress": 0.822,
+        "collisions": 1,
+        "at_fault": 0,
+        "failed_to_yield": 1,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "collision",
+          "failed to yield"
+        ]
+      },
+      {
+        "id": "s1-12",
+        "pass": false,
+        "arrived": false,
+        "time_s": 701.3,
+        "distance_m": 1093,
+        "progress": 0.796,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 2,
+        "deadlocks": 0,
+        "snowbank_conflicts": 0,
+        "failures": [
+          "timeout",
+          "failed to yield"
+        ]
+      }
+    ],
+    "before_lines": [
+      "s1-1 PASS arrived=true t=156.8 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-2 FAIL arrived=false t=264.8 coll=0/0 off=0 dl=0 safety=0 lc=1",
+      "s1-3 FAIL arrived=false t=208 coll=0/0 off=0 dl=26 safety=0 lc=0",
+      "s1-4 FAIL arrived=false t=357.6 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-5 FAIL arrived=false t=317.6 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-6 FAIL arrived=false t=462.8 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-7 FAIL arrived=false t=497.2 coll=1/0 off=0 dl=0 safety=1 lc=0 school_bus_1:school_bus@278.1",
+      "s1-8 FAIL arrived=false t=378 coll=0/0 off=0 dl=0 safety=1 lc=0",
+      "s1-9 FAIL arrived=false t=464.4 coll=0/0 off=0.4 dl=0 safety=0 lc=1",
+      "s1-10 FAIL arrived=false t=363.2 coll=0/0 off=0 dl=12 safety=1 lc=0",
+      "s1-11 FAIL arrived=false t=247.6 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-12 FAIL arrived=false t=434.8 coll=1/0 off=0 dl=0 safety=0 lc=0 car_p3:car@301.7"
+    ],
+    "after_lines": [
+      "s1-1 PASS arrived=true t=156.8 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-2 FAIL arrived=true t=292.5 coll=0/0 off=0 dl=0 safety=0 lc=1",
+      "s1-3 FAIL arrived=true t=328.5 coll=1/0 off=0 dl=0 safety=0 lc=0 school_bus_1:school_bus@107.4",
+      "s1-4 FAIL arrived=false t=576.8 coll=0/0 off=0 dl=0 safety=1 lc=1",
+      "s1-5 FAIL arrived=false t=512.3 coll=1/0 off=0 dl=0 safety=0 lc=0 ped_44:pedestrian@367.5",
+      "s1-6 PASS arrived=true t=415.6 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-7 FAIL arrived=true t=583.4 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-8 FAIL arrived=true t=368.5 coll=0/0 off=0 dl=0 safety=1 lc=0",
+      "s1-9 FAIL arrived=true t=460 coll=0/0 off=0.4 dl=0 safety=0 lc=1",
+      "s1-10 PASS arrived=true t=284.6 coll=0/0 off=0 dl=0 safety=0 lc=0",
+      "s1-11 FAIL arrived=true t=300.7 coll=1/0 off=0 dl=0 safety=0 lc=0 ambulance_1:ambulance@154.8",
+      "s1-12 FAIL arrived=false t=701.3 coll=0/0 off=0 dl=0 safety=0 lc=0"
+    ]
+  },
+  "bare_dry": {
+    "reference": "/private/tmp/claude-501/-Users-brendanhallas--t3-worktrees-jev-fsd-t3-905db334-58248fa495159be6/ec5337c4-1a99-4bb7-8f00-1bd6524f599d/scratchpad/before-bare.json",
+    "field_for_field_identical": true,
+    "ignored_fields": [
+      "wall_ms",
+      "latency_*"
+    ],
+    "summary": {
+      "scenarios": 12,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 10.53,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0.2,
+      "safety_brakes": 7,
+      "deadlocks": 0,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 23.82,
+      "min_gap_m": 1.4,
+      "min_ttc_s": 0.7,
+      "hard_brakes": 0,
+      "rms_jerk": 3.02,
+      "max_lat_accel": 5.29,
+      "lane_rms_m": 0.17,
+      "lane_changes": 3,
+      "speeding_s": 0,
+      "decisions": 5154,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "minimum_deadline_margin_s": 123.7
+  },
+  "bare_snow": {
+    "pass_count": 12,
+    "count": 12,
+    "summary": {
+      "scenarios": 12,
+      "pass_rate": 1,
+      "arrived_rate": 1,
+      "km": 10.54,
+      "collisions": 0,
+      "at_fault": 0,
+      "red_lights": 0,
+      "stop_signs": 0,
+      "failed_to_yield": 0,
+      "off_road_s": 0.4,
+      "safety_brakes": 3,
+      "deadlocks": 0,
+      "fallbacks": 0,
+      "violations_per_km": 0,
+      "avg_kmh": 15.1,
+      "min_gap_m": 1.8,
+      "min_ttc_s": 1.5,
+      "hard_brakes": 0,
+      "rms_jerk": 1.63,
+      "max_lat_accel": 1.87,
+      "lane_rms_m": 0.11,
+      "lane_changes": 4,
+      "speeding_s": 0,
+      "decisions": 7945,
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "results": [
+      {
+        "id": "s1-1",
+        "pass": true,
+        "arrived": true,
+        "time_s": 156.2,
+        "distance_m": 564,
+        "progress": 0.998,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-2",
+        "pass": true,
+        "arrived": true,
+        "time_s": 155.4,
+        "distance_m": 658,
+        "progress": 0.998,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-3",
+        "pass": true,
+        "arrived": true,
+        "time_s": 136.6,
+        "distance_m": 517,
+        "progress": 0.998,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-4",
+        "pass": true,
+        "arrived": true,
+        "time_s": 201.9,
+        "distance_m": 895,
+        "progress": 0.999,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-5",
+        "pass": true,
+        "arrived": true,
+        "time_s": 220.5,
+        "distance_m": 792,
+        "progress": 0.998,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-6",
+        "pass": true,
+        "arrived": true,
+        "time_s": 264.8,
+        "distance_m": 1154,
+        "progress": 0.999,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-7",
+        "pass": true,
+        "arrived": true,
+        "time_s": 282.9,
+        "distance_m": 1239,
+        "progress": 0.999,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-8",
+        "pass": true,
+        "arrived": true,
+        "time_s": 232.7,
+        "distance_m": 941,
+        "progress": 0.999,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-9",
+        "pass": true,
+        "arrived": true,
+        "time_s": 237.6,
+        "distance_m": 1169,
+        "progress": 0.999,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-10",
+        "pass": true,
+        "arrived": true,
+        "time_s": 209.2,
+        "distance_m": 906,
+        "progress": 0.999,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-11",
+        "pass": true,
+        "arrived": true,
+        "time_s": 141.6,
+        "distance_m": 617,
+        "progress": 0.998,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      },
+      {
+        "id": "s1-12",
+        "pass": true,
+        "arrived": true,
+        "time_s": 255.9,
+        "distance_m": 1084,
+        "progress": 0.999,
+        "collisions": 0,
+        "at_fault": 0,
+        "failed_to_yield": 0,
+        "deadlocks": 0,
+        "failures": []
+      }
+    ]
+  },
+  "checks": [
+    {
+      "script": "scripts/test_snowbank_boundaries.mjs",
+      "exit_code": 0,
+      "seconds": 0.3
+    },
+    {
+      "script": "scripts/test_snowbank_potholes.mjs",
+      "exit_code": 0,
+      "seconds": 0.3
+    },
+    {
+      "script": "scripts/test_bench_snow_limit.mjs",
+      "exit_code": 0,
+      "seconds": 0.1
+    },
+    {
+      "script": "scripts/test_snowbanks.mjs",
+      "exit_code": 0,
+      "seconds": 5.4
+    },
+    {
+      "script": "scripts/test_pull_out.mjs",
+      "exit_code": 0,
+      "seconds": 0.4
+    },
+    {
+      "script": "scripts/test_snow_plows.mjs",
+      "exit_code": 0,
+      "seconds": 5.1
+    },
+    {
+      "script": "scripts/test_potholes.mjs",
+      "exit_code": 0,
+      "seconds": 2.3
+    },
+    {
+      "script": "scripts/test_black_ice.mjs",
+      "exit_code": 0,
+      "seconds": 11.6
+    },
+    {
+      "script": "scripts/test_world_conditions.mjs",
+      "exit_code": 0,
+      "seconds": 0.1
+    },
+    {
+      "script": "scripts/test_free_drive.mjs",
+      "exit_code": 0,
+      "seconds": 0.3
+    },
+    {
+      "script": "scripts/test_simulation_errors.mjs",
+      "exit_code": 0,
+      "seconds": 2.2
+    },
+    {
+      "script": "scripts/test_drive_lab.mjs",
+      "exit_code": 0,
+      "seconds": 63.7
+    },
+    {
+      "script": "scripts/build_jev_fixtures.mjs --check",
+      "exit_code": 0,
+      "output": "0 stale fixture(s)"
+    }
+  ],
+  "remaining_failed_routes": [
+    {
+      "id": "s1-2",
+      "arrived": true,
+      "failures": [
+        "failed to yield"
+      ]
+    },
+    {
+      "id": "s1-3",
+      "arrived": true,
+      "failures": [
+        "collision",
+        "failed to yield"
+      ]
+    },
+    {
+      "id": "s1-4",
+      "arrived": false,
+      "failures": [
+        "timeout",
+        "failed to yield"
+      ]
+    },
+    {
+      "id": "s1-5",
+      "arrived": false,
+      "failures": [
+        "timeout",
+        "collision",
+        "failed to yield"
+      ]
+    },
+    {
+      "id": "s1-7",
+      "arrived": true,
+      "failures": [
+        "failed to yield"
+      ]
+    },
+    {
+      "id": "s1-8",
+      "arrived": true,
+      "failures": [
+        "failed to yield"
+      ]
+    },
+    {
+      "id": "s1-9",
+      "arrived": true,
+      "failures": [
+        "failed to yield",
+        "made a prohibited turn"
+      ]
+    },
+    {
+      "id": "s1-11",
+      "arrived": true,
+      "failures": [
+        "collision",
+        "failed to yield"
+      ]
+    },
+    {
+      "id": "s1-12",
+      "arrived": false,
+      "failures": [
+        "timeout",
+        "failed to yield"
+      ]
+    }
+  ],
+  "remaining_holds": [
+    {
+      "id": "s1-4",
+      "phase": "end",
+      "t": 576.7833333331374,
+      "v": 3.3791773412979813,
+      "remaining": 426.27623915151713,
+      "chosen": "wait_for_parker",
+      "target": {
+        "v": 2.1632560120827047,
+        "reasons": [
+          "snow",
+          "leave braking room ahead"
+        ]
+      },
+      "snowbank": null,
+      "following": {
+        "id": "reversing_3_away",
+        "gap": 19.901928455827488,
+        "v": 0.8165948141355364
+      },
+      "near": [
+        {
+          "id": "reversing_2_away",
+          "v": 0,
+          "x": 346.25978168822456,
+          "y": 53.16768124090133,
+          "psi": 1.544642149052175,
+          "s": 77.96635875253321,
+          "edge": "e316",
+          "lead": null,
+          "sb": 0,
+          "ev": 0,
+          "waiting": 35.23333333333262,
+          "frozen": 0
+        },
+        {
+          "id": "reversing_3_away",
+          "v": 0.7816307433685764,
+          "x": 376.27858846185006,
+          "y": 66.51031906357046,
+          "psi": -0.024872203860771665,
+          "s": 31.246215048308798,
+          "edge": "e569",
+          "lead": {
+            "gap": 4.132254701078629,
+            "v": 0
+          },
+          "ev": 0,
+          "waiting": 0,
+          "frozen": 0
+        }
+      ]
+    },
+    {
+      "id": "s1-5",
+      "phase": "end",
+      "t": 512.2666666665294,
+      "v": 0,
+      "remaining": 273.6175721098516,
+      "chosen": "hold",
+      "target": {
+        "v": 0,
+        "reasons": [
+          "snow",
+          "leave braking room ahead"
+        ]
+      },
+      "snowbank": {
+        "narrowing": {
+          "id": "narrow_e111",
+          "street": "Larch Street",
+          "length_m": 52,
+          "gap_m": 18.9,
+          "inside": false,
+          "priority": "oncoming",
+          "reason": "inside",
+          "committed": false,
+          "sees_through": false,
+          "oncoming": {
+            "id": "car_5",
+            "inside": true,
+            "gap_m": 0,
+            "speed": 0
+          },
+          "wait": true,
+          "stop_s_route": 341.42813679273263,
+          "bumper_to_stop_m": 16.910388386158047,
+          "entry_s_route": 343.42813679273263,
+          "limit_mps": 4.13471979769681,
+          "squeeze": false,
+          "detour": {
+            "id": "sb:narrow_e111",
+            "from": 333.42813679273263,
+            "full": 342.42813679273263,
+            "back": 396.5692462135011,
+            "to": 403.5692462135011,
+            "shift": -0.4
+          }
+        },
+        "corner": null
+      },
+      "following": {
+        "id": "school_bus_1",
+        "gap": 2.5099601457262,
+        "v": 2.339442595620722e-13
+      },
+      "near": [
+        {
+          "id": "car_4",
+          "v": 0,
+          "x": -186.55171751679796,
+          "y": 79.90948545283534,
+          "psi": -0.023156019813266204,
+          "s": 149.9673816755058,
+          "edge": "e331",
+          "lead": {
+            "gap": 2.999992169312492,
+            "v": 0
+          },
+          "sb": 0,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 202.3333333333865,
+          "frozen": 0
+        },
+        {
+          "id": "car_5",
+          "v": -1.4999023544531482,
+          "x": -170.51804571525088,
+          "y": 53.07707270122506,
+          "psi": 1.5497079604387392,
+          "s": 69.62085516875038,
+          "edge": "e112",
+          "lead": {
+            "gap": 4.020331467123477,
+            "v": -2.00254068303486e-13
+          },
+          "sb": 0,
+          "ph": -0.43,
+          "ev": 0,
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_21",
+          "v": 0.04769290330207856,
+          "x": -211.73553272172254,
+          "y": 80.49274662887827,
+          "psi": -0.0231560198138585,
+          "s": 117.35512902206337,
+          "edge": "e331",
+          "lead": {
+            "gap": 3.35514380901212,
+            "v": 0.012062936716347755
+          },
+          "sb": 0,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_36",
+          "v": 1.1046605426035878,
+          "x": -128.40070116759335,
+          "y": 81.71842974558997,
+          "psi": 3.1173752120874965,
+          "s": 129.21011935607257,
+          "edge": "e328",
+          "lead": {
+            "gap": 10.390387022346914,
+            "v": 0.06632333240574137
+          },
+          "sb": 0,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "school_bus_1",
+          "v": 2.4238600113240814e-13,
+          "x": -172.216690688752,
+          "y": 74.5176934472417,
+          "psi": -1.3120098574265024,
+          "s": 166.70393644093159,
+          "edge": "e111",
+          "lead": {
+            "gap": 12.15149981777809,
+            "v": -1.4999023544531482
+          },
+          "sb": -0.011528779149474902,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 0,
+          "school": {
+            "phase": "drive"
+          },
+          "frozen": 0
+        },
+        {
+          "id": "car_p3",
+          "v": 0.003490111090393328,
+          "x": -172.09180717734438,
+          "y": 96.071168023494,
+          "psi": -1.6475184207800615,
+          "s": 77.70640304837798,
+          "edge": "e109",
+          "lead": {
+            "gap": 14.849290788866584,
+            "v": 2.4238600113240814e-13
+          },
+          "pull": null,
+          "sb": 0,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 9.366666666666712,
+          "frozen": 0
+        },
+        {
+          "id": "car_p4",
+          "v": 0.012401286337367978,
+          "x": -203.88309362655477,
+          "y": 80.31088288731065,
+          "psi": -0.023156019833649576,
+          "s": 127.44804629492056,
+          "edge": "e331",
+          "lead": {
+            "gap": 3.1362239716371536,
+            "v": 6.613055692122144e-08
+          },
+          "pull": null,
+          "sb": 0,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p8",
+          "v": 0,
+          "x": -175.43876419590003,
+          "y": 50.15043898637911,
+          "psi": -1.5912877866187158,
+          "s": 31.10256617451251,
+          "edge": "e111",
+          "pull": {
+            "lat": 2.0494347323606075,
+            "t": 0,
+            "T": 3.5,
+            "wait": 2.4121602709637955
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p9",
+          "v": 0,
+          "x": -175.47308837433718,
+          "y": 44.04890161390051,
+          "psi": -1.588761072254649,
+          "s": 37.20296769604318,
+          "edge": "e111",
+          "pull": {
+            "lat": 1.926806297303203,
+            "t": 0,
+            "T": 3.5,
+            "wait": 3.2108762881252915
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p12",
+          "v": 0.5401297433854342,
+          "x": -183.4802777778855,
+          "y": 83.07952072110024,
+          "psi": 3.133519689748589,
+          "s": 184.31589937730175,
+          "edge": "e330",
+          "lead": {
+            "gap": 6.806298834627103,
+            "v": 6.613055692122144e-08
+          },
+          "pull": null,
+          "ev": 0,
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p13",
+          "v": 3.16904830641115e-08,
+          "x": -158.79043509988432,
+          "y": 82.42501227647276,
+          "psi": 3.101894707373323,
+          "s": 159.62650679828994,
+          "edge": "e328",
+          "lead": null,
+          "pull": null,
+          "sb": 0,
+          "ev": 0,
+          "waiting": 64.51666666666429,
+          "frozen": 0
+        },
+        {
+          "id": "car_p15",
+          "v": 0,
+          "x": -151.2881774151968,
+          "y": 82.42947726756618,
+          "psi": 2.9666290967037816,
+          "s": 152.12655693337135,
+          "edge": "e328",
+          "lead": {
+            "gap": 2.9999498653936882,
+            "v": 3.16904830641115e-08
+          },
+          "pull": null,
+          "ev": 0,
+          "waiting": 19.233333333333523,
+          "frozen": 0
+        },
+        {
+          "id": "car_p16",
+          "v": 0,
+          "x": -139.2017135049682,
+          "y": 76.20150792732034,
+          "psi": -0.031856235145831004,
+          "s": 31.900035155263325,
+          "edge": "e329",
+          "pull": {
+            "lat": 2.576815372428833,
+            "t": 0,
+            "T": 3.5,
+            "wait": 3.46246447856538
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p17",
+          "v": 0,
+          "x": -127.55525459881162,
+          "y": 75.9206453294077,
+          "psi": -0.026206866895088447,
+          "s": 43.54988010451542,
+          "edge": "e329",
+          "pull": {
+            "lat": 2.5755865167828587,
+            "t": 0,
+            "T": 3.5,
+            "wait": 2.174859230639413
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "ambulance_2",
+          "v": 7.616512865040027e-08,
+          "x": -195.51227381090987,
+          "y": 81.71681014394488,
+          "psi": -0.023134656276563068,
+          "s": 140.44676491344572,
+          "edge": "e331",
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p19",
+          "v": 0,
+          "x": -152.68363868829402,
+          "y": 76.44211893019602,
+          "psi": -0.03076446709340204,
+          "s": 18.41623675583803,
+          "edge": "e329",
+          "pull": {
+            "lat": 2.662728276904751,
+            "t": 0,
+            "T": 3.5,
+            "wait": 1.5407978281145915
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p20",
+          "v": 0,
+          "x": -132.54033712388437,
+          "y": 84.31410403291699,
+          "psi": 3.108653231597736,
+          "s": 133.42984824744886,
+          "edge": "e328",
+          "pull": {
+            "lat": 2.493944909391793,
+            "t": 0,
+            "T": 3.5,
+            "wait": 3.089182890020311
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p21",
+          "v": 0,
+          "x": -146.10940855710763,
+          "y": 76.38916971143686,
+          "psi": -0.013581427532488,
+          "s": 24.989821406817917,
+          "edge": "e329",
+          "pull": {
+            "lat": 2.5564725760320037,
+            "t": 0,
+            "T": 3.5,
+            "wait": 1.614961849176325
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p22",
+          "v": 0.06617511718255033,
+          "x": -143.26936234090672,
+          "y": 82.0792170854529,
+          "psi": 3.1173510366343473,
+          "s": 144.10050637841948,
+          "edge": "e328",
+          "lead": {
+            "gap": 3.526050554951866,
+            "v": 0
+          },
+          "pull": null,
+          "sb": 0,
+          "ev": 0,
+          "waiting": 0,
+          "frozen": 0
+        }
+      ]
+    },
+    {
+      "id": "s1-12",
+      "phase": "end",
+      "t": 701.2999999996908,
+      "v": 0,
+      "remaining": 336.16833130024406,
+      "chosen": "hold",
+      "target": {
+        "v": 0,
+        "reasons": [
+          "snow",
+          "oncoming car's turn between the snowbanks"
+        ]
+      },
+      "snowbank": {
+        "narrowing": {
+          "id": "narrow_e195",
+          "street": "Balsam Street",
+          "length_m": 60,
+          "gap_m": 2.4,
+          "inside": false,
+          "priority": "oncoming",
+          "reason": "inside",
+          "committed": false,
+          "sees_through": false,
+          "oncoming": {
+            "id": "school_bus_6",
+            "inside": true,
+            "gap_m": 0,
+            "speed": 0.3
+          },
+          "wait": true,
+          "stop_s_route": 869.6951476058788,
+          "bumper_to_stop_m": 0.4224464680978599,
+          "entry_s_route": 871.6951476058788,
+          "limit_mps": 1.2,
+          "squeeze": false,
+          "detour": {
+            "id": "sb:narrow_e195",
+            "from": 861.6951476058788,
+            "full": 870.6951476058788,
+            "back": 932.6639334249113,
+            "to": 939.6639334249113,
+            "shift": -0.4
+          }
+        },
+        "corner": null
+      },
+      "following": null,
+      "near": [
+        {
+          "id": "car_18",
+          "v": 5.7471542696033484e-15,
+          "x": 10.692377037174236,
+          "y": -14.10833144073763,
+          "psi": 3.0986147310521988,
+          "s": 156.41505268450132,
+          "edge": "e318",
+          "lead": {
+            "gap": 8.725715907590843,
+            "v": 0
+          },
+          "sb": 0,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 116.28333333332802,
+          "frozen": 0
+        },
+        {
+          "id": "car_p10",
+          "v": 0,
+          "x": -3.374189119167071,
+          "y": -21.83154469481975,
+          "psi": -1.5908460470355525,
+          "s": 171.75054238179982,
+          "edge": "e195",
+          "lead": {
+            "gap": 2.9999915551609604,
+            "v": 0
+          },
+          "pull": null,
+          "sb": -0.0032741495380072686,
+          "ph": 0,
+          "ev": 0,
+          "waiting": 177.88333333336703,
+          "frozen": 0
+        },
+        {
+          "id": "school_bus_6",
+          "v": 0.3329792379242076,
+          "x": -1.2672669575941267,
+          "y": -52.57095126581357,
+          "psi": 1.5471794272995036,
+          "s": 62.775396190267465,
+          "edge": "e196",
+          "lead": {
+            "gap": 25.387622309114942,
+            "v": 0
+          },
+          "sb": -0.6699999999999997,
+          "ev": 0,
+          "waiting": 0,
+          "school": {
+            "phase": "approach"
+          },
+          "frozen": 0
+        },
+        {
+          "id": "car_p16",
+          "v": 0,
+          "x": 0.7068655422712573,
+          "y": -82.28899406227873,
+          "psi": 1.5539672155184923,
+          "s": 33.147574714564435,
+          "edge": "e196",
+          "pull": {
+            "lat": 2.004890037725538,
+            "t": 0,
+            "T": 3.5,
+            "wait": 1.84020412073005
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p17",
+          "v": 0,
+          "x": 1.3613121494484361,
+          "y": -57.033492164135396,
+          "psi": 1.5367862183386711,
+          "s": 58.411487862136624,
+          "edge": "e196",
+          "pull": {
+            "lat": 2.062932786596843,
+            "t": 0,
+            "T": 3.5,
+            "wait": 1.7066381595795974
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p18",
+          "v": 0,
+          "x": -6.387746061286653,
+          "y": -78.8276818298963,
+          "psi": -1.5909451956986242,
+          "s": 63.52229973681076,
+          "edge": "e195",
+          "pull": {
+            "lat": 1.9721909232929566,
+            "t": 0,
+            "T": 3.5,
+            "wait": 2.0252261110581458
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p19",
+          "v": 0,
+          "x": 0.4895317594692581,
+          "y": -89.25155802091018,
+          "psi": 1.563959355006951,
+          "s": 26.181820481813492,
+          "edge": "e196",
+          "pull": {
+            "lat": 1.9519861617531278,
+            "t": 0,
+            "T": 3.5,
+            "wait": 3.5684814412379637
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p20",
+          "v": 0,
+          "x": -5.778550541792849,
+          "y": -53.005116093060046,
+          "psi": -1.6088347894451374,
+          "s": 37.692549254079175,
+          "edge": "e195",
+          "pull": {
+            "lat": 1.9754180007641127,
+            "t": 0,
+            "T": 3.5,
+            "wait": 2.205645740381442
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "ambulance_3",
+          "v": 0,
+          "x": -0.6506787324635391,
+          "y": -17.293389872473856,
+          "psi": -1.729075197346165,
+          "s": 94.30246208169372,
+          "edge": "e195",
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p21",
+          "v": 0,
+          "x": 0.7455634803404145,
+          "y": -76.4910896196273,
+          "psi": 1.5460472105508922,
+          "s": 38.94477685822957,
+          "edge": "e196",
+          "pull": {
+            "lat": 1.906702655580887,
+            "t": 0,
+            "T": 3.5,
+            "wait": 3.056993921403773
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p22",
+          "v": 0,
+          "x": 0.4253810407416252,
+          "y": -94.75794562987768,
+          "psi": 1.5323280864367514,
+          "s": 20.67545304795472,
+          "edge": "e196",
+          "pull": {
+            "lat": 2.017845847781282,
+            "t": 0,
+            "T": 3.5,
+            "wait": 2.829329240252264
+          },
+          "waiting": 0,
+          "frozen": 0
+        },
+        {
+          "id": "car_p23",
+          "v": 0,
+          "x": -6.581141088084103,
+          "y": -84.95034766110054,
+          "psi": -1.6136814538049304,
+          "s": 69.64782974754141,
+          "edge": "e195",
+          "pull": {
+            "lat": 2.020363577607302,
+            "t": 0,
+            "T": 3.5,
+            "wait": 1.5604799814755097
+          },
+          "waiting": 0,
+          "frozen": 0
+        }
+      ]
+    }
+  ],
+  "limitations": "Standalone snow worktree. Phase 1 is not complete. Other agents are handling dry stuck routes, yielding, the prohibited turn and traffic collisions. Final timeouts: s1-4 follows driveway traffic (reversing_3_away); s1-5 follows school_bus_1 facing an oncoming queue at Larch; s1-12 has cleared its early false pothole hold but later waits correctly outside a narrowing for school_bus_6, which is inside at about 0.3 m/s in its approach phase, with 336 m left at the deadline. Those later traffic/bus holds remain unresolved; no safety rule was relaxed to clear them.",
+  "drive_lab": {
+    "checks_passed": 331,
+    "rules_challenges_passed": 60,
+    "cautious_challenges_passed": 60
+  },
+  "all_regression_scripts_under_360_seconds": true
+}

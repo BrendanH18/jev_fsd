@@ -893,7 +893,10 @@ export class NpcFleet {
           if (sb) lat -= sbAt(at) - (n.sbShift || 0);
           // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
           const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
-          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0) - (n.sbShift || 0)) <= reach;
+          // Another move (a pothole nudge, for example) may already keep left of the snowbank
+          // corridor, leaving sbShift at zero. The lane it keeps to includes that move too.
+          const kept = sb ? Math.abs(lat - sbBase - (n.sbShift || 0)) : Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0) - (n.sbShift || 0));
+          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || kept <= reach;
         };
         const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
         if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral, p.s)) {
@@ -2151,6 +2154,7 @@ export class NpcFleet {
   // Nothing in the lane coming up behind within a few seconds (less for an assertive driver), and
   // nothing stopped right in front.
   pullClear(n) {
+    if (this.world.snowbanks?.narrowings.length && !this.world.snowbanks.canPullOut(n)) return false;
     const path = n.path;
     const gap = Math.max(n.pull?.T || 3.5, n.driver && n.driver.T < 1.05 ? 3.5 : 5) + 1.5;
     for (const o of [this.world.ego, ...this.vehicles]) {

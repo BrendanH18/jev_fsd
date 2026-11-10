@@ -405,6 +405,11 @@ export class World {
     // snowbanks (sim/snowbanks.js): the banks, piles and narrowings, whether the car has come up to a
     // narrowing this drive, and whether it was in each one it is near last tick
     this.snowbanks = new Snowbanks(this, { enabled: snowbanks, seed });
+    if (this.snowbanks.narrowings.length) {
+      const near = map.nearestLane(this.ego.x, this.ego.y, this.ego.psi);
+      if (near) this.snowbanks.place(this.ego, near.lane);
+      this.resetContactHistory();
+    }
     this.snowbanksSeen = false;
     this.snowbankCalls = new Map();
     // puddles at the kerb (sim/puddles.js): where they stand, whether it has rained this drive (they lie
@@ -491,6 +496,7 @@ export class World {
   placeOnLane(lane, s) {
     const { pointAt, headingAt } = lanePoint(lane, s);
     this.ego.x = pointAt[0]; this.ego.y = pointAt[1]; this.ego.psi = headingAt; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
+    if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, lane);
     this.egoStop.reset();
     this.allWay.forget(this.ego);
     this.resetContactHistory();
@@ -500,6 +506,7 @@ export class World {
     const near = this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 80);
     if (near) {
       this.ego.x = near.point[0]; this.ego.y = near.point[1]; this.ego.psi = near.heading; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
+      if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, near.lane);
       this.resetContactHistory();
     }
     this.events.push({ type: "reset" });
