@@ -606,7 +606,7 @@ export async function boot() {
   function finishDrive(reason) {
     if (lab?.reviewing) return;
     if (!drive || drive.finished) return;
-    if (simulationError) reason = "error";
+    if (drive.simulationError) reason = "error";
     // A manual driver finishes parking with the review button; the AI reports its own arrival.
     if (reason === "finished" && challenge?.park && drive.driver === "manual" && world.route && Math.abs(world.ego.v) < 0.05) {
       const car = world.ego, spec = car.spec;
@@ -662,10 +662,11 @@ export async function boot() {
   // a newer destination picked meanwhile wins. Resolves false when no drive started.
   let routeGeneration = 0;
   async function applyRoute(data, pt, title, checked = false) {
+    if (simulationError) return false;
     const generation = ++routeGeneration;
     if (world.restrictions && !checked) {
       const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
-      if (generation !== routeGeneration) return false;
+      if (generation !== routeGeneration || simulationError) return false;
       if (!res.routes.length) { hud.badge("No legal route to this destination", "safety", 2200); return false; }
       data = res.routes[0];
     }
@@ -739,6 +740,7 @@ export async function boot() {
   });
 
   async function setDestination(pt) {
+    if (simulationError) return;
     if (lab?.reviewing) lab.live();
     const generation = ++routeGeneration;  // (a destination picked after this one, whose route comes back first, wins)
     try {

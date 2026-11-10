@@ -1540,7 +1540,9 @@
       "camera_control_usable": true,
       "restart_clears_error_and_advances": true,
       "errored_parking_report_preserves_failure": true,
-      "normal_manual_parking_still_completes": true
+      "normal_manual_parking_still_completes": true,
+      "failed_drive_review_button_usable": true,
+      "route_selection_cannot_replace_failed_drive": true
     },
     "unit_tests_passed": 199,
     "unit_tests_total": 199,

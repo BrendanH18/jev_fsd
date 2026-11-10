@@ -42,7 +42,7 @@ export class DriveReport {
     this.stats.textContent = `${(r.distance_m / 1000).toFixed(2)} km · ${time(r.elapsed_s)} · ${r.qualified ? `Grade ${r.grade}` : "100 m to qualify"}`;
     const reached = r.parking?.result === "parked" ? "Parked at the destination" : r.parking && r.parking.result !== "not yet" ? `Destination reached · ${r.parking.result}` : "Destination reached";
     this.coach.textContent = r.status === "active" ? r.coach : `${r.status === "arrived" ? reached : "Drive finished"} · ${r.tips[0]}`;
-    this.finishButton.disabled = r.status !== "active";
+    this.finishButton.disabled = !!session.finished;
     this.bars.replaceChildren(...this.categoryBars(r));
   }
 

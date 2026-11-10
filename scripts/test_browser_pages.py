@@ -34,6 +34,7 @@ PRACTICE_FINISH = """async kind => {
   try {
     keys.forEach(key => localStorage.removeItem(key));
     const app = window.__jev;
+    let keptFailedDrive = true, errorFinishAvailable = true;
     if (kind === 'resume') {
       app.world.violations.collisions++;
       app.world.paused = false; app.advance(0.05); // Sample the injected violation before finishing.
@@ -68,8 +69,15 @@ PRACTICE_FINISH = """async kind => {
       if (kind === 'simulation-error') {
         app.world.parked.step = () => { throw new Error('Injected parked drive failure'); };
         app.world.paused = false; app.advance(0.1);
+        const failedDrive = app.drive, failedRoute = app.world.route;
+        await app.setDestination(failedRoute.pointAt(failedRoute.length));
+        keptFailedDrive = app.drive === failedDrive && app.world.route === failedRoute;
+        app.driveReport.lastUpdate = -Infinity; app.driveReport.update(app.drive);
+        errorFinishAvailable = !app.driveReport.finishButton.disabled;
+        app.driveReport.finishButton.click();
+      } else {
+        app.finishDrive('finished');
       }
-      app.finishDrive('finished');
     } else if (kind === 'arrived') {
       const route = app.world.route, [x, y] = route.pointAt(route.length);
       Object.assign(app.world.ego, { x, y, psi: route.headingAt(route.length), v: 0 });
@@ -84,11 +92,12 @@ PRACTICE_FINISH = """async kind => {
       && report.status === (kind === 'simulation-error' ? 'error' : kind === 'early' || parking && !completed ? 'finished' : 'arrived')
       && (allowed ? record?.attempts === 1 && record.completed === completed : !record)
       && (kind !== 'simulation-error' || report.simulation_error === 'Injected parked drive failure'
+        && keptFailedDrive && errorFinishAvailable && app.driveReport.finishButton.disabled
         && report.parking?.result !== 'parked' && challengeFailures({ park: true }, report).includes('simulation error'))
       && (kind !== 'modified' || report.modified === true)
       && (kind !== 'branched' || report.branched === true)
       && (kind !== 'rules' || report.driver === 'rules'),
-      detail: JSON.stringify({ status: report?.status, driver: report?.driver, modified: report?.modified, branched: report?.branched, record }) }];
+      detail: JSON.stringify({ status: report?.status, driver: report?.driver, modified: report?.modified, branched: report?.branched, keptFailedDrive, errorFinishAvailable, record }) }];
   } finally {
     keys.forEach((key, i) => before[i] === null ? localStorage.removeItem(key) : localStorage.setItem(key, before[i]));
   }
