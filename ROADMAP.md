@@ -108,8 +108,9 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   - `s1-4`, `s1-9`: the crash in 0.1.
 
   Status, 10 November (Rules, Kitsilano, seed 1, at the city preset of 1.2): **dry 12/12, fog
-  11/12, rain 11/12, snow 11/12**, up from 7/12, 5/12, 4/12 and 1/12 at the first probe, with no
-  route that passed before failing since. Fixed along the way, each with a Node check:
+  12/12, rain 12/12, snow 11/12**, up from 7/12, 5/12, 4/12 and 1/12 at the first probe, with no
+  route that passed before failing since. A road-closure detour now extends the bench deadline by
+  the distance it adds. Fixed along the way, each with a Node check:
   - Audits: a prohibited-turn audit misreading a legal left; the emergency-vehicle audit penalising
     stops the car could not improve on, and an exact-target comparison inside a snowbank narrowing.
   - Emergency vehicles: two missed sirens on turns; pull-overs that could not finish steering before
@@ -121,10 +122,10 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   - The car: a slow left ignoring a stopped oncoming car; a ball warning missed behind a competing
     stop; a red light from a wet amber dilemma; no way back from a pull-over beside parked cars.
   - Snowbank narrowings lost on partial routes.
-  Still open: `s1-4` in fog, rain and snow times out. It arrives in dry weather in 353 s of its
-  357.6 s; in the wet a road-closure detour makes it about 1,400 m against the 894 m planned, with
-  legitimate waits for geese, a parker and traffic, and no collision or rule failure.
-  Evidence: `docs/validation/city-round3-2026-11-10.json`, `city-yields-2026-11-10.json`,
+  Still open: snow `s1-4` arrives after two detours (1,940 m against 894 m planned) but fails to
+  yield to an emergency vehicle on the way: the planner thinks it was asked to drive on ahead of
+  it while the audit does not. The 1.6 soak finds more emergency yields at night and on other maps.
+  Evidence: `docs/validation/city-round3-2026-11-10.json`, `city-detours-2026-11-10.json`, `city-yields-2026-11-10.json`,
   `city-snow-2026-11-10.json`, `traffic-clearance-2026-11-10.md`.
 - [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
