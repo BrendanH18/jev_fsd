@@ -139,10 +139,11 @@ export class ModelRecording {
 }
 
 // A drive's result without what measures the computer rather than the drive (the wall-clock time a
-// drive took, and an arena report's wall-clock start) and the tape's own counts. Everything else,
+// drive took, and an arena report's wall-clock start), the tape's own counts, and the optional
+// `diagnostics` (bench_node --diagnostics 1), which a replay may ask for or not. Everything else,
 // model latency included (it is part of the recorded answer), must replay exactly.
 export function comparableResult(result) {
-  const { wall_ms, model_recording, ...rest } = result || {};
+  const { wall_ms, model_recording, diagnostics, ...rest } = result || {};
   const out = JSON.parse(JSON.stringify(rest));
   if (out.report && typeof out.report === "object") delete out.report.started_at;
   return out;

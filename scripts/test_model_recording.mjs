@@ -150,6 +150,8 @@ await test("a replay makes no model call, needs no registered endpoint and plays
   assert.equal(replayed.calls, recorded.calls); assert.equal(replayed.decisions, recorded.decisions);
   assert.equal(replayed.time_s, recorded.time_s); assert.equal(replayed.arrived, recorded.arrived);
   assert.equal(sameResult(replayed, saved.results[sc.id]), true, firstDifference(replayed, saved.results[sc.id]));
+  // (bench_node --diagnostics 1 is optional output: asking for it, or not, on replay is the same drive)
+  assert.equal(sameResult({ ...replayed, diagnostics: [{ type: "collision", at_s: 1 }] }, saved.results[sc.id]), true);
 });
 
 await test("a request missing from the recording is a visible Rules fallback, not a silent answer", async () => {

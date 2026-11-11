@@ -47,7 +47,7 @@ function rig() {
   const { world, autopilot, old, law, replan } = rig();
   assert.ok(law.chain > 0, "the old route's chain for the freeway is not its first");
   await replan();
-  assert.notEqual(world.route, old, "re-planned");
+  assert.ok(world.route !== old, "re-planned");
   assert.equal(world.route.edges.slice(0, 3).join(","), "e10,e407,e411", "onto Main Street, left from the freeway");
   assert.equal(world.route.laneAt(world.route.project(world.ego.x, world.ego.y, 0).s).idx, 0, "whose lane, ahead of the left turn, is the leftmost");
   assert.equal(autopilot.executing, null, "the old route's lane manoeuvre is dropped");
