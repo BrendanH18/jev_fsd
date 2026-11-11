@@ -21,7 +21,7 @@ const sunClock = (challenge) => ({ ...(challenge.date ? { day: dayOfYear(challen
 // (3: school and playground zones apply in every challenge, so earlier runs no longer compare)
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
-export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {} } = {}) {
+export function setupChallenge(map, challenge, { brain = "rules", onDecision = () => {}, onEvent = () => {}, tape = null } = {}) {
   const world = new World(map, { seed: challenge.seed, weather: challenge.weather, parked: 0, pedestrians: 0, vehicleSpec: getVehicleModel("compact").spec, park: !!challenge.park, hazards: !!challenge.hidden, passCyclists: !!challenge.passCyclists, calming: !!challenge.calming, scrambles: !!challenge.scrambles, guards: !!challenge.guards, busLanes: !!challenge.busLanes, pxo: !!challenge.pxo, nightFlash: !!challenge.nightFlash, restrictions: !!challenge.restrictions, contraflow: !!challenge.contraflow, highBeams: !!challenge.highBeams, leftOnRed: !!challenge.leftOnRed, redTurnSigns: !!challenge.redTurnSigns, amberLights: !!challenge.amberLights, followingDistance: !!challenge.followingDistance, redRunners: !!challenge.redRunners, sunGlare: !!challenge.sunGlare, driveways: !!challenge.driveways, potholes: !!challenge.potholes, balls: !!challenge.balls, geese: !!challenge.geese, tailgaters: !!challenge.tailgaters, ice: !!challenge.ice, snowbanks: !!challenge.snowbanks, puddles: !!challenge.puddles, parkers: !!challenge.parkers, roadClosures: !!challenge.roadClosures, officers: !!challenge.officers });
   world.visibility.setNight(challenge.time === "night" || challenge.nightFlash ? 1 : 0);
   // (school and playground zones go by the challenge's time of day)
@@ -30,17 +30,21 @@ export function setupChallenge(map, challenge, { brain = "rules", onDecision = (
   const scenario = challengeScenario(map, challenge);
   world.placeOnLane(map.lane(scenario.start.edge, scenario.start.lane), scenario.start.s);
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: challenge.seed });
-  const autopilot = new Autopilot(world, { onDecision, onEvent }); autopilot.setBrain(brain);
+  const autopilot = new Autopilot(world, { onDecision, onEvent });
+  // (a model recording records or replays the driver's answers: brain/recording.js)
+  if (tape) autopilot.brains[brain] = tape.brainFor(autopilot, brain, autopilot.brains[brain]);
+  autopilot.setBrain(brain);
   world.route = new Route(scenario.route, map, world.ego.spec); world.destination = scenario.goal;
   installChallenge(world, fleet, challenge, scenario); autopilot.setEnabled(true);
   return { world, fleet, autopilot, scenario };
 }
 
-export async function evaluateChallenge(map, challenge, { brain = "rules", mode = "lockstep", shouldStop = () => false, limit = challenge.limit_s || 180 } = {}) {
+export async function evaluateChallenge(map, challenge, { brain = "rules", mode = "lockstep", shouldStop = () => false, limit = challenge.limit_s || 180, tape = null } = {}) {
   if (!["lockstep", "realtime"].includes(mode) || !Number.isFinite(limit) || limit <= 0) throw new Error("Choose a valid evaluation clock and time limit.");
+  if (tape && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
   let arrived = false, arrival = null;
   const latencies = [], trace = new EvaluationTrace();
-  const ctx = setupChallenge(map, challenge, { brain, onEvent: event => {
+  const ctx = setupChallenge(map, challenge, { brain, tape, onEvent: event => {
     if (event.type === "arrived") { arrived = true; arrival = event; }
     if (event.type === "fallback") return; // Record the fallback when its replacement decision executes below.
     const messages = { arrived: event.parked ? "Parked at the destination" : "Reached the destination", safety: "Shared emergency brake intervened", deadlock: "Deadlock recovery started", reroute: "Route recalculated" };
@@ -99,5 +103,5 @@ export async function evaluateChallenge(map, challenge, { brain = "rules", mode 
     seed: challenge.seed, weather: challenge.weather, time: challenge.time, car: "compact", brain, mode,
     engine_version: EVALUATION_ENGINE_VERSION, limit_s: limit,
     ...summary, hard_brakes: report.hard_brakes, pass: !stopped && summary.pass, report, ...trace.export(),
-    stopped, wall_ms: Math.round(performance.now() - start) };
+    stopped, ...(tape ? { model_recording: { mode: tape.mode, ...tape.stats, ...(tape.mode === "replay" ? { exact: tape.exact } : {}) } } : {}), wall_ms: Math.round(performance.now() - start) };
 }

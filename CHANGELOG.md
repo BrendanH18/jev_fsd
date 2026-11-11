@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Model runs replay without a key. A model recording keeps every answer a model driver gets, keyed by
+  a hash of what the model saw, with its tokens, cost and latency, invalid answers, HTTP errors and
+  timeouts: `scripts/bench_node.mjs --record out.json` records a run, and `--replay out.json` plays it
+  again with no model call, reporting any request the recording has no answer for as a Rules
+  fallback and checking that each drive's result matches the recorded one. `/bench` records and
+  replays through `window.__bench.run({ record: true })` and `({ replay: name })`, saving under
+  `data/recordings/`; arena evaluations take the same tape. CI replays a committed recording made
+  with a deterministic stub model (`scripts/test_model_recording.mjs`). See docs/agents.md.
 - Fixed free drives freezing when a traffic car looked for parking beside a driveway. Every parking
   reservation now records its owner and the stretch of kerb it occupies, so driveways, work zones,
   lane closures, roadside stops and parking cars share the same free-space checks and release rules.

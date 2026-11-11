@@ -41,7 +41,7 @@ export function scenarioTimeLimit(sc, { features = "bare", weather = "dry" } = {
 }
 
 // A world set up for a scenario, ready to step. The app uses this to replay a scenario in 3D.
-export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, style = null, vehicleSpec = undefined, onDecision = null, onEvent = null } = {}) {
+export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, style = null, vehicleSpec = undefined, onDecision = null, onEvent = null, tape = null } = {}) {
   const options = benchmarkConfig({ features, park, hour, without, cover });
   const preset = presetOptions(features, options);
   const world = new World(map, { seed: sc.traffic_seed, weather, vehicleSpec, ...preset.world });
@@ -62,6 +62,8 @@ export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "
     onEvent: (e) => { events.push({ t: Math.round(world.t * 10) / 10, ...e }); if (onEvent) onEvent(e); },
   });
   if (style) autopilot.style = style;
+  // (a model recording records or replays the driver's answers: brain/recording.js)
+  if (tape) autopilot.brains[brain] = tape.brainFor(autopilot, brain, autopilot.brains[brain]);
   autopilot.setBrain(brain);
   world.route = new Route(sc.route, map, world.ego.spec);
   world.destination = sc.goal;
@@ -91,9 +93,10 @@ export function parkingVerdict(arrival, { status = null, planned = false } = {})
   return !parked && status === "none" && !planned ? { parked: null, no_space: true } : { parked };
 }
 
-export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, style = null, vehicleSpec = undefined, diagnostics = false, shouldStop = () => false } = {}) {
+export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, style = null, vehicleSpec = undefined, diagnostics = false, shouldStop = () => false, tape = null } = {}) {
+  if (tape && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
-  const ctx = setupScenario(map, sc, { brain, npcs, weather, features, park, hour, without, cover, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
+  const ctx = setupScenario(map, sc, { brain, npcs, weather, features, park, hour, without, cover, style, vehicleSpec, tape, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
   const { world, autopilot, events } = ctx;
   let limit = scenarioTimeLimit(sc, { features, weather });
   const wallStart = performance.now();
@@ -149,6 +152,8 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
   // (sim/parallel-park.js), and that arrival is not a parking failure; giving up a space it had is.
   if (world.parkAtGoal) Object.assign(result, parkingVerdict(events.find((e) => e.type === "arrived"), { status: parkStatus, planned: parkPlanned }));
   if (simulationError) result.simulation_error = simulationError;
+  // (only with a model recording, which leaves it out when comparing results)
+  if (tape) result.model_recording = { mode: tape.mode, ...tape.stats, ...(tape.mode === "replay" ? { exact: tape.exact } : {}) };
   if (world.parkAtGoal || simulationError) {
     result.failures = failures(result);
     result.pass = result.failures.length === 0;

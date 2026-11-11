@@ -27,7 +27,7 @@ from urllib.parse import parse_qs, urlparse
 
 from jev import decide, decision, decision_setup, llm, llm_setup, security
 from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
-from jev.config import MAPS_DIR, PROJECT_ROOT, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
+from jev.config import MAPS_DIR, PROJECT_ROOT, RECORDINGS_DIR, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.osm.bus_lanes import build_buslanes
@@ -50,6 +50,9 @@ VERSION = "0.2.0"
 STATIC = PROJECT_ROOT / "static"
 PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html", "/arena": "arena.html"}
 MAX_BODY_BYTES = 1024 * 1024
+# A model recording keeps every answer of a benchmark run (static/js/brain/recording.js).
+MAX_RECORDING_BYTES = 32 * 1024 * 1024
+RECORDING_FORMAT = "jev-model-recording/1"
 
 settings = Settings()
 client = JevClient(settings)
@@ -344,6 +347,63 @@ def api_bench_runs(_body, query):
     return {"runs": runs}
 
 
+# Model recordings (ROADMAP 2.6): every answer a model driver got, keyed by its request, so a run
+# replays with no key. Saved like runs, but under data/recordings/, which is committed.
+
+
+def api_recording_save(body, _query):
+    """Store a model recording (static/js/brain/recording.js) under data/recordings/."""
+    if body.get("format") != RECORDING_FORMAT:
+        raise BadRequest("format must be %s" % RECORDING_FORMAT)
+    header, drives = body.get("header"), body.get("drives")
+    results, scenarios = body.get("results", {}), body.get("scenarios", {})
+    if not all(isinstance(v, dict) for v in (header, drives, results, scenarios)):
+        raise BadRequest("a recording needs header, drives, results and scenarios objects")
+    if not all(isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()):
+        raise BadRequest("each drive maps request keys to lists of outcomes")
+    driver = "".join(ch if ch.isalnum() else "-" for ch in str(header.get("driver") or "model"))[:40].strip("-") or "model"
+    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = RECORDINGS_DIR / ("%s-%s.json" % (stamp, driver))
+    if path.exists():
+        path = RECORDINGS_DIR / ("%s-%s-%s.json" % (stamp, driver, secrets.token_hex(2)))
+    path.write_text(_recording_text(header, results, scenarios, drives))
+    return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
+
+
+def _recording_text(header, results, scenarios, drives):
+    """The layout ModelRecording.serialize() writes: a line for the header, each result, each scenario
+    and each request."""
+    def dumps(value):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    def lines(obj, indent, each):
+        return ",\n".join("%s%s: %s" % (indent, json.dumps(k, ensure_ascii=False), each(v)) for k, v in obj.items())
+    text = lines(drives, "  ", lambda answers: "{\n%s\n  }" % lines(answers, "   ", dumps))
+    return ('{\n "format": %s,\n "header": %s,\n "results": {\n%s\n },\n "scenarios": {\n%s\n },\n "drives": {\n%s\n }\n}\n'
+            % (json.dumps(RECORDING_FORMAT), dumps(header), lines(results, "  ", dumps), lines(scenarios, "  ", dumps), text))
+
+
+def api_recordings(_body, query):
+    """Recordings, newest first, with their headers (?name=<recording> returns one in full)."""
+    name = (query.get("name") or [""])[0]
+    if name:
+        safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_.")
+        path = RECORDINGS_DIR / ("%s.json" % safe)
+        if not safe or safe.startswith(".") or not path.is_file():
+            raise BadRequest("No recording named %s" % safe)
+        return json.loads(path.read_text())
+    recordings = []
+    for path in sorted(RECORDINGS_DIR.glob("*.json"), reverse=True)[:50] if RECORDINGS_DIR.is_dir() else []:
+        try:
+            data = json.loads(path.read_text())
+        except ValueError:
+            continue
+        if isinstance(data, dict) and data.get("format") == RECORDING_FORMAT:
+            recordings.append({"name": path.stem, "header": data.get("header"), "drives": sorted(data.get("drives") or {})})
+    return {"recordings": recordings}
+
+
 ROUTES = {
     ("GET", "/api/status"): api_status,
     ("GET", "/api/map"): api_map,
@@ -364,6 +424,8 @@ ROUTES = {
     ("POST", "/api/snapshot/save"): api_snapshot_save,
     ("POST", "/api/bench/save"): api_bench_save,
     ("GET", "/api/bench/runs"): api_bench_runs,
+    ("POST", "/api/recordings/save"): api_recording_save,
+    ("GET", "/api/recordings"): api_recordings,
 }
 
 CSP = ("default-src 'self'; script-src 'self' 'nonce-%s'; "
@@ -414,7 +476,7 @@ class Handler(BaseHTTPRequestHandler):
         route = ROUTES.get((method, path))
         if route:
             try:
-                if length > MAX_BODY_BYTES:
+                if length > (MAX_RECORDING_BYTES if path == "/api/recordings/save" else MAX_BODY_BYTES):
                     raise BadRequest("Request body too large")
                 body = json.loads(self.rfile.read(length).decode() or "{}") if length else {}
                 if not isinstance(body, dict):

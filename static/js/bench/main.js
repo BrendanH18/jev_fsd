@@ -1,5 +1,7 @@
 // Benchmark page: build the suite, run every scenario headlessly, show and save the results, and
-// compare with an earlier run. window.__bench.run(opts) does the same from a script.
+// compare with an earlier run. window.__bench.run(opts) does the same from a script, and with
+// { record: true } or { replay: "<recording name>" } records or replays a model driver's answers
+// (brain/recording.js).
 
 import { api, $, h, usd, appUrl } from "../common.js";
 import { MapData } from "../map/mapdata.js";
@@ -9,6 +11,7 @@ import { aggregate } from "./metrics.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
+import { ModelRecording, recordingHeader, loadRecording, saveRecording, sameResult, mapFingerprint, checkMap, driverKind } from "../brain/recording.js";
 
 // [key, header, format, better: "low" | "high" | null]
 const COLUMNS = [
@@ -94,15 +97,29 @@ function runFromForm() {
   });
 }
 
-export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, save = true } = {}) {
+export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, save = true, record = false, replay = null } = {}) {
+  // A replay takes its driver and suite from the recording (a saved name, its JSON, or a ModelRecording).
+  const replaying = replay ? await loadRecording(replay) : null;
+  if (replaying) {
+    const b = replaying.header.bench || {};
+    if (b.bbox && b.bbox.join(",") !== map.routingBbox.join(",")) throw new Error(`The recording was made on ${b.map || b.bbox.join(",")}; open /bench?map=${b.map || b.bbox.join(",")} to replay it.`);
+    checkMap(replaying, map);
+    ({ count, npcs, seed, weather } = b);
+    ({ features = "bare", park = false, hour, without = [], cover } = b);
+    brain = replaying.header.driver;
+  }
+  if ((record || replaying) && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
+  if (record && !replaying && !driverKind(brain)) throw new Error(`Only model drivers (jev, decision:<name>, llm:<name>) can be recorded, not "${brain}".`);
   const options = benchmarkConfig({ features, park, hour, without, cover });
   running = true; stopRequested = false;
   $("#run").textContent = "Stop";
   const definition = agentDefinitions().find(a => a.id === brain), endpoint = definition?.decision || definition?.llm;
   const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, ...options, map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
   const setStatus = (t) => { $("#status").textContent = t; };
+  const recording = replaying || (record ? new ModelRecording({ header: recordingHeader({ driver: brain, brain: { endpoint }, model: brain === "jev" ? status.decision?.jev?.model : null,
+    map: status.map.name, map_sha: mapFingerprint(map), seed, preset: features, weather, bench: config }) }) : null);
   setStatus("building the scenario suite…");
-  const suite = await buildSuite(map, { count, seed, ...suiteOptions(features, options) });
+  const suite = replaying?.suite() || await buildSuite(map, { count, seed, ...suiteOptions(features, options) });
   const state = { config, suite, results: [], summary: null };
   lastRun = state;
   render(state);
@@ -111,25 +128,31 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
     setStatus(`running ${i + 1} / ${suite.length}: ${suite[i].tags.length_m} m, ${suite[i].tags.signals} signals, ${suite[i].tags.stops} stops`);
     render(state);
     await yieldNow();
-    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, ...options, shouldStop: () => stopRequested });
+    const tape = recording ? recording.tape(suite[i].id, replaying ? "replay" : "record") : null;
+    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, ...options, shouldStop: () => stopRequested, tape });
+    if (record && !replaying) recording.keepResult(suite[i].id, r, suite[i]);
+    if (replaying) r.model_recording.same_result = replaying.results[suite[i].id] ? sameResult(r, replaying.results[suite[i].id]) : null;
     state.results.push(r);
     state.summary = aggregate(state.results);
     render(state);
   }
   state.current = null;
   state.summary = aggregate(state.results);
-  let saved = null;
+  let saved = null, savedRecording = null;
+  if (record && !replaying && save && state.results.length) {
+    try { savedRecording = await saveRecording(recording); } catch (err) { setStatus(`could not save the recording: ${err.message}`); }
+  }
   if (save && state.results.length) {
     try {
       saved = await api("/api/bench/save", { config: { ...config, completed: state.results.length }, summary: state.summary, results: state.results });
-      setStatus(`saved ${saved.saved}`);
+      setStatus(`saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}`);
       await loadRuns();
     } catch (err) { setStatus(`could not save: ${err.message}`); }
   } else setStatus(stopRequested ? "stopped" : "done");
   render(state);
   running = false;
   $("#run").textContent = "Run";
-  return { config, summary: state.summary, results: state.results, saved };
+  return { config, summary: state.summary, results: state.results, saved, ...(recording ? { recording: savedRecording, replayed: replaying ? state.results.every(r => r.model_recording.exact && r.model_recording.same_result !== false) : null } : {}) };
 }
 
 function compareSummary() {
