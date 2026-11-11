@@ -407,6 +407,8 @@ export class Autopilot {
         } else {
           this.pendingRoutes = res.routes;         // the next decision asks the model which one
           world.route = new Route(res.routes[0], world.map, world.ego.spec);
+          // (an answer still on its way was asked on the old route: it must not install that route's lanes)
+          this.bumpEpoch();
         }
         this.offRouteFor = 0;
         // A lane manoeuvre under way was planned on the old route: its lanes (named by that route's

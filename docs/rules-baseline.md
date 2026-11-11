@@ -28,6 +28,13 @@ Other maps: 22/22, up from 16/22, with no collision, failure to yield, off-road 
 metre on any of them. Kitsilano: 48/48 as before, though every city route's details change (traffic
 draws from a different set of parked cars, see below).
 
+**After review (#73):** a hard brake during a detour no longer adds the detour's move a second time
+(`brakeLine` in `brain/candidates.js`). Re-run against every row above, each is identical field for
+field (timings aside) but Kitsilano snow `s1-12`. That route is unchanged except for one safety brake
+logged at 260.5 s: its closing speed is 9.141 m/s instead of 9.155, and its gap differs by 0.01 mm.
+Reverting only that change reproduces the recorded value, so the snow row stays the reference
+with that one exception.
+
 **The bare suite changes on two routes**, so `20261111-130222-rules` replaces `20261110-190326-rules`
 as the bare reference; every other route is identical field for field (timings aside):
 

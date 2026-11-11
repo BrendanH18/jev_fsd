@@ -154,7 +154,7 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
   render(state);
   running = false;
   $("#run").textContent = "Run";
-  return { config, summary: state.summary, results: state.results, saved, ...(recording ? { recording: savedRecording, replayed: replaying ? state.results.every(r => r.model_recording.exact && r.model_recording.same_result === true) : null } : {}) };
+  return { config, summary: state.summary, results: state.results, saved, ...(recording ? { recording: savedRecording || (recordingError ? { error: recordingError, data: recording.toJSON() } : null), replayed: replaying ? state.results.every(r => r.model_recording.exact && r.model_recording.same_result === true) : null } : {}) };
 }
 
 function compareSummary() {

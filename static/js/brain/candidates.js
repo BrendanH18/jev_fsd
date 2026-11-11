@@ -505,7 +505,10 @@ export function sampleCandidates(snap, world) {
   // into whatever it was keeping clear of)
   // (and easing round a pothole, it carries on round it while it brakes: sim/potholes.js)
   const easing = snap.pothole?.room && snap.pothole.detour && !shifting && !detour.detour && !passing.detour && s >= snap.pothole.detour.from ? { detour: snap.pothole.detour } : null;
-  const brakeLine = !easing && !scenery && !shifting && lane && Math.abs(lane.lateral) >= HOLD_LINE_M ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : nudge;
+  // (a detour's own move is already in `lane.lateral`, and inLane keeps the detour: holding the line
+  // there would add the move twice)
+  const detouring = !!detour.detour || !!(snap.cyclist_pass?.going && passing.detour);
+  const brakeLine = !easing && !scenery && !shifting && !detouring && lane && Math.abs(lane.lateral) >= HOLD_LINE_M ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : nudge;
   list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: brakeLine }), ...(easing || {}), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   const amber = snap.amber_clear || snap.intersection?.amber;
   for (const c of list) if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);
