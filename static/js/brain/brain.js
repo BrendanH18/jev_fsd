@@ -286,7 +286,9 @@ export class Autopilot {
     if ((!Object.keys(questions).length && this.brain?.questionDriven) || this.brainName === "rules") {
       const r = this.brains.rules.decideSync(snap, eligible);
       if (this.brainName !== "rules") { r.meta.source = "local"; r.answers = { ...local }; } else r.answers = { ...local, motion: { type: "choice", choice: r.motion, probabilities: { [r.motion]: 1 }, confidence: 1 }, vector: { type: "choice", choice: r.candidateId, probabilities: { [r.candidateId]: 1 }, confidence: 1 } };
-      this.apply(r, snap, candidates, request, this.brainName === "rules" ? "model" : "local");
+      // (Rules, like a question nothing needed asking, decides here with no call: local, so a later
+      // driver's cumulative counts never credit Rules' decisions to its model)
+      this.apply(r, snap, candidates, request, "local");
       return;
     }
     const controller = new AbortController();

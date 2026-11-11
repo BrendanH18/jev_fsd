@@ -84,7 +84,16 @@ await test("the shares are of all decisions, rounded to 0.001, and read as text"
   assert.match(decidedByText(run), /^\d+% model · \d+% local · \d+% fallback$/);
 });
 
+// (who each of the Rules drive's decisions is counted as, seen where the autopilot applies it)
+const { Autopilot } = await import("../static/js/brain/brain.js");
+const applyOf = Autopilot.prototype.apply, rulesBy = {};
+Autopilot.prototype.apply = function (result, snap, candidates, request, by) { rulesBy[by] = (rulesBy[by] || 0) + 1; return applyOf.apply(this, arguments); };
 const rules = await evaluateChallenge(map, challenge, { brain: "rules" });
+Autopilot.prototype.apply = applyOf;
+await test("Rules decides locally, never as a model: a later driver's counts never credit Rules to its model", () => {
+  assert.equal(rulesBy.model || 0, 0, JSON.stringify(rulesBy));
+  assert.equal(rulesBy.local, rules.decisions);
+});
 await test("a Rules drive reports no new field, so earlier records compare; the stub drove it alike", () => {
   assert.equal(rules.decisions, run.decisions); assert.equal(rules.time_s, run.time_s); assert.equal(rules.arrived, run.arrived);
   for (const k of [...DECIDED_BY, "model_share", "local_share", "fallback_share"]) assert.equal(k in rules, false, k);

@@ -60,8 +60,11 @@ if (replayJson) try { replaying = recordingModule.ModelRecording.parse(replayJso
 
 // The server falls back to its default map for a name or box it does not recognise, so check
 // that the map it returned is the one asked for.
-const preset = String(args.map || "kitsilano");
-const known = (await api("/api/maps")).maps.find((m) => m.id === preset);
+const maps = (await api("/api/maps")).maps;
+// (a recording made on /bench names its map by the pack's cache key: replay it by its box)
+const replayBbox = replayJson?.header?.bench?.bbox;
+const preset = String(!maps.some((m) => m.id === args.map) && replayBbox ? replayBbox.join(",") : args.map || "kitsilano");
+const known = maps.find((m) => m.id === preset);
 const wanted = known ? known.bbox : preset.split(",").map(Number);
 if (wanted.length !== 4 || wanted.some((v) => !Number.isFinite(v))) fail(`Unknown map "${preset}": use a preset id or W,S,E,N.`);
 const map = new MapData(await api(`/api/map?bbox=${encodeURIComponent(preset)}`));
