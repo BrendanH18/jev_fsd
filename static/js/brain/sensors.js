@@ -33,7 +33,7 @@ import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
-import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, isEmergency, isJunction, leadsEmergency, nearestCall, pullOverOffset } from "../sim/emergency.js";
+import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, emergencyLead, isEmergency, isJunction, nearestCall, pullOverOffset } from "../sim/emergency.js";
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
@@ -823,14 +823,13 @@ function emergencyYield(world, p, frontS, lane, visible) {
       if (ends && ends.en - SNOWBANK_WAIT_M - frontS >= v * v / (2 * EV_FIRM_DECEL) && stop >= ends.en - SNOWBANK_WAIT_M) stop = Math.min(stop, ends.en - SNOWBANK_WAIT_M);
     }
     stop = Math.min(stop, route.length - 1);
-    plan = world.evYield = { id: ev.id, route, stop, speed: v, since: world.t, tight: stop - frontS < EV_STEER_M - 1e-6, clearing, lead: plan?.id === ev.id && plan.lead };
+    plan = world.evYield = { id: ev.id, route, stop, speed: v, since: world.t, tight: stop - frontS < EV_STEER_M - 1e-6, clearing };
   }
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
   if (frontS > plan.stop + 1.5) plan.stop = Math.min(route.length - 1, frontS + (v > 0.3 ? v * v / (2 * EV_FIRM_DECEL) : 0));
-  // stuck behind the car: from then on it drives on ahead of it
-  plan.lead ||= leadsEmergency(ev, ego);
-  const lead = plan.lead;
+  // The physical call owns drive-on authorization, including whether the car yielded first.
+  const lead = emergencyLead(world, ev);
   // pulled over: into the parking lane where nothing is parked from 10 m behind the stop to 5 m on
   const i = route.edgeIndexAt(plan.stop - ego.spec.length / 2), e = map.edges.get(route.edges[i]);
   const at = route.pointAt(plan.stop), h = route.headingAt(plan.stop);
