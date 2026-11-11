@@ -125,7 +125,9 @@ for (const queueGap of [2.8, 8]) {
 }
 {
   const { world, ev } = setup("signal", { midblock: true, queueGap: 2.8 });
-  world.npcs = [ev]; pass(world, ev);
+  // (the queue clears at 1 s, as the audit sees every step; released, the car has as long to pull over as
+  // it had from the call, and it is 9 s before the ambulance draws level)
+  world.npcs = [ev]; world.t = 1; world.auditEmergency(world.roadInfo()); pass(world, ev);
   assert.equal(world.violations.failed_to_yield, 1, "a queue that clears no longer prevents pulling over");
 }
 {

@@ -97,6 +97,27 @@ export function pullOverOffset(edge, laneIdx, width, parkingFree) {
   return Math.max(edgeOfLane, Math.min(PULL_INTO_PARKING_M, room));
 }
 
+// How far right of a lane's centre (at x, y, heading h) a car of `spec` can pull over beside the cars
+// parked at the kerb there and keep the forward simulations' 0.3 m from them (brain/candidates.js), or
+// Infinity with none beside it. A narrow lane with cars parked close to its line leaves less than the
+// usual pull-over: the plan aims no further (brain/sensors.js emergencyYield), and the audit takes a
+// car that far over as pulled over (World.auditEmergency).
+export const PARKED_CLEAR_M = 0.3;
+// (`ahead` metres more of kerb ahead of it count too: the stretch it is pulling over into)
+export function parkedRoom(world, x, y, h, spec = CAR, ahead = 0) {
+  const c = Math.cos(h), sn = Math.sin(h), reach = spec.length / 2 + 3;
+  let room = Infinity;
+  for (const car of world.parked?.near(x, y, reach + ahead + 6) || []) {
+    const o = car.obb(), oc = Math.cos(o.heading), os = Math.sin(o.heading);
+    for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const px = o.center[0] + oc * a * o.halfLength + os * b * o.halfWidth - x, py = o.center[1] + os * a * o.halfLength - oc * b * o.halfWidth - y;
+      const along = px * c + py * sn, right = px * sn - py * c;
+      if (along >= -reach && along <= reach + ahead && right > 0) room = Math.min(room, right - spec.width / 2 - PARKED_CLEAR_M - 0.05);
+    }
+  }
+  return room;
+}
+
 // Whether emergency vehicle `ev` calls on vehicle `o` to give way: its siren is on, it is within
 // CALL_M, and `o`, now or over the next 20 m it goes (`points`, by default straight on along its
 // heading), is within IN_WAY_M of the path `ev` is about to take, ahead of `ev` (until `ev` has
@@ -141,6 +162,11 @@ export function nearestCall(o, vehicles, points = null) {
   }
   return best;
 }
+
+// A car giving way to an emergency vehicle stops with its front at least this far from the node of the
+// junction ahead (brain/sensors.js emergencyYield), and the audit counts its front coming this close to a
+// junction's node as entering it (World.auditEmergency).
+export const EV_BOX_M = 8;
 
 const junctionCache = new WeakMap();
 // A node where three or more streets meet.

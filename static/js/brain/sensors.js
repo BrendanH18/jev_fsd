@@ -33,7 +33,7 @@ import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
-import { EMERGENCY_NAMES, FOLLOW_M, IN_WAY_M, emergencyLead, isEmergency, isJunction, nearestCall, pullOverOffset } from "../sim/emergency.js";
+import { EMERGENCY_NAMES, EV_BOX_M, FOLLOW_M, IN_WAY_M, emergencyLead, parkedRoom, isEmergency, isJunction, nearestCall, pullOverOffset } from "../sim/emergency.js";
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
@@ -182,6 +182,7 @@ const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
 export const EV_STOP_DECEL = 1.5;
 const EV_FIRM_DECEL = 3.5;
 const EV_SHORT_M = 2.5;
+const ALONGSIDE_M = 4;   // an emergency vehicle this close beside the car, going round it
 const EV_STEER_M = 8;
 const EV_CLEAR_MPS = 10 / 3.6; // keep moving slowly enough to yield while finishing the lateral move
 const EV_HARD_DECEL = 6;
@@ -808,7 +809,8 @@ function emergencyYield(world, p, frontS, lane, visible) {
       if (sNode - frontS > stop - frontS + 40) break;
       if (!isJunction(map, e.to)) continue;
       const half = map.crossingHalfWidth(e.id), line = route.controls.find((c) => c.edge === e.id);
-      const short = Math.min(sNode - half - EV_SHORT_M, line ? line.sRoute - 0.5 : Infinity);
+      // (out of the box round its node, as the audit measures entering it)
+      const short = Math.min(sNode - half - EV_SHORT_M, sNode - EV_BOX_M - 0.5, line ? line.sRoute - 0.5 : Infinity);
       const clear = sNode + half + ego.spec.length + 1 + EV_STEER_M;
       if (frontS > short && frontS < clear) { stop = Math.max(stop, clear); clearing = true; continue; }
       if (short >= stop || short < frontS) continue;
@@ -829,6 +831,14 @@ function emergencyYield(world, p, frontS, lane, visible) {
   // braking firmly
   if (frontS > plan.stop + 1.5) plan.stop = Math.min(route.length - 1, frontS + (v > 0.3 ? v * v / (2 * EV_FIRM_DECEL) : 0));
   // The physical call owns drive-on authorization, including whether the car yielded first.
+  // (but one drawing alongside to go round after all can turn across the car's nose: until it is past, the
+  // car keeps still where it is)
+  const at0 = ego.toLocal(ev.x, ev.y), evSpec = ev.spec || ego.spec;
+  const alongside = at0.ahead + evSpec.length - evSpec.rearOverhang > -ego.spec.rearOverhang && at0.ahead - evSpec.rearOverhang < ego.spec.length - ego.spec.rearOverhang && Math.abs(at0.right) < ALONGSIDE_M;
+  if (emergencyLead(world, ev) && alongside) {
+    return { id: ev.id, kind: EMERGENCY_NAMES[ev.kind] || ev.kind, from: call.relation, distance_m: call.distance_m, eta_s: call.eta_s, seen: visible.includes(ev),
+      stop_s_route: frontS, bumper_to_stop_m: 0, offset_m: 0, steer_at_stop: false, max_speed_mps: EV_CLEAR_MPS, clearing: false, lead: false, alongside: true };
+  }
   const lead = emergencyLead(world, ev);
   // pulled over: into the parking lane where nothing is parked from 10 m behind the stop to 5 m on
   const i = route.edgeIndexAt(plan.stop - ego.spec.length / 2), e = map.edges.get(route.edges[i]);
@@ -839,7 +849,12 @@ function emergencyYield(world, p, frontS, lane, visible) {
   });
   // (from a lane further out, across into the curb lane and over in it)
   const across = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width;
-  const offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
+  let offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
+  // (beside cars parked close to a narrow lane's line, only as far over as they leave room: sim/emergency.js)
+  if (!free && !across) {
+    const mid = route.offsetPointAt(Math.max(0, plan.stop - (ego.spec.length - ego.spec.rearOverhang) + ego.spec.length / 2), lane.center);
+    offset = Math.max(0, Math.min(offset, parkedRoom(world, mid[0], mid[1], h, ego.spec)));
+  }
   return { id: ev.id, kind: EMERGENCY_NAMES[ev.kind] || ev.kind, from: call.relation, distance_m: call.distance_m, eta_s: call.eta_s, seen: visible.includes(ev),
     stop_s_route: lead ? null : plan.stop, bumper_to_stop_m: lead ? null : plan.stop - frontS, offset_m: lead ? 0 : offset, steer_at_stop: !!plan.tight,
     // A car already slow or stopped only crawls forward to steer over; the extra steering room

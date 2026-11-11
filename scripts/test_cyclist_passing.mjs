@@ -514,10 +514,10 @@ await test("the audit counts passing a cyclist closer than the minimum passing d
 });
 
 await test("with the option off nothing is computed: no cyclist_pass, no pass state on any driver, no audit state, and a free drive plays out exactly as with no option at all", () => {
-  const run = (opts, { count = 25, seconds = 60 } = {}) => {
+  const run = (opts, { count = 25, seconds = 60, seed = 11, fleetSeed = 17 } = {}) => {
     setWeather("dry");
-    const world = new World(KITS, { seed: 11, pedestrians: 0, ...opts });
-    const fleet = new NpcFleet(world, { count, bikes: 12, seed: 17 });
+    const world = new World(KITS, { seed, pedestrians: 0, ...opts });
+    const fleet = new NpcFleet(world, { count, bikes: 12, seed: fleetSeed });
     let reported = 0, passing = 0, hits = new Set(), started = 0;
     const wasPassing = new Set();
     world.route = new Route(routeFromLanes(KITS, [KITS.lane(EDGE, 0), KITS.lane(NEXT, 0)], 10, 80), KITS, world.ego.spec);
@@ -531,10 +531,14 @@ await test("with the option off nothing is computed: no cyclist_pass, no pass st
     const sig = fleet.vehicles.map((n) => `${n.id}:${n.x.toFixed(6)},${n.y.toFixed(6)},${n.v.toFixed(6)}`).join("|");
     return { reported, passing, started, hits: hits.size, sig, audit: world.bikePasses.size, close: world.violations.close_passes };
   };
-  const plain = run({}), off = run({ passCyclists: false }), onRun = run({ passCyclists: true }, { count: 40, seconds: 180 });
+  // (a pass starts about once in three minutes of such a drive: two drives, so the check does not hang
+  // on one event in one seeded drive)
+  const plain = run({}), off = run({ passCyclists: false });
+  const onRuns = [run({ passCyclists: true }, { count: 40, seconds: 180 }), run({ passCyclists: true }, { count: 40, seconds: 180, seed: 13, fleetSeed: 19 })];
+  const onRun = { started: onRuns.reduce((a, r) => a + r.started, 0), hits: onRuns.reduce((a, r) => a + r.hits, 0) };
   assert.ok(off.reported === 0 && off.passing === 0 && off.audit === 0 && off.close === undefined, JSON.stringify({ ...off, sig: undefined }));
   assert.equal(off.sig, plain.sig, "identical to a drive with no option");
-  assert.ok(onRun.started > 0, `with it on, 40 cars started ${onRun.started} passes of cyclists in 3 minutes`);
+  assert.ok(onRun.started > 0, `with it on, 40 cars started ${onRun.started} passes of cyclists in two 3-minute drives`);
   assert.equal(onRun.hits, 0, "and touched nobody doing it");
 });
 

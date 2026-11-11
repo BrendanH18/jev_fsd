@@ -1,5 +1,9 @@
 // Reserved curb lanes. Cars may enter for a right turn in the last 50 m,
 // or for the actual curb parking/pull-out manoeuvre. No random draws.
+// A right turn into a street ends in its curb lane (BC MVA s. 165: as close as practicable to the
+// right-hand curb); where that lane is reserved, the car leaves it at once, and the lane change out is
+// not driving in it.
+import { laneChangeLength } from "./controller.js";
 export const BUS_TURN_M = 50;
 export function busLaneActive(lane, clock) {
   if (!clock || !Number.isFinite(clock.hour)) return false;
@@ -23,8 +27,11 @@ export function routeBusLane(route, s, clock, curb = false, i = route.laneEdgeAt
   const turn = route.map.turnThrough(route.edges, i, route.map.junctionNodes(route.map.intersections.get(edge.control?.id))).turn;
   const lanes = (route.map.buslanes || []).filter(l => l.edge === edge.id);
   if (!lanes.length) return null;
+  // (how far along this street the car is, having turned right into it: null if it did not)
+  const before = i > 0 ? route.map.edges.get(route.edges[i - 1]) : null;
+  const turnedIn = before && route.map.turnThrough(route.edges, i - 1, route.map.junctionNodes(route.map.intersections.get(before.control?.id))).turn === 'right' ? s - starts[i] : null;
   return { edge: edge.id, lanes, turn, remaining, entering_allowed: curb || (turn === 'right' && remaining <= BUS_TURN_M),
-    active: lanes.some(l => busLaneActive(l, clock)), approach_m: BUS_TURN_M };
+    active: lanes.some(l => busLaneActive(l, clock)), approach_m: BUS_TURN_M, turned_in_m: turnedIn };
 }
 // The lane the car is actually in, route or not (manual driving included); the route only grants the
 // right-turn approach, and parking grants the curb.
@@ -38,7 +45,9 @@ export function auditBusLanes(world, dt) {
   // (on the route's own street: rounding the corner of the right turn, the route is already on the next one)
   const curb = !!world.parking || !!world.parkedIn, i = route ? route.edges.indexOf(near.lane.edge) : -1;
   const p = !curb && i >= 0 && route.project(ego.x, ego.y, route.hint);
-  if (curb || (p && routeBusLane(route, p.s, world.clock, false, i)?.entering_allowed)) return;
+  const b = p ? routeBusLane(route, p.s, world.clock, false, i) : null;
+  // (or leaving the curb lane it turned right into, over a lane change's length)
+  if (curb || b?.entering_allowed || (b?.turned_in_m != null && b.turned_in_m <= laneChangeLength(ego.v))) return;
   world.violations.bus_lane_driving = (world.violations.bus_lane_driving || 0) + Math.max(0, ego.v) * dt;
   world.events.push({ type: 'bus_lane_driving', edge: near.lane.edge });
 }

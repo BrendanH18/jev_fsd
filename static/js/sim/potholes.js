@@ -38,6 +38,10 @@ export const REF_DEPTH_M = 0.07, REF_MPS = 20 / 3.6, MIN_MPS = 15 / 3.6, MAX_MPS
 export const HIT_OVER_MPS = 5 / 3.6;
 // A forward sim (brain/candidates.js) whose wheel crosses one faster than its safe speed plus this is rejected.
 export const SIM_OVER_MPS = 0.5;
+// ... and the room it keeps round one: the prediction runs a few centimetres from what the car does
+// (coming out of a turn its nose still points across the lane), so a wheel predicted to pass closer
+// than this is taken to go in.
+export const SIM_PAD_M = 0.1;
 // Half a tyre's width, and the room a driver leaves between a wheel and the edge of a pothole it goes
 // round (on top of that, the lane's lines: a car never puts a wheel over one to go round a pothole).
 export const TYRE_HALF_M = 0.1, ROOM_MARGIN_M = 0.15, EDGE_MARGIN_M = 0.05;
@@ -111,12 +115,12 @@ export function inPothole(h, x, y) {
   return u * u + v * v <= 1;
 }
 
-// Whether a tyre going from (x0, y0) to (x1, y1) goes into pothole `h` on the way (an ellipse stays one
+// Whether a tyre going from (x0, y0) to (x1, y1) goes into pothole `h` (grown by `pad` metres all round) on the way (an ellipse stays one
 // under the stretch that makes it a circle, and so does the tyre's straight path).
-export function crossesPothole(h, x0, y0, x1, y1) {
-  const c = Math.cos(h.heading), s = Math.sin(h.heading), b = h.b + TYRE_HALF_M;
-  const u0 = ((x0 - h.x) * c + (y0 - h.y) * s) / h.a, v0 = ((x0 - h.x) * s - (y0 - h.y) * c) / b;
-  const u1 = ((x1 - h.x) * c + (y1 - h.y) * s) / h.a, v1 = ((x1 - h.x) * s - (y1 - h.y) * c) / b;
+export function crossesPothole(h, x0, y0, x1, y1, pad = 0) {
+  const c = Math.cos(h.heading), s = Math.sin(h.heading), a = h.a + pad, b = h.b + TYRE_HALF_M + pad;
+  const u0 = ((x0 - h.x) * c + (y0 - h.y) * s) / a, v0 = ((x0 - h.x) * s - (y0 - h.y) * c) / b;
+  const u1 = ((x1 - h.x) * c + (y1 - h.y) * s) / a, v1 = ((x1 - h.x) * s - (y1 - h.y) * c) / b;
   const du = u1 - u0, dv = v1 - v0, len = du * du + dv * dv;
   const t = len > 1e-12 ? Math.max(0, Math.min(1, -(u0 * du + v0 * dv) / len)) : 0;
   const u = u0 + du * t, v = v0 + dv * t;

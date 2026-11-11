@@ -13,6 +13,21 @@ import { PEEK_SHORT_M } from "../sim/priority.js";
 // lane, so the car changes into it as a lane change instead of sliding across with the polyline.
 export const PREPARE_LANE_M = 150;
 const RAMP_M = 40;   // the polyline's own move between lanes is measured up to this far either side of the join
+const MERGE_ALIGN_M = 1.0;   // a lane ending within this of the next street's lane carries on into it
+const NO_MERGES = Object.freeze([]);
+
+// How far right the polyline has moved at s through these moves (laneShifts, busMerges).
+function shiftSum(moves, s) {
+  let sum = 0;
+  for (const sh of moves) {
+    const k = s - sh.at - sh.lo;
+    if (k <= 0) continue;
+    if (k >= sh.ramp.length - 1) { sum += sh.by; continue; }
+    const j = Math.floor(k);
+    sum += sh.by * (sh.ramp[j] + (sh.ramp[j + 1] - sh.ramp[j]) * (k - j));
+  }
+  return sum;
+}
 
 export class Route {
   constructor(data, map, vehicleSpec = CAR) {
@@ -260,18 +275,11 @@ export class Route {
   // route's start. Lane laws subtract the move since they were chosen, so a car holds its lane
   // where the polyline moves to another one.
   frameShift(s) {
-    let sum = 0;
-    for (const sh of this.laneShifts()) {
-      const k = s - sh.at - sh.lo;
-      if (k <= 0) continue;
-      if (k >= sh.ramp.length - 1) { sum += sh.by; continue; }
-      const j = Math.floor(k);
-      sum += sh.by * (sh.ramp[j] + (sh.ramp[j + 1] - sh.ramp[j]) * (k - j));
-    }
-    return sum;
+    const sum = shiftSum(this.laneShifts(), s);
+    return this.busLanePolicy ? sum + shiftSum(this.busMerges(), s) : sum;
   }
   frameMove(s0, s) {
-    return Number.isFinite(s0) && this.laneShifts().length ? this.frameShift(s) - this.frameShift(s0) : 0;
+    return Number.isFinite(s0) && (this.laneShifts().length || this.busMerges().length) ? this.frameShift(s) - this.frameShift(s0) : 0;
   }
 
   // The route's lane at s as the car drives it: the lane the route follows here or, within
@@ -279,6 +287,11 @@ export class Route {
   // index (0 is the leftmost), the edge's lane count and offsets, the chain the edge belongs to and
   // the lane's centre in metres right of the polyline at s.
   laneAt(s) {
+    const { i, info, chain, idx } = this.laneIndexAt(s);
+    return { lanes: info.lanes, idx, lineIdx: info.idx, offsets: info.offsets, ring: info.ring, chain, ahead: idx !== info.idx, center: this.laneOffsetAt(s, idx) };
+  }
+  // laneAt's choice of lane, without its centre: the route edge (i) and its lanes, its chain, and the lane.
+  laneIndexAt(s) {
     const i = this.laneEdgeAt(s), info = this.laneInfo(i), chain = this.chainOf(i);
     let idx = info.idx;
     for (const sh of this.laneShifts()) {
@@ -300,13 +313,56 @@ export class Route {
         }
       }
     }
-    return { lanes: info.lanes, idx, lineIdx: info.idx, offsets: info.offsets, ring: info.ring, chain, ahead: idx !== info.idx, center: this.laneOffsetAt(s, idx) };
+    return { i, info, chain, idx };
+  }
+  // Where a reserved bus lane keeps the car out of the route's own lane (laneIndexAt) up to the end of
+  // a street whose lanes do not carry on as they are (fewer lanes, say), and the lane the car keeps to
+  // runs straight on into the route's lane beyond: the router follows the curb lane (jev/routing.py),
+  // so the polyline moves across to the car's lane there, and lane laws move with it instead of
+  // holding their offset off the road. The same shape as laneShifts; only with a bus-lane policy.
+  busMerges() {
+    const policy = this.busLanePolicy, clock = policy?.clock;
+    if (!policy) return NO_MERGES;
+    const minute = Number.isFinite(clock?.hour) ? Math.floor(clock.hour * 60) : null, day = clock?.weekday ?? 0, curb = !!policy.curb;
+    const memo = this._merges;
+    if (memo && memo.minute === minute && memo.day === day && memo.curb === curb) return memo.list;
+    const list = [];
+    this._merges = { minute, day, curb, list };
+    const starts = this.laneEdgeStarts();
+    for (let i = 1; i < this.edges.length; i++) {
+      const at = starts[i];
+      if (this.sameLanes(i - 1) || this.laneInfo(i - 1).ring || this.laneInfo(i).ring
+        || this.map.classifyTurn(this.map.turnAngle(this.edges[i - 1], this.edges[i])) !== "straight") continue;
+      const a = this.laneIndexAt(at - 0.5), b = this.laneIndexAt(at + 0.5);
+      if (a.i !== i - 1 || b.i !== i || a.idx === a.info.idx) continue;
+      const laneA = this.map.lane(this.edges[i - 1], a.idx), laneB = this.map.lane(this.edges[i], b.idx);
+      if (!laneA || !laneB || dist(laneA.pts[laneA.pts.length - 1], laneB.pts[0]) > MERGE_ALIGN_M) continue;
+      const before = a.info.offsets[a.idx] - a.info.offsets[a.info.idx], after = b.info.offsets[b.idx] - b.info.offsets[b.info.idx];
+      const by = before - after;
+      if (Math.abs(by) < 0.5) continue;
+      // the fraction of the move the polyline has made d metres from the join, measured from the lane
+      // the car keeps to on either side of it
+      const made = (d) => {
+        const lane = d < 0 ? laneA : laneB;
+        const q = projectPoint(lane.pts, lane.cum, this.pointAt(Math.max(0, Math.min(this.length, at + d))));
+        return Math.max(0, Math.min(1, (before + q.lateral) / by));
+      };
+      const ramp = [made(0)];
+      let lo = 0;
+      for (let d = -1; d >= Math.max(-RAMP_M, starts[i - 1] - at) && ramp[0] > 0.001; d--, lo--) ramp.unshift(Math.min(ramp[0], made(d)));
+      for (let d = 1; d <= Math.min(RAMP_M, starts[i + 1] - at) && ramp[ramp.length - 1] < 0.999; d++) ramp.push(Math.max(ramp[ramp.length - 1], made(d)));
+      ramp[0] = 0;
+      ramp[ramp.length - 1] = 1;
+      list.push({ i, at, by, lo, ramp });
+    }
+    return list;
   }
   // Centre of lane k of the edge at s, in metres right of the polyline there.
   laneOffsetAt(s, k) {
     const i = this.laneEdgeAt(s), info = this.laneInfo(i);
     let settled = 0;
     for (const sh of this.laneShifts()) if (sh.i <= i) settled += sh.by;
+    for (const m of this.busMerges()) if (m.i <= i) settled += m.by;
     return info.offsets[k] - info.offsets[info.idx] - (this.frameShift(s) - settled);
   }
 

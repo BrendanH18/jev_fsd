@@ -1,0 +1,212 @@
+{
+ "name": "20261111-130215-rules",
+ "saved_at": "2026-11-11T13:02:15",
+ "config": {
+  "brain": "rules",
+  "count": 2,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "mount_pleasant",
+  "bbox": [
+   -123.112,
+   49.257,
+   -123.094,
+   49.268
+  ],
+  "pack": "6",
+  "engine": "node v22.23.4"
+ },
+ "summary": {
+  "scenarios": 2,
+  "pass_rate": 1,
+  "arrived_rate": 1,
+  "km": 1.83,
+  "collisions": 0,
+  "at_fault": 0,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 0,
+  "off_road_s": 0,
+  "safety_brakes": 3,
+  "deadlocks": 0,
+  "fallbacks": 0,
+  "violations_per_km": 0,
+  "avg_kmh": 17.45,
+  "min_gap_m": 2.3,
+  "min_ttc_s": 1.1,
+  "hard_brakes": 0,
+  "rms_jerk": 3.62,
+  "max_lat_accel": 6.08,
+  "lane_rms_m": 0.33,
+  "lane_changes": 3,
+  "speeding_s": 0,
+  "decisions": 1480,
+  "calls": 0,
+  "tokens": 0,
+  "cost_usd": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 753,
+    "signals": 0,
+    "stops": 3,
+    "lefts": 0,
+    "rights": 2
+   },
+   "arrived": true,
+   "time_s": 233.1,
+   "distance_m": 914,
+   "progress": 0.802,
+   "avg_kmh": 14.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "bus_lane_driving": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.3,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.71,
+   "max_decel": -6.78,
+   "hard_brakes": 0,
+   "rms_jerk": 3.74,
+   "max_jerk": 45.1,
+   "max_lat_accel": 5.38,
+   "lane_rms_m": 0.24,
+   "lane_max_m": 1.28,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 26.4,
+   "decisions": 890,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 72.6,
+     "type": "reroute",
+     "count": 2
+    },
+    {
+     "t": 153.3,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1950204958961053,
+      "gap": 3.5525281908238644
+     }
+    },
+    {
+     "t": 233.1,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 27210
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 667,
+    "signals": 2,
+    "stops": 2,
+    "lefts": 3,
+    "rights": 4
+   },
+   "arrived": true,
+   "time_s": 159.5,
+   "distance_m": 920,
+   "progress": 0.842,
+   "avg_kmh": 20.8,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "bus_lane_driving": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "contraflow_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 6.5,
+   "min_ttc_s": 3.7,
+   "min_headway_s": 3.72,
+   "max_accel": 3.51,
+   "max_decel": -6.72,
+   "hard_brakes": 0,
+   "rms_jerk": 3.5,
+   "max_jerk": 31.5,
+   "max_lat_accel": 6.78,
+   "lane_rms_m": 0.42,
+   "lane_max_m": 3.64,
+   "lane_changes": 3,
+   "speeding_s": 0,
+   "stopped_s": 16.2,
+   "decisions": 590,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 55.5,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 6.348576726725211,
+      "closing": 6.427525492567986
+     }
+    },
+    {
+     "t": 60.7,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 108.6,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.201679939107365,
+      "closing": 4.20241807271794
+     }
+    },
+    {
+     "t": 159.5,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 17486
+  }
+ ]
+}
