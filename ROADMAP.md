@@ -189,9 +189,10 @@ cost $0.033.
   ([D2](#open-decisions)) over the 60 challenges, the road tests and the city suite. Commit the
   runs, with model ids, date, seed and prompt version, and write them up in
   `docs/model-results.md`.
-- [ ] **2.6 Make a model run repeatable offline.** (M) Save each model answer keyed by its request,
+- [x] **2.6 Make a model run repeatable offline.** (M) Save each model answer keyed by its request,
   so a published run can be replayed exactly without a key, and CI can check that a recorded model
-  drive still plays out the same.
+  drive still plays out the same. Done: model recordings (`brain/recording.js`, `bench_node.mjs
+  --record`/`--replay`, `data/recordings/`, checked by `scripts/test_model_recording.mjs`; docs/agents.md).
 - [ ] **2.7 Show the results where people look.** (M) A results table at the top of the README and
   a read-only leaderboard in the public demo, built from the committed runs.
 
