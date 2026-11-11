@@ -149,8 +149,8 @@ dry on every change and the full matrix weekly, every job blocking. The scenario
 D3. What the smoke suite and the soak found on other maps is not frozen work:
 
 - [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each):
-  - Winnipeg `s1-1`: deadlocks (45 recoveries), two collisions with parked cars (one at fault) and
-    a failure to yield.
+  - Winnipeg `s1-1`: deadlocks (45 recoveries), two collisions with parked cars (one at fault), a
+    failure to yield and 1.1 s off road.
   - Toronto `s1-2`: off road with four deadlock recoveries.
   - Edmonton `s1-1`, Québec City `s1-1`: a failure to yield each.
   - Mount Pleasant `s1-2`: driving in a reserved bus lane.

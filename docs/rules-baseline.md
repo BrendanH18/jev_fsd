@@ -21,7 +21,7 @@ deadline by the distance it adds; city snow deadlines are divided by the weather
 | `20261110-190311-rules` | Saskatoon | dry | 2 | 2 | 1.92 | |
 | `20261110-190312-rules` | Toronto | dry | 2 | 1 | 2.61 | `s1-2` off road, four deadlock recoveries |
 | `20261110-190313-rules` | Victoria | dry | 2 | 1 | 2.07 | `s1-2` hit a pothole too fast |
-| `20261110-190314-rules` | Winnipeg | dry | 2 | 1 | 2.53 | `s1-1` two collisions with parked cars (one at fault), a failure to yield, 45 deadlock recoveries |
+| `20261110-190314-rules` | Winnipeg | dry | 2 | 1 | 2.53 | `s1-1` two collisions with parked cars (one at fault), a failure to yield, off road (1.1 s), 45 deadlock recoveries |
 
 Kitsilano passes 48/48 with no collision, rule failure or deadlock in any weather; the other
 eleven maps pass 16/22 (ROADMAP 1.8). The bare suite on the same code is
