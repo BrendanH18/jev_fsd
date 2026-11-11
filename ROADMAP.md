@@ -98,7 +98,7 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   `bench/runner.js` and `scripts/bench_node.mjs`: `bare` (today's behaviour, so every earlier
   record stays comparable) and `city` (the free-drive defaults, with routes planned the way the app
   plans them, turn restrictions included). The 9 November probe script is the starting point.
-- [ ] **1.3 Triage what the probe found.** (L) On Kitsilano dry, seed 1, with features on:
+- [x] **1.3 Triage what the probe found.** (L) On Kitsilano dry, seed 1, with features on:
   - `s1-3`: after a road-closure detour the car stops 69 m short of its goal and never moves again.
   - `s1-11`: the car sits behind a stationary car that had pulled out from the kerb, with a fire
     truck stuck behind it, for over five minutes.
@@ -107,9 +107,9 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   - `s1-12`: a hard brake with a tailgater behind.
   - `s1-4`, `s1-9`: the crash in 0.1.
 
-  Status, 10 November (Rules, Kitsilano, seed 1, at the city preset of 1.2): **dry 12/12, fog
-  12/12, rain 12/12, snow 11/12**, up from 7/12, 5/12, 4/12 and 1/12 at the first probe, with no
-  route that passed before failing since. A road-closure detour now extends the bench deadline by
+  Done, 10 November (Rules, Kitsilano, seed 1, at the city preset of 1.2): **12/12 in dry, fog,
+  rain and snow**, up from 7/12, 5/12, 4/12 and 1/12 at the first probe, with no route that passed
+  before failing since. A road-closure detour now extends the bench deadline by
   the distance it adds. Fixed along the way, each with a Node check:
   - Audits: a prohibited-turn audit misreading a legal left; the emergency-vehicle audit penalising
     stops the car could not improve on, and an exact-target comparison inside a snowbank narrowing.
@@ -122,17 +122,18 @@ Free drives turn nearly all of them on together. Nothing checks that combination
   - The car: a slow left ignoring a stopped oncoming car; a ball warning missed behind a competing
     stop; a red light from a wet amber dilemma; no way back from a pull-over beside parked cars.
   - Snowbank narrowings lost on partial routes.
-  Still open: snow `s1-4` arrives after two detours (1,940 m against 894 m planned) but fails to
-  yield to an emergency vehicle on the way: the planner thinks it was asked to drive on ahead of
-  it while the audit does not. The 1.6 soak finds more emergency yields at night and on other maps.
+  - Emergency drive-on: the planner and the audit kept separate drive-on latches, so snow `s1-4`
+    failed to yield on a right turn it had been told to make; they now share one
+    (`emergencyLead`).
   Evidence: `docs/validation/city-round3-2026-11-10.json`, `city-detours-2026-11-10.json`, `city-yields-2026-11-10.json`,
   `city-snow-2026-11-10.json`, `traffic-clearance-2026-11-10.md`.
-- [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
+- [x] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
-  `docs/rules-baseline.md`.
+  `docs/rules-baseline.md`. Recorded 10 November: Kitsilano 48/48 across the four weathers; the
+  other eleven maps 16/22 (see 1.8).
 - [x] **1.5 Run it in CI.** (S) The city suite for Kitsilano dry on every change; the full matrix
-  on a schedule. `.github/workflows/bench.yml` runs bare dry and city dry on every change, both blocking,
-  and the city matrix weekly; fog, rain and snow report without blocking until they pass.
+  on a schedule. `.github/workflows/bench.yml` runs bare dry and city dry on every change and the city
+  matrix weekly, every job blocking.
 - [ ] **1.6 Look for interactions on purpose.** (M) A scheduled soak over several seeds and maps,
   and a run over pairs of features, since the bugs found so far are all pairs (parkers with
   driveways, closures with detours, pull-outs with emergency vehicles). A throw, a stuck car or a
@@ -142,6 +143,20 @@ Free drives turn nearly all of them on together. Nothing checks that combination
 
 Exit: Rules passes the city suite on Kitsilano in all four weathers with no throw and no stuck car,
 and CI runs it.
+
+**Exited 10 November.** The city suite passes on Kitsilano in all four weathers, and CI runs city
+dry on every change and the full matrix weekly, every job blocking. The scenario freeze lifts under
+D3. What the smoke suite and the soak found on other maps is not frozen work:
+
+- [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each):
+  - Winnipeg `s1-1`: deadlocks (45 recoveries), two collisions with parked cars (one at fault) and
+    a failure to yield.
+  - Toronto `s1-2`: off road with four deadlock recoveries.
+  - Edmonton `s1-1`, Québec City `s1-1`: a failure to yield each.
+  - Mount Pleasant `s1-2`: driving in a reserved bus lane.
+  - Victoria `s1-2`: a pothole hit too fast.
+  The 1.6 soak adds stuck routes in Toronto, Calgary and Victoria, a delivery-van stand-off and
+  emergency yields at night.
 
 ## Phase 2: put the models on the road
 

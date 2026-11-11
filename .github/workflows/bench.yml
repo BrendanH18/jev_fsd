@@ -2,9 +2,7 @@ name: Seeded benchmark
 # Rules over the seeded Kitsilano suite, in the bare world (every opt-in feature off, as the
 # benchmark always was) and the city world (the free drive's features: static/js/sim/free-drive.js).
 # Every change runs both in dry weather; the weekly run adds the city world in fog, rain and snow.
-# Any route that fails, throws or gets stuck fails the job (scripts/bench_node.mjs --check 1). Bare dry
-# and city dry block a change; the city world's other weathers report without blocking until they pass
-# (ROADMAP.md 1.3).
+# Any route that fails, throws or gets stuck fails the job (scripts/bench_node.mjs --check 1).
 on:
   push:
     branches: [main]
@@ -25,8 +23,6 @@ jobs:
     name: ${{ matrix.features }} world, ${{ matrix.weather }}
     runs-on: namespace-profile-gitrunner
     timeout-minutes: 30
-    # The city world passes in dry weather but not yet in fog, rain or snow (ROADMAP.md 1.3).
-    continue-on-error: ${{ matrix.features == 'city' && matrix.weather != 'dry' }}
     strategy:
       fail-fast: false
       matrix:
