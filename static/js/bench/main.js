@@ -17,7 +17,7 @@ const COLUMNS = [
   ["min_gap_m", "min gap m", 1, "high"], ["min_ttc_s", "min TTC s", 1, "high"], ["max_decel", "max decel", 1, "high"],
   ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "rms jerk", 2, "low"], ["max_lat_accel", "max lat m/s²", 1, "low"],
   ["lane_rms_m", "lane rms m", 2, "low"], ["speeding_s", "speeding s", 1, "low"], ["safety_brakes", "safety", 0, "low"],
-  ["decisions", "decisions", 0, null], ["fallbacks", "fallbacks", 0, "low"], ["latency_p50_ms", "p50 ms", 0, "low"], ["cost_usd", "cost", "usd", null],
+  ["decisions", "decisions", 0, null], ["model_share", "model", "pct", "high"], ["local_share", "local", "pct", null], ["fallbacks", "fallbacks", 0, "low"], ["latency_p50_ms", "p50 ms", 0, "low"], ["cost_usd", "cost", "usd", null],
 ];
 const CARDS = [
   ["pass_rate", "pass rate", "pct", "high"], ["violations_per_km", "violations / km", 2, "low"], ["collisions", "collisions", 0, "low"], ["at_fault", "at-fault collisions", 0, "low"],
@@ -25,6 +25,8 @@ const CARDS = [
   ["min_ttc_s", "worst TTC s", 1, "high"], ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "mean rms jerk", 2, "low"],
   ["lane_rms_m", "mean lane rms m", 2, "low"], ["avg_kmh", "mean km/h", 1, "high"], ["km", "km driven", 2, null],
   ["safety_brakes", "safety brakes", 0, "low"], ["cost_usd", "cost", "usd", null],
+  // (who made the decisions: only drivers other than Rules report it, bench/metrics.js)
+  ["model_share", "decided by the model", "pct", "high"], ["local_share", "answered locally", "pct", null], ["fallback_share", "fell back to Rules", "pct", "low"],
 ];
 
 const fmt = (v, f) => {
@@ -149,7 +151,7 @@ function delta(cur, prev, better, f) {
 function render(state) {
   const prev = compareSummary();
   const s = state.summary;
-  $("#summary").replaceChildren(...(s ? CARDS.map(([k, label, f, better]) => h("div", { class: "card" },
+  $("#summary").replaceChildren(...(s ? CARDS.filter(([k]) => s[k] !== undefined).map(([k, label, f, better]) => h("div", { class: "card" },
     h("span", { class: "label" }, label),
     h("span", { class: "value" }, fmt(s[k], f)),
     prev ? delta(s[k], prev[k], better, f) : null)) : []));

@@ -56,6 +56,11 @@ export class Autopilot {
     this.creepBlockedAt = -Infinity;
     this.creepCheckedAt = -Infinity;
     this.totals = { tokens: 0, cost: 0, decisions: 0, calls: 0 };
+    // Who made each decision (bench/metrics.js reports the shares for every driver but Rules): the
+    // driver itself (`model`; `partial` counts those of them that left a route or headlight question
+    // it was asked to the default), answered locally with no call (`local`), or Rules after a timeout,
+    // an error, an unusable answer or an invalid vector (`fallback`).
+    this.decidedBy = { model: 0, partial: 0, local: 0, fallback: 0 };
     this.snap = null;
     this.offRouteFor = 0;
     this.rerouting = false;
@@ -275,13 +280,13 @@ export class Autopilot {
     const { questions, local } = buildQuestions(snap, eligible, { routeOptions });
     const request = { epoch, state, questions, local, candidates, eligible, flags, mustStop };
     if (!eligible.length) {
-      this.apply({ motion: "stop", candidateId: "hard_brake", meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" }, answers: { ...local } }, snap, candidates, request);
+      this.apply({ motion: "stop", candidateId: "hard_brake", meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" }, answers: { ...local } }, snap, candidates, request, "local");
       return;
     }
     if ((!Object.keys(questions).length && this.brain?.questionDriven) || this.brainName === "rules") {
       const r = this.brains.rules.decideSync(snap, eligible);
       if (this.brainName !== "rules") { r.meta.source = "local"; r.answers = { ...local }; } else r.answers = { ...local, motion: { type: "choice", choice: r.motion, probabilities: { [r.motion]: 1 }, confidence: 1 }, vector: { type: "choice", choice: r.candidateId, probabilities: { [r.candidateId]: 1 }, confidence: 1 } };
-      this.apply(r, snap, candidates, request);
+      this.apply(r, snap, candidates, request, this.brainName === "rules" ? "model" : "local");
       return;
     }
     const controller = new AbortController();
@@ -306,7 +311,7 @@ export class Autopilot {
         this.world.violations.fallbacks++;
       }
       if (isDecisionAgent(this.brainName) || result.meta.live_call) this.totals.calls++;
-      this.apply(result, snap, candidates, request);
+      this.apply(result, snap, candidates, request, result.meta.fallback ? "fallback" : "model");
     } catch (err) {
       clearTimeout(timer);
       if (epoch !== this.epoch) return;
@@ -322,17 +327,23 @@ export class Autopilot {
       r.answers = { ...local };
       this.world.violations.fallbacks++;
       this.onEvent({ type: "fallback", error: r.meta.error, status: err.status });
-      this.apply(r, snap, candidates, request);
+      this.apply(r, snap, candidates, request, "fallback");
     } finally {
       if (this.inFlight === controller) this.inFlight = null;
     }
   }
 
-  apply(result, snap, candidates, request) {
+  // `by` is who made the decision, for `decidedBy`; a choice made from outside the autopilot (a
+  // replay branch's alternate manoeuvre, picked by the person) counts as local: it is not the model's.
+  apply(result, snap, candidates, request, by = "local") {
     const world = this.world;
+    // (a model answer that left a route or headlight question it was asked to the default is partial:
+    // the car keeps the first route option, and the beam the sensing allows)
+    const beam = result.headlights ?? result.answers?.headlights?.choice;
+    const partial = by === "model" && ((request.questions?.route && !this.pendingRoutes?.some((r) => r.id === result.routeId))
+      || (request.questions?.headlights && beam !== "high" && beam !== "low"));
     if (world.highBeams) {
-      const answer = result.headlights ?? result.answers?.headlights?.choice;
-      world.ego.highBeam = (answer === "high" || answer === "low" ? answer : (snap.headlights?.high_allowed ? "high" : "low")) === "high";
+      world.ego.highBeam = (beam === "high" || beam === "low" ? beam : (snap.headlights?.high_allowed ? "high" : "low")) === "high";
     }
     let chosen = candidates.find((c) => c.id === result.candidateId) || null;
     if (result.motion === "stop") {
@@ -363,6 +374,8 @@ export class Autopilot {
       this.pendingRoutes = null;
     }
     this.totals.decisions++;
+    this.decidedBy[by]++;
+    if (partial) this.decidedBy.partial++;
     this.totals.tokens += result.meta.input_tokens || 0;
     this.totals.cost += result.meta.cost_usd || 0;
     this.lastDecision = {

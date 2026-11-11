@@ -9,6 +9,7 @@ import { readHistory } from "../sim/drive-score.js";
 import { EVALUATION_SCHEMA, EVALUATION_HISTORY_KEY, MAX_IMPORT_BYTES, validateEvaluation, readEvaluations,
   saveEvaluation, compareResult, incidentCount, summarizeResults } from "./history.js";
 import { ROAD_TESTS } from "./road-tests.js";
+import { decidedByText } from "../bench/metrics.js";
 import { examine } from "./examiner.js";
 
 let running = false, stop = false, results = [], current = null, saved = [];
@@ -57,6 +58,7 @@ function render() {
       h("td", {}, h("button", { class: "result-button", onclick: () => details(r), "aria-label": `Inspect ${agentLabel(r.brain)} on ${challengeLabel(r.challenge)}` }, agentLabel(r.brain)),
         h("small", {}, challengeLabel(r.challenge)), comparison.reasons?.length ? h("small", { class: "comparison-note" }, `Not compared: ${comparison.reasons.join(", ")}`) : null),
       h("td", { class: r.pass ? "pass" : "fail" }, r.stopped ? "STOPPED" : r.pass ? "PASS" : r.failures.join(", "), roadTestVerdict(r),
+        decidedByText(r) ? h("small", { class: "delta" }, `Decisions: ${decidedByText(r)}`) : null,
         before ? h("small", { class: "delta" }, before.pass === r.pass ? "Same outcome" : before.pass ? "Baseline passed" : "Baseline failed") : null),
       h("td", {}, r.report.qualified ? r.report.score : "Practice"), h("td", {}, `${r.time_s}s`),
       h("td", {}, incidentCount(r), before ? h("small", { class: "delta" }, `${signed(incidentCount(r) - incidentCount(before))} vs baseline`) : null),
@@ -77,6 +79,7 @@ function render() {
     return h("article", { class: "agent-summary" }, h("h3", {}, agentLabel(id)),
       h("p", {}, `${percent(summary.pass_rate)} passes · ${summary.count} attempts · ${summary.incidents} incidents`),
       h("p", {}, `${summary.hard_brakes} hard brakes · ${summary.latency_p50_ms == null ? "—" : `${Math.round(summary.latency_p50_ms)} ms mean of run p50s`} · ${usd(summary.cost_usd)}`),
+      decidedByText(summary) ? h("p", {}, `Decisions: ${decidedByText(summary)}`) : null,
       pairs.length ? h("p", {}, `Matched ${pairs.length}: ${signed((after.pass_rate - before.pass_rate) * 100)} pp passes · ${signed(after.incidents - before.incidents)} incidents · ${signed(after.hard_brakes - before.hard_brakes)} hard brakes`,
         h("span", { class: "delta" }, `${after.latency_p50_ms == null || before.latency_p50_ms == null ? "— latency" : `${signed(after.latency_p50_ms - before.latency_p50_ms)} ms mean p50`} · ${signed(after.cost_usd - before.cost_usd, 6)} USD`)) : null);
   }));
@@ -97,6 +100,7 @@ function details(result) {
   $("#details-heading").textContent = `${agentLabel(result.brain)} · ${challengeLabel(result.challenge)}`;
   $("#details-content").replaceChildren(...[
     h("p", {}, `${result.mode} · challenge v${result.version} · map pack ${result.pack} · seed ${result.seed} · ${result.weather} · ${result.time} · ${result.car}`),
+    decidedByText(result) ? h("p", {}, `Decisions: ${decidedByText(result)}. Only the model's share is the driver's own; local answers and Rules fallbacks are not.`) : null,
     h("p", {}, result.stopped ? "Stopped attempts cannot pass." : result.pass ? "Arrived with no audited failure. Coaching and comfort are reported separately." : `Failed: ${result.failures.join(", ")}.`),
     h("p", {}, "Each event links to the most recent recorded decision, not proof that the decision caused it. Emergency braking and unseen hazards can intervene."),
     !result.decisions_trace ? h("p", {}, "This older export has scoring incidents but no decision context.") : null,

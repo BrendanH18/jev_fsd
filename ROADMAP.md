@@ -179,10 +179,12 @@ cost $0.033.
 - [ ] **2.3 Smoke-test the endpoints against real providers.** (S) One decision model and one LLM
   through a hosted provider, and one through a local server. The README says they have only met
   mock servers.
-- [ ] **2.4 Report who actually drove.** (S) A model drive falls back to Rules on a timeout or an
+- [x] **2.4 Report who actually drove.** (S) A model drive falls back to Rules on a timeout or an
   unusable answer, and many questions are answered locally. Show, per drive, the share of decisions
   the model made, the share answered locally and the share that fell back. Without it a "pass"
-  cannot be credited to the model.
+  cannot be credited to the model. *Landed:* the autopilot counts model, partial, local and
+  fallback decisions; non-Rules results, the bench aggregate and table, the arena, the drive report
+  and the Inspect drawer show `model_share`, `local_share` and `fallback_share`.
 - [ ] **2.5 First published comparison.** (M) Rules, the cautious agent, Jev and at least one LLM
   ([D2](#open-decisions)) over the 60 challenges, the road tests and the city suite. Commit the
   runs, with model ids, date, seed and prompt version, and write them up in

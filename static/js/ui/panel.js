@@ -1,6 +1,7 @@
 // The "What Jev sees" drawer: live state, questions, answers with probability bars, and meta.
 
 import { $, h, pct, ms, usd, num, copyText, api } from "../common.js";
+import { decidedBy, decidedByText } from "../bench/metrics.js";
 
 const llmRequest = d => (Array.isArray(d?.trace?.request?.messages) ? d.trace.request : null);
 
@@ -109,6 +110,9 @@ export class Panel {
     ];
     const t = this.autopilot.totals;
     rows.push(["totals", `${t.decisions} decisions · ${t.calls} live calls · ${num(t.tokens)} tokens · ${usd(t.cost)}`]);
+    // (who made them, for every driver but Rules: bench/metrics.js)
+    const decided = decidedByText(decidedBy(this.autopilot));
+    if (decided) rows.push(["decided by", decided]);
     const kv = h("div", { class: "kv" });
     for (const [k, v] of rows) kv.append(h("span", { class: "label" }, k), h("span", {}, String(v ?? "–")));
     return [kv];

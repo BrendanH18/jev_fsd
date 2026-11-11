@@ -1,4 +1,4 @@
-import { failures } from "../bench/metrics.js";
+import { failures, DECIDED_BY, decidedByTotals } from "../bench/metrics.js";
 
 // (v3: decisions no event links to are compact, and repeats are folded together: lab/trace.js)
 export const EVALUATION_SCHEMA = "jev-agent-evaluation-v3";
@@ -48,6 +48,9 @@ export function validateEvaluation(value) {
       || !Number.isInteger(r.seed) || r.pack == null || !["string", "number"].includes(typeof r.pack)
       || !COUNTERS.every(k => finite(r[k])) || typeof r.arrived !== "boolean" || typeof r.stopped !== "boolean"
       || (r.latency_p50_ms !== null && !finite(r.latency_p50_ms))
+      // (who decided, reported for every driver but Rules: bench/metrics.js)
+      || (r.model_decisions !== undefined && !(DECIDED_BY.every(k => Number.isInteger(r[k]) && r[k] >= 0)
+        && ["model_share", "local_share", "fallback_share"].every(k => r[k] === null || (finite(r[k]) && r[k] <= 1))))
       || !r.report || !finite(r.report.score) || r.report.score > 100 || typeof r.report.qualified !== "boolean"
       || (r.simulation_error !== undefined && !text(r.simulation_error))
       || r.report.status !== (r.simulation_error ? "error" : r.stopped ? "stopped" : r.arrived ? "arrived" : "timeout")
@@ -130,5 +133,5 @@ export function summarizeResults(results) {
   const mean = key => { const values = results.map(r => r[key]).filter(Number.isFinite); return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null; };
   return { count: results.length, pass_rate: results.length ? results.filter(r => r.pass && !r.stopped).length / results.length : 0,
     incidents: results.reduce((sum, r) => sum + incidentCount(r), 0), hard_brakes: results.reduce((sum, r) => sum + r.hard_brakes, 0),
-    latency_p50_ms: mean("latency_p50_ms"), cost_usd: results.reduce((sum, r) => sum + r.cost_usd, 0) };
+    latency_p50_ms: mean("latency_p50_ms"), cost_usd: results.reduce((sum, r) => sum + r.cost_usd, 0), ...decidedByTotals(results) };
 }

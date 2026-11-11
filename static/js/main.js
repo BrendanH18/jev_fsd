@@ -89,6 +89,7 @@ import { ModelSetup, ModelMenu, KINDS } from "./ui/model-setup.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
+import { decidedByCounts } from "./bench/metrics.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
 import { advanceNotice, approachPhase, pedPhase, scrambleNotice } from "./sim/signals.js";
@@ -177,6 +178,7 @@ export async function boot() {
   let challengeModified = false;
   let examinerPrompt = null;
   let drive = null, arrivalPending = false, driveReport;
+  let decidedAtStart = null;   // the autopilot's decision counts when the drive started (bench/metrics.js)
   const callbacks = {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
     onEvent: (ev) => {
@@ -551,6 +553,7 @@ export async function boot() {
     lab?.endReview();
     driveReport.lastUpdate = -Infinity;
     driveReport.update(drive);
+    decidedAtStart = { ...autopilot.decidedBy };
     recorder.record({ world, fleet, autopilot, drive, clock }, true);
   }
   function finishDrive(reason) {
@@ -576,6 +579,12 @@ export async function boot() {
     report.recording_id = recorder.recordingId;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
+    // (who made an AI drive's decisions: none for a manual or Rules drive, bench/metrics.js)
+    if (!["manual", "rules"].includes(drive.driver) && decidedAtStart) {
+      const decided = decidedByCounts(autopilot.decidedBy, decidedAtStart);
+      // (counted from this autopilot's start of the drive: one made since, by a world rebuilt, has no share)
+      if (decided.model_share !== null && Object.values(decided).every((n) => n === null || n >= 0)) Object.assign(report, decided);
+    }
     if (challenge) {
       const practice = challenge.roadTest ? saveRoadTest(challenge, report, examine(challenge, report)) : savePractice(challenge, report);
       lab.practice = practice;

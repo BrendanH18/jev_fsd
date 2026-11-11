@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Drives now report who actually made the decisions. For every driver but Rules, the benchmark,
+  the arena, the drive report and the Inspect drawer give the share of decisions the model made
+  itself, the share answered locally because nothing needed asking, and the share that fell back
+  to Rules after a timeout, an error, an unusable answer or an invalid vector: the new result
+  fields `model_decisions`, `partial_decisions` (model answers that left a route or headlight
+  question to the default), `local_decisions`, `fallback_decisions`, `model_share`,
+  `local_share` and `fallback_share`, counted by the autopilot. `aggregate()` gives a suite's
+  overall shares. Rules results are unchanged, field for field.
 - Fixed free drives freezing when a traffic car looked for parking beside a driveway. Every parking
   reservation now records its owner and the stretch of kerb it occupies, so driveways, work zones,
   lane closures, roadside stops and parking cars share the same free-space checks and release rules.

@@ -988,6 +988,25 @@ the centre of the lane the car is in or moving into), lane changes, fault, safet
 brakes, gaps, tokens, cost and latency. This pass criterion is separate from the live coach's
 weighted score.
 
+**Who made the decisions.** A model can pass a drive that Rules mostly drove: many decisions need
+no question and are answered locally, and a timeout or an unusable answer falls back to Rules.
+So every driver but Rules also reports, per drive, where its decisions came from, counted by the
+autopilot as it applies each one (`Autopilot.decidedBy`):
+
+| Field | Meaning |
+|---|---|
+| `model_decisions` | The driver's own answer was used (for the cautious starter, the agent itself) |
+| `partial_decisions` | Of those, answers that left a route or headlight question it was asked to the default (the first route option, the beam sensing allows) |
+| `local_decisions` | Nothing needed asking, so the decision was made locally with no call; also the hard brake when no manoeuvre is eligible |
+| `fallback_decisions` | Rules decided instead: a timeout, an error, an unusable answer, or a vector outside the eligible set replaced by the Rules choice |
+| `model_share`, `local_share`, `fallback_share` | Each count over `decisions` (model + local + fallback), to 0.001; `null` with no decisions |
+
+A Rules drive reports none of these, so its results stay field-for-field as before and earlier
+records compare. `aggregate()` sums the counts over the drives that report them and gives the
+suite's overall shares; the benchmark table shows the model and local shares per route and the
+summary cards the three shares. The arena shows them in each result row, its details and each
+driver's summary; the drive report and the Inspect drawer show them for an AI drive.
+
 Recorded validation includes a 500 m Rules drive through Victoria in rain with no audited
 collision, red-light, stop or yield violations and a score of 97. The
 [2026-10-20 Rules baseline](rules-baseline.md) is the current seeded record. In WebKit, the
