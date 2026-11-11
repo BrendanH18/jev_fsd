@@ -1,0 +1,87 @@
+name: City interaction soak
+# Report-only while city failures are being triaged (ROADMAP.md 1.6/1.7).
+on:
+  schedule:
+    - cron: '43 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    name: City maps/seeds and feature pairs, shard ${{ matrix.shard }}
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Start the local server
+        run: |
+          PORT=8381 uv run --locked server.py > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8381/bench && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: Rules, city samples and every covering row
+        run: >
+          node --experimental-default-type=module scripts/soak.mjs --port 8381
+          --maps kitsilano,toronto,calgary,victoria --seeds 1,2,3 --count 2
+          --shard ${{ matrix.shard }} --shards 8 --json soak.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: soak-${{ matrix.shard }}
+          path: |
+            soak.json
+            server.log
+
+  park-night:
+    name: City ${{ matrix.label }}
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: dry parking, weather: dry, options: '--park 1' }
+          - { label: dry 23h30, weather: dry, options: '--hour 23.5' }
+          - { label: dry 06h30, weather: dry, options: '--hour 6.5' }
+          - { label: fog 23h30, weather: fog, options: '--hour 23.5' }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Start the local server
+        run: |
+          PORT=8381 uv run --locked server.py > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8381/bench && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: Rules, Kitsilano, suite seed 1
+        run: >
+          node --experimental-default-type=module scripts/bench_node.mjs --port 8381
+          --features city --weather ${{ matrix.weather }} ${{ matrix.options }} --check 1 --json run.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: city-${{ matrix.weather }}-${{ strategy.job-index }}
+          path: |
+            run.json
+            server.log

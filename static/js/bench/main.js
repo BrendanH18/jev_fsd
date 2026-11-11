@@ -4,7 +4,7 @@
 import { api, $, h, usd, appUrl } from "../common.js";
 import { MapData } from "../map/mapdata.js";
 import { buildSuite } from "./scenarios.js";
-import { runScenario, yieldNow, suiteOptions } from "./runner.js";
+import { runScenario, yieldNow, suiteOptions, benchmarkConfig } from "./runner.js";
 import { aggregate } from "./metrics.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
@@ -49,7 +49,13 @@ async function boot() {
   endpointOptions();
   if (decisions.length) checkDecisionEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
   if (endpoints.length) checkLlmEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
-  $("#run").addEventListener("click", () => (running ? (stopRequested = true) : runFromForm()));
+  $("#run").addEventListener("click", () => {
+    if (running) { stopRequested = true; return; }
+    runFromForm().catch(err => {
+      running = false; $("#run").textContent = "Run";
+      $("#status").textContent = `Failed to run: ${err.message}`;
+    });
+  });
   $("#compare").addEventListener("change", () => lastRun && render(lastRun));
   await loadRuns();
 }
@@ -75,7 +81,7 @@ async function loadRuns() {
   const sel = $("#compare");
   const keep = sel.value;
   sel.replaceChildren(h("option", { value: "" }, "none"), ...runs.map((r) => h("option", { value: r.name },
-    `${r.name} · ${r.config?.brain} · ${r.config?.count} × seed ${r.config?.seed}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`)));
+    `${r.name} · ${r.config?.brain} · ${r.config?.count} × seed ${r.config?.seed}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`)));
   if (keep) sel.value = keep;
   sel._runs = runs;
 }
@@ -83,18 +89,20 @@ async function loadRuns() {
 function runFromForm() {
   return run({
     brain: $("#brain").value, count: +$("#count").value, npcs: +$("#npcs").value,
-    seed: +$("#seed").value, mode: $("#mode").value, weather: $("#weather").value, features: $("#features").value,
+    seed: +$("#seed").value, mode: $("#mode").value, weather: $("#weather").value, features: $("#features").value, park: $("#park").checked,
+    hour: $("#hour").value === "" ? undefined : +$("#hour").value, without: $("#without").value,
   });
 }
 
-export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", save = true } = {}) {
+export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, save = true } = {}) {
+  const options = benchmarkConfig({ features, park, hour, without, cover });
   running = true; stopRequested = false;
   $("#run").textContent = "Stop";
   const definition = agentDefinitions().find(a => a.id === brain), endpoint = definition?.decision || definition?.llm;
-  const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, ...(features !== "bare" ? { features } : {}), map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
+  const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, ...options, map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
   const setStatus = (t) => { $("#status").textContent = t; };
   setStatus("building the scenario suite…");
-  const suite = await buildSuite(map, { count, seed, ...suiteOptions(features) });
+  const suite = await buildSuite(map, { count, seed, ...suiteOptions(features, options) });
   const state = { config, suite, results: [], summary: null };
   lastRun = state;
   render(state);
@@ -103,7 +111,7 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
     setStatus(`running ${i + 1} / ${suite.length}: ${suite[i].tags.length_m} m, ${suite[i].tags.signals} signals, ${suite[i].tags.stops} stops`);
     render(state);
     await yieldNow();
-    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, features, shouldStop: () => stopRequested });
+    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, ...options, shouldStop: () => stopRequested });
     state.results.push(r);
     state.summary = aggregate(state.results);
     render(state);
@@ -178,7 +186,7 @@ function render(state) {
 }
 
 function watch(sc, config) {
-  try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs, weather: config.weather, features: config.features || "bare", bbox: config.bbox || map.routingBbox })); } catch { /* storage off */ }
+  try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs, weather: config.weather, ...benchmarkConfig(config), bbox: config.bbox || map.routingBbox })); } catch { /* storage off */ }
   window.open(appUrl("", { replay: 1, bbox: (config.bbox || map.routingBbox).join(",") }), "_blank", "noopener");
 }
 

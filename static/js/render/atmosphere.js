@@ -2,7 +2,7 @@
 // to Vancouver (~49.27 N). Weather overlays cloud/fog; `lighting` holds shared shader uniforms.
 
 import * as THREE from "three";
-import { sunAngles } from "../sim/speed-zones.js";
+import { sunAngles, nightLevel } from "../sim/speed-zones.js";
 import { solarAngles } from "../sim/sun-glare.js";
 
 export const lighting = {
@@ -77,7 +77,7 @@ export function atmosphereFor(hour, weather = "dry", location = null) {
   const elDeg = sun.elevation * 180 / Math.PI;
   const sky = keyed(elDeg);
   const day = smooth(-6, 12, elDeg);                // 0 at night, 1 in full daylight
-  const night = 1 - smooth(-3, 5, elDeg);           // street lights on
+  const night = nightLevel(sun.elevation);         // street lights on
   const sunUp = smooth(-1, 6, elDeg);
   if (W.overcast) {
     // an overcast sky is as bright as the daylight behind it; at night it reflects the city's

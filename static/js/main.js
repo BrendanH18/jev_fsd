@@ -147,7 +147,7 @@ export async function boot() {
   let savedQuality;
   try { savedQuality = localStorage.getItem("jev-fsd-quality"); } catch { /* preferences are optional */ }
   const quality = params.get("quality") || savedQuality || "high";
-  let hour = parseHour(params.get("time"));
+  let hour = replay?.hour ?? parseHour(params.get("time"));
   const clock = new WorldClock(hour, options.clockRate, Number(params.get("weekday") || 0));
   const view = new SceneView($("#view"), map.extent, { quality });
   hud.setQuality(view.quality);
@@ -195,7 +195,7 @@ export async function boot() {
     ({ world, fleet, autopilot } = setupChallenge(map, challenge, callbacks));
     autopilot.setEnabled(false);
   } else if (replay) {
-    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: agentAvailable(replay.brain) ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", features: replay.features || "bare", ...callbacks }));
+    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: agentAvailable(replay.brain) ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", features: replay.features || "bare", park: replay.park || false, hour: replay.hour, without: replay.without || [], cover: replay.cover, ...callbacks }));
   } else {
     // every opt-in feature of a free drive, each on unless its query parameter is "0" (sim/free-drive.js)
     const free = freeDriveOptions(params, { hour });
