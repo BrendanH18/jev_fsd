@@ -149,6 +149,17 @@ export function phaseOf(intersection, t) {
   return { A: stateIn(plan.A, u), B: stateIn(plan.B, u), u };
 }
 
+// Remaining time on the amber actually displayed (including an advance arrow's).
+export function amberTimeLeft(intersection, shows, t) {
+  const plan = planOf(intersection), phase = phaseOf(intersection, t), u = phase.u;
+  if (shows === "arrow_yellow" && plan.advance) {
+    const a = plan.advance;
+    return Math.max(0, plan[a.group].start + a.length + ARROW_YELLOW_S - u);
+  }
+  const p = phase.A === "yellow" ? plan.A : phase.B === "yellow" ? plan.B : null;
+  return p ? Math.max(0, p.start + p.green + p.yellow - u) : 0;
+}
+
 // The pedestrian signal for people walking alongside `group`'s traffic: "walk", "flash" (the
 // flashing hand: finish crossing, do not start), or "dont".
 // At a scramble every crossing, diagonals too, shows the all-walk phase, whatever the group.

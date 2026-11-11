@@ -23,24 +23,24 @@ import { crossingNotice, isTrain } from "./sim/rail.js";
 import { boxNotice } from "./sim/junction-box.js";
 import { IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, doorsOpen, isStreetcar, streetcarRelation } from "./sim/streetcar.js";
 import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
-import { ROADSIDE_COUNT, ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
+import { ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
 import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
-import { WORK_ZONE_COUNT, workZoneNotice } from "./sim/work-zone.js";
+import { workZoneNotice } from "./sim/work-zone.js";
 import { createLaneClosureMesh, syncLaneClosure } from "./render/lane-closure.js";
-import { LANE_CLOSURE_COUNT, laneClosureNotice } from "./sim/lane-closure.js";
-import { OUTAGE_COUNT, outageNotice } from "./sim/outage.js";
+import { laneClosureNotice } from "./sim/lane-closure.js";
+import { outageNotice } from "./sim/outage.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
-import { VAN_COUNT, vanNotice } from "./sim/double-parked.js";
-import { PLOW_COUNT, isPlow, plowNotice } from "./sim/snow-plow.js";
+import { vanNotice } from "./sim/double-parked.js";
+import { isPlow, plowNotice } from "./sim/snow-plow.js";
 import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
 import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
-import { STEP_OUT_COUNT, hazardNotice } from "./sim/hidden-hazards.js";
+import { hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
 import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { calmingNotice } from "./sim/traffic-calming.js";
 import { sunGlareNotice, egoGlare } from "./sim/sun-glare.js";
 import { SunGlareView } from "./render/sun-glare.js";
-import { TRUCK_COUNT, isTruck } from "./sim/collection-truck.js";
+import { isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
 import { buildBusLanes } from "./render/bus-lanes.js";
 import { buildContraflow } from "./render/contraflow.js";
@@ -102,6 +102,7 @@ import { DriveAudio } from "./ui/drive-audio.js";
 import { Cockpit } from "./ui/cockpit.js";
 import { capturePose, interpolatePose } from "./sim/interpolate.js";
 import { WorldClock, formatClock, worldOptions } from "./sim/world-clock.js";
+import { freeDriveOptions } from "./sim/free-drive.js";
 import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-models.js";
 import { OrbitControls } from "./ui/orbit-controls.js";
 import { PhotoMode } from "./ui/photo-mode.js";
@@ -194,63 +195,12 @@ export async function boot() {
     ({ world, fleet, autopilot } = setupChallenge(map, challenge, callbacks));
     autopilot.setEnabled(false);
   } else if (replay) {
-    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: agentAvailable(replay.brain) ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", ...callbacks }));
+    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: agentAvailable(replay.brain) ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", features: replay.features || "bare", ...callbacks }));
   } else {
-    // fewer people out on foot late in the evening and at night
-    const pedestrians = hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined;
-    // buses run their routes in a free drive (`?buses=0` takes them off)
-    const buses = params.get("buses") !== "0";
-    // and vehicles stopped at the roadside with their lights flashing (`?roadside=0` takes them off)
-    const roadside = params.get("roadside") !== "0" ? ROADSIDE_COUNT : 0;
-    // and work zones with a flagger at each end (`?workzones=0` takes them off)
-    const workZones = params.get("workzones") !== "0" ? WORK_ZONE_COUNT : 0;
-    // and lane closures where both lanes zipper merge (`?closures=0` takes them off)
-    const closures = params.get("closures") !== "0" ? LANE_CLOSURE_COUNT : 0;
-    // and power cuts that turn a signal's lights off for a while (`?outages=0` turns them off)
-    const outages = params.get("outages") !== "0" ? OUTAGE_COUNT : 0;
-    // and delivery vans double-parked now and then, by day (`?vans=0` takes them off)
-    const vans = params.get("vans") !== "0" ? VAN_COUNT : 0;
-    // and the autopilot parks at the destination, where there is a space (`?park=0` stops it in its lane)
-    const park = params.get("park") !== "0";
-    // and cars parked at the kerb hide the people behind them, now and then someone steps out from
-    // between them, and the autopilot keeps to a speed it can stop from beside them (`?hazards=0`
-    // turns that off)
-    const hazards = params.get("hazards") !== "0";
-    // and on two-way streets with one lane each way, everyone passes a cyclist riding in the lane
-    // through the oncoming lane once it is clear, with the minimum passing distance (`?cyclistpass=0`
-    // turns that off: everyone stays behind)
-    const passCyclists = params.get("cyclistpass") !== "0";
-    // and everyone slows for speed humps, tables, cushions and bumps (`?calming=0` turns that off)
-    const calming = params.get("calming") !== "0";
-    // and signals with a scramble crossing run their all-walk phase, with no right turn on red
-    // (`?scramble=0` runs them as any other signal)
-    const scrambles = params.get("scramble") !== "0";
-    // and, while a school zone is in effect, crossing guards walk children across the marked crosswalks
-    // in it, and everyone stops for their STOP sign (`?guards=0` takes them off)
-    const guards = params.get("guards") !== "0";
-    // and, on one-way streets that allow it, cyclists ride against the traffic, and everyone looks both
-    // ways for them (`?contraflow=0` takes them off)
-    const contraflow = params.get("contraflow") !== "0";
-    // and, now and then, a car behind closes up and tailgates the driven car (`?tailgaters=0` turns that off)
-    const tailgaters = params.get("tailgaters") !== "0";
-    // and, now and then, the car ahead parallel parks, and everyone waits (`?parkers=0` turns that off)
-    const parkers = params.get("parkers") !== "0";
-    // and, now and then, a police officer directs traffic at a signal on the car's way (`?officers=0` turns that off)
-    const officers = params.get("officers") !== "0";
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", pedestrians, vehicleSpec: garage.vehicle.spec, buses, roadside, workZones, outages, vans, park, hazards, stepOuts: hazards ? STEP_OUT_COUNT : 0, closures, passCyclists, calming, scrambles, guards, nightFlash: params.get("nightflash") !== "0", busLanes: params.get("buslanes") !== "0", pxo: params.get("pxo") !== "0", restrictions: params.get("restrictions") !== "0", contraflow, highBeams: params.get("highbeams") !== "0", leftOnRed: params.get("leftonred") !== "0", redTurnSigns: params.get("redturnsigns") !== "0", amberLights: params.get("amberlights") !== "0", redRunners: params.get("redrunners") !== "0", followingDistance: params.get("followingdistance") !== "0", sunGlare: params.get("sunglare") !== "0", driveways: params.get("driveways") !== "0", potholes: params.get("potholes") !== "0", balls: params.get("balls") !== "0", geese: params.get("geese") !== "0", tailgaters, ice: params.get("ice") !== "0", snowbanks: params.get("snowbanks") !== "0", puddles: params.get("puddles") !== "0", parkers, roadClosures: params.get("roadclosures") !== "0", officers });
-    // emergency vehicles answer calls now and then in a free drive (`?emergency=0` turns them off)
-    // and, on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0` takes them off)
-    const schoolBuses = params.get("schoolbuses") !== "0" && hour >= 7 && hour < 17 ? 2 : 0;
-    // streetcars run their routes on their tracks, where the map has any (`?streetcars=0` takes them off)
-    const streetcars = params.get("streetcars") !== "0";
-    // and trains theirs, over the level crossings (`?trains=0` takes them off)
-    const trains = params.get("trains") !== "0";
-    // and, while it snows, a snow plow clears the main streets (`?plows=0` takes them off)
-    const plows = params.get("plows") !== "0" ? PLOW_COUNT : 0;
-    // and, by day, a garbage truck works the quiet streets, its crew emptying the bins (`?collection=0`
-    // takes it off)
-    const collection = params.get("collection") !== "0" ? TRUCK_COUNT : 0;
-    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, emergency: params.get("emergency") !== "0", buses, streetcars, trains, schoolBuses, plows, collection });
+    // every opt-in feature of a free drive, each on unless its query parameter is "0" (sim/free-drive.js)
+    const free = freeDriveOptions(params, { hour });
+    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", vehicleSpec: garage.vehicle.spec, ...free.world });
+    fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, ...free.fleet });
     autopilot = new Autopilot(world, callbacks);
   }
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)

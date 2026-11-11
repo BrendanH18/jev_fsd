@@ -90,11 +90,11 @@ and all 199 browser unit checks passed. The existing 12-route dry suite is uncha
 Every opt-in feature is off in the seeded benchmark, and each is tested alone by its own challenge.
 Free drives turn nearly all of them on together. Nothing checks that combination.
 
-- [ ] **1.1 One definition of a free drive.** (M) `main.js` builds about forty `World` and
+- [x] **1.1 One definition of a free drive.** (M) `main.js` builds about forty `World` and
   `NpcFleet` options inline from query parameters. Move that into one function that the app, the
   benchmark and the Node runner all call, so the benchmark's "city" world cannot drift from the
   app's.
-- [ ] **1.2 A "city" suite beside the current one.** (M) Add a feature preset to
+- [x] **1.2 A "city" suite beside the current one.** (M) Add a feature preset to
   `bench/runner.js` and `scripts/bench_node.mjs`: `bare` (today's behaviour, so every earlier
   record stays comparable) and `city` (the free-drive defaults, with routes planned the way the app
   plans them, turn restrictions included). The 9 November probe script is the starting point.
@@ -106,11 +106,33 @@ Free drives turn nearly all of them on together. Nothing checks that combination
     the audit is wrong.
   - `s1-12`: a hard brake with a tailgater behind.
   - `s1-4`, `s1-9`: the crash in 0.1.
+
+  Status, 10 November (Rules, Kitsilano, seed 1, at the city preset of 1.2): **dry 12/12, fog
+  12/12, rain 12/12, snow 11/12**, up from 7/12, 5/12, 4/12 and 1/12 at the first probe, with no
+  route that passed before failing since. A road-closure detour now extends the bench deadline by
+  the distance it adds. Fixed along the way, each with a Node check:
+  - Audits: a prohibited-turn audit misreading a legal left; the emergency-vehicle audit penalising
+    stops the car could not improve on, and an exact-target comparison inside a snowbank narrowing.
+  - Emergency vehicles: two missed sirens on turns; pull-overs that could not finish steering before
+    a short stop, or approached it too fast; a stood-down vehicle that kept its passing controller;
+    gap searches blocked by what was behind them.
+  - Traffic: boxed in by pothole moves and a garbage truck; driving into the stopped car; turning
+    bodies swinging across it; a pedestrian and a cyclist waiting on each other at a crossing;
+    buses blocking a narrowing's exit.
+  - The car: a slow left ignoring a stopped oncoming car; a ball warning missed behind a competing
+    stop; a red light from a wet amber dilemma; no way back from a pull-over beside parked cars.
+  - Snowbank narrowings lost on partial routes.
+  Still open: snow `s1-4` arrives after two detours (1,940 m against 894 m planned) but fails to
+  yield to an emergency vehicle on the way: the planner thinks it was asked to drive on ahead of
+  it while the audit does not. The 1.6 soak finds more emergency yields at night and on other maps.
+  Evidence: `docs/validation/city-round3-2026-11-10.json`, `city-detours-2026-11-10.json`, `city-yields-2026-11-10.json`,
+  `city-snow-2026-11-10.json`, `traffic-clearance-2026-11-10.md`.
 - [ ] **1.4 Record a city baseline.** (M) Kitsilano in dry, fog, rain and snow, then the two-route
   smoke suite for every other map. Commit it under `data/runs/` and describe it in
   `docs/rules-baseline.md`.
-- [ ] **1.5 Run it in CI.** (S) The city suite for Kitsilano dry on every change; the full matrix
-  on a schedule.
+- [x] **1.5 Run it in CI.** (S) The city suite for Kitsilano dry on every change; the full matrix
+  on a schedule. `.github/workflows/bench.yml` runs bare dry and city dry on every change, both blocking,
+  and the city matrix weekly; fog, rain and snow report without blocking until they pass.
 - [ ] **1.6 Look for interactions on purpose.** (M) A scheduled soak over several seeds and maps,
   and a run over pairs of features, since the bugs found so far are all pairs (parkers with
   driveways, closures with detours, pull-outs with emergency vehicles). A throw, a stuck car or a

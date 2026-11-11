@@ -79,9 +79,9 @@ function car(id, x, y, psi, v = 0) {
   return n;
 }
 const oncoming = (x, v = 11, extra = {}) => Object.assign(car("oncoming", x, HALF, Math.PI, v), extra);
-function setup({ x = -40, v = 8, npcs = [], route = LEFT, weather = "dry", t = 0, on = map } = {}) {
+function setup({ x = -40, v = 8, npcs = [], route = LEFT, weather = "dry", t = 0, on = map, hazards = false } = {}) {
   setWeather(weather);
-  const world = new World(on, { parked: 0, pedestrians: 0, weather });
+  const world = new World(on, { parked: 0, pedestrians: 0, weather, hazards });
   world.t = t;
   Object.assign(world.ego, { x, y: -HALF, psi: 0, v });
   world.route = new Route(route, on);
@@ -540,4 +540,28 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
   console.log(`✓ going straight on or turning right past oncoming traffic at real junctions, which goes straight or turns either way, is never a failure to yield (${drives} drives)`);
 }
 
+
+// City snow s1-4: a stationary oncoming queue can launch on its green
+// while the car is taking a slow left turn across it.
+for (const hazards of [true, false]) {
+  const world = setup({ x: -12, v: 0, npcs: [oncoming(17, 0, { a: 0 })], weather: "snow", hazards });
+  const { snap, eligible } = decide(world);
+  assert.equal(snap.intersection.oncoming?.id === "oncoming", hazards, "a green queue may start with hidden hazards on");
+  if (hazards) {
+    const chosen = eligible.find(c => c.id === new RulesBrain().decideSync(snap, eligible).candidateId);
+    assert.equal(Number.isFinite(chosen?.law.stopAtRoute), true, "Rules approaches a stop before the oncoming lane");
+  }
+}
+{
+  const world = setup({ x: -8, v: 0, npcs: [oncoming(17, 0, { a: 0 })], hazards: true, t: 35 });
+  assert.equal(phaseOf(map.intersections.get("sig"), world.t).A, "red");
+  assert.equal(decide(world).snap.intersection.oncoming === null, true, "a queue held on red is not assumed to launch");
+}
+{
+  const world = setup({ x: -8, v: 0, npcs: [oncoming(17, 0, { a: 0 })], hazards: true });
+  world.outages.cut("sig");
+  assert.equal(decide(world).snap.intersection.oncoming === null, true, "an outage overrides the otherwise green signal");
+}
+console.log("✓ a visible oncoming queue may start on green; red queues and hazards-off behavior are preserved");
 console.log("All left-turn checks passed.");
+process.exit(0);

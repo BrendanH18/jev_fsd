@@ -59,6 +59,8 @@ const BANKED = new Set(["residential", "unclassified", "living_street", "tertiar
 // further out; others keep SIDE_CLEAR_M clear of them.
 export const PUSH_M = 0.6;
 export const SIDE_CLEAR_M = 0.5;
+// The full narrowed corridor starts this far before its entry and ends this far after its exit.
+export const NARROW_FULL_M = 1;
 export const NARROW_P = 0.7;
 export const NARROW_LEN_M = [40, 100];
 const MIN_NARROW_M = 30;
@@ -325,6 +327,9 @@ export class Snowbanks {
   // null when it is not coming to it within LOOK_M, or is through it.
   claimFor(nw, v) {
     if (!narrowable(v)) return null;
+    // Until a pull-out has a gap and starts moving it is still parked at the kerb, outside the
+    // shared corridor. Its longitudinal position alone does not give it the narrowing.
+    if (v.pull && !v.pull.moving) return null;
     const world = this.world, map = world.map, spec = v.spec || CAR, fr = spec.length - spec.rearOverhang;
     if (Math.abs(v.x - nw.x) > nw.reach + LOOK_M || Math.abs(v.y - nw.y) > nw.reach + LOOK_M) return null;
     const make = (dir, gap, en = null, ex = null) => {
@@ -361,7 +366,23 @@ export class Snowbanks {
     const i = route.edges.findIndex((id) => id === nw.edge || id === nw.opposite);
     if (i >= 0) {
       const map = this.world.map, dir = route.edges[i] === nw.edge ? 1 : -1, e = map.edges.get(route.edges[i]), lat = e.lane_offsets?.[0] ?? e.lane_width / 2;
-      const at = (s) => { const q = offsetPoint(e, s, lat), p = projectPoint(route.pts, route.cum, q, null); return p && p.distance < 3 ? p.s : null; };
+      const at = (s) => {
+        // A drive can start or finish inside the stretch. Its truncated polyline cannot project
+        // the missing end: keep that end beyond the route boundary in the same street's frame.
+        // One that starts past the stretch, or finishes short of it, never reaches it.
+        if (i === 0) {
+          const start = projectPoint(e.pts, e.cum, route.pts[0], null);
+          if (start && start.s > exitOf(nw, dir)) return null;
+          if (start && s < start.s) return s - start.s;
+        }
+        if (i === route.edges.length - 1) {
+          const end = projectPoint(e.pts, e.cum, route.pts[route.pts.length - 1], null);
+          if (end && end.s < entryOf(nw, dir)) return null;
+          if (end && s > end.s) return route.length + s - end.s;
+        }
+        const q = offsetPoint(e, s, lat), p = projectPoint(route.pts, route.cum, q, null);
+        return p && p.distance < 3 ? p.s : null;
+      };
       const en = at(entryOf(nw, dir)), ex = at(exitOf(nw, dir));
       if (en !== null && ex !== null && ex > en) out = { dir, en, ex, edge: e.id };
     }
@@ -400,7 +421,7 @@ export class Snowbanks {
   // stop short of it even braking hard, on the grip under its wheels (black ice too), so that one already
   // in, coming the other way, outranks a late claim from a driver still outside that could still stop.
   committed(nw, c, self = false) {
-    if (c.inside || this.go.get(keyOf(c.v, nw))) return true;
+    if (c.inside || (!self && this.go.get(keyOf(c.v, nw)))) return true;
     if (c.speed <= 0.3) return false;
     if (!self) return c.gap < c.speed * c.speed / (2 * comfort().decel) + COMMIT_M;
     // (after the brakes' response, and the ramp to full braking, then braking hard)
@@ -445,6 +466,27 @@ export class Snowbanks {
 
   // The narrowings edge `id` runs through, with the way along it.
   on(id) { return this.geo.byEdge.get(id) || null; }
+
+  // Joining the shared corridor from a parking space is an entry, even halfway along the block.
+  canPullOut(v) {
+    const pe = v.path?.currentEdge(), on = pe && this.on(pe.id);
+    if (!on) return true;
+    const e = this.world.map.edges.get(pe.id), p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
+    if (!p || p.s < entryOf(on.nw, on.dir) || p.s > exitOf(on.nw, on.dir)) return true;
+    const c = { v, id: v.id, dir: on.dir, gap: 0, inside: false, speed: 0 };
+    return narrowingTurn(this, on.nw, c).mayEnter;
+  }
+
+  // Spawning or resetting in a narrowed lane must start in its drivable corridor, clear of the
+  // cars the banks pushed out. Use the same move over as traffic and the driven car's lane laws.
+  place(v, lane) {
+    const on = this.on(lane.edge);
+    if (!on) return;
+    const e = this.world.map.edges.get(lane.edge), p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
+    if (!p) return;
+    const shift = keepRel(this.world.map, on.nw, on.dir, v.spec || CAR) * moveAt(p.s, entryOf(on.nw, on.dir), exitOf(on.nw, on.dir));
+    v.x += Math.sin(v.psi) * shift; v.y -= Math.cos(v.psi) * shift;
+  }
 }
 
 // Whose turn it is in narrowing `nw` for claim `c` (Snowbanks.claimFor): { mayEnter, committed (it has
@@ -452,7 +494,6 @@ export class Snowbanks {
 // first), reason ("inside", "committed", "turn") }. `seen(vehicle)`: only those (the driven car: what it
 // can see); traffic sees what is there.
 export function narrowingTurn(sb, nw, c, seen = null) {
-  const self = sb.committed(nw, c, true);
   let first = null, reason = null;
   for (const o of sb.claims(nw)) {
     if (o.dir === c.dir || o.v === c.v || (seen && !seen(o.v)) || !sb.committed(nw, o)) continue;
@@ -462,6 +503,10 @@ export function narrowingTurn(sb, nw, c, seen = null) {
     if (o.dir === c.dir || o.v === c.v || (seen && !seen(o.v)) || !sb.precedes(nw, o, c)) continue;
     if (!first || o.gap < first.gap) { first = o; reason = "turn"; }
   }
+  // A latched turn keeps two waiting approaches from swapping priority. It cannot outrank a
+  // vehicle that has since appeared inside (pulling out from the kerb, for example), while this
+  // driver is still outside and can stop. Only physical inability to stop allows it to continue.
+  const self = sb.committed(nw, c, true) || (first?.inside !== true && !!sb.go.get(keyOf(c.v, nw)));
   return { mayEnter: self || !first, committed: self, oncoming: first, reason };
 }
 
@@ -519,7 +564,7 @@ function keepRel(map, nw, dir, spec) {
 
 // How far into the move over toward the middle a driver is at arc length `s` of its way, for a narrowing
 // it comes into at `en` and leaves at `ex` (0 to 1).
-const moveAt = (s, en, ex) => (s < en - EASE_IN_M || s > ex + EASE_OUT_M ? 0 : s < en - 1 ? ease((s - en + EASE_IN_M) / (EASE_IN_M - 1)) : s > ex + 1 ? ease((ex + EASE_OUT_M - s) / (EASE_OUT_M - 1)) : 1);
+const moveAt = (s, en, ex) => (s < en - EASE_IN_M || s > ex + EASE_OUT_M ? 0 : s < en - NARROW_FULL_M ? ease((s - en + EASE_IN_M) / (EASE_IN_M - NARROW_FULL_M)) : s > ex + NARROW_FULL_M ? ease((ex + EASE_OUT_M - s) / (EASE_OUT_M - NARROW_FULL_M)) : 1);
 
 // Traffic (sim/npc.js): for driver `n`, whose front is `front` along its path, the first narrowing ahead
 // on it: { hold (its front's arc length where it waits, or null), limit, keep (how far over from its
@@ -540,7 +585,27 @@ export function snowbankYield(world, n, front) {
     const c = sb.claims(nw).find((x) => x.v === n) || sb.claimFor(nw, n);
     if (!c) return { hold: null, limit: Infinity, keep, at };
     const turn = narrowingTurn(sb, nw, c);
-    return { hold: turn.mayEnter ? null : waitPoint(en, front), limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)), keep, at, turn };
+    let hold = turn.mayEnter ? null : waitPoint(en, front);
+    // Turning into a narrow street, leave its exit clear for the oncoming driver.
+    // Waiting at the bank itself can put a long nose across that driver's way.
+    const prev = n.path.edges[n.path.edges.indexOf(pe) - 1];
+    const roomToWait = en - pe.sStart >= (n.spec || CAR).length + map.crossingHalfWidth(pe.id) + WAIT_M;
+    if (prev && !roomToWait && Math.abs(map.turnAngle(prev.id, pe.id)) > Math.PI / 6) {
+      // The last car can be clear of the banks but still at the junction's stop
+      // line. Keep its way out open until it has left the approach too.
+      const edge = map.edges.get(pe.id), entry = entryOf(nw, dir);
+      const exiting = [world.ego, ...world.npcs].some(o => {
+        if (o === n || !narrowable(o) || (o.pull && !o.pull.moving)) return false;
+        const p = onStreet(edge, o);
+        return p?.opposite && p.s < entry;
+      });
+      const before = pe.sStart - map.crossingHalfWidth(prev.id) - WAIT_M;
+      if ((hold !== null || exiting) && front <= before + 1) hold = Math.min(hold ?? Infinity, before);
+    }
+    // Leave the exit lane open while waiting outside the banks. Moving toward
+    // the middle before our turn can strand a long oncoming vehicle in the corridor.
+    return { hold, limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)), keep,
+      at: hold !== null && front <= en - NARROW_FULL_M ? () => 0 : at, turn };
   }
   return null;
 }
@@ -596,7 +661,7 @@ function egoNarrowing(world, frontS) {
     oncoming: o ? { id: o.id, inside: o.inside, gap_m: r1(Math.max(0, o.gap)), speed: r1(o.speed) } : null,
     wait, stop_s_route: stop, bumper_to_stop_m: wait ? stop - frontS : null, entry_s_route: c.en,
     limit_mps: limit, squeeze: !!squeeze && squeeze.v !== ego,
-    detour: shift < 0 ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - 1, back: c.ex + 1, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
+    detour: shift < 0 && !(wait && frontS <= c.en - NARROW_FULL_M) ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - NARROW_FULL_M, back: c.ex + NARROW_FULL_M, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
 }
 
 // The corner the car comes to next on its route: at the end of the street it is on (a junction), with a

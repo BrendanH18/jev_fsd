@@ -216,6 +216,27 @@ function drive(world, fleet, seconds, each = () => {}) {
   console.log(`✓ Rules pulls over and stops (${stoppedAt.toFixed(1)} s), the ambulance goes by (${passedAt.toFixed(1)} s), and the car arrives (${out.t.toFixed(1)} s)`);
 }
 
+{
+  // City s1-12: the siren reaches a stationary car (waiting for a parallel parker). With cars
+  // parked at the kerb it can move only 0.3 m right. Four metres of forward travel stopped it
+  // before pure pursuit had completed even that small shift, so the ambulance passed a car
+  // still in the lane. Leave steering room in the low-speed stop plan.
+  const { world, fleet } = setup({ front: -120, v: 0 });
+  for (let x = -150; x < -60; x += 6.5) world.parked.add(Object.assign(new Vehicle(x, -HALF - 2.65, 0, 0), { id: `kerb_${x}`, edge: "w_in", curb: "right" }));
+  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  assert.equal(ev?.kind, "ambulance");
+  let stoppedRight = null, fastest = 0;
+  const out = drive(world, fleet, 8, (w) => {
+    if (stoppedRight === null) fastest = Math.max(fastest, w.ego.v);
+    if (w.t > 2 && w.ego.v < 0.05 && stoppedRight === null) stoppedRight = w.roadInfo().lateral;
+  });
+  assert.ok(stoppedRight >= 0.25, `pulled toward the 0.3 m lane-edge target before stopping: ${stoppedRight}`);
+  assert.ok(fastest < 3, `only crawls forward to steer over: ${fastest} m/s`);
+  assert.equal(out.failed, 0);
+  assert.equal(out.collisions, 0);
+  console.log("✓ from rest beside parked cars, Rules leaves room to steer to the lane edge before stopping for the ambulance");
+}
+
 // A traffic car with its rear axle at x (on West Street, going east unless `west`), straight on.
 function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   const edge = !west ? "w_in" : x > 0 ? "e_in" : "w_out", lane = world.map.lane(edge, 0), s = !west ? ARM + x : x > 0 ? ARM - x : -x;
@@ -228,15 +249,18 @@ function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   return car;
 }
 
-{
+for (const followingDistance of [false, true]) {
   // traffic gives way too: a car ahead going the same way and one coming the other way pull over
   // and stop, and the ambulance threads between them without touching either
   const { world, fleet } = setup({ front: -190, v: 0 });
-  world.ego.x = -400; world.ego.y = 400;   // (out of the way)
+  world.followingDistance = followingDistance;
+  // Off the streets but near enough to keep the ambulance active. A remote ego retires it
+  // after 10 s, even while it is still moving through this fixture.
+  world.ego.x = -120; world.ego.y = 40;
   const ahead = trafficCar(world, fleet, "ahead", -120, { v: 9 });
   const oncoming = trafficCar(world, fleet, "oncoming", -20, { v: 9, west: true });
   const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 1 });
-  assert.equal(ev, null, "nothing to dispatch past with the car off the streets");
+  assert.equal(ev === null, true, "nothing to dispatch past with the car off the streets");
   const lane = world.map.lane("w_in", 0), p = pointAt(lane.pts, lane.cum, 10);
   const amb = new Vehicle(p[0], 0, 0, 13, (await import("../static/js/sim/vehicle.js")).AMBULANCE);
   Object.assign(amb, { id: "ambulance_t", kind: "ambulance", siren: true, side: -HALF, age: 0, v0: 15, driver: { aMax: 2.2, b: 3, s0: 3, T: 0.9, react: 0.3, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0, blockedBy: null, blockedFor: 0 });
@@ -244,22 +268,27 @@ function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   amb.path.start("w_in", 0, 10, [["e_out", 0]]);
   fleet.vehicles.push(amb);
   let aheadStopped = false, oncomingStopped = false, aheadRight = 0, oncomingRight = 0, touched = false, passedBoth = false;
-  for (let k = 0; k < 40 * 60 && !passedBoth; k++) {
+  // Include moving off within the existing 40 s budget. The following car must first leave
+  // the responding ambulance its 150 m gap, which can take longer than six seconds.
+  for (let k = 0; k < 40 * 60; k++) {
     fleet.step(1 / 60);
     world.t += 1 / 60;
     if (ahead.v < 0.05) { aheadStopped = true; aheadRight = Math.max(aheadRight, -HALF - ahead.y); }
     if (oncoming.v < 0.05) { oncomingStopped = true; oncomingRight = Math.max(oncomingRight, oncoming.y - HALF); }
     for (const o of [ahead, oncoming]) if (obbOverlap(amb.obb(), o.obb(), 0)) touched = true;
-    passedBoth = amb.x - amb.spec.rearOverhang > Math.max(ahead.x, oncoming.x) + 5;
+    if (!passedBoth && amb.x - amb.spec.rearOverhang > Math.max(ahead.x, oncoming.x) + 5) {
+      assert.equal(fleet.vehicles.includes(amb), true, "the ambulance passes while active in the fleet");
+      assert.equal(amb.siren, true, "passes both while responding");
+      passedBoth = true;
+    }
+    if (passedBoth && ahead.v > 2 && oncoming.v > 2) break;
   }
   assert.ok(aheadStopped && oncomingStopped, `stopped: ahead ${aheadStopped}, oncoming ${oncomingStopped}`);
   assert.ok(aheadRight > 1.2 && oncomingRight > 0.4, `pulled over ${aheadRight.toFixed(2)} and ${oncomingRight.toFixed(2)} m`);
   assert.ok(passedBoth, `the ambulance got past both (at x = ${amb.x.toFixed(1)})`);
   assert.equal(touched, false);
-  // and they carry on once it has gone by
-  for (let k = 0; k < 6 * 60; k++) { fleet.step(1 / 60); world.t += 1 / 60; }
   assert.ok(ahead.v > 2 && oncoming.v > 2, `moving again: ${ahead.v.toFixed(1)}, ${oncoming.v.toFixed(1)}`);
-  console.log("✓ traffic both ways pulls over and stops, the ambulance threads between, and traffic carries on");
+  console.log(`✓ traffic both ways pulls over and stops, the ambulance threads between, and traffic carries on (followingDistance=${followingDistance})`);
 }
 
 {
@@ -407,3 +436,24 @@ function trafficCar(world, fleet, id, x, { v = 9, west = false } = {}) {
   assert.equal(touched, false, "the ambulance never touches the cyclist");
   console.log("✓ an ambulance keeps clear of a contraflow cyclist in its way");
 }
+
+{
+  // City rain s1-9: route lookahead has rounded away, but the physical
+  // approach still leads across the siren's path until the car begins its turn.
+  const { world } = setup({ front: -20, v: 0 });
+  const { AMBULANCE } = await import("../static/js/sim/vehicle.js");
+  const ev = Object.assign(new Vehicle(0, 30, -Math.PI / 2, 4, AMBULANCE), {
+    id: "crossing_siren", kind: "ambulance", siren: true,
+    path: { pts: [[0, 100], [0, -100]], cum: [0, 200], length: 200, s: 70 },
+  });
+  world.npcs.push(ev);
+  const offsetPoint = world.route.offsetPointAt.bind(world.route);
+  const turn = world.route.project(world.ego.x, world.ego.y, 0).s;
+  world.route.offsetPointAt = (s, offset) => s > turn + 5 ? [world.ego.x, -50] : offsetPoint(s, offset);
+  assert.equal(emergencyCall(world.ego, ev) !== null, true, "the physical approach still intersects the siren's way");
+  assert.equal(buildSnapshot(world).emergency?.id, ev.id, "planned corners must not release the obligation early");
+  world.ego.psi = -Math.PI / 2;
+  assert.equal(buildSnapshot(world).emergency === null, true, "turning away physically ends the call");
+  console.log("✓ a rounded route corner cannot hide a siren still crossing the physical approach");
+}
+process.exit(0);

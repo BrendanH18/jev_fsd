@@ -22,6 +22,8 @@ import { officerWalk } from "./traffic-officer.js";
 import { rng } from "../common.js";
 import { CROSS_AHEAD_M, redsOn } from "./school-bus.js";
 import { doorPoints, doorsOpen } from "./streetcar.js";
+import { obbOverlap } from "./collision.js";
+import { segmentHitsBox } from "./crosswalk.js";
 
 export const PEDESTRIANS = 60;
 export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 };   // footprint for collisions
@@ -327,7 +329,7 @@ export class Crowd {
       if (this.pxo && wp.cross?.leg?.pxo && !wp.cross.diagonal) wp.cross.marked = wp.cross.leg.pxo;
       if (wp.cross && !ped.crossing) {
         // at the curb: wait for the walk phase or a safe gap
-        if (!this.mayCross(wp.cross, t)) { ped.v = 0; ped.waiting += dt; continue; }
+        if ((!ped.dart && this.occupiedCrossing(ped, wp.cross)) || !this.mayCross(wp.cross, t)) { ped.v = 0; ped.waiting += dt; continue; }
         ped.crossing = wp.cross;
         ped.waiting = 0;
       }
@@ -355,10 +357,29 @@ export class Crowd {
     if (home) for (let i = this.list.length - 1; i >= 0; i--) if (this.list[i].gone) this.list.splice(i, 1);
   }
 
+  // Wait on the sidewalk before starting a crossing occupied by a slow/stopped body. Starting
+  // anyway, then waiting beside that body, makes the driver yield to someone who cannot cross.
+  occupiedCrossing(ped, cross) {
+    return [this.world.ego, ...this.world.npcs].some(o => {
+      // Riders start/end at their own streetcar's door; its padded body is not another car
+      // blocking their crossing. mayCross still requires its doors to be open for boarding.
+      if (Math.abs(o.v) >= 2 || (cross.streetcar && cross.streetcar === o.id) || (ped.boarding && ped.streetcar === o.id)) return false;
+      const box = o.obb(), margin = Math.max(PED.length, PED.width) / 2 + 0.1;
+      return segmentHitsBox(cross.from, cross.to, { ...box, halfLength: box.halfLength + margin, halfWidth: box.halfWidth + margin });
+    });
+  }
+
   // A car bearing down that will not stop in time: "hurry" out of its path if already in it, "wait"
-  // if about to step into it, else null.
+  // if about to step into it. Also wait before walking into a stationary car's body; else null.
   threat(ped, ux, uy) {
     for (const o of [this.world.ego, ...this.world.npcs]) {
+      // A stopped car has no arrival time, but still occupies the crosswalk. Wait short of its
+      // body; someone already caught beside/in it can continue out instead of being trapped.
+      // A boarding rider deliberately enters their own streetcar through its open door.
+      if (!(ped.boarding && ped.streetcar === o.id) && Math.abs(o.v) < (o.kind === "bike" ? 2 : 0.5) && Math.abs(o.x - ped.x) < 15 && Math.abs(o.y - ped.y) < 15) {
+        const body = ped.obb(), ahead = { ...body, heading: Math.atan2(uy, ux), center: [ped.x + ux * 0.4, ped.y + uy * 0.4] };
+        if (obbOverlap(ahead, o.obb(), 0.1) && !obbOverlap(body, o.obb())) return "wait";
+      }
       if (o.v < 2 || Math.abs(o.x - ped.x) > 40 || Math.abs(o.y - ped.y) > 40) continue;
       const local = o.toLocal(ped.x, ped.y);
       const front = (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6);

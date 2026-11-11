@@ -10,7 +10,7 @@ import { auditRestrictions } from "./turn-restrictions.js";
 
 import { auditBusLanes } from "./bus-lanes.js";
 import { auditPxo, ontarioMap } from "./pxo.js";
-import { Vehicle, CAR } from "./vehicle.js";
+import { Vehicle, CAR, comfort } from "./vehicle.js";
 import { headingAt, projectPoint } from "../map/mapdata.js";
 import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopMemory } from "./signals.js";
 import { obbOverlap } from "./collision.js";
@@ -22,7 +22,7 @@ import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
 import { AllWayStops } from "./all-way.js";
 import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
-import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency } from "./emergency.js";
+import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency, pullOverOffset } from "./emergency.js";
 import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { BEHIND_M, ONCOMING_M, SIDE_M, canStopFor as canStopForSchool, redsOn, schoolBusRelation } from "./school-bus.js";
@@ -51,8 +51,9 @@ import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers } from "./parkers.js";
 import { RoadClosures, auditRoadClosures } from "./road-closures.js";
 import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
+import { FOLLOWING_STANDSTILL_M } from "./following.js";
 import { BlackIce, auditIce } from "./black-ice.js";
-import { Snowbanks, auditSnowbanks, bankHidden } from "./snowbanks.js";
+import { Snowbanks, auditSnowbanks, bankHidden, keepAt, NARROW_FULL_M } from "./snowbanks.js";
 import { Puddles, auditPuddles } from "./puddles.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
@@ -107,9 +108,11 @@ const AUDIT_HOOK_AGAIN_S = 10;
 // if its front enters a junction (8 m of its centre) that a vehicle coming from the side is due
 // across, 3 s or more after the call came; if, 4 s or more after the call came, the vehicle draws
 // level with it along its street (within 8 m to the side) while it is not pulled over and not in a
-// junction; or if the vehicle has been stuck behind it for 6 s while
+// junction (unless the call found it constrained by an existing line stop or close queue);
+// or if the vehicle has been stuck behind it for 6 s while
 // it is not pulled over (at least 0.2 m right of its lane's centre) and has not been told to drive on
-// ahead of it. Counted once a vehicle.
+// ahead of it. A second blocker directly ahead can prevent that too. In a snowbank
+// narrowing the usable right edge replaces the old lane centre. Counted once a vehicle.
 const AUDIT_EV_MOVING_MPS = 3;
 const AUDIT_EV_DECEL = 1;
 const AUDIT_EV_REACT_S = 2;
@@ -119,6 +122,7 @@ const AUDIT_EV_BLOCK_S = 6;
 const AUDIT_EV_PULLED_M = 0.2;
 const AUDIT_EV_PULL_S = 4;
 const AUDIT_EV_SIDE_M = 8;
+const AUDIT_EV_LINE_M = 2;
 // Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
 // lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
 // or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
@@ -403,6 +407,11 @@ export class World {
     // snowbanks (sim/snowbanks.js): the banks, piles and narrowings, whether the car has come up to a
     // narrowing this drive, and whether it was in each one it is near last tick
     this.snowbanks = new Snowbanks(this, { enabled: snowbanks, seed });
+    if (this.snowbanks.narrowings.length) {
+      const near = map.nearestLane(this.ego.x, this.ego.y, this.ego.psi);
+      if (near) this.snowbanks.place(this.ego, near.lane);
+      this.resetContactHistory();
+    }
     this.snowbanksSeen = false;
     this.snowbankCalls = new Map();
     // puddles at the kerb (sim/puddles.js): where they stand, whether it has rained this drive (they lie
@@ -489,6 +498,7 @@ export class World {
   placeOnLane(lane, s) {
     const { pointAt, headingAt } = lanePoint(lane, s);
     this.ego.x = pointAt[0]; this.ego.y = pointAt[1]; this.ego.psi = headingAt; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
+    if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, lane);
     this.egoStop.reset();
     this.allWay.forget(this.ego);
     this.resetContactHistory();
@@ -498,6 +508,7 @@ export class World {
     const near = this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 80);
     if (near) {
       this.ego.x = near.point[0]; this.ego.y = near.point[1]; this.ego.psi = near.heading; this.ego.v = 0; this.ego.delta = 0; this.ego.a = 0;
+      if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, near.lane);
       this.resetContactHistory();
     }
     this.events.push({ type: "reset" });
@@ -1299,24 +1310,80 @@ export class World {
     }
     const entered = junction !== null && junction !== this.evJunction && ego.v > 1;
     this.evJunction = junction;
-    const pulled = road.lane && road.lateral >= AUDIT_EV_PULLED_M;
+    // Snowbanks move the usable right edge into the lane. A stopped car must not
+    // drive into the cars parked there to satisfy a measurement from the old lane centre.
+    const narrowed = this.snowbanks?.enabled && road.lane && road.edge && this.snowbanks.on(road.edge.id);
+    const entry = narrowed && (narrowed.dir > 0 ? narrowed.nw.a : narrowed.nw.L - narrowed.nw.b);
+    const exit = narrowed && (narrowed.dir > 0 ? narrowed.nw.b : narrowed.nw.L - narrowed.nw.a);
+    const rightmost = narrowed && road.s + FRONT >= entry - NARROW_FULL_M && road.s - ego.spec.rearOverhang <= exit + NARROW_FULL_M
+      ? keepAt(road.edge, ego.spec) - road.lane.offset : Infinity;
+    // The normal target leaves a settling allowance before this audit's minimum
+    // (0.3 m versus 0.2 m for the standard car). Preserve that allowance when banks
+    // move the target left; requiring exact equality with keepAt has no feasible
+    // range between the audit and the parked-car clearance policy.
+    const settling = road.lane ? Math.max(0, pullOverOffset(road.edge, road.lane.idx, ego.spec.width, false) - AUDIT_EV_PULLED_M) : 0;
+    const pulled = road.lane && road.lateral + 1e-6 >= Math.min(AUDIT_EV_PULLED_M, rightmost - settling);
+    const control = road.edge?.control, toLine = control ? control.s_line - road.s - FRONT : Infinity;
+    // An existing queue can leave less steering room than a control line. Measure
+    // real bodies here, including a bus standing at an angle, independently of the plan.
+    const queued = Math.abs(ego.v) < 0.3 ? this.npcs.find(n => {
+      if (isEmergency(n) || Math.abs(n.v) >= 1 || !n.obb) return false;
+      const box = n.obb(), p = ego.toLocal(...box.center), angle = box.heading - ego.psi;
+      const along = Math.abs(Math.cos(angle)) * box.halfLength + Math.abs(Math.sin(angle)) * box.halfWidth;
+      const side = Math.abs(Math.sin(angle)) * box.halfLength + Math.abs(Math.cos(angle)) * box.halfWidth;
+      return p.ahead > FRONT && p.ahead - along - FRONT <= FOLLOWING_STANDSTILL_M + AUDIT_EV_LINE_M
+        && Math.abs(p.right) < side + ego.spec.width / 2;
+    }) : null;
     for (const ev of evs) {
       const call = emergencyCall(ego, ev);
       let rec = this.evCalls.get(ev.id);
       if (!call) { if (rec) this.evCalls.delete(ev.id); continue; }
-      if (!rec) this.evCalls.set(ev.id, rec = { since: this.t, v0: Math.max(0, ego.v), lead: false, ahead: null });
+      if (!rec) {
+        // Already stopped at a control line when the siren reached it: there is no room to steer
+        // sideways without entering the junction. Holding that stop as the vehicle passes is
+        // yielding too. Capture this at the call, so stopping here later cannot excuse a missed
+        // opportunity to pull over. Moving on ends the exception; blocking the vehicle is still
+        // judged independently below.
+        const atLine = (control?.type === "stop" || control?.type === "signal") && Math.abs(ego.v) < 0.3 && toLine >= 0 && toLine <= AUDIT_EV_LINE_M;
+        const v = Math.max(0, ego.v);
+        // A crawl already running out of steering room before a control can finish
+        // that stop. Judge the opportunity at the call, not from its later choice.
+        const stopping = v * ego.spec.accelLag + v * v / (2 * AUDIT_EV_DECEL);
+        const approachingLine = !atLine && (control?.type === "stop" || control?.type === "signal")
+          && v <= AUDIT_EV_MOVING_MPS && toLine >= v * v / (2 * comfort().hardDecel)
+          && toLine <= stopping + AUDIT_EV_LINE_M;
+        this.evCalls.set(ev.id, rec = { since: this.t, v0: v, lead: false, ahead: null,
+          ...(atLine ? { stoppedAtLine: [ego.x, ego.y] } : {}),
+          ...(queued ? { stoppedInQueue: { id: queued.id, at: [ego.x, ego.y] } } : {}),
+          ...(approachingLine ? { lineApproach: { edge: road.edge.id, control: control.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } } : {}) });
+      }
+      if (rec.lineApproach) {
+        if (this.t > rec.lineApproach.until || road.edge?.id !== rec.lineApproach.edge || control?.id !== rec.lineApproach.control) delete rec.lineApproach;
+        else if (Math.abs(ego.v) < 0.3 && toLine >= -1.5 && toLine <= AUDIT_EV_LINE_M) {
+          rec.stoppedAtLine = [ego.x, ego.y]; rec.lineOvershoot = true;
+          delete rec.lineApproach;
+        }
+      }
+      if (rec.stoppedAtLine && (toLine < (rec.lineOvershoot ? -1.5 : 0) || toLine > AUDIT_EV_LINE_M || Math.hypot(ego.x - rec.stoppedAtLine[0], ego.y - rec.stoppedAtLine[1]) > AUDIT_EV_LINE_M)) delete rec.stoppedAtLine;
+      if (rec.stoppedInQueue && (queued?.id !== rec.stoppedInQueue.id || Math.hypot(ego.x - rec.stoppedInQueue.at[0], ego.y - rec.stoppedInQueue.at[1]) > AUDIT_EV_LINE_M)) delete rec.stoppedInQueue;
       // (where its middle is along the car, from the car's middle)
       const [cx, cy] = ev.center, local = ego.toLocal(cx, cy), ahead = local.ahead - (ego.spec.length / 2 - ego.spec.rearOverhang), before = rec.ahead;
       rec.ahead = ahead;
-      // (told to drive on ahead of it, having pulled over as far as it could)
-      rec.lead ||= pulled && leadsEmergency(ev, ego);
+      // The instruction to drive on is latched while the car is as far over as
+      // it can get, including a queue that physically prevents pulling farther over.
+      const blockedInQueue = queued && ev.blockedBy?.includes(queued);
+      rec.lead ||= (pulled || blockedInQueue) && leadsEmergency(ev, ego);
       if (this.evCounted.has(ev.id)) continue;
       const after = this.t - rec.since;
       const late = !rec.lead && after > AUDIT_EV_REACT_S && ego.v > Math.max(AUDIT_EV_MOVING_MPS, rec.v0 - AUDIT_EV_DECEL * (after - AUDIT_EV_REACT_S));
       const crossing = call.relation === "left" || call.relation === "right";
       const level = !crossing && before !== null && Math.sign(before) !== Math.sign(ahead) && Math.abs(local.right) < AUDIT_EV_SIDE_M;
-      const unmoved = level && after >= AUDIT_EV_PULL_S && !pulled && !rec.lead && junction === null;
-      if (late || unmoved || (entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !rec.lead)) {
+      const holdingLine = rec.stoppedAtLine && Math.abs(ego.v) < 0.3;
+      const holdingQueue = rec.stoppedInQueue && queued && Math.abs(ego.v) < 0.3;
+      const unmoved = level && after >= AUDIT_EV_PULL_S && !pulled && !rec.lead && !holdingLine && !holdingQueue && junction === null;
+      // A second blocker directly in front of the car prevents it from driving on
+      // when asked. Holding that safe stop is not the cause of this gridlock.
+      if (late || unmoved || (entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !rec.lead && !blockedInQueue)) {
         this.evCounted.add(ev.id);
         this.violations.failed_to_yield++;
         this.events.push({ type: "failed_to_yield", to: "emergency vehicle", with: ev.id });

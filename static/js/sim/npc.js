@@ -258,6 +258,25 @@ function bodyOnPath(n, o, front, from, side) {
   return null;
 }
 
+// A long vehicle's nose swings outside its rear axle's lane through a turn. Predict the body
+// with the same steering and vehicle model it drives with, rather than laying it on the lane's
+// tangent. Look far enough to brake, including actuator response, even on a slippery road.
+const bodySweepLook = (n, least) => Math.max(least, n.v * 0.8 + n.v * n.v / (2 * comfort().decel));
+function sweptBodyGap(n, obstacle, offset, least, margin = 0.1) {
+  const look = bodySweepLook(n, least);
+  const body = obstacle.obb();
+  if (Math.hypot(obstacle.x - n.x, obstacle.y - n.y) >= n.spec.length + look + 6 || obbOverlap(n.obb(), body, 0.05)) return null;
+  const car = n.clone(), speed = Math.max(1, n.v), dt = Math.min(0.1, 0.5 / speed);
+  for (let d = 0; d <= look; d += speed * dt) {
+    if (d > 0 && obbOverlap(car.obb(), body, margin)) return Math.max(0, d - speed * dt);
+    const p = projectPoint(n.path.pts, n.path.cum, [car.x, car.y], null);
+    // Hold the observation speed: braking must not shorten the path we check for a reason to brake.
+    car.v = speed; car.a = 0;
+    car.step(dt, { steer: purePursuit(car, n.path, p.s, offset), accel: 0 });
+  }
+  return null;
+}
+
 // How far right of a lane's centre a cyclist rides in the street's parking lane, or null when the
 // lane is not beside the right curb or has no parking lane wide enough.
 export function stripOffset(e, laneIdx) {
@@ -705,7 +724,12 @@ export class NpcFleet {
         stepTrain(n, railIndex(this.map).tracks.get(n.rail.track), dt, [...all, ...world.crowd.list], (cab, o) => world.visibility.sees(cab, o), this.rails);
         continue;
       }
-      if (isEmergencyVehicle(n)) { this.emergencyStep(n, dt, riders.length ? all.concat(riders) : all); continue; }
+      if (isEmergencyVehicle(n)) {
+        if (n.siren) { this.emergencyStep(n, dt, riders.length ? all.concat(riders) : all); continue; }
+        // Stood down: return to ordinary lane driving and junction priority. Keeping the
+        // centre-of-road passing controller after the siren stops can hold a junction forever.
+        n.age += dt;
+      }
       if (n.pull && n.pull.wait > 0) {
         n.signal = n.pull.lat > 0 ? "left" : "right";
         if (this.pullClear(n)) n.pull.wait -= dt;
@@ -750,6 +774,7 @@ export class NpcFleet {
       const edge = path.currentEdge();
       const spec = n.spec;
       const front = path.s + (spec.length - spec.rearOverhang);
+      if (isEmergencyVehicle(n) && !n.siren && n.evRejoin === undefined) n.evRejoin = proj.lateral;
       // behind a car parallel parking ahead (sim/parkers.js): keep back from the room it reverses into
       // (below), and don't go round it
       const pkc = world.parkers?.active.length && !n.parker ? parkerConflict(world, n, path, front) : null;
@@ -795,8 +820,9 @@ export class NpcFleet {
       // pulling over for an emergency vehicle (a cyclist already keeps right)
       const pullTo = yielding && n.kind !== "bike" && !n.transit?.tram ? this.pullOverTo(n, edge, front) : 0;
       n.evShift = (n.evShift || 0) + Math.max(-EV_SHIFT_MPS * dt, Math.min(EV_SHIFT_MPS * dt, pullTo - (n.evShift || 0)));
-      // easing left in its lane to pass a bus standing at its stop (see busNudge)
-      if (this.buses.length && n.kind !== "bike" && !n.transit) {
+      // easing left in its lane to pass a bus standing at its stop (see busNudge); a wide
+      // collection truck also leaves that clearance beside cars parked at the kerb
+      if ((this.buses.length || n.collect) && n.kind !== "bike" && !n.transit) {
         const to = this.busNudge(n, edge);
         n.nudge = (n.nudge || 0) + Math.max(-NUDGE_MPS * dt, Math.min(NUDGE_MPS * dt, to - (n.nudge || 0)));
       }
@@ -865,6 +891,18 @@ export class NpcFleet {
         if (n.pull.t >= n.pull.T && n.pull.moving) n.pull = null;
       }
 
+      // Stood down beside another car: carry on along the line already held until
+      // the real body can merge back. An immediate lane-centre target can trap both
+      // drivers at a signal even though the passing line ahead is clear.
+      if (n.evRejoin != null) {
+        const next = n.evRejoin + Math.max(-EV_SHIFT_MPS * dt, Math.min(EV_SHIFT_MPS * dt, offset - n.evRejoin));
+        const near = [world.ego, ...world.obstaclesNear(n.x, n.y, spec.length + bodySweepLook(n, BUS_BODY_LOOK_M) + 6)].filter(o => o !== n);
+        const blocked = near.some(o => sweptBodyGap(n, o, next, BUS_BODY_LOOK_M, LEADER_MARGIN_M + 0.05) !== null);
+        const kept = blocked ? n.evRejoin : next;
+        n.evRejoin = Math.abs(kept - offset) < 1e-6 ? null : kept;
+        offset = kept;
+      }
+
       // Leader: nearest vehicle ahead on our path within LOOK_M (parked cars only when they
       // stick into the lane).
       let gap = Infinity, leadV = n.v0, leader = null;
@@ -892,7 +930,10 @@ export class NpcFleet {
           if (sb) lat -= sbAt(at) - (n.sbShift || 0);
           // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
           const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
-          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0) - (n.sbShift || 0)) <= reach;
+          // Another move (a pothole nudge, for example) may already keep left of the snowbank
+          // corridor, leaving sbShift at zero. The lane it keeps to includes that move too.
+          const kept = n.evRejoin != null ? Math.abs(lat - offset) : sb ? Math.abs(lat - sbBase - (n.sbShift || 0)) : Math.abs(lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0) - (n.sbShift || 0));
+          return Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || kept <= reach;
         };
         const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
         if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral, p.s)) {
@@ -932,6 +973,13 @@ export class NpcFleet {
           const hit = close.find((o) => obbOverlap({ ...body, center: [x, y], heading: path.headingAt(mid) }, o.obb(), 0.05));
           if (hit) { gap = d - 0.5; leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi)); leader = hit; break; }
         }
+      }
+      // Ordinary cars can swing across a stopped car too, especially through a wet-road turn:
+      // forecast every motor vehicle's real body through the stopping distance.
+      if (n.kind !== "bike") {
+        const ego = world.ego, nose = spec.length - spec.rearOverhang - 1;
+        const g = n.school && n.toLocal(ego.x, ego.y).ahead < nose ? null : sweptBodyGap(n, ego, offset, BUS_BODY_LOOK_M);
+        if (g !== null && g < gap) { gap = g; leader = ego; leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi)); }
       }
       // behind the driven car while it pulls up to a space and reverses into it (sim/parallel-park.js),
       // wherever its body is, in the lane or partway into the space: keep back the room it reverses
@@ -1022,7 +1070,10 @@ export class NpcFleet {
       }
       // crowd.pxo keeps a PXO occupied until the far curb, in every lane (sim/pxo.js).
       const cw = crosswalkConflict(path.pts, path.cum, front - 2, front + 35, world.crowd, spec.width / 2 + 0.9 + (n.kind === "bike" ? Math.abs(n.side) : 0));
-      if (cw) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
+      // A cyclist whose nose has already crossed the walk clears it; stopping with the
+      // bicycle across it traps a pedestrian beside its rear. People in front still have priority.
+      const clearingWalk = n.kind === "bike" && cw && cw.s < front && n.toLocal(cw.ped.x, cw.ped.y).ahead < spec.length - spec.rearOverhang && bodyOnPath(n, cw.ped, front, proj.lateral, offset) === null;
+      if (cw && !clearingWalk) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
       // a cyclist that cannot move back into the lane yet waits where the parking lane ends
       if (n.kind === "bike" && n.stripHold != null) stopAt = stopAt === null ? n.stripHold - front : Math.min(stopAt, n.stripHold - front);
       // giving way to an emergency vehicle: stop where it chose to when the call came
@@ -1088,16 +1139,16 @@ export class NpcFleet {
       // a bus at its stop, or pulling in to it; or, behind a bus signalling to pull out from its stop,
       // letting it out (sim/bus.js): after the checks above, which still hold on the way there (a
       // junction before the stop), and not a line the wait at which is ever given up
-      const forBus = this.buses.length && n.kind !== "bike" && !n.transit && !isEmergencyVehicle(n) ? this.yieldToBus(n) : null;
+      const forBus = this.buses.length && n.kind !== "bike" && !n.transit && !isEmergency(n) ? this.yieldToBus(n) : null;
       const busStop = Math.min(stand?.stopAt ?? Infinity, forBus ?? Infinity);
       if (busStop < gap) { gap = Math.max(0.05, busStop); leadV = 0; }
       // a school bus at its stop, or stopping for a school bus with its reds flashing (sim/school-bus.js)
-      const forSchool = this.schoolBuses.length && !isEmergencyVehicle(n) ? this.yieldToSchoolBus(n, front) : null;
+      const forSchool = this.schoolBuses.length && !isEmergency(n) ? this.yieldToSchoolBus(n, front) : null;
       const schoolAt = Math.min(schoolStop ?? Infinity, forSchool ?? Infinity);
       if (schoolAt < gap) { gap = Math.max(0.05, schoolAt); leadV = 0; }
       if (truckStop !== null && (truckStop === "work" ? 0.05 : truckStop) < gap) { gap = Math.max(0.05, truckStop === "work" ? 0.05 : truckStop); leadV = 0; }
       // not passing a streetcar with its doors open on the side its riders use (sim/streetcar.js)
-      const forStreetcar = this.streetcars.length && !isEmergencyVehicle(n) && !n.transit?.tram ? this.yieldToStreetcar(n, front) : null;
+      const forStreetcar = this.streetcars.length && !isEmergency(n) && !n.transit?.tram ? this.yieldToStreetcar(n, front) : null;
       if (forStreetcar !== null && forStreetcar < gap) { gap = Math.max(0.05, forStreetcar); leadV = 0; }
       // at a level crossing: short of the tracks for a train coming, or for a queue backed up past them
       // (sim/rail.js; an emergency vehicle only for the train)
@@ -1268,12 +1319,21 @@ export class NpcFleet {
       .map((o) => ({ o, p: closestOnPath(path, ...o.obb().center, path.s - spec.length, path.s + LOOK_M) })).filter(({ p }) => p && p.s > path.s - spec.length + 1e-6 && p.s < path.s + LOOK_M - 1e-6);
     // across the road: the nearest gap past what is beside it and in the next stretch (the vehicles'
     // bodies, as they lie across the path)
-    const spans = near.filter(({ p }) => p.s - path.s < EV_PASS_LOOK_M + spec.length).map(({ o, p }) => {
+    // A body entirely behind our tail cannot close a lateral opening ahead.
+    // The old full-length rear window kept a bicycle well behind the truck in
+    // this search, stranding it beside the driven car with no usable opening.
+    const rear = spec.rearOverhang + spec.width / 2 + EV_SQUEEZE_M;
+    const spans = near.filter(({ o, p }) => {
+      const os = o.spec || CAR, a = o.psi - path.headingAt(p.s);
+      const along = Math.abs(Math.cos(a)) * os.length / 2 + Math.abs(Math.sin(a)) * os.width / 2;
+      return p.s + along >= path.s - rear && p.s - path.s < EV_PASS_LOOK_M + spec.length;
+    }).map(({ o, p }) => {
       const os = o.spec || CAR, h = Math.abs(Math.sin(o.psi - path.headingAt(p.s))) * os.length / 2 + Math.abs(Math.cos(o.psi - path.headingAt(p.s))) * os.width / 2;
       return [p.lateral - h, p.lateral + h];
     });
     const preferred = evOffset(e, pe.lane, spec);
-    const target = threadGap(e, pe.lane, spec, preferred, spans) ?? preferred;
+    // No gap is a reason to wait on the line we hold, not steer back into an occupied one.
+    const opening = threadGap(e, pe.lane, spec, preferred, spans), target = opening ?? n.side;
     n.side += Math.max(-dt, Math.min(dt, target - n.side));
     const offset = n.side;
     let gap = Infinity, leadV = n.v0, leader = null, squeeze = false;
@@ -1284,10 +1344,13 @@ export class NpcFleet {
       // where it is)
       const across = Math.abs(o.v) > 0.3 && Math.cos(o.psi - path.headingAt(p.s)) < 0.85;
       const os = o.spec || CAR, clear = Math.abs(p.lateral - offset) - (spec.width + os.width) / 2;
-      if (clear >= (across ? EV_CROSSING_M : EV_SQUEEZE_M - 1e-6)) { if (clear < 0.6 && p.s - path.s < 25) squeeze = true; continue; }
       // (from its middle; coming the other way, it closes the gap)
       const g = p.s - path.s - (spec.length - spec.rearOverhang) - os.length / 2;
-      if (g < 15 && !o.parked) blocking.push(o);
+      // A failed gap search keeps the current line; lateral clearance still
+      // decides what blocks it. Sideways parked rows can project beside its axle.
+      const inWay = clear < (across ? EV_CROSSING_M : EV_SQUEEZE_M - 1e-6);
+      if ((inWay || opening === null) && g < 15 && !o.parked) blocking.push(o);
+      if (!inWay) { if (clear < 0.6 && p.s - path.s < 25) squeeze = true; continue; }
       if (g < gap) { gap = g; leadV = o.v * Math.cos(o.psi - path.headingAt(p.s)); leader = o; }
     }
     // any part of a body in its way over the next few metres, its own body laid along its path there
@@ -1301,6 +1364,18 @@ export class NpcFleet {
       const hit = close.find((o) => obbOverlap(ahead, o.obb(), 0.05) && !obbOverlap(body, o.obb(), 0.05));
       if (hit) { gap = Math.min(gap, d - 0.5); leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi)); leader = hit; break; }
     }
+    // The requested offset can clear the driven car while the real nose is still steering into it.
+    const ego = world.ego, hereGap = sweptBodyGap(n, ego, offset, EV_BODY_LOOK_M);
+    // Its side continues easing toward the selected opening on later ticks. Check that line
+    // too, from the real pose, so a safe current offset cannot hide the coming lateral sweep.
+    const toGap = target === offset ? null : sweptBodyGap(n, ego, target, EV_BODY_LOOK_M);
+    const g = hereGap === null ? toGap : toGap === null ? hereGap : Math.min(hereGap, toGap);
+    if (g !== null && g < gap) {
+      gap = g; leader = ego; leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi));
+      // A body-sweep obstruction is a real blocker too. Ask a car going our way to lead
+      // after the same wait, rather than holding a siren behind it until standing down.
+      if (g < 15 && !blocking.includes(ego)) blocking.push(ego);
+    }
     // stuck behind something it cannot get past
     // (`blocking`: everything in its way within 15 m, but what is parked)
     if (blocking.length && n.v < 1) { n.blockedFor += dt; n.blockedBy = blocking; }
@@ -1309,7 +1384,8 @@ export class NpcFleet {
     // stuck for good: stood down, it turns its siren off and carries on at the limit
     if (n.stuck > EV_STAND_DOWN_S) { n.siren = false; n.blockedBy = null; n.v0 = Math.min(n.v0, e.limit); }
     // (something coming toward it in its way: slow right down until it is out of the way)
-    let vCap = squeeze ? EV_SQUEEZE_MPS : Infinity, stopAt = null;
+    // With no verified lateral opening, keep the current line at squeeze speed.
+    let vCap = squeeze || opening === null ? EV_SQUEEZE_MPS : Infinity, stopAt = null;
     if (leader && leadV < -0.3) vCap = Math.min(vCap, EV_JUNCTION_MPS);
     for (const c of path.edges) {
       if (c.sEnd < path.s) continue;
@@ -1724,19 +1800,20 @@ export class NpcFleet {
       }
       return n.railOwed.get(key);
     };
-    const hold = crossingHold(this.map, n.path.pts, n.path.cum, front, n.spec, n.v, { trains: this.trains, vehicles: isEmergencyVehicle(n) ? [] : all, self: n, owes });
+    const hold = crossingHold(this.map, n.path.pts, n.path.cum, front, n.spec, n.v, { trains: this.trains, vehicles: isEmergency(n) ? [] : all, self: n, owes });
     return hold ? hold.stop_m : null;
   }
 
   // How far left of its lane's path (negative) a driver eases to pass a bus standing at its stop just
-  // ahead or beside it (see NUDGE_MPS), or 0.
+  // ahead or beside it (see NUDGE_MPS), or 0. A collection truck also eases past parked
+  // cars whose parking jitter leaves slightly less than its usual leader margin.
   busNudge(n, pe) {
     const e = this.map.edges.get(pe.id), path = n.path, spec = n.spec;
     const room = e.lane_width / 2 - spec.width / 2 - 0.1;
     let nudge = 0;
-    for (const bus of this.buses) {
+    for (const bus of this.buses.concat(n.collect ? this.world.parked.near(n.x, n.y, NUDGE_LOOK_M + 15) : [])) {
       const t = bus.transit;
-      if (!(t.phase === "dwell" || t.phase === "leaving" || (t.phase === "in" && t.shift > 1)) || Math.abs(bus.x - n.x) > NUDGE_LOOK_M + 15 || Math.abs(bus.y - n.y) > NUDGE_LOOK_M + 15) continue;
+      if ((!bus.parked && !(t.phase === "dwell" || t.phase === "leaving" || (t.phase === "in" && t.shift > 1))) || Math.abs(bus.x - n.x) > NUDGE_LOOK_M + 15 || Math.abs(bus.y - n.y) > NUDGE_LOOK_M + 15) continue;
       const [cx, cy] = bus.center, p = projectPoint(path.pts, path.cum, [cx, cy], null);
       // (until the car's rear is past the bus's front)
       if (!p || p.s - path.s < -(bus.spec.length / 2 + spec.rearOverhang) || p.s - path.s > NUDGE_LOOK_M + bus.spec.length || p.lateral <= 0) continue;
@@ -2019,7 +2096,10 @@ export class NpcFleet {
       }
       y.stop = path.pointAt(Math.min(path.length, front + dist));
     }
-    return projectPoint(path.pts, path.cum, y.stop, null).s - front;
+    // The point is the physical front-bumper stop. IDM leaves s0 behind an obstacle, so place
+    // that virtual obstacle s0 beyond it to preserve the planned rear clearance at a junction
+    // or narrowing. Both following-distance settings use the same IDM standstill gap.
+    return projectPoint(path.pts, path.cum, y.stop, null).s - front + (n.driver || IDM).s0;
   }
 
   // Reverse slowly, straight back, until clear by `left` meters, blocked behind, or out of time;
@@ -2029,7 +2109,8 @@ export class NpcFleet {
     b.t += dt;
     b.left -= Math.abs(n.v) * dt;
     let behind = Infinity;
-    for (const o of this.world.obstaclesNear(n.x, n.y, 12)) {
+    // obstaclesNear lists the rest of the world, not the driven car.
+    for (const o of this.world.obstaclesNear(n.x, n.y, 12).concat(this.world.ego)) {
       if (o === n) continue;
       const l = n.toLocal(o.x, o.y);
       if (l.ahead < 0 && Math.abs(l.right) < 1.6) behind = Math.min(behind, -l.ahead - n.spec.rearOverhang - (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6));
@@ -2074,9 +2155,10 @@ export class NpcFleet {
     const room = park.end - p.s;
     const offset = park.lat * smooth((14 - room) / 9);
     const target = Math.min(3, Math.sqrt(2 * comfort().decel * Math.max(0, room - 0.2)));
-    // Check a short swept envelope, including pedestrians, before moving into the bay.
+    // With following-distance policy on, parking still needs grip-dependent stopping room.
+    // Keep the legacy envelope when it is off, as for ordinary traffic's following policy.
     const box = n.obb();
-    const reach = Math.max(0.5, n.v * 0.8);
+    const reach = this.world.followingDistance ? Math.max(0.5, n.v * 0.8 + n.v * n.v / (2 * comfort().decel)) : Math.max(0.5, n.v * 0.8);
     box.center = [box.center[0] + Math.cos(n.psi) * reach / 2, box.center[1] + Math.sin(n.psi) * reach / 2];
     box.halfLength += reach / 2;
     box.halfWidth += 0.15;
@@ -2149,6 +2231,7 @@ export class NpcFleet {
   // Nothing in the lane coming up behind within a few seconds (less for an assertive driver), and
   // nothing stopped right in front.
   pullClear(n) {
+    if (this.world.snowbanks?.narrowings.length && !this.world.snowbanks.canPullOut(n)) return false;
     const path = n.path;
     const gap = Math.max(n.pull?.T || 3.5, n.driver && n.driver.T < 1.05 ? 3.5 : 5) + 1.5;
     for (const o of [this.world.ego, ...this.vehicles]) {
@@ -2472,7 +2555,18 @@ export class NpcFleet {
       if (a && a.to_node_m > this.map.crossingHalfWidth(a.edge) + 0.1) continue;
       if (Math.hypot(o.x - node.x, o.y - node.y) > BOX_M) continue;
       const diff = Math.abs(wrap(o.psi - n.psi));
-      if (diff > Math.PI / 6 && diff < Math.PI * 5 / 6) return true;
+      if (diff > Math.PI / 6 && diff < Math.PI * 5 / 6) {
+        // The radius includes cars whose tail has already left the crossing street.
+        // A siren can stop one there, but it no longer occupies this junction.
+        const edge = this.map.edges.get(e.id);
+        if (isEmergency(n) && edge?.asphalt) {
+          const box = o.obb(), h = this.map.headingIn(e.id), angle = box.heading - h;
+          const right = (box.center[0] - node.x) * Math.sin(h) - (box.center[1] - node.y) * Math.cos(h);
+          const half = Math.abs(Math.sin(angle)) * box.halfLength + Math.abs(Math.cos(angle)) * box.halfWidth;
+          if (right + half < edge.asphalt[0] - 0.1 || right - half > edge.asphalt[1] + 0.1) continue;
+        }
+        return true;
+      }
     }
     return false;
   }

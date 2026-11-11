@@ -1,0 +1,1871 @@
+{
+ "base_commit": "339e030",
+ "engine": "node v22.23.4",
+ "map": "kitsilano",
+ "brain": "rules",
+ "seed": 1,
+ "npcs": 40,
+ "features": "city",
+ "cases": [
+  {
+   "weather": "dry",
+   "id": "s1-4",
+   "before": {
+    "id": "s1-4",
+    "tags": {
+     "length_m": 894,
+     "signals": 2,
+     "stops": 2,
+     "lefts": 4,
+     "rights": 0
+    },
+    "arrived": false,
+    "time_s": 357.6,
+    "distance_m": 890,
+    "progress": 0.59,
+    "avg_kmh": 9,
+    "collisions": 1,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 0,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "hump_hits": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 0,
+    "wildlife_conflicts": 0,
+    "closure_entries": 0,
+    "officer_violations": 0,
+    "off_road_s": 0,
+    "safety_brakes": 1,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 2.1,
+    "min_ttc_s": 1.1,
+    "min_headway_s": 1.16,
+    "max_accel": 2.66,
+    "max_decel": -6.39,
+    "hard_brakes": 0,
+    "rms_jerk": 2.88,
+    "max_jerk": 51.9,
+    "max_lat_accel": 5.14,
+    "lane_rms_m": 0.32,
+    "lane_max_m": 3.49,
+    "lane_changes": 1,
+    "speeding_s": 0,
+    "stopped_s": 195.9,
+    "decisions": 1373,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "collision"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 85,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "type": "collision",
+      "with": "ped_23",
+      "kind": "pedestrian",
+      "fault": "other",
+      "at_fault": false,
+      "t": 330.7,
+      "ego_v": 0,
+      "other_v": 1.6,
+      "other_ahead": 1,
+      "other_right": 1.3,
+      "relative_heading_deg": 54
+     },
+     {
+      "t": 349.4,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 1.1976200209594638,
+       "gap": 3.5536266267660044
+      }
+     }
+    ]
+   },
+   "after": {
+    "id": "s1-4",
+    "tags": {
+     "length_m": 894,
+     "signals": 2,
+     "stops": 2,
+     "lefts": 4,
+     "rights": 0
+    },
+    "arrived": false,
+    "time_s": 357.6,
+    "distance_m": 886,
+    "progress": 0.59,
+    "avg_kmh": 8.9,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 0,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "hump_hits": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 0,
+    "wildlife_conflicts": 0,
+    "closure_entries": 0,
+    "officer_violations": 0,
+    "off_road_s": 0,
+    "safety_brakes": 1,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 2.3,
+    "min_ttc_s": 1.1,
+    "min_headway_s": 1.15,
+    "max_accel": 2.58,
+    "max_decel": -6.39,
+    "hard_brakes": 0,
+    "rms_jerk": 2.88,
+    "max_jerk": 51.9,
+    "max_lat_accel": 4.87,
+    "lane_rms_m": 0.29,
+    "lane_max_m": 3.49,
+    "lane_changes": 1,
+    "speeding_s": 0,
+    "stopped_s": 196.5,
+    "decisions": 1373,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 85,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "t": 353.1,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 1.1936301465749768,
+       "gap": 3.539850228007879
+      }
+     }
+    ]
+   }
+  },
+  {
+   "weather": "fog",
+   "id": "s1-7",
+   "before": {
+    "id": "s1-7",
+    "tags": {
+     "length_m": 1243,
+     "signals": 0,
+     "stops": 5,
+     "lefts": 1,
+     "rights": 5
+    },
+    "arrived": true,
+    "time_s": 440.5,
+    "distance_m": 1753,
+    "progress": 0.765,
+    "avg_kmh": 14.3,
+    "collisions": 1,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 0,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "reversing_conflicts": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 0,
+    "brake_checks": 0,
+    "closure_entries": 0,
+    "officer_violations": 0,
+    "off_road_s": 0,
+    "safety_brakes": 3,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 0.4,
+    "min_ttc_s": 0.3,
+    "min_headway_s": 0.34,
+    "max_accel": 2.56,
+    "max_decel": -7.36,
+    "hard_brakes": 0,
+    "rms_jerk": 2.85,
+    "max_jerk": 66.3,
+    "max_lat_accel": 4.75,
+    "lane_rms_m": 0.18,
+    "lane_max_m": 0.88,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 91.3,
+    "decisions": 1622,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "collision"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 22.1,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 1.1961021171793178,
+       "gap": 3.504532070321818
+      }
+     },
+     {
+      "t": 48.4,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 0.5440817032842846,
+       "gap": 2.102177942073882
+      }
+     },
+     {
+      "type": "collision",
+      "with": "school_bus_2",
+      "kind": "school_bus",
+      "fault": "other",
+      "at_fault": false,
+      "t": 51.2,
+      "ego_v": 0,
+      "other_v": 4.7,
+      "other_ahead": 7.8,
+      "other_right": 1.1,
+      "relative_heading_deg": 152
+     },
+     {
+      "t": 93.1,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "t": 103,
+      "type": "safety",
+      "brake": {
+       "reason": "open door"
+      }
+     },
+     {
+      "t": 294.3,
+      "type": "reroute",
+      "count": 1
+     },
+     {
+      "t": 440.4,
+      "type": "arrived"
+     }
+    ]
+   },
+   "after": {
+    "id": "s1-7",
+    "tags": {
+     "length_m": 1243,
+     "signals": 0,
+     "stops": 5,
+     "lefts": 1,
+     "rights": 5
+    },
+    "arrived": false,
+    "time_s": 497.2,
+    "distance_m": 995,
+    "progress": 0.542,
+    "avg_kmh": 7.2,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 1,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "reversing_conflicts": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 0,
+    "parking_conflicts": 0,
+    "closure_entries": 0,
+    "officer_violations": 0,
+    "off_road_s": 0,
+    "safety_brakes": 4,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 0.4,
+    "min_ttc_s": 0.3,
+    "min_headway_s": 0.34,
+    "max_accel": 2.56,
+    "max_decel": -7.36,
+    "hard_brakes": 0,
+    "rms_jerk": 2.26,
+    "max_jerk": 66.3,
+    "max_lat_accel": 4.56,
+    "lane_rms_m": 0.14,
+    "lane_max_m": 0.73,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 292.7,
+    "decisions": 1837,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "failed to yield"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 22.1,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 1.1961021171793178,
+       "gap": 3.504532070321818
+      }
+     },
+     {
+      "t": 48.4,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 0.5440817032842846,
+       "gap": 2.102177942073882
+      }
+     },
+     {
+      "t": 93.1,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "t": 103,
+      "type": "safety",
+      "brake": {
+       "reason": "open door"
+      }
+     },
+     {
+      "t": 241.2,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 1.1892859683911645,
+       "gap": 3.493753198289824
+      }
+     }
+    ]
+   }
+  },
+  {
+   "weather": "rain",
+   "id": "s1-7",
+   "before": {
+    "id": "s1-7",
+    "tags": {
+     "length_m": 1243,
+     "signals": 0,
+     "stops": 5,
+     "lefts": 1,
+     "rights": 5
+    },
+    "arrived": false,
+    "time_s": 497.2,
+    "distance_m": 995,
+    "progress": 0.564,
+    "avg_kmh": 7.2,
+    "collisions": 1,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 1,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 0,
+    "closure_entries": 0,
+    "officer_violations": 0,
+    "off_road_s": 0,
+    "safety_brakes": 1,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 2.1,
+    "min_ttc_s": 1.2,
+    "min_headway_s": 1.21,
+    "max_accel": 2.5,
+    "max_decel": -5.26,
+    "hard_brakes": 0,
+    "rms_jerk": 1.74,
+    "max_jerk": 35.2,
+    "max_lat_accel": 3.19,
+    "lane_rms_m": 0.09,
+    "lane_max_m": 0.65,
+    "lane_changes": 3,
+    "speeding_s": 0,
+    "stopped_s": 314.4,
+    "decisions": 1880,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "collision",
+     "failed to yield"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 78.2,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "t": 186.1,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 1.1989575725166668,
+       "gap": 3.074013139728322
+      }
+     },
+     {
+      "type": "collision",
+      "with": "fire_truck_2",
+      "kind": "fire_truck",
+      "fault": "other",
+      "at_fault": false,
+      "t": 345.2,
+      "ego_v": 0,
+      "other_v": 3,
+      "other_ahead": -5.6,
+      "other_right": -2.3,
+      "relative_heading_deg": -2
+     }
+    ]
+   },
+   "after": {
+    "id": "s1-7",
+    "tags": {
+     "length_m": 1243,
+     "signals": 0,
+     "stops": 5,
+     "lefts": 1,
+     "rights": 5
+    },
+    "arrived": false,
+    "time_s": 497.2,
+    "distance_m": 995,
+    "progress": 0.564,
+    "avg_kmh": 7.2,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 1,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 0,
+    "closure_entries": 0,
+    "officer_violations": 0,
+    "off_road_s": 0,
+    "safety_brakes": 1,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 2.1,
+    "min_ttc_s": 1.2,
+    "min_headway_s": 1.21,
+    "max_accel": 2.5,
+    "max_decel": -5.26,
+    "hard_brakes": 0,
+    "rms_jerk": 1.74,
+    "max_jerk": 35.2,
+    "max_lat_accel": 3.19,
+    "lane_rms_m": 0.09,
+    "lane_max_m": 0.65,
+    "lane_changes": 3,
+    "speeding_s": 0,
+    "stopped_s": 314.4,
+    "decisions": 1880,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "failed to yield"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 78.2,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "t": 186.1,
+      "type": "safety",
+      "brake": {
+       "reason": "following",
+       "ttc": 1.1989575725166668,
+       "gap": 3.074013139728322
+      }
+     }
+    ]
+   }
+  },
+  {
+   "weather": "rain",
+   "id": "s1-10",
+   "before": {
+    "id": "s1-10",
+    "tags": {
+     "length_m": 908,
+     "signals": 3,
+     "stops": 3,
+     "lefts": 1,
+     "rights": 2
+    },
+    "arrived": false,
+    "time_s": 363.2,
+    "distance_m": 975,
+    "progress": 0.796,
+    "avg_kmh": 9.7,
+    "collisions": 3,
+    "at_fault": 0,
+    "red_lights": 0,
+    "amber_lights_run": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 1,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "hump_hits": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 1,
+    "closure_entries": 0,
+    "off_road_s": 0,
+    "safety_brakes": 0,
+    "deadlocks": 4,
+    "fallbacks": 0,
+    "min_gap_m": 4.5,
+    "min_ttc_s": 4.1,
+    "min_headway_s": 3.25,
+    "max_accel": 2.52,
+    "max_decel": -5.33,
+    "hard_brakes": 0,
+    "rms_jerk": 1.97,
+    "max_jerk": 30,
+    "max_lat_accel": 3.09,
+    "lane_rms_m": 0.13,
+    "lane_max_m": 0.68,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 185.5,
+    "decisions": 1386,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "stuck",
+     "collision",
+     "failed to yield",
+     "ignored a ball rolling into the street"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 161.3,
+      "type": "reroute",
+      "count": 2
+     },
+     {
+      "type": "collision",
+      "with": "car_39",
+      "kind": "car",
+      "fault": "other",
+      "at_fault": false,
+      "t": 260.6,
+      "ego_v": 0,
+      "other_v": -1.5,
+      "other_ahead": 4.5,
+      "other_right": 0,
+      "relative_heading_deg": 0
+     },
+     {
+      "type": "collision",
+      "with": "car_39",
+      "kind": "car",
+      "fault": "other",
+      "at_fault": false,
+      "t": 286.4,
+      "ego_v": 0,
+      "other_v": -1.5,
+      "other_ahead": 4.5,
+      "other_right": 0,
+      "relative_heading_deg": 0
+     },
+     {
+      "type": "collision",
+      "with": "car_39",
+      "kind": "car",
+      "fault": "other",
+      "at_fault": false,
+      "t": 312.3,
+      "ego_v": 0,
+      "other_v": -1.5,
+      "other_ahead": 4.5,
+      "other_right": 0,
+      "relative_heading_deg": 0
+     },
+     {
+      "t": 362.6,
+      "type": "deadlock",
+      "stuck_s": 12,
+      "holding": "hold",
+      "rejected": {
+       "collision": 10
+      },
+      "next_turn": "right",
+      "turn_in_m": 23.4
+     },
+     {
+      "t": 362.6,
+      "type": "deadlock",
+      "stuck_s": 12,
+      "holding": "hold",
+      "rejected": {
+       "collision": 10
+      },
+      "next_turn": "right",
+      "turn_in_m": 23.4
+     },
+     {
+      "t": 362.9,
+      "type": "deadlock",
+      "stuck_s": 12.3,
+      "holding": "hold",
+      "rejected": {
+       "collision": 15
+      },
+      "next_turn": "right",
+      "turn_in_m": 23.4
+     },
+     {
+      "t": 363.1,
+      "type": "deadlock",
+      "stuck_s": 12.6,
+      "holding": "hard_brake",
+      "rejected": {
+       "collision": 15
+      },
+      "next_turn": "right",
+      "turn_in_m": 23.3
+     }
+    ]
+   },
+   "after": {
+    "id": "s1-10",
+    "tags": {
+     "length_m": 908,
+     "signals": 3,
+     "stops": 3,
+     "lefts": 1,
+     "rights": 2
+    },
+    "arrived": false,
+    "time_s": 363.2,
+    "distance_m": 975,
+    "progress": 0.796,
+    "avg_kmh": 9.7,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "amber_lights_run": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 1,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "illegal_turns": 0,
+    "hump_hits": 0,
+    "pothole_hits": 0,
+    "ball_warnings_ignored": 1,
+    "closure_entries": 0,
+    "off_road_s": 0,
+    "safety_brakes": 0,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 2.9,
+    "min_ttc_s": 4.1,
+    "min_headway_s": 3.25,
+    "max_accel": 2.52,
+    "max_decel": -5.33,
+    "hard_brakes": 0,
+    "rms_jerk": 2,
+    "max_jerk": 30,
+    "max_lat_accel": 3.09,
+    "lane_rms_m": 0.13,
+    "lane_max_m": 0.68,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 185.4,
+    "decisions": 1386,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "failed to yield",
+     "ignored a ball rolling into the street"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 161.3,
+      "type": "reroute",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "weather": "snow",
+   "id": "s1-7",
+   "before": {
+    "id": "s1-7",
+    "tags": {
+     "length_m": 1243,
+     "signals": 0,
+     "stops": 5,
+     "lefts": 1,
+     "rights": 5
+    },
+    "arrived": false,
+    "time_s": 497.2,
+    "distance_m": 1126,
+    "progress": 0.459,
+    "avg_kmh": 8.1,
+    "collisions": 1,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 2,
+    "plow_right_passes": 0,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "hump_hits": 0,
+    "reversing_conflicts": 0,
+    "pothole_hits": 0,
+    "snowbank_conflicts": 0,
+    "parking_conflicts": 0,
+    "closure_entries": 0,
+    "off_road_s": 0,
+    "safety_brakes": 1,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 1.8,
+    "min_ttc_s": 1.5,
+    "min_headway_s": 1.54,
+    "max_accel": 2.45,
+    "max_decel": -2.45,
+    "hard_brakes": 0,
+    "rms_jerk": 1.87,
+    "max_jerk": 16.4,
+    "max_lat_accel": 1.93,
+    "lane_rms_m": 0.19,
+    "lane_max_m": 0.77,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 85.5,
+    "decisions": 1899,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "collision",
+     "failed to yield"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 223,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "type": "collision",
+      "with": "school_bus_1",
+      "kind": "school_bus",
+      "fault": "other",
+      "at_fault": false,
+      "t": 278.1,
+      "ego_v": 0,
+      "other_v": 3.1,
+      "other_ahead": 2.5,
+      "other_right": -6.6,
+      "relative_heading_deg": -99
+     },
+     {
+      "t": 409.6,
+      "type": "safety",
+      "brake": {
+       "reason": "open door"
+      }
+     }
+    ]
+   },
+   "after": {
+    "id": "s1-7",
+    "tags": {
+     "length_m": 1243,
+     "signals": 0,
+     "stops": 5,
+     "lefts": 1,
+     "rights": 5
+    },
+    "arrived": false,
+    "time_s": 497.2,
+    "distance_m": 1217,
+    "progress": 0.532,
+    "avg_kmh": 8.8,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 1,
+    "plow_right_passes": 0,
+    "merge_cut_ins": 0,
+    "close_passes": 0,
+    "hump_hits": 0,
+    "reversing_conflicts": 0,
+    "pothole_hits": 0,
+    "snowbank_conflicts": 0,
+    "parking_conflicts": 0,
+    "closure_entries": 0,
+    "off_road_s": 0,
+    "safety_brakes": 0,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 2.6,
+    "min_ttc_s": 2.7,
+    "min_headway_s": 2.04,
+    "max_accel": 2.45,
+    "max_decel": -2.45,
+    "hard_brakes": 0,
+    "rms_jerk": 1.71,
+    "max_jerk": 14.2,
+    "max_lat_accel": 1.93,
+    "lane_rms_m": 0.23,
+    "lane_max_m": 0.8,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 59.6,
+    "decisions": 1895,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "failed to yield"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 223,
+      "type": "reroute",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "weather": "snow",
+   "id": "s1-12",
+   "before": {
+    "id": "s1-12",
+    "tags": {
+     "length_m": 1087,
+     "signals": 2,
+     "stops": 3,
+     "lefts": 2,
+     "rights": 1
+    },
+    "arrived": false,
+    "time_s": 434.8,
+    "distance_m": 309,
+    "progress": 0.209,
+    "avg_kmh": 2.6,
+    "collisions": 1,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 0,
+    "plow_right_passes": 0,
+    "close_passes": 0,
+    "pothole_hits": 0,
+    "snowbank_conflicts": 0,
+    "closure_entries": 0,
+    "off_road_s": 0,
+    "safety_brakes": 0,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 4.1,
+    "min_ttc_s": 4.5,
+    "min_headway_s": 4.95,
+    "max_accel": 2.44,
+    "max_decel": -2.4,
+    "hard_brakes": 0,
+    "rms_jerk": 0.8,
+    "max_jerk": 11.4,
+    "max_lat_accel": 1.26,
+    "lane_rms_m": 0.36,
+    "lane_max_m": 0.42,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 321.3,
+    "decisions": 1665,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout",
+     "collision"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 72.7,
+      "type": "reroute",
+      "count": 3
+     },
+     {
+      "type": "collision",
+      "with": "car_p3",
+      "kind": "car",
+      "fault": "other",
+      "at_fault": false,
+      "t": 301.7,
+      "ego_v": 0,
+      "other_v": 1,
+      "other_ahead": -4.5,
+      "other_right": 0.2,
+      "relative_heading_deg": -4
+     }
+    ]
+   },
+   "after": {
+    "id": "s1-12",
+    "tags": {
+     "length_m": 1087,
+     "signals": 2,
+     "stops": 3,
+     "lefts": 2,
+     "rights": 1
+    },
+    "arrived": false,
+    "time_s": 434.8,
+    "distance_m": 309,
+    "progress": 0.209,
+    "avg_kmh": 2.6,
+    "collisions": 0,
+    "at_fault": 0,
+    "red_lights": 0,
+    "stop_signs": 0,
+    "failed_to_yield": 0,
+    "plow_right_passes": 0,
+    "close_passes": 0,
+    "pothole_hits": 0,
+    "snowbank_conflicts": 0,
+    "closure_entries": 0,
+    "off_road_s": 0,
+    "safety_brakes": 0,
+    "deadlocks": 0,
+    "fallbacks": 0,
+    "min_gap_m": 3.8,
+    "min_ttc_s": 4,
+    "min_headway_s": 4.95,
+    "max_accel": 2.44,
+    "max_decel": -2.4,
+    "hard_brakes": 0,
+    "rms_jerk": 0.78,
+    "max_jerk": 11.4,
+    "max_lat_accel": 1.26,
+    "lane_rms_m": 0.35,
+    "lane_max_m": 0.42,
+    "lane_changes": 0,
+    "speeding_s": 0,
+    "stopped_s": 322.3,
+    "decisions": 1665,
+    "calls": 0,
+    "tokens": 0,
+    "cost_usd": 0,
+    "failures": [
+     "timeout"
+    ],
+    "pass": false,
+    "events": [
+     {
+      "t": 72.7,
+      "type": "reroute",
+      "count": 3
+     }
+    ]
+   }
+  }
+ ],
+ "traces": {
+  "rain-10": [
+   {
+    "event": {
+     "type": "collision",
+     "with": "car_39",
+     "kind": "car",
+     "fault": "other",
+     "at_fault": false,
+     "t": 260.6,
+     "ego_v": 0,
+     "other_v": -1.5,
+     "other_ahead": 4.5,
+     "other_right": 0,
+     "relative_heading_deg": 0
+    },
+    "samples": [
+     {
+      "t": 246.38333333342155,
+      "ego": {
+       "x": -609.9749023485542,
+       "y": 69.76500238508032,
+       "psi": 1.5491573092824091,
+       "v": 0
+      },
+      "other": {
+       "id": "car_39",
+       "x": -609.8076556009296,
+       "y": 77.3969219990683,
+       "psi": 1.5488128542727448,
+       "v": 2.3160447623610647e-08,
+       "a": 1.539778223174993e-07,
+       "ctrl": {
+        "steer": -8.485741682326361e-07,
+        "accel": 2.2107922854462294e-07
+       },
+       "lead": {
+        "gap": 53.3561215236253,
+        "v": 6.541551371220693
+       },
+       "s": 55.52183201441693,
+       "edge": "e140",
+       "egoProjection": {
+        "distance": 0.0005586290350133481,
+        "s": 47.88808010917855,
+        "lateral": 0.0005586290350133481,
+        "heading": 1.5488124332721735
+       },
+       "local": {
+        "ahead": -7.633751905816452,
+        "right": 0.0005562455125977528
+       }
+      }
+     },
+     {
+      "t": 259.4500000000927,
+      "ego": {
+       "x": -609.9749023485542,
+       "y": 69.76500238508032,
+       "psi": 1.5491573092824091,
+       "v": 0
+      },
+      "other": {
+       "id": "car_39",
+       "x": -609.8394927333395,
+       "y": 75.94892493963857,
+       "psi": 1.5488128542726873,
+       "v": -1.4661468750510955,
+       "a": -0.19441689779570057,
+       "ctrl": {
+        "steer": 0,
+        "accel": -0.0556401098682493,
+        "reverse": true
+       },
+       "lead": {
+        "gap": 21.30355995748513,
+        "v": 0.010804984583948829
+       },
+       "s": 55.52183223468168,
+       "edge": "e140",
+       "egoProjection": {
+        "distance": 0.0005586290350133481,
+        "s": 47.88808010917855,
+        "lateral": 0.0005586290350133481,
+        "heading": 1.5488124332721735
+       },
+       "local": {
+        "ahead": -6.185404886930019,
+        "right": 0.0005562455133204525
+       }
+      }
+     },
+     {
+      "t": 260.53333333342505,
+      "ego": {
+       "x": -609.9749023485542,
+       "y": 69.76500238508032,
+       "psi": 1.5491573092824091,
+       "v": 0
+      },
+      "other": {
+       "id": "car_39",
+       "x": -609.8752943237317,
+       "y": 74.32061881761872,
+       "psi": 1.5488128542726873,
+       "v": -1.5088835689757003,
+       "a": 0.012523887290629202,
+       "ctrl": {
+        "steer": 0,
+        "accel": 0.013638450645816147,
+        "reverse": true
+       },
+       "lead": {
+        "gap": 21.30355995748513,
+        "v": 0.010804984583948829
+       },
+       "s": 55.52183223468168,
+       "edge": "e140",
+       "egoProjection": {
+        "distance": 0.0005586290350133481,
+        "s": 47.88808010917855,
+        "lateral": 0.0005586290350133481,
+        "heading": 1.5488124332721735
+       },
+       "local": {
+        "ahead": -4.556705227421879,
+        "right": 0.0005562455137926164
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "fog-7": [
+   {
+    "event": {
+     "type": "collision",
+     "with": "school_bus_2",
+     "kind": "school_bus",
+     "fault": "other",
+     "at_fault": false,
+     "t": 51.2,
+     "ego_v": 0,
+     "other_v": 4.7,
+     "other_ahead": 7.8,
+     "other_right": 1.1,
+     "relative_heading_deg": 152
+    },
+    "samples": [
+     {
+      "t": 49.98333333333178,
+      "ego": {
+       "x": 685.8293032506805,
+       "y": -30.92344573413253,
+       "psi": -2.6742648226742065,
+       "v": 0
+      },
+      "other": {
+       "id": "school_bus_2",
+       "x": 666.3451489113061,
+       "y": -33.809234377551384,
+       "psi": -0.02422659985389478,
+       "v": 8.198410819317568,
+       "a": -0.5046452441521256,
+       "ctrl": {
+        "steer": 9.025746662314892e-17,
+        "accel": -0.649667211569839
+       },
+       "lead": null,
+       "school": "approach",
+       "evShift": 0,
+       "s": 151.3328523071137,
+       "edge": "e254",
+       "egoProjection": {
+        "distance": 3.819743214285642,
+        "s": 170.0537365776652,
+        "lateral": -3.819743214285642,
+        "heading": -0.2508892804403081
+       },
+       "local": {
+        "ahead": 19.40853071183945,
+        "right": -3.356930446499129
+       }
+      }
+     },
+     {
+      "t": 51.06666666666505,
+      "ego": {
+       "x": 685.8293032506805,
+       "y": -30.92344573413253,
+       "psi": -2.6742648226742065,
+       "v": 0
+      },
+      "other": {
+       "id": "school_bus_2",
+       "x": 674.137387428097,
+       "y": -33.998050764059506,
+       "psi": -0.024226599853895244,
+       "v": 5.123336748662421,
+       "a": -5.150072883893037,
+       "ctrl": {
+        "steer": -6.2972820554645295e-15,
+        "accel": -6
+       },
+       "lead": {
+        "gap": 0,
+        "v": 0
+       },
+       "school": "approach",
+       "evShift": 0,
+       "s": 159.177661562386,
+       "edge": "e254",
+       "egoProjection": {
+        "distance": 3.819743214285642,
+        "s": 170.0537365776652,
+        "lateral": -3.819743214285642,
+        "heading": -0.2508892804403081
+       },
+       "local": {
+        "ahead": 11.614004893653078,
+        "right": -3.356930446499138
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "snow-7": [
+   {
+    "event": {
+     "type": "collision",
+     "with": "school_bus_1",
+     "kind": "school_bus",
+     "fault": "other",
+     "at_fault": false,
+     "t": 278.1,
+     "ego_v": 0,
+     "other_v": 3.1,
+     "other_ahead": 2.5,
+     "other_right": -6.6,
+     "relative_heading_deg": -99
+    },
+    "samples": [
+     {
+      "t": 276.78333333341027,
+      "ego": {
+       "x": 349.3327651947571,
+       "y": 152.58636425294574,
+       "psi": 1.3567596100282149,
+       "v": 1.3599116182721684
+      },
+      "other": {
+       "id": "school_bus_1",
+       "x": 337.79765586211,
+       "y": 160.21523681116946,
+       "psi": -0.03371659509129409,
+       "v": 3.3706594574820765,
+       "a": -0.13005819212648773,
+       "ctrl": {
+        "steer": -0.6925644069801948,
+        "accel": 0.3002764078272795
+       },
+       "lead": {
+        "gap": 24.241542253227454,
+        "v": 5.1613120614884185
+       },
+       "school": "drive",
+       "evShift": 0,
+       "s": 162.63718702890498,
+       "edge": "e225",
+       "egoProjection": {
+        "distance": 4.161077301825443,
+        "s": 175.42506205608885,
+        "lateral": -4.155007695871965,
+        "heading": -1.339958001848855
+       },
+       "local": {
+        "ahead": 11.785724221848138,
+        "right": 7.235685758259761
+       }
+      }
+     },
+     {
+      "t": 277.8666666667426,
+      "ego": {
+       "x": 349.44993476392267,
+       "y": 153.0802887652976,
+       "psi": 1.3047997829298952,
+       "v": 0.014647665112871223
+      },
+      "other": {
+       "id": "school_bus_1",
+       "x": 341.14503182613436,
+       "y": 159.75672730797436,
+       "psi": -0.3374431016479118,
+       "v": 3.1082156792754247,
+       "a": 0.1714932791291477,
+       "ctrl": {
+        "steer": -1.0947851894779943,
+        "accel": 0.060910732526034
+       },
+       "lead": {
+        "gap": 26.202825092279046,
+        "v": 5.063576256579002
+       },
+       "school": "drive",
+       "evShift": 0,
+       "s": 166.21474719696752,
+       "edge": "e225",
+       "egoProjection": {
+        "distance": 4.382076147268404,
+        "s": 175.19571380091438,
+        "lateral": -4.382076147268404,
+        "heading": -1.339958001848855
+       },
+       "local": {
+        "ahead": 10.046946993173192,
+        "right": 3.550366253866317
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "rain-7": [
+   {
+    "event": {
+     "type": "collision",
+     "with": "fire_truck_2",
+     "kind": "fire_truck",
+     "fault": "other",
+     "at_fault": false,
+     "t": 345.2,
+     "ego_v": 0,
+     "other_v": 3,
+     "other_ahead": -5.6,
+     "other_right": -2.3,
+     "relative_heading_deg": -2
+    },
+    "samples": [
+     {
+      "t": 342.2166666666841,
+      "ego": {
+       "x": -0.7142926022930788,
+       "y": -58.329922120179866,
+       "psi": 1.5581971876435554,
+       "v": 0
+      },
+      "other": {
+       "id": "fire_truck_2",
+       "x": -3.5755024579786183,
+       "y": -76.27672993972841,
+       "psi": 1.5421479440788413,
+       "v": 6.528719245831675,
+       "a": -3.9042091827096916,
+       "ctrl": {
+        "steer": -0.017245983912803135,
+        "accel": -4.748040000000001
+       },
+       "side": -2.3457892454805918,
+       "s": 38.91743343840012,
+       "edge": "e196",
+       "egoProjection": {
+        "distance": 0.018816113687415138,
+        "s": 57.03642769380609,
+        "lateral": 0.018816113687415138,
+        "heading": 1.5471794594613137
+       },
+       "local": {
+        "ahead": 18.021401405985745,
+        "right": 2.3459591033127265
+       }
+      }
+     },
+     {
+      "t": 343.95000000001585,
+      "ego": {
+       "x": -0.7142926022930788,
+       "y": -58.329922120179866,
+       "psi": 1.5581971876435554,
+       "v": 0
+      },
+      "other": {
+       "id": "fire_truck_2",
+       "x": -3.3408458313296756,
+       "y": -69.09645121219027,
+       "psi": 1.5416249417645747,
+       "v": 3.422234784947936,
+       "a": 0.3519404334234779,
+       "ctrl": {
+        "steer": 0.009599327812695558,
+        "accel": 0.5341192699841656
+       },
+       "side": -2.3457892454805918,
+       "s": 46.153912852105144,
+       "edge": "e196",
+       "egoProjection": {
+        "distance": 0.018816113687415138,
+        "s": 57.03642769380609,
+        "lateral": 0.018816113687415138,
+        "heading": 1.5471794594613137
+       },
+       "local": {
+        "ahead": 10.83855775091646,
+        "right": 2.3114057268506087
+       }
+      }
+     },
+     {
+      "t": 345.0333333333482,
+      "ego": {
+       "x": -0.7142926022930788,
+       "y": -58.329922120179866,
+       "psi": 1.5581971876435554,
+       "v": 0
+      },
+      "other": {
+       "id": "fire_truck_2",
+       "x": -3.2360733832857083,
+       "y": -65.20606443197718,
+       "psi": 1.537155000888612,
+       "v": 3.4280081245601335,
+       "a": -2.0998974860219213,
+       "ctrl": {
+        "steer": -0.12970632406827637,
+        "accel": -4.748040000000001
+       },
+       "side": -2.0957892454805926,
+       "s": 50.04506048859711,
+       "edge": "e196",
+       "egoProjection": {
+        "distance": 0.018816113687415138,
+        "s": 57.03642769380609,
+        "lateral": 0.018816113687415138,
+        "heading": 1.5471794594613137
+       },
+       "local": {
+        "ahead": 6.957071728176863,
+        "right": 2.289075002806885
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "snow-12-parking": [
+   {
+    "event": {
+     "type": "collision",
+     "with": "car_p3",
+     "kind": "car",
+     "fault": "other",
+     "at_fault": false,
+     "t": 301.7,
+     "ego_v": 0,
+     "other_v": 1,
+     "other_ahead": -4.5,
+     "other_right": 0.2,
+     "relative_heading_deg": -4
+    },
+    "samples": [
+     {
+      "t": 286.5333333334014,
+      "ego": {
+       "x": 49.03348362427337,
+       "y": 454.5340872655251,
+       "psi": -0.01968935603848787,
+       "v": 0.006338729538564043
+      },
+      "other": {
+       "id": "car_p3",
+       "x": 40.796867915393676,
+       "y": 454.7241318024659,
+       "psi": -0.00985930177613345,
+       "v": 0.10533253915282766,
+       "a": -0.023301778386638463,
+       "ctrl": {
+        "steer": 0.00237307060920808,
+        "accel": -0.020467846699168315
+       },
+       "lead": {
+        "gap": 3.7405343947699667,
+        "v": 0.006338729538564043
+       },
+       "pull": null,
+       "parking": null,
+       "evShift": 0,
+       "s": 30.67262891905277,
+       "edge": "e306",
+       "egoProjection": {
+        "distance": 0.40772426012314744,
+        "s": 38.913163313822736,
+        "lateral": -0.40772426012314744,
+        "heading": -0.020137331982181574
+       },
+       "local": {
+        "ahead": 8.238089064667971,
+        "right": 0.10882933603955804
+       }
+      }
+     },
+     {
+      "t": 300.40000000005546,
+      "ego": {
+       "x": 49.03540293072366,
+       "y": 454.5340494681686,
+       "psi": -0.01969211597710536,
+       "v": 0
+      },
+      "other": {
+       "id": "car_p3",
+       "x": 42.17701901081173,
+       "y": 454.69558103575184,
+       "psi": -0.04766032777925869,
+       "v": 1.8741374105754003,
+       "a": 2.1804047727680764,
+       "ctrl": {
+        "steer": -0.10854362276982976,
+        "accel": 1.7433040034561014
+       },
+       "lead": {
+        "gap": 3.1311071967514263,
+        "v": 0
+       },
+       "pull": null,
+       "parking": {
+        "t": 0.9833333333333347,
+        "end": 88.95817963175615,
+        "lat": 2.004474485236594
+       },
+       "evShift": 0,
+       "s": 32.02421763575992,
+       "edge": "e306",
+       "egoProjection": {
+        "distance": 0.40772511752905255,
+        "s": 38.91508299222162,
+        "lateral": -0.4077251175290525,
+        "heading": -0.020137331982181574
+       },
+       "local": {
+        "ahead": 6.858291694473295,
+        "right": -0.16540094845875145
+       }
+      }
+     },
+     {
+      "t": 301.4833333333878,
+      "ego": {
+       "x": 49.03540293072366,
+       "y": 454.5340494681686,
+       "psi": -0.01969211597710536,
+       "v": 0
+      },
+      "other": {
+       "id": "car_p3",
+       "x": 44.34656801722661,
+       "y": 454.5320017073028,
+       "psi": -0.09044776533588539,
+       "v": 1.316829318776173,
+       "a": -1.8721749191820707,
+       "ctrl": {
+        "steer": -0.010535588952763722,
+        "accel": -1.9620000000000002
+       },
+       "lead": {
+        "gap": 3.1311071967514263,
+        "v": 0
+       },
+       "pull": null,
+       "parking": {
+        "t": 2.066666666666664,
+        "end": 88.95817963175615,
+        "lat": 2.004474485236594
+       },
+       "evShift": 0,
+       "s": 34.20482813887361,
+       "edge": "e306",
+       "egoProjection": {
+        "distance": 0.40772511752905255,
+        "s": 38.91508299222162,
+        "lateral": -0.4077251175290525,
+        "heading": -0.020137331982181574
+       },
+       "local": {
+        "ahead": 4.669483815833512,
+        "right": -0.42555602806492243
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "dry-4": [
+   {
+    "event": {
+     "type": "collision",
+     "with": "ped_23",
+     "kind": "pedestrian",
+     "fault": "other",
+     "at_fault": false,
+     "t": 330.7,
+     "ego_v": 0,
+     "other_v": 1.6,
+     "other_ahead": 1,
+     "other_right": 1.3,
+     "relative_heading_deg": 54
+    },
+    "samples": [
+     {
+      "t": 324.2333333333671,
+      "ego": {
+       "x": -2.8846615697402376,
+       "y": -219.0938958295848,
+       "psi": 2.174837064588225,
+       "v": 4.489913599675323e-12
+      },
+      "other": {
+       "id": "ped_23",
+       "x": 3.038263237844718,
+       "y": -213.12963209474378,
+       "psi": -1.6028593215938831,
+       "v": 1.3597191882086919,
+       "a": 0,
+       "crossing": false
+      }
+     },
+     {
+      "t": 329.4333333333624,
+      "ego": {
+       "x": -2.8846615697463345,
+       "y": -219.09389582957616,
+       "psi": 2.174837064586243,
+       "v": 0
+      },
+      "other": {
+       "id": "ped_23",
+       "x": -1.162623871613694,
+       "y": -216.4707005389551,
+       "psi": 3.109529658790716,
+       "v": 1.5636770664399955,
+       "a": 0,
+       "crossing": true,
+       "crosswalk": {
+        "node": "n60428456",
+        "from": [
+         2.926894799307032,
+         -216.60186770608536
+        ],
+        "to": [
+         -13.804501279556671,
+         -216.06522513212732
+        ]
+       }
+      }
+     },
+     {
+      "t": 330.51666666669473,
+      "ego": {
+       "x": -2.8846615697463345,
+       "y": -219.09389582957616,
+       "psi": 2.174837064586243,
+       "v": 0
+      },
+      "other": {
+       "id": "ped_23",
+       "x": -2.85573669715412,
+       "y": -216.41639566084385,
+       "psi": 3.109529658790676,
+       "v": 1.5636770664399955,
+       "a": 0,
+       "crossing": true,
+       "crosswalk": {
+        "node": "n60428456",
+        "from": [
+         2.926894799307032,
+         -216.60186770608536
+        ],
+        "to": [
+         -13.804501279556671,
+         -216.06522513212732
+        ]
+       }
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "bare_comparison": {
+  "source": "before-bare.json supplied with the task",
+  "ignored_fields": [
+   "wall_ms",
+   "*latency*"
+  ],
+  "scope": "entire config, summary and all 12 complete results including events",
+  "equal": true,
+  "normalized_sha256": "4859a3028d0cf5f2a5af975c93ae3672ccd33367fa974b234919cfbbea797ed2",
+  "summary": {
+   "scenarios": 12,
+   "pass_rate": 1,
+   "arrived_rate": 1,
+   "km": 10.53,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "off_road_s": 0.2,
+   "safety_brakes": 7,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "violations_per_km": 0,
+   "avg_kmh": 23.82,
+   "min_gap_m": 1.4,
+   "min_ttc_s": 0.7,
+   "hard_brakes": 0,
+   "rms_jerk": 3.02,
+   "max_lat_accel": 5.29,
+   "lane_rms_m": 0.17,
+   "lane_changes": 3,
+   "speeding_s": 0,
+   "decisions": 5154,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0
+  }
+ },
+ "checks": [
+  {
+   "script": "scripts/test_traffic_backoff.mjs",
+   "exit_code": 0,
+   "seconds": 0.08
+  },
+  {
+   "script": "scripts/test_traffic_body_sweep.mjs",
+   "exit_code": 0,
+   "seconds": 0.25
+  },
+  {
+   "script": "scripts/test_traffic_parking_clearance.mjs",
+   "exit_code": 0,
+   "seconds": 0.08
+  },
+  {
+   "script": "scripts/test_school_buses.mjs",
+   "exit_code": 0,
+   "seconds": 10.4
+  },
+  {
+   "script": "scripts/test_buses.mjs",
+   "exit_code": 0,
+   "seconds": 2.99
+  },
+  {
+   "script": "scripts/test_emergency.mjs",
+   "exit_code": 0,
+   "seconds": 2.09
+  },
+  {
+   "script": "scripts/test_pull_out.mjs",
+   "exit_code": 0,
+   "seconds": 0.35
+  },
+  {
+   "script": "scripts/test_parkers.mjs",
+   "exit_code": 0,
+   "seconds": 4.87
+  },
+  {
+   "script": "scripts/test_parking_ego.mjs",
+   "exit_code": 0,
+   "seconds": 3.54
+  },
+  {
+   "script": "scripts/test_parking_reservations.mjs",
+   "exit_code": 0,
+   "seconds": 0.25
+  },
+  {
+   "script": "scripts/test_crosswalks.mjs",
+   "exit_code": 0,
+   "seconds": 9.48
+  },
+  {
+   "script": "scripts/test_right_hook.mjs",
+   "exit_code": 0,
+   "seconds": 0.41
+  },
+  {
+   "script": "scripts/test_vehicle_models.mjs",
+   "exit_code": 0,
+   "seconds": 0.14
+  },
+  {
+   "script": "scripts/test_following_integration.mjs",
+   "exit_code": 0,
+   "seconds": 0.13
+  },
+  {
+   "script": "scripts/test_pedestrian_stopped_car.mjs",
+   "exit_code": 0,
+   "seconds": 0.08
+  },
+  {
+   "script": "scripts/test_streetcars.mjs",
+   "exit_code": 0,
+   "seconds": 8.91
+  },
+  {
+   "script": "scripts/test_collection_trucks.mjs",
+   "exit_code": 0,
+   "seconds": 9.98
+  },
+  {
+   "script": "scripts/test_crossing_guards.mjs",
+   "exit_code": 0,
+   "seconds": 1.48
+  },
+  {
+   "script": "scripts/test_drive_lab.mjs",
+   "exit_code": 0,
+   "seconds": 65.57
+  }
+ ],
+ "drive_lab": {
+  "checks": 331,
+  "challenges": 60,
+  "drivers": [
+   "rules",
+   "cautious"
+  ],
+  "passed": true
+ }
+}

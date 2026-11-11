@@ -216,10 +216,10 @@ await test("sensing, candidates and wording: wait short of the stretch while it 
   const n = snap.snowbank.narrowing;
   assert.equal(n.priority, "oncoming"); assert.equal(n.reason, "inside"); assert.equal(n.oncoming.id, "challenge_oncoming");
   assert.equal(n.street, "Avenue Laval");
-  assert.equal(n.detour.shift < 0, true);
+  assert.equal(n.detour == null, true, "wait in the approach lane until the corridor is ours");
   const cs = sampleCandidates(snap, w), { eligible, rejected } = simulateAll(cs, snap, w);
   assert.equal(eligible.some(c => c.id === "wait_for_oncoming_narrowing"), true);
-  for (const c of eligible) assert.equal(c.law.detour?.id, `sb:${n.id}`);
+  for (const c of eligible) assert.equal(c.law.detour == null, true, "leave the oncoming vehicle's exit clear");
   // (nothing that would take it past where it waits is on offer)
   assert.equal(rejected.enters_narrowing_out_of_turn > 0 || eligible.every(c => c.sim.progress_m < n.bumper_to_stop_m + 1), true);
   const state = toJevState(snap, cs, { rejected });

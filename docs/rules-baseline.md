@@ -1,4 +1,18 @@
-# Rules benchmark check — 2026-11-09 (free-drive freezes)
+# Rules benchmark check — 2026-11-10 (city suite, traffic swept bodies)
+
+The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4) still
+passes 12/12 with zero collisions, red lights, stop-sign violations, failures to yield or
+deadlocks, 0.2 seconds off road and seven safety brakes. It is no longer field-for-field identical
+to the 2026-11-09 record: ordinary traffic now forecasts its swept body through a turn near the
+driven car with every feature setting (`sim/npc.js`, `test_traffic_turn_clearance.mjs`), a general
+collision fix. Two routes change: `s1-8` takes 175.5 s instead of 171.2 s and `s1-10` 147.9 s
+instead of 148.2 s; the aggregate changes only in average speed (23.82 to 23.78 km/h), RMS jerk
+(3.02 to 3.04) and decisions (5,154 to 5,167). Every other change on the branch leaves bare as it
+was, which was checked after each. Compare bare runs with this record from now on; both are in
+[the validation record](validation/city-detours-2026-11-10.json), beside the city suite in all
+four weathers (dry, fog and rain 12/12, snow 11/12; ROADMAP.md 1.3).
+
+## Earlier record: 2026-11-09 (free-drive freezes)
 
 The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4,
 macOS arm64) passes 12/12 on untouched base `a9977b6` and this change. Every per-route field
