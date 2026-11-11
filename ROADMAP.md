@@ -171,6 +171,12 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
   - Emergency yields: Victoria seed 2 `s2-1`, Calgary seed 2 `s2-1`; and the soak's night yields.
   - Calgary seed 2 `s2-2`: a prohibited turn early in the route.
   - The delivery-van stand-off (cover row 4), not re-run.
+  - From review of #73, each needing a re-baseline: check a parked car's jittered footprint, not only
+    its bay, against the 0.3 m lane limit (`sim/parking.js`); latch the bus-lane turn-in allowance
+    when the lane change starts rather than at the current speed (`sim/bus-lanes.js`).
+  - Also from that review, for model drivers: a multi-route reroute should bump the epoch, so a
+    pending answer cannot install a lane manoeuvre from the old route (`brain/brain.js`, older than
+    #73; needs the stub recording rewritten).
 
 ## Phase 2: put the models on the road
 
