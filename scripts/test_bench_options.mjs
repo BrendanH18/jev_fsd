@@ -36,8 +36,10 @@ console.log("✓ defaults, independent parking/hour, route hours, dependencies a
 const rows = coveringArray();
 assert.ok(rows.length < 24, `${rows.length} rows should remain a small covering array`);
 assert.equal(JSON.stringify(rows), JSON.stringify(coveringArray()));
+// (the module's URL goes in through the environment, so the code run is a fixed string)
 const fresh = spawnSync(process.execPath, ["--experimental-default-type=module", "--input-type=module", "-e",
-  `globalThis.document = { querySelector: () => null }; const { coveringArray } = await import(${JSON.stringify(new URL("../static/js/bench/features.js", import.meta.url).href)}); process.stdout.write(JSON.stringify(coveringArray()), () => process.exit(0));`], { encoding: "utf8", timeout: 10000 });
+  "globalThis.document = { querySelector: () => null }; const { coveringArray } = await import(process.env.FEATURES_URL); process.stdout.write(JSON.stringify(coveringArray()), () => process.exit(0));"],
+  { encoding: "utf8", timeout: 10000, env: { ...process.env, FEATURES_URL: new URL("../static/js/bench/features.js", import.meta.url).href } });
 assert.equal(fresh.status, 0, fresh.stderr);
 assert.equal(fresh.stdout, JSON.stringify(rows), "a fresh process generates the same rows");
 assert.notEqual(JSON.stringify(rows), JSON.stringify(coveringArray(2)));
