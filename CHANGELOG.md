@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- The city benchmark's smoke suite now passes on the other eleven maps (ROADMAP 1.8), with fixes
+  that apply everywhere:
+  - No parking bay on the inside of a tight bend, where a parked car's straight body reached into the
+    travel lane (Winnipeg's Lily Street blocked the car and an ambulance for minutes). Every other bay
+    keeps its car and its number.
+  - A bus lane reserved up to where a street's lanes end: the car's lane follows the route onto the
+    narrower street instead of holding its offset off the road (Winnipeg's Disraeli Freeway).
+  - A right turn into a reserved curb lane: moving straight out of it, over a lane change's length, is
+    not bus-lane driving.
+  - A re-plan drops the lane manoeuvre planned on the old route and decides again at once, as the app
+    does for a new destination; the old route's lane names had put the car two lanes from where it was.
+  - A lane change that leaves the car a lane from its route's lane leaves room for the next one.
+  - A hard brake well off the lane's centre, or while easing round a pothole, keeps to its line.
+  - The forward simulations keep 10 cm round a pothole they ease past.
+  - Junction fills, drawn as asphalt, count as road for the off-road checks (`map/junctions.js`, shared
+    with the renderer); scenery placement is unchanged.
+  - Emergency vehicles: the car stops out of the 8 m junction box the audit measures; beside cars parked
+    close to a narrow lane it pulls over only as far as they leave room, and that counts as pulled over;
+    stopped with a vehicle alongside on its right, or at a reversing parker's hold line, it is yielding,
+    and released from such a queue it has the usual time to pull over; told to drive on, it keeps still
+    while the vehicle draws alongside to go round.
+
 - Fixed free drives freezing when a traffic car looked for parking beside a driveway. Every parking
   reservation now records its owner and the stretch of kerb it occupies, so driveways, work zones,
   lane closures, roadside stops and parking cars share the same free-space checks and release rules.

@@ -1,0 +1,5522 @@
+{
+ "schema": 1,
+ "weather": "dry",
+ "shard": 0,
+ "shards": 1,
+ "audit_policy": "report-only; throws, deadlocks/timeouts and collisions fail",
+ "failed": true,
+ "runs": [
+  {
+   "id": "city/kitsilano/seed-1",
+   "map": "kitsilano",
+   "seed": 1,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "kitsilano",
+    "bbox": [
+     -123.17,
+     49.26,
+     -123.15,
+     49.27
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s1-1",
+     "tags": {
+      "length_m": 565,
+      "signals": 3,
+      "stops": 1,
+      "lefts": 0,
+      "rights": 1
+     },
+     "arrived": true,
+     "time_s": 78.3,
+     "distance_m": 563,
+     "progress": 0.997,
+     "avg_kmh": 25.9,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": null,
+     "min_ttc_s": null,
+     "min_headway_s": null,
+     "max_accel": 2.92,
+     "max_decel": -6.45,
+     "hard_brakes": 0,
+     "rms_jerk": 2.97,
+     "max_jerk": 15,
+     "max_lat_accel": 4.02,
+     "lane_rms_m": 0.2,
+     "lane_max_m": 0.74,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 3,
+     "decisions": 285,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 78.3,
+       "x": -133,
+       "y": -118,
+       "street": "West Broadway",
+       "edge": "e247",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 78.3,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 7898
+    },
+    {
+     "id": "s1-2",
+     "tags": {
+      "length_m": 662,
+      "signals": 2,
+      "stops": 1,
+      "lefts": 3,
+      "rights": 1
+     },
+     "arrived": true,
+     "time_s": 153.5,
+     "distance_m": 901,
+     "progress": 0.715,
+     "avg_kmh": 21.1,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "closure_entries": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 17.2,
+     "min_ttc_s": 11.7,
+     "min_headway_s": 3.37,
+     "max_accel": 3.26,
+     "max_decel": -6.91,
+     "hard_brakes": 0,
+     "rms_jerk": 2.89,
+     "max_jerk": 24.7,
+     "max_lat_accel": 5.18,
+     "lane_rms_m": 0.36,
+     "lane_max_m": 2.05,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "stopped_s": 6.4,
+     "decisions": 583,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 153.5,
+       "x": -303,
+       "y": -218,
+       "street": "West 10th Avenue",
+       "edge": "e445",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 58.2,
+       "type": "reroute",
+       "count": 1
+      },
+      {
+       "t": 153.5,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 15509
+    }
+   ]
+  },
+  {
+   "id": "city/kitsilano/seed-2",
+   "map": "kitsilano",
+   "seed": 2,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 2,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "kitsilano",
+    "bbox": [
+     -123.17,
+     49.26,
+     -123.15,
+     49.27
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s2-1",
+     "tags": {
+      "length_m": 516,
+      "signals": 0,
+      "stops": 1,
+      "lefts": 1,
+      "rights": 0
+     },
+     "arrived": true,
+     "time_s": 111.3,
+     "distance_m": 514,
+     "progress": 0.997,
+     "avg_kmh": 16.6,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 4.8,
+     "min_ttc_s": 3.5,
+     "min_headway_s": 3.55,
+     "max_accel": 2.51,
+     "max_decel": -6.76,
+     "hard_brakes": 0,
+     "rms_jerk": 2.6,
+     "max_jerk": 15,
+     "max_lat_accel": 4.86,
+     "lane_rms_m": 0.13,
+     "lane_max_m": 0.79,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 14,
+     "decisions": 420,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 8.2,
+        "x": -165,
+        "y": 172,
+        "street": "West 6th Avenue",
+        "edge": "e221",
+        "speed": 4.2,
+        "following": null,
+        "nearby": [
+         {
+          "id": "parked_786",
+          "x": -173,
+          "y": 162,
+          "speed": 0
+         },
+         {
+          "id": "parked_795",
+          "x": -165,
+          "y": 157,
+          "speed": 0
+         },
+         {
+          "id": "parked_1328",
+          "x": -157,
+          "y": 169,
+          "speed": 0
+         },
+         {
+          "id": "parked_1329",
+          "x": -151,
+          "y": 169,
+          "speed": 0
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 111.3,
+       "x": 303,
+       "y": 161,
+       "street": "West 6th Avenue",
+       "edge": "e225",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_p5",
+         "x": 309,
+         "y": 158,
+         "speed": 0
+        },
+        {
+         "id": "parked_1388",
+         "x": 290,
+         "y": 159,
+         "speed": 0
+        },
+        {
+         "id": "parked_1390",
+         "x": 316,
+         "y": 158,
+         "speed": 0
+        },
+        {
+         "id": "parked_1393",
+         "x": 310,
+         "y": 167,
+         "speed": 0
+        },
+        {
+         "id": "parked_1394",
+         "x": 304,
+         "y": 167,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 8.2,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 4.200502561753009,
+        "closing": 4.230240232893498
+       }
+      },
+      {
+       "t": 111.3,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 11531
+    },
+    {
+     "id": "s2-2",
+     "tags": {
+      "length_m": 816,
+      "signals": 4,
+      "stops": 0,
+      "lefts": 0,
+      "rights": 2
+     },
+     "arrived": true,
+     "time_s": 166.1,
+     "distance_m": 1161,
+     "progress": 0.741,
+     "avg_kmh": 25.2,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "hump_hits": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 38.3,
+     "min_ttc_s": 15.5,
+     "min_headway_s": 5.6,
+     "max_accel": 2.65,
+     "max_decel": -6.32,
+     "hard_brakes": 0,
+     "rms_jerk": 2.71,
+     "max_jerk": 38,
+     "max_lat_accel": 5.18,
+     "lane_rms_m": 0.24,
+     "lane_max_m": 0.82,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 12.8,
+     "decisions": 628,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 166.1,
+       "x": 83,
+       "y": 265,
+       "street": "West 5th Avenue",
+       "edge": "e218",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "parked_1266",
+         "x": 69,
+         "y": 259,
+         "speed": 0
+        },
+        {
+         "id": "parked_1267",
+         "x": 75,
+         "y": 259,
+         "speed": 0
+        },
+        {
+         "id": "parked_1268",
+         "x": 81,
+         "y": 259,
+         "speed": 0
+        },
+        {
+         "id": "parked_1277",
+         "x": 96,
+         "y": 267,
+         "speed": 0
+        },
+        {
+         "id": "parked_1278",
+         "x": 77,
+         "y": 267,
+         "speed": 0
+        },
+        {
+         "id": "parked_1276",
+         "x": 102,
+         "y": 267,
+         "speed": 0
+        },
+        {
+         "id": "parked_1266_door",
+         "kind": "door",
+         "x": 71,
+         "y": 261,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 63.7,
+       "type": "reroute",
+       "count": 1
+      },
+      {
+       "t": 166,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 15751
+    }
+   ]
+  },
+  {
+   "id": "city/kitsilano/seed-3",
+   "map": "kitsilano",
+   "seed": 3,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 3,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "kitsilano",
+    "bbox": [
+     -123.17,
+     49.26,
+     -123.15,
+     49.27
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [
+    "s3-1"
+   ],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s3-1",
+     "tags": {
+      "length_m": 1026,
+      "signals": 2,
+      "stops": 2,
+      "lefts": 1,
+      "rights": 4
+     },
+     "arrived": true,
+     "time_s": 351.8,
+     "distance_m": 1363,
+     "progress": 0.785,
+     "avg_kmh": 13.9,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "hump_hits": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 4,
+     "deadlocks": 3,
+     "fallbacks": 0,
+     "min_gap_m": 2.2,
+     "min_ttc_s": 1,
+     "min_headway_s": 1.03,
+     "max_accel": 3,
+     "max_decel": -7.01,
+     "hard_brakes": 0,
+     "rms_jerk": 3.55,
+     "max_jerk": 55.2,
+     "max_lat_accel": 5.69,
+     "lane_rms_m": 0.34,
+     "lane_max_m": 3.5,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 89.9,
+     "decisions": 1345,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "deadlock_overrides",
+        "value": 1,
+        "t": 12,
+        "x": 508,
+        "y": -207,
+        "street": "Arbutus Street",
+        "edge": "e607",
+        "speed": 0,
+        "following": null,
+        "nearby": [],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 2,
+        "t": 12.3,
+        "x": 508,
+        "y": -207,
+        "street": "Arbutus Street",
+        "edge": "e607",
+        "speed": 0.2,
+        "following": null,
+        "nearby": [],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 3,
+        "t": 12.5,
+        "x": 508,
+        "y": -207,
+        "street": "Arbutus Street",
+        "edge": "e607",
+        "speed": 0.7,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p1",
+          "x": 486,
+          "y": -231,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 36.6,
+        "x": 377,
+        "y": -232,
+        "street": "West 10th Avenue",
+        "edge": "e586",
+        "speed": 6.3,
+        "following": {
+         "id": "parked_3058_door",
+         "gap_m": 7.484811773643805
+        },
+        "nearby": [
+         {
+          "id": "car_33",
+          "x": 396,
+          "y": -232,
+          "speed": 7.9
+         },
+         {
+          "id": "car_p1",
+          "x": 354,
+          "y": -231,
+          "speed": 7.3
+         },
+         {
+          "id": "parked_3058",
+          "x": 367,
+          "y": -228,
+          "speed": 0
+         },
+         {
+          "id": "parked_3057",
+          "x": 387,
+          "y": -229,
+          "speed": 0
+         },
+         {
+          "id": "parked_3058_door",
+          "kind": "door",
+          "x": 366,
+          "y": -230,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 128,
+        "x": -143,
+        "y": -107,
+        "street": "West Broadway",
+        "edge": "e248",
+        "speed": 3,
+        "following": {
+         "id": "school_bus_2",
+         "gap_m": 3.5704677934465283
+        },
+        "nearby": [
+         {
+          "id": "car_33",
+          "x": -141,
+          "y": -111,
+          "speed": 8.5
+         },
+         {
+          "id": "school_bus_2",
+          "kind": "school_bus",
+          "x": -154,
+          "y": -107,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 3,
+        "t": 200.2,
+        "x": -170,
+        "y": 48,
+        "street": "Larch Street",
+        "edge": "e112",
+        "speed": 2.9,
+        "following": {
+         "id": "school_bus_4",
+         "gap_m": 3.4642899759112313
+        },
+        "nearby": [
+         {
+          "id": "school_bus_4",
+          "kind": "school_bus",
+          "x": -170,
+          "y": 58,
+          "speed": 0
+         },
+         {
+          "id": "parked_782",
+          "x": -176,
+          "y": 50,
+          "speed": 0
+         },
+         {
+          "id": "parked_783",
+          "x": -176,
+          "y": 37,
+          "speed": 0
+         },
+         {
+          "id": "parked_784",
+          "x": -176,
+          "y": 31,
+          "speed": 0
+         },
+         {
+          "id": "parked_781",
+          "x": -176,
+          "y": 63,
+          "speed": 0
+         },
+         {
+          "id": "parked_789",
+          "x": -168,
+          "y": 27,
+          "speed": 0
+         },
+         {
+          "id": "parked_790",
+          "x": -168,
+          "y": 33,
+          "speed": 0
+         },
+         {
+          "id": "parked_791",
+          "x": -168,
+          "y": 46,
+          "speed": 0
+         },
+         {
+          "id": "kid_ball_ball_1",
+          "kind": "pedestrian",
+          "x": -171,
+          "y": 65,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 4,
+        "t": 279.9,
+        "x": -15,
+        "y": 76,
+        "street": "West 7th Avenue",
+        "edge": "e329",
+        "speed": 3,
+        "following": {
+         "id": "school_bus_4",
+         "gap_m": 3.5796714682264112
+        },
+        "nearby": [
+         {
+          "id": "school_bus_4",
+          "kind": "school_bus",
+          "x": -5,
+          "y": 75,
+          "speed": 0
+         },
+         {
+          "id": "fire_truck_2",
+          "kind": "fire_truck",
+          "x": 1,
+          "y": 92,
+          "speed": 0
+         },
+         {
+          "id": "parked_2215",
+          "x": -30,
+          "y": 82,
+          "speed": 0
+         },
+         {
+          "id": "parked_1149",
+          "x": -4,
+          "y": 65,
+          "speed": 0
+         },
+         {
+          "id": "parked_2237",
+          "x": -25,
+          "y": 73,
+          "speed": 0
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 351.8,
+       "x": 114,
+       "y": 165,
+       "street": "West 6th Avenue",
+       "edge": "e223",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_p11",
+         "x": 92,
+         "y": 163,
+         "speed": 0
+        },
+        {
+         "id": "parked_1365",
+         "x": 125,
+         "y": 171,
+         "speed": 0
+        },
+        {
+         "id": "parked_1366",
+         "x": 118,
+         "y": 171,
+         "speed": 0
+        },
+        {
+         "id": "parked_1367",
+         "x": 106,
+         "y": 171,
+         "speed": 0
+        },
+        {
+         "id": "parked_1360",
+         "x": 125,
+         "y": 163,
+         "speed": 0
+        },
+        {
+         "id": "ped_9",
+         "kind": "pedestrian",
+         "x": 131,
+         "y": 158,
+         "speed": 1.3
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 12,
+       "type": "deadlock",
+       "stuck_s": 12,
+       "holding": "hard_brake",
+       "rejected": {
+        "must_return_to_route_lane": 10,
+        "lane_change_gap": 1
+       },
+       "control": "uncontrolled junction:n11144417766",
+       "line_m": 14.7,
+       "lanes_from_route": -1,
+       "next_turn": "right",
+       "turn_in_m": 29.4
+      },
+      {
+       "t": 12.2,
+       "type": "deadlock",
+       "stuck_s": 12.3,
+       "holding": "keep_lane_limit",
+       "rejected": {},
+       "control": "uncontrolled junction:n11144417766",
+       "line_m": 14.7,
+       "next_turn": "right",
+       "turn_in_m": 29.4
+      },
+      {
+       "t": 12.5,
+       "type": "deadlock",
+       "stuck_s": 12.5,
+       "holding": "left_0.5_target",
+       "rejected": {},
+       "control": "uncontrolled junction:n11144417766",
+       "line_m": 14.7,
+       "next_turn": "right",
+       "turn_in_m": 29.4
+      },
+      {
+       "t": 36.5,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1949888319068154,
+        "gap": 7.484811773643805
+       }
+      },
+      {
+       "t": 102.9,
+       "type": "reroute",
+       "count": 3
+      },
+      {
+       "t": 128,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1978010540321455,
+        "gap": 3.5704677934465283
+       }
+      },
+      {
+       "t": 200.2,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1890018395662207,
+        "gap": 3.4642899759112313
+       }
+      },
+      {
+       "t": 279.9,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1990133857433702,
+        "gap": 3.5796714682264112
+       }
+      },
+      {
+       "t": 351.8,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 37744
+    },
+    {
+     "id": "s3-2",
+     "tags": {
+      "length_m": 917,
+      "signals": 2,
+      "stops": 1,
+      "lefts": 2,
+      "rights": 3
+     },
+     "arrived": true,
+     "time_s": 225.2,
+     "distance_m": 1256,
+     "progress": 0.964,
+     "avg_kmh": 20.1,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "hump_hits": 0,
+     "crew_close_passes": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "wildlife_conflicts": 0,
+     "parking_conflicts": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2.6,
+     "min_ttc_s": 3,
+     "min_headway_s": 1.34,
+     "max_accel": 2.57,
+     "max_decel": -7.47,
+     "hard_brakes": 0,
+     "rms_jerk": 2.99,
+     "max_jerk": 39.1,
+     "max_lat_accel": 5.08,
+     "lane_rms_m": 0.16,
+     "lane_max_m": 0.94,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "stopped_s": 19.1,
+     "decisions": 851,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 193,
+        "x": 517,
+        "y": -24,
+        "street": "Arbutus Street",
+        "edge": "e626",
+        "speed": 4.3,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p3",
+          "x": 499,
+          "y": -30,
+          "speed": 0
+         },
+         {
+          "id": "parked_1033",
+          "x": 510,
+          "y": -40,
+          "speed": 0
+         },
+         {
+          "id": "parked_1042",
+          "x": 517,
+          "y": -46,
+          "speed": 0
+         },
+         {
+          "id": "parked_3173",
+          "x": 511,
+          "y": -10,
+          "speed": 0
+         },
+         {
+          "id": "parked_3174",
+          "x": 520,
+          "y": -16,
+          "speed": 0
+         },
+         {
+          "id": "parked_3176",
+          "x": 503,
+          "y": -24,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 217.1,
+        "x": 521,
+        "y": 145,
+        "street": "Arbutus Street",
+        "edge": "e172",
+        "speed": 5.5,
+        "following": {
+         "id": "car_21",
+         "gap_m": 7.5210835922009665
+        },
+        "nearby": [
+         {
+          "id": "car_21",
+          "x": 520,
+          "y": 157,
+          "speed": 4.3
+         },
+         {
+          "id": "parked_1061",
+          "x": 515,
+          "y": 145,
+          "speed": 0
+         },
+         {
+          "id": "parked_1065",
+          "x": 523,
+          "y": 128,
+          "speed": 0
+         },
+         {
+          "id": "parked_1066",
+          "x": 523,
+          "y": 134,
+          "speed": 0
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 225.2,
+       "x": 521,
+       "y": 170,
+       "street": "Arbutus Street",
+       "edge": "e170",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "reversing_1_away",
+         "x": 505,
+         "y": 156,
+         "speed": 0.1
+        },
+        {
+         "id": "parked_2813",
+         "x": 507,
+         "y": 162,
+         "speed": 0
+        },
+        {
+         "id": "parked_1053",
+         "x": 516,
+         "y": 189,
+         "speed": 0
+        },
+        {
+         "id": "parked_1054",
+         "x": 516,
+         "y": 183,
+         "speed": 0
+        },
+        {
+         "id": "parked_1055",
+         "x": 524,
+         "y": 182,
+         "speed": 0
+        },
+        {
+         "id": "parked_1056",
+         "x": 524,
+         "y": 188,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 62.3,
+       "type": "reroute",
+       "count": 3
+      },
+      {
+       "t": 193,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 4.26232660810275,
+        "closing": 4.2896534580948344
+       }
+      },
+      {
+       "t": 217.1,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 7.536463354400066,
+        "closing": 8.705862113097721
+       }
+      },
+      {
+       "t": 225.2,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 22767
+    }
+   ]
+  },
+  {
+   "id": "city/toronto/seed-1",
+   "map": "toronto",
+   "seed": 1,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "toronto",
+    "bbox": [
+     -79.412,
+     43.66,
+     -79.394,
+     43.671
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s1-1",
+     "tags": {
+      "length_m": 1220,
+      "signals": 4,
+      "stops": 3,
+      "lefts": 1,
+      "rights": 3
+     },
+     "arrived": true,
+     "time_s": 267.4,
+     "distance_m": 1215,
+     "progress": 0.998,
+     "avg_kmh": 16.4,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "hump_hits": 0,
+     "crew_close_passes": 0,
+     "guard_violations": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "wildlife_conflicts": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.1,
+     "min_headway_s": 1.15,
+     "max_accel": 2.63,
+     "max_decel": -6.27,
+     "hard_brakes": 0,
+     "rms_jerk": 2.46,
+     "max_jerk": 31.9,
+     "max_lat_accel": 5.21,
+     "lane_rms_m": 0.18,
+     "lane_max_m": 0.85,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 52.6,
+     "decisions": 996,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 88.2,
+        "x": -15,
+        "y": 297,
+        "street": "Madison Avenue",
+        "edge": "e78",
+        "speed": 3,
+        "following": {
+         "id": "reversing_1_away",
+         "gap_m": 3.5312894197094242
+        },
+        "nearby": [
+         {
+          "id": "ambulance_1",
+          "kind": "ambulance",
+          "x": -18,
+          "y": 309,
+          "speed": 2.7
+         },
+         {
+          "id": "reversing_1_away",
+          "x": -13,
+          "y": 289,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 146.6,
+        "x": 18,
+        "y": 182,
+        "street": "Madison Avenue",
+        "edge": "e78",
+        "speed": 3,
+        "following": {
+         "id": "reversing_1_away",
+         "gap_m": 3.5206714938047416
+        },
+        "nearby": [
+         {
+          "id": "ambulance_1",
+          "kind": "ambulance",
+          "x": 13,
+          "y": 199,
+          "speed": 3.5
+         },
+         {
+          "id": "reversing_1_away",
+          "x": 21,
+          "y": 174,
+          "speed": 0
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 267.4,
+       "x": 390,
+       "y": -239,
+       "street": "St. George Street",
+       "edge": "e328",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 88.2,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1896253130198067,
+        "gap": 3.5312894197094242
+       }
+      },
+      {
+       "t": 146.6,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1889995206908839,
+        "gap": 3.5206714938047416
+       }
+      },
+      {
+       "t": 267.4,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 29886
+    },
+    {
+     "id": "s1-2",
+     "tags": {
+      "length_m": 776,
+      "signals": 1,
+      "stops": 4,
+      "lefts": 2,
+      "rights": 1
+     },
+     "arrived": true,
+     "time_s": 316.5,
+     "distance_m": 1392,
+     "progress": 1,
+     "avg_kmh": 15.8,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "guard_violations": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "parking_conflicts": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 3.7,
+     "min_ttc_s": 1.2,
+     "min_headway_s": 1.24,
+     "max_accel": 2.67,
+     "max_decel": -6.7,
+     "hard_brakes": 0,
+     "rms_jerk": 2.96,
+     "max_jerk": 47.2,
+     "max_lat_accel": 5.52,
+     "lane_rms_m": 0.36,
+     "lane_max_m": 3.28,
+     "lane_changes": 0,
+     "speeding_s": 0.4,
+     "stopped_s": 49,
+     "decisions": 1203,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 316.5,
+       "x": 23,
+       "y": 11,
+       "street": "Washington Avenue",
+       "edge": "e24",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "parked_102",
+         "x": 22,
+         "y": 5,
+         "speed": 0
+        },
+        {
+         "id": "parked_120",
+         "x": 21,
+         "y": 13,
+         "speed": 0
+        },
+        {
+         "id": "parked_103",
+         "x": 28,
+         "y": 7,
+         "speed": 0
+        },
+        {
+         "id": "parked_119",
+         "x": 28,
+         "y": 15,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 138.7,
+       "type": "reroute",
+       "count": 2
+      },
+      {
+       "t": 316.5,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 30114
+    }
+   ]
+  },
+  {
+   "id": "city/toronto/seed-2",
+   "map": "toronto",
+   "seed": 2,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 2,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "toronto",
+    "bbox": [
+     -79.412,
+     43.66,
+     -79.394,
+     43.671
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [
+    "s2-2"
+   ],
+   "collisions": [
+    "s2-1"
+   ],
+   "audits": [],
+   "results": [
+    {
+     "id": "s2-1",
+     "tags": {
+      "length_m": 1351,
+      "signals": 4,
+      "stops": 3,
+      "lefts": 0,
+      "rights": 4
+     },
+     "arrived": true,
+     "time_s": 560.2,
+     "distance_m": 2778,
+     "progress": 0.786,
+     "avg_kmh": 17.9,
+     "collisions": 1,
+     "at_fault": 1,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "guard_violations": 0,
+     "contraflow_conflicts": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "wildlife_conflicts": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0.1,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2.1,
+     "min_ttc_s": 1.1,
+     "min_headway_s": 1.15,
+     "max_accel": 2.53,
+     "max_decel": -64.18,
+     "hard_brakes": 0,
+     "rms_jerk": 12.22,
+     "max_jerk": 646.2,
+     "max_lat_accel": 5.16,
+     "lane_rms_m": 0.23,
+     "lane_max_m": 1.33,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 116.2,
+     "decisions": 1987,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [
+      "collision"
+     ],
+     "pass": false,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 122.3,
+        "x": 122,
+        "y": -252,
+        "street": "Harbord Street",
+        "edge": "e142",
+        "speed": 3,
+        "following": {
+         "id": "bus_4",
+         "gap_m": 3.5226206367115998
+        },
+        "nearby": [
+         {
+          "id": "bus_4",
+          "kind": "bus",
+          "x": 111,
+          "y": -252,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "collisions",
+        "value": 1,
+        "t": 341,
+        "x": -72,
+        "y": 121,
+        "street": "Bloor Street West",
+        "edge": "e184",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_4",
+          "x": -58,
+          "y": 133,
+          "speed": 5.8
+         },
+         {
+          "id": "car_36",
+          "x": -70,
+          "y": 124,
+          "speed": 0
+         }
+        ],
+        "events": [
+         {
+          "type": "collision",
+          "with": "car_36",
+          "kind": "car",
+          "fault": "ego",
+          "at_fault": true,
+          "t": 341,
+          "ego_v": 6.1,
+          "other_v": 4.7,
+          "other_ahead": 0.9,
+          "other_right": -2.6,
+          "relative_heading_deg": -25
+         }
+        ]
+       },
+       {
+        "audit": "collisions_at_fault",
+        "value": 1,
+        "t": 341,
+        "x": -72,
+        "y": 121,
+        "street": "Bloor Street West",
+        "edge": "e184",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_4",
+          "x": -58,
+          "y": 133,
+          "speed": 5.8
+         },
+         {
+          "id": "car_36",
+          "x": -70,
+          "y": 124,
+          "speed": 0
+         }
+        ],
+        "events": [
+         {
+          "type": "collision",
+          "with": "car_36",
+          "kind": "car",
+          "fault": "ego",
+          "at_fault": true,
+          "t": 341,
+          "ego_v": 6.1,
+          "other_v": 4.7,
+          "other_ahead": 0.9,
+          "other_right": -2.6,
+          "relative_heading_deg": -25
+         }
+        ]
+       },
+       {
+        "audit": "off_road_s",
+        "value": 0.016666666666666666,
+        "t": 501.8,
+        "x": -155,
+        "y": -293,
+        "street": "Major Street",
+        "edge": "e40",
+        "speed": 10.4,
+        "following": null,
+        "nearby": [
+         {
+          "id": "parked_194",
+          "x": -156,
+          "y": -309,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "off_road_s",
+        "value": 0.03333333333333333,
+        "t": 501.8,
+        "x": -155,
+        "y": -293,
+        "street": "Major Street",
+        "edge": "e40",
+        "speed": 10.4,
+        "following": null,
+        "nearby": [
+         {
+          "id": "parked_194",
+          "x": -156,
+          "y": -309,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "off_road_s",
+        "value": 0.05,
+        "t": 501.8,
+        "x": -155,
+        "y": -293,
+        "street": "Major Street",
+        "edge": "e40",
+        "speed": 10.4,
+        "following": null,
+        "nearby": [
+         {
+          "id": "parked_194",
+          "x": -156,
+          "y": -309,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 542.3,
+        "x": -124,
+        "y": -137,
+        "street": "Sussex Avenue",
+        "edge": "e35",
+        "speed": 4.5,
+        "following": null,
+        "nearby": [
+         {
+          "id": "ped_13",
+          "kind": "pedestrian",
+          "x": -115,
+          "y": -136,
+          "speed": 2.4
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 560.2,
+       "x": -83,
+       "y": -260,
+       "street": "Robert Street",
+       "edge": "e70",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 122.2,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.188936322535063,
+        "gap": 3.5226206367115998
+       }
+      },
+      {
+       "t": 195.3,
+       "type": "reroute",
+       "count": 2
+      },
+      {
+       "type": "collision",
+       "with": "car_36",
+       "kind": "car",
+       "fault": "ego",
+       "at_fault": true,
+       "t": 341,
+       "ego_v": 6.1,
+       "other_v": 4.7,
+       "other_ahead": 0.9,
+       "other_right": -2.6,
+       "relative_heading_deg": -25
+      },
+      {
+       "t": 442.1,
+       "type": "reroute",
+       "count": 1
+      },
+      {
+       "t": 542.3,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 4.992034009366588,
+        "closing": 5.021968391993844
+       }
+      },
+      {
+       "t": 560.2,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 55489
+    },
+    {
+     "id": "s2-2",
+     "tags": {
+      "length_m": 501,
+      "signals": 1,
+      "stops": 3,
+      "lefts": 0,
+      "rights": 0
+     },
+     "arrived": false,
+     "time_s": 325.9,
+     "distance_m": 453,
+     "progress": 0.509,
+     "avg_kmh": 5,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "guard_violations": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 516,
+     "fallbacks": 0,
+     "min_gap_m": 6,
+     "min_ttc_s": 2.7,
+     "min_headway_s": 2.69,
+     "max_accel": 2.7,
+     "max_decel": -6.57,
+     "hard_brakes": 0,
+     "rms_jerk": 1.78,
+     "max_jerk": 28.7,
+     "max_lat_accel": 5.15,
+     "lane_rms_m": 0.76,
+     "lane_max_m": 0.92,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 232.1,
+     "decisions": 1257,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [
+      "stuck"
+     ],
+     "pass": false,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 65.7,
+        "x": 182,
+        "y": -47,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 4.3,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_34",
+          "x": 173,
+          "y": -53,
+          "speed": 0
+         },
+         {
+          "id": "car_p2",
+          "x": 196,
+          "y": -66,
+          "speed": 1.2
+         },
+         {
+          "id": "parked_74",
+          "x": 166,
+          "y": -57,
+          "speed": 0
+         },
+         {
+          "id": "parked_75",
+          "x": 174,
+          "y": -46,
+          "speed": 0
+         },
+         {
+          "id": "parked_22",
+          "x": 187,
+          "y": -34,
+          "speed": 0
+         },
+         {
+          "id": "parked_88",
+          "x": 199,
+          "y": -48,
+          "speed": 0
+         },
+         {
+          "id": "closure_1_b0_0",
+          "kind": "barricade",
+          "x": 179,
+          "y": -39,
+          "speed": 0
+         },
+         {
+          "id": "closure_1_b0_1",
+          "kind": "barricade",
+          "x": 181,
+          "y": -38,
+          "speed": 0
+         },
+         {
+          "id": "closure_1_b0_2",
+          "kind": "barricade",
+          "x": 183,
+          "y": -38,
+          "speed": 0
+         },
+         {
+          "id": "closure_1_b0_3",
+          "kind": "barricade",
+          "x": 185,
+          "y": -37,
+          "speed": 0
+         },
+         {
+          "id": "closure_1_b0_4",
+          "kind": "barricade",
+          "x": 188,
+          "y": -37,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 1,
+        "t": 192.9,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 55,
+          "y": -94,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 2,
+        "t": 193,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 55,
+          "y": -94,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 3,
+        "t": 193.2,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 55,
+          "y": -93,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 4,
+        "t": 193.5,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 56,
+          "y": -93,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 5,
+        "t": 193.7,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 56,
+          "y": -93,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 6,
+        "t": 194,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 56,
+          "y": -93,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 7,
+        "t": 194.2,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 57,
+          "y": -93,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 8,
+        "t": 194.5,
+        "x": 63,
+        "y": -80,
+        "street": "Sussex Avenue",
+        "edge": "e18",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_p4",
+          "x": 57,
+          "y": -80,
+          "speed": 0
+         },
+         {
+          "id": "parked_87",
+          "x": 50,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_61",
+          "x": 68,
+          "y": -85,
+          "speed": 0
+         },
+         {
+          "id": "parked_62",
+          "x": 80,
+          "y": -82,
+          "speed": 0
+         },
+         {
+          "id": "parked_85",
+          "x": 81,
+          "y": -73,
+          "speed": 0
+         },
+         {
+          "id": "ped_56",
+          "kind": "pedestrian",
+          "x": 57,
+          "y": -93,
+          "speed": 1.6
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 325.9,
+       "x": 63,
+       "y": -80,
+       "street": "Sussex Avenue",
+       "edge": "e18",
+       "speed": 0,
+       "following": null,
+       "nearby": [
+        {
+         "id": "truck_1",
+         "kind": "collection_truck",
+         "x": 44,
+         "y": -89,
+         "speed": 4.4
+        },
+        {
+         "id": "car_p2",
+         "x": 70,
+         "y": -79,
+         "speed": 0
+        },
+        {
+         "id": "car_p4",
+         "x": 57,
+         "y": -80,
+         "speed": 0
+        },
+        {
+         "id": "parked_87",
+         "x": 50,
+         "y": -82,
+         "speed": 0
+        },
+        {
+         "id": "parked_61",
+         "x": 68,
+         "y": -85,
+         "speed": 0
+        },
+        {
+         "id": "parked_62",
+         "x": 80,
+         "y": -82,
+         "speed": 0
+        },
+        {
+         "id": "parked_85",
+         "x": 81,
+         "y": -73,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 47.9,
+       "type": "reroute",
+       "count": 1
+      },
+      {
+       "t": 65.7,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 4.282415090042658,
+        "closing": 4.285535826513065
+       }
+      },
+      {
+       "t": 192.9,
+       "type": "deadlock",
+       "stuck_s": 12,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 193,
+       "type": "deadlock",
+       "stuck_s": 12.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 193.2,
+       "type": "deadlock",
+       "stuck_s": 12.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 193.5,
+       "type": "deadlock",
+       "stuck_s": 12.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 193.7,
+       "type": "deadlock",
+       "stuck_s": 12.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 194,
+       "type": "deadlock",
+       "stuck_s": 13.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 194.2,
+       "type": "deadlock",
+       "stuck_s": 13.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 194.5,
+       "type": "deadlock",
+       "stuck_s": 13.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 194.7,
+       "type": "deadlock",
+       "stuck_s": 13.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 195,
+       "type": "deadlock",
+       "stuck_s": 14.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 195.2,
+       "type": "deadlock",
+       "stuck_s": 14.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 195.5,
+       "type": "deadlock",
+       "stuck_s": 14.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 195.7,
+       "type": "deadlock",
+       "stuck_s": 14.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 196,
+       "type": "deadlock",
+       "stuck_s": 15.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 196.2,
+       "type": "deadlock",
+       "stuck_s": 15.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 196.5,
+       "type": "deadlock",
+       "stuck_s": 15.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 196.7,
+       "type": "deadlock",
+       "stuck_s": 15.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 197,
+       "type": "deadlock",
+       "stuck_s": 16.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 197.2,
+       "type": "deadlock",
+       "stuck_s": 16.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 197.5,
+       "type": "deadlock",
+       "stuck_s": 16.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 197.7,
+       "type": "deadlock",
+       "stuck_s": 16.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 198,
+       "type": "deadlock",
+       "stuck_s": 17.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 198.2,
+       "type": "deadlock",
+       "stuck_s": 17.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 198.5,
+       "type": "deadlock",
+       "stuck_s": 17.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 198.7,
+       "type": "deadlock",
+       "stuck_s": 17.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 199,
+       "type": "deadlock",
+       "stuck_s": 18.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 199.2,
+       "type": "deadlock",
+       "stuck_s": 18.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 199.5,
+       "type": "deadlock",
+       "stuck_s": 18.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 199.7,
+       "type": "deadlock",
+       "stuck_s": 18.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 200,
+       "type": "deadlock",
+       "stuck_s": 19.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 200.2,
+       "type": "deadlock",
+       "stuck_s": 19.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 200.5,
+       "type": "deadlock",
+       "stuck_s": 19.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 200.7,
+       "type": "deadlock",
+       "stuck_s": 19.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 201,
+       "type": "deadlock",
+       "stuck_s": 20.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 201.2,
+       "type": "deadlock",
+       "stuck_s": 20.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 201.5,
+       "type": "deadlock",
+       "stuck_s": 20.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 201.7,
+       "type": "deadlock",
+       "stuck_s": 20.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 202,
+       "type": "deadlock",
+       "stuck_s": 21.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 202.2,
+       "type": "deadlock",
+       "stuck_s": 21.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 202.5,
+       "type": "deadlock",
+       "stuck_s": 21.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 202.7,
+       "type": "deadlock",
+       "stuck_s": 21.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 203,
+       "type": "deadlock",
+       "stuck_s": 22.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 203.2,
+       "type": "deadlock",
+       "stuck_s": 22.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 203.5,
+       "type": "deadlock",
+       "stuck_s": 22.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 203.7,
+       "type": "deadlock",
+       "stuck_s": 22.8,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 204,
+       "type": "deadlock",
+       "stuck_s": 23.1,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 204.2,
+       "type": "deadlock",
+       "stuck_s": 23.3,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      },
+      {
+       "t": 204.5,
+       "type": "deadlock",
+       "stuck_s": 23.6,
+       "holding": "left_1_target",
+       "rejected": {
+        "collision": 8
+       },
+       "control": "signal sig10",
+       "line_m": 21.4,
+       "next_turn": "right",
+       "turn_in_m": 33.5
+      }
+     ],
+     "wall_ms": 29582
+    }
+   ]
+  },
+  {
+   "id": "city/toronto/seed-3",
+   "map": "toronto",
+   "seed": 3,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 3,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "toronto",
+    "bbox": [
+     -79.412,
+     43.66,
+     -79.394,
+     43.671
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s3-1",
+     "tags": {
+      "length_m": 915,
+      "signals": 4,
+      "stops": 1,
+      "lefts": 1,
+      "rights": 2
+     },
+     "arrived": true,
+     "time_s": 225.4,
+     "distance_m": 1194,
+     "progress": 0.837,
+     "avg_kmh": 19.1,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "guard_violations": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 1.1,
+     "min_headway_s": 1.16,
+     "max_accel": 2.54,
+     "max_decel": -6.59,
+     "hard_brakes": 0,
+     "rms_jerk": 3.52,
+     "max_jerk": 52.4,
+     "max_lat_accel": 4.8,
+     "lane_rms_m": 0.23,
+     "lane_max_m": 1.6,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 18.9,
+     "decisions": 849,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 144.1,
+        "x": 347,
+        "y": -79,
+        "street": "St. George Street",
+        "edge": "e8",
+        "speed": 3,
+        "following": {
+         "id": "bike_11",
+         "gap_m": 3.5384419653644725
+        },
+        "nearby": [
+         {
+          "id": "bike_11",
+          "kind": "bike",
+          "x": 346,
+          "y": -72,
+          "speed": 0
+         },
+         {
+          "id": "reversing_1_away",
+          "x": 343,
+          "y": -65,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 160.9,
+        "x": 333,
+        "y": -32,
+        "street": "St. George Street",
+        "edge": "e8",
+        "speed": 3,
+        "following": {
+         "id": "bike_11",
+         "gap_m": 3.5551009631210944
+        },
+        "nearby": [
+         {
+          "id": "bike_11",
+          "kind": "bike",
+          "x": 332,
+          "y": -24,
+          "speed": 0
+         },
+         {
+          "id": "reversing_1_away",
+          "x": 330,
+          "y": -20,
+          "speed": 1.4
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 225.4,
+       "x": 204,
+       "y": -115,
+       "street": "Huron Street",
+       "edge": "e13",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_p4",
+         "x": 198,
+         "y": -102,
+         "speed": 0
+        },
+        {
+         "id": "parked_35",
+         "x": 200,
+         "y": -109,
+         "speed": 0
+        },
+        {
+         "id": "parked_36",
+         "x": 210,
+         "y": -115,
+         "speed": 0
+        },
+        {
+         "id": "parked_37",
+         "x": 207,
+         "y": -103,
+         "speed": 0
+        },
+        {
+         "id": "parked_38",
+         "x": 205,
+         "y": -97,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 53.4,
+       "type": "reroute",
+       "count": 2
+      },
+      {
+       "t": 144.1,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1938189185583872,
+        "gap": 3.5384419653644725
+       }
+      },
+      {
+       "t": 160.9,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 1.1984277565652457,
+        "gap": 3.5551009631210944
+       }
+      },
+      {
+       "t": 225.3,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 21639
+    },
+    {
+     "id": "s3-2",
+     "tags": {
+      "length_m": 1243,
+      "signals": 2,
+      "stops": 2,
+      "lefts": 0,
+      "rights": 1
+     },
+     "arrived": true,
+     "time_s": 352.3,
+     "distance_m": 1549,
+     "progress": 0.782,
+     "avg_kmh": 15.8,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "guard_violations": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "wildlife_conflicts": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2.4,
+     "min_ttc_s": 1.4,
+     "min_headway_s": 1.07,
+     "max_accel": 2.57,
+     "max_decel": -6.92,
+     "hard_brakes": 0,
+     "rms_jerk": 2.57,
+     "max_jerk": 36.9,
+     "max_lat_accel": 4.95,
+     "lane_rms_m": 0.56,
+     "lane_max_m": 4.33,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 89.3,
+     "decisions": 1302,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 352.3,
+       "x": 205,
+       "y": 401,
+       "street": "St. George Street",
+       "edge": "e164",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "parked_749",
+         "x": 197,
+         "y": 408,
+         "speed": 0
+        },
+        {
+         "id": "parked_750",
+         "x": 199,
+         "y": 403,
+         "speed": 0
+        },
+        {
+         "id": "parked_736",
+         "x": 210,
+         "y": 395,
+         "speed": 0
+        },
+        {
+         "id": "parked_751",
+         "x": 203,
+         "y": 390,
+         "speed": 0
+        },
+        {
+         "id": "parked_737",
+         "x": 208,
+         "y": 402,
+         "speed": 0
+        },
+        {
+         "id": "parked_738",
+         "x": 204,
+         "y": 414,
+         "speed": 0
+        },
+        {
+         "id": "parked_739",
+         "x": 203,
+         "y": 420,
+         "speed": 0
+        },
+        {
+         "id": "stepout_2",
+         "kind": "pedestrian",
+         "x": 196,
+         "y": 396,
+         "speed": 1.6
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 71.3,
+       "type": "reroute",
+       "count": 3
+      },
+      {
+       "t": 352.3,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 31625
+    }
+   ]
+  },
+  {
+   "id": "city/calgary/seed-1",
+   "map": "calgary",
+   "seed": 1,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "calgary",
+    "bbox": [
+     -114.087,
+     51.034,
+     -114.063,
+     51.045
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s1-1",
+     "tags": {
+      "length_m": 665,
+      "signals": 2,
+      "stops": 1,
+      "lefts": 2,
+      "rights": 1
+     },
+     "arrived": true,
+     "time_s": 190.9,
+     "distance_m": 661,
+     "progress": 0.997,
+     "avg_kmh": 12.5,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "parking_conflicts": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2,
+     "min_ttc_s": 1.2,
+     "min_headway_s": 1.19,
+     "max_accel": 2.57,
+     "max_decel": -6.16,
+     "hard_brakes": 0,
+     "rms_jerk": 3.11,
+     "max_jerk": 46.7,
+     "max_lat_accel": 4.92,
+     "lane_rms_m": 0.15,
+     "lane_max_m": 0.84,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 53.4,
+     "decisions": 721,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 48.7,
+        "x": -302,
+        "y": 56,
+        "street": "14 Avenue SW",
+        "edge": "e154",
+        "speed": 3,
+        "following": {
+         "id": "parked_989_door",
+         "gap_m": 3.6787981123687308
+        },
+        "nearby": [
+         {
+          "id": "car_10",
+          "x": -316,
+          "y": 53,
+          "speed": 2.8
+         },
+         {
+          "id": "parked_1043",
+          "x": -300,
+          "y": 41,
+          "speed": 0
+         },
+         {
+          "id": "parked_989",
+          "x": -308,
+          "y": 58,
+          "speed": 0
+         },
+         {
+          "id": "parked_1054",
+          "x": -291,
+          "y": 65,
+          "speed": 0
+         },
+         {
+          "id": "parked_1066",
+          "x": -299,
+          "y": 75,
+          "speed": 0
+         },
+         {
+          "id": "parked_989_door",
+          "kind": "door",
+          "x": -310,
+          "y": 57,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 90.4,
+        "x": -432,
+        "y": 61,
+        "street": "14 Avenue SW",
+        "edge": "e154",
+        "speed": 0.7,
+        "following": {
+         "id": "reversing_1_away",
+         "gap_m": 1.9904566451500045
+        },
+        "nearby": [
+         {
+          "id": "reversing_1_away",
+          "x": -439,
+          "y": 61,
+          "speed": 0
+         },
+         {
+          "id": "parked_997",
+          "x": -442,
+          "y": 64,
+          "speed": 0
+         },
+         {
+          "id": "parked_996",
+          "x": -423,
+          "y": 63,
+          "speed": 0
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 190.9,
+       "x": -521,
+       "y": -147,
+       "street": "16 Avenue SW",
+       "edge": "e131",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 48.7,
+       "type": "safety",
+       "brake": {
+        "reason": "open door"
+       }
+      },
+      {
+       "t": 90.4,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": 2.5486679038368756,
+        "gap": 1.9904566451500045
+       }
+      },
+      {
+       "t": 190.9,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 19039
+    },
+    {
+     "id": "s1-2",
+     "tags": {
+      "length_m": 511,
+      "signals": 2,
+      "stops": 0,
+      "lefts": 1,
+      "rights": 0
+     },
+     "arrived": true,
+     "time_s": 92.5,
+     "distance_m": 507,
+     "progress": 0.995,
+     "avg_kmh": 19.7,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "brake_checks": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 17.9,
+     "min_ttc_s": 11.9,
+     "min_headway_s": 2.58,
+     "max_accel": 3.19,
+     "max_decel": -6.92,
+     "hard_brakes": 0,
+     "rms_jerk": 4.09,
+     "max_jerk": 39.1,
+     "max_lat_accel": 6.89,
+     "lane_rms_m": 0.33,
+     "lane_max_m": 2.64,
+     "lane_changes": 6,
+     "speeding_s": 0,
+     "stopped_s": 17.1,
+     "decisions": 342,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 92.5,
+       "x": 43,
+       "y": -7,
+       "street": "5 Street SW",
+       "edge": "e593",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_23",
+         "x": 44,
+         "y": 11,
+         "speed": 3
+        },
+        {
+         "id": "car_p1",
+         "x": 47,
+         "y": -2,
+         "speed": 9.9
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 92.5,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 7950
+    }
+   ]
+  },
+  {
+   "id": "city/calgary/seed-2",
+   "map": "calgary",
+   "seed": 2,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 2,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "calgary",
+    "bbox": [
+     -114.087,
+     51.034,
+     -114.063,
+     51.045
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [
+    "s2-1"
+   ],
+   "collisions": [],
+   "audits": [
+    {
+     "id": "s2-1",
+     "failures": [
+      "failed to yield"
+     ]
+    },
+    {
+     "id": "s2-2",
+     "failures": [
+      "made a prohibited turn"
+     ]
+    }
+   ],
+   "results": [
+    {
+     "id": "s2-1",
+     "tags": {
+      "length_m": 1063,
+      "signals": 3,
+      "stops": 2,
+      "lefts": 3,
+      "rights": 0
+     },
+     "arrived": false,
+     "time_s": 425.2,
+     "distance_m": 543,
+     "progress": 0.511,
+     "avg_kmh": 4.6,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 1,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2.3,
+     "min_ttc_s": 3.1,
+     "min_headway_s": 3.68,
+     "max_accel": 2.89,
+     "max_decel": -6.92,
+     "hard_brakes": 0,
+     "rms_jerk": 1.65,
+     "max_jerk": 37.4,
+     "max_lat_accel": 6.67,
+     "lane_rms_m": 2.83,
+     "lane_max_m": 6.19,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "stopped_s": 332.8,
+     "decisions": 1621,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [
+      "timeout",
+      "failed to yield"
+     ],
+     "pass": false,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 328.3,
+        "x": -257,
+        "y": 365,
+        "street": "11 Avenue SW",
+        "edge": "e478",
+        "speed": 1.8,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_2",
+          "x": -280,
+          "y": 352,
+          "speed": 0
+         },
+         {
+          "id": "car_10",
+          "x": -282,
+          "y": 384,
+          "speed": 0
+         },
+         {
+          "id": "car_16",
+          "x": -263,
+          "y": 365,
+          "speed": 0
+         },
+         {
+          "id": "car_29",
+          "x": -281,
+          "y": 340,
+          "speed": 0
+         },
+         {
+          "id": "car_33",
+          "x": -267,
+          "y": 365,
+          "speed": 0
+         },
+         {
+          "id": "school_bus_1",
+          "kind": "school_bus",
+          "x": -261,
+          "y": 370,
+          "speed": 6.1
+         },
+         {
+          "id": "school_bus_2",
+          "kind": "school_bus",
+          "x": -278,
+          "y": 364,
+          "speed": 0
+         },
+         {
+          "id": "car_p6",
+          "x": -276,
+          "y": 386,
+          "speed": 0
+         },
+         {
+          "id": "car_p10",
+          "x": -278,
+          "y": 343,
+          "speed": 0
+         },
+         {
+          "id": "fire_truck_2",
+          "kind": "fire_truck",
+          "x": -239,
+          "y": 366,
+          "speed": 3.4
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "failed_to_yield",
+        "value": 1,
+        "t": 338.7,
+        "x": -260,
+        "y": 369,
+        "street": "11 Avenue SW",
+        "edge": "e478",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_2",
+          "x": -280,
+          "y": 352,
+          "speed": 0
+         },
+         {
+          "id": "car_10",
+          "x": -282,
+          "y": 384,
+          "speed": 0
+         },
+         {
+          "id": "car_16",
+          "x": -263,
+          "y": 365,
+          "speed": 0
+         },
+         {
+          "id": "car_33",
+          "x": -267,
+          "y": 365,
+          "speed": 0
+         },
+         {
+          "id": "school_bus_2",
+          "kind": "school_bus",
+          "x": -278,
+          "y": 364,
+          "speed": 0
+         },
+         {
+          "id": "car_p5",
+          "x": -276,
+          "y": 392,
+          "speed": 0
+         },
+         {
+          "id": "car_p6",
+          "x": -276,
+          "y": 386,
+          "speed": 0
+         },
+         {
+          "id": "fire_truck_2",
+          "kind": "fire_truck",
+          "x": -249,
+          "y": 367,
+          "speed": 0
+         }
+        ],
+        "events": [
+         {
+          "type": "failed_to_yield",
+          "to": "emergency vehicle",
+          "with": "fire_truck_2"
+         }
+        ]
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 359.1,
+        "x": -263,
+        "y": 370,
+        "street": "11 Avenue SW",
+        "edge": "e478",
+        "speed": 0.5,
+        "following": {
+         "id": "car_33",
+         "gap_m": -0.672896044598133
+        },
+        "nearby": [
+         {
+          "id": "car_2",
+          "x": -280,
+          "y": 352,
+          "speed": 0
+         },
+         {
+          "id": "car_10",
+          "x": -282,
+          "y": 381,
+          "speed": 0
+         },
+         {
+          "id": "car_16",
+          "x": -263,
+          "y": 365,
+          "speed": 0
+         },
+         {
+          "id": "car_33",
+          "x": -267,
+          "y": 365,
+          "speed": 0
+         },
+         {
+          "id": "school_bus_2",
+          "kind": "school_bus",
+          "x": -278,
+          "y": 364,
+          "speed": 0
+         },
+         {
+          "id": "car_p2",
+          "x": -286,
+          "y": 349,
+          "speed": 0
+         },
+         {
+          "id": "car_p5",
+          "x": -276,
+          "y": 392,
+          "speed": 0
+         },
+         {
+          "id": "car_p6",
+          "x": -276,
+          "y": 386,
+          "speed": 0
+         },
+         {
+          "id": "car_p8",
+          "x": -286,
+          "y": 356,
+          "speed": 0
+         },
+         {
+          "id": "fire_truck_2",
+          "kind": "fire_truck",
+          "x": -251,
+          "y": 367,
+          "speed": 0.4
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 425.2,
+       "x": -263,
+       "y": 370,
+       "street": "11 Avenue SW",
+       "edge": "e478",
+       "speed": 0,
+       "following": {
+        "id": "car_33",
+        "gap_m": -0.823972969337092
+       },
+       "nearby": [
+        {
+         "id": "car_2",
+         "x": -280,
+         "y": 352,
+         "speed": 0
+        },
+        {
+         "id": "car_10",
+         "x": -282,
+         "y": 381,
+         "speed": 0
+        },
+        {
+         "id": "car_16",
+         "x": -263,
+         "y": 365,
+         "speed": 0
+        },
+        {
+         "id": "car_29",
+         "x": -281,
+         "y": 345,
+         "speed": 0
+        },
+        {
+         "id": "car_33",
+         "x": -267,
+         "y": 365,
+         "speed": 0
+        },
+        {
+         "id": "school_bus_2",
+         "kind": "school_bus",
+         "x": -278,
+         "y": 364,
+         "speed": 0
+        },
+        {
+         "id": "car_p2",
+         "x": -286,
+         "y": 349,
+         "speed": 0
+        },
+        {
+         "id": "car_p5",
+         "x": -276,
+         "y": 392,
+         "speed": 0
+        },
+        {
+         "id": "car_p6",
+         "x": -276,
+         "y": 386,
+         "speed": 0
+        },
+        {
+         "id": "car_p8",
+         "x": -286,
+         "y": 356,
+         "speed": 0
+        },
+        {
+         "id": "fire_truck_2",
+         "kind": "fire_truck",
+         "x": -252,
+         "y": 367,
+         "speed": 0
+        },
+        {
+         "id": "car_p11",
+         "x": -282,
+         "y": 389,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 328.3,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": -0.3635662871904488,
+        "closing": -2.7749071771852787
+       }
+      },
+      {
+       "t": 359,
+       "type": "safety",
+       "brake": {
+        "reason": "following",
+        "ttc": -1.3457865166822203,
+        "gap": -0.672896044598133
+       }
+      }
+     ],
+     "wall_ms": 45410
+    },
+    {
+     "id": "s2-2",
+     "tags": {
+      "length_m": 784,
+      "signals": 3,
+      "stops": 0,
+      "lefts": 3,
+      "rights": 0
+     },
+     "arrived": true,
+     "time_s": 224.2,
+     "distance_m": 779,
+     "progress": 0.997,
+     "avg_kmh": 12.5,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "illegal_turns": 1,
+     "crew_close_passes": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "wildlife_conflicts": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 14.1,
+     "min_ttc_s": null,
+     "min_headway_s": 3.05,
+     "max_accel": 2.64,
+     "max_decel": -6.76,
+     "hard_brakes": 0,
+     "rms_jerk": 2.24,
+     "max_jerk": 15,
+     "max_lat_accel": 5.34,
+     "lane_rms_m": 0.18,
+     "lane_max_m": 1.2,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 114.2,
+     "decisions": 856,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [
+      "made a prohibited turn"
+     ],
+     "pass": false,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "illegal_turns",
+        "value": 1,
+        "t": 15.7,
+        "x": -474,
+        "y": -470,
+        "street": "",
+        "edge": "e560",
+        "speed": 5.3,
+        "following": null,
+        "nearby": [
+         {
+          "id": "parked_1829",
+          "x": -460,
+          "y": -482,
+          "speed": 0
+         },
+         {
+          "id": "parked_1829_door",
+          "kind": "door",
+          "x": -459,
+          "y": -481,
+          "speed": 0
+         }
+        ],
+        "events": [
+         {
+          "type": "illegal_turn",
+          "from": "e561",
+          "to": "e560"
+         }
+        ]
+       }
+      ],
+      "final": {
+       "t": 224.2,
+       "x": -620,
+       "y": 68,
+       "street": "14 Avenue SW",
+       "edge": "e430",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_21",
+         "x": -641,
+         "y": 78,
+         "speed": 6
+        },
+        {
+         "id": "car_p3",
+         "x": -595,
+         "y": 67,
+         "speed": 3.9
+        },
+        {
+         "id": "parked_1541",
+         "x": -600,
+         "y": 70,
+         "speed": 0
+        },
+        {
+         "id": "parked_1542",
+         "x": -607,
+         "y": 70,
+         "speed": 0
+        },
+        {
+         "id": "parked_1543",
+         "x": -619,
+         "y": 71,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 224.2,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 21199
+    }
+   ]
+  },
+  {
+   "id": "city/calgary/seed-3",
+   "map": "calgary",
+   "seed": 3,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 3,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "calgary",
+    "bbox": [
+     -114.087,
+     51.034,
+     -114.063,
+     51.045
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s3-1",
+     "tags": {
+      "length_m": 1055,
+      "signals": 3,
+      "stops": 2,
+      "lefts": 2,
+      "rights": 2
+     },
+     "arrived": true,
+     "time_s": 260.6,
+     "distance_m": 1253,
+     "progress": 0.841,
+     "avg_kmh": 17.3,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "wildlife_conflicts": 0,
+     "closure_entries": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 25.8,
+     "min_ttc_s": 10.3,
+     "min_headway_s": 9.88,
+     "max_accel": 2.57,
+     "max_decel": -6.89,
+     "hard_brakes": 0,
+     "rms_jerk": 3.1,
+     "max_jerk": 51.7,
+     "max_lat_accel": 5.12,
+     "lane_rms_m": 0.15,
+     "lane_max_m": 0.86,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "stopped_s": 69.9,
+     "decisions": 990,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 260.6,
+       "x": 237,
+       "y": 51,
+       "street": "4 Street SW",
+       "edge": "e249",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "parked_1287",
+         "x": 250,
+         "y": 45,
+         "speed": 0
+        },
+        {
+         "id": "parked_1288",
+         "x": 250,
+         "y": 52,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 97.2,
+       "type": "reroute",
+       "count": 2
+      },
+      {
+       "t": 260.6,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 25352
+    },
+    {
+     "id": "s3-2",
+     "tags": {
+      "length_m": 1235,
+      "signals": 4,
+      "stops": 3,
+      "lefts": 1,
+      "rights": 3
+     },
+     "arrived": true,
+     "time_s": 453.6,
+     "distance_m": 2150,
+     "progress": 0.982,
+     "avg_kmh": 17.1,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "merge_cut_ins": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "crew_close_passes": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "wildlife_conflicts": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 17.2,
+     "min_ttc_s": 4,
+     "min_headway_s": 4.05,
+     "max_accel": 2.71,
+     "max_decel": -6.92,
+     "hard_brakes": 0,
+     "rms_jerk": 2.84,
+     "max_jerk": 53.6,
+     "max_lat_accel": 5.04,
+     "lane_rms_m": 0.24,
+     "lane_max_m": 3.52,
+     "lane_changes": 0,
+     "speeding_s": 0.7,
+     "stopped_s": 121.7,
+     "decisions": 1645,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 416.9,
+        "x": -455,
+        "y": 58,
+        "street": "14 Avenue SW",
+        "edge": "e155",
+        "speed": 4.1,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_32",
+          "x": -447,
+          "y": 61,
+          "speed": 0
+         },
+         {
+          "id": "bus_4",
+          "kind": "bus",
+          "x": -474,
+          "y": 37,
+          "speed": 0
+         },
+         {
+          "id": "parked_962",
+          "x": -442,
+          "y": 64,
+          "speed": 0
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 453.6,
+       "x": -171,
+       "y": 46,
+       "street": "14 Avenue SW",
+       "edge": "e153",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 143.6,
+       "type": "reroute",
+       "count": 3
+      },
+      {
+       "t": 416.9,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 4.005334833587842,
+        "closing": 4.097657849094721
+       }
+      },
+      {
+       "t": 453.6,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 42064
+    }
+   ]
+  },
+  {
+   "id": "city/victoria/seed-1",
+   "map": "victoria",
+   "seed": 1,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "victoria",
+    "bbox": [
+     -123.374,
+     48.419,
+     -123.357,
+     48.432
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s1-1",
+     "tags": {
+      "length_m": 940,
+      "signals": 3,
+      "stops": 2,
+      "lefts": 2,
+      "rights": 2
+     },
+     "arrived": true,
+     "time_s": 195,
+     "distance_m": 938,
+     "progress": 0.542,
+     "avg_kmh": 17.3,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "crew_close_passes": 0,
+     "contraflow_conflicts": 0,
+     "pothole_hits": 0,
+     "closure_entries": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 8.9,
+     "min_ttc_s": 3.2,
+     "min_headway_s": 2.81,
+     "max_accel": 2.7,
+     "max_decel": -6.82,
+     "hard_brakes": 0,
+     "rms_jerk": 3.12,
+     "max_jerk": 21.6,
+     "max_lat_accel": 7.16,
+     "lane_rms_m": 0.34,
+     "lane_max_m": 3.34,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 30.1,
+     "decisions": 721,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 195,
+       "x": -306,
+       "y": -165,
+       "street": "Wharf Street",
+       "edge": "e559",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 64.9,
+       "type": "reroute",
+       "count": 2
+      },
+      {
+       "t": 195,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 18537
+    },
+    {
+     "id": "s1-2",
+     "tags": {
+      "length_m": 1134,
+      "signals": 4,
+      "stops": 1,
+      "lefts": 4,
+      "rights": 2
+     },
+     "arrived": true,
+     "time_s": 240.4,
+     "distance_m": 1131,
+     "progress": 0.998,
+     "avg_kmh": 16.9,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "pothole_hits": 0,
+     "wildlife_conflicts": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 2.5,
+     "min_ttc_s": 1.5,
+     "min_headway_s": 1.1,
+     "max_accel": 2.56,
+     "max_decel": -6.64,
+     "hard_brakes": 0,
+     "rms_jerk": 2.74,
+     "max_jerk": 33.7,
+     "max_lat_accel": 5.48,
+     "lane_rms_m": 1.02,
+     "lane_max_m": 2.08,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "stopped_s": 81.4,
+     "decisions": 918,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 240.4,
+       "x": 366,
+       "y": -61,
+       "street": "View Street",
+       "edge": "e551",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_p2",
+         "x": 355,
+         "y": -65,
+         "speed": 0
+        },
+        {
+         "id": "parked_973",
+         "x": 348,
+         "y": -64,
+         "speed": 0
+        },
+        {
+         "id": "parked_970",
+         "x": 365,
+         "y": -58,
+         "speed": 0
+        },
+        {
+         "id": "parked_971",
+         "x": 359,
+         "y": -57,
+         "speed": 0
+        },
+        {
+         "id": "parked_975",
+         "x": 361,
+         "y": -66,
+         "speed": 0
+        },
+        {
+         "id": "parked_976",
+         "x": 367,
+         "y": -67,
+         "speed": 0
+        },
+        {
+         "id": "parked_977",
+         "x": 373,
+         "y": -68,
+         "speed": 0
+        },
+        {
+         "id": "parked_969",
+         "x": 384,
+         "y": -61,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 240.3,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 20300
+    }
+   ]
+  },
+  {
+   "id": "city/victoria/seed-2",
+   "map": "victoria",
+   "seed": 2,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 2,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "victoria",
+    "bbox": [
+     -123.374,
+     48.419,
+     -123.357,
+     48.432
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [
+    "s2-2"
+   ],
+   "collisions": [],
+   "audits": [
+    {
+     "id": "s2-1",
+     "failures": [
+      "failed to yield"
+     ]
+    }
+   ],
+   "results": [
+    {
+     "id": "s2-1",
+     "tags": {
+      "length_m": 952,
+      "signals": 4,
+      "stops": 1,
+      "lefts": 1,
+      "rights": 5
+     },
+     "arrived": true,
+     "time_s": 241.8,
+     "distance_m": 1389,
+     "progress": 0.874,
+     "avg_kmh": 20.7,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 1,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "pothole_hits": 0,
+     "brake_checks": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 2,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 1.3,
+     "min_ttc_s": 1,
+     "min_headway_s": 0.21,
+     "max_accel": 2.5,
+     "max_decel": -7.42,
+     "hard_brakes": 0,
+     "rms_jerk": 3.37,
+     "max_jerk": 35.6,
+     "max_lat_accel": 7.53,
+     "lane_rms_m": 0.65,
+     "lane_max_m": 7.45,
+     "lane_changes": 2,
+     "speeding_s": 0,
+     "stopped_s": 22.4,
+     "decisions": 915,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [
+      "failed to yield"
+     ],
+     "pass": false,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "failed_to_yield",
+        "value": 1,
+        "t": 87.7,
+        "x": 262,
+        "y": 494,
+        "street": "Blanshard Street",
+        "edge": "e405",
+        "speed": 0,
+        "following": null,
+        "nearby": [
+         {
+          "id": "ambulance_1",
+          "kind": "ambulance",
+          "x": 266,
+          "y": 493,
+          "speed": 6.9
+         }
+        ],
+        "events": [
+         {
+          "type": "failed_to_yield",
+          "to": "emergency vehicle",
+          "with": "ambulance_1"
+         }
+        ]
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 110.3,
+        "x": 253,
+        "y": 348,
+        "street": "Blanshard Street",
+        "edge": "e372",
+        "speed": 7.9,
+        "following": null,
+        "nearby": [
+         {
+          "id": "car_8",
+          "x": 253,
+          "y": 340,
+          "speed": 6.4
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "safety_brakes",
+        "value": 2,
+        "t": 201.5,
+        "x": 476,
+        "y": 124,
+        "street": "Quadra Street",
+        "edge": "e328",
+        "speed": 4.1,
+        "following": {
+         "id": "car_28",
+         "gap_m": 14.537083398600657
+        },
+        "nearby": [
+         {
+          "id": "car_8",
+          "x": 461,
+          "y": 122,
+          "speed": 0
+         },
+         {
+          "id": "car_28",
+          "x": 480,
+          "y": 142,
+          "speed": 7.4
+         },
+         {
+          "id": "car_p2",
+          "x": 475,
+          "y": 103,
+          "speed": 1
+         },
+         {
+          "id": "parked_749",
+          "x": 481,
+          "y": 131,
+          "speed": 0
+         },
+         {
+          "id": "parked_750",
+          "x": 482,
+          "y": 137,
+          "speed": 0
+         },
+         {
+          "id": "ped_18",
+          "kind": "pedestrian",
+          "x": 481,
+          "y": 111,
+          "speed": 0
+         },
+         {
+          "id": "ped_37",
+          "kind": "pedestrian",
+          "x": 484,
+          "y": 130,
+          "speed": 1.4
+         }
+        ],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 241.8,
+       "x": 440,
+       "y": 342,
+       "street": "Cormorant Street",
+       "edge": "e305",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "parked_712",
+         "x": 439,
+         "y": 336,
+         "speed": 0
+        },
+        {
+         "id": "parked_713",
+         "x": 446,
+         "y": 335,
+         "speed": 0
+        },
+        {
+         "id": "parked_718",
+         "x": 446,
+         "y": 344,
+         "speed": 0
+        },
+        {
+         "id": "parked_719",
+         "x": 427,
+         "y": 346,
+         "speed": 0
+        },
+        {
+         "id": "parked_714",
+         "x": 452,
+         "y": 334,
+         "speed": 0
+        },
+        {
+         "id": "parked_716",
+         "x": 459,
+         "y": 343,
+         "speed": 0
+        },
+        {
+         "id": "parked_717",
+         "x": 453,
+         "y": 343,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 73.7,
+       "type": "reroute",
+       "count": 2
+      },
+      {
+       "t": 110.2,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 2.7156168023688547,
+        "closing": 2.7420688917018827
+       }
+      },
+      {
+       "t": 201.5,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 4.034578226765149,
+        "closing": 4.078338129236082
+       }
+      },
+      {
+       "t": 241.8,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 19874
+    },
+    {
+     "id": "s2-2",
+     "tags": {
+      "length_m": 1163,
+      "signals": 3,
+      "stops": 2,
+      "lefts": 4,
+      "rights": 2
+     },
+     "arrived": false,
+     "time_s": 465.2,
+     "distance_m": 1008,
+     "progress": 0.867,
+     "avg_kmh": 7.8,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "crew_close_passes": 0,
+     "contraflow_conflicts": 0,
+     "pothole_hits": 0,
+     "wildlife_conflicts": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 1,
+     "deadlocks": 4,
+     "fallbacks": 0,
+     "min_gap_m": 5.5,
+     "min_ttc_s": 3.7,
+     "min_headway_s": 2.3,
+     "max_accel": 2.56,
+     "max_decel": -6.62,
+     "hard_brakes": 0,
+     "rms_jerk": 1.99,
+     "max_jerk": 35.1,
+     "max_lat_accel": 5.61,
+     "lane_rms_m": 1.89,
+     "lane_max_m": 4.03,
+     "lane_changes": 1,
+     "speeding_s": 0,
+     "stopped_s": 302.4,
+     "decisions": 1745,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [
+      "stuck"
+     ],
+     "pass": false,
+     "diagnostics": {
+      "incidents": [
+       {
+        "audit": "safety_brakes",
+        "value": 1,
+        "t": 43.1,
+        "x": -141,
+        "y": -230,
+        "street": "Gordon Street",
+        "edge": "e62",
+        "speed": 4.3,
+        "following": null,
+        "nearby": [
+         {
+          "id": "parked_453",
+          "x": -145,
+          "y": -238,
+          "speed": 0
+         },
+         {
+          "id": "parked_454",
+          "x": -146,
+          "y": -245,
+          "speed": 0
+         },
+         {
+          "id": "parked_458",
+          "x": -132,
+          "y": -216,
+          "speed": 0
+         }
+        ],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 1,
+        "t": 188.4,
+        "x": -491,
+        "y": -771,
+        "street": "Menzies Street",
+        "edge": "e545",
+        "speed": 0,
+        "following": null,
+        "nearby": [],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 2,
+        "t": 188.6,
+        "x": -491,
+        "y": -771,
+        "street": "Menzies Street",
+        "edge": "e545",
+        "speed": 0.1,
+        "following": null,
+        "nearby": [],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 3,
+        "t": 188.8,
+        "x": -491,
+        "y": -771,
+        "street": "Menzies Street",
+        "edge": "e545",
+        "speed": 0.5,
+        "following": null,
+        "nearby": [],
+        "events": []
+       },
+       {
+        "audit": "deadlock_overrides",
+        "value": 4,
+        "t": 189.1,
+        "x": -490,
+        "y": -771,
+        "street": "Menzies Street",
+        "edge": "e545",
+        "speed": 0.9,
+        "following": null,
+        "nearby": [],
+        "events": []
+       }
+      ],
+      "final": {
+       "t": 465.2,
+       "x": -488,
+       "y": -771,
+       "street": "Menzies Street",
+       "edge": "e545",
+       "speed": 0,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_10",
+         "x": -487,
+         "y": -751,
+         "speed": 0
+        },
+        {
+         "id": "school_bus_5",
+         "kind": "school_bus",
+         "x": -491,
+         "y": -760,
+         "speed": 0
+        },
+        {
+         "id": "ambulance_2",
+         "kind": "ambulance",
+         "x": -493,
+         "y": -765,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 43.1,
+       "type": "safety",
+       "brake": {
+        "reason": "ahead",
+        "gap": 4.25645555879127,
+        "closing": 4.287409463552028
+       }
+      },
+      {
+       "t": 188.4,
+       "type": "deadlock",
+       "stuck_s": 12,
+       "holding": "keep_lane_stop",
+       "rejected": {
+        "off_road": 9
+       },
+       "next_turn": "uturn",
+       "turn_in_m": 13.9
+      },
+      {
+       "t": 188.6,
+       "type": "deadlock",
+       "stuck_s": 12.1,
+       "holding": "keep_lane_stop",
+       "rejected": {
+        "off_road": 9
+       },
+       "next_turn": "uturn",
+       "turn_in_m": 13.9
+      },
+      {
+       "t": 188.8,
+       "type": "deadlock",
+       "stuck_s": 12.4,
+       "holding": "hard_brake",
+       "rejected": {
+        "collision": 7,
+        "off_road": 2
+       },
+       "next_turn": "uturn",
+       "turn_in_m": 13.9
+      },
+      {
+       "t": 189.1,
+       "type": "deadlock",
+       "stuck_s": 12.6,
+       "holding": "keep_lane_stop",
+       "rejected": {
+        "collision": 7,
+        "off_road": 6
+       },
+       "next_turn": "uturn",
+       "turn_in_m": 13.9
+      }
+     ],
+     "wall_ms": 33878
+    }
+   ]
+  },
+  {
+   "id": "city/victoria/seed-3",
+   "map": "victoria",
+   "seed": 3,
+   "count": 2,
+   "options": {
+    "features": "city"
+   },
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 3,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "victoria",
+    "bbox": [
+     -123.374,
+     48.419,
+     -123.357,
+     48.432
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "throws": [],
+   "stuck": [],
+   "collisions": [],
+   "audits": [],
+   "results": [
+    {
+     "id": "s3-1",
+     "tags": {
+      "length_m": 1121,
+      "signals": 7,
+      "stops": 0,
+      "lefts": 2,
+      "rights": 0
+     },
+     "arrived": true,
+     "time_s": 232.5,
+     "distance_m": 1119,
+     "progress": 0.999,
+     "avg_kmh": 17.3,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "illegal_turns": 0,
+     "pothole_hits": 0,
+     "wildlife_conflicts": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 3.8,
+     "min_ttc_s": 2.1,
+     "min_headway_s": 1.98,
+     "max_accel": 2.51,
+     "max_decel": -6.81,
+     "hard_brakes": 0,
+     "rms_jerk": 2.82,
+     "max_jerk": 30.5,
+     "max_lat_accel": 4.88,
+     "lane_rms_m": 0.21,
+     "lane_max_m": 1.1,
+     "lane_changes": 3,
+     "speeding_s": 0.2,
+     "stopped_s": 60.4,
+     "decisions": 868,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 232.5,
+       "x": 116,
+       "y": -205,
+       "street": "Broughton Street",
+       "edge": "e300",
+       "speed": 0.2,
+       "following": null,
+       "nearby": []
+      }
+     },
+     "events": [
+      {
+       "t": 232.4,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 19170
+    },
+    {
+     "id": "s3-2",
+     "tags": {
+      "length_m": 1032,
+      "signals": 4,
+      "stops": 1,
+      "lefts": 3,
+      "rights": 2
+     },
+     "arrived": true,
+     "time_s": 260.5,
+     "distance_m": 1022,
+     "progress": 0.562,
+     "avg_kmh": 14.1,
+     "collisions": 0,
+     "at_fault": 0,
+     "red_lights": 0,
+     "amber_lights_run": 0,
+     "stop_signs": 0,
+     "failed_to_yield": 0,
+     "close_passes": 0,
+     "crew_close_passes": 0,
+     "reversing_conflicts": 0,
+     "pothole_hits": 0,
+     "ball_warnings_ignored": 0,
+     "wildlife_conflicts": 0,
+     "closure_entries": 0,
+     "officer_violations": 0,
+     "off_road_s": 0,
+     "safety_brakes": 0,
+     "deadlocks": 0,
+     "fallbacks": 0,
+     "min_gap_m": 9,
+     "min_ttc_s": 4,
+     "min_headway_s": 3.34,
+     "max_accel": 2.63,
+     "max_decel": -6.88,
+     "hard_brakes": 0,
+     "rms_jerk": 2.78,
+     "max_jerk": 36.5,
+     "max_lat_accel": 5.39,
+     "lane_rms_m": 0.34,
+     "lane_max_m": 3.52,
+     "lane_changes": 0,
+     "speeding_s": 0,
+     "stopped_s": 67.9,
+     "decisions": 999,
+     "calls": 0,
+     "tokens": 0,
+     "cost_usd": 0,
+     "latency_p50_ms": null,
+     "latency_p95_ms": null,
+     "failures": [],
+     "pass": true,
+     "diagnostics": {
+      "incidents": [],
+      "final": {
+       "t": 260.5,
+       "x": 532,
+       "y": -442,
+       "street": "Burdett Avenue",
+       "edge": "e513",
+       "speed": 0.2,
+       "following": null,
+       "nearby": [
+        {
+         "id": "car_p6",
+         "x": 525,
+         "y": -435,
+         "speed": 0
+        },
+        {
+         "id": "parked_897",
+         "x": 538,
+         "y": -437,
+         "speed": 0
+        }
+       ]
+      }
+     },
+     "events": [
+      {
+       "t": 145.2,
+       "type": "reroute",
+       "count": 2
+      },
+      {
+       "t": 260.5,
+       "type": "arrived"
+      }
+     ],
+     "wall_ms": 24520
+    }
+   ]
+  }
+ ]
+}

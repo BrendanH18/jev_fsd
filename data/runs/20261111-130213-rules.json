@@ -1,0 +1,220 @@
+{
+ "name": "20261111-130213-rules",
+ "saved_at": "2026-11-11T13:02:13",
+ "config": {
+  "brain": "rules",
+  "count": 2,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "halifax",
+  "bbox": [
+   -63.59,
+   44.64,
+   -63.57,
+   44.652
+  ],
+  "pack": "6",
+  "engine": "node v22.23.4"
+ },
+ "summary": {
+  "scenarios": 2,
+  "pass_rate": 1,
+  "arrived_rate": 1,
+  "km": 1.83,
+  "collisions": 0,
+  "at_fault": 0,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 0,
+  "off_road_s": 0,
+  "safety_brakes": 1,
+  "deadlocks": 3,
+  "fallbacks": 0,
+  "violations_per_km": 0,
+  "avg_kmh": 20.65,
+  "min_gap_m": 2.3,
+  "min_ttc_s": 1.1,
+  "hard_brakes": 0,
+  "rms_jerk": 3.19,
+  "max_lat_accel": 5.38,
+  "lane_rms_m": 0.27,
+  "lane_changes": 0,
+  "speeding_s": 1.2,
+  "decisions": 1173,
+  "calls": 0,
+  "tokens": 0,
+  "cost_usd": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 1023,
+    "signals": 5,
+    "stops": 0,
+    "lefts": 1,
+    "rights": 5
+   },
+   "arrived": true,
+   "time_s": 170.2,
+   "distance_m": 1017,
+   "progress": 0.998,
+   "avg_kmh": 21.5,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "guard_violations": 0,
+   "pothole_hits": 0,
+   "wildlife_conflicts": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 3,
+   "fallbacks": 0,
+   "min_gap_m": 2.3,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.6,
+   "max_decel": -6.89,
+   "hard_brakes": 0,
+   "rms_jerk": 3.16,
+   "max_jerk": 59.9,
+   "max_lat_accel": 5.35,
+   "lane_rms_m": 0.31,
+   "lane_max_m": 1.04,
+   "lane_changes": 0,
+   "speeding_s": 1.2,
+   "stopped_s": 32.5,
+   "decisions": 639,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 30.3,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1970160439300024,
+      "gap": 3.570899589455252
+     }
+    },
+    {
+     "t": 110.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "keep_lane_stop",
+     "rejected": {
+      "collision": 10
+     },
+     "control": "signal sig10",
+     "line_m": 70.1,
+     "next_turn": "right",
+     "turn_in_m": 104.1
+    },
+    {
+     "t": 110.8,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "keep_lane_stop",
+     "rejected": {
+      "collision": 9
+     },
+     "control": "signal sig10",
+     "line_m": 70.1,
+     "next_turn": "right",
+     "turn_in_m": 104.1
+    },
+    {
+     "t": 111.1,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "keep_lane_stop",
+     "rejected": {
+      "collision": 10
+     },
+     "control": "signal sig10",
+     "line_m": 70.1,
+     "next_turn": "right",
+     "turn_in_m": 104
+    },
+    {
+     "t": 170.2,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 13286
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 813,
+    "signals": 4,
+    "stops": 0,
+    "lefts": 1,
+    "rights": 3
+   },
+   "arrived": true,
+   "time_s": 147.1,
+   "distance_m": 808,
+   "progress": 0.998,
+   "avg_kmh": 19.8,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "guard_violations": 0,
+   "pothole_hits": 0,
+   "wildlife_conflicts": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 11.5,
+   "min_ttc_s": 130.7,
+   "min_headway_s": 9.41,
+   "max_accel": 2.52,
+   "max_decel": -6.92,
+   "hard_brakes": 0,
+   "rms_jerk": 3.22,
+   "max_jerk": 39.4,
+   "max_lat_accel": 5.41,
+   "lane_rms_m": 0.23,
+   "lane_max_m": 0.86,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 29.9,
+   "decisions": 534,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 147.1,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 9276
+  }
+ ]
+}

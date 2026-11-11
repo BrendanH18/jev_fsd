@@ -394,6 +394,13 @@ export class Autopilot {
           world.route = new Route(res.routes[0], world.map, world.ego.spec);
         }
         this.offRouteFor = 0;
+        // A lane manoeuvre under way was planned on the old route: its lanes (named by that route's
+        // chains) and arc lengths mean nothing on the new one, so decide again at once, as the app
+        // does when the driver picks a new destination (main.js).
+        if (this.executing && (this.executing.law.kind === "lane" || this.executing.law.kind === "hard_brake")) {
+          this.executing = null;
+          this.lastStart = -Infinity;
+        }
         this.onEvent({ type: "reroute", count: res.routes.length });
       }
     } catch (err) {

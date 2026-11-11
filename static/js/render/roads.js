@@ -17,33 +17,9 @@ import { wetReflective } from "./reflection.js";
 
 import { GUTTER, CURB, streetOf } from "../map/streets.js";
 import { sceneryFor, analyzeStreets, trimAt } from "../map/scenery.js";
+import { junctionFills } from "../map/junctions.js";
 const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
-
-const surfaceHalf = (e) => Math.max(Math.abs(e.asphalt[0]), Math.abs(e.asphalt[1])) + GUTTER;
-
-// Groups the directed edges into drawn streets (a two-way street is two edges) and computes, per
-// node, the widest street meeting there.
-// Leg of a street leaving a node: a point `d` meters out and the heading away from the node.
-function legFrame(e, out, d) {
-  const L = e.cum[e.cum.length - 1];
-  const s = out ? Math.min(d, L * 0.5) : Math.max(L - d, L * 0.5);
-  const p = pointAt(e.pts, e.cum, s);
-  let h = headingAt(e.pts, e.cum, s);
-  if (!out) h += Math.PI;
-  return { p, h };
-}
-
-function hull(points) {
-  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (pts.length < 3) return pts;
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lower = [], upper = [];
-  for (const p of pts) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); }
-  for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
-  upper.pop(); lower.pop();
-  return lower.concat(upper);
-}
 
 export function buildRoads(map) {
   const group = new THREE.Group();
@@ -105,34 +81,16 @@ export function buildRoads(map) {
   }
 
   // roundabouts: a disc of asphalt out to the ring's outer edge; the island is painted over it
-  const ringNodes = new Set();
   const islandCurb = new GeoBuilder(), island = new GeoBuilder();
   for (const rb of (map.roundabouts || new Map()).values()) {
-    for (const v of rb.vertices) ringNodes.add(v);
     asphalt.polygon(circle(rb.x, rb.y, rb.outer_r + GUTTER, 40), 0, { scale: 7 });
     islandCurb.polygon(circle(rb.x, rb.y, rb.island_r, 32), 0);
     island.polygon(circle(rb.x, rb.y, rb.island_r - 0.3, 32), 0, { scale: 14 });
   }
 
-  // junction fills: hull of each leg's cross-section a little way out from the node
-  for (const [id, list] of legs) {
-    const node = map.nodes.get(id);
-    if (!node || list.length < 2 || ringNodes.has(id)) continue;
-    if (list.length === 2) {
-      const [a, b] = list.map((l) => legFrame(l.st.edge, l.out, 1).h);
-      const bend = Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-      if (bend > Math.PI - 0.12) continue;  // straight through: ribbons already meet
-    }
-    const r = nodeR.get(id);
-    const pts = [[node.x, node.y]];
-    for (const l of list) {
-      const half = surfaceHalf(l.st.edge);
-      const { p, h } = legFrame(l.st.edge, l.out, r + 0.5);
-      const nx = Math.sin(h), ny = -Math.cos(h);
-      pts.push([p[0] + nx * half, p[1] + ny * half], [p[0] - nx * half, p[1] - ny * half]);
-    }
-    asphalt.polygon(hull(pts), 0, { scale: 7 });
-  }
+  // junction fills: hull of each leg's cross-section a little way out from the node (map/junctions.js,
+  // which the driving checks count as road too)
+  for (const { poly } of junctionFills(map)) asphalt.polygon(poly, 0, { scale: 7 });
 
   // stop lines and, at signals, crosswalks
   for (const e of map.edges.values()) {

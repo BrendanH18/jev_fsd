@@ -1,0 +1,964 @@
+{
+ "name": "20261111-130207-rules",
+ "saved_at": "2026-11-11T13:02:07",
+ "config": {
+  "brain": "rules",
+  "count": 12,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "fog",
+  "features": "city",
+  "map": "kitsilano",
+  "bbox": [
+   -123.17,
+   49.26,
+   -123.15,
+   49.27
+  ],
+  "pack": "6",
+  "engine": "node v22.23.4"
+ },
+ "summary": {
+  "scenarios": 12,
+  "pass_rate": 1,
+  "arrived_rate": 1,
+  "km": 12.94,
+  "collisions": 0,
+  "at_fault": 0,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 0,
+  "off_road_s": 0,
+  "safety_brakes": 17,
+  "deadlocks": 0,
+  "fallbacks": 0,
+  "violations_per_km": 0,
+  "avg_kmh": 14.84,
+  "min_gap_m": 0.4,
+  "min_ttc_s": 0.3,
+  "hard_brakes": 0,
+  "rms_jerk": 2.89,
+  "max_lat_accel": 4.91,
+  "lane_rms_m": 0.26,
+  "lane_changes": 3,
+  "speeding_s": 0,
+  "decisions": 11731,
+  "calls": 0,
+  "tokens": 0,
+  "cost_usd": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 565,
+    "signals": 3,
+    "stops": 1,
+    "lefts": 0,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 126.5,
+   "distance_m": 563,
+   "progress": 0.997,
+   "avg_kmh": 16,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "pothole_hits": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 7.6,
+   "min_ttc_s": 2.5,
+   "min_headway_s": 2.54,
+   "max_accel": 2.55,
+   "max_decel": -5.62,
+   "hard_brakes": 0,
+   "rms_jerk": 2.4,
+   "max_jerk": 14.8,
+   "max_lat_accel": 4.11,
+   "lane_rms_m": 0.17,
+   "lane_max_m": 0.66,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 21.4,
+   "decisions": 440,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 126.5,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 16831
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 662,
+    "signals": 2,
+    "stops": 1,
+    "lefts": 3,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 215.3,
+   "distance_m": 901,
+   "progress": 0.733,
+   "avg_kmh": 15.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 12.6,
+   "min_ttc_s": 11.8,
+   "min_headway_s": 2.48,
+   "max_accel": 2.78,
+   "max_decel": -5.66,
+   "hard_brakes": 0,
+   "rms_jerk": 2.57,
+   "max_jerk": 30.1,
+   "max_lat_accel": 4.48,
+   "lane_rms_m": 0.26,
+   "lane_max_m": 1.33,
+   "lane_changes": 1,
+   "speeding_s": 0,
+   "stopped_s": 32.9,
+   "decisions": 782,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 98.6,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 215.3,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 24733
+  },
+  {
+   "id": "s1-3",
+   "tags": {
+    "length_m": 520,
+    "signals": 0,
+    "stops": 2,
+    "lefts": 1,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 102.9,
+   "distance_m": 516,
+   "progress": 0.997,
+   "avg_kmh": 18.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 17.3,
+   "min_ttc_s": 4.6,
+   "min_headway_s": 3.05,
+   "max_accel": 2.63,
+   "max_decel": -5.78,
+   "hard_brakes": 0,
+   "rms_jerk": 2.85,
+   "max_jerk": 27.7,
+   "max_lat_accel": 4.44,
+   "lane_rms_m": 0.15,
+   "lane_max_m": 0.68,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 2.6,
+   "decisions": 385,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 102.9,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 9312
+  },
+  {
+   "id": "s1-4",
+   "tags": {
+    "length_m": 894,
+    "signals": 2,
+    "stops": 2,
+    "lefts": 4,
+    "rights": 0
+   },
+   "arrived": true,
+   "time_s": 375.2,
+   "distance_m": 1431,
+   "progress": 0.952,
+   "avg_kmh": 13.7,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 3,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.2,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.2,
+   "max_accel": 2.87,
+   "max_decel": -5.78,
+   "hard_brakes": 0,
+   "rms_jerk": 3.14,
+   "max_jerk": 56.1,
+   "max_lat_accel": 5.95,
+   "lane_rms_m": 0.73,
+   "lane_max_m": 4.14,
+   "lane_changes": 2,
+   "speeding_s": 0,
+   "stopped_s": 81.2,
+   "decisions": 1398,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 21.2,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 133.8,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 149.5,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 3.8120200954110453,
+      "closing": 3.8740750404359727
+     }
+    },
+    {
+     "t": 333,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 375.2,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 45142
+  },
+  {
+   "id": "s1-5",
+   "tags": {
+    "length_m": 794,
+    "signals": 3,
+    "stops": 2,
+    "lefts": 2,
+    "rights": 0
+   },
+   "arrived": true,
+   "time_s": 215.5,
+   "distance_m": 784,
+   "progress": 0.61,
+   "avg_kmh": 13.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.2,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.17,
+   "max_accel": 2.56,
+   "max_decel": -5.74,
+   "hard_brakes": 0,
+   "rms_jerk": 3.01,
+   "max_jerk": 49,
+   "max_lat_accel": 4.79,
+   "lane_rms_m": 0.15,
+   "lane_max_m": 0.77,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 39.8,
+   "decisions": 801,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 61.8,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 147.7,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1987200503345938,
+      "gap": 3.5302706733151754
+     }
+    },
+    {
+     "t": 215.5,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 25948
+  },
+  {
+   "id": "s1-6",
+   "tags": {
+    "length_m": 1157,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 3
+   },
+   "arrived": true,
+   "time_s": 271.5,
+   "distance_m": 1156,
+   "progress": 0.655,
+   "avg_kmh": 15.3,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "hump_hits": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 4.9,
+   "min_ttc_s": 2.7,
+   "min_headway_s": 2.58,
+   "max_accel": 2.61,
+   "max_decel": -5.78,
+   "hard_brakes": 0,
+   "rms_jerk": 2.69,
+   "max_jerk": 30.6,
+   "max_lat_accel": 4.8,
+   "lane_rms_m": 0.19,
+   "lane_max_m": 1.6,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 41.9,
+   "decisions": 999,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 107,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 112.5,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 5.983741402488727,
+      "closing": 6.108366840204927
+     }
+    },
+    {
+     "t": 271.5,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 43042
+  },
+  {
+   "id": "s1-7",
+   "tags": {
+    "length_m": 1243,
+    "signals": 0,
+    "stops": 5,
+    "lefts": 1,
+    "rights": 5
+   },
+   "arrived": true,
+   "time_s": 419.3,
+   "distance_m": 1754,
+   "progress": 0.765,
+   "avg_kmh": 15.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "brake_checks": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 3,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 0.4,
+   "min_ttc_s": 0.3,
+   "min_headway_s": 0.34,
+   "max_accel": 2.68,
+   "max_decel": -7.36,
+   "hard_brakes": 0,
+   "rms_jerk": 3.12,
+   "max_jerk": 66.3,
+   "max_lat_accel": 5.02,
+   "lane_rms_m": 0.24,
+   "lane_max_m": 1.51,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 61.2,
+   "decisions": 1541,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 22.1,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1961021171793178,
+      "gap": 3.504532070321818
+     }
+    },
+    {
+     "t": 48.4,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 0.5440817032842846,
+      "gap": 2.102177942073882
+     }
+    },
+    {
+     "t": 93.1,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 103.1,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 305.5,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 419.2,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 65561
+  },
+  {
+   "id": "s1-8",
+   "tags": {
+    "length_m": 945,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 2,
+    "rights": 2
+   },
+   "arrived": true,
+   "time_s": 281.8,
+   "distance_m": 930,
+   "progress": 0.525,
+   "avg_kmh": 11.9,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.2,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.17,
+   "max_accel": 2.57,
+   "max_decel": -5.85,
+   "hard_brakes": 0,
+   "rms_jerk": 3.22,
+   "max_jerk": 55,
+   "max_lat_accel": 4.74,
+   "lane_rms_m": 0.14,
+   "lane_max_m": 0.75,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 73,
+   "decisions": 1075,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 102.6,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 192.8,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1995781052128798,
+      "gap": 3.5351867694103025
+     }
+    },
+    {
+     "t": 269.6,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 281.8,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 34879
+  },
+  {
+   "id": "s1-9",
+   "tags": {
+    "length_m": 1161,
+    "signals": 4,
+    "stops": 2,
+    "lefts": 3,
+    "rights": 2
+   },
+   "arrived": true,
+   "time_s": 333,
+   "distance_m": 1490,
+   "progress": 0.788,
+   "avg_kmh": 16.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.3,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.17,
+   "max_accel": 2.57,
+   "max_decel": -6.25,
+   "hard_brakes": 0,
+   "rms_jerk": 3.39,
+   "max_jerk": 60.8,
+   "max_lat_accel": 6.01,
+   "lane_rms_m": 0.32,
+   "lane_max_m": 3.52,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 43.2,
+   "decisions": 1190,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 108.3,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 266.7,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1956768826312245,
+      "gap": 3.516966127197407
+     }
+    },
+    {
+     "t": 297.7,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1904812601559018,
+      "gap": 3.507696798806797
+     }
+    },
+    {
+     "t": 333,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 42474
+  },
+  {
+   "id": "s1-10",
+   "tags": {
+    "length_m": 908,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 2
+   },
+   "arrived": true,
+   "time_s": 259.2,
+   "distance_m": 1179,
+   "progress": 0.826,
+   "avg_kmh": 16.4,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 9.5,
+   "min_ttc_s": null,
+   "min_headway_s": null,
+   "max_accel": 2.71,
+   "max_decel": -5.58,
+   "hard_brakes": 0,
+   "rms_jerk": 2.57,
+   "max_jerk": 28.5,
+   "max_lat_accel": 4.82,
+   "lane_rms_m": 0.2,
+   "lane_max_m": 0.87,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 22.3,
+   "decisions": 962,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 170.8,
+     "type": "reroute",
+     "count": 2
+    },
+    {
+     "t": 180.8,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.027632897957169,
+      "closing": 4.070380894739949
+     }
+    },
+    {
+     "t": 259.2,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 36281
+  },
+  {
+   "id": "s1-11",
+   "tags": {
+    "length_m": 619,
+    "signals": 1,
+    "stops": 0,
+    "lefts": 1,
+    "rights": 0
+   },
+   "arrived": true,
+   "time_s": 239.3,
+   "distance_m": 814,
+   "progress": 0.801,
+   "avg_kmh": 12.3,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "hump_hits": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 3.5,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.19,
+   "max_accel": 2.63,
+   "max_decel": -5.66,
+   "hard_brakes": 0,
+   "rms_jerk": 3.15,
+   "max_jerk": 41.4,
+   "max_lat_accel": 4.81,
+   "lane_rms_m": 0.43,
+   "lane_max_m": 1.56,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 55.2,
+   "decisions": 887,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 90.7,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 118.5,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1970754955412795,
+      "gap": 3.5260572953977407
+     }
+    },
+    {
+     "t": 195.7,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.03413563922973,
+      "closing": 4.059885035782371
+     }
+    },
+    {
+     "t": 239.3,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 34608
+  },
+  {
+   "id": "s1-12",
+   "tags": {
+    "length_m": 1087,
+    "signals": 2,
+    "stops": 3,
+    "lefts": 2,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 341.8,
+   "distance_m": 1420,
+   "progress": 0.992,
+   "avg_kmh": 15,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.4,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.17,
+   "max_accel": 2.57,
+   "max_decel": -5.74,
+   "hard_brakes": 0,
+   "rms_jerk": 2.59,
+   "max_jerk": 42.6,
+   "max_lat_accel": 4.93,
+   "lane_rms_m": 0.16,
+   "lane_max_m": 0.92,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 65.8,
+   "decisions": 1271,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 52.3,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 199.3,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 218.6,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.0764231215265525,
+      "closing": 4.113965858287455
+     }
+    },
+    {
+     "t": 341.8,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 45874
+  }
+ ]
+}

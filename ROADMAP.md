@@ -154,15 +154,23 @@ and CI runs it.
 dry on every change and the full matrix weekly, every job blocking. The scenario freeze lifts under
 D3. What the smoke suite and the soak found on other maps is not frozen work:
 
-- [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each):
-  - Winnipeg `s1-1`: deadlocks (45 recoveries), two collisions with parked cars (one at fault), a
-    failure to yield and 1.1 s off road.
-  - Toronto `s1-2`: off road with four deadlock recoveries.
-  - Edmonton `s1-1`, Québec City `s1-1`: a failure to yield each.
-  - Mount Pleasant `s1-2`: driving in a reserved bus lane.
-  - Victoria `s1-2`: a pothole hit too fast.
-  The 1.6 soak adds stuck routes in Toronto, Calgary and Victoria, a delivery-van stand-off and
-  emergency yields at night.
+- [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each) **passes on every
+  map**, 11 November: the other eleven maps 22/22 (16/22 before), Kitsilano still 48/48 in all four
+  weathers, with no route that passed failing; bare changes on `s1-3` and `s1-9` only, and
+  `20261111-130222-rules` is its new reference (`docs/rules-baseline.md`). Fixed, each with a Node
+  check: bays on the inside of tight bends, a bus lane up to a lane drop, the turn out of a reserved
+  curb lane, a re-plan keeping the old route's lane manoeuvre, two lane changes in too little room,
+  junction fills counted as off road, pothole margins and hard brakes, and emergency yields (the
+  junction box, a reversing parker's queue, parked cars beside a narrow lane, a vehicle alongside on
+  the right, a vehicle drawing alongside to go round). Evidence:
+  `docs/validation/other-maps-2026-11-11.md`. Remaining, from the soak sample re-run on the final tree:
+  - Stuck routes: Toronto seed 2 `s2-2` (Sussex Avenue), Victoria seed 2 `s2-2` (Menzies Street),
+    Calgary seed 2 `s2-1` (11 Avenue SW); Kitsilano seed 3 `s3-1` recovers from three deadlocks.
+  - Toronto seed 2 `s2-1`: a traffic car in the left lane swings into the car's lane on a bend of Bloor
+    Street West; counted as the car's collision.
+  - Emergency yields: Victoria seed 2 `s2-1`, Calgary seed 2 `s2-1`; and the soak's night yields.
+  - Calgary seed 2 `s2-2`: a prohibited turn early in the route.
+  - The delivery-van stand-off (cover row 4), not re-run.
 
 ## Phase 2: put the models on the road
 
