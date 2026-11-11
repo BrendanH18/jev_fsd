@@ -134,12 +134,18 @@ Free drives turn nearly all of them on together. Nothing checks that combination
 - [x] **1.5 Run it in CI.** (S) The city suite for Kitsilano dry on every change; the full matrix
   on a schedule. `.github/workflows/bench.yml` runs bare dry and city dry on every change and the city
   matrix weekly, every job blocking.
-- [ ] **1.6 Look for interactions on purpose.** (M) A scheduled soak over several seeds and maps,
+- [x] **1.6 Look for interactions on purpose.** (M) A scheduled soak over several seeds and maps,
   and a run over pairs of features, since the bugs found so far are all pairs (parkers with
   driveways, closures with detours, pull-outs with emergency vehicles). A throw, a stuck car or a
-  collision fails it.
-- [ ] **1.7 Park and night.** (M) The benchmark has no parking at the destination and no time of
+  collision fails it. `--without` and `--cover` (13 seeded configurations covering every pair of the
+  42 free-drive switches, `bench/features.js`) and `scripts/soak.mjs`, run weekly by `soak.yml`. The
+  first run found a delivery-van stand-off (configuration 4), stuck cars in Toronto, Calgary and
+  Victoria, and failures to yield to emergency vehicles at night and on other maps
+  (`docs/validation/bench-options-soak-2026-11-10.md`).
+- [x] **1.7 Park and night.** (M) The benchmark has no parking at the destination and no time of
   day. Add both as suite options so the overnight and parking features are covered by a seeded run.
+  `--park 1` (an arrival with no space to be had is no failure) and `--hour 23.5`, run weekly; city
+  dry with parking passes 12/12.
 
 Exit: Rules passes the city suite on Kitsilano in all four weathers with no throw and no stuck car,
 and CI runs it.
