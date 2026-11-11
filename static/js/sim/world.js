@@ -22,7 +22,7 @@ import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
 import { AllWayStops } from "./all-way.js";
 import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
-import { emergencyCall, holdsUp, isEmergency, isJunction, leadsEmergency, pullOverOffset } from "./emergency.js";
+import { emergencyCall, emergencyLead, holdsUp, isEmergency, isJunction, pullOverOffset } from "./emergency.js";
 import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { BEHIND_M, ONCOMING_M, SIDE_M, canStopFor as canStopForSchool, redsOn, schoolBusRelation } from "./school-bus.js";
@@ -1370,20 +1370,22 @@ export class World {
       const [cx, cy] = ev.center, local = ego.toLocal(cx, cy), ahead = local.ahead - (ego.spec.length / 2 - ego.spec.rearOverhang), before = rec.ahead;
       rec.ahead = ahead;
       // The instruction to drive on is latched while the car is as far over as
-      // it can get, including a queue that physically prevents pulling farther over.
+      // it can get, including a captured line stop or queue that prevents steering farther.
       const blockedInQueue = queued && ev.blockedBy?.includes(queued);
-      rec.lead ||= (pulled || blockedInQueue) && leadsEmergency(ev, ego);
-      if (this.evCounted.has(ev.id)) continue;
-      const after = this.t - rec.since;
-      const late = !rec.lead && after > AUDIT_EV_REACT_S && ego.v > Math.max(AUDIT_EV_MOVING_MPS, rec.v0 - AUDIT_EV_DECEL * (after - AUDIT_EV_REACT_S));
-      const crossing = call.relation === "left" || call.relation === "right";
-      const level = !crossing && before !== null && Math.sign(before) !== Math.sign(ahead) && Math.abs(local.right) < AUDIT_EV_SIDE_M;
       const holdingLine = rec.stoppedAtLine && Math.abs(ego.v) < 0.3;
       const holdingQueue = rec.stoppedInQueue && queued && Math.abs(ego.v) < 0.3;
-      const unmoved = level && after >= AUDIT_EV_PULL_S && !pulled && !rec.lead && !holdingLine && !holdingQueue && junction === null;
+      const lead = emergencyLead(this, ev, pulled || blockedInQueue || holdingLine);
+      if (this.evCounted.has(ev.id)) continue;
+      const after = this.t - rec.since;
+      const late = !lead && after > AUDIT_EV_REACT_S && ego.v > Math.max(AUDIT_EV_MOVING_MPS, rec.v0 - AUDIT_EV_DECEL * (after - AUDIT_EV_REACT_S));
+      const crossing = call.relation === "left" || call.relation === "right";
+      const level = !crossing && before !== null && Math.sign(before) !== Math.sign(ahead) && Math.abs(local.right) < AUDIT_EV_SIDE_M;
+      const unmoved = level && after >= AUDIT_EV_PULL_S && !pulled && !lead && !holdingLine && !holdingQueue && junction === null;
       // A second blocker directly in front of the car prevents it from driving on
       // when asked. Holding that safe stop is not the cause of this gridlock.
-      if (late || unmoved || (entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !rec.lead && !blockedInQueue)) {
+      // Turning changes the relative bearing of a siren behind the car. An authorized lead
+      // remains a drive-on instruction, not a new crossing call as the car clears the junction.
+      if (late || unmoved || (!lead && entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !lead && !blockedInQueue)) {
         this.evCounted.add(ev.id);
         this.violations.failed_to_yield++;
         this.events.push({ type: "failed_to_yield", to: "emergency vehicle", with: ev.id });

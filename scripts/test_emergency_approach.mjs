@@ -26,7 +26,7 @@ for (let k = 0; k < 5 * 60; k++) {
 assert.equal(world.violations.failed_to_yield, 0, "extra clearing room does not postpone slowing for a siren");
 assert.equal(world.ego.v < 3, true, "actual vehicle response reaches yielding speed");
 world.parked.remove(parked);
-world.evYield.lead = true;
+world.evCalls.get(ev.id).lead = true;
 const snap = buildSnapshot(world), candidates = sampleCandidates(snap, world);
 simulateAll(candidates, snap, world);
 assert.equal(candidates.some(c => c.eligible && c.law.vTarget > 3), true, "a drive-on instruction releases the response ceiling");

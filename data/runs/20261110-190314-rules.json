@@ -1,0 +1,811 @@
+{
+ "name": "20261110-190314-rules",
+ "saved_at": "2026-11-10T19:03:14",
+ "config": {
+  "brain": "rules",
+  "count": 2,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "winnipeg",
+  "bbox": [
+   -97.15,
+   49.892,
+   -97.131,
+   49.903
+  ],
+  "pack": "6",
+  "engine": "node v22.23.4",
+  "completed": 2
+ },
+ "summary": {
+  "scenarios": 2,
+  "pass_rate": 0.5,
+  "arrived_rate": 1,
+  "km": 2.53,
+  "collisions": 2,
+  "at_fault": 1,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 1,
+  "off_road_s": 1.1,
+  "safety_brakes": 2,
+  "deadlocks": 45,
+  "fallbacks": 0,
+  "violations_per_km": 1.19,
+  "avg_kmh": 20.15,
+  "min_gap_m": 16.4,
+  "min_ttc_s": 7.1,
+  "hard_brakes": 0,
+  "rms_jerk": 3.2,
+  "max_lat_accel": 5.9,
+  "lane_rms_m": 0.47,
+  "lane_changes": 1,
+  "speeding_s": 0,
+  "decisions": 1909,
+  "calls": 0,
+  "tokens": 0,
+  "cost_usd": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 1245,
+    "signals": 0,
+    "stops": 0,
+    "lefts": 3,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 355.1,
+   "distance_m": 1396,
+   "progress": 0.886,
+   "avg_kmh": 14.2,
+   "collisions": 2,
+   "at_fault": 1,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 1,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "bus_lane_driving": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "closure_entries": 0,
+   "off_road_s": 1.1,
+   "safety_brakes": 2,
+   "deadlocks": 45,
+   "fallbacks": 0,
+   "min_gap_m": 45.4,
+   "min_ttc_s": 23.7,
+   "min_headway_s": 5.59,
+   "max_accel": 2.7,
+   "max_decel": -6.93,
+   "hard_brakes": 0,
+   "rms_jerk": 3.85,
+   "max_jerk": 70.8,
+   "max_lat_accel": 5.41,
+   "lane_rms_m": 0.66,
+   "lane_max_m": 3.46,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 173.1,
+   "decisions": 1348,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [
+    "collision",
+    "failed to yield",
+    "off road"
+   ],
+   "pass": false,
+   "events": [
+    {
+     "t": 33.1,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "keep_lane_stop",
+     "rejected": {
+      "off_road": 13,
+      "collision": 1
+     },
+     "control": "uncontrolled junction:n4090317831",
+     "line_m": 55.7,
+     "next_turn": "left",
+     "turn_in_m": 66
+    },
+    {
+     "t": 33.3,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hard_brake",
+     "rejected": {
+      "off_road": 14,
+      "collision": 1
+     },
+     "control": "uncontrolled junction:n4090317831",
+     "line_m": 55.7,
+     "next_turn": "left",
+     "turn_in_m": 66
+    },
+    {
+     "t": 33.6,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "off_road": 14,
+      "collision": 1
+     },
+     "control": "uncontrolled junction:n4090317831",
+     "line_m": 55.6,
+     "next_turn": "left",
+     "turn_in_m": 65.9
+    },
+    {
+     "t": 46.2,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 49.4,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 9.457590536021517,
+      "closing": 9.463904154637651
+     }
+    },
+    {
+     "t": 117.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "keep_lane_stop",
+     "rejected": {
+      "collision": 10
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 28.5,
+     "next_turn": "right",
+     "turn_in_m": 19.1
+    },
+    {
+     "t": 117.7,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 15
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 28.5,
+     "next_turn": "right",
+     "turn_in_m": 19.1
+    },
+    {
+     "t": 118,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 28.4,
+     "next_turn": "right",
+     "turn_in_m": 19
+    },
+    {
+     "type": "collision",
+     "with": "parked_1264",
+     "kind": "car",
+     "fault": "other",
+     "at_fault": false,
+     "t": 118.7,
+     "ego_v": 0.3,
+     "other_v": 0,
+     "other_ahead": -0.8,
+     "other_right": 2.7,
+     "relative_heading_deg": 24
+    },
+    {
+     "t": 130.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.9,
+     "next_turn": "right",
+     "turn_in_m": 18.5
+    },
+    {
+     "t": 130.6,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.9,
+     "next_turn": "right",
+     "turn_in_m": 18.5
+    },
+    {
+     "t": 130.9,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.9,
+     "next_turn": "right",
+     "turn_in_m": 18.5
+    },
+    {
+     "t": 131,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.409416560410111,
+      "closing": 4.50377971473972
+     }
+    },
+    {
+     "t": 131.1,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.7,
+     "next_turn": "right",
+     "turn_in_m": 18.3
+    },
+    {
+     "t": 131.4,
+     "type": "deadlock",
+     "stuck_s": 12.9,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.6,
+     "next_turn": "right",
+     "turn_in_m": 18.2
+    },
+    {
+     "t": 131.6,
+     "type": "deadlock",
+     "stuck_s": 13.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.5,
+     "next_turn": "right",
+     "turn_in_m": 18.1
+    },
+    {
+     "t": 131.9,
+     "type": "deadlock",
+     "stuck_s": 13.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.5,
+     "next_turn": "right",
+     "turn_in_m": 18.1
+    },
+    {
+     "t": 132.1,
+     "type": "deadlock",
+     "stuck_s": 13.6,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.5,
+     "next_turn": "right",
+     "turn_in_m": 18.1
+    },
+    {
+     "t": 132.4,
+     "type": "deadlock",
+     "stuck_s": 13.9,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 27.3,
+     "next_turn": "right",
+     "turn_in_m": 17.9
+    },
+    {
+     "t": 144.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 80,
+     "next_turn": "right",
+     "turn_in_m": 17.2
+    },
+    {
+     "t": 145.1,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 80,
+     "next_turn": "right",
+     "turn_in_m": 17.2
+    },
+    {
+     "t": 145.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 79.9,
+     "next_turn": "right",
+     "turn_in_m": 17.1
+    },
+    {
+     "t": 157.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 79.3,
+     "next_turn": "right",
+     "turn_in_m": 16.5
+    },
+    {
+     "t": 157.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 79.3,
+     "next_turn": "right",
+     "turn_in_m": 16.5
+    },
+    {
+     "t": 158.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 79.3,
+     "next_turn": "right",
+     "turn_in_m": 16.4
+    },
+    {
+     "t": 158.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 79.2,
+     "next_turn": "right",
+     "turn_in_m": 16.3
+    },
+    {
+     "t": 170.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 78.5,
+     "next_turn": "right",
+     "turn_in_m": 15.7
+    },
+    {
+     "t": 171.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 78.5,
+     "next_turn": "right",
+     "turn_in_m": 15.7
+    },
+    {
+     "t": 171.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 78.4,
+     "next_turn": "right",
+     "turn_in_m": 15.6
+    },
+    {
+     "t": 183.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 11
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 77.8,
+     "next_turn": "right",
+     "turn_in_m": 15
+    },
+    {
+     "t": 184.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 77.8,
+     "next_turn": "right",
+     "turn_in_m": 14.9
+    },
+    {
+     "t": 184.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 77.7,
+     "next_turn": "right",
+     "turn_in_m": 14.9
+    },
+    {
+     "t": 196.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 77.1,
+     "next_turn": "right",
+     "turn_in_m": 14.3
+    },
+    {
+     "t": 197.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 77.1,
+     "next_turn": "right",
+     "turn_in_m": 14.2
+    },
+    {
+     "t": 197.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 77,
+     "next_turn": "right",
+     "turn_in_m": 14.1
+    },
+    {
+     "t": 209.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 76.3,
+     "next_turn": "right",
+     "turn_in_m": 13.5
+    },
+    {
+     "t": 210.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 76.3,
+     "next_turn": "right",
+     "turn_in_m": 13.5
+    },
+    {
+     "type": "collision",
+     "with": "parked_1265",
+     "kind": "car",
+     "fault": "ego",
+     "at_fault": true,
+     "t": 210.4,
+     "ego_v": 0.6,
+     "other_v": 0,
+     "other_ahead": 0.9,
+     "other_right": 3,
+     "relative_heading_deg": -32
+    },
+    {
+     "t": 210.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 76.2,
+     "next_turn": "right",
+     "turn_in_m": 13.4
+    },
+    {
+     "t": 210.6,
+     "type": "deadlock",
+     "stuck_s": 12.8,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 22.8,
+     "next_turn": "right",
+     "turn_in_m": 13.4
+    },
+    {
+     "t": 210.9,
+     "type": "deadlock",
+     "stuck_s": 13,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985895",
+     "line_m": 22.6,
+     "next_turn": "right",
+     "turn_in_m": 13.2
+    },
+    {
+     "t": 223.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 75.4,
+     "next_turn": "right",
+     "turn_in_m": 12.6
+    },
+    {
+     "t": 223.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 75.4,
+     "next_turn": "right",
+     "turn_in_m": 12.6
+    },
+    {
+     "t": 223.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 75.3,
+     "next_turn": "right",
+     "turn_in_m": 12.5
+    },
+    {
+     "t": 236.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 12
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 74.6,
+     "next_turn": "right",
+     "turn_in_m": 11.8
+    },
+    {
+     "t": 236.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 74.6,
+     "next_turn": "right",
+     "turn_in_m": 11.8
+    },
+    {
+     "t": 236.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 74.5,
+     "next_turn": "right",
+     "turn_in_m": 11.7
+    },
+    {
+     "t": 249.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 11
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 73.9,
+     "next_turn": "right",
+     "turn_in_m": 11
+    },
+    {
+     "t": 249.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 16
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 73.8,
+     "next_turn": "right",
+     "turn_in_m": 11
+    },
+    {
+     "t": 249.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 15
+     },
+     "control": "uncontrolled junction:n4937985889",
+     "line_m": 73.7,
+     "next_turn": "right",
+     "turn_in_m": 10.9
+    }
+   ],
+   "wall_ms": 235796
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 1135,
+    "signals": 0,
+    "stops": 0,
+    "lefts": 2,
+    "rights": 0
+   },
+   "arrived": true,
+   "time_s": 155.9,
+   "distance_m": 1131,
+   "progress": 0.998,
+   "avg_kmh": 26.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "wildlife_conflicts": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 16.4,
+   "min_ttc_s": 7.1,
+   "min_headway_s": 2.26,
+   "max_accel": 2.53,
+   "max_decel": -6.2,
+   "hard_brakes": 0,
+   "rms_jerk": 2.55,
+   "max_jerk": 17.4,
+   "max_lat_accel": 6.38,
+   "lane_rms_m": 0.27,
+   "lane_max_m": 1.4,
+   "lane_changes": 1,
+   "speeding_s": 0,
+   "stopped_s": 16.9,
+   "decisions": 561,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 155.9,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 29950
+  }
+ ]
+}

@@ -1,3 +1,33 @@
+# City baseline — 2026-11-10 (ROADMAP 1.4)
+
+Rules, the `city` preset (every free-drive feature but parking at the destination, a 15:30 Monday
+clock, restriction-aware routes), lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through
+`scripts/bench_node.mjs`, saved through `/api/bench/save`. A road-closure detour extends a drive's
+deadline by the distance it adds; city snow deadlines are divided by the weather's speed.
+
+| Run | Map | Weather | Routes | Passed | km | Notes |
+|---|---|---|---|---|---|---|
+| `20261110-190259-rules` | Kitsilano | dry | 12 | 12 | 12.8 | |
+| `20261110-190300-rules` | Kitsilano | fog | 12 | 12 | 12.94 | |
+| `20261110-190301-rules` | Kitsilano | rain | 12 | 12 | 12.61 | |
+| `20261110-190302-rules` | Kitsilano | snow | 12 | 12 | 13.33 | |
+| `20261110-190303-rules` | Calgary | dry | 2 | 2 | 1.17 | |
+| `20261110-190304-rules` | Edmonton | dry | 2 | 1 | 2.68 | `s1-1` failed to yield |
+| `20261110-190305-rules` | Halifax | dry | 2 | 2 | 1.83 | three deadlock recoveries |
+| `20261110-190306-rules` | Montréal | dry | 2 | 2 | 1.33 | |
+| `20261110-190308-rules` | Mount Pleasant | dry | 2 | 1 | 1.84 | `s1-2` in a reserved bus lane |
+| `20261110-190309-rules` | Ottawa | dry | 2 | 2 | 1.4 | |
+| `20261110-190310-rules` | Québec City | dry | 2 | 1 | 1.9 | `s1-1` failed to yield |
+| `20261110-190311-rules` | Saskatoon | dry | 2 | 2 | 1.92 | |
+| `20261110-190312-rules` | Toronto | dry | 2 | 1 | 2.61 | `s1-2` off road, four deadlock recoveries |
+| `20261110-190313-rules` | Victoria | dry | 2 | 1 | 2.07 | `s1-2` hit a pothole too fast |
+| `20261110-190314-rules` | Winnipeg | dry | 2 | 1 | 2.53 | `s1-1` two collisions with parked cars (one at fault), a failure to yield, off road (1.1 s), 45 deadlock recoveries |
+
+Kitsilano passes 48/48 with no collision, rule failure or deadlock in any weather; the other
+eleven maps pass 16/22 (ROADMAP 1.8). The bare suite on the same code is
+`20261110-190326-rules` (12/12, the reference below). Compare a run with the newest committed run
+of the same map, preset and weather.
+
 # Rules benchmark check — 2026-11-10 (city suite, traffic swept bodies)
 
 The 12-route Kitsilano dry suite (Rules, seed 1, 40 traffic cars, lockstep, Node 22.23.4) still

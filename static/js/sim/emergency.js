@@ -48,6 +48,14 @@ export const isEmergencyVehicle = (v) => !!v && !!EMERGENCY_SPECS[v.kind];
 // Whether a vehicle an emergency vehicle is stuck behind should drive on ahead of it: one going its
 // way, that has held it up for EV_STUCK_S.
 export const leadsEmergency = (ev, o) => holdsUp(ev, o, EV_STUCK_S) && Math.abs(wrap(o.psi - ev.psi)) < Math.PI / 4;
+// The driven car's one drive-on authorization, kept with the physical call record. Only the
+// audit supplies `ready`: the car has pulled over or was constrained from doing so. Sensing
+// reads this same latch, so rebuilding a stop plan cannot grant or lose the instruction.
+export function emergencyLead(world, ev, ready = false) {
+  const rec = world.evCalls.get(ev.id);
+  if (rec && ready && leadsEmergency(ev, world.ego)) rec.lead = true;
+  return rec?.lead === true;
+}
 // Whether `o` is one of what has held emergency vehicle `ev` up, standing, for more than `s` seconds.
 export const holdsUp = (ev, o, s) => !!ev.blockedBy?.includes(o) && ev.blockedFor > s;
 
