@@ -527,7 +527,7 @@
     ]
   },
   "bare_dry": {
-    "reference": "/private/tmp/claude-501/-Users-brendanhallas--t3-worktrees-jev-fsd-t3-905db334-58248fa495159be6/ec5337c4-1a99-4bb7-8f00-1bd6524f599d/scratchpad/before-bare.json",
+    "reference": "the bare dry suite (Rules, Kitsilano, seed 1) at fc9fdab, the base of this branch",
     "field_for_field_identical": true,
     "ignored_fields": [
       "wall_ms",

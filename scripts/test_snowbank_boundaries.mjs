@@ -57,6 +57,11 @@ for (const edge of ["e127", "e335"]) for (const reverse of [false, true]) {
     assert.equal(end.ex > w.route.length + 5, true, "retain the exit beyond the destination");
     if (start > 5) assert.equal(end.en < 0, true);
   }
+  // A route on the street that ends before the narrowing, or starts past it, never reaches it.
+  w.route = new Route(routeFromLanes(map, [lane], 2, 15), map);
+  assert.equal(sb.alongRoute(w.route, nw), null, `${edge} ${reverse}: ends before the narrowing`);
+  w.route = new Route(routeFromLanes(map, [lane], lane.length - 15, lane.length - 3), map);
+  assert.equal(sb.alongRoute(w.route, nw), null, `${edge} ${reverse}: starts past the narrowing`);
   checks++;
 }
 {

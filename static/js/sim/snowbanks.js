@@ -369,12 +369,15 @@ export class Snowbanks {
       const at = (s) => {
         // A drive can start or finish inside the stretch. Its truncated polyline cannot project
         // the missing end: keep that end beyond the route boundary in the same street's frame.
+        // One that starts past the stretch, or finishes short of it, never reaches it.
         if (i === 0) {
           const start = projectPoint(e.pts, e.cum, route.pts[0], null);
+          if (start && start.s > exitOf(nw, dir)) return null;
           if (start && s < start.s) return s - start.s;
         }
         if (i === route.edges.length - 1) {
           const end = projectPoint(e.pts, e.cum, route.pts[route.pts.length - 1], null);
+          if (end && end.s < entryOf(nw, dir)) return null;
           if (end && s > end.s) return route.length + s - end.s;
         }
         const q = offsetPoint(e, s, lat), p = projectPoint(route.pts, route.cum, q, null);
