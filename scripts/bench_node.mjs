@@ -126,7 +126,8 @@ for (const sc of suite) {
   if (replaying) {
     const recorded = replaying.results[sc.id];
     r.model_recording.same_result = recorded ? recordingModule.sameResult(r, recorded) : null;
-    if (r.model_recording.same_result === false || !r.model_recording.exact) drifted.push(r.id);
+    // (a drive the recording has no result for cannot be checked: drift too)
+    if (r.model_recording.same_result !== true || !r.model_recording.exact) drifted.push(r.id);
   }
   results.push(r);
   const hits = r.events.filter((e) => e.type === "collision").map((e) => `${e.with}:${e.kind}@${e.t}`).join(" ");

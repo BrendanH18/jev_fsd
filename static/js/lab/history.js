@@ -1,4 +1,4 @@
-import { failures, DECIDED_BY, decidedByTotals } from "../bench/metrics.js";
+import { failures, DECIDED_BY, decidedByTotals, decidedByCounts } from "../bench/metrics.js";
 
 // (v3: decisions no event links to are compact, and repeats are folded together: lab/trace.js)
 export const EVALUATION_SCHEMA = "jev-agent-evaluation-v3";
@@ -67,7 +67,9 @@ export function validateEvaluation(value) {
         || !(e.decision_id === null || r.decisions_trace?.some(d => d.id === e.decision_id && d.at_s <= e.at_s && d.context_recorded))
         || !(e.decision_age_s === null || finite(e.decision_age_s))))) throw new Error("The export contains an invalid incident timeline.");
     const f = failures(r);
-    return { ...r, failures: f, pass: !r.stopped && f.length === 0 };
+    // (an import's shares are derived from its validated counts, so a row and the summary agree)
+    const decided = r.model_decisions === undefined ? {} : decidedByCounts({ model: r.model_decisions, partial: r.partial_decisions, local: r.local_decisions, fallback: r.fallback_decisions });
+    return { ...r, ...decided, failures: f, pass: !r.stopped && f.length === 0 };
   });
   return { schema: value.schema, challenge_version: value.challenge_version, created_at: value.created_at,
     status: ["complete", "stopped", "error", "imported"].includes(value.status) ? value.status : "imported", results };

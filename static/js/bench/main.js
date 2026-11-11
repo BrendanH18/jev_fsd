@@ -140,21 +140,21 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
   }
   state.current = null;
   state.summary = aggregate(state.results);
-  let saved = null, savedRecording = null;
+  let saved = null, savedRecording = null, recordingError = null;
   if (record && !replaying && save && state.results.length) {
-    try { savedRecording = await saveRecording(recording); } catch (err) { setStatus(`could not save the recording: ${err.message}`); }
+    try { savedRecording = await saveRecording(recording); } catch (err) { recordingError = err.message; setStatus(`could not save the recording: ${err.message}`); }
   }
   if (save && state.results.length) {
     try {
       saved = await api("/api/bench/save", { config: { ...config, completed: state.results.length }, summary: state.summary, results: state.results });
-      setStatus(`saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}`);
+      setStatus(`saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `; could not save the recording: ${recordingError}` : ""}`);
       await loadRuns();
     } catch (err) { setStatus(`could not save: ${err.message}`); }
   } else setStatus(stopRequested ? "stopped" : "done");
   render(state);
   running = false;
   $("#run").textContent = "Run";
-  return { config, summary: state.summary, results: state.results, saved, ...(recording ? { recording: savedRecording, replayed: replaying ? state.results.every(r => r.model_recording.exact && r.model_recording.same_result !== false) : null } : {}) };
+  return { config, summary: state.summary, results: state.results, saved, ...(recording ? { recording: savedRecording, replayed: replaying ? state.results.every(r => r.model_recording.exact && r.model_recording.same_result === true) : null } : {}) };
 }
 
 function compareSummary() {

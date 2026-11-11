@@ -117,6 +117,9 @@ await test("an arena export keeps the counts, and a malformed share is refused",
   assert.equal(validateEvaluation(JSON.parse(JSON.stringify(exported))).results[0].model_decisions, run.model_decisions);
   assert.throws(() => validateEvaluation({ ...exported, results: [{ ...run, model_share: 2 }] }), /invalid evaluation result/);
   assert.throws(() => validateEvaluation({ ...exported, results: [{ ...run, fallback_decisions: -1 }] }), /invalid evaluation result/);
+  // (shares that disagree with the counts are derived again from them)
+  const forged = validateEvaluation({ ...exported, results: [{ ...run, model_share: 1, local_share: 0, fallback_share: 0 }] }).results[0];
+  assert.equal(forged.model_share, run.model_share); assert.equal(forged.fallback_share, run.fallback_share);
 });
 
 // At night with high beams on every decision asks which beam to use; an answer without one is partial.
