@@ -5,11 +5,11 @@
 import { api } from "../common.js";
 
 export class JevBrain {
-  constructor() { this.name = "jev"; this.timeoutMs = 1500; this.questionDriven = true; }
+  constructor() { this.name = "jev"; this.timeoutMs = 1500; this.questionDriven = true; this.transport = api; }
 
   async decide(snap, eligible, request, signal) {
     const started = performance.now();
-    const res = await api("/api/decide", { tick: snap.tick, epoch: request.epoch, state: request.state, questions: request.questions }, { signal });
+    const res = await this.transport("/api/decide", { tick: snap.tick, epoch: request.epoch, state: request.state, questions: request.questions }, { signal });
     return decisionResult(res, request, eligible, { ...res.meta, source: "jev", round_trip_ms: Math.round(performance.now() - started) });
   }
 }

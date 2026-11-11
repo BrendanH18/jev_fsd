@@ -5,6 +5,7 @@
 import { CAR, comfort } from "../sim/vehicle.js";
 import { followingPolicy } from "../sim/following.js";
 import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
+import { surfaceDistance } from "../map/junctions.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
 import { EV_STOP_DECEL, CROSSWALK_STOP_M, LANE_CLEAR_M, ONCOMING_STOP_M, HOOK_STOP_M, CLEARING_M, PEEK_MPS, waitsItsTurn } from "./sensors.js";
@@ -17,7 +18,7 @@ import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
-import { SIM_OVER_MPS, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
+import { SIM_OVER_MPS, SIM_PAD_M, crossesPothole, safeSpeed, wheelPoints, wheelsCross } from "../sim/potholes.js";
 import { coverAfter } from "../sim/ball-chase.js";
 import { TAIL_EASE_MIN_MPS, TAIL_EASE_MPS, TAIL_GENTLEST_SLACK, TAIL_STOP_DECEL } from "../sim/tailgaters.js";
 import { officerStopLaw } from "../sim/traffic-officer.js";
@@ -39,6 +40,7 @@ const LANE_RETURN_MARGIN_M = 8;
 // give or take this.
 const PLOW_CLOSING_M = 0.05;
 const MIN_CHANGE_M = 12;
+const HOLD_LINE_M = 0.75;   // a hard brake this far off the lane's centre keeps to its line
 // Scenery standing in the car's lane ahead, as far as this, gets nudges of a full metre on offer.
 const SCENERY_LOOK_M = 40;
 // Pulling up where the car reverses into a space, it brakes at no more than this.
@@ -141,13 +143,16 @@ export function sampleCandidates(snap, world) {
     const len = Math.max(MIN_CHANGE_M, Math.min(laneChangeLength(v), leaving));
     for (const side of lane ? Object.values(lane.sides) : []) {
       if (!side.offer) continue;
+      // (a return that still leaves the car lanes away from the route's lane shares the room before the
+      // lane ends with the changes still to come)
+      const share = side.offer === "return" && side.delta ? Math.max(MIN_CHANGE_M, Math.min(len, leaving / (1 + Math.abs(side.delta)))) : len;
       // (tailgated: over to the right at the car's speed, never faster, and let the tailgater by:
       // sim/tailgaters.js)
       if (side.offer === "let_pass") {
         const vt = Math.round(Math.max(0, Math.min(limit, v, side.target_v)) * 10) / 10;
         if (vt > 0.05) out.push({ id: "let_tailgater_pass", change: { dir: side.dir, offer: side.offer, gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M, leave }, laneUntil: side.until_s, laneTarget: side.target_v,
           law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, laneIdx: lane.route_index + side.delta, chain: lane.chain, fromLane: lane.delta, fromIdx: lane.index, vTarget: vt,
-            shift: { from: snap.routeProj.lateral, start: s, len } },
+            shift: { from: snap.routeProj.lateral, start: s, len: share } },
           steer: "move over to the right lane and let the tailgater by", speed: speedLabel(vt, v, limit) });
         continue;
       }
@@ -160,7 +165,7 @@ export function sampleCandidates(snap, world) {
         const name = Math.abs(vt - v) < 0.3 ? "hold" : vt > v ? "faster" : "slow";
         out.push({ id: `change_${side.dir}_${name}`, change: { dir: side.dir, offer: side.offer, ...(prepare ? { prepare } : {}), gap_ok: side.gap_ok, too_late: leaving < MIN_CHANGE_M, leave }, laneUntil: side.until_s, laneTarget: side.target_v,
           law: { kind: "lane", offset: side.center, center: side.center, lane: side.delta, laneIdx: lane.route_index + side.delta, chain: lane.chain, fromLane: lane.delta, fromIdx: lane.index, vTarget: vt,
-            shift: { from: snap.routeProj.lateral, start: s, len } },
+            shift: { from: snap.routeProj.lateral, start: s, len: share } },
           steer: side.offer === "pass" ? `change to the ${side.dir} lane to pass` : side.offer === "abort" ? `move back to the ${side.dir} lane`
             : side.offer === "move_over" ? `move over to the ${side.dir} lane, away from the stopped ${snap.roadside_stop.name}` : `${prepare ? "change" : "return"} to the ${side.dir} lane${toRoute}`, speed: speedLabel(vt, v, limit) });
       }
@@ -495,7 +500,16 @@ export function sampleCandidates(snap, world) {
     c.law.slowTo = [...(c.law.slowTo || []), ...snap.black_ice_ahead.map((a) => a.slow)]; c.law.ice = true;
     if (c.law.stopAtRoute !== undefined) c.law.stopDecel = Math.min(c.law.stopDecel ?? Infinity, iceStopDecel(snap.black_ice_ahead));
   }
-  list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: nudge }), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
+  // (well off the lane's centre, nudged over to pass something, it brakes on the line it is on, to the
+  // nearest half metre, as with scenery in the lane: steering back while braking hard would swing it
+  // into whatever it was keeping clear of)
+  // (and easing round a pothole, it carries on round it while it brakes: sim/potholes.js)
+  const easing = snap.pothole?.room && snap.pothole.detour && !shifting && !detour.detour && !passing.detour && s >= snap.pothole.detour.from ? { detour: snap.pothole.detour } : null;
+  // (a detour's own move is already in `lane.lateral`, and inLane keeps the detour: holding the line
+  // there would add the move twice)
+  const detouring = !!detour.detour || !!(snap.cyclist_pass?.going && passing.detour);
+  const brakeLine = !easing && !scenery && !shifting && !detouring && lane && Math.abs(lane.lateral) >= HOLD_LINE_M ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : nudge;
+  list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: brakeLine }), ...(easing || {}), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   const amber = snap.amber_clear || snap.intersection?.amber;
   for (const c of list) if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);
   return list;
@@ -628,7 +642,7 @@ export function simulateAll(candidates, snap, world) {
       // (a wheel going into a pothole too fast: sim/potholes.js)
       if (holes?.length && wheelsBefore && !potholeFast) {
         const wheelsAfter = wheelPoints(car);
-        for (const h of holes) if (car.v > safeSpeed(h) + SIM_OVER_MPS && wheelsAfter.some(([x, y], i) => crossesPothole(h, wheelsBefore[i][0], wheelsBefore[i][1], x, y))) { potholeFast = true; break; }
+        for (const h of holes) if (car.v > safeSpeed(h) + SIM_OVER_MPS && wheelsAfter.some(([x, y], i) => crossesPothole(h, wheelsBefore[i][0], wheelsBefore[i][1], x, y, SIM_PAD_M))) { potholeFast = true; break; }
       }
       // (a wheel through a puddle with someone near faster than its splash speed: sim/puddles.js)
       if (splashAt && wheelsBefore && !splashes) splashes = simSplashes(splashAt, wheelsBefore, wheelPoints(car), car.v);
@@ -709,7 +723,7 @@ export function simulateAll(candidates, snap, world) {
         if (parkAt !== null && s > parkAt + 1 && car.v > 0.5) pastSpace = true;
       }
       if (k % 3 === 0 || k === steps) {
-        const rd = map.roadDistance(car.x, car.y);
+        const rd = surfaceDistance(map, car.x, car.y);
         if (rd.distance > 0.8) { staysOnRoad = false; offSteps++; }
         const box = car.obb();
         const c = Math.cos(car.psi), sn = Math.sin(car.psi);

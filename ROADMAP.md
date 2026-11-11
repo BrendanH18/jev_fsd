@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-11-09. This is the one place the plan lives. Update it when an item lands, when
+Last reviewed: 2026-11-11. This is the one place the plan lives. Update it when an item lands, when
 a priority changes, or when a decision under [Open decisions](#open-decisions) is made.
 
 ## What this project is for
@@ -154,15 +154,29 @@ and CI runs it.
 dry on every change and the full matrix weekly, every job blocking. The scenario freeze lifts under
 D3. What the smoke suite and the soak found on other maps is not frozen work:
 
-- [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each):
-  - Winnipeg `s1-1`: deadlocks (45 recoveries), two collisions with parked cars (one at fault), a
-    failure to yield and 1.1 s off road.
-  - Toronto `s1-2`: off road with four deadlock recoveries.
-  - Edmonton `s1-1`, Québec City `s1-1`: a failure to yield each.
-  - Mount Pleasant `s1-2`: driving in a reserved bus lane.
-  - Victoria `s1-2`: a pothole hit too fast.
-  The 1.6 soak adds stuck routes in Toronto, Calgary and Victoria, a delivery-van stand-off and
-  emergency yields at night.
+- [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each) **passes on every
+  map**, 11 November: the other eleven maps 22/22 (16/22 before), Kitsilano still 48/48 in all four
+  weathers, with no route that passed failing; bare changes on `s1-3` and `s1-9` only, and
+  `20261111-130222-rules` is its new reference (`docs/rules-baseline.md`). Fixed, each with a Node
+  check: bays on the inside of tight bends, a bus lane up to a lane drop, the turn out of a reserved
+  curb lane, a re-plan keeping the old route's lane manoeuvre, two lane changes in too little room,
+  junction fills counted as off road, pothole margins and hard brakes, and emergency yields (the
+  junction box, a reversing parker's queue, parked cars beside a narrow lane, a vehicle alongside on
+  the right, a vehicle drawing alongside to go round). Evidence:
+  `docs/validation/other-maps-2026-11-11.md`. Remaining, from the soak sample re-run on the final tree:
+  - Stuck routes: Toronto seed 2 `s2-2` (Sussex Avenue), Victoria seed 2 `s2-2` (Menzies Street),
+    Calgary seed 2 `s2-1` (11 Avenue SW); Kitsilano seed 3 `s3-1` recovers from three deadlocks.
+  - Toronto seed 2 `s2-1`: a traffic car in the left lane swings into the car's lane on a bend of Bloor
+    Street West; counted as the car's collision.
+  - Emergency yields: Victoria seed 2 `s2-1`, Calgary seed 2 `s2-1`; and the soak's night yields.
+  - Calgary seed 2 `s2-2`: a prohibited turn early in the route.
+  - The delivery-van stand-off (cover row 4), not re-run.
+  - From review of #73, each needing a re-baseline: check a parked car's jittered footprint, not only
+    its bay, against the 0.3 m lane limit (`sim/parking.js`); latch the bus-lane turn-in allowance
+    when the lane change starts rather than at the current speed (`sim/bus-lanes.js`).
+  - Scenery in the lane during a detour: `nudge` (`brain/candidates.js`) rounds `lane.lateral`, which
+    already includes the detour's move, and `inLane` adds the detour again, for the hard brake and the
+    scenery stops alike. Older than #73; needs a re-baseline.
 
 ## Phase 2: put the models on the road
 
@@ -179,17 +193,23 @@ cost $0.033.
 - [ ] **2.3 Smoke-test the endpoints against real providers.** (S) One decision model and one LLM
   through a hosted provider, and one through a local server. The README says they have only met
   mock servers.
-- [ ] **2.4 Report who actually drove.** (S) A model drive falls back to Rules on a timeout or an
+- [x] **2.4 Report who actually drove.** (S) A model drive falls back to Rules on a timeout or an
   unusable answer, and many questions are answered locally. Show, per drive, the share of decisions
   the model made, the share answered locally and the share that fell back. Without it a "pass"
-  cannot be credited to the model.
+  cannot be credited to the model. *Landed:* the autopilot counts model, partial, local and
+  fallback decisions; non-Rules results, the bench aggregate and table, the arena, the drive report
+  and the Inspect drawer show `model_share`, `local_share` and `fallback_share`. Finding for 2.5: almost every
+  decision asks the model something (with Rules, every decision in three seeded routes and the first
+  60 s of every challenge would have), so per decision the local share is near zero; what is answered
+  locally is mostly the motion question inside a call. Consider a per-question count before 2.5.
 - [ ] **2.5 First published comparison.** (M) Rules, the cautious agent, Jev and at least one LLM
   ([D2](#open-decisions)) over the 60 challenges, the road tests and the city suite. Commit the
   runs, with model ids, date, seed and prompt version, and write them up in
   `docs/model-results.md`.
-- [ ] **2.6 Make a model run repeatable offline.** (M) Save each model answer keyed by its request,
+- [x] **2.6 Make a model run repeatable offline.** (M) Save each model answer keyed by its request,
   so a published run can be replayed exactly without a key, and CI can check that a recorded model
-  drive still plays out the same.
+  drive still plays out the same. Done: model recordings (`brain/recording.js`, `bench_node.mjs
+  --record`/`--replay`, `data/recordings/`, checked by `scripts/test_model_recording.mjs`; docs/agents.md).
 - [ ] **2.7 Show the results where people look.** (M) A results table at the top of the README and
   a read-only leaderboard in the public demo, built from the committed runs.
 

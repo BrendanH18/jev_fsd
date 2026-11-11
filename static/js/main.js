@@ -89,6 +89,7 @@ import { ModelSetup, ModelMenu, KINDS } from "./ui/model-setup.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
+import { decidedByCounts } from "./bench/metrics.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
 import { advanceNotice, approachPhase, pedPhase, scrambleNotice } from "./sim/signals.js";
@@ -177,6 +178,7 @@ export async function boot() {
   let challengeModified = false;
   let examinerPrompt = null;
   let drive = null, arrivalPending = false, driveReport;
+  let decidedAtStart = null;   // the autopilot's decision counts when the drive started (bench/metrics.js)
   const callbacks = {
     onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
     onEvent: (ev) => {
@@ -366,7 +368,7 @@ export async function boot() {
   $("#restart-world").addEventListener("click", () => {
     const seed = $("#world-seed");
     if (!seed.reportValidity()) return;
-    if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("world restarted"));
+    if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("world restarted")));
     autopilot.setEnabled(false);
     const next = new URL(location.href);
     next.searchParams.delete("replay"); next.searchParams.delete("explore");
@@ -543,7 +545,7 @@ export async function boot() {
   });
   function startDrive(title, route = null) {
     if (challenge && drive) challengeModified = true; // Only the original authored attempt counts.
-    if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("replaced"));
+    if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("replaced")));
     drive = new DriveScore(world, { title, route, map: pack.synthetic ? "Practice grid" : status.map.label, driver: autopilot.enabled ? autopilot.brainName : "manual" });
     if (challenge?.roadTest) drive.observer = new RoadTestObserver(); // (the road test's examiner: lab/examiner.js)
     arrivalPending = false;
@@ -551,7 +553,17 @@ export async function boot() {
     lab?.endReview();
     driveReport.lastUpdate = -Infinity;
     driveReport.update(drive);
+    decidedAtStart = { ...autopilot.decidedBy };
     recorder.record({ world, fleet, autopilot, drive, clock }, true);
+  }
+  // Who made an AI drive's decisions (bench/metrics.js): none for a manual or Rules drive. Counted from
+  // this autopilot's start of the drive; one made since, by a world rebuilt, has no share.
+  function withDecidedBy(report) {
+    if (!["manual", "rules"].includes(report.driver ?? drive?.driver) && decidedAtStart) {
+      const decided = decidedByCounts(autopilot.decidedBy, decidedAtStart);
+      if (decided.model_share !== null && Object.values(decided).every((n) => n === null || n >= 0)) Object.assign(report, decided);
+    }
+    return report;
   }
   function finishDrive(reason) {
     if (lab?.reviewing) return;
@@ -576,6 +588,7 @@ export async function boot() {
     report.recording_id = recorder.recordingId;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
+    withDecidedBy(report);
     if (challenge) {
       const practice = challenge.roadTest ? saveRoadTest(challenge, report, examine(challenge, report)) : savePractice(challenge, report);
       lab.practice = practice;
@@ -595,7 +608,7 @@ export async function boot() {
     onClose: () => { world.paused = pausedBeforeExplorer; },
     onDrive: (d) => applyRoute(d.route, d.destination, d.title),
     onMap: (id) => {
-      if (drive && !drive.finished && drive.distance > 1) saveDrive(drive.finish("map changed"));
+      if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("map changed")));
       autopilot.setEnabled(false);
       const next = new URL(location.href);
       next.searchParams.delete("bbox"); next.searchParams.delete("replay");

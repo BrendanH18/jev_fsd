@@ -1,3 +1,53 @@
+# City smoke suite on the other maps — 2026-11-11 (ROADMAP 1.8)
+
+Rules, the `city` preset, lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through
+`scripts/bench_node.mjs`, saved through `/api/bench/save`. Every map's two-route dry smoke suite now
+passes, and Kitsilano's city suite still passes in all four weathers. Root causes, fixes and checks are
+in [the validation record](validation/other-maps-2026-11-11.md).
+
+| Run | Map | Weather | Routes | Passed | km | Notes |
+|---|---|---|---|---|---|---|
+| `20261111-130206-rules` | Kitsilano | dry | 12 | 12 | 12.8 | |
+| `20261111-130207-rules` | Kitsilano | fog | 12 | 12 | 12.94 | |
+| `20261111-130208-rules` | Kitsilano | rain | 12 | 12 | 12.61 | |
+| `20261111-130209-rules` | Kitsilano | snow | 12 | 12 | 13.68 | |
+| `20261111-130210-rules` | Calgary | dry | 2 | 2 | 1.17 | |
+| `20261111-130211-rules` | Edmonton | dry | 2 | 2 | 2.68 | was 1/2 |
+| `20261111-130213-rules` | Halifax | dry | 2 | 2 | 1.83 | `s1-1` three deadlock recoveries, as before |
+| `20261111-130214-rules` | Montréal | dry | 2 | 2 | 1.33 | |
+| `20261111-130215-rules` | Mount Pleasant | dry | 2 | 2 | 1.83 | was 1/2 |
+| `20261111-130216-rules` | Ottawa | dry | 2 | 2 | 1.4 | |
+| `20261111-130217-rules` | Québec City | dry | 2 | 2 | 1.9 | was 1/2 |
+| `20261111-130218-rules` | Saskatoon | dry | 2 | 2 | 1.92 | |
+| `20261111-130219-rules` | Toronto | dry | 2 | 2 | 2.61 | was 1/2 |
+| `20261111-130220-rules` | Victoria | dry | 2 | 2 | 2.07 | was 1/2 |
+| `20261111-130221-rules` | Winnipeg | dry | 2 | 2 | 2.36 | was 1/2 |
+| `20261111-130222-rules` | Kitsilano (bare) | dry | 12 | 12 | 10.53 | the new bare reference |
+
+Other maps: 22/22, up from 16/22, with no collision, failure to yield, off-road second or bus-lane
+metre on any of them. Kitsilano: 48/48 as before, though every city route's details change (traffic
+draws from a different set of parked cars, see below).
+
+**After review (#73):** a hard brake during a detour no longer adds the detour's move a second time
+(`brakeLine` in `brain/candidates.js`). Re-run against every row above, each is identical field for
+field (timings aside) but Kitsilano snow `s1-12`. That route is unchanged except for one safety brake
+logged at 260.5 s: its closing speed is 9.141 m/s instead of 9.155, and its gap differs by 0.01 mm.
+Reverting only that change reproduces the recorded value, so the snow row stays the reference
+with that one exception.
+
+**The bare suite changes on two routes**, so `20261111-130222-rules` replaces `20261110-190326-rules`
+as the bare reference; every other route is identical field for field (timings aside):
+
+- `s1-3` (84.3 s to 84.6 s, 262 to 261 decisions): seven parking bays on the insides of tight bends in
+  Kitsilano are no longer placed (`sim/parking.js`). One of them, `parked_2602`, stood 0.3 m or more
+  into the lane of a curving street (`e422`) ahead of traffic car `car_14`, which slowed for it; without
+  it `car_14` reaches the car's route a moment earlier. Restoring only the old `parking.js` restores the
+  route exactly; keeping the slots but not the cars does not, so it is the car, not the slot list.
+- `s1-9` (139.0 s to 139.3 s, 431 to 438 decisions): its 0.2 s off road was the car's wheels on a
+  junction's corner fill, which the renderer draws as asphalt and which now counts as road
+  (`map/junctions.js`); candidates through that corner are no longer rejected as off road. Off road
+  goes from 0.2 s to 0 for the suite.
+
 # City baseline — 2026-11-10 (ROADMAP 1.4)
 
 Rules, the `city` preset (every free-drive feature but parking at the destination, a 15:30 Monday

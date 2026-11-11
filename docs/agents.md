@@ -315,6 +315,73 @@ timed-out evaluations are labelled and never become passes. These are local resu
 does not upload them to a public leaderboard. Your browser's saved challenge attempts appear
 below the results and label manual, mixed and replay-branch drives.
 
+## Record a model run and replay it without a key
+
+A model recording keeps every answer a model driver (Jev, `decision:<name>` or `llm:<name>`)
+got from the server, keyed by what the model saw, so a run can be published and replayed
+exactly by anyone, with no key and no model call (`static/js/brain/recording.js`).
+
+```sh
+# record: the run makes live calls, as any model run does
+node --experimental-default-type=module scripts/bench_node.mjs --brain llm:luna --count 4 --record data/recordings/luna-kitsilano.json
+# replay: no key, no model call; the driver, map, scenarios and options come from the recording
+node --experimental-default-type=module scripts/bench_node.mjs --replay data/recordings/luna-kitsilano.json --check 1
+```
+
+On `/bench`, `await window.__bench.run({ brain: "llm:luna", record: true })` saves the
+recording under `data/recordings/` next to the run (`POST /api/recordings/save`, with the
+session token, as runs are saved), and `await window.__bench.run({ replay: "<name>" })` replays
+one listed by `GET /api/recordings`. Arena evaluations take the same tape:
+`evaluateChallenge(map, challenge, { brain, tape })` (`lab/evaluation.js`). Recording and replay
+run only on the lockstep clock: in realtime a late answer lands at a different moment each run.
+
+**What is recorded.** The recorder wraps the brain's one server call (`brain.transport`), not its
+`decide()`, so the brain's own answer handling and the autopilot's fallback accounting run
+unchanged on replay. A call's key is a 64-bit hash of the canonical JSON (sorted keys) of the
+driver id, the model, the API path and the request body without `tick` and `epoch`: for Jev and
+decision models, the state and questions; for LLMs, the endpoint name, messages and expected
+fields. Each outcome is kept as it came: the server's JSON with its meta (model, tokens, cost,
+latency), including answers rejected as invalid; an HTTP error with its status; a timeout; or a
+call cancelled because a new epoch (a fresh route) made it stale. A timeout replays at once as the
+same timeout fallback, not re-timed. The same request asked twice in a drive keeps both answers,
+in order. Trace fields that only echo the request (the LLM's messages) are stored once, in the
+key's request, and rebuilt on replay.
+
+**Drift is visible.** A request the recording has no answer for fails with `not in recording:
+<key>`, which counts as a Rules fallback in the drive's results. Each result carries
+`model_recording` (`calls`, `served`, `missing`, `drift`, `exact`), and a replay compares the
+drive's result with the recorded one (`same_result`), ignoring only wall-clock fields
+(`wall_ms`, an arena report's `started_at`). `--check 1` fails a replay that did not play out as
+recorded. With recording off, results and drives are exactly as before.
+
+**Format** (`jev-model-recording/1`, one line per header, result, scenario and request):
+
+```json
+{
+ "format": "jev-model-recording/1",
+ "header": {"driver": "llm:luna", "kind": "llm", "model": "openai/gpt-6-luna", "endpoint": {...},
+   "recorded_at": "...", "engine": "node v22.23.4", "versions": {"format": "...", "llm_prompt": "<hash>"},
+   "map": "kitsilano", "map_sha": "<hash of the map data>", "seed": 1, "preset": "bare", "weather": "dry", "bench": {...}},
+ "results": {"s1-1": {...the drive's result, timings removed...}},
+ "scenarios": {"s1-1": {...start, route, traffic seed...}},
+ "drives": {"s1-1": {"<request key>": [{"response": {...}} | {"error": {"message", "status"}} | {"timeout": true} | {"cancelled": true}]}}
+}
+```
+
+A replay drives the recorded scenarios, so a later change to the router cannot move them, and
+refuses map data whose fingerprint differs from `map_sha` (a rebuilt pack or layer). Anything
+else that changes what the model is asked (physics, traffic, sensing, candidates, the decision
+state, the LLM prompt) shows as drift. A recording replays exactly only on the JavaScript engine
+it was made on, as benchmark baselines compare only within one engine: a recording made with
+`bench_node.mjs` (V8) drifts when replayed in Safari's WebKit.
+
+`data/recordings/stub-llm-kitsilano-s1.json` is a fixture from a deterministic **stub** model,
+not a real one: `scripts/test_model_recording.mjs` (run in CI) records a drive with that stub,
+including an invalid answer, a timeout and an HTTP error, replays it, and checks that the
+committed recording still replays to its saved result. When a change to the simulation is
+intended, rewrite the fixture with `node --experimental-default-type=module
+scripts/test_model_recording.mjs --write`.
+
 ## Saved evaluations and comparisons
 
 Evaluations save automatically to this browser, including completed attempts from a stopped
@@ -337,6 +404,11 @@ but their missing simulation version and time limit prevent comparisons with v2 
 Click an agent's name in a result row to inspect its timeline. Audited collisions, red lights,
 missed stops, failed yields, hard brakes, the off-road failure threshold, hazard triggers,
 emergency brakes, fallbacks and termination events retain their simulation timestamps.
+Each result row, its details and each driver's summary also say who made the decisions: the share
+the driver answered itself, the share answered locally because nothing needed asking, and the share
+that fell back to Rules (`model_share`, `local_share`, `fallback_share`, with the counts beside
+them; see "Who made the decisions" in [the project reference](project-reference.md)). Only the
+first is the driver's own work, so read a pass alongside it. Rules results report none of these.
 Arena hard-brake counts use the coaching model's events so the totals match the timeline.
 Expand an event to see the most recent executed decision, its age, selected candidate,
 eligible and rejected options, hazard flags and observed state. Other decisions retain a

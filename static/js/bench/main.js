@@ -1,5 +1,7 @@
 // Benchmark page: build the suite, run every scenario headlessly, show and save the results, and
-// compare with an earlier run. window.__bench.run(opts) does the same from a script.
+// compare with an earlier run. window.__bench.run(opts) does the same from a script, and with
+// { record: true } or { replay: "<recording name>" } records or replays a model driver's answers
+// (brain/recording.js).
 
 import { api, $, h, usd, appUrl } from "../common.js";
 import { MapData } from "../map/mapdata.js";
@@ -9,6 +11,7 @@ import { aggregate } from "./metrics.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
+import { ModelRecording, recordingHeader, loadRecording, saveRecording, sameResult, mapFingerprint, checkMap, driverKind } from "../brain/recording.js";
 
 // [key, header, format, better: "low" | "high" | null]
 const COLUMNS = [
@@ -17,7 +20,7 @@ const COLUMNS = [
   ["min_gap_m", "min gap m", 1, "high"], ["min_ttc_s", "min TTC s", 1, "high"], ["max_decel", "max decel", 1, "high"],
   ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "rms jerk", 2, "low"], ["max_lat_accel", "max lat m/s²", 1, "low"],
   ["lane_rms_m", "lane rms m", 2, "low"], ["speeding_s", "speeding s", 1, "low"], ["safety_brakes", "safety", 0, "low"],
-  ["decisions", "decisions", 0, null], ["fallbacks", "fallbacks", 0, "low"], ["latency_p50_ms", "p50 ms", 0, "low"], ["cost_usd", "cost", "usd", null],
+  ["decisions", "decisions", 0, null], ["model_share", "model", "pct", "high"], ["local_share", "local", "pct", null], ["fallbacks", "fallbacks", 0, "low"], ["latency_p50_ms", "p50 ms", 0, "low"], ["cost_usd", "cost", "usd", null],
 ];
 const CARDS = [
   ["pass_rate", "pass rate", "pct", "high"], ["violations_per_km", "violations / km", 2, "low"], ["collisions", "collisions", 0, "low"], ["at_fault", "at-fault collisions", 0, "low"],
@@ -25,6 +28,8 @@ const CARDS = [
   ["min_ttc_s", "worst TTC s", 1, "high"], ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "mean rms jerk", 2, "low"],
   ["lane_rms_m", "mean lane rms m", 2, "low"], ["avg_kmh", "mean km/h", 1, "high"], ["km", "km driven", 2, null],
   ["safety_brakes", "safety brakes", 0, "low"], ["cost_usd", "cost", "usd", null],
+  // (who made the decisions: only drivers other than Rules report it, bench/metrics.js)
+  ["model_share", "decided by the model", "pct", "high"], ["local_share", "answered locally", "pct", null], ["fallback_share", "fell back to Rules", "pct", "low"],
 ];
 
 const fmt = (v, f) => {
@@ -94,15 +99,29 @@ function runFromForm() {
   });
 }
 
-export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, save = true } = {}) {
+export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, save = true, record = false, replay = null } = {}) {
+  // A replay takes its driver and suite from the recording (a saved name, its JSON, or a ModelRecording).
+  const replaying = replay ? await loadRecording(replay) : null;
+  if (replaying) {
+    const b = replaying.header.bench || {};
+    if (b.bbox && b.bbox.join(",") !== map.routingBbox.join(",")) throw new Error(`The recording was made on ${b.map || b.bbox.join(",")}; open /bench?map=${b.map || b.bbox.join(",")} to replay it.`);
+    checkMap(replaying, map);
+    ({ count, npcs, seed, weather } = b);
+    ({ features = "bare", park = false, hour, without = [], cover } = b);
+    brain = replaying.header.driver;
+  }
+  if ((record || replaying) && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
+  if (record && !replaying && !driverKind(brain)) throw new Error(`Only model drivers (jev, decision:<name>, llm:<name>) can be recorded, not "${brain}".`);
   const options = benchmarkConfig({ features, park, hour, without, cover });
   running = true; stopRequested = false;
   $("#run").textContent = "Stop";
   const definition = agentDefinitions().find(a => a.id === brain), endpoint = definition?.decision || definition?.llm;
   const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, ...options, map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
   const setStatus = (t) => { $("#status").textContent = t; };
+  const recording = replaying || (record ? new ModelRecording({ header: recordingHeader({ driver: brain, brain: { endpoint }, model: brain === "jev" ? status.decision?.jev?.model : null,
+    map: status.map.name, map_sha: mapFingerprint(map), seed, preset: features, weather, bench: config }) }) : null);
   setStatus("building the scenario suite…");
-  const suite = await buildSuite(map, { count, seed, ...suiteOptions(features, options) });
+  const suite = replaying?.suite() || await buildSuite(map, { count, seed, ...suiteOptions(features, options) });
   const state = { config, suite, results: [], summary: null };
   lastRun = state;
   render(state);
@@ -111,25 +130,31 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
     setStatus(`running ${i + 1} / ${suite.length}: ${suite[i].tags.length_m} m, ${suite[i].tags.signals} signals, ${suite[i].tags.stops} stops`);
     render(state);
     await yieldNow();
-    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, ...options, shouldStop: () => stopRequested });
+    const tape = recording ? recording.tape(suite[i].id, replaying ? "replay" : "record") : null;
+    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, ...options, shouldStop: () => stopRequested, tape });
+    if (record && !replaying) recording.keepResult(suite[i].id, r, suite[i]);
+    if (replaying) r.model_recording.same_result = replaying.results[suite[i].id] ? sameResult(r, replaying.results[suite[i].id]) : null;
     state.results.push(r);
     state.summary = aggregate(state.results);
     render(state);
   }
   state.current = null;
   state.summary = aggregate(state.results);
-  let saved = null;
+  let saved = null, savedRecording = null, recordingError = null;
+  if (record && !replaying && save && state.results.length) {
+    try { savedRecording = await saveRecording(recording); } catch (err) { recordingError = err.message; setStatus(`could not save the recording: ${err.message}`); }
+  }
   if (save && state.results.length) {
     try {
       saved = await api("/api/bench/save", { config: { ...config, completed: state.results.length }, summary: state.summary, results: state.results });
-      setStatus(`saved ${saved.saved}`);
+      setStatus(`saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `; could not save the recording: ${recordingError}` : ""}`);
       await loadRuns();
     } catch (err) { setStatus(`could not save: ${err.message}`); }
   } else setStatus(stopRequested ? "stopped" : "done");
   render(state);
   running = false;
   $("#run").textContent = "Run";
-  return { config, summary: state.summary, results: state.results, saved };
+  return { config, summary: state.summary, results: state.results, saved, ...(recording ? { recording: savedRecording || (recordingError ? { error: recordingError, data: recording.toJSON() } : null), replayed: replaying ? state.results.every(r => r.model_recording.exact && r.model_recording.same_result === true) : null } : {}) };
 }
 
 function compareSummary() {
@@ -149,7 +174,7 @@ function delta(cur, prev, better, f) {
 function render(state) {
   const prev = compareSummary();
   const s = state.summary;
-  $("#summary").replaceChildren(...(s ? CARDS.map(([k, label, f, better]) => h("div", { class: "card" },
+  $("#summary").replaceChildren(...(s ? CARDS.filter(([k]) => s[k] !== undefined).map(([k, label, f, better]) => h("div", { class: "card" },
     h("span", { class: "label" }, label),
     h("span", { class: "value" }, fmt(s[k], f)),
     prev ? delta(s[k], prev[k], better, f) : null)) : []));

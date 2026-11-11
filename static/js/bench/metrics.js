@@ -150,6 +150,8 @@ export class DriveMetrics {
       cost_usd: Math.round(autopilot.totals.cost * 1e6) / 1e6,
       latency_p50_ms: lat.length ? Math.round(lat[Math.floor(lat.length / 2)]) : null,
       latency_p95_ms: lat.length ? Math.round(lat[Math.min(lat.length - 1, Math.floor(lat.length * 0.95))]) : null,
+      // (who made the decisions, for every driver but Rules, whose results stay as they were)
+      ...decidedBy(autopilot),
     };
     out.failures = failures(out);
     out.pass = out.failures.length === 0;
@@ -198,6 +200,39 @@ export function failures(m) {
   return f;
 }
 
+// Who made a drive's decisions (Autopilot.decidedBy), for any driver but Rules: the counts, and the
+// shares of all decisions that the driver made itself, that were answered locally with no call, and
+// that fell back to Rules. `partial_decisions` are model decisions that left a route or headlight
+// question to the default. A Rules drive, or a stand-in autopilot without a driver, adds nothing.
+export const DECIDED_BY = ["model_decisions", "partial_decisions", "local_decisions", "fallback_decisions"];
+export function decidedBy(autopilot) {
+  if (!autopilot?.decidedBy || !autopilot.brainName || autopilot.brainName === "rules") return {};
+  return decidedByCounts(autopilot.decidedBy);
+}
+// The same fields from the autopilot's counts `by`, less those it had at `since` (the app's drive
+// report counts from the start of the drive: main.js).
+export function decidedByCounts(by, since = {}) {
+  const d = (k) => by[k] - (since[k] || 0);
+  return withShares({ model_decisions: d("model"), partial_decisions: d("partial"), local_decisions: d("local"), fallback_decisions: d("fallback") });
+}
+function withShares(c) {
+  const n = c.model_decisions + c.local_decisions + c.fallback_decisions;
+  const share = (k) => (n ? Math.round((c[k] / n) * 1000) / 1000 : null);
+  return { ...c, model_share: share("model_decisions"), local_share: share("local_decisions"), fallback_share: share("fallback_decisions") };
+}
+// The counts and shares over the results that report who decided: none for Rules, so its summaries
+// stay as they were.
+export function decidedByTotals(results) {
+  return results.some((r) => r.model_decisions !== undefined)
+    ? withShares(Object.fromEntries(DECIDED_BY.map((k) => [k, results.reduce((a, r) => a + (r[k] || 0), 0)]))) : {};
+}
+// "62% model · 30% local · 8% fallback" for a result or summary with the shares, else null.
+export function decidedByText(r) {
+  if (!r || r.model_share == null) return null;
+  const pct = (x) => `${Math.round(x * 100)}%`;
+  return `${pct(r.model_share)} model${r.partial_decisions ? ` (${r.partial_decisions} partial)` : ""} · ${pct(r.local_share)} local · ${pct(r.fallback_share)} fallback`;
+}
+
 export function aggregate(results) {
   const n = results.length || 1;
   const sum = (k) => results.reduce((a, r) => a + (r[k] || 0), 0);
@@ -226,5 +261,6 @@ export function aggregate(results) {
     lane_rms_m: mean("lane_rms_m"), lane_changes: sum("lane_changes"), speeding_s: Math.round(sum("speeding_s") * 10) / 10,
     decisions: sum("decisions"), calls: sum("calls"), tokens: sum("tokens"),
     cost_usd: Math.round(sum("cost_usd") * 1e6) / 1e6,
+    ...decidedByTotals(results),
   };
 }

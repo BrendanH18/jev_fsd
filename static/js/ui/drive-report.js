@@ -4,6 +4,7 @@ import { exportDriveCard, copyDriveLink, driveLink } from "../lab/share.js";
 import { CHALLENGES, challengeById, challengeConfig } from "../lab/challenges.js";
 import { readPractice, practiceStatus, challengeFailures } from "../lab/practice.js";
 import { examinerSheet, roadTestNote } from "./road-test.js";
+import { decidedByText } from "../bench/metrics.js";
 
 const time = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
@@ -98,9 +99,12 @@ export class DriveReport {
       : "AI, mixed-driver, modified and replay drives do not change your manual practice progress.";
     // (a road test, lab/road-tests.js, is marked on the examiner's sheet instead: ui/road-test.js)
     const roadTest = !!challenge?.roadTest;
-    this.dialog.replaceChildren(
+    // (sections a report does not have are null: left out, not shown as "null")
+    this.dialog.replaceChildren(...[
       h("div", { class: "dialog-header" }, h("span", { class: "label" }, "DRIVE REPORT"), h("button", { class: "toggle", "aria-label": "Close report", onclick: () => this.dialog.close() }, "×")),
       h("h2", {}, report.title), h("p", { class: "muted" }, `${report.map} · ${report.driver} · ${report.status}${report.parking && report.parking.result !== "not yet" ? ` · ${report.parking.result}${report.parking.result === "parked" ? `, ${Math.round(report.parking.kerb_m * 100)} cm from the kerb` : ""}` : ""}${report.modified ? " · modified challenge" : ""}`),
+      // (an AI drive's decisions: the model's own, answered locally, or Rules after a fallback, main.js)
+      decidedByText(report) ? h("p", { class: "muted report-decided" }, `Decisions: ${decidedByText(report)}`) : null,
       roadTest ? examinerSheet(challenge, report, incident => this.incidentRow(report, incident)) : challenge ? this.debrief(challenge, report) : null,
       h("div", { class: "report-score" }, h("strong", {}, report.qualified ? report.score : "—"), h("span", {}, report.qualified ? `Grade ${report.grade} / 100` : "Practice drive · not yet graded")),
       h("div", { class: "report-metrics" }, h("span", {}, `${(report.distance_m / 1000).toFixed(2)} km`), h("span", {}, time(report.elapsed_s)), h("span", {}, `${report.max_kmh} km/h peak`)),
@@ -119,7 +123,7 @@ export class DriveReport {
         report.config?.challenge ? h("a", { class: "toggle", href: driveLink({ ...report.config, drive: "rules" }) }, "Try with Rules") : null,
         challenge ? h("a", { class: "toggle", href: driveLink({ ...challengeConfig(challenge), drive: "manual" }) }, "Retry manually") : null,
         next ? h("a", { class: "toggle", href: driveLink({ ...challengeConfig(next), drive: "manual" }) }, `Practise next: ${next.title}`) : null,
-        this.onReplay && Number.isInteger(this.getReplayTarget(report)) ? h("button", { class: "toggle", onclick: () => this.replayIncident(report) }, "Review replay") : null));
+        this.onReplay && Number.isInteger(this.getReplayTarget(report)) ? h("button", { class: "toggle", onclick: () => this.replayIncident(report) }, "Review replay") : null)].filter(Boolean));
     this.open();
   }
 

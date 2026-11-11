@@ -13,6 +13,9 @@ const SLOT_M = 6.4;            // curb length per parked car
 const CORNER_CLEAR_M = 5.0;    // no parking this close to the crossing street's curb
 const LINE_CLEAR_M = 6.0;      // nor this close before a stop line or yield line
 const CELL = 25;
+// On the inside of a bend a straight car body leaves the curve: its ends reach out of the parking lane
+// into the travel lane. A bay whose car would reach further in than this is not a bay.
+const BEND_INTRUSION_M = 0.3;
 // Real-world paint mix, as for the traffic.
 const PALETTE = [0xeeeeea, 0x8d9299, 0x1a1c20, 0xc4c8cc, 0x2b3a55, 0x9b1e1e, 0xf2f2ee, 0x4a4f57, 0x0f1114, 0x6b7f5e, 0xb9b3a5, 0x6e5a44];
 
@@ -25,6 +28,22 @@ export function reserveSlot(map, slot, owner, { spec = owner.spec || CAR, sFrom,
   const e = map.edges.get(slot.edge), s = projectPoint(e.pts, e.cum, [slot.x, slot.y]).s;
   slot.reserved = { owner, sFrom: sFrom ?? s - spec.rearOverhang - 0.5, sTo: sTo ?? s - spec.rearOverhang + spec.length + 0.5 };
   return slot.reserved;
+}
+
+// How far (metres) a car parked square in the bay centred at `s`, `lat` metres right of edge e's
+// centreline, reaches past the parking lane into the travel lanes: positive on the inside of a bend.
+export function bayIntrusion(e, s, lat, spec = CAR) {
+  const [px, py] = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const cx = px + Math.sin(h) * lat, cy = py - Math.cos(h) * lat;
+  const right = lat > 0, inner = right ? e.asphalt[1] - e.parking[1] : e.asphalt[0] + e.parking[0];
+  let worst = -Infinity;
+  for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    const x = cx + Math.cos(h) * a * spec.length / 2 + Math.sin(h) * b * spec.width / 2;
+    const y = cy + Math.sin(h) * a * spec.length / 2 - Math.cos(h) * b * spec.width / 2;
+    const q = projectPoint(e.pts, e.cum, [x, y]);
+    worst = Math.max(worst, right ? inner - q.lateral : q.lateral - inner);
+  }
+  return worst;
 }
 
 export class ParkedCars {
@@ -61,6 +80,7 @@ export class ParkedCars {
     const junction = (node) => new Set([...(map.inn.get(node) || []), ...(map.out.get(node) || [])].map((id) => {
       const o = map.edges.get(id); return o.from === node ? o.to : o.from;
     })).size >= 3;
+    let serial = this.list.length;
     for (const e of map.edges.values()) {
       if (!e.parking || e.ring) continue;
       const L = e.cum[e.cum.length - 1];
@@ -76,6 +96,12 @@ export class ParkedCars {
         const zones = lat > 0 ? this.zones?.get(e.id) : null;
         for (let s = from + SLOT_M / 2; s + SLOT_M / 2 <= to; s += SLOT_M) {
           if (zones && zones.some(([a, b]) => s + SLOT_M / 2 > a && s - SLOT_M / 2 < b)) continue;
+          // (a bay on the inside of a tight bend is left out; its draws are still made, and its car's
+          // number used, so every other bay keeps the car it had)
+          if (bayIntrusion(e, s, lat) > BEND_INTRUSION_M) {
+            if (random() <= density) { for (let k = 0; k < 6; k++) random(); serial++; }
+            continue;
+          }
           const pSlot = pointAt(e.pts, e.cum, s), hSlot = headingAt(e.pts, e.cum, s);
           const backSlot = CAR.length / 2 - CAR.rearOverhang;
           const slot = { edge: e.id, curb: lat > 0 ? "right" : "left", occupant: null, reserved: null,
@@ -92,7 +118,7 @@ export class ParkedCars {
           // Vehicle positions are at the rear axle
           const back = CAR.length / 2 - CAR.rearOverhang;
           const car = new Vehicle(cx - Math.cos(psi) * back, cy - Math.sin(psi) * back, psi, 0);
-          car.id = `parked_${this.list.length + 1}`;
+          car.id = `parked_${++serial}`;
           car.parked = true;
           car.color = PALETTE[Math.floor(random() * PALETTE.length)];
           car.style = Math.floor(random() * 8);

@@ -20,12 +20,13 @@ export class DecisionBrain {
     this.endpoint = endpoint;
     this.name = endpoint.id;
     this.questionDriven = true;   // like Jev: nothing to ask means a local decision, no call
+    this.transport = api;   // the server call; a model recording (recording.js) swaps it
     this.timeoutMs = Math.round((endpoint.timeout_s || 5) * 1000) + TIMEOUT_MARGIN_MS;
   }
 
   async decide(snap, eligible, request, signal) {
     const started = performance.now();
-    const res = await api("/api/decision/decide", { endpoint: this.endpoint.name, tick: snap.tick || 0, epoch: request.epoch || 0,
+    const res = await this.transport("/api/decision/decide", { endpoint: this.endpoint.name, tick: snap.tick || 0, epoch: request.epoch || 0,
       state: request.state, questions: request.questions }, { signal });
     const meta = { ...res.meta, source: this.name, live_call: true, round_trip_ms: Math.round(performance.now() - started) };
     // The call happened, so the error carries its tokens, cost and trace into the Rules fallback.

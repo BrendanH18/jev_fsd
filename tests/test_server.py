@@ -129,3 +129,42 @@ class StaticServerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RecordingStoreTests(unittest.TestCase):
+    """Model recordings (static/js/brain/recording.js) are saved and read back like benchmark runs."""
+
+    def setUp(self):
+        tmp = self.enterContext(tempfile.TemporaryDirectory())
+        self.dir = Path(tmp) / "recordings"
+        self.enterContext(patch.object(server, "RECORDINGS_DIR", self.dir))
+        self.enterContext(patch.object(server, "PROJECT_ROOT", Path(tmp)))
+
+    def recording(self, driver="llm:stub"):
+        return {"format": server.RECORDING_FORMAT, "header": {"driver": driver, "model": "stub-1"},
+                "drives": {"s1-1": {"0123456789abcdef": [{"timeout": True}]}}, "results": {"s1-1": {"pass": True}}}
+
+    def test_save_list_and_load(self):
+        saved = server.api_recording_save(self.recording(), {})
+        self.assertTrue(saved["name"].endswith("-llm-stub"))
+        self.assertTrue(saved["saved"].startswith("recordings/"))
+        listed = server.api_recordings({}, {})["recordings"]
+        self.assertEqual([r["name"] for r in listed], [saved["name"]])
+        self.assertEqual(listed[0]["drives"], ["s1-1"])
+        full = server.api_recordings({}, {"name": [saved["name"]]})
+        self.assertEqual(full["drives"]["s1-1"]["0123456789abcdef"], [{"timeout": True}])
+        self.assertEqual(full["results"], {"s1-1": {"pass": True}})
+        text = (self.dir / ("%s.json" % saved["name"])).read_text()
+        self.assertIn('\n   "0123456789abcdef": [{"timeout":true}]\n', text)
+
+    def test_rejects_other_shapes_and_unknown_names(self):
+        with self.assertRaises(server.BadRequest):
+            server.api_recording_save({**self.recording(), "format": "other"}, {})
+        for drives in ([], {"s1-1": []}, {"s1-1": {"key": {"timeout": True}}}):
+            with self.assertRaises(server.BadRequest):
+                server.api_recording_save({**self.recording(), "drives": drives}, {})
+        for name in ["missing", "../secret", ""]:
+            if name:
+                with self.assertRaises(server.BadRequest):
+                    server.api_recordings({}, {"name": [name]})
+        self.assertEqual(server.api_recordings({}, {}), {"recordings": []})
