@@ -67,17 +67,33 @@ export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "
   return { world, fleet, autopilot, events };
 }
 
+// A road closed ahead (sim/road-closures.js) sends the car round it, further than the route its
+// deadline was set for. Call the returned function after each step: when a closure re-plan settles
+// having replaced the route, `onDetour` gets the distance driven plus the new route's length. A
+// re-plan that fails or finds nothing, and every other re-plan, leaves the deadline alone.
+export function watchClosureReplans(autopilot, world, metrics, onDetour) {
+  let seen = null;
+  return () => {
+    const pending = autopilot.closureRouting;
+    if (!pending || pending === seen) return;
+    seen = pending;
+    const before = world.route;
+    pending.then(() => { if (world.route && world.route !== before) onDetour(metrics.distance + world.route.length); }, () => {});
+  };
+}
+
 export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = "lockstep", weather = "dry", features = "bare", style = null, vehicleSpec = undefined, shouldStop = () => false } = {}) {
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
   const ctx = setupScenario(map, sc, { brain, npcs, weather, features, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
   const { world, autopilot, events } = ctx;
   let limit = scenarioTimeLimit(sc, { features, weather });
   const wallStart = performance.now();
-  let arrived = false, steps = 0, simulationError = null, closing = false, route = world.route;
+  let arrived = false, steps = 0, simulationError = null;
+  const closureReplans = watchClosureReplans(autopilot, world, metrics, (length_m) => { limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m } }, { features, weather })); });
   try {
     while (world.t < limit && !shouldStop()) {
       const road = stepWorld(ctx, DT, world.t * 1000);
-      if (autopilot.closureRouting) closing = true;
+      closureReplans();
       for (const e of world.events) if (e.type === "collision") events.push(e);
       metrics.record(world, autopilot.snap, road, DT);
       steps++;
@@ -93,13 +109,6 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
         const ahead = world.t * 1000 - (performance.now() - wallStart);
         if (ahead > 4) await sleep(ahead);
         else if (steps % 60 === 0) await yieldNow();
-      }
-      // A road closed ahead (sim/road-closures.js) sends the car round it, further than the route
-      // the deadline was set for: once the detour comes, the deadline covers what has been driven
-      // plus the new route, at the same pace. Other re-plans keep the deadline they had.
-      if (world.route !== route) {
-        if (closing && world.route) limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m: metrics.distance + world.route.length } }, { features, weather }));
-        closing = false; route = world.route;
       }
     }
   } catch (error) {
