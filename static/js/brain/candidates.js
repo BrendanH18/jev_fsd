@@ -108,8 +108,8 @@ export function sampleCandidates(snap, world) {
   if (!lost && !offRoad) {
     // Moving back from a pull-over can swing the tail into a kerbside car. Keep the exact
     // present line available at a crawl, until there is room to steer back; the same forward
-    // simulations and clearance margins judge it. The city following policy enables this recovery.
-    if (world.followingDistance && !shifting && lane && v < 3 && Math.abs(lane.lateral) > 0.2
+    // simulations and clearance margins judge it.
+    if (!shifting && lane && v < 3 && Math.abs(lane.lateral) > 0.2
       && Math.abs(lane.lateral) < ((snap.road.edge?.lane_width || 0) - world.ego.spec.width) / 2
       && world.parked.near(world.ego.x, world.ego.y, 8).length) {
       out.push({ id: "keep_present_line", laneUntil, law: inLane({ kind: "lane", offset: lane.lateral, vTarget: Math.min(2, snap.target?.v ?? limit) }),

@@ -974,9 +974,9 @@ export class NpcFleet {
           if (hit) { gap = d - 0.5; leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi)); leader = hit; break; }
         }
       }
-      // Ordinary cars can swing across a stopped car too, especially through a wet-road turn.
-      // With the following policy on, forecast their real bodies through the stopping distance.
-      if (n.transit || n.school || (world.followingDistance && n.kind !== "bike")) {
+      // Ordinary cars can swing across a stopped car too, especially through a wet-road turn:
+      // forecast every motor vehicle's real body through the stopping distance.
+      if (n.kind !== "bike") {
         const ego = world.ego, nose = spec.length - spec.rearOverhang - 1;
         const g = n.school && n.toLocal(ego.x, ego.y).ahead < nose ? null : sweptBodyGap(n, ego, offset, BUS_BODY_LOOK_M);
         if (g !== null && g < gap) { gap = g; leader = ego; leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi)); }
@@ -2096,8 +2096,10 @@ export class NpcFleet {
       }
       y.stop = path.pointAt(Math.min(path.length, front + dist));
     }
-    // With the following policy on, this is the chosen physical stop, rather than a
-    // leader to leave another IDM gap behind (which can strand the tail in a narrowing).
+    // With the following policy on, this is the chosen physical stop, rather than a leader to leave
+    // another IDM gap behind (which can strand the tail in a narrowing). Without it the legacy gap
+    // stays: applied there it lines up traffic stopping both ways and the vehicle cannot thread
+    // between them (test_emergency.mjs). ROADMAP 1.3 follows this up.
     return projectPoint(path.pts, path.cum, y.stop, null).s - front + (this.world.followingDistance ? (n.driver || IDM).s0 : 0);
   }
 

@@ -20,8 +20,8 @@ for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambl
   if (url) pack[name] = JSON.parse(fs.readFileSync(url));
 }
 const map = new MapData(pack);
-for (const weather of ["dry", "rain", "snow"]) {
-  const w = new World(map, { parked: 0, pedestrians: 0, followingDistance: true, weather });
+for (const followingDistance of [true, false]) for (const weather of ["dry", "rain", "snow"]) {
+  const w = new World(map, { parked: 0, pedestrians: 0, followingDistance, weather });
   const lane = map.lane("e574", 0);
   w.route = new Route(routeFromLanes(map, [lane], 0, lane.length - 2), map);
   Object.assign(w.ego, { x: -186.1638544315576, y: -460.52440543307387, psi: -1.6006758267802192, delta: 0.09960438193636989, v: 0 });
@@ -40,8 +40,6 @@ for (const weather of ["dry", "rain", "snow"]) {
   }
   assert.equal(touched, false, `${weather}: keeps the full prediction margin in actual execution`);
   assert.equal(w.route.project(w.ego.x, w.ego.y).s - s0 > 8, true);
-  w.followingDistance = false;
-  assert.equal(sampleCandidates(buildSnapshot(w), w).some(c => c.id === "keep_present_line"), false, "legacy preset keeps its candidate set");
 }
 console.log("A car can leave its pull-over along the present line without reducing parked-car clearance");
 process.exit(0);

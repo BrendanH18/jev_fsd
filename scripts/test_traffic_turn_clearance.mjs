@@ -14,8 +14,8 @@ const next = { ...main, id: "next", from: "b", to: "c", pts: [[100, 0], [100, 10
 const map = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -30, 150, 150], edges: [main, next],
   lanes: [main, next].map(e => ({ edge: e.id, idx: 0, pts: e.pts })),
   nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 100, y: 0 }, { id: "c", x: 100, y: 100 }], intersections: [], stops: [], buildings: [] });
-for (const weather of ["dry", "rain", "snow"]) {
-  const world = new World(map, { parked: 0, pedestrians: 0, weather, followingDistance: true });
+for (const followingDistance of [true, false]) for (const weather of ["dry", "rain", "snow"]) {
+  const world = new World(map, { parked: 0, pedestrians: 0, weather, followingDistance });
   Object.assign(world.ego, { x: 104, y: 4, psi: Math.PI, v: 0 });
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 1 });
   fleet.nextPull = fleet.nextPark = Infinity;
@@ -33,5 +33,5 @@ for (const weather of ["dry", "rain", "snow"]) {
   for (let k = 0; k < 30 * 60; k++) { fleet.step(1 / 60); world.t += 1 / 60; }
   assert.equal(car.y > 25, true, `${weather}: resumes once the obstruction clears`);
 }
-console.log("Ordinary cars stop for their swept bodies on turns in dry, rain and snow");
+console.log("Ordinary cars stop for their swept bodies on turns in dry, rain and snow, with and without the following policy");
 process.exit(0);

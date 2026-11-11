@@ -71,12 +71,13 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
   const ctx = setupScenario(map, sc, { brain, npcs, weather, features, style, vehicleSpec, onDecision: (d) => { if (d.meta && (d.meta.source === "jev" || d.meta.live_call) && d.meta.latency_ms) metrics.latencies.push(d.meta.latency_ms); } });
   const { world, autopilot, events } = ctx;
-  const limit = scenarioTimeLimit(sc, { features, weather });
+  let limit = scenarioTimeLimit(sc, { features, weather });
   const wallStart = performance.now();
-  let arrived = false, steps = 0, simulationError = null;
+  let arrived = false, steps = 0, simulationError = null, closing = false, route = world.route;
   try {
     while (world.t < limit && !shouldStop()) {
       const road = stepWorld(ctx, DT, world.t * 1000);
+      if (autopilot.closureRouting) closing = true;
       for (const e of world.events) if (e.type === "collision") events.push(e);
       metrics.record(world, autopilot.snap, road, DT);
       steps++;
@@ -92,6 +93,13 @@ export async function runScenario(map, sc, { brain = "rules", npcs = 40, mode = 
         const ahead = world.t * 1000 - (performance.now() - wallStart);
         if (ahead > 4) await sleep(ahead);
         else if (steps % 60 === 0) await yieldNow();
+      }
+      // A road closed ahead (sim/road-closures.js) sends the car round it, further than the route
+      // the deadline was set for: once the detour comes, the deadline covers what has been driven
+      // plus the new route, at the same pace. Other re-plans keep the deadline they had.
+      if (world.route !== route) {
+        if (closing && world.route) limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m: metrics.distance + world.route.length } }, { features, weather }));
+        closing = false; route = world.route;
       }
     }
   } catch (error) {
