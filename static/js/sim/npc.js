@@ -2096,11 +2096,10 @@ export class NpcFleet {
       }
       y.stop = path.pointAt(Math.min(path.length, front + dist));
     }
-    // With the following policy on, this is the chosen physical stop, rather than a leader to leave
-    // another IDM gap behind (which can strand the tail in a narrowing). Without it the legacy gap
-    // stays: applied there it lines up traffic stopping both ways and the vehicle cannot thread
-    // between them (test_emergency.mjs). ROADMAP 1.3 follows this up.
-    return projectPoint(path.pts, path.cum, y.stop, null).s - front + (this.world.followingDistance ? (n.driver || IDM).s0 : 0);
+    // The point is the physical front-bumper stop. IDM leaves s0 behind an obstacle, so place
+    // that virtual obstacle s0 beyond it to preserve the planned rear clearance at a junction
+    // or narrowing. Both following-distance settings use the same IDM standstill gap.
+    return projectPoint(path.pts, path.cum, y.stop, null).s - front + (n.driver || IDM).s0;
   }
 
   // Reverse slowly, straight back, until clear by `left` meters, blocked behind, or out of time;
