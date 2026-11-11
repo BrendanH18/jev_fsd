@@ -174,6 +174,9 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
   - From review of #73, each needing a re-baseline: check a parked car's jittered footprint, not only
     its bay, against the 0.3 m lane limit (`sim/parking.js`); latch the bus-lane turn-in allowance
     when the lane change starts rather than at the current speed (`sim/bus-lanes.js`).
+  - Scenery in the lane during a detour: `nudge` (`brain/candidates.js`) rounds `lane.lateral`, which
+    already includes the detour's move, and `inLane` adds the detour again, for the hard brake and the
+    scenery stops alike. Older than #73; needs a re-baseline.
 
 ## Phase 2: put the models on the road
 
