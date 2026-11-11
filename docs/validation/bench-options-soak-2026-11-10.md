@@ -5,6 +5,10 @@ Implementation: `c68570acaaea7319ead1270a1188b99fce9038b4`. Follow-up page valid
 pack version 6. Every benchmark used the production server on port 8381. No sim, brain,
 map, router or ROADMAP files changed. No dependencies or tools were added.
 
+Rebased onto #70's final head (`3006db0`): with default options, bare and city dry are identical
+field for field to that head's own runs, and city dry with `--park 1` passes 12/12 (s1-11 included,
+fixed there). The results below were recorded on `bd81abd`.
+
 ## Design
 
 - Parking and hour apply to **bare and city**, so parking alone is a separable suite. Bare has no
