@@ -7,7 +7,7 @@
 // road-tests; or all), --only id,id (just these), --port, --json out.json (a summary per drive, no
 // decision trace), --check 1 (exit with status 1 if a drive fails or a replay does not play out as
 // recorded), --record out.json and --replay rec.json (model drivers only; docs/agents.md; a name
-// ending .gz is gzipped).
+// ending .gz is gzipped), --reserve 0.5 (stop between drives once the server's budget runs low).
 //
 // A recording here covers several maps, so its header keeps one map fingerprint per map
 // (`header.maps`), and each drive's recorded result leaves out the decision trace and timeline,
@@ -18,7 +18,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((out, a, i, all) =>
   return out;
 }, []));
 const fail = (message) => { console.error(message); process.exit(1); };
-const OPTIONS = ["brain", "set", "only", "port", "json", "check", "record", "replay"];
+const OPTIONS = ["brain", "set", "only", "port", "json", "check", "record", "replay", "reserve"];
 for (const [name, value] of Object.entries(args)) {
   if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
   if (value === true) fail(`--${name} needs a value.`);
@@ -92,8 +92,18 @@ const resultSha = (result) => rec.hashText(rec.canonicalJson(rec.comparableResul
 const SUMMARY = ["challenge", "map", "pass", "failures", "arrived", "time_s", "collisions", "at_fault", "hard_brakes", "safety_brakes", "decisions", "fallbacks",
   "model_share", "local_share", "fallback_share", "cost_usd", "input_tokens", "output_tokens", "simulation_error", "stopped"];
 
+// --reserve 0.5: start no further drive once less than this many dollars of the server's budget
+// (JEV_FSD_BUDGET_USD) are left, so a run that would outspend it stops between drives instead of
+// spoiling the drive under way with budget fallbacks. With --record, the finished drives are kept.
+const reserve = args.reserve === undefined ? null : Number(args.reserve);
+if (reserve !== null && !(reserve >= 0)) fail("--reserve must be a number of dollars.");
 const results = [], drifted = [];
+let budgetStop = null;
 for (const challenge of drives) {
+  if (reserve !== null) {
+    const { budget_usd: budget, spent_usd: spent } = (await api("/api/status")).spend || {};
+    if (Number.isFinite(budget) && budget - spent < reserve) { budgetStop = `stopped before ${challenge.id}: $${(budget - spent).toFixed(2)} of the budget left`; break; }
+  }
   const tape = recording ? recording.tape(challenge.id, args.record ? "record" : "replay") : null;
   const r = await evaluateChallenge(maps[challenge.map], challenge, { brain, tape });
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
@@ -109,6 +119,7 @@ for (const challenge of drives) {
     + `${r.pass ? "" : ` failures=${(r.failures || []).join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}`
     + `${r.model_recording ? ` rec=${JSON.stringify(r.model_recording)}` : ""}`);
 }
+if (budgetStop) console.log(budgetStop);
 const passed = results.filter((r) => r.pass).length;
 const cost = results.reduce((sum, r) => sum + (r.cost_usd || 0), 0);
 const summary = { brain, set, drives: results.length, passed, cost_usd: Math.round(cost * 1e6) / 1e6, engine: `node ${process.version}` };

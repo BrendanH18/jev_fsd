@@ -4,12 +4,14 @@
 
 - First live model results (ROADMAP Phase 2), in `docs/model-results.md`: all 39 saved Jev cases
   pass against `jev-1.14.0`; Jev passes all 60 challenges and both road tests, as Rules and the
-  cautious agent do, making 99.95% of its decisions itself, and the recording replays exactly without
-  a key (`data/recordings/jev-arena-2026-11-11.json.gz`); the cautious agent's city suite and
-  one-challenge recordings of GPT-6 Luna, DeepSeek V4.1 Flash, Liquid d1 and a local Granite 4.2 are
-  committed beside it. The cost per decision is measured, with a ceiling for new wording.
+  cautious agent do, making 99.95% of its decisions itself, and DeepSeek V4.1 Flash passes 61 of 62
+  (it waits behind a double-parked van until time runs out); both recordings replay exactly without
+  a key (`data/recordings/*-arena-2026-11-11.json.gz`); the cautious agent's city suite and
+  one-challenge recordings of GPT-6 Luna, Liquid d1 and a local Granite 4.2 are committed beside
+  them. The cost per decision is measured, with a ceiling for new wording.
 - `scripts/arena_node.mjs` runs the challenges and road tests under Node with any driver, as the arena
-  does, and records or replays a model run (`--record`, `--replay`). Recordings ending `.gz` are
+  does, and records or replays a model run (`--record`, `--replay`); `--reserve` stops it between
+  drives before the server's budget runs out. Recordings ending `.gz` are
   gzipped, in this script and `bench_node.mjs`, and both now save a recording after every drive.
 - LLM endpoints now count the cost the provider billed (`usage.cost`, which OpenRouter reports), as
   decision-model endpoints already did, so the budget sees it. DeepSeek V4.1 Flash on OpenRouter

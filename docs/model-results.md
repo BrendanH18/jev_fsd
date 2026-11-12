@@ -21,6 +21,7 @@ The per-drive results are in `data/results/2026-11-11/`.
 | Rules | none | 62 / 62 | n/a | n/a | 132 | 1 | 3,518 s | $0 |
 | Cautious agent | none (browser agent) | 62 / 62 | 99.98% | 0 | 182 | 0 | 3,877 s | $0 |
 | Jev | `jev-1.14.0` (asked as `jev-latest`) | 62 / 62 | 99.95% | 1 (a timeout) | 137 | 5 | 3,785 s | $1.26 |
+| DeepSeek V4.1 Flash (LLM) | `deepseek/deepseek-v4.1-flash-1017`, reasoning off | **61 / 62** | 99.0% | 7 (timeouts) | 148 | 0 | 3,815 s | $2.55 |
 
 "Model's own decisions" is `model_share` (ROADMAP 2.4), weighted by decisions; Jev answered
 12,096 of its 12,102 decisions itself, 5 were answered locally and 1 fell back to Rules, so, as 2.4
@@ -31,9 +32,19 @@ None of them led to a failure. Jev took 7.6% longer over the set than Rules, mos
 `road-closed` (93 s longer) and `into-the-sun` (34 s longer); the recordings show each decision
 for anyone who wants to see why.
 
-All three drivers pass everything, so this set does not yet tell them apart on pass or fail. That
-is the problem ROADMAP Phase 4 is for: every option offered to a driver has already passed the
-safety filter.
+**DeepSeek fails `double-parked`** (Toronto: a van stands double-parked in the car's lane): it
+stopped behind the van and stayed there. It answered "stop, `keep_lane_stop`" to 577 of its 674
+calls, though a lane change to the left (`left_1_target`) was among the safe options at least 55
+times; it timed out at 180 s, and in the little it did move it also failed to yield once. Rules
+finished in 33 s. Apart from that drive DeepSeek drove much as Jev did: 1% of its decisions were
+answered locally (questions with one eligible answer, mostly the motion question), 7 fell back to
+Rules when the provider took more than 10 s, and it never needed the emergency brake. Its median
+call took 0.61 s (p95 1.30 s), with 6,187 input tokens (p95 6,991), at $0.00021 a decision as
+billed: prompt caching brought it down from the $0.00031 of the pilot.
+
+The other three drivers pass everything, so on pass or fail this set tells only DeepSeek apart, and
+on one drive. That is the problem ROADMAP Phase 4 is for: every option offered to a driver has
+already passed the safety filter.
 
 ### Other model drivers, one challenge each
 
@@ -48,9 +59,8 @@ dry). Each passed, with every decision the model's own and no fallback.
 | `llm:granite` | `granite4.2:3b` | Ollama, this Mac | 240 (`dont-splash`, `left-on-red`) | $0 | about 1 s |
 
 LLM prompt version (the hash of `SYSTEM_PROMPT` in `static/js/brain/llm-prompt.js`):
-`971452a84ca8b571`. A full DeepSeek run over all 62 drives was started and stopped at 27 drives
-(all passed) when its real cost turned out to be seven times the estimate (see
-[Spend](#spend-and-what-went-wrong)); those drives were not recorded and are not counted.
+`971452a84ca8b571`. DeepSeek's full run is `data/recordings/deepseek-arena-2026-11-11.json.gz`
+(1.2 MB), recorded in five shards on one server and merged; it replays exactly.
 
 ## The city suite
 
@@ -180,7 +190,9 @@ The budget for this first comparison was $5 ([D2](../ROADMAP.md#open-decisions))
 was spent: $3.16 with TypeSafe (live check $0.004, the 62 Jev drives $1.05, the 14 re-recorded
 $0.45, the unpublished city run $1.66) and $2.63 with OpenRouter (smoke tests and pilots about
 $0.25, the stopped DeepSeek and Luna runs the rest). The overrun came from the cost estimate
-above; the runs were stopped as soon as the bill was checked.
+above; the runs were stopped as soon as the bill was checked. The budget was then raised for
+DeepSeek's full run, which cost $2.57 more, with the server's count (now the billed cost) matching
+OpenRouter's to within 2 cents: **about $8.36 in all** to date.
 
 Two things to avoid next time:
 
@@ -194,7 +206,7 @@ Two things to avoid next time:
 ## What is still open for 2.5
 
 - Jev on the city suite, at least Kitsilano dry (about $1.40).
-- One or two LLMs over the 62 drives. At the billed prices: DeepSeek V4.1 Flash about $3.50, GPT-6
-  Luna about $5.50, and the city suite again as much per 12 Kitsilano routes. A larger LLM such as
-  GPT-6.1 Terra (about $0.0055 a decision) costs about $60 for the 62 drives, so it needs a smaller
-  set or a bigger budget.
+- An LLM on the city suite: DeepSeek on Kitsilano dry would cost about $2.10 (10,000 decisions).
+- A second LLM over the 62 drives, if wanted: GPT-6 Luna about $5.50 at billed prices. A larger LLM
+  such as GPT-6.1 Terra (about $0.0055 a decision) costs about $60 for the 62 drives, so it needs a
+  smaller set or a bigger budget.

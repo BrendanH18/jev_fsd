@@ -31,7 +31,7 @@ Measured on 2026-11-09 at `0b5bdd3`.
 | Checks | 268 Python tests, 76 Node checks, browser and renderer suites; CI green, 10 to 17 minutes |
 | Seeded benchmark, features off | Rules 12/12 on Kitsilano dry; full 70-route matrix last run 31 October |
 | Seeded routes, features on | **Rules 6/12** in a one-off probe: 2 routes threw, 2 left the car stuck, 4 logged a failure to yield |
-| Model results | Since 11 November: Jev 62/62 on the challenges and road tests, recorded and replayable ([model results](docs/model-results.md)); no LLM or city-suite model result yet; endpoints checked against real providers |
+| Model results | Since 11 November: Jev 62/62 and DeepSeek V4.1 Flash 61/62 on the challenges and road tests, recorded and replayable ([model results](docs/model-results.md)); no city-suite model result yet; endpoints checked against real providers |
 | Release | Still `0.2.0` (28 September) with about 1,600 lines of unreleased changelog |
 | Size | `static/js` about 41,000 lines, up from about 12,600 on 14 October |
 
@@ -214,13 +214,13 @@ cost $0.033.
 - [ ] **2.5 First published comparison.** (M) Rules, the cautious agent, Jev and at least one LLM
   ([D2](#open-decisions)) over the 60 challenges, the road tests and the city suite. Commit the
   runs, with model ids, date, seed and prompt version, and write them up in
-  `docs/model-results.md`. *Part done, 11 November:* Rules, the cautious agent and Jev over the 60
-  challenges and 2 road tests (all 62/62; Jev recorded, `scripts/arena_node.mjs`), and Rules and
-  the cautious agent over the city suite (cautious 38/48 on Kitsilano, 16/22 elsewhere). Still to
-  run: Jev on the city suite (about $1.40; the first attempt was spoiled by the instruction limit
-  and a shared rate limit) and an LLM over the 62 drives (DeepSeek V4.1 Flash about $3.50 at billed
-  prices). The $5 of D2 was spent, $5.79 in all; see the write-up for where it went. All three
-  drivers pass every challenge, which is Phase 4's point.
+  `docs/model-results.md`. *Mostly done, 11 November:* over the 60 challenges and 2 road tests,
+  Rules, the cautious agent and Jev pass 62/62 and DeepSeek V4.1 Flash 61/62 (it waited behind the
+  double-parked van until time ran out); Jev and DeepSeek are recorded and replay without a key
+  (`scripts/arena_node.mjs`). Rules and the cautious agent ran the city suite (cautious 38/48 on
+  Kitsilano, 16/22 elsewhere). Still to run: a model on the city suite (Jev about $1.40, DeepSeek
+  about $2.10 for Kitsilano dry; Jev's first attempt was spoiled by the instruction limit and a
+  shared rate limit). About $8.36 spent so far; see the write-up.
 - [x] **2.6 Make a model run repeatable offline.** (M) Save each model answer keyed by its request,
   so a published run can be replayed exactly without a key, and CI can check that a recorded model
   drive still plays out the same. Done: model recordings (`brain/recording.js`, `bench_node.mjs
@@ -340,7 +340,7 @@ A scenario is ready when all of these hold:
 | | Decision | Recommendation |
 |---|---|---|
 | **D1** | Is this first a model showcase or a driving game? | The showcase, with the game as how people meet it: the one-line statement at the top |
-| **D2** | Which models go in the first comparison, and what is the budget? | *Decided 11 November:* OpenRouter for the LLMs, $5 in all. Spent ($5.79) with Jev complete on the challenges and no LLM over the full set; at billed prices an LLM costs $0.0003 to $0.0055 a decision, so the next round needs a new budget (about $5 for Jev's city run and DeepSeek over the 62 drives) |
+| **D2** | Which models go in the first comparison, and what is the budget? | *Decided 11 November:* Jev and DeepSeek V4.1 Flash through OpenRouter, $5 to start, raised for DeepSeek's full run; about $8.36 spent. At billed prices an LLM costs $0.0002 to $0.0055 a decision; a model on the city suite needs a further $1.40 (Jev) to $2.10 (DeepSeek) |
 | **D3** | Does the scenario freeze hold until Phase 1 exits, or until Phase 3? | Phase 1; allow at most one new scenario between phases after that |
 | **D4** | Is `city` a second suite, or does it replace the current one? | A second suite, so earlier records stay comparable |
 | **D5** | Is the next release 0.3.0 or 1.0? | 0.3.0 now; 1.0 when Phase 2 exits |

@@ -378,7 +378,10 @@ Its recordings span several maps, so the header keeps a fingerprint per map (`ma
 asked for (`arena`), and each recorded result leaves out the decision trace, timeline and report,
 keeping `result_sha`, a hash of the whole comparable result, so a replay is still checked field for
 field. A recording whose name ends in `.gz` is gzipped (both scripts), and both save it after every
-drive, so a run stopped part way keeps what it finished. The published runs are listed in
+drive, so a run stopped part way keeps what it finished. `arena_node.mjs --reserve 0.5` starts no
+further drive once less than $0.50 of the server's budget (`JEV_FSD_BUDGET_USD`) is left, so a run
+that would outspend it stops between drives rather than spoiling one with budget fallbacks. The
+published runs are listed in
 [model results](model-results.md).
 
 **Format** (`jev-model-recording/1`, one line per header, result, scenario and request):
