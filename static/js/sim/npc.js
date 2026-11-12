@@ -277,6 +277,26 @@ function sweptBodyGap(n, obstacle, offset, least, margin = 0.1) {
   return null;
 }
 
+// Whether a long vehicle following its path through the turn out of `cur` (one of its path's edges)
+// would sweep its body over a parked car: rolled on its own model, as in sweptBodyGap, from where it
+// is to a body length past the corner. Its nose swings out over the parking lane beyond, wider than
+// any corner rounding can take back (a school bus's front corner sweeps an 11.5 m circle).
+function turnSweepsParked(world, n, cur) {
+  const path = n.path, spec = n.spec, nose = spec.length - spec.rearOverhang;
+  const end = Math.min(path.length, cur.sEnd + spec.length + 5);
+  const parked = world.parked.near(n.x, n.y, end - path.s + spec.length);
+  if (!parked.length) return false;
+  const car = n.clone(), speed = 2.5, dt = 0.1;
+  for (let i = 0; i < 600; i++) {
+    const p = projectPoint(path.pts, path.cum, [car.x, car.y], null);
+    if (p.s >= end) return false;
+    if (p.s + nose > cur.sEnd && parked.some((o) => obbOverlap(car.obb(), o.obb(), 0.1))) return true;
+    car.v = speed; car.a = 0;
+    car.step(dt, { steer: purePursuit(car, path, p.s, 0), accel: 0 });
+  }
+  return false;
+}
+
 // How far right of a lane's centre a cyclist rides in the street's parking lane, or null when the
 // lane is not beside the right curb or has no parking lane wide enough.
 export function stripOffset(e, laneIdx) {
@@ -765,6 +785,25 @@ export class NpcFleet {
           const lane = this.map.lane(cur.id, cur.lane), at = projectPoint(lane.pts, lane.cum, [n.x, n.y]).s;
           path.start(cur.id, cur.lane, at);
           proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
+        }
+      }
+      // A school bus whose next turn would sweep its body over a car parked by the corner cannot make
+      // it, and would stand in the junction for good (Calgary: 11 Avenue SW left into 7 Street SW). Once
+      // its lane changes are done, while there is room, it goes the gentlest other way instead.
+      if (n.school && !n.lc) {
+        const cur = path.currentEdge(), next = path.edges[path.edges.indexOf(cur) + 1];
+        const key = next && `${cur.id}:${cur.lane}:${next.id}`;
+        if (next && n.cornerChecked !== key && cur.sEnd - path.s > 12) {
+          n.cornerChecked = key;
+          if (turnSweepsParked(world, n, cur)) {
+            const other = this.otherWay(path, cur.id, next.id);
+            if (other) {
+              const lane = this.map.lane(cur.id, cur.lane), at = projectPoint(lane.pts, lane.cum, [n.x, n.y]).s;
+              path.start(cur.id, cur.lane, at, [[other, path.laneInto(cur.id, cur.lane, other)]]);
+              proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
+              n.cornerChecked = `${cur.id}:${cur.lane}:${other}`;
+            }
+          }
         }
       }
       // (a way through a block closed for an event is re-planned while there is room: sim/road-closures.js)
@@ -2578,6 +2617,15 @@ export class NpcFleet {
       if (local.ahead > 0 && local.ahead < 8 && Math.abs(local.right) < 2) return true;
     }
     return false;
+  }
+
+  // The successor of edge `from` closest to straight on, other than `not`, that traffic may take
+  // (no banned turn, closed block or U-turn), or null.
+  otherWay(path, from, not) {
+    const ok = this.map.successors(from).filter((id) => id !== not && Math.abs(this.map.turnAngle(from, id)) < SHARP_TURN
+      && !(this.world.restrictions && turnBanned(this.map, from, id, this.world.clock)) && !path.closures?.closed.has(id));
+    ok.sort((a, b) => Math.abs(this.map.turnAngle(from, a)) - Math.abs(this.map.turnAngle(from, b)));
+    return ok[0] ?? null;
   }
 
   recoverPath(n) {
