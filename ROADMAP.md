@@ -171,12 +171,11 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
   - Emergency yields: Victoria seed 2 `s2-1`, Calgary seed 2 `s2-1`; and the soak's night yields.
   - Calgary seed 2 `s2-2`: a prohibited turn early in the route.
   - The delivery-van stand-off (cover row 4), not re-run.
-  - From review of #73, each needing a re-baseline: check a parked car's jittered footprint, not only
-    its bay, against the 0.3 m lane limit (`sim/parking.js`); latch the bus-lane turn-in allowance
-    when the lane change starts rather than at the current speed (`sim/bus-lanes.js`).
-  - Scenery in the lane during a detour: `nudge` (`brain/candidates.js`) rounds `lane.lateral`, which
-    already includes the detour's move, and `inLane` adds the detour again, for the hard brake and the
-    scenery stops alike. Older than #73; needs a re-baseline.
+  - *Fixed 12 November:* a parked car's jittered footprint is checked against the 0.3 m lane limit,
+    the bus-lane turn-in allowance is latched when the car starts out of the lane, and a detour's move
+    is counted once for the scenery stops and hard brake. The bare suite and the other maps' smoke runs
+    are unchanged. Kitsilano dry city `s1-10` changes (one parked car fewer, off its route): it needs a new
+    reference (`docs/validation/review-followups-2026-11-12.md`).
 
 ## Phase 2: put the models on the road
 
