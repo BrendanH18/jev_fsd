@@ -222,7 +222,9 @@ menus switch between your models, and each button drives with the last one you c
 also list endpoints by hand in `data/decision-endpoints.json` and `data/llm-endpoints.json`
 (templates are in `data/`). Every model picks among the same safety-checked manoeuvres; when an
 answer is unusable, late or fails, Rules drives that step and the HUD says why. Both kinds of
-endpoint have been tested only against local mock servers so far, not against a real provider.
+endpoint were checked live on 11 November 2026: decision models on TypeSafe (Jev) and OpenRouter
+(Liquid d1), LLMs on OpenRouter (GPT-6 Luna, GPT-6.1 Terra, DeepSeek V4.1 Flash) and on a local
+Ollama (Granite 4.2 3B).
 The [agent guide](docs/agents.md#decision-models-jev-and-others) has the details and copy-paste
 examples.
 

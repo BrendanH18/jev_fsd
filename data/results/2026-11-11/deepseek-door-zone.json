@@ -1,0 +1,31 @@
+{
+ "summary": {
+  "brain": "llm:deepseek",
+  "set": "challenges",
+  "drives": 1,
+  "passed": 1,
+  "cost_usd": 0.007788,
+  "engine": "node v22.23.4"
+ },
+ "results": [
+  {
+   "challenge": "door-zone",
+   "map": "kitsilano",
+   "pass": true,
+   "failures": [],
+   "arrived": true,
+   "time_s": 57.4,
+   "collisions": 0,
+   "at_fault": 0,
+   "hard_brakes": 4,
+   "safety_brakes": 0,
+   "decisions": 170,
+   "fallbacks": 0,
+   "model_share": 1,
+   "local_share": 0,
+   "fallback_share": 0,
+   "cost_usd": 0.007788,
+   "stopped": false
+  }
+ ]
+}
