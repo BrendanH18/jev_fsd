@@ -164,10 +164,13 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
   junction box, a reversing parker's queue, parked cars beside a narrow lane, a vehicle alongside on
   the right, a vehicle drawing alongside to go round). Evidence:
   `docs/validation/other-maps-2026-11-11.md`. Remaining, from the soak sample re-run on the final tree:
-  - Stuck routes: Toronto seed 2 `s2-2` (Sussex Avenue), Victoria seed 2 `s2-2` (Menzies Street),
-    Calgary seed 2 `s2-1` (11 Avenue SW); Kitsilano seed 3 `s3-1` recovers from three deadlocks.
-  - Toronto seed 2 `s2-1`: a traffic car in the left lane swings into the car's lane on a bend of Bloor
-    Street West; counted as the car's collision.
+  - Stuck routes: Victoria seed 2 `s2-2` (Menzies Street), Calgary seed 2 `s2-1` (11 Avenue SW);
+    Kitsilano seed 3 `s3-1` recovers from three deadlocks.
+  - Toronto seed 2 passes 2/2 (12 November): traffic no longer plans a turn from a lane it cannot
+    reach the turn's lane from, and a car waiting at the kerb to pull out is parked for an emergency
+    pull-over; with an emergency vehicle's ball cover speed and a body-gap close-pass audit, which the
+    traffic change exposed. Kitsilano city still 12/12; ten bare routes change, so the bare reference
+    needs replacing. Evidence: `docs/validation/toronto-s2-2026-11-12.md`.
   - Emergency yields: Victoria seed 2 `s2-1`, Calgary seed 2 `s2-1`; and the soak's night yields.
   - Calgary seed 2 `s2-2`: a prohibited turn early in the route.
   - The delivery-van stand-off (cover row 4), not re-run.

@@ -133,6 +133,11 @@ export const BIKES = 12;
 const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xdd6b20];
 const SHARP_TURN = 130 * Math.PI / 180;   // mirrors SHARP_TURN_DEG in jev/routing.py
 const LINK_M = 20;   // a street this short going straight on is a link inside a junction
+// A driver starts a lane change no later than LC_END_M before its street ends, nor within LC_END_M
+// before a control line (maybeChangeLane), so a turn from the wrong lane needs this much stretch
+// before that, per lane to cross, to find a gap in (NpcPath.reachesTurnLane).
+const LC_END_M = 30;
+const LC_ROOM_M = 20;
 const BOX_M = 9;
 const LEADER_MARGIN_M = 0.3;    // beyond two half-widths: anything closer to the path is in the way
 // Turning right on red (where the map allows it), from the curb lane after a full stop: the gap a
@@ -352,10 +357,34 @@ export class NpcPath {
         const routes = pool.filter((id) => this.map.edges.get(id).bike);
         if (routes.length && this.random() < 0.85) pool = routes;
       }
+      // no turn from a lane it has no room to leave for the turn's lane: it would turn across the next
+      // lane, into whoever is in it (Bloor Street West after two short blocks)
+      const reached = pool.filter((id) => this.reachesTurnLane(last, id));
+      if (reached.length) pool = reached;
       const next = pool[Math.floor(this.random() * pool.length)];
       this.append(next, this.laneInto(last.id, last.lane, next));
     }
     return true;
+  }
+  // Whether a car in lane `last.lane` of the last planned edge can be in the lane for turning onto
+  // `next` (the leftmost for a left, the curb lane for a right) by the junction: it is in it already,
+  // or the planned edges up to there leave room to change lanes. maybeChangeLane changes lanes on an
+  // edge up to LC_END_M before its end and its control line, for a turn at its end or beyond short
+  // links that go straight on, so only that edge and such links count.
+  reachesTurnLane(last, next) {
+    const e = this.map.edges.get(last.id), turn = this.map.classifyTurn(this.map.turnAngle(last.id, next));
+    const want = turn === "left" ? 0 : turn === "right" ? e.lanes - 1 : last.lane;
+    if (this.bike || want === last.lane) return true;
+    let room = 0;
+    for (let k = this.edges.length - 1; k >= 0; k--) {
+      const x = this.edges[k], xe = this.map.edges.get(x.id);
+      let end = x.sEnd - LC_END_M;
+      if (x.control) end = Math.min(end, x.sStart + (x.control.s_line / Math.max(1, xe.length)) * (x.sEnd - x.sStart) - LC_END_M);
+      room += Math.max(0, end - Math.max(x.sStart, this.s ?? 0));
+      const before = this.edges[k - 1];
+      if (!before || xe.length >= LINK_M || this.map.classifyTurn(this.map.turnAngle(before.id, x.id)) !== "straight") break;
+    }
+    return room >= LC_ROOM_M * Math.abs(want - last.lane);
   }
   trim() {
     // drop edges fully behind us to keep the polyline short
@@ -1413,7 +1442,11 @@ export class NpcFleet {
     const forRail = this.crossings ? this.yieldAtCrossing(n, front, all) : null;
     if (forRail !== null) stopAt = stopAt === null ? forRail : Math.min(stopAt, forRail);
     if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
-    const v0 = Math.min(n.v0 * weather.speed, e.limit * (n.siren ? EV_LIMIT_FACTOR : 1) * weather.speed, EV_MAX_MPS, curveSpeed(path, path.s), vCap);
+    // (a ball it has seen roll into the street ahead: no faster than it can stop from short of the gap it
+    // came from, as all traffic does, siren or not: sim/ball-chase.js. A truck that ran on stopped over
+    // the child's way back to the gap, each waiting for the other.)
+    const vBall = world.balls?.balls.length ? ballYield(world, n, front)?.limit ?? Infinity : Infinity;
+    const v0 = Math.min(n.v0 * weather.speed, e.limit * (n.siren ? EV_LIMIT_FACTOR : 1) * weather.speed, EV_MAX_MPS, curveSpeed(path, path.s), vCap, vBall);
     const D = n.driver;
     let a;
     if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
@@ -2379,10 +2412,10 @@ export class NpcFleet {
     const e = this.map.edges.get(edge.id);
     if (!e || e.lanes < 2 || (n.v < 3 && !curbward) || n.lcCooldown > 0 || n.kind === "bike" || n.pull) return;
     const toEnd = edge.sEnd - front;
-    if (toEnd < (curbward ? 15 : 30)) return;
+    if (toEnd < (curbward ? 15 : LC_END_M)) return;
     if (edge.control && !curbward) {
       const lineS = edge.sStart + (edge.control.s_line / Math.max(1, e.length)) * (edge.sEnd - edge.sStart);
-      if (lineS - front < 30 && lineS - front > -5) return;
+      if (lineS - front < LC_END_M && lineS - front > -5) return;
     }
     const path = n.path;
     // the turn at the next junction, looking through a short link that goes straight on inside it
