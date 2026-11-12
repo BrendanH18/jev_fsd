@@ -33,7 +33,7 @@ import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
-import { EMERGENCY_NAMES, EV_BOX_M, FOLLOW_M, IN_WAY_M, emergencyLead, parkedRoom, isEmergency, isJunction, nearestCall, pullOverOffset } from "../sim/emergency.js";
+import { EMERGENCY_NAMES, EV_BOX_M, FOLLOW_M, IN_WAY_M, emergencyLead, kerbCars, parkedRoom, isEmergency, isJunction, nearestCall, pullOverOffset } from "../sim/emergency.js";
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
@@ -849,10 +849,11 @@ function emergencyYield(world, p, frontS, lane, visible) {
       stop_s_route: frontS, bumper_to_stop_m: 0, offset_m: 0, steer_at_stop: false, max_speed_mps: EV_CLEAR_MPS, clearing: false, lead: false, alongside: true };
   }
   const lead = emergencyLead(world, ev);
-  // pulled over: into the parking lane where nothing is parked from 10 m behind the stop to 5 m on
+  // pulled over: into the parking lane where nothing is parked (nor waiting to pull out) from 10 m
+  // behind the stop to 5 m on
   const i = route.edgeIndexAt(plan.stop - ego.spec.length / 2), e = map.edges.get(route.edges[i]);
   const at = route.pointAt(plan.stop), h = route.headingAt(plan.stop);
-  const free = !world.parked.near(at[0], at[1], 20).some((c) => {
+  const free = !kerbCars(world, at[0], at[1], 20).some((c) => {
     const ahead = (c.x - at[0]) * Math.cos(h) + (c.y - at[1]) * Math.sin(h), right = (c.x - at[0]) * Math.sin(h) - (c.y - at[1]) * Math.cos(h);
     return ahead > -10 - ego.spec.length && ahead < 5 && right - lane.center - (lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width) > 1;
   });

@@ -44,7 +44,7 @@ import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
-import { DrivewayReversers, auditReversers, reverserHidden } from "./driveway-reversers.js";
+import { DrivewayReversers, auditReversers, boxGap, reverserHidden } from "./driveway-reversers.js";
 import { Potholes, auditPotholes } from "./potholes.js";
 import { BallChase, auditBalls } from "./ball-chase.js";
 import { Geese, auditGeese } from "./geese.js";
@@ -1046,11 +1046,13 @@ export class World {
       if (n.kind !== "bike") continue;
       if (Math.abs(n.x - ego.x) > AUDIT_PASS_NEAR_M || Math.abs(n.y - ego.y) > AUDIT_PASS_NEAR_M || Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 4) { this.bikePasses.delete(n.id); continue; }
       const b = n.obb(), c = Math.cos(b.heading), s = Math.sin(b.heading), dx = eb.center[0] - b.center[0], dy = eb.center[1] - b.center[1];
-      const ahead = dx * c + dy * s, gap = Math.abs(dx * s - dy * c) - eb.halfWidth - b.halfWidth, reach = eb.halfLength + b.halfLength;
+      const ahead = dx * c + dy * s, reach = eb.halfLength + b.halfLength;
       if (ahead < -reach) { this.bikePasses.set(n.id, { min: Infinity }); continue; }
       const rec = this.bikePasses.get(n.id);
       if (!rec) continue;
-      if (ahead <= reach) { rec.min = Math.min(rec.min, gap); continue; }
+      // (the gap between the bodies: a car still angled out of a turn, or back into its lane, has its
+      // centre line nearer the cyclist's than the side of it going by)
+      if (ahead <= reach) { rec.min = Math.min(rec.min, boxGap(eb, b)); continue; }
       this.bikePasses.delete(n.id);
       if (rec.min < min - AUDIT_PASS_SLACK_M) {
         this.violations.close_passes = (this.violations.close_passes || 0) + 1;

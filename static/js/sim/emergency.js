@@ -97,6 +97,15 @@ export function pullOverOffset(edge, laneIdx, width, parkingFree) {
   return Math.max(edgeOfLane, Math.min(PULL_INTO_PARKING_M, room));
 }
 
+// The cars standing at the kerb within `r` of (x, y): those parked, and those waiting there to pull
+// out (sim/npc.js `pull`), which have left `world.parked` but not yet their space. Pulling over into
+// such a space stops the car nose to its tail, angled at the kerb, where neither can move off.
+export function kerbCars(world, x, y, r) {
+  const out = world.parked?.near(x, y, r) || [];
+  for (const n of world.npcs || []) if (n.pull && !n.pull.moving && (n.x - x) ** 2 + (n.y - y) ** 2 <= r * r) out.push(n);
+  return out;
+}
+
 // How far right of a lane's centre (at x, y, heading h) a car of `spec` can pull over beside the cars
 // parked at the kerb there and keep the forward simulations' 0.3 m from them (brain/candidates.js), or
 // Infinity with none beside it. A narrow lane with cars parked close to its line leaves less than the
@@ -107,7 +116,7 @@ export const PARKED_CLEAR_M = 0.3;
 export function parkedRoom(world, x, y, h, spec = CAR, ahead = 0) {
   const c = Math.cos(h), sn = Math.sin(h), reach = spec.length / 2 + 3;
   let room = Infinity;
-  for (const car of world.parked?.near(x, y, reach + ahead + 6) || []) {
+  for (const car of kerbCars(world, x, y, reach + ahead + 6)) {
     const o = car.obb(), oc = Math.cos(o.heading), os = Math.sin(o.heading);
     for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const px = o.center[0] + oc * a * o.halfLength + os * b * o.halfWidth - x, py = o.center[1] + os * a * o.halfLength - oc * b * o.halfWidth - y;
