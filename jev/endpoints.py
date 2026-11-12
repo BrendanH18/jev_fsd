@@ -395,8 +395,9 @@ def reported_cost(usage: dict) -> Optional[float]:
     """The call's cost as the provider billed it (`usage.cost`, which OpenRouter reports), or None.
     Prompt caching and provider pricing make it differ from tokens at list prices, in both directions."""
     reported = usage.get("cost")
-    if isinstance(reported, (int, float)) and not isinstance(reported, bool) and math.isfinite(reported) \
-            and 0 <= reported <= MAX_REPORTED_COST_USD:
+    # (the range first: math.isfinite raises OverflowError on a huge JSON integer, and NaN fails it too)
+    if isinstance(reported, (int, float)) and not isinstance(reported, bool) \
+            and 0 <= reported <= MAX_REPORTED_COST_USD and math.isfinite(reported):
         return float(reported)
     return None
 

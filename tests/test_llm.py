@@ -294,7 +294,7 @@ class EndpointTests(LlmTestCase):
                 self.assertAlmostEqual(meta["cost_usd"], 0.00031)
                 self.assertTrue(meta["cost_known"])
                 self.assertAlmostEqual(reg.guard.snapshot()["spent_usd"], 0.00031)
-        for bad in (-1, float("nan"), True, "0.1", 1000.0):
+        for bad in (-1, float("nan"), True, "0.1", 1000.0, 10 ** 400):
             with self.subTest(bad=bad):
                 def reply(h, body, bad=bad):
                     payload = completion('{"motion": "drive", "candidate": "keep_lane_target"}')

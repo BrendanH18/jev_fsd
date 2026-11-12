@@ -7,8 +7,8 @@ traffic. Every model drive below is committed as a recording under `data/recordi
 exactly with no key and no model call:
 
 ```sh
-PORT=8331 uv run server.py
-node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/jev-arena-2026-11-11.json.gz --check 1
+PORT=8331 uv run server.py      # in one terminal; it keeps running
+node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/jev-arena-2026-11-11.json.gz --check 1   # in another
 ```
 
 A recording replays exactly only on the JavaScript engine it was made on (here V8, through Node).
@@ -48,13 +48,21 @@ already passed the safety filter.
 
 ### Other model drivers, one challenge each
 
-These were pilots to price and check each driver before a full run, on `door-zone` (Kitsilano,
-dry). Each passed, with every decision the model's own and no fallback.
+These were pilots to price and check each driver before a full run: the three hosted drivers on
+`door-zone` (Kitsilano, dry), and Granite, the local one, on `dont-splash` and `left-on-red`. Each
+passed, with every decision the model's own and no fallback.
+
+They were recorded before the LLM driver counted the provider's billed cost (see
+[the endpoints](#endpoints-checked-against-real-providers-roadmap-23)), so the `cost_usd` saved
+with the DeepSeek and Luna pilots (in their recordings and `data/results/2026-11-11/`) is tokens at
+catalogue prices: $0.0078 and $0.108 for the drive. The billed cost below is OpenRouter's own
+`usage.cost`, which each recorded reply also carries: $0.053 and $0.080. Liquid d1 is a decision
+model, whose driver already counted the billed cost.
 
 | Driver | Model | Where | Decisions | Billed cost a decision | Latency p50 / p95 |
 |---|---|---|---|---|---|
-| `llm:deepseek` | `deepseek/deepseek-v4.1-flash-1017` | OpenRouter | 170 | $0.00031 | 0.64 / 1.43 s |
-| `llm:luna` | `openai/gpt-6-luna` | OpenRouter | 165 | $0.00049 | 1.24 / 4.33 s |
+| `llm:deepseek` | `deepseek/deepseek-v4.1-flash-1017` | OpenRouter | 170 | $0.00031 (catalogue: $0.000046) | 0.64 / 1.43 s |
+| `llm:luna` | `openai/gpt-6-luna` | OpenRouter | 165 | $0.00049 (catalogue: $0.00066) | 1.24 / 4.33 s |
 | `decision:liquid-d1` | `liquid/d1-20260930` | OpenRouter Decisions API | 185 | $0.00005 | 0.48 / 0.64 s |
 | `llm:granite` | `granite4.2:3b` | Ollama, this Mac | 240 (`dont-splash`, `left-on-red`) | $0 | about 1 s |
 
@@ -67,13 +75,14 @@ LLM prompt version (the hash of `SYSTEM_PROMPT` in `static/js/brain/llm-prompt.j
 | Driver | Kitsilano, dry / fog / rain / snow | Other 11 maps, two routes each, dry | Runs |
 |---|---|---|---|
 | Rules | 12 / 12 / 12 / 12 | 22 / 22 | `data/runs/20261111-130206-rules` to `-130221-rules` |
-| Cautious agent | 10 / 10 / 12 / 6 | 16 / 22 | `data/runs/20261111-172000-cautious` to `-172014-cautious` |
+| Cautious agent | 10 / 10 / 12 / 6 | 17 / 22 | `data/runs/20261111-172000-cautious` to `-172014-cautious` |
 
 The cautious agent's failures: Kitsilano dry `s1-1` collision with a pedestrian and `s1-12` braked
 hard with a tailgater close behind; fog `s1-1` timeout and `s1-8` failed to yield; snow `s1-2`,
 `s1-6`, `s1-12` failed to yield, `s1-3` timeout, `s1-4` collision and failed to yield, `s1-10`
-stuck; Edmonton and Montreal `s1-1` stuck, Québec City `s1-1` and Toronto `s1-2` timeouts,
-Winnipeg `s1-1` failed to yield. Rules was tuned on this suite in Phase 1 and the cautious agent
+stuck and failed to yield; on the other maps, one route each in five cities: Edmonton and Montreal
+`s1-1` stuck and failed to yield, Québec City `s1-1` and Toronto `s1-2` timeouts, Winnipeg `s1-1`
+failed to yield. Rules was tuned on this suite in Phase 1 and the cautious agent
 was not, so read this as a measure of the suite, not of the agent alone.
 
 **Jev has no city result yet.** A Jev run of Kitsilano dry was made and is not published, because

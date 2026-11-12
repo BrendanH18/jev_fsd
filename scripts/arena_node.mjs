@@ -62,7 +62,13 @@ const SETS = { challenges: CHALLENGES, "road-tests": ROAD_TESTS, all: [...CHALLE
 const set = replayJson ? replayJson.header.arena.set : String(args.set || "challenges");
 if (!SETS[set]) fail(`Unknown set "${set}": use ${Object.keys(SETS).join(", ")}.`);
 let drives = SETS[set];
-if (replayJson) drives = drives.filter((c) => c.id in replayJson.results);
+if (replayJson) {
+  // (a recorded drive whose challenge is gone or renamed fails the replay rather than being skipped;
+  // the recorded results, not the planned ids, so a recording stopped part way still replays)
+  const gone = Object.keys(replayJson.results || {}).filter((id) => !drives.some((c) => c.id === id));
+  if (gone.length) fail(`The recording has drives no longer in ${set}: ${gone.join(", ")}.`);
+  drives = drives.filter((c) => c.id in replayJson.results);
+}
 const only = args.only ? String(args.only).split(",") : null;
 const unknown = (only || []).filter((id) => !drives.some((c) => c.id === id));
 if (unknown.length) fail(`No drive ${unknown.join(", ")} in ${set}.`);
@@ -85,7 +91,12 @@ if (replayJson) {
     arena: { set, ids: drives.map((c) => c.id) }, maps: shas }) });
 }
 
-const save = (recording) => { const text = recording.serialize(); fs.writeFileSync(args.record, args.record.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text); };
+// (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
+const save = (recording) => {
+  const text = recording.serialize(), tmp = `${args.record}.tmp`;
+  fs.writeFileSync(tmp, args.record.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
+  fs.renameSync(tmp, args.record);
+};
 const BULKY = ["decisions_trace", "events", "report"];
 const trimmed = (result) => Object.fromEntries(Object.entries(rec.comparableResult(result)).filter(([k]) => !BULKY.includes(k)));
 const resultSha = (result) => rec.hashText(rec.canonicalJson(rec.comparableResult(result)));
@@ -102,7 +113,8 @@ let budgetStop = null;
 for (const challenge of drives) {
   if (reserve !== null) {
     const { budget_usd: budget, spent_usd: spent } = (await api("/api/status")).spend || {};
-    if (Number.isFinite(budget) && budget - spent < reserve) { budgetStop = `stopped before ${challenge.id}: $${(budget - spent).toFixed(2)} of the budget left`; break; }
+    // (a budget of 0 means no limit: jev/client.py SpendGuard)
+    if (Number.isFinite(budget) && budget > 0 && budget - spent < reserve) { budgetStop = `stopped before ${challenge.id}: $${(budget - spent).toFixed(2)} of the budget left`; break; }
   }
   const tape = recording ? recording.tape(challenge.id, args.record ? "record" : "replay") : null;
   const r = await evaluateChallenge(maps[challenge.map], challenge, { brain, tape });

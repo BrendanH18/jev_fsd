@@ -117,7 +117,12 @@ const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
 if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);
 const results = [], drifted = [];
-const saveRecording = async () => { const text = recording.serialize(); (await import("node:fs")).writeFileSync(args.record, args.record.endsWith(".gz") ? (await import("node:zlib")).gzipSync(text, { level: 9 }) : text); };
+// (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
+const saveRecording = async () => {
+  const fs = await import("node:fs"), text = recording.serialize(), tmp = `${args.record}.tmp`;
+  fs.writeFileSync(tmp, args.record.endsWith(".gz") ? (await import("node:zlib")).gzipSync(text, { level: 9 }) : text);
+  fs.renameSync(tmp, args.record);
+};
 for (const sc of suite) {
   if (only && !only.includes(sc.id)) continue;
   const tape = recording ? recording.tape(sc.id, args.record ? "record" : "replay") : null;

@@ -248,7 +248,7 @@ variables. `JEV_FSD_LLM_ENDPOINTS` points at a different config file.
 | `base_url`, `model` | required | The API root (up to `/v1`) and the model name it expects |
 | `label` | `name` | Name shown in pickers and results |
 | `api_key_env` | none | Variable holding the key; omit for local servers that need none |
-| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens, used when the reply has no `usage.cost` (OpenRouter sends it, and it can be several times the listed price); with neither, cost is reported as unknown ($0) and the budget cannot stop the endpoint |
+| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens, used when the reply has no `usage.cost` (OpenRouter sends it, and it can be several times the listed price). Cost is unknown ($0), and the budget cannot stop the endpoint, only when the reply has no `usage.cost` and no prices are set |
 | `timeout_s` | `10` | Total server deadline for one decision, covering the TCP connect, any proxy tunnel, the TLS handshake, the whole reply and any plain retry; only DNS lookup is outside it (1–60); the browser waits 0.75 s more |
 | `response_format` | `json_schema` | `json_schema`, `json_object` or `none` |
 | `max_tokens`, `temperature` | `400`, `0` | Sent when not `null` |
@@ -295,14 +295,15 @@ answer is still used. Decisions with nothing to ask (one eligible manoeuvre and 
 question) are made locally without a call.
 
 **Cost and limits.** Every LLM call shares Jev's per-run budget (`JEV_FSD_BUDGET_USD`) and rate
-limit (`JEV_FSD_RPM`). With prices set, the HUD, bench and arena report cost from the returned
-token usage; without prices they report tokens and $0, so `JEV_FSD_BUDGET_USD` cannot stop that
-endpoint and only the rate limit applies. A lockstep run makes several calls per simulated second, far
+limit (`JEV_FSD_RPM`). The HUD, bench and arena report the cost the provider billed when the reply
+carries it (`usage.cost`, which OpenRouter sends), else the returned token usage at the configured
+prices. Only with neither do they report tokens and $0, and then `JEV_FSD_BUDGET_USD` cannot stop
+that endpoint and only the rate limit applies. A lockstep run makes several calls per simulated second, far
 faster than real time, so a fast model can reach the shared 240-per-minute cap within a
 minute; every call after that falls back with *Local rate limit* as the reason. Raise
 `JEV_FSD_RPM`, or give the endpoint its own `rpm`. `rpm: 0` removes the rate limit for that
-endpoint; the budget still applies, but only to spend it can price, so an unpriced endpoint
-with `rpm: 0` has no limit at all. Use that for free local servers only. Each HTTP attempt,
+endpoint; the budget still applies, but only to spend it can count, so an endpoint with no
+`usage.cost` and no prices, and `rpm: 0`, has no limit at all. Use that for free local servers only. Each HTTP attempt,
 including a plain retry, passes the budget and rate checks and counts toward the rate limit.
 Use **Lockstep** to compare decision quality: the simulation
 waits for each answer. **Realtime** includes latency, so a slow model drives on its previous

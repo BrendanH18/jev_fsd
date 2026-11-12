@@ -218,7 +218,7 @@ cost $0.033.
   Rules, the cautious agent and Jev pass 62/62 and DeepSeek V4.1 Flash 61/62 (it waited behind the
   double-parked van until time ran out); Jev and DeepSeek are recorded and replay without a key
   (`scripts/arena_node.mjs`). Rules and the cautious agent ran the city suite (cautious 38/48 on
-  Kitsilano, 16/22 elsewhere). Still to run: a model on the city suite (Jev about $1.40, DeepSeek
+  Kitsilano, 17/22 elsewhere). Still to run: a model on the city suite (Jev about $1.40, DeepSeek
   about $2.10 for Kitsilano dry; Jev's first attempt was spoiled by the instruction limit and a
   shared rate limit). About $8.36 spent so far; see the write-up.
 - [x] **2.6 Make a model run repeatable offline.** (M) Save each model answer keyed by its request,
