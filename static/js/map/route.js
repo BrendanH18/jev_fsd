@@ -50,6 +50,21 @@ export class Route {
       s += i === 0 ? e.length - (data.start_s || 0) : e.length;
     }
     this.edgeStarts.push(s);
+    // A U-turn where the route's own polyline turns (sim/turnaround.js stops short of it and turns round
+    // there): the server gives it in summed edge lengths, which drift from the polyline (rounded corners)
+    // by metres over a long route, and the car would come to the turn before the turnaround was offered.
+    if (this.turns?.some((t) => t.dir === "uturn")) {
+      const starts = this.laneEdgeStarts();
+      this.turns = this.turns.map((t) => {
+        if (t.dir !== "uturn") return t;
+        let best = 1;
+        for (let i = 1; i < this.edges.length; i++) {
+          const gap = (j) => Math.min(Math.abs(this.edgeStarts[j] - t.at_m), Math.abs(starts[j] - t.at_m));
+          if (gap(i) < gap(best)) best = i;
+        }
+        return { ...t, at_m: starts[best] };
+      });
+    }
     this.hint = 0;
     // traffic controls along the route: stop-line position expressed as route arc length. A
     // junction without a sign or signal counts too (MapData.priorityOf), where the car gives way

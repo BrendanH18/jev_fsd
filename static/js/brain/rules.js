@@ -74,7 +74,10 @@ export class RulesBrain {
 
       // a lane change is judged against the speed the car could keep in the new lane
       const vWant = Math.min(c.laneTarget ?? vDesired, snap.limit, c.law.lane ? vTurnLane : Infinity);
-      let cost = -1.0 * s.progress_m + 2.0 * Math.abs(s.lane_err_end) + 0.05 * Math.abs(s.heading_err_deg) + 0.8 * Math.abs(s.end_speed - vWant);
+      // (a pull-over is judged by how near it ends to where it pulls over to, across lanes to the
+      // kerb if need be: from the lane's centre, two lanes out, it would cost as much as its bonus)
+      const laneErr = c.id === "pull_over" ? s.lane_err_end - (c.law.offset - c.law.center) : s.lane_err_end;
+      let cost = -1.0 * s.progress_m + 2.0 * Math.abs(laneErr) + 0.05 * Math.abs(s.heading_err_deg) + 0.8 * Math.abs(s.end_speed - vWant);
       if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index) && c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) cost -= 20;
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
