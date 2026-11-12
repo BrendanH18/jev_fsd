@@ -12,6 +12,10 @@ const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link i
 // curb, leaving room for a crosswalk, and at least 4 m before the junction.
 const STOP_LINE_SETBACK_M = 4.0;
 const CURB_CLEARANCE_M = 3.4;
+// A stop sign mapped further than this short of the junction its street leads to stands at a crossing
+// the street graph does not have (a greenway, say): jev/osm/controls.py takes a sign without a
+// direction as the junction's only within this distance, and puts one with a direction where it stands.
+const STOP_AHEAD_M = 30;
 // Road classes by importance, for junctions without a sign or signal: a road of a lower class gives
 // way to one of a higher class (primary and secondary roads, then tertiary, then everything else).
 const CLASS_RANK = { primary: 3, primary_link: 3, secondary: 3, secondary_link: 3, tertiary: 2, tertiary_link: 2 };
@@ -332,9 +336,24 @@ export class MapData {
     return this._priority.get(edgeId);
   }
 
-  priorityRule(edgeId) {
+  // The junction beyond a stop sign that stands more than STOP_AHEAD_M short of it, or null: the car
+  // stops at the sign, then still gives way at the junction (as `priorityOf`, `rule` "minor": a street
+  // with a stop sign gives way whatever its class, sim/priority.js), rather than crossing it as if the
+  // stop there had been made.
+  junctionPastStop(edgeId) {
+    if (!this._pastStop) this._pastStop = new Map();
+    if (!this._pastStop.has(edgeId)) {
+      const c = this.edges.get(edgeId)?.control;
+      const far = c && c.type === "stop" && !c.all_way && this.edges.get(edgeId).length - c.s_line > STOP_AHEAD_M;
+      const rule = far ? this.priorityRule(edgeId, true) : null;
+      this._pastStop.set(edgeId, rule && { ...rule, rule: "minor" });
+    }
+    return this._pastStop.get(edgeId);
+  }
+
+  priorityRule(edgeId, pastStop = false) {
     const e = this.edges.get(edgeId);
-    if (!e || e.control || e.ring) return null;
+    if (!e || (e.control && !pastStop) || e.ring) return null;
     const node = e.to;
     if (!this._junctionSkip) {
       this._junctionSkip = new Set();

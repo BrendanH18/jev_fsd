@@ -22,7 +22,7 @@ import { advanceHolds, approachPhase, isScramble, movementSignal, protectedLeft,
 import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
-import { ringBusy } from "../sim/roundabout.js";
+import { ringBusy, ringJoining } from "../sim/roundabout.js";
 import { routeRedTurnBanned } from "../sim/red-turn-signs.js";
 import { headlights } from "../sim/high-beams.js";
 import { pxoAhead } from "../sim/pxo.js";
@@ -269,8 +269,11 @@ export function buildSnapshot(world, executing = null) {
       let crossTraffic = false;
       const rb = control.type === "yield" ? map.roundabouts.get(control.roundabout) : null;
       // yielding at a roundabout: look further round the ring the longer the car needs to reach the line
-      if (rb) crossTraffic = ringBusy(rb, map.nodes.get(map.edges.get(c.edge).to), visibleNpcs, null, Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v)));
-      else if (junction) {
+      // (and for a vehicle about to come into the ring at another entry: it will be in it first)
+      if (rb) {
+        const node = map.nodes.get(map.edges.get(c.edge).to), extra = Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v));
+        crossTraffic = ringBusy(rb, node, visibleNpcs, null, extra) || (bumperToLine > 0 && ringJoining(rb, node, visibleNpcs, extra));
+      } else if (junction) {
         // crossing traffic in the junction, or heading for it and due within a few seconds (at a
         // two-way stop the through road does not stop, so its traffic must be waited for)
         for (const n of visibleNpcs) {

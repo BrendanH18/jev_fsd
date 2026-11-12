@@ -1371,10 +1371,19 @@ export class World {
         const approachingLine = !atLine && (control?.type === "stop" || control?.type === "signal")
           && v <= AUDIT_EV_MOVING_MPS && toLine >= v * v / (2 * comfort().hardDecel)
           && toLine <= stopping + AUDIT_EV_LINE_M;
+        // (and likewise a crawl up to the hold line of a traffic car stopped to reverse into a space, or
+        // reversing: the room beside and ahead of it is the parker's, sim/parkers.js)
+        const hold = !queued && v <= AUDIT_EV_MOVING_MPS ? this.parkerHold(FRONT) : null;
+        const approachingQueue = hold && hold.to_hold_m >= v * v / (2 * comfort().hardDecel) && hold.to_hold_m <= stopping + AUDIT_EV_LINE_M ? hold.parker : null;
         this.evCalls.set(ev.id, rec = { since: this.t, v0: v, lead: false, ahead: null,
           ...(atLine ? { stoppedAtLine: [ego.x, ego.y] } : {}),
           ...(queued ? { stoppedInQueue: { id: queued.id, at: [ego.x, ego.y] } } : {}),
-          ...(approachingLine ? { lineApproach: { edge: road.edge.id, control: control.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } } : {}) });
+          ...(approachingLine ? { lineApproach: { edge: road.edge.id, control: control.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } } : {}),
+          ...(approachingQueue ? { queueApproach: { id: approachingQueue.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } } : {}) });
+      }
+      if (rec.queueApproach) {
+        if (this.t > rec.queueApproach.until) delete rec.queueApproach;
+        else if (queued?.id === rec.queueApproach.id) { rec.stoppedInQueue = { id: queued.id, at: [ego.x, ego.y] }; delete rec.queueApproach; }
       }
       if (rec.lineApproach) {
         if (this.t > rec.lineApproach.until || road.edge?.id !== rec.lineApproach.edge || control?.id !== rec.lineApproach.control) delete rec.lineApproach;
@@ -1417,10 +1426,17 @@ export class World {
   // standing at its hold line: the room between them is the parker's, so the car is queued behind it
   // as behind a stopped body (auditEmergency), with nowhere to pull over to.
   parkerQueue(FRONT) {
+    const c = this.parkerHold(FRONT);
+    return c && c.to_hold_m <= AUDIT_EV_LINE_M ? c.parker : null;
+  }
+
+  // The parker ahead stopped to reverse into a space, or reversing, whose hold line the car's front is
+  // `to_hold_m` short of (parkerConflict), or null.
+  parkerHold(FRONT) {
     if (!this.parkers?.active.length || !this.route) return null;
     const route = this.route, p = route.project(this.ego.x, this.ego.y, route.hint);
     const c = p && parkerConflict(this, this.ego, route, p.s + FRONT, { lat: p.lateral, hint: p.index });
-    return c && c.phase !== "approach" && c.to_hold_m <= AUDIT_EV_LINE_M ? c.parker : null;
+    return c && c.phase !== "approach" ? c : null;
   }
 
   auditCyclists() {
