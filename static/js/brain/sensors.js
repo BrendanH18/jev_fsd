@@ -1686,10 +1686,14 @@ function laneOptions(snap, world) {
     const side = { delta, dir, center: span.offset, until_s: delta ? span.until : null, leader: null, rear: null, alongside: false };
     for (const o of vehicles) {
       const q = route.project(o.x, o.y, p.index);
-      if (!q || Math.abs(q.lateral + route.frameMove(s, q.s) - span.offset) > 1.7 || Math.abs(q.s - s) > TRAFFIC_RADIUS_M) continue;
+      if (!q || Math.abs(q.lateral + route.frameMove(s, q.s) - span.offset) > 1.7) continue;
+      // (beyond either end of the route, along the line it starts or ends on: a vehicle behind a route
+      // that starts where the car is projects onto its start, and is not alongside the car)
+      const qs = q.s <= 0 || q.s >= route.length ? q.s + (o.x - q.point[0]) * Math.cos(q.heading) + (o.y - q.point[1]) * Math.sin(q.heading) : q.s;
+      if (Math.abs(qs - s) > TRAFFIC_RADIUS_M) continue;
       if (Math.abs(o.v) > 0.5 && Math.abs(wrap(o.psi - q.heading)) > Math.PI / 2) continue;
       const spec = o.spec || CAR;
-      const ahead = q.s - spec.rearOverhang - (s + FRONT), behind = s - REAR - (q.s + spec.length - spec.rearOverhang);
+      const ahead = qs - spec.rearOverhang - (s + FRONT), behind = s - REAR - (qs + spec.length - spec.rearOverhang);
       if (ahead > 0) { if (!side.leader || ahead < side.leader.gap_m) side.leader = { id: o.id, gap_m: ahead, speed: Math.max(0, o.v) }; }
       else if (behind > 0) { if (!side.rear || behind < side.rear.gap_m) side.rear = { id: o.id, gap_m: behind, speed: Math.max(0, o.v) }; }
       else side.alongside = true;
