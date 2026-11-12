@@ -34,8 +34,13 @@ export function reserveSlot(map, slot, owner, { spec = owner.spec || CAR, sFrom,
 // centreline, reaches past the parking lane into the travel lanes: positive on the inside of a bend.
 export function bayIntrusion(e, s, lat, spec = CAR) {
   const [px, py] = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-  const cx = px + Math.sin(h) * lat, cy = py - Math.cos(h) * lat;
-  const right = lat > 0, inner = right ? e.asphalt[1] - e.parking[1] : e.asphalt[0] + e.parking[0];
+  return footprintIntrusion(e, px + Math.sin(h) * lat, py - Math.cos(h) * lat, h, lat > 0, spec);
+}
+
+// The same for a car body centred at (cx, cy), heading h, parked at the right kerb (`right`) or the
+// left one of edge e: the car as actually placed, with its jitter, not only its bay.
+export function footprintIntrusion(e, cx, cy, h, right, spec = CAR) {
+  const inner = right ? e.asphalt[1] - e.parking[1] : e.asphalt[0] + e.parking[0];
   let worst = -Infinity;
   for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     const x = cx + Math.cos(h) * a * spec.length / 2 + Math.sin(h) * b * spec.width / 2;
@@ -115,6 +120,9 @@ export class ParkedCars {
           const cx = p[0] + Math.sin(h) * (lat + (random() - 0.5) * 0.2);
           const cy = p[1] - Math.cos(h) * (lat + (random() - 0.5) * 0.2);
           const psi = h + (random() - 0.5) * 0.04;
+          // (nor is a car whose jittered body would reach that far in: the bay stays empty, and the car
+          // still makes its draws and uses its number)
+          if (footprintIntrusion(e, cx, cy, psi, lat > 0) > BEND_INTRUSION_M) { random(); random(); serial++; continue; }
           // Vehicle positions are at the rear axle
           const back = CAR.length / 2 - CAR.rearOverhang;
           const car = new Vehicle(cx - Math.cos(psi) * back, cy - Math.sin(psi) * back, psi, 0);
