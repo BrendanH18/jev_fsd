@@ -171,12 +171,12 @@ const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
 // Giving way to an emergency vehicle (sim/emergency.js) calling on the car: it hears the siren
 // within 100 m whether or not it can see the vehicle. When the call comes it picks where to stop:
 // its stopping distance braking at 1.5 m/s^2 (at least 8 m on, leaving room to steer over even from
-// rest; chosen again from where it is if it could no longer stop there even braking at 6 m/s^2),
-// or short of the next junction (2.5 m short
+// rest, and 12 m more for each lane it crosses into the curb lane; chosen again from where it is if it
+// could no longer stop there even braking at 6 m/s^2), or short of the next junction (2.5 m short
 // of the crossing street, or of the stop line) if it can stop there braking at up to 3.5 m/s^2,
 // else past it, leaving 8 m to finish steering once its rear clears the junction. It pulls over
-// to the right as it stops (across into the curb lane where there are several, then into an empty
-// parking lane beside it, see pullOverOffset)
+// to the right as it stops (across into the curb lane where there are several, as far as the stop
+// leaves room to change lanes, then into an empty parking lane beside it, see pullOverOffset)
 // and waits there until the vehicle has gone by. If the vehicle is stuck behind the car for 3 s,
 // going its way, the car drives on ahead of it instead. Once one has gone by, the car stays 150 m behind it.
 export const EV_STOP_DECEL = 1.5;
@@ -184,6 +184,11 @@ const EV_FIRM_DECEL = 3.5;
 const EV_SHORT_M = 2.5;
 const ALONGSIDE_M = 4;   // an emergency vehicle this close beside the car, going round it
 const EV_STEER_M = 8;
+// More room to stop in for each lane it crosses into the curb lane to pull over: the sharpest lane change
+// offered (MIN_CHANGE_M, brain/candidates.js). With 8 m in all, a car crossing from the inner lane of
+// West Broadway reached its stop at an angle, short of the curb lane's middle, and one standing in the
+// left lane of three on 11 Avenue SW (Calgary) stood across the middle one, in a fire truck's way.
+const EV_CROSS_M = 12;
 const EV_CLEAR_MPS = 10 / 3.6; // keep moving slowly enough to yield while finishing the lateral move
 const EV_HARD_DECEL = 6;
 
@@ -801,7 +806,8 @@ function emergencyYield(world, p, frontS, lane, visible) {
   // even braking hard, having been slow to start)
   // (well past it is handled below)
   if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + 1.5 && (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v)) {
-    let stop = frontS + Math.max(EV_STEER_M, v * v / (2 * EV_STOP_DECEL)), clearing = false;
+    const crossing = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * EV_CROSS_M;
+    let stop = frontS + Math.max(EV_STEER_M + crossing, v * v / (2 * EV_STOP_DECEL)), clearing = false;
     // junctions along the route from here to there: stop short of the first, or clear it
     // (from the street before this one: the car may still be in the junction it has just come through)
     for (let i = Math.max(0, route.edgeIndexAt(p.s) - 1); i < route.edges.length - 1; i++) {
@@ -825,7 +831,10 @@ function emergencyYield(world, p, frontS, lane, visible) {
       if (ends && ends.en - SNOWBANK_WAIT_M - frontS >= v * v / (2 * EV_FIRM_DECEL) && stop >= ends.en - SNOWBANK_WAIT_M) stop = Math.min(stop, ends.en - SNOWBANK_WAIT_M);
     }
     stop = Math.min(stop, route.length - 1);
-    plan = world.evYield = { id: ev.id, route, stop, speed: v, since: world.t, tight: stop - frontS < EV_STEER_M - 1e-6, clearing };
+    // (the furthest lane right the stop leaves room to change into: the curb lane, or short of a junction
+    // perhaps only the one it is in)
+    const reach = lane.index + Math.floor(Math.max(0, stop - frontS - EV_STEER_M) / EV_CROSS_M);
+    plan = world.evYield = { id: ev.id, route, stop, speed: v, since: world.t, tight: stop - frontS < EV_STEER_M - 1e-6, clearing, reach };
   }
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
@@ -847,9 +856,11 @@ function emergencyYield(world, p, frontS, lane, visible) {
     const ahead = (c.x - at[0]) * Math.cos(h) + (c.y - at[1]) * Math.sin(h), right = (c.x - at[0]) * Math.sin(h) - (c.y - at[1]) * Math.cos(h);
     return ahead > -10 - ego.spec.length && ahead < 5 && right - lane.center - (lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width) > 1;
   });
-  // (from a lane further out, across into the curb lane and over in it)
-  const across = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width;
-  let offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
+  // (from a lane further out, across into the curb lane and over in it, as far as the stop leaves room for
+  // the lane changes; else over in the furthest lane it can reach)
+  const cross = lane.shift ? 0 : Math.max(0, Math.min(lane.lanes - 1, plan.reach ?? Infinity) - lane.index);
+  const across = cross * e.lane_width, curb = lane.shift || lane.index + cross >= lane.lanes - 1;
+  let offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, curb && !lane.shift && free);
   // (beside cars parked close to a narrow lane's line, only as far over as they leave room: sim/emergency.js)
   if (!free && !across) {
     const mid = route.offsetPointAt(Math.max(0, plan.stop - (ego.spec.length - ego.spec.rearOverhang) + ego.spec.length / 2), lane.center);

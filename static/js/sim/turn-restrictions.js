@@ -38,7 +38,11 @@ export function auditRestrictions(world) {
   // Inside a junction, a turning car can be nearest the start of a different exit. Keep the
   // approach until it is aligned with, and a little way along, the actual outgoing lane.
   // Short links still confirm by their midpoint. This uses the driven path, not navigation.
-  if (prior && prior !== edge.id && (near.s < Math.min(8, near.lane.length / 2)
+  // Mid-turn it can equally be nearest the end of another approach into the same junction (Calgary's
+  // slip lane e561 beside Royal Avenue's e564): that is still the junction, not a new approach.
+  const margin = Math.min(8, near.lane.length / 2);
+  if (prior && prior !== edge.id && (near.s < margin
+    || (world.map.edges.get(prior)?.to === edge.to && near.lane.length - near.s < margin)
     || Math.cos(world.ego.psi - near.heading) < 0.5)) return;
   if (prior && prior !== edge.id && world.map.edges.get(prior)?.to === edge.from && turnBanned(world.map, prior, edge.id, world.clock)) {
     world.restrictionsSeen = true;

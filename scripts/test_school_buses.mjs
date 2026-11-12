@@ -90,7 +90,7 @@ function soak(seconds, { schoolBuses = 3, seed = 4, count = 25 } = {}) {
   setWeather("dry");
   const world = new World(KITS, { seed, pedestrians: 20 });
   const fleet = new NpcFleet(world, { count, bikes: 6, seed, schoolBuses });
-  const log = { stops: new Map(), ambers: new Set(), kids: new Map(), crossed: new Set(), passes: [], waiting: 0 };
+  const log = { stops: new Map(), ambers: new Set(), kids: new Map(), crossed: new Set(), passes: [], waiting: 0, cleared: new Set() };
   const ctx = { world, fleet, autopilot: idle };
   const owed = new Map();
   for (let k = 0; k < 60 * seconds; k++) {
@@ -99,7 +99,8 @@ function soak(seconds, { schoolBuses = 3, seed = 4, count = 25 } = {}) {
       const sb = bus.school, key = `${bus.id}:${sb.stops}`;
       if (sb.lights === "amber") log.ambers.add(`${bus.id}:${sb.stops + 1}`);
       if (redsOn(bus) && !log.stops.has(key)) log.stops.set(key, { bus, edge: sb.stop.edge, at: sb.stop.s });
-      if (!redsOn(bus)) continue;
+      // (a stop's reds off again, the bus still out on the road)
+      if (!redsOn(bus)) { if (log.stops.has(key)) log.cleared.add(key); continue; }
       // traffic that owes the stop never draws level with the bus while the reds flash
       for (const n of fleet.vehicles) {
         if (n === bus || n.kind === "ambulance" || n.kind === "fire_truck" || !n.schoolOwed?.[key]) continue;
@@ -150,8 +151,7 @@ test("children get off; some cross in front of the bus, only while its reds flas
 test("traffic stops for a school bus with its reds flashing, and it moves off once they go off", () => {
   const { fleet, log } = free;
   assert.deepEqual(log.passes, []);
-  const done = [...log.stops.values()].filter(({ bus }) => fleet.vehicles.includes(bus) && !redsOn(bus));
-  assert.ok(done.length >= 1, "reds off again");
+  assert.ok(log.cleared.size >= 1, "reds off again");
   assert.ok(fleet.schoolBuses.every((b) => b.school.phase !== "red" || b.school.t < 45 + 1e-6), "never held for good");
 });
 
