@@ -22,8 +22,9 @@ never a URL. Endpoints change only by editing these files or through the token-p
       (default "default"), JEV_FSD_LLM_PRICE_INPUT_PER_MTOK, JEV_FSD_LLM_PRICE_OUTPUT_PER_MTOK
 
 Keys are read from the environment or `.env` by variable name (`api_key_env`); the JSON file never
-holds a key. Calls share Jev's SpendGuard (JEV_FSD_BUDGET_USD, JEV_FSD_RPM). Without prices an
-endpoint reports tokens and an unknown ($0) cost, so the budget cannot stop it; the RPM cap still does,
+holds a key. Calls share Jev's SpendGuard (JEV_FSD_BUDGET_USD, JEV_FSD_RPM). Cost is the provider's
+`usage.cost` when it reports one (OpenRouter does), else tokens at the configured prices. Without
+either an endpoint reports tokens and an unknown ($0) cost, so the budget cannot stop it; the RPM cap still does,
 unless the endpoint sets `rpm: 0`, which removes that too.
 
 Standard library only (urllib), no SDK.
@@ -43,7 +44,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .config import Settings
 from .endpoints import (MAX_SCRUB_DEPTH, MAX_TRACE_DEPTH, Endpoint, EndpointError, EndpointRegistry,  # noqa: F401
                         check_common, deeper_than, error_body, load_entries, number, post_json, price, public_url,
-                        scrub, tokens, unique)
+                        reported_cost, scrub, tokens, unique)
 
 ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 MOTIONS = ("drive", "stop", "reverse")
@@ -154,8 +155,16 @@ class LlmResult:
         self.input_tokens = tokens(usage.get("prompt_tokens", usage.get("input_tokens")))
         self.output_tokens = tokens(usage.get("completion_tokens", usage.get("output_tokens")))
         config = endpoint.config
-        self.cost_usd = ((self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)) / 1_000_000
-                         if config.priced else 0.0)
+        # (the provider's billed cost when it reports one, as for decision models: OpenRouter's can be
+        # several times tokens at list prices, which is what the budget must stop)
+        reported = reported_cost(usage)
+        if reported is not None:
+            self.cost_usd, self.cost_source = reported, "provider"
+        elif config.priced:
+            self.cost_usd = (self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)) / 1_000_000
+            self.cost_source = "price"
+        else:
+            self.cost_usd, self.cost_source = 0.0, None
         # The trace copies the completion, so an absurdly nested one is summarised rather than walked.
         if unparsed:
             self.response = {"note": "completion nested too deeply to parse; not shown"}
@@ -183,7 +192,7 @@ class LlmResult:
         return {
             "model": self.model, "endpoint": config.name, "latency_ms": round(self.latency_ms, 1),
             "input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
-            "cost_usd": self.cost_usd, "cost_known": config.priced, "response_format": self.format_used,
+            "cost_usd": self.cost_usd, "cost_known": self.cost_source is not None, "response_format": self.format_used,
             "backend": "openai-compatible (stdlib)", "live_call": True,
         }
 

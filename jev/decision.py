@@ -19,8 +19,8 @@ still counts the call); an HTTP error, a timeout or an exhausted budget is an er
 
   data/decision-endpoints.json (gitignored; start from data/decision-endpoints.example.json)
       {"endpoints": [
-        {"name": "pplx-decider", "base_url": "https://openrouter.ai", "path": "/api/alpha/decisions",
-         "model": "perplexity/pplx-decider-v1.1-27b", "api_key_env": "OPENROUTER_API_KEY",
+        {"name": "liquid-d1", "base_url": "https://openrouter.ai", "path": "/api/alpha/decisions",
+         "model": "liquid/d1", "api_key_env": "OPENROUTER_API_KEY",
          "price_per_mtok_input": 0.02}]}
 
 The built-in `jev` driver is not configured here: it uses jev/client.py, TYPESAFE_API_KEY and
@@ -45,12 +45,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import decide
 from .config import Settings
 from .endpoints import (MAX_TRACE_DEPTH, Endpoint, EndpointError, EndpointRegistry, check_common, deeper_than,
-                        error_body, load_entries, number, post_json, price, public_url, scrub, tokens, unique)
+                        error_body, load_entries, number, post_json, price, public_url, reported_cost, scrub, tokens,
+                        unique)
 
 PATH_RE = re.compile(r"^/[A-Za-z0-9._~/-]{0,200}$")
 DEFAULT_PATH = "/v1/systemone"
 DEFAULT_CHECK_PATH = "/v1/models"
-MAX_REPORTED_COST_USD = 100.0   # a larger per-call cost is a broken usage block, not a real charge
 
 
 class DecisionError(EndpointError):
@@ -184,10 +184,9 @@ class DecisionResult:
         self.input_tokens = tokens(usage.get("input_tokens", usage.get("prompt_tokens")))
         self.output_tokens = tokens(usage.get("output_tokens", usage.get("completion_tokens")))
         config = endpoint.config
-        reported = usage.get("cost")
-        if isinstance(reported, (int, float)) and not isinstance(reported, bool) and math.isfinite(reported) \
-                and 0 <= reported <= MAX_REPORTED_COST_USD:
-            self.cost_usd, self.cost_source = float(reported), "provider"
+        reported = reported_cost(usage)
+        if reported is not None:
+            self.cost_usd, self.cost_source = reported, "provider"
         elif config.priced:
             self.cost_usd = (self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)) / 1_000_000
             self.cost_source = "price"

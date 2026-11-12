@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- First live model results (ROADMAP Phase 2), in `docs/model-results.md`: all 39 saved Jev cases
+  pass against `jev-1.14.0`; Jev passes all 60 challenges and both road tests, as Rules and the
+  cautious agent do, making 99.95% of its decisions itself, and the recording replays exactly without
+  a key (`data/recordings/jev-arena-2026-11-11.json.gz`); the cautious agent's city suite and
+  one-challenge recordings of GPT-6 Luna, DeepSeek V4.1 Flash, Liquid d1 and a local Granite 4.2 are
+  committed beside it. The cost per decision is measured, with a ceiling for new wording.
+- `scripts/arena_node.mjs` runs the challenges and road tests under Node with any driver, as the arena
+  does, and records or replays a model run (`--record`, `--replay`). Recordings ending `.gz` are
+  gzipped, in this script and `bench_node.mjs`, and both now save a recording after every drive.
+- LLM endpoints now count the cost the provider billed (`usage.cost`, which OpenRouter reports), as
+  decision-model endpoints already did, so the budget sees it. DeepSeek V4.1 Flash on OpenRouter
+  billed about seven times its tokens at catalogue prices.
+- Jev requests may carry up to 6,000 characters of instructions per question, up from 2,000, which
+  refused about one Jev decision in six on the city suite. Jev accepts 6,000.
+- The endpoint docs and templates record the live checks: Ollama needs a larger context
+  (`OLLAMA_CONTEXT_LENGTH=16384`) and thinking turned off, and the Perplexity decider listed in the
+  examples is no longer served by OpenRouter (replaced by Liquid d1).
+
 - Drives now report who actually made the decisions. For every driver but Rules, the benchmark,
   the arena, the drive report and the Inspect drawer give the share of decisions the model made
   itself, the share answered locally because nothing needed asking, and the share that fell back

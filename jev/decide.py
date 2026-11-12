@@ -9,7 +9,10 @@ from typing import Any, Dict
 ALLOWED_QUESTIONS = {"motion", "vector", "route", "headlights"}
 MAX_STATE_BYTES = 24 * 1024
 MAX_CRITERIA = 32
-MAX_INSTRUCTIONS_CHARS = 2000
+# Jev accepts 6,000 characters (checked live on 11 November 2026). The city suite's busiest moments,
+# with several situation clauses at once, need about 3,000; the 2,000 used before rejected one
+# request in six there (docs/model-results.md). A new clause must keep the total under 4,000.
+MAX_INSTRUCTIONS_CHARS = 6000
 
 
 class InvalidRequest(ValueError):

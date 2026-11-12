@@ -279,6 +279,31 @@ class EndpointTests(LlmTestCase):
         self.assertEqual(reg.guard.snapshot()["output_tokens"], 12)
         self.assertNotIn(SECRET, json.dumps(out))
 
+    def test_a_provider_reported_cost_wins_over_list_prices_and_reaches_the_budget(self):
+        # (OpenRouter reports usage.cost; on 11 November DeepSeek V4.1 Flash billed about 7 times its
+        # tokens at list prices, so the budget must count the billed figure)
+        def billed(h, body):
+            payload = completion('{"motion": "drive", "candidate": "keep_lane_target"}')
+            payload["usage"]["cost"] = 0.00031
+            return 200, payload, {}
+        for prices in ({"price_per_mtok_input": 0.006, "price_per_mtok_output": 0.5}, {}):
+            with self.subTest(priced=bool(prices)):
+                mock = self.mock(billed)
+                reg = self.registry([{"name": "a", "base_url": mock.url, "model": "x", **prices}])
+                meta = self.decide(reg, "a")["meta"]
+                self.assertAlmostEqual(meta["cost_usd"], 0.00031)
+                self.assertTrue(meta["cost_known"])
+                self.assertAlmostEqual(reg.guard.snapshot()["spent_usd"], 0.00031)
+        for bad in (-1, float("nan"), True, "0.1", 1000.0):
+            with self.subTest(bad=bad):
+                def reply(h, body, bad=bad):
+                    payload = completion('{"motion": "drive", "candidate": "keep_lane_target"}')
+                    payload["usage"]["cost"] = bad
+                    return 200, payload, {}
+                mock = self.mock(reply)
+                reg = self.registry([{"name": "a", "base_url": mock.url, "model": "x", "price_per_mtok_input": 2.0}])
+                self.assertAlmostEqual(self.decide(reg, "a")["meta"]["cost_usd"], 1200 * 2.0 / 1e6)
+
     def test_local_endpoint_sends_no_authorization_and_unpriced_cost_is_unknown(self):
         mock = self.mock()
         reg = self.registry([{"name": "local", "base_url": mock.url, "model": "llama3.2", "response_format": "json_object"}])

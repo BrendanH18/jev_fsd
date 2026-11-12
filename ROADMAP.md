@@ -31,7 +31,7 @@ Measured on 2026-11-09 at `0b5bdd3`.
 | Checks | 268 Python tests, 76 Node checks, browser and renderer suites; CI green, 10 to 17 minutes |
 | Seeded benchmark, features off | Rules 12/12 on Kitsilano dry; full 70-route matrix last run 31 October |
 | Seeded routes, features on | **Rules 6/12** in a one-off probe: 2 routes threw, 2 left the car stuck, 4 logged a failure to yield |
-| Model results | **None committed.** Model endpoints tested against mock servers only; last live Jev check 14 October |
+| Model results | Since 11 November: Jev 62/62 on the challenges and road tests, recorded and replayable ([model results](docs/model-results.md)); no LLM or city-suite model result yet; endpoints checked against real providers |
 | Release | Still `0.2.0` (28 September) with about 1,600 lines of unreleased changelog |
 | Size | `static/js` about 41,000 lines, up from about 12,600 on 14 October |
 
@@ -183,16 +183,25 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
 This is the original point of the project, and the cheapest phase to run: the September Jev drive
 cost $0.033.
 
-- [ ] **2.1 Live-check every saved case.** (S) Run `scripts/verify_jev.py` against all cases in
+- [x] **2.1 Live-check every saved case.** (S) Run `scripts/verify_jev.py` against all cases in
   `data/snapshots/`. Nineteen of the 28 were written for situations added since the last live run. Record
   the date, the model version and each result in the docs, and fix the wording of any that fail.
-- [ ] **2.2 Measure what a decision costs now.** (S) The question wording has grown by about thirty
+  *Done 11 November:* 39 of 39 pass on `jev-1.14.0` ([model results](docs/model-results.md#live-check-of-the-saved-cases-roadmap-21)); no wording changed.
+- [x] **2.2 Measure what a decision costs now.** (S) The question wording has grown by about thirty
   situation clauses, and the newer requests are roughly twice the size of the first ones. Record
   input tokens, latency and cost per decision for a plain road and for the busiest cases, and set a
-  ceiling that a new clause must stay under.
-- [ ] **2.3 Smoke-test the endpoints against real providers.** (S) One decision model and one LLM
+  ceiling that a new clause must stay under. *Done:* Jev costs $0.00010 a decision on the
+  challenges and $0.00014 on the city suite; ceilings are 4,000 characters of instructions per
+  question, 5,500 Jev input tokens and a 6,000-token LLM system prompt
+  ([model results](docs/model-results.md#what-a-decision-costs-roadmap-22)). Found on the way: the
+  server's 2,000-character instruction limit refused one city decision in six; it is now 6,000.
+- [x] **2.3 Smoke-test the endpoints against real providers.** (S) One decision model and one LLM
   through a hosted provider, and one through a local server. The README says they have only met
-  mock servers.
+  mock servers. *Done:* Liquid d1 and Jev through the decision endpoint, GPT-6 Luna, GPT-6.1 Terra
+  and DeepSeek V4.1 Flash through OpenRouter, Granite 4.2 through Ollama
+  ([model results](docs/model-results.md#endpoints-checked-against-real-providers-roadmap-23)).
+  Fixed: the LLM driver now counts the provider's billed cost; Ollama's context and thinking
+  settings are documented; the stale Perplexity decider example is gone. llama.cpp not tried.
 - [x] **2.4 Report who actually drove.** (S) A model drive falls back to Rules on a timeout or an
   unusable answer, and many questions are answered locally. Show, per drive, the share of decisions
   the model made, the share answered locally and the share that fell back. Without it a "pass"
@@ -205,7 +214,13 @@ cost $0.033.
 - [ ] **2.5 First published comparison.** (M) Rules, the cautious agent, Jev and at least one LLM
   ([D2](#open-decisions)) over the 60 challenges, the road tests and the city suite. Commit the
   runs, with model ids, date, seed and prompt version, and write them up in
-  `docs/model-results.md`.
+  `docs/model-results.md`. *Part done, 11 November:* Rules, the cautious agent and Jev over the 60
+  challenges and 2 road tests (all 62/62; Jev recorded, `scripts/arena_node.mjs`), and Rules and
+  the cautious agent over the city suite (cautious 38/48 on Kitsilano, 16/22 elsewhere). Still to
+  run: Jev on the city suite (about $1.40; the first attempt was spoiled by the instruction limit
+  and a shared rate limit) and an LLM over the 62 drives (DeepSeek V4.1 Flash about $3.50 at billed
+  prices). The $5 of D2 was spent, $5.79 in all; see the write-up for where it went. All three
+  drivers pass every challenge, which is Phase 4's point.
 - [x] **2.6 Make a model run repeatable offline.** (M) Save each model answer keyed by its request,
   so a published run can be replayed exactly without a key, and CI can check that a recorded model
   drive still plays out the same. Done: model recordings (`brain/recording.js`, `bench_node.mjs
@@ -325,7 +340,7 @@ A scenario is ready when all of these hold:
 | | Decision | Recommendation |
 |---|---|---|
 | **D1** | Is this first a model showcase or a driving game? | The showcase, with the game as how people meet it: the one-line statement at the top |
-| **D2** | Which models go in the first comparison, and what is the budget? | Jev, one small and one large LLM through a hosted provider, $5 |
+| **D2** | Which models go in the first comparison, and what is the budget? | *Decided 11 November:* OpenRouter for the LLMs, $5 in all. Spent ($5.79) with Jev complete on the challenges and no LLM over the full set; at billed prices an LLM costs $0.0003 to $0.0055 a decision, so the next round needs a new budget (about $5 for Jev's city run and DeepSeek over the 62 drives) |
 | **D3** | Does the scenario freeze hold until Phase 1 exits, or until Phase 3? | Phase 1; allow at most one new scenario between phases after that |
 | **D4** | Is `city` a second suite, or does it replace the current one? | A second suite, so earlier records stay comparable |
 | **D5** | Is the next release 0.3.0 or 1.0? | 0.3.0 now; 1.0 when Phase 2 exits |

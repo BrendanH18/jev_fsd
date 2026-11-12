@@ -25,6 +25,12 @@ class ValidateTests(unittest.TestCase):
         self.assertEqual(req["tick"], 5)
         self.assertEqual(set(req["questions"]), {"motion", "vector"})
 
+    def test_city_length_instructions_are_accepted(self):
+        # (the city suite's busiest moments ask with about 3,000 characters of situation and choice
+        # wording; the old 2,000-character cap rejected one Jev request in six there)
+        long = {"type": "choice", "instructions": "x" * 6000, "criteria": {"a": None}}
+        self.assertEqual(validate_request(dict(GOOD, questions={"vector": long}))["questions"]["vector"], long)
+
     def test_rejects(self):
         bad = [
             dict(GOOD, state="text"),
@@ -35,7 +41,7 @@ class ValidateTests(unittest.TestCase):
             dict(GOOD, questions={"motion": {"type": "choice", "instructions": "?", "criteria": {}}}),
             dict(GOOD, questions={"motion": {"type": "choice", "instructions": "?",
                                               "criteria": {str(i): None for i in range(40)}}}),
-            dict(GOOD, questions={"motion": {"type": "choice", "instructions": "x" * 3000,
+            dict(GOOD, questions={"motion": {"type": "choice", "instructions": "x" * 6001,
                                               "criteria": {"a": None}}}),
             dict(GOOD, tick="5"),
         ]

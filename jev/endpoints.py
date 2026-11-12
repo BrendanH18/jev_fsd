@@ -35,6 +35,7 @@ ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_USAGE_TOKENS = 10 ** 9      # a larger token count is a broken usage block, not a real call
 MAX_TRACE_DEPTH = 64            # deeper replies are summarised in the trace instead of copied
+MAX_REPORTED_COST_USD = 100.0   # a larger per-call cost is a broken usage block, not a real charge
 MAX_SCRUB_DEPTH = 2 * MAX_TRACE_DEPTH   # scrub() summarises anything deeper; traces fit well inside it
 CHECK_TTL_S = 15.0
 CHECK_TIMEOUT_S = 3.0
@@ -388,6 +389,16 @@ def tokens(value: Any) -> int:
 
 def finite(value: float) -> Optional[float]:
     return value if math.isfinite(value) else None
+
+
+def reported_cost(usage: dict) -> Optional[float]:
+    """The call's cost as the provider billed it (`usage.cost`, which OpenRouter reports), or None.
+    Prompt caching and provider pricing make it differ from tokens at list prices, in both directions."""
+    reported = usage.get("cost")
+    if isinstance(reported, (int, float)) and not isinstance(reported, bool) and math.isfinite(reported) \
+            and 0 <= reported <= MAX_REPORTED_COST_USD:
+        return float(reported)
+    return None
 
 
 def deeper_than(value: Any, limit: int) -> bool:

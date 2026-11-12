@@ -66,8 +66,9 @@ Every decision model receives exactly the state and questions Jev does (built by
 `static/js/brain/state.js`): which manoeuvre to take among those that passed the safety filter,
 whether to drive or stop when that is in question, and which route when there are several. So
 a comparison between Jev and another decision model measures the model, not the prompt. These
-drivers have been tested only against a local mock server, not against TypeSafe, OpenRouter or
-llama.cpp.
+drivers were checked live on 11 November 2026 against TypeSafe (Jev through this endpoint type,
+`jev-1.14.0`) and OpenRouter's Decisions API (`liquid/d1`); llama.cpp has not been tried. The
+Perplexity decider the examples used to list is no longer served by OpenRouter (HTTP 404).
 
 ### Connect a decision model in the app
 
@@ -109,8 +110,8 @@ cp data/decision-endpoints.example.json data/decision-endpoints.json   # gitigno
 
 ```json
 {"endpoints": [
-  {"name": "pplx-decider", "label": "Perplexity Decider (OpenRouter)", "base_url": "https://openrouter.ai",
-   "path": "/api/alpha/decisions", "check_path": "/api/v1/key", "model": "perplexity/pplx-decider-v1.1-27b",
+  {"name": "liquid-d1", "label": "Liquid d1 (OpenRouter)", "base_url": "https://openrouter.ai",
+   "path": "/api/alpha/decisions", "check_path": "/api/v1/key", "model": "liquid/d1",
    "api_key_env": "OPENROUTER_API_KEY", "price_per_mtok_input": 0.02},
   {"name": "kev-4b", "base_url": "http://localhost:8080", "model": "kev-4b", "timeout_s": 20, "rpm": 0}
 ]}
@@ -144,9 +145,13 @@ total deadline work exactly as for LLM endpoints below.
 
 The driver speaks the OpenAI Chat Completions protocol (`POST {base_url}/chat/completions`),
 so it should work with servers that offer it: OpenAI, OpenRouter, Together, Groq, vLLM,
-LM Studio, Ollama, Anthropic's OpenAI-compatible endpoint and others. It has been tested only
-against a local mock server, not against any of these providers, so expect to adjust
-`response_format`, `max_tokens` or `extra_body` for some of them. Each configured endpoint becomes its own driver,
+LM Studio, Ollama, Anthropic's OpenAI-compatible endpoint and others. It was checked live on
+11 November 2026 against OpenRouter (`openai/gpt-6-luna`, `openai/gpt-6.1-terra`,
+`deepseek/deepseek-v4.1-flash-1017`, all with the default `json_schema` format) and a local
+Ollama (`granite4.2:3b`); other providers may still need `response_format`, `max_tokens` or
+`extra_body` adjusted. For reasoning models, turn the reasoning down: it adds latency and output
+tokens to every decision (on OpenRouter, `"extra_body": {"reasoning": {"effort": "minimal"}}` for
+OpenAI models or `{"reasoning": {"enabled": false}}`). Each configured endpoint becomes its own driver,
 `llm:<name>`, in **Settings → Active agent**, the challenge picker, replay branches, the
 [arena](http://127.0.0.1:8322/arena) and the [`/bench`](http://127.0.0.1:8322/bench) brain list,
 so several models can be compared side by side under identical conditions.
@@ -219,6 +224,13 @@ Then add `OPENAI_API_KEY=sk-...` to `.env`. Reasoning models that reject `max_to
 {"name": "ollama", "base_url": "http://localhost:11434/v1", "model": "llama3.2", "timeout_s": 20, "rpm": 0}
 ```
 
+Two things to set for Ollama. The prompt is about 5,500 to 6,500 tokens, more than Ollama's default
+4,096-token context, which it rejects with HTTP 400 ("exceeds the available context size"): start
+the server with a larger one, `OLLAMA_CONTEXT_LENGTH=16384 ollama serve`. And a model that thinks
+first (Granite 4.2, Qwen 3.5) can spend all of `max_tokens` thinking and reply with nothing; add
+`"extra_body": {"reasoning_effort": "none"}`. With both, `granite4.2:3b` answered in about 1 s a
+decision on an Apple-silicon Mac.
+
 **LM Studio** (start the local server in LM Studio's Developer tab; no key)
 
 ```json
@@ -236,7 +248,7 @@ variables. `JEV_FSD_LLM_ENDPOINTS` points at a different config file.
 | `base_url`, `model` | required | The API root (up to `/v1`) and the model name it expects |
 | `label` | `name` | Name shown in pickers and results |
 | `api_key_env` | none | Variable holding the key; omit for local servers that need none |
-| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens; without them cost is reported as unknown ($0) and the budget cannot stop the endpoint |
+| `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens, used when the reply has no `usage.cost` (OpenRouter sends it, and it can be several times the listed price); with neither, cost is reported as unknown ($0) and the budget cannot stop the endpoint |
 | `timeout_s` | `10` | Total server deadline for one decision, covering the TCP connect, any proxy tunnel, the TLS handshake, the whole reply and any plain retry; only DNS lookup is outside it (1–60); the browser waits 0.75 s more |
 | `response_format` | `json_schema` | `json_schema`, `json_object` or `none` |
 | `max_tokens`, `temperature` | `400`, `0` | Sent when not `null` |
@@ -353,6 +365,21 @@ key's request, and rebuilt on replay.
 drive's result with the recorded one (`same_result`), ignoring only wall-clock fields
 (`wall_ms`, an arena report's `started_at`). `--check 1` fails a replay that did not play out as
 recorded. With recording off, results and drives are exactly as before.
+
+**Challenges and road tests under Node.** `scripts/arena_node.mjs` runs them with any driver, as
+the arena does, and takes the same `--record` and `--replay`:
+
+```sh
+node --experimental-default-type=module scripts/arena_node.mjs --brain jev --set all --record data/recordings/jev-arena.json.gz
+node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/jev-arena-2026-11-11.json.gz --check 1
+```
+
+Its recordings span several maps, so the header keeps a fingerprint per map (`maps`) and the drives
+asked for (`arena`), and each recorded result leaves out the decision trace, timeline and report,
+keeping `result_sha`, a hash of the whole comparable result, so a replay is still checked field for
+field. A recording whose name ends in `.gz` is gzipped (both scripts), and both save it after every
+drive, so a run stopped part way keeps what it finished. The published runs are listed in
+[model results](model-results.md).
 
 **Format** (`jev-model-recording/1`, one line per header, result, scenario and request):
 

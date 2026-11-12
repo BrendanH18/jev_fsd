@@ -1,0 +1,50 @@
+{
+ "summary": {
+  "brain": "llm:granite",
+  "set": "challenges",
+  "drives": 2,
+  "passed": 2,
+  "cost_usd": 0,
+  "engine": "node v22.23.4"
+ },
+ "results": [
+  {
+   "challenge": "left-on-red",
+   "map": "calgary",
+   "pass": true,
+   "failures": [],
+   "arrived": true,
+   "time_s": 42,
+   "collisions": 0,
+   "at_fault": 0,
+   "hard_brakes": 3,
+   "safety_brakes": 0,
+   "decisions": 144,
+   "fallbacks": 0,
+   "model_share": 1,
+   "local_share": 0,
+   "fallback_share": 0,
+   "cost_usd": 0,
+   "stopped": false
+  },
+  {
+   "challenge": "dont-splash",
+   "map": "mount_pleasant",
+   "pass": true,
+   "failures": [],
+   "arrived": true,
+   "time_s": 28.4,
+   "collisions": 0,
+   "at_fault": 0,
+   "hard_brakes": 0,
+   "safety_brakes": 0,
+   "decisions": 96,
+   "fallbacks": 0,
+   "model_share": 1,
+   "local_share": 0,
+   "fallback_share": 0,
+   "cost_usd": 0,
+   "stopped": false
+  }
+ ]
+}

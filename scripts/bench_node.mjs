@@ -8,7 +8,7 @@
 // --park 1, --hour 23.5 (both presets), --without geese,ice (city), --cover 0 (city pairwise row),
 // --diagnostics 1 (incident positions and actors), --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
 // (exit with status 1 if any route fails, as CI does).
-// Model recordings (static/js/brain/recording.js, docs/agents.md): --record out.json keeps every answer a
+// Model recordings (static/js/brain/recording.js, docs/agents.md; a name ending .gz is gzipped): --record out.json keeps every answer a
 // model driver (--brain jev, decision:<name> or llm:<name>) gets, keyed by its request, with each drive's
 // result; --replay rec.json drives again from those answers with no model call and no key, taking the
 // driver, map and suite from the recording, and reports whether each drive played out as recorded
@@ -31,7 +31,8 @@ const SUITE_OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "feat
 // (read here, checked once the modules load: they need the page's token first)
 let replayJson = null;
 if (args.replay) {
-  try { replayJson = JSON.parse((await import("node:fs")).readFileSync(args.replay, "utf8")); } catch (error) { fail(`Cannot read the recording ${args.replay}: ${error.message}`); }
+  // (a recording may be gzipped: name it .json.gz)
+  try { const raw = (await import("node:fs")).readFileSync(args.replay); replayJson = JSON.parse(args.replay.endsWith(".gz") ? (await import("node:zlib")).gunzipSync(raw).toString("utf8") : raw.toString("utf8")); } catch (error) { fail(`Cannot read the recording ${args.replay}: ${error.message}`); }
   if (typeof replayJson?.header?.driver !== "string") fail(`${args.replay} is not a model recording.`);
   const given = SUITE_OPTIONS.filter((name) => args[name] !== undefined);
   if (given.length) fail(`The recording sets the driver and suite: drop ${given.map((name) => `--${name}`).join(", ")}.`);
@@ -116,11 +117,13 @@ const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
 if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);
 const results = [], drifted = [];
+const saveRecording = async () => { const text = recording.serialize(); (await import("node:fs")).writeFileSync(args.record, args.record.endsWith(".gz") ? (await import("node:zlib")).gzipSync(text, { level: 9 }) : text); };
 for (const sc of suite) {
   if (only && !only.includes(sc.id)) continue;
   const tape = recording ? recording.tape(sc.id, args.record ? "record" : "replay") : null;
   const r = await runScenario(map, sc, { brain: config.brain, npcs: config.npcs, mode: config.mode, weather: config.weather, ...options, diagnostics: args.diagnostics === "1", tape });
-  if (args.record) recording.keepResult(sc.id, r, sc);
+  // (saved after every drive, so a run stopped part way keeps the drives it finished)
+  if (args.record) { recording.keepResult(sc.id, r, sc); await saveRecording(); }
   // (a replay matches when every call was answered from the recording and the drive's result is the
   // recorded one, timings aside)
   if (replaying) {
@@ -135,7 +138,7 @@ for (const sc of suite) {
 }
 const summary = aggregate(results);
 if (args.json) (await import("node:fs")).writeFileSync(args.json, JSON.stringify({ config, summary, results }, null, 1));
-if (args.record) { (await import("node:fs")).writeFileSync(args.record, recording.serialize()); console.log(`recorded ${results.length} drives to ${args.record}`); }
+if (args.record) console.log(`recorded ${results.length} drives to ${args.record}`);
 // The runner's MessageChannel would keep Node alive; exit once the summary has been written out.
 if (replaying) console.log(drifted.length ? `replay: ${drifted.join(", ")} did not play out as recorded` : `replay: all ${results.length} drives played out as recorded`);
 const failed = args.check && args.check !== "0" ? [...new Set([...results.filter((r) => !r.pass).map((r) => r.id), ...drifted])] : [];
