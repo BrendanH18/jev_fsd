@@ -72,39 +72,41 @@ export class Route {
     this.controls = [];
     for (let i = 0; i < this.edges.length; i++) {
       const e = map.edges.get(this.edges[i]);
-      const control = e && (e.control || (map.priorityOf ? map.priorityOf(e.id) : null));
-      if (!control) continue;
-      const lineOnEdge = pointAt(e.pts, e.cum, control.s_line);
-      const p = projectPoint(this.pts, this.cum, lineOnEdge);
-      if (!p || p.distance > 12) continue;
-      if (i === 0 && control.s_line < (data.start_s || 0) - 1) continue;  // already behind the start
-      // Include controls the selected car's front bumper reaches beyond its destination.
-      if (i === this.edges.length - 1 && data.goal_s !== undefined && control.s_line > data.goal_s + vehicleSpec.length - vehicleSpec.rearOverhang + 0.3) continue;
-      // A longer car can reach a line beyond the truncated route. Projection clamps to the
-      // endpoint, so retain its forward distance rather than moving the line to the destination.
-      let sRoute = p.s;
-      if (i === this.edges.length - 1 && p.s >= this.length - 1e-6) {
-        const end = this.endPoint(), h = this.headingAt(this.length);
-        const beyond = (lineOnEdge[0] - end[0]) * Math.cos(h) + (lineOnEdge[1] - end[1]) * Math.sin(h);
-        if (beyond > 0) sRoute += beyond;
+      // (and, past a stop sign standing well short of the junction, the junction itself: MapData.junctionPastStop)
+      for (const control of e ? [e.control || (map.priorityOf ? map.priorityOf(e.id) : null), map.junctionPastStop?.(e.id)] : []) {
+        if (!control) continue;
+        const lineOnEdge = pointAt(e.pts, e.cum, control.s_line);
+        const p = projectPoint(this.pts, this.cum, lineOnEdge);
+        if (!p || p.distance > 12) continue;
+        if (i === 0 && control.s_line < (data.start_s || 0) - 1) continue;  // already behind the start
+        // Include controls the selected car's front bumper reaches beyond its destination.
+        if (i === this.edges.length - 1 && data.goal_s !== undefined && control.s_line > data.goal_s + vehicleSpec.length - vehicleSpec.rearOverhang + 0.3) continue;
+        // A longer car can reach a line beyond the truncated route. Projection clamps to the
+        // endpoint, so retain its forward distance rather than moving the line to the destination.
+        let sRoute = p.s;
+        if (i === this.edges.length - 1 && p.s >= this.length - 1e-6) {
+          const end = this.endPoint(), h = this.headingAt(this.length);
+          const beyond = (lineOnEdge[0] - end[0]) * Math.cos(h) + (lineOnEdge[1] - end[1]) * Math.sin(h);
+          if (beyond > 0) sRoute += beyond;
+        }
+        const junctionNode = map.nodes.get(e.to);
+        const inter = control.type === "signal" ? map.intersections.get(control.id) : null;
+        // The turn the route makes at this junction, from the streets either side of it (across short
+        // links that go straight inside it), and where the junction's centre is along the route,
+        // searched forward from the line.
+        const { turn } = map.turnThrough(this.edges, i, map.junctionNodes(inter));
+        if (control.rule === "major" && turn !== "left" && turn !== "uturn") continue;
+        const centre = inter ? [inter.x, inter.y] : junctionNode ? [junctionNode.x, junctionNode.y] : null;
+        const cp = centre ? projectPoint(this.pts, this.cum, centre, p.index) : null;
+        const sJunction = cp && cp.distance < 15 && cp.s >= sRoute - 1 ? cp.s : null;
+        this.controls.push({
+          edge: e.id, control, sRoute, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
+          turn, sJunction,
+          // where the front bumper stops to look, giving way (sim/priority.js)
+          sPeek: Math.max(sRoute, (sJunction ?? sRoute + 8) - map.crossingHalfWidth(e.id) - PEEK_SHORT_M),
+          secondsToGreen: inter ? (t) => secondsToGreenFor(inter, control.group, t, e.id, turn) : null,
+        });
       }
-      const junctionNode = map.nodes.get(e.to);
-      const inter = control.type === "signal" ? map.intersections.get(control.id) : null;
-      // The turn the route makes at this junction, from the streets either side of it (across short
-      // links that go straight inside it), and where the junction's centre is along the route,
-      // searched forward from the line.
-      const { turn } = map.turnThrough(this.edges, i, map.junctionNodes(inter));
-      if (control.rule === "major" && turn !== "left" && turn !== "uturn") continue;
-      const centre = inter ? [inter.x, inter.y] : junctionNode ? [junctionNode.x, junctionNode.y] : null;
-      const cp = centre ? projectPoint(this.pts, this.cum, centre, p.index) : null;
-      const sJunction = cp && cp.distance < 15 && cp.s >= sRoute - 1 ? cp.s : null;
-      this.controls.push({
-        edge: e.id, control, sRoute, junction: junctionNode ? [junctionNode.x, junctionNode.y] : null,
-        turn, sJunction,
-        // where the front bumper stops to look, giving way (sim/priority.js)
-        sPeek: Math.max(sRoute, (sJunction ?? sRoute + 8) - map.crossingHalfWidth(e.id) - PEEK_SHORT_M),
-        secondsToGreen: inter ? (t) => secondsToGreenFor(inter, control.group, t, e.id, turn) : null,
-      });
     }
     this.controls.sort((a, b) => a.sRoute - b.sRoute);
     // where each street's speed limit starts, located on the polyline like the controls
