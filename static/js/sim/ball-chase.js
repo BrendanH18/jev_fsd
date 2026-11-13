@@ -45,7 +45,7 @@ import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
 import { segmentHitsBox } from "./crosswalk.js";
 import { rng } from "../common.js";
-import { Pedestrian } from "./pedestrians.js";
+import { Pedestrian, PED } from "./pedestrians.js";
 
 export const EGO = "ego";
 export const BALL_R = 0.11;
@@ -398,6 +398,9 @@ export class BallChase {
       b.x = ped.x; b.y = ped.y;
       // (back at the kerb: clear of the road)
       if (b.childState === "out" && !ped.crossing && ped.path.length <= 1) b.childState = "clear";
+      // (stopped on the way back by a vehicle standing across it, one that braked for them over the gap,
+      // say, and is waiting for them in turn: round the end of its body)
+      else if (b.childState === "out" && ped.crossing?.ballBack && ped.v === 0 && !(ped.pause > 0)) walkRound(world, ped);
       return;
     }
     // (after the ball, wherever it has got to)
@@ -426,6 +429,42 @@ export class BallChase {
       if (ped && b.seenBy.has(id) && !b.childSeenBy.has(id) && world.crowd.list.includes(ped) && (id === EGO ? world.sees(o, ped) : world.visibility.sees(o, ped))) b.childSeenBy.add(id);
     }
   }
+}
+
+// A child on the way back to the kerb with the ball, `ped`, stopped short of a vehicle standing across
+// that way (sim/pedestrians.js `threat` waits short of a stationary body): a vehicle that braked for them
+// and stopped over the gap waits for them as they wait for it. They walk round the nearer end of its body,
+// ROUND_M clear of it (round the other end where that way is blocked by another standing body), then on to
+// the kerb as before. Moving traffic is left to `threat`. At most ROUNDS_MAX times on one way back.
+export const ROUND_M = 0.6;
+const ROUNDS_MAX = 3;
+export function walkRound(world, ped) {
+  const wp = ped.path[0];
+  if (!wp || (ped.rounds || 0) >= ROUNDS_MAX) return false;
+  const from = [ped.x, ped.y], margin = Math.max(PED.length, PED.width) / 2 + 0.1;
+  const standing = [world.ego, ...world.npcs].filter((o) => Math.abs(o.v || 0) < 0.5 && Math.abs(o.x - ped.x) < 15 && Math.abs(o.y - ped.y) < 15);
+  const grow = (box, m) => ({ ...box, halfLength: box.halfLength + m, halfWidth: box.halfWidth + m });
+  const blocked = (a, z, skip = null) => standing.some((o) => o !== skip && segmentHitsBox(a, z, grow(o.obb(), margin)));
+  const o = standing.find((v) => segmentHitsBox(from, wp.p, grow(v.obb(), margin)));
+  if (!o) return false;
+  const box = o.obb(), c = Math.cos(box.heading), s = Math.sin(box.heading);
+  const local = (p) => { const x = p[0] - box.center[0], y = p[1] - box.center[1]; return [x * c + y * s, -x * s + y * c]; };
+  const world_ = ([u, v]) => [box.center[0] + u * c - v * s, box.center[1] + u * s + v * c];
+  const [pu, pv] = local(from), [, tv] = local(wp.p);
+  const L = box.halfLength + ROUND_M + margin, W = box.halfWidth + ROUND_M + margin;
+  const sideP = Math.sign(pv) || 1, sideT = Math.sign(tv) || -sideP;
+  for (const end of [Math.sign(pu) || 1, -(Math.sign(pu) || 1)]) {
+    const pts = [world_([end * L, sideP * W])];
+    if (sideT !== sideP) pts.push(world_([end * L, sideT * W]));
+    const legs = [from, ...pts, wp.p];
+    let clear = true;
+    for (let k = 0; k + 1 < legs.length && clear; k++) clear = !blocked(legs[k], legs[k + 1], o) && !segmentHitsBox(legs[k], legs[k + 1], grow(box, 0.1));
+    if (!clear) continue;
+    ped.path.unshift(...pts.map((p) => ({ p, round: true })));
+    ped.rounds = (ped.rounds || 0) + 1;
+    return true;
+  }
+  return false;
 }
 
 // The point across the street from the gap, beyond the far kerb, along the line from the gap through

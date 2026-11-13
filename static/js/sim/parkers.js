@@ -66,7 +66,8 @@ export const HOLD_MARGIN_M = 1.5;
 // STOP_NEAR_M of its start (giving up past it by OVERSHOOT_M); pauses there PAUSE_S, signalling and
 // checking behind; gives up after GIVE_UP_S with someone in the room it needs (or after MAX_S before it
 // has started back), and, reversing, only while within GIVE_UP_PHI of parallel; and stops reversing for
-// anything standing within REV_CLEAR_M behind it; stuck, it tries again from where it stands every RETRY_S.
+// anything standing within REV_CLEAR_M behind it; stuck, it tries again from where it stands every RETRY_S,
+// for STUCK_MAX_S at most.
 export const NUDGE_FROM_M = 20;
 export const NUDGE_MPS = 0.4;
 export const STOP_NEAR_M = 2.5;
@@ -77,6 +78,7 @@ export const MAX_S = 75;
 export const GIVE_UP_PHI = 12 * Math.PI / 180;
 export const REV_CLEAR_M = 1.0;
 export const RETRY_S = 1.5;
+export const STUCK_MAX_S = 30;
 // The one test: the hold line within BAND_M of the observer's line, within LOOK_M ahead of its front.
 // Moving at COMING_MPS or more toward the room it needs, within COMING_S of it, someone is coming.
 export const BAND_M = 1.6;
@@ -303,11 +305,13 @@ export function stepParker(world, fleet, n, dt) {
   n.reverseLamps = reversing(law);
   const near = () => { const f = frameOf(n, pk.plan); return Math.abs(f.phi) < GIVE_UP_PHI && Math.abs(f.w - pk.plan.startW) < 0.8; };
   // (stuck: something in the way, a door opening beside it, say: wait and try again from where it stands,
-  // RETRY_S at a time; after GIVE_UP_S of that it gives up while still near its start, or else keeps trying)
+  // RETRY_S at a time; after GIVE_UP_S of that it gives up while still near its start, or else keeps trying,
+  // for STUCK_MAX_S at most: angled across its lane with no leg left that the kerbs allow, on a narrow
+  // street, trying again leads nowhere, and it drives on from where it stands)
   if (law.phase === "stuck") {
     hold(n, dt);
     pk.stuckFor = (pk.stuckFor || 0) + dt;
-    if (pk.stuckFor > GIVE_UP_S && near()) { release(world, n, true); return false; }
+    if ((pk.stuckFor > GIVE_UP_S && near()) || pk.stuckFor > STUCK_MAX_S) { release(world, n, true); return false; }
     if ((pk.retry = (pk.retry || 0) + dt) >= RETRY_S && Math.abs(n.v) < 0.05) { pk.retry = 0; pk.law = planParking(pk.plan); }
     return true;
   }

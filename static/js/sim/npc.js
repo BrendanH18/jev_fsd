@@ -68,7 +68,7 @@ import { boxHold } from "./junction-box.js";
 import { WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DECIDE_M, PASS_DECEL, PASS_MPS, VAN_LOOK_M, queuedAhead, wayRound } from "./double-parked.js";
 import { AHEAD_M as LC_AHEAD_M, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, OWED_DECEL as LC_OWED_DECEL, THROUGH_M, canStop as canStopForMerge, detourOf as closureDetour } from "./lane-closure.js";
-import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
+import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_CLASSES, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
 import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass, queuedBehind, ridingIn, wayClear as cyclistWayClear } from "./cyclist-pass.js";
 import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
@@ -105,6 +105,8 @@ const DARK_CAUGHT_S = 0.5, DARK_GO_S = 10;
 const PARK_BACK_S = 2;
 const PARK_BACK_MAX_M = 7;
 const PARK_SIDE_M = 4.5;   // (the driven car, parking, is this close to a driver's path: in its lane or the space beside it)
+// A driver backing up (`backOff`) stops with this much room left behind it.
+const BACK_CLEAR_M = 1.5;
 
 // Seeded per-driver IDM and lane-change temperament so adding NPCs does not shift spawn points.
 function driverProfile(random, bike = false) {
@@ -313,7 +315,9 @@ export function stripOffset(e, laneIdx) {
 
 export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
-  constructor(map, random, { bike = false, world = null } = {}) { this.restrictionWorld = world; this.map = map; this.random = random; this.bike = bike; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
+  // (`classes`: the street classes it keeps to where the streets let it, as a snow plow keeps to the main
+  // streets it works: sim/snow-plow.js PLOW_CLASSES)
+  constructor(map, random, { bike = false, world = null, classes = null } = {}) { this.restrictionWorld = world; this.map = map; this.random = random; this.bike = bike; this.classes = classes; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
   start(edgeId, laneIdx, s, planned = []) {
     this.edges = [];
     this.pts = []; this.cum = [0]; this.length = 0;
@@ -371,6 +375,12 @@ export class NpcPath {
       if (this.busLanePolicy && !this.busLanePolicy.bus) {
         const legal = pool.filter(id => Array.from({ length: this.map.edges.get(id).lanes }, (_, k) => k).some(k => legalBusLane(this.map, id, k, this.busLanePolicy.clock, "straight", Infinity, false, this.bike ? "bicycle" : "car")));
         if (legal.length) pool = legal;
+      }
+      // a snow plow keeps to the main streets it works where it can: 2.6 m wide, on a residential street's
+      // 3.2 m lane it cannot pass the cars parked at the kerb (sim/snow-plow.js)
+      if (this.classes) {
+        const kept = pool.filter((id) => this.classes.has(this.map.edges.get(id).cls));
+        if (kept.length) pool = kept;
       }
       // cyclists keep to bike routes where they can
       if (this.bike) {
@@ -1597,7 +1607,7 @@ export class NpcFleet {
     const p = pointAt(lane.pts, lane.cum, s), plow = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, SNOW_PLOW);
     Object.assign(plow, { id: `plow_${++this.plowCount}`, kind: "snow_plow", color: PLOW_COLOR, v0: PLOW_MPS, beacons: true,
       driver: { aMax: 1.0, b: 1.8, T: 1.8, s0: 3.0, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
-    plow.path = new NpcPath(this.map, this.plowStream, { world: this.world });
+    plow.path = new NpcPath(this.map, this.plowStream, { world: this.world, classes: PLOW_CLASSES });
     plow.path.start(lane.edge, lane.idx, s, planned);
     this.vehicles.push(plow);
     this.plows = this.vehicles.filter(isPlow);
@@ -2180,14 +2190,20 @@ export class NpcFleet {
     const b = n.backoff;
     b.t += dt;
     b.left -= Math.abs(n.v) * dt;
-    let behind = Infinity;
+    let behind = Infinity, swept = false;
+    // (the room it reverses into: its body moved BACK_CLEAR_M straight back. A car stopped behind it at
+    // an angle, or off to one side, has its centre outside the strip straight behind but its corner in
+    // that room.)
+    const box = n.obb(), c = Math.cos(n.psi), s = Math.sin(n.psi);
+    const room = { ...box, center: [box.center[0] - c * BACK_CLEAR_M / 2, box.center[1] - s * BACK_CLEAR_M / 2], halfLength: box.halfLength + BACK_CLEAR_M / 2 };
     // obstaclesNear lists the rest of the world, not the driven car.
     for (const o of this.world.obstaclesNear(n.x, n.y, 12).concat(this.world.ego)) {
       if (o === n) continue;
       const l = n.toLocal(o.x, o.y);
       if (l.ahead < 0 && Math.abs(l.right) < 1.6) behind = Math.min(behind, -l.ahead - n.spec.rearOverhang - (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6));
+      if (!swept && l.ahead < 0 && o.obb && obbOverlap(room, o.obb(), 0)) swept = true;
     }
-    const done = b.left <= 0 || b.t > 7 || behind < 1.5;
+    const done = b.left <= 0 || b.t > 7 || behind < BACK_CLEAR_M || swept;
     n.step(dt, { steer: 0, accel: done ? (n.v < -0.05 ? 3 : 0) : Math.max(-1.5, (-1.5 - n.v) * 1.5), reverse: true });
     n.signal = null;
     if (done && n.v > -0.05) { n.v = 0; n.backoff = null; n.holdFor = 5; }
