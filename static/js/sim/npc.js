@@ -836,12 +836,14 @@ export class NpcFleet {
         if (next && n.cornerChecked !== key && cur.sEnd - path.s > 12) {
           n.cornerChecked = key;
           if (turnSweepsParked(world, n, cur)) {
-            const other = this.otherWay(path, cur.id, next.id);
-            if (other) {
-              const lane = this.map.lane(cur.id, cur.lane), at = projectPoint(lane.pts, lane.cum, [n.x, n.y]).s;
+            const lane = this.map.lane(cur.id, cur.lane), at = projectPoint(lane.pts, lane.cum, [n.x, n.y]).s;
+            const tried = new Set([next.id]);
+            for (let other = this.otherWay(path, cur.id, tried); other; other = this.otherWay(path, cur.id, tried)) {
+              tried.add(other);
               path.start(cur.id, cur.lane, at, [[other, path.laneInto(cur.id, cur.lane, other)]]);
               proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
               n.cornerChecked = `${cur.id}:${cur.lane}:${other}`;
+              if (!turnSweepsParked(world, n, path.currentEdge())) break;
             }
           }
         }
@@ -2672,7 +2674,7 @@ export class NpcFleet {
   // The successor of edge `from` closest to straight on, other than `not`, that traffic may take
   // (no banned turn, closed block or U-turn), or null.
   otherWay(path, from, not) {
-    const ok = this.map.successors(from).filter((id) => id !== not && Math.abs(this.map.turnAngle(from, id)) < SHARP_TURN
+    const ok = this.map.successors(from).filter((id) => !not.has(id) && Math.abs(this.map.turnAngle(from, id)) < SHARP_TURN
       && !(this.world.restrictions && turnBanned(this.map, from, id, this.world.clock)) && !path.closures?.closed.has(id));
     ok.sort((a, b) => Math.abs(this.map.turnAngle(from, a)) - Math.abs(this.map.turnAngle(from, b)));
     return ok[0] ?? null;

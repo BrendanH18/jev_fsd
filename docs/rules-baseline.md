@@ -1,7 +1,7 @@
 # References after the second 1.8 round — 2026-11-12
 
 Rules, lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through `scripts/bench_node.mjs`, final
-tree (`f5ffd31` and the two review fixes; saved without the `--diagnostics` field). These replace every reference below. Fixes,
+tree (`f5ffd31` and the review fixes; saved without the `--diagnostics` field). These replace every reference below. Fixes,
 causes and the full 41-job matrix are in [the validation record](validation/other-maps-round2-2026-11-12.md).
 
 | Run | Map | Preset | Weather | Routes | Passed | km | Notes |

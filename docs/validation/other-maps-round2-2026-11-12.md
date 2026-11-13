@@ -1,6 +1,6 @@
 # The other maps, second round, 12 November 2026 (ROADMAP 1.8)
 
-Starting tree: `dcfc663`. Final tree: `f5ffd31` plus the two review fixes below. Node 22.23.4, Rules, lockstep, 40 traffic cars,
+Starting tree: `dcfc663`. Final tree: `f5ffd31` plus the review fixes below. Node 22.23.4, Rules, lockstep, 40 traffic cars,
 `scripts/bench_node.mjs --diagnostics 1`, one server for every job. No live model calls, no new
 dependencies. Per-job results: [the JSON beside this note](other-maps-round2-2026-11-12.json).
 
@@ -36,10 +36,22 @@ not in the way (its body now stays where it is; only its straight-on forecast is
 `test_emergency_line_stop.mjs`); and traffic counted a one-lane block before a short two-lane link as
 room to change lanes for a turn (`test_npc_turn_lane.mjs`).
 
+The PR's review bots found three more, each fixed with a check that fails without it: people walked
+through the body of a car waiting at the kerb to pull out (it is walked round now, like any vehicle
+standing just short of their way; `test_pedestrian_round.mjs`); a school bus avoiding a corner took the
+first other way without checking it, so it could stall at a second blocked corner
+(`test_school_bus_corner.mjs`); and the parking shuffle check read a list that does not exist, so its
+"never touches a parked car" could not fail (`test_parking_shuffle.mjs`). Four smaller suggestions
+(re-sorting turns after a U-turn moves, a rounding tolerance on the lanes a pull-over can cross, the
+stuck timeout during a parker's blocked retries, and rolling the bus's corner check all the way to a
+far corner) were tried together and broke Kitsilano city dry `s1-12` (a failure to yield on Balsam
+Street) through the traffic they changed, so they were left out and are follow-ups.
+
 ## Results
 
 All 41 jobs (172 routes) on the final tree: **166/172**, from 160/172 after the first round's merge
 (166/172 before the review fixes too, with Victoria seed 2 `s2-1` failing instead of parking `s1-10`).
+Only snow `s1-4` changed with the bots' fixes, failing as before.
 "Start" is `dcfc663`, where it was run.
 
 | Job | Start | Final |

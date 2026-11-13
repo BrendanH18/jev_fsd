@@ -19,7 +19,7 @@ const { obbOverlap } = await import("../static/js/sim/collision.js");
 const key = "a53c5bcf6438";
 const map = new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${key}.v6.pack.json`, import.meta.url))));
 
-function drive(parkedAtCorner) {
+function drive(parkedAtCorner, parkedStraightOn = false) {
   const world = new World(map, { seed: 1, parked: 0, pedestrians: 0 });
   // (near enough that the fleet keeps the bus, off its way)
   Object.assign(world.ego, { x: -240, y: 420 });
@@ -32,19 +32,27 @@ function drive(parkedAtCorner) {
     parked = Object.assign(new Vehicle(-286.03 - Math.cos(psi) * back, 354.48 - Math.sin(psi) * back, psi, 0), { id: "parked_corner", edge: "e546", curb: "right" });
     world.parked.add(parked);
   }
+  // (and one standing in 11 Avenue's left lane just past the junction, so straight on is blocked too)
+  let ahead = null;
+  if (parkedStraightOn) {
+    ahead = Object.assign(new Vehicle(-292, 364.7, Math.PI + 0.045, 0), { id: "parked_ahead", edge: "e479", curb: "left" });
+    world.parked.add(ahead);
+  }
   // in the left lane, planning the left turn, as the bus was once its lane change was done
   const bus = fleet.addSchoolBus(map.lane("e478", 0), 120, 6, [["e546", 0]]);
   bus.school.every = Infinity;
-  let touched = false, turned = false, gaveUp = false, stood = 0;
+  let touched = false, turned = false, gaveUp = false, right = false, stood = 0;
   for (let k = 0; k < 90 * 60; k++) {
     fleet.step(1 / 60); world.t += 1 / 60;
     if (parked) touched ||= obbOverlap(bus.obb(), parked.obb(), 0);
+    if (ahead) touched ||= obbOverlap(bus.obb(), ahead.obb(), 0);
+    if (bus.path.edges.some((e) => e.id === "e547")) right = true;
     if (bus.path.edges.some((e) => e.id === "e479")) gaveUp = true;
     if (bus.y < 330) turned = true;
     if (Math.abs(bus.x + 280) < 8 && Math.abs(bus.y - 364) < 8 && bus.v < 0.1) stood += 1 / 60;
-    if (bus.x < -330 || turned) break;
+    if (bus.x < -330 || turned || (parkedStraightOn && right && k > 10 * 60)) break;
   }
-  return { touched, turned, gaveUp, stood, x: bus.x };
+  return { touched, turned, gaveUp, right, stood, x: bus.x, way: bus.path.edges.map((e) => e.id).join(",") };
 }
 
 const blocked = drive(true);
@@ -58,4 +66,10 @@ const clear = drive(false);
 assert.equal(clear.turned, true, "with nothing parked there it turns left into 7 Street");
 assert.equal(clear.gaveUp, false);
 console.log("✓ with the corner clear it still turns");
+// With straight on blocked as well, the replacement is checked too: it takes the next way it can make.
+const both = drive(true, true);
+assert.equal(both.touched, false, "the bus touches neither parked car");
+assert.equal(both.right, true, `it goes right into e547 (${both.way})`);
+assert.equal(both.way.includes("e479"), false, `it does not keep straight on over the car there (${both.way})`);
+console.log("✓ when the other way is blocked too, it checks that one and takes the next");
 process.exit(0);

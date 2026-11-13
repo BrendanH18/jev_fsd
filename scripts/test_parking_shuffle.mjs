@@ -55,7 +55,7 @@ let touched = false;
 for (let k = 0; k < 120 / DT && law.phase !== "parked" && law.phase !== "stuck"; k++) {
   P.stepParking(ego, law, world, DT, speedControl);
   phases.add(law.phase);
-  touched ||= world.parked.cars?.some?.((c) => obbOverlap(ego.obb(), c.obb())) ?? false;
+  touched ||= world.parked.list.some((c) => obbOverlap(ego.obb(), c.obb()));
 }
 assert.ok(phases.has("shuffle"), `a straight leg to make room (${[...phases].join(", ")})`);
 assert.equal(law.phase, "parked", `parks (${law.phase} after ${law.legs} legs)`);

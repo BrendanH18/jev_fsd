@@ -389,8 +389,6 @@ export class Crowd {
     // (`standing`: the vehicle standing in the way, when that is what it waits for)
     this.standing = null;
     for (const o of [this.world.ego, ...this.world.npcs]) {
-      // (a car still at the kerb, waiting to pull out, is parked: people walk by it as by parked cars)
-      if (o.pull && !o.pull.moving) continue;
       // A stopped car has no arrival time, but still occupies the crosswalk. Wait short of its
       // body; someone already caught beside/in it can continue out instead of being trapped.
       // A boarding rider deliberately enters their own streetcar through its open door.

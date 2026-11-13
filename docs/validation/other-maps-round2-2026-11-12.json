@@ -1,7 +1,7 @@
 {
  "date": "2026-11-12",
  "start_tree": "dcfc663",
- "final_tree": "f5ffd31 + review fixes",
+ "final_tree": "f5ffd31 + Sol, Codex and Greptile review fixes",
  "engine": "node v22.23.4",
  "brain": "rules",
  "mode": "lockstep",
