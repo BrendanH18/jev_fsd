@@ -68,7 +68,7 @@ import { boxHold } from "./junction-box.js";
 import { WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, marksOn, paddle, stopKey } from "./work-zone.js";
 import { DECIDE_M, PASS_DECEL, PASS_MPS, VAN_LOOK_M, queuedAhead, wayRound } from "./double-parked.js";
 import { AHEAD_M as LC_AHEAD_M, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, OWED_DECEL as LC_OWED_DECEL, THROUGH_M, canStop as canStopForMerge, detourOf as closureDetour } from "./lane-closure.js";
-import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
+import { NEXT_LANE_M, PASS_SIGHT_M, PLOW_CLASSES, PLOW_COLOR, PLOW_EVERY_S, PLOW_GONE_M, PLOW_MPS, PLOW_SPAWN_M, SAME_LANE_M, isPlow, plowLanes, stayBack, turningLeft } from "./snow-plow.js";
 import { DECIDE_M as CP_DECIDE_M, RETURN_M as CP_RETURN_M, passStreet, planPass, queuedBehind, ridingIn, wayClear as cyclistWayClear } from "./cyclist-pass.js";
 import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
@@ -105,6 +105,8 @@ const DARK_CAUGHT_S = 0.5, DARK_GO_S = 10;
 const PARK_BACK_S = 2;
 const PARK_BACK_MAX_M = 7;
 const PARK_SIDE_M = 4.5;   // (the driven car, parking, is this close to a driver's path: in its lane or the space beside it)
+// A driver backing up (`backOff`) stops with this much room left behind it.
+const BACK_CLEAR_M = 1.5;
 
 // Seeded per-driver IDM and lane-change temperament so adding NPCs does not shift spawn points.
 function driverProfile(random, bike = false) {
@@ -133,6 +135,11 @@ export const BIKES = 12;
 const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xdd6b20];
 const SHARP_TURN = 130 * Math.PI / 180;   // mirrors SHARP_TURN_DEG in jev/routing.py
 const LINK_M = 20;   // a street this short going straight on is a link inside a junction
+// A driver starts a lane change no later than LC_END_M before its street ends, nor within LC_END_M
+// before a control line (maybeChangeLane), so a turn from the wrong lane needs this much stretch
+// before that, per lane to cross, to find a gap in (NpcPath.reachesTurnLane).
+const LC_END_M = 30;
+const LC_ROOM_M = 20;
 const BOX_M = 9;
 const LEADER_MARGIN_M = 0.3;    // beyond two half-widths: anything closer to the path is in the way
 // Turning right on red (where the map allows it), from the curb lane after a full stop: the gap a
@@ -277,6 +284,26 @@ function sweptBodyGap(n, obstacle, offset, least, margin = 0.1) {
   return null;
 }
 
+// Whether a long vehicle following its path through the turn out of `cur` (one of its path's edges)
+// would sweep its body over a parked car: rolled on its own model, as in sweptBodyGap, from where it
+// is to a body length past the corner. Its nose swings out over the parking lane beyond, wider than
+// any corner rounding can take back (a school bus's front corner sweeps an 11.5 m circle).
+function turnSweepsParked(world, n, cur) {
+  const path = n.path, spec = n.spec, nose = spec.length - spec.rearOverhang;
+  const end = Math.min(path.length, cur.sEnd + spec.length + 5);
+  const parked = world.parked.near(n.x, n.y, end - path.s + spec.length);
+  if (!parked.length) return false;
+  const car = n.clone(), speed = 2.5, dt = 0.1;
+  for (let i = 0; i < 600; i++) {
+    const p = projectPoint(path.pts, path.cum, [car.x, car.y], null);
+    if (p.s >= end) return false;
+    if (p.s + nose > cur.sEnd && parked.some((o) => obbOverlap(car.obb(), o.obb(), 0.1))) return true;
+    car.v = speed; car.a = 0;
+    car.step(dt, { steer: purePursuit(car, path, p.s, 0), accel: 0 });
+  }
+  return false;
+}
+
 // How far right of a lane's centre a cyclist rides in the street's parking lane, or null when the
 // lane is not beside the right curb or has no parking lane wide enough.
 export function stripOffset(e, laneIdx) {
@@ -288,7 +315,9 @@ export function stripOffset(e, laneIdx) {
 
 export class NpcPath {
   // A path is a chain of lane polylines; we keep the current lane and the next one joined.
-  constructor(map, random, { bike = false, world = null } = {}) { this.restrictionWorld = world; this.map = map; this.random = random; this.bike = bike; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
+  // (`classes`: the street classes it keeps to where the streets let it, as a snow plow keeps to the main
+  // streets it works: sim/snow-plow.js PLOW_CLASSES)
+  constructor(map, random, { bike = false, world = null, classes = null } = {}) { this.restrictionWorld = world; this.map = map; this.random = random; this.bike = bike; this.classes = classes; this.edges = []; this.pts = []; this.cum = [0]; this.length = 0; }
   start(edgeId, laneIdx, s, planned = []) {
     this.edges = [];
     this.pts = []; this.cum = [0]; this.length = 0;
@@ -347,15 +376,46 @@ export class NpcPath {
         const legal = pool.filter(id => Array.from({ length: this.map.edges.get(id).lanes }, (_, k) => k).some(k => legalBusLane(this.map, id, k, this.busLanePolicy.clock, "straight", Infinity, false, this.bike ? "bicycle" : "car")));
         if (legal.length) pool = legal;
       }
+      // a snow plow keeps to the main streets it works where it can: 2.6 m wide, on a residential street's
+      // 3.2 m lane it cannot pass the cars parked at the kerb (sim/snow-plow.js)
+      if (this.classes) {
+        const kept = pool.filter((id) => this.classes.has(this.map.edges.get(id).cls));
+        if (kept.length) pool = kept;
+      }
       // cyclists keep to bike routes where they can
       if (this.bike) {
         const routes = pool.filter((id) => this.map.edges.get(id).bike);
         if (routes.length && this.random() < 0.85) pool = routes;
       }
+      // no turn from a lane it has no room to leave for the turn's lane: it would turn across the next
+      // lane, into whoever is in it (Bloor Street West after two short blocks)
+      const reached = pool.filter((id) => this.reachesTurnLane(last, id));
+      if (reached.length) pool = reached;
       const next = pool[Math.floor(this.random() * pool.length)];
       this.append(next, this.laneInto(last.id, last.lane, next));
     }
     return true;
+  }
+  // Whether a car in lane `last.lane` of the last planned edge can be in the lane for turning onto
+  // `next` (the leftmost for a left, the curb lane for a right) by the junction: it is in it already,
+  // or the planned edges up to there leave room to change lanes. maybeChangeLane changes lanes on an
+  // edge up to LC_END_M before its end and its control line, for a turn at its end or beyond short
+  // links that go straight on, so only that edge and such links count.
+  reachesTurnLane(last, next) {
+    const e = this.map.edges.get(last.id), turn = this.map.classifyTurn(this.map.turnAngle(last.id, next));
+    const want = turn === "left" ? 0 : turn === "right" ? e.lanes - 1 : last.lane;
+    if (this.bike || want === last.lane) return true;
+    let room = 0;
+    for (let k = this.edges.length - 1; k >= 0; k--) {
+      const x = this.edges[k], xe = this.map.edges.get(x.id);
+      let end = x.sEnd - LC_END_M;
+      if (x.control) end = Math.min(end, x.sStart + (x.control.s_line / Math.max(1, xe.length)) * (x.sEnd - x.sStart) - LC_END_M);
+      // (a street with fewer lanes than the turn's has none to change into)
+      if (xe.lanes >= e.lanes) room += Math.max(0, end - Math.max(x.sStart, this.s ?? 0));
+      const before = this.edges[k - 1];
+      if (!before || xe.length >= LINK_M || this.map.classifyTurn(this.map.turnAngle(before.id, x.id)) !== "straight") break;
+    }
+    return room >= LC_ROOM_M * Math.abs(want - last.lane);
   }
   trim() {
     // drop edges fully behind us to keep the polyline short
@@ -765,6 +825,27 @@ export class NpcFleet {
           const lane = this.map.lane(cur.id, cur.lane), at = projectPoint(lane.pts, lane.cum, [n.x, n.y]).s;
           path.start(cur.id, cur.lane, at);
           proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
+        }
+      }
+      // A school bus whose next turn would sweep its body over a car parked by the corner cannot make
+      // it, and would stand in the junction for good (Calgary: 11 Avenue SW left into 7 Street SW). Once
+      // its lane changes are done, while there is room, it goes the gentlest other way instead.
+      if (n.school && !n.lc) {
+        const cur = path.currentEdge(), next = path.edges[path.edges.indexOf(cur) + 1];
+        const key = next && `${cur.id}:${cur.lane}:${next.id}`;
+        if (next && n.cornerChecked !== key && cur.sEnd - path.s > 12) {
+          n.cornerChecked = key;
+          if (turnSweepsParked(world, n, cur)) {
+            const lane = this.map.lane(cur.id, cur.lane), at = projectPoint(lane.pts, lane.cum, [n.x, n.y]).s;
+            const tried = new Set([next.id]);
+            for (let other = this.otherWay(path, cur.id, tried); other; other = this.otherWay(path, cur.id, tried)) {
+              tried.add(other);
+              path.start(cur.id, cur.lane, at, [[other, path.laneInto(cur.id, cur.lane, other)]]);
+              proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s;
+              n.cornerChecked = `${cur.id}:${cur.lane}:${other}`;
+              if (!turnSweepsParked(world, n, path.currentEdge())) break;
+            }
+          }
         }
       }
       // (a way through a block closed for an event is re-planned while there is room: sim/road-closures.js)
@@ -1413,7 +1494,11 @@ export class NpcFleet {
     const forRail = this.crossings ? this.yieldAtCrossing(n, front, all) : null;
     if (forRail !== null) stopAt = stopAt === null ? forRail : Math.min(stopAt, forRail);
     if (stopAt !== null && stopAt < gap) { gap = Math.max(0.05, stopAt); leadV = 0; }
-    const v0 = Math.min(n.v0 * weather.speed, e.limit * (n.siren ? EV_LIMIT_FACTOR : 1) * weather.speed, EV_MAX_MPS, curveSpeed(path, path.s), vCap);
+    // (a ball it has seen roll into the street ahead: no faster than it can stop from short of the gap it
+    // came from, as all traffic does, siren or not: sim/ball-chase.js. A truck that ran on stopped over
+    // the child's way back to the gap, each waiting for the other.)
+    const vBall = world.balls?.balls.length ? ballYield(world, n, front)?.limit ?? Infinity : Infinity;
+    const v0 = Math.min(n.v0 * weather.speed, e.limit * (n.siren ? EV_LIMIT_FACTOR : 1) * weather.speed, EV_MAX_MPS, curveSpeed(path, path.s), vCap, vBall);
     const D = n.driver;
     let a;
     if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
@@ -1525,7 +1610,7 @@ export class NpcFleet {
     const p = pointAt(lane.pts, lane.cum, s), plow = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, SNOW_PLOW);
     Object.assign(plow, { id: `plow_${++this.plowCount}`, kind: "snow_plow", color: PLOW_COLOR, v0: PLOW_MPS, beacons: true,
       driver: { aMax: 1.0, b: 1.8, T: 1.8, s0: 3.0, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
-    plow.path = new NpcPath(this.map, this.plowStream, { world: this.world });
+    plow.path = new NpcPath(this.map, this.plowStream, { world: this.world, classes: PLOW_CLASSES });
     plow.path.start(lane.edge, lane.idx, s, planned);
     this.vehicles.push(plow);
     this.plows = this.vehicles.filter(isPlow);
@@ -2108,14 +2193,20 @@ export class NpcFleet {
     const b = n.backoff;
     b.t += dt;
     b.left -= Math.abs(n.v) * dt;
-    let behind = Infinity;
+    let behind = Infinity, swept = false;
+    // (the room it reverses into: its body moved BACK_CLEAR_M straight back. A car stopped behind it at
+    // an angle, or off to one side, has its centre outside the strip straight behind but its corner in
+    // that room.)
+    const box = n.obb(), c = Math.cos(n.psi), s = Math.sin(n.psi);
+    const room = { ...box, center: [box.center[0] - c * BACK_CLEAR_M / 2, box.center[1] - s * BACK_CLEAR_M / 2], halfLength: box.halfLength + BACK_CLEAR_M / 2 };
     // obstaclesNear lists the rest of the world, not the driven car.
     for (const o of this.world.obstaclesNear(n.x, n.y, 12).concat(this.world.ego)) {
       if (o === n) continue;
       const l = n.toLocal(o.x, o.y);
       if (l.ahead < 0 && Math.abs(l.right) < 1.6) behind = Math.min(behind, -l.ahead - n.spec.rearOverhang - (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6));
+      if (!swept && l.ahead < 0 && o.obb && obbOverlap(room, o.obb(), 0)) swept = true;
     }
-    const done = b.left <= 0 || b.t > 7 || behind < 1.5;
+    const done = b.left <= 0 || b.t > 7 || behind < BACK_CLEAR_M || swept;
     n.step(dt, { steer: 0, accel: done ? (n.v < -0.05 ? 3 : 0) : Math.max(-1.5, (-1.5 - n.v) * 1.5), reverse: true });
     n.signal = null;
     if (done && n.v > -0.05) { n.v = 0; n.backoff = null; n.holdFor = 5; }
@@ -2379,10 +2470,10 @@ export class NpcFleet {
     const e = this.map.edges.get(edge.id);
     if (!e || e.lanes < 2 || (n.v < 3 && !curbward) || n.lcCooldown > 0 || n.kind === "bike" || n.pull) return;
     const toEnd = edge.sEnd - front;
-    if (toEnd < (curbward ? 15 : 30)) return;
+    if (toEnd < (curbward ? 15 : LC_END_M)) return;
     if (edge.control && !curbward) {
       const lineS = edge.sStart + (edge.control.s_line / Math.max(1, e.length)) * (edge.sEnd - edge.sStart);
-      if (lineS - front < 30 && lineS - front > -5) return;
+      if (lineS - front < LC_END_M && lineS - front > -5) return;
     }
     const path = n.path;
     // the turn at the next junction, looking through a short link that goes straight on inside it
@@ -2578,6 +2669,15 @@ export class NpcFleet {
       if (local.ahead > 0 && local.ahead < 8 && Math.abs(local.right) < 2) return true;
     }
     return false;
+  }
+
+  // The successor of edge `from` closest to straight on, other than `not`, that traffic may take
+  // (no banned turn, closed block or U-turn), or null.
+  otherWay(path, from, not) {
+    const ok = this.map.successors(from).filter((id) => !not.has(id) && Math.abs(this.map.turnAngle(from, id)) < SHARP_TURN
+      && !(this.world.restrictions && turnBanned(this.map, from, id, this.world.clock)) && !path.closures?.closed.has(id));
+    ok.sort((a, b) => Math.abs(this.map.turnAngle(from, a)) - Math.abs(this.map.turnAngle(from, b)));
+    return ok[0] ?? null;
   }
 
   recoverPath(n) {

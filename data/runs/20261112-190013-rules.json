@@ -1,0 +1,227 @@
+{
+ "name": "20261112-190013-rules",
+ "saved_at": "2026-11-12T19:00:13",
+ "config": {
+  "brain": "rules",
+  "count": 2,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "toronto",
+  "bbox": [
+   -79.412,
+   43.66,
+   -79.394,
+   43.671
+  ],
+  "pack": "6",
+  "engine": "node v22.23.4"
+ },
+ "summary": {
+  "scenarios": 2,
+  "pass_rate": 1,
+  "arrived_rate": 1,
+  "km": 2.6,
+  "collisions": 0,
+  "at_fault": 0,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 0,
+  "off_road_s": 0,
+  "safety_brakes": 5,
+  "deadlocks": 0,
+  "fallbacks": 0,
+  "violations_per_km": 0,
+  "avg_kmh": 15.7,
+  "min_gap_m": 2.1,
+  "min_ttc_s": 1.1,
+  "hard_brakes": 0,
+  "rms_jerk": 2.92,
+  "max_lat_accel": 5.3,
+  "lane_rms_m": 0.3,
+  "lane_changes": 0,
+  "speeding_s": 0,
+  "decisions": 2331,
+  "calls": 0,
+  "tokens": 0,
+  "cost_usd": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 1220,
+    "signals": 4,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 3
+   },
+   "arrived": true,
+   "time_s": 268.7,
+   "distance_m": 1216,
+   "progress": 0.999,
+   "avg_kmh": 16.3,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "guard_violations": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.1,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.65,
+   "max_decel": -6.23,
+   "hard_brakes": 0,
+   "rms_jerk": 2.83,
+   "max_jerk": 58.1,
+   "max_lat_accel": 5.16,
+   "lane_rms_m": 0.17,
+   "lane_max_m": 0.84,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 51,
+   "decisions": 994,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 90,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1980757443856367,
+      "gap": 3.5660036479490036
+     }
+    },
+    {
+     "t": 147.3,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1929640852054473,
+      "gap": 3.5343934057152073
+     }
+    },
+    {
+     "t": 268.7,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 86094
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 776,
+    "signals": 1,
+    "stops": 4,
+    "lefts": 2,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 331.4,
+   "distance_m": 1388,
+   "progress": 1,
+   "avg_kmh": 15.1,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "guard_violations": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 3,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.2,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.15,
+   "max_accel": 2.57,
+   "max_decel": -6.41,
+   "hard_brakes": 0,
+   "rms_jerk": 3.01,
+   "max_jerk": 47.5,
+   "max_lat_accel": 5.43,
+   "lane_rms_m": 0.42,
+   "lane_max_m": 3.29,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 41.5,
+   "decisions": 1337,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 141.2,
+     "type": "reroute",
+     "count": 2
+    },
+    {
+     "t": 177.9,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 223.2,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.18724184932132,
+      "gap": 3.5337447667547397
+     }
+    },
+    {
+     "t": 275.1,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.196084673020946,
+      "gap": 3.5579458350027613
+     }
+    },
+    {
+     "t": 331.4,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 88364
+  }
+ ]
+}

@@ -22,7 +22,7 @@ import { advanceHolds, approachPhase, isScramble, movementSignal, protectedLeft,
 import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
-import { ringBusy } from "../sim/roundabout.js";
+import { ringBusy, ringJoining } from "../sim/roundabout.js";
 import { routeRedTurnBanned } from "../sim/red-turn-signs.js";
 import { headlights } from "../sim/high-beams.js";
 import { pxoAhead } from "../sim/pxo.js";
@@ -33,7 +33,7 @@ import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
 import { TURN_ROUND_START_M, TURN_ROUND_OFFER_MPS, turnaroundStopS } from "../sim/turnaround.js";
-import { EMERGENCY_NAMES, EV_BOX_M, FOLLOW_M, IN_WAY_M, emergencyLead, parkedRoom, isEmergency, isJunction, nearestCall, pullOverOffset } from "../sim/emergency.js";
+import { EMERGENCY_NAMES, EV_BOX_M, FOLLOW_M, IN_WAY_M, emergencyLead, kerbCars, parkedRoom, isEmergency, isJunction, nearestCall, pullOverOffset } from "../sim/emergency.js";
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
@@ -171,12 +171,12 @@ const HOOK_SIDE_M = 6;   // (on its street: no further right than this)
 // Giving way to an emergency vehicle (sim/emergency.js) calling on the car: it hears the siren
 // within 100 m whether or not it can see the vehicle. When the call comes it picks where to stop:
 // its stopping distance braking at 1.5 m/s^2 (at least 8 m on, leaving room to steer over even from
-// rest; chosen again from where it is if it could no longer stop there even braking at 6 m/s^2),
-// or short of the next junction (2.5 m short
+// rest, and 12 m more for each lane it crosses into the curb lane; chosen again from where it is if it
+// could no longer stop there even braking at 6 m/s^2), or short of the next junction (2.5 m short
 // of the crossing street, or of the stop line) if it can stop there braking at up to 3.5 m/s^2,
 // else past it, leaving 8 m to finish steering once its rear clears the junction. It pulls over
-// to the right as it stops (across into the curb lane where there are several, then into an empty
-// parking lane beside it, see pullOverOffset)
+// to the right as it stops (across into the curb lane where there are several, as far as the stop
+// leaves room to change lanes, then into an empty parking lane beside it, see pullOverOffset)
 // and waits there until the vehicle has gone by. If the vehicle is stuck behind the car for 3 s,
 // going its way, the car drives on ahead of it instead. Once one has gone by, the car stays 150 m behind it.
 export const EV_STOP_DECEL = 1.5;
@@ -184,8 +184,14 @@ const EV_FIRM_DECEL = 3.5;
 const EV_SHORT_M = 2.5;
 const ALONGSIDE_M = 4;   // an emergency vehicle this close beside the car, going round it
 const EV_STEER_M = 8;
+// More room to stop in for each lane it crosses into the curb lane to pull over: the sharpest lane change
+// offered (MIN_CHANGE_M, brain/candidates.js). With 8 m in all, a car crossing from the inner lane of
+// West Broadway reached its stop at an angle, short of the curb lane's middle, and one standing in the
+// left lane of three on 11 Avenue SW (Calgary) stood across the middle one, in a fire truck's way.
+const EV_CROSS_M = 12;
 const EV_CLEAR_MPS = 10 / 3.6; // keep moving slowly enough to yield while finishing the lateral move
 const EV_HARD_DECEL = 6;
+const EV_OVERSHOOT_M = 1.5;   // how far a short stop overshoots
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -269,8 +275,11 @@ export function buildSnapshot(world, executing = null) {
       let crossTraffic = false;
       const rb = control.type === "yield" ? map.roundabouts.get(control.roundabout) : null;
       // yielding at a roundabout: look further round the ring the longer the car needs to reach the line
-      if (rb) crossTraffic = ringBusy(rb, map.nodes.get(map.edges.get(c.edge).to), visibleNpcs, null, Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v)));
-      else if (junction) {
+      // (and for a vehicle about to come into the ring at another entry: it will be in it first)
+      if (rb) {
+        const node = map.nodes.get(map.edges.get(c.edge).to), extra = Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v));
+        crossTraffic = ringBusy(rb, node, visibleNpcs, null, extra) || (bumperToLine > 0 && ringJoining(rb, node, visibleNpcs, extra));
+      } else if (junction) {
         // crossing traffic in the junction, or heading for it and due within a few seconds (at a
         // two-way stop the through road does not stop, so its traffic must be waited for)
         for (const n of visibleNpcs) {
@@ -340,7 +349,7 @@ export function buildSnapshot(world, executing = null) {
     }
     const lane = snap.lane = laneState(route, p, executing && executing.law);
     snap.right_hook = rightHook(world, p, frontS, lane);
-    snap.emergency = emergencyYield(world, p, frontS, lane, visible);
+    snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
     snap.bus = busPullingOut(world, frontS, visible);
     if (world.pxo) {
@@ -782,7 +791,7 @@ function rightHook(world, p, frontS, lane) {
 // far right of its lane's centre it pulls over (`offset_m`); `clearing` when that is past a
 // junction, and `lead` (no stop) when the vehicle is stuck behind the car. The stop is chosen once
 // per call and remembered in `world.evYield`.
-function emergencyYield(world, p, frontS, lane, visible) {
+function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
   const { ego, route, map } = world;
   const evs = world.npcs.filter(isEmergency);
   // where the car is and will be over the next 20 m, along its route
@@ -800,18 +809,38 @@ function emergencyYield(world, p, frontS, lane, visible) {
   // (and again if the car could no longer stop there, or within the 1.5 m a short stop overshoots,
   // even braking hard, having been slow to start)
   // (well past it is handled below)
-  if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + 1.5 && (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v)) {
-    let stop = frontS + Math.max(EV_STEER_M, v * v / (2 * EV_STOP_DECEL)), clearing = false;
+  if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + EV_OVERSHOOT_M && (plan.stop + EV_OVERSHOOT_M - frontS) * 2 * EV_HARD_DECEL < v * v)) {
+    const crossing = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * EV_CROSS_M;
+    let stop = frontS + Math.max(EV_STEER_M + crossing, v * v / (2 * EV_STOP_DECEL)), clearing = false;
     // junctions along the route from here to there: stop short of the first, or clear it
     // (from the street before this one: the car may still be in the junction it has just come through)
-    for (let i = Math.max(0, route.edgeIndexAt(p.s) - 1); i < route.edges.length - 1; i++) {
-      const e = map.edges.get(route.edges[i]), sNode = route.edgeStarts[i + 1];
+    // (where each node is along the polyline, not the summed edge lengths, which run metres ahead of it
+    // past rounded corners: Route.laneEdgeStarts)
+    const starts = route.laneEdgeStarts();
+    for (let i = Math.max(0, route.laneEdgeAt(p.s) - 1); i < route.edges.length - 1; i++) {
+      const e = map.edges.get(route.edges[i]), sNode = starts[i + 1];
       if (sNode - frontS > stop - frontS + 40) break;
       if (!isJunction(map, e.to)) continue;
       const half = map.crossingHalfWidth(e.id), line = route.controls.find((c) => c.edge === e.id);
       // (out of the box round its node, as the audit measures entering it)
       const short = Math.min(sNode - half - EV_SHORT_M, sNode - EV_BOX_M - 0.5, line ? line.sRoute - 0.5 : Infinity);
       const clear = sNode + half + ego.spec.length + 1 + EV_STEER_M;
+      // At or past that stop but still out of the junction (the crossing street and the box), slow enough
+      // to stop within the 1.5 m a short stop overshoots: stopped at its line or a little over it, or crept
+      // past a stop sign's line to look. It is short of the junction, not in it, and stops there: not on
+      // over its line (the audit takes holding a line stop as yielding, and moving on over the line as
+      // giving that up), over a signal's line where it is, and over a stop sign's line using what room
+      // there is up to the junction, and up to where it would wait to look, to pull over. Moving off
+      // through a light that is not red, it is on its way through: it clears the junction, as below.
+      const inside = Math.min(sNode - half, sNode - EV_BOX_M - 0.5), halt = v * v / (2 * EV_FIRM_DECEL);
+      const through = line?.control?.type === "signal" && v > 0.5 && intersection?.id === line.control.id && intersection.signal !== "red";
+      if (frontS > short && frontS + halt <= inside && halt <= EV_OVERSHOOT_M && !through) {
+        const over = !!line && frontS > line.sRoute;
+        const room = over && line.control?.type === "signal" ? frontS
+          : Math.min(stop, inside, line ? line.sPeek : Infinity, line && !over ? line.sRoute - 0.5 : Infinity);
+        stop = Math.max(frontS + halt, room);
+        break;
+      }
       if (frontS > short && frontS < clear) { stop = Math.max(stop, clear); clearing = true; continue; }
       if (short >= stop || short < frontS) continue;
       if (short - frontS >= v * v / (2 * EV_FIRM_DECEL)) stop = Math.max(frontS + 0.3, short);
@@ -825,11 +854,14 @@ function emergencyYield(world, p, frontS, lane, visible) {
       if (ends && ends.en - SNOWBANK_WAIT_M - frontS >= v * v / (2 * EV_FIRM_DECEL) && stop >= ends.en - SNOWBANK_WAIT_M) stop = Math.min(stop, ends.en - SNOWBANK_WAIT_M);
     }
     stop = Math.min(stop, route.length - 1);
-    plan = world.evYield = { id: ev.id, route, stop, speed: v, since: world.t, tight: stop - frontS < EV_STEER_M - 1e-6, clearing };
+    // (the furthest lane right the stop leaves room to change into: the curb lane, or short of a junction
+    // perhaps only the one it is in)
+    const reach = lane.index + Math.floor(Math.max(0, stop - frontS - EV_STEER_M) / EV_CROSS_M);
+    plan = world.evYield = { id: ev.id, route, stop, speed: v, since: world.t, tight: stop - frontS < EV_STEER_M - 1e-6, clearing, reach };
   }
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
-  if (frontS > plan.stop + 1.5) plan.stop = Math.min(route.length - 1, frontS + (v > 0.3 ? v * v / (2 * EV_FIRM_DECEL) : 0));
+  if (frontS > plan.stop + EV_OVERSHOOT_M) plan.stop = Math.min(route.length - 1, frontS + (v > 0.3 ? v * v / (2 * EV_FIRM_DECEL) : 0));
   // The physical call owns drive-on authorization, including whether the car yielded first.
   // (but one drawing alongside to go round after all can turn across the car's nose: until it is past, the
   // car keeps still where it is)
@@ -840,16 +872,19 @@ function emergencyYield(world, p, frontS, lane, visible) {
       stop_s_route: frontS, bumper_to_stop_m: 0, offset_m: 0, steer_at_stop: false, max_speed_mps: EV_CLEAR_MPS, clearing: false, lead: false, alongside: true };
   }
   const lead = emergencyLead(world, ev);
-  // pulled over: into the parking lane where nothing is parked from 10 m behind the stop to 5 m on
+  // pulled over: into the parking lane where nothing is parked (nor waiting to pull out) from 10 m
+  // behind the stop to 5 m on
   const i = route.edgeIndexAt(plan.stop - ego.spec.length / 2), e = map.edges.get(route.edges[i]);
   const at = route.pointAt(plan.stop), h = route.headingAt(plan.stop);
-  const free = !world.parked.near(at[0], at[1], 20).some((c) => {
+  const free = !kerbCars(world, at[0], at[1], 20).some((c) => {
     const ahead = (c.x - at[0]) * Math.cos(h) + (c.y - at[1]) * Math.sin(h), right = (c.x - at[0]) * Math.sin(h) - (c.y - at[1]) * Math.cos(h);
     return ahead > -10 - ego.spec.length && ahead < 5 && right - lane.center - (lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width) > 1;
   });
-  // (from a lane further out, across into the curb lane and over in it)
-  const across = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * e.lane_width;
-  let offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, !lane.shift && free);
+  // (from a lane further out, across into the curb lane and over in it, as far as the stop leaves room for
+  // the lane changes; else over in the furthest lane it can reach)
+  const cross = lane.shift ? 0 : Math.max(0, Math.min(lane.lanes - 1, plan.reach ?? Infinity) - lane.index);
+  const across = cross * e.lane_width, curb = lane.shift || lane.index + cross >= lane.lanes - 1;
+  let offset = across + pullOverOffset(e, e.lanes - 1, ego.spec.width, curb && !lane.shift && free);
   // (beside cars parked close to a narrow lane's line, only as far over as they leave room: sim/emergency.js)
   if (!free && !across) {
     const mid = route.offsetPointAt(Math.max(0, plan.stop - (ego.spec.length - ego.spec.rearOverhang) + ego.spec.length / 2), lane.center);
@@ -1686,10 +1721,14 @@ function laneOptions(snap, world) {
     const side = { delta, dir, center: span.offset, until_s: delta ? span.until : null, leader: null, rear: null, alongside: false };
     for (const o of vehicles) {
       const q = route.project(o.x, o.y, p.index);
-      if (!q || Math.abs(q.lateral + route.frameMove(s, q.s) - span.offset) > 1.7 || Math.abs(q.s - s) > TRAFFIC_RADIUS_M) continue;
+      if (!q || Math.abs(q.lateral + route.frameMove(s, q.s) - span.offset) > 1.7) continue;
+      // (beyond either end of the route, along the line it starts or ends on: a vehicle behind a route
+      // that starts where the car is projects onto its start, and is not alongside the car)
+      const qs = q.s <= 0 || q.s >= route.length ? q.s + (o.x - q.point[0]) * Math.cos(q.heading) + (o.y - q.point[1]) * Math.sin(q.heading) : q.s;
+      if (Math.abs(qs - s) > TRAFFIC_RADIUS_M) continue;
       if (Math.abs(o.v) > 0.5 && Math.abs(wrap(o.psi - q.heading)) > Math.PI / 2) continue;
       const spec = o.spec || CAR;
-      const ahead = q.s - spec.rearOverhang - (s + FRONT), behind = s - REAR - (q.s + spec.length - spec.rearOverhang);
+      const ahead = qs - spec.rearOverhang - (s + FRONT), behind = s - REAR - (qs + spec.length - spec.rearOverhang);
       if (ahead > 0) { if (!side.leader || ahead < side.leader.gap_m) side.leader = { id: o.id, gap_m: ahead, speed: Math.max(0, o.v) }; }
       else if (behind > 0) { if (!side.rear || behind < side.rear.gap_m) side.rear = { id: o.id, gap_m: behind, speed: Math.max(0, o.v) }; }
       else side.alongside = true;

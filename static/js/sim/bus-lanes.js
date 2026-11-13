@@ -33,6 +33,16 @@ export function routeBusLane(route, s, clock, curb = false, i = route.laneEdgeAt
   return { edge: edge.id, lanes, turn, remaining, entering_allowed: curb || (turn === 'right' && remaining <= BUS_TURN_M),
     active: lanes.some(l => busLaneActive(l, clock)), approach_m: BUS_TURN_M, turned_in_m: turnedIn };
 }
+// How far into a street it turned right into the car may still be leaving its reserved curb lane:
+// a lane change's length at the fastest it went there before it had moved `TURN_OUT_M` from the
+// lane's centre, then fixed (per street and route). The latch lives on the world, so checkpoints keep it.
+export const TURN_OUT_M = 0.5;
+function turnInAllowance(world, near) {
+  let t = world.busTurnIn;
+  if (t?.edge !== near.lane.edge || t.route !== world.route) t = world.busTurnIn = { edge: near.lane.edge, route: world.route, allow_m: 0, out: false };
+  if (!t.out) { t.allow_m = Math.max(t.allow_m, laneChangeLength(world.ego.v)); t.out = Math.abs(near.lateral) >= TURN_OUT_M; }
+  return t.allow_m;
+}
 // The lane the car is actually in, route or not (manual driving included); the route only grants the
 // right-turn approach, and parking grants the curb.
 export function auditBusLanes(world, dt) {
@@ -46,8 +56,10 @@ export function auditBusLanes(world, dt) {
   const curb = !!world.parking || !!world.parkedIn, i = route ? route.edges.indexOf(near.lane.edge) : -1;
   const p = !curb && i >= 0 && route.project(ego.x, ego.y, route.hint);
   const b = p ? routeBusLane(route, p.s, world.clock, false, i) : null;
-  // (or leaving the curb lane it turned right into, over a lane change's length)
-  if (curb || b?.entering_allowed || (b?.turned_in_m != null && b.turned_in_m <= laneChangeLength(ego.v))) return;
+  if (curb || b?.entering_allowed) return;
+  // (or leaving the curb lane it turned right into, over a lane change's length: latched at the speed
+  // it had when it started out of the lane, so slowing on the way across does not shorten it)
+  if (b?.turned_in_m != null && b.turned_in_m <= turnInAllowance(world, near)) return;
   world.violations.bus_lane_driving = (world.violations.bus_lane_driving || 0) + Math.max(0, ego.v) * dt;
   world.events.push({ type: 'bus_lane_driving', edge: near.lane.edge });
 }

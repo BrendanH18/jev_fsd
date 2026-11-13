@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-11-11. This is the one place the plan lives. Update it when an item lands, when
+Last reviewed: 2026-11-12. This is the one place the plan lives. Update it when an item lands, when
 a priority changes, or when a decision under [Open decisions](#open-decisions) is made.
 
 ## What this project is for
@@ -154,29 +154,42 @@ and CI runs it.
 dry on every change and the full matrix weekly, every job blocking. The scenario freeze lifts under
 D3. What the smoke suite and the soak found on other maps is not frozen work:
 
-- [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each) **passes on every
-  map**, 11 November: the other eleven maps 22/22 (16/22 before), Kitsilano still 48/48 in all four
-  weathers, with no route that passed failing; bare changes on `s1-3` and `s1-9` only, and
-  `20261111-130222-rules` is its new reference (`docs/rules-baseline.md`). Fixed, each with a Node
-  check: bays on the inside of tight bends, a bus lane up to a lane drop, the turn out of a reserved
-  curb lane, a re-plan keeping the old route's lane manoeuvre, two lane changes in too little room,
-  junction fills counted as off road, pothole margins and hard brakes, and emergency yields (the
-  junction box, a reversing parker's queue, parked cars beside a narrow lane, a vehicle alongside on
-  the right, a vehicle drawing alongside to go round). Evidence:
-  `docs/validation/other-maps-2026-11-11.md`. Remaining, from the soak sample re-run on the final tree:
-  - Stuck routes: Toronto seed 2 `s2-2` (Sussex Avenue), Victoria seed 2 `s2-2` (Menzies Street),
-    Calgary seed 2 `s2-1` (11 Avenue SW); Kitsilano seed 3 `s3-1` recovers from three deadlocks.
-  - Toronto seed 2 `s2-1`: a traffic car in the left lane swings into the car's lane on a bend of Bloor
-    Street West; counted as the car's collision.
-  - Emergency yields: Victoria seed 2 `s2-1`, Calgary seed 2 `s2-1`; and the soak's night yields.
-  - Calgary seed 2 `s2-2`: a prohibited turn early in the route.
-  - The delivery-van stand-off (cover row 4), not re-run.
-  - From review of #73, each needing a re-baseline: check a parked car's jittered footprint, not only
-    its bay, against the 0.3 m lane limit (`sim/parking.js`); latch the bus-lane turn-in allowance
-    when the lane change starts rather than at the current speed (`sim/bus-lanes.js`).
-  - Scenery in the lane during a detour: `nudge` (`brain/candidates.js`) rounds `lane.lateral`, which
-    already includes the detour's move, and `inLane` adds the detour again, for the hard brake and the
-    scenery stops alike. Older than #73; needs a re-baseline.
+- [ ] **1.8 The other maps.** (M) The 1.4 smoke suite (city, dry, two routes each) **passed on every
+  map** on 11 November (`docs/validation/other-maps-2026-11-11.md`). A second round on 12 November
+  fixed every failure the soak sample and the review of #73 had left open: Toronto, Calgary and
+  Victoria seed 2 (stuck routes, a traffic car turning across the car, emergency yields, a prohibited
+  turn the audit misread), the Kitsilano seed 3 deadlocks, the night failures at 23:30 and 06:30 and in
+  fog, the delivery-van stand-off (cover row 4), parked cars' jittered footprints, the bus-lane turn-in
+  latch and a detour counted twice. Each fix has a Node check. The fixes changed which traffic the car
+  meets, and merged they found older faults (emergency stops at a line, junctions placed from summed
+  edge lengths, a plow on residential streets, waits at a narrow contraflow mouth, a parking manoeuvre
+  given up after one overshoot), fixed in turn. Over 41 jobs (172 routes) on the final tree: **166/172**;
+  new references in `docs/rules-baseline.md`, ten bare routes changed. Evidence:
+  `docs/validation/other-maps-round2-2026-11-12.md`. Still open, all found by the final run:
+  - Kitsilano city rain `s1-12`: a brake check with a car closing from behind at 0.92 s; the forward
+    sims assume a follower keeps its speed, so every stop for the sign is rejected and the car brakes
+    hard. The weekly blocking city matrix fails on this and the next one.
+  - Kitsilano city snow `s1-4`: failures to yield to an emergency vehicle (Balsam and Arbutus Streets).
+  - Edmonton `s1-2`: timeout on 81 Avenue NW. Winnipeg `s1-1`: failure to yield on Martha Street.
+  - Kitsilano 06:30 `s1-4`: failure to yield on Vine Street. Kitsilano parking `s1-10`: arrives on
+    Stephens Street but does not park.
+  - Unprotected lefts in fog: 28 m of sight is too short to judge 11 m/s oncoming traffic
+    (`docs/validation/night-2026-11-12.md`); the fog-night `s1-6` failure is gone for now only because
+    traffic changed.
+  - Long vehicles other than school buses (transit buses, plows, garbage and emergency trucks) can
+    still sweep parked cars at corners; turns other than U-turns still take their position from summed
+    edge lengths; the car's own contraflow sensing keeps the old junction-entry rule.
+  - The committed Jev and DeepSeek challenge recordings replay exactly on 54 of 62 drives on this tree
+    (`docs/model-results.md`); re-record the other eight.
+  - From the review of #75, each changing traffic, so each needs its own re-baseline: re-sort turns
+    after a U-turn moves (`map/route.js`); a rounding tolerance on the lanes a pull-over can cross
+    (`brain/sensors.js`); keep a parker's stuck timeout running through blocked retries
+    (`sim/parkers.js`); roll the school bus's corner check all the way to a far corner and check that
+    its replacement turn's lane can be reached (`sim/npc.js`); check parked cars and other vehicles on a
+    pedestrian's or a child's way round a car (`sim/pedestrians.js`, `sim/ball-chase.js`); keep a
+    stopped car in a contraflow rider's gap check until its body clears (`sim/contraflow.js`); use the
+    achieved, not commanded, deceleration in `ringJoining` (`sim/roundabout.js`). Tried together, the
+    first four broke Kitsilano city dry `s1-12`.
 
 ## Phase 2: put the models on the road
 

@@ -1,0 +1,1107 @@
+{
+ "date": "2026-11-12",
+ "start_tree": "dcfc663",
+ "final_tree": "f5ffd31 + Sol, Codex and Greptile review fixes",
+ "engine": "node v22.23.4",
+ "brain": "rules",
+ "mode": "lockstep",
+ "npcs": 40,
+ "jobs": [
+  {
+   "id": "bare-kits",
+   "args": "--map kitsilano --seed 1"
+  },
+  {
+   "id": "city-kits-dry",
+   "args": "--features city --map kitsilano --seed 1"
+  },
+  {
+   "id": "city-kits-fog",
+   "args": "--features city --map kitsilano --seed 1 --weather fog"
+  },
+  {
+   "id": "city-kits-rain",
+   "args": "--features city --map kitsilano --seed 1 --weather rain"
+  },
+  {
+   "id": "city-kits-snow",
+   "args": "--features city --map kitsilano --seed 1 --weather snow"
+  },
+  {
+   "id": "city-calgary",
+   "args": "--features city --map calgary --seed 1 --count 2"
+  },
+  {
+   "id": "city-edmonton",
+   "args": "--features city --map edmonton --seed 1 --count 2"
+  },
+  {
+   "id": "city-halifax",
+   "args": "--features city --map halifax --seed 1 --count 2"
+  },
+  {
+   "id": "city-montreal",
+   "args": "--features city --map montreal --seed 1 --count 2"
+  },
+  {
+   "id": "city-mount_pleasant",
+   "args": "--features city --map mount_pleasant --seed 1 --count 2"
+  },
+  {
+   "id": "city-ottawa",
+   "args": "--features city --map ottawa --seed 1 --count 2"
+  },
+  {
+   "id": "city-quebec_city",
+   "args": "--features city --map quebec_city --seed 1 --count 2"
+  },
+  {
+   "id": "city-saskatoon",
+   "args": "--features city --map saskatoon --seed 1 --count 2"
+  },
+  {
+   "id": "city-toronto",
+   "args": "--features city --map toronto --seed 1 --count 2"
+  },
+  {
+   "id": "city-victoria",
+   "args": "--features city --map victoria --seed 1 --count 2"
+  },
+  {
+   "id": "city-winnipeg",
+   "args": "--features city --map winnipeg --seed 1 --count 2"
+  },
+  {
+   "id": "night-2330",
+   "args": "--features city --map kitsilano --seed 1 --hour 23.5"
+  },
+  {
+   "id": "night-0630",
+   "args": "--features city --map kitsilano --seed 1 --hour 6.5"
+  },
+  {
+   "id": "night-fog",
+   "args": "--features city --map kitsilano --seed 1 --hour 23.5 --weather fog"
+  },
+  {
+   "id": "park",
+   "args": "--features city --map kitsilano --seed 1 --park 1"
+  },
+  {
+   "id": "soak-toronto-s2",
+   "args": "--features city --map toronto --seed 2 --count 2"
+  },
+  {
+   "id": "soak-calgary-s2",
+   "args": "--features city --map calgary --seed 2 --count 2"
+  },
+  {
+   "id": "soak-victoria-s2",
+   "args": "--features city --map victoria --seed 2 --count 2"
+  },
+  {
+   "id": "soak-kits-s2",
+   "args": "--features city --map kitsilano --seed 2 --count 2"
+  },
+  {
+   "id": "soak-kits-s3",
+   "args": "--features city --map kitsilano --seed 3 --count 2"
+  },
+  {
+   "id": "soak-toronto-s3",
+   "args": "--features city --map toronto --seed 3 --count 2"
+  },
+  {
+   "id": "soak-calgary-s3",
+   "args": "--features city --map calgary --seed 3 --count 2"
+  },
+  {
+   "id": "soak-victoria-s3",
+   "args": "--features city --map victoria --seed 3 --count 2"
+  },
+  {
+   "id": "cover-0",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 0"
+  },
+  {
+   "id": "cover-1",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 1"
+  },
+  {
+   "id": "cover-2",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 2"
+  },
+  {
+   "id": "cover-3",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 3"
+  },
+  {
+   "id": "cover-4",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 4"
+  },
+  {
+   "id": "cover-5",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 5"
+  },
+  {
+   "id": "cover-6",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 6"
+  },
+  {
+   "id": "cover-7",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 7"
+  },
+  {
+   "id": "cover-8",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 8"
+  },
+  {
+   "id": "cover-9",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 9"
+  },
+  {
+   "id": "cover-10",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 10"
+  },
+  {
+   "id": "cover-11",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 11"
+  },
+  {
+   "id": "cover-12",
+   "args": "--features city --map kitsilano --seed 1 --count 2 --cover 12"
+  }
+ ],
+ "start": {
+  "toronto-s2": {
+   "passed": 0,
+   "routes": 2,
+   "failures": {
+    "s2-1": [
+     "collision"
+    ],
+    "s2-2": [
+     "stuck"
+    ]
+   },
+   "deadlocks": 516
+  },
+  "calgary-s2": {
+   "passed": 0,
+   "routes": 2,
+   "failures": {
+    "s2-1": [
+     "timeout",
+     "failed to yield"
+    ],
+    "s2-2": [
+     "made a prohibited turn"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "victoria-s2": {
+   "passed": 0,
+   "routes": 2,
+   "failures": {
+    "s2-1": [
+     "failed to yield"
+    ],
+    "s2-2": [
+     "stuck"
+    ]
+   },
+   "deadlocks": 4
+  },
+  "kits-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 3
+  },
+  "night-2330": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-0630": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-7": [
+     "collision",
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-fog": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-6": [
+     "collision",
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "park": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-4": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  }
+ },
+ "after_round1": {
+  "bare-kits": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-dry": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-rain": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-9": [
+     "timeout"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-kits-snow": {
+   "passed": 10,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ],
+    "s1-12": [
+     "timeout"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-calgary": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-edmonton": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-2": [
+     "timeout"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-halifax": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-montreal": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-2": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-mount_pleasant": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-1": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-ottawa": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-1": [
+     "timeout",
+     "collision"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-quebec_city": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-1": [
+     "timeout"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-saskatoon": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-toronto": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-victoria": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-winnipeg": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "night-2330": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "night-0630": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "night-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "park": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-12": [
+     "not parked"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "soak-toronto-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s2": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s2-2": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "soak-victoria-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-kits-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-kits-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-toronto-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-victoria-s3": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s3-2": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "cover-0": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-1": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-4": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-5": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-6": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-7": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-8": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-9": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-2": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "cover-10": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-11": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-12": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  }
+ },
+ "final": {
+  "bare-kits": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-dry": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-rain": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-12": [
+     "braked hard with a tailgater close behind"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-kits-snow": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-calgary": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-edmonton": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-2": [
+     "timeout"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-halifax": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-montreal": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-mount_pleasant": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-ottawa": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-quebec_city": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-saskatoon": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-toronto": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-victoria": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-winnipeg": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-1": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-2330": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "night-0630": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "park": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-10": [
+     "not parked"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "soak-toronto-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-victoria-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-kits-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-kits-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-toronto-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-victoria-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-0": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-1": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-4": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-5": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-6": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-7": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-8": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-9": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-10": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-11": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-12": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  }
+ },
+ "before_review": {
+  "bare-kits": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-dry": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-rain": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-12": [
+     "braked hard with a tailgater close behind"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-kits-snow": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-calgary": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-edmonton": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-2": [
+     "timeout"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-halifax": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-montreal": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-mount_pleasant": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-ottawa": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-quebec_city": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-saskatoon": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-toronto": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-victoria": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-winnipeg": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-1": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-2330": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "night-0630": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "park": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-toronto-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-victoria-s2": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s2-1": [
+     "red light"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "soak-kits-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-kits-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-toronto-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-victoria-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-0": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-1": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-4": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-5": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-6": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-7": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-8": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-9": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-10": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-11": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-12": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  }
+ }
+}

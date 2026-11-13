@@ -73,6 +73,10 @@ const BLOCKED_S = 6;
 // Past a vehicle standing still facing it, a rider leaves at least this between them, at SQUEEZE_MPS.
 const SQUEEZE_M = 0.1;
 const SQUEEZE_MPS = 2;
+// Squeezing by a vehicle standing face to face along a contraflow street, it may ride up to HUG_M nearer
+// the kerb than its line, moving over at HUG_MPS.
+const HUG_M = 0.2;
+const HUG_MPS = 0.4;
 
 export const isContraflowRider = (o) => !!o?.contra;
 const wrap = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a <= -Math.PI) a += 2 * Math.PI; return a; };
@@ -373,8 +377,11 @@ export class ContraflowRiders {
     // any body in its way just ahead: a car meeting it in a narrow street, one turning across it, a
     // cyclist, someone on foot
     if (n.squeeze && Math.hypot(n.squeeze.x - n.x, n.squeeze.y - n.y) > 15) n.squeeze = null;
-    let gap = Infinity, leadV = n.v0, blocker = null, squeezing = false;
+    let gap = Infinity, leadV = n.v0, blocker = null, squeezing = false, hug = false;
     const reach = spec.width / 2 + 0.15;
+    // (squeezing by, along a contraflow street, it may keep up to HUG_M nearer the kerb than its line:
+    // which way that is, or 0)
+    const seg0 = path.segs.find((g) => path.s < g.sEnd), kerb = seg0?.contra ? (contraflowOf(map, seg0.id)?.side === "right" ? -1 : 1) : 0;
     const bodies = [world.ego, ...world.npcs, ...this.riders, ...world.parked.near(n.x, n.y, BODY_LOOK_M + 6), ...world.parked.doorsNear(n.x, n.y, BODY_LOOK_M + 6), ...world.crowd.near(n.x, n.y, BODY_LOOK_M + 6)];
     for (const o of bodies) {
       if (o === n || o === n.squeeze || Math.abs(o.x - n.x) > BODY_LOOK_M + 8 || Math.abs(o.y - n.y) > BODY_LOOK_M + 8) continue;
@@ -383,6 +390,18 @@ export class ContraflowRiders {
       // squeezes by, slowly, if it fits)
       const still = o.spec && Math.abs(o.v || 0) < 0.3 && (Math.abs(wrap(o.psi - n.psi)) > Math.PI * 2 / 3 || (n.waitedOn === o && n.waited > BLOCKED_S));
       const side = still ? spec.width / 2 + SQUEEZE_M : reach;
+      // (one standing face to face that has not moved over far enough, the driven car stopped short of
+      // where it meant to, say: by the kerb, where that fits)
+      if (still && kerb && Math.abs(wrap(o.psi - n.psi)) > Math.PI * 2 / 3) {
+        const blocks = (off) => {
+          for (let d = 0; d <= BODY_LOOK_M; d += 0.5) {
+            const [x, y] = path.offsetPointAt(Math.min(path.length, front + d), off), dx = x - b.center[0], dy = y - b.center[1];
+            if (Math.abs(dx * c + dy * s) <= b.halfLength + side && Math.abs(dy * c - dx * s) <= b.halfWidth + side) return true;
+          }
+          return false;
+        };
+        if (blocks(0) && !blocks(kerb * HUG_M)) { hug = squeezing = true; continue; }
+      }
       for (let d = 0; d <= BODY_LOOK_M && d < gap; d += 0.5) {
         const [x, y] = path.pointAt(Math.min(path.length, front + d)), dx = x - b.center[0], dy = y - b.center[1];
         if (still && d < 8 && Math.abs(dx * c + dy * s) <= b.halfLength + reach && Math.abs(dy * c - dx * s) <= b.halfWidth + reach + 0.6) squeezing = true;
@@ -393,9 +412,10 @@ export class ContraflowRiders {
     const standing = blocker && blocker.spec && n.v < 0.2 && Math.abs(blocker.v || 0) < 0.2 && (stopAt === null || stopAt > gap + 1);
     if (standing) { if (n.waitedOn !== blocker) { n.waitedOn = blocker; n.waited = 0; } n.waited += dt; }
     else if (n.waitedOn && (Math.abs(n.waitedOn.v || 0) > 0.3 || Math.hypot(n.waitedOn.x - n.x, n.waitedOn.y - n.y) > 12)) { n.waitedOn = null; n.waited = 0; }
-    // (held up, face to face, by a vehicle standing in its way, not the driven car, and not where it
-    // means to stop)
-    const stuck = blocker && blocker !== world.ego && blocker.spec && n.v < 0.2 && Math.abs(blocker.v || 0) < 0.2 && Math.abs(wrap(blocker.psi - n.psi)) > Math.PI * 2 / 3 && (stopAt === null || stopAt > gap + 1);
+    // (held up, face to face, by a vehicle standing in its way, not the driven car: also where it means to
+    // stop, as at a line a police officer holds it at, since a vehicle waiting there for it to go by
+    // waits for good)
+    const stuck = blocker && blocker !== world.ego && blocker.spec && n.v < 0.2 && Math.abs(blocker.v || 0) < 0.2 && Math.abs(wrap(blocker.psi - n.psi)) > Math.PI * 2 / 3;
     n.blocked = stuck ? (n.blocked || 0) + dt : 0;
     if (n.blocked > BLOCKED_S) {
       n.blocked = 0;
@@ -416,7 +436,8 @@ export class ContraflowRiders {
     a = Math.max(-4, Math.min(IDM.aMax, a));
     if (n.v < 0.05 && a < 0) a = -1;
     n.held = stopAt !== null && n.v < 0.3;
-    n.step(dt, { steer: purePursuit(n, path, path.s, 0), accel: a });
+    if (hug || n.hug) n.hug = (n.hug || 0) + Math.max(-HUG_MPS * dt, Math.min(HUG_MPS * dt, (hug ? kerb * HUG_M : 0) - (n.hug || 0)));
+    n.step(dt, { steer: purePursuit(n, path, path.s, n.hug || 0), accel: a });
     if (n.v < 0) n.v = 0;
   }
 }
@@ -494,6 +515,22 @@ export function entryHold(map, edgeId, start) {
   return start - crossHalf(map, e.from, [e]) - ENTRY_M;
 }
 
+// Where the junction a driver enters contraflow edge `edgeId` through ends (arc length along its line,
+// the edge starting at `start`): the far side of the crossing street's asphalt.
+function junctionFar(map, edgeId, start) {
+  const e = map.edges.get(edgeId);
+  return start + crossHalf(map, e.from, [e]);
+}
+
+// Where traffic on NpcPath `path` waits before entering contraflow edge `en` ({ id, start }): at the line of
+// the signal on the edge it comes in on, where there is one, or else (and never nearer) at `entryHold`.
+function entryWait(map, path, en) {
+  const i = path.edges.findIndex((g) => g.id === en.id), prev = i > 0 ? path.edges[i - 1] : null;
+  const hold = entryHold(map, en.id, en.start), c = prev?.control;
+  if (c?.type !== "signal") return hold;
+  return Math.min(hold, prev.sStart + (c.s_line / Math.max(1, map.edges.get(prev.id).length)) * (prev.sEnd - prev.sStart));
+}
+
 // The contraflow edges along a vehicle's way that it enters within `look` metres of its front (not
 // the one it is on): [{ id, start }] (start: the arc length where it begins).
 export function entriesAhead(map, edges, front, look = ENTRY_LOOK_M) {
@@ -522,8 +559,13 @@ export function trafficYield(world, d, front) {
   const map = world.map, path = d.path, spec = d.spec;
   const cur = path.currentEdge(), e = map.edges.get(cur.id);
   const lat = (d.side || 0);
-  const room = () => roomRight(e, cur.lane, spec);
+  // (the room on the street where it would meet the rider, which may be a narrower one it turns into)
+  const room = (r) => {
+    const g = path.edges.find((x) => r < x.sEnd) || cur;
+    return roomRight(map.edges.get(g.id), g.lane, spec);
+  };
   const entries = entriesAhead(map, path.edges, front);
+  const stopping = d.v * d.v / (2 * Math.min(4, comfort().hardDecel)) - 1;
   let hold = null, shift = 0;
   for (const n of riders) {
     if (Math.abs(n.x - d.x) > RIDER_LOOK_M + 20 || Math.abs(n.y - d.y) > RIDER_LOOK_M + 20) continue;
@@ -532,8 +574,19 @@ export function trafficYield(world, d, front) {
     shift = Math.max(shift, c.shift || 0);
     if (c.at === null) continue;
     let at = c.at - (c.meet ? 3 : 1);
-    // (about to enter its street: short of the junction instead)
-    for (const en of entries) if (comingOut(n, en.id) && front < en.start) at = Math.min(at, entryHold(map, en.id, en.start));
+    for (const en of entries) {
+      if (front >= en.start) continue;
+      // (about to enter its street: short of the junction instead)
+      if (comingOut(n, en.id)) at = Math.min(at, entryHold(map, en.id, en.start));
+      // (meeting it just inside the street it turns into, one standing at its line say, where waiting for it
+      // would leave the car's body in the junction: before the junction instead, at the line of a signal it
+      // comes through, out of the box, as for a junction with no room past it (sim/junction-box.js); once it
+      // can still stop there)
+      else if (c.meet && c.at >= en.start && at - spec.length < junctionFar(map, en.id, en.start)) {
+        const wait = entryWait(map, path, en);
+        if (wait - front > stopping) at = Math.min(at, wait);
+      }
+    }
     if (hold === null || at < hold) hold = at;
   }
   return hold === null && shift === 0 ? null : { hold, shift };

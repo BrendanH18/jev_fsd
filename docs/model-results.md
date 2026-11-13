@@ -11,7 +11,13 @@ PORT=8331 uv run server.py      # in one terminal; it keeps running
 node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/jev-arena-2026-11-11.json.gz --check 1   # in another
 ```
 
-A recording replays exactly only on the JavaScript engine it was made on (here V8, through Node).
+A recording replays exactly only on the JavaScript engine it was made on (here V8, through Node),
+and only on a tree whose traffic, sensing and candidates ask the same questions. The 12 November
+1.8 fixes (`docs/validation/other-maps-round2-2026-11-12.md`) change traffic, so after them 54
+of the 62 drives replay exactly; `door-zone`, `snow-plow`, `zipper`, `roundabout-gap`, `make-room`,
+`on-your-bumper` and both road tests ask questions the recordings have no answer for, which fall back
+to Rules (Jev still passes all 62, DeepSeek still fails only `double-parked`). Check out `dcfc663`
+to replay every drive exactly, or record those eight again.
 The per-drive results are in `data/results/2026-11-11/`.
 
 ## The 60 challenges and the 2 road tests

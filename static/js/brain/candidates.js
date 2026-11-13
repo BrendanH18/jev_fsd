@@ -4,7 +4,7 @@
 
 import { CAR, comfort } from "../sim/vehicle.js";
 import { followingPolicy } from "../sim/following.js";
-import { applyLaw, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
+import { applyLaw, detourAt, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { surfaceDistance } from "../map/junctions.js";
 import { obbOverlap } from "../sim/collision.js";
 import { wrap } from "../sim/world.js";
@@ -104,8 +104,11 @@ export function sampleCandidates(snap, world) {
   // Scenery in the lane ahead: nudges of a full metre are offered, and the car stops at a line, or
   // brakes hard, where it is (to the nearest half metre either way), not back in the middle of the
   // lane beside it.
+  // (the line it is on, less the move of a detour the law carries: `lane.lateral` includes that move,
+  // and the law adds it again)
   const scenery = !shifting && !!lane && sceneryInLane(snap, world, keep.center);
-  const nudge = scenery ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : 0;
+  const lineOff = (moved) => Math.round(Math.max(-1, Math.min(1, lane.lateral - detourAt(moved, s))) * 2) / 2;
+  const nudge = scenery ? lineOff(detour.detour) : 0;
 
   if (!lost && !offRoad) {
     // Moving back from a pull-over can swing the tail into a kerbside car. Keep the exact
@@ -508,7 +511,8 @@ export function sampleCandidates(snap, world) {
   // (a detour's own move is already in `lane.lateral`, and inLane keeps the detour: holding the line
   // there would add the move twice)
   const detouring = !!detour.detour || !!(snap.cyclist_pass?.going && passing.detour);
-  const brakeLine = !easing && !scenery && !shifting && !detouring && lane && Math.abs(lane.lateral) >= HOLD_LINE_M ? Math.round(Math.max(-1, Math.min(1, lane.lateral)) * 2) / 2 : nudge;
+  const brakeLine = !easing && !scenery && !shifting && !detouring && lane && Math.abs(lane.lateral) >= HOLD_LINE_M ? lineOff(null)
+    : scenery ? lineOff(easing?.detour || (snap.cyclist_pass?.going ? passing.detour : null) || detour.detour) : 0;
   list.push({ id: "hard_brake", law: { ...inLane({ kind: "hard_brake", offset: brakeLine }), ...(easing || {}), ...(snap.cyclist_pass?.going ? passing : {}) }, steer: "hold lane", speed: "brake hard" });
   const amber = snap.amber_clear || snap.intersection?.amber;
   for (const c of list) if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);
@@ -527,10 +531,18 @@ export function simulateAll(candidates, snap, world) {
   // (an emergency vehicle coming up behind stops for what it cannot get past: it is not predicted
   // to run into the car)
   const behindEv = (o) => isEmergency(o) && world.ego.toLocal(o.x, o.y).ahead < 0 && Math.abs(wrap(o.psi - world.ego.psi)) < Math.PI / 4;
+  // (one coming the other way down the street moves across only to a gap that clears the car, or stops
+  // (sim/emergency.js threadGap): its body stays where it is in the forward sims. Still angled from a
+  // turn into the street, one predicted straight on went into a car standing at the kerb, and every
+  // pull-over was braked off)
+  const oncomingEv = (o) => isEmergency(o) && world.ego.toLocal(o.x, o.y).ahead > 0 && Math.abs(wrap(o.psi - world.ego.psi)) > Math.PI * 3 / 4;
   // (nor a tailgater close behind, sim/tailgaters.js: it brakes too, late; braking it could not match is
   // `brakes_hard_with_tailgater`, below)
   const tailgater = snap.tailgater?.vehicle || null;
-  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !behindEv(o) && o !== tailgater).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
+  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !behindEv(o) && o !== tailgater).map((n) => {
+    const v = oncomingEv(n) ? 0 : n.v;
+    return { n, x: n.x, y: n.y, vx: Math.cos(n.psi) * v, vy: Math.sin(n.psi) * v };
+  });
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
