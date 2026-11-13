@@ -26,7 +26,8 @@ import { reserveSlot } from "./parking.js";
 // walking pace, each on full lock or straight, the car stopping and turning the wheel before each one.
 // Straight to where the S starts (`align`), the S into the space (`in1` on full lock toward the kerb up
 // to an angle, `back` straight, `in2` on full lock the other way once that brings it parallel at the
-// kerb), `square` legs to straighten up should anything cut a leg short, and `settle` straight forward
+// kerb), `square` legs to straighten up should anything cut a leg short (with a short `shuffle` straight back or
+// forward first where neither swing has the room), and `settle` straight forward
 // or back to its goal; then `parked`. Pulling out of the space (`mode` "out", planPullOut) is the same
 // path backwards. Each leg ends short of
 // the kerb (the wheels never touch it; a bumper may reach over it) and CLEAR_M short of anything
@@ -72,6 +73,7 @@ const ALIGN_M = 0.12;                // the S starts this close to where it shou
 const STEER_READY_RAD = 3 * Math.PI / 180;
 const LEG_MAX_M = 9;
 export const MAX_LEGS = 12;
+const SHUFFLE_M = 0.5;              // a straight leg to make room for a swing that has none
 const KERB_OVER_M = 0.25;           // how far a bumper may reach over the kerb
 const TYRE_M = 0.1;                 // half a tyre's width: its outer face this far outside the wheel's centre
 const OUT_GAP_M = 25;               // pulling out: nobody in the lane coming up behind within this, or
@@ -555,8 +557,14 @@ function nextLeg(vehicle, law, world) {
   const lose = phi > 0 ? { dir: 1, steer: -1 } : { dir: -1, steer: -1 };
   const [one, two] = errW > LAT_TOL ? [gain, lose] : [lose, gain];
   const leg = can(one.dir, one.steer) ? one : can(two.dir, two.steer) ? two : null;
-  if (!leg) { law.phase = "stuck"; return; }
-  Object.assign(law, { phase: "square", ...leg, sign: Math.sign(phi) });
+  if (leg) { Object.assign(law, { phase: "square", ...leg, sign: Math.sign(phi) }); return; }
+  // (neither swing has the room, the car in front or behind in the way of its corner: standing as the law
+  // allows already, it is parked; else a little way straight, toward where swinging in goes, else away
+  // from it, and then it tries again, once)
+  if (parkedPose(vehicle, law, world).within_kerb) { law.phase = "parked"; return; }
+  const shuffle = law.phase === "shuffle" ? undefined : [gain.dir, -gain.dir].find((dir) => can(dir, 0));
+  if (shuffle === undefined) { law.phase = "stuck"; return; }
+  Object.assign(law, { phase: "shuffle", dir: shuffle, steer: 0 });
 }
 
 // How far the current leg has still to go (metres of travel), or <= 0 once it is over. The S's first
@@ -574,6 +582,7 @@ function remaining(vehicle, law) {
     return a <= PAR_TOL / 4 ? 0 : law.R * a;
   }
   if (law.phase === "settle") return (law.goalU - u) * law.dir - U_TOL / 4;
+  if (law.phase === "shuffle") return SHUFFLE_M - law.travelled;
   if (law.phase === "align") return (law.startU - u) * law.dir - 0.03;
   return 0;
 }
