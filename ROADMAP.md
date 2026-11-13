@@ -181,6 +181,15 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
     edge lengths; the car's own contraflow sensing keeps the old junction-entry rule.
   - The committed Jev and DeepSeek challenge recordings replay exactly on 54 of 62 drives on this tree
     (`docs/model-results.md`); re-record the other eight.
+  - From the review of #75, each changing traffic, so each needs its own re-baseline: re-sort turns
+    after a U-turn moves (`map/route.js`); a rounding tolerance on the lanes a pull-over can cross
+    (`brain/sensors.js`); keep a parker's stuck timeout running through blocked retries
+    (`sim/parkers.js`); roll the school bus's corner check all the way to a far corner and check that
+    its replacement turn's lane can be reached (`sim/npc.js`); check parked cars and other vehicles on a
+    pedestrian's or a child's way round a car (`sim/pedestrians.js`, `sim/ball-chase.js`); keep a
+    stopped car in a contraflow rider's gap check until its body clears (`sim/contraflow.js`); use the
+    achieved, not commanded, deceleration in `ringJoining` (`sim/roundabout.js`). Tried together, the
+    first four broke Kitsilano city dry `s1-12`.
 
 ## Phase 2: put the models on the road
 
