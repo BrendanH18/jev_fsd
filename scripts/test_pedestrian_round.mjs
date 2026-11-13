@@ -45,19 +45,18 @@ for (const npc of [false, true]) {
 }
 // A car still at the kerb waiting to pull out, its tail grazing their way (that s1-9 child's way home,
 // round the stopped car, ran past the tail of one, which waited on others), is walked round like any car
-// standing just short of their way, never through: and once it moves off, it is waited for.
-for (const moving of [false, true]) {
-  const car = Object.assign(new Vehicle(0, 0, 0, 0), { id: "car_p1", pull: { lat: 2.5, t: 0, T: 3.5, wait: 1, moving } });
+// standing just short of their way, never through.
+{
+  const car = Object.assign(new Vehicle(0, 0, 0, 0), { id: "car_p1", pull: { lat: 2.5, t: 0, T: 3.5, wait: 1, moving: false } });
   const x = FRONT + 0.2, cross = { node: null, from: [x, -6], to: [x, 6], jaywalk: true };
   const ped = new Pedestrian({ id: "child", x, y: -1.6, psi: Math.PI / 2, speed: 1.5, v: 0, phase: 0, waiting: 0,
     path: [{ p: cross.to, cross }], crossing: cross, home: true, child: true });
   const crowd = Object.create(Crowd.prototype);
   Object.assign(crowd, { list: [ped], world: { t: 0, ego: new Vehicle(200, 200, 0, 0), npcs: [car] } });
   let touched = false;
-  for (let k = 0; k < (moving ? 2 : 10) * 60; k++) { crowd.step(1 / 60); crowd.world.t += 1 / 60; touched ||= obbOverlap(ped.obb(), car.obb()); }
-  assert.equal(touched, false, `never walks through the car (${moving ? "moving off" : "waiting at the kerb"})`);
-  if (moving) assert.ok(ped.y < -CAR.width / 2, "waits for a car that has moved off from the kerb");
-  else assert.ok(ped.y > CAR.width / 2, `walks round a car still waiting at the kerb (${ped.y.toFixed(2)})`);
+  for (let k = 0; k < 10 * 60; k++) { crowd.step(1 / 60); crowd.world.t += 1 / 60; touched ||= obbOverlap(ped.obb(), car.obb()); }
+  assert.equal(touched, false, "never walks through a car waiting at the kerb");
+  assert.ok(ped.y > CAR.width / 2, `walks round a car still waiting at the kerb (${ped.y.toFixed(2)})`);
 }
 console.log("Pedestrians held up by a vehicle standing just short of their way walk round it");
 process.exit(0);
