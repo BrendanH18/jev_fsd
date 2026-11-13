@@ -27,6 +27,11 @@ import { segmentHitsBox } from "./crosswalk.js";
 
 export const PEDESTRIANS = 60;
 export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 };   // footprint for collisions
+// Part-way across, held up this long by a vehicle standing just short of their way (one stopped for them,
+// its bumper at their line, say), someone walks round its nearer end, ROUND_CLEAR_M clear of it.
+const ROUND_S = 3;
+const ROUND_CLEAR_M = 0.55;
+const ROUND_GRAZE_M = 0.1;   // (a way passing no further into its body than this only grazes it)
 
 export class Pedestrian {
   constructor(props) { Object.assign(this, props); this.spec = PED; this.kind = "pedestrian"; this.a = 0; this.frozen = 0; }
@@ -338,7 +343,16 @@ export class Crowd {
       // (a child darting out, `dart`, runs without looking: see the School zone challenge)
       if (ped.crossing && !ped.dart) {
         const react = this.threat(ped, dx / (d || 1), dy / (d || 1));
-        if (react === "wait") { ped.v = 0; continue; }
+        if (react === "wait") {
+          ped.v = 0;
+          // (held up by a vehicle standing just short of their way, its bumper at the line, not across it
+          // (that one they wait for): after a while, round it)
+          const o = this.standing, box = o?.obb(), body = o && !segmentHitsBox([ped.x, ped.y], wp.p, { ...box, halfLength: box.halfLength - ROUND_GRAZE_M, halfWidth: box.halfWidth - ROUND_GRAZE_M }) ? o : null;
+          ped.roundWait = body ? (ped.roundWait || 0) + dt : 0;
+          if (body && ped.roundWait > ROUND_S && !wp.round) { ped.roundWait = 0; this.walkRound(ped, body, dx / (d || 1), dy / (d || 1)); }
+          continue;
+        }
+        ped.roundWait = 0;
         if (react === "hurry") v = Math.max(v, 2.4);
       }
       if (d <= v * dt) {
@@ -372,13 +386,17 @@ export class Crowd {
   // A car bearing down that will not stop in time: "hurry" out of its path if already in it, "wait"
   // if about to step into it. Also wait before walking into a stationary car's body; else null.
   threat(ped, ux, uy) {
+    // (`standing`: the vehicle standing in the way, when that is what it waits for)
+    this.standing = null;
     for (const o of [this.world.ego, ...this.world.npcs]) {
+      // (a car still at the kerb, waiting to pull out, is parked: people walk by it as by parked cars)
+      if (o.pull && !o.pull.moving) continue;
       // A stopped car has no arrival time, but still occupies the crosswalk. Wait short of its
       // body; someone already caught beside/in it can continue out instead of being trapped.
       // A boarding rider deliberately enters their own streetcar through its open door.
       if (!(ped.boarding && ped.streetcar === o.id) && Math.abs(o.v) < (o.kind === "bike" ? 2 : 0.5) && Math.abs(o.x - ped.x) < 15 && Math.abs(o.y - ped.y) < 15) {
         const body = ped.obb(), ahead = { ...body, heading: Math.atan2(uy, ux), center: [ped.x + ux * 0.4, ped.y + uy * 0.4] };
-        if (obbOverlap(ahead, o.obb(), 0.1) && !obbOverlap(body, o.obb())) return "wait";
+        if (obbOverlap(ahead, o.obb(), 0.1) && !obbOverlap(body, o.obb())) { this.standing = o; return "wait"; }
       }
       if (o.v < 2 || Math.abs(o.x - ped.x) > 40 || Math.abs(o.y - ped.y) > 40) continue;
       const local = o.toLocal(ped.x, ped.y);
@@ -396,6 +414,17 @@ export class Crowd {
       if (Math.abs(local.right) < half + 2.5 && Math.sign(towardRight) === -Math.sign(local.right)) return "wait";
     }
     return null;
+  }
+
+  // Round the nearer end of vehicle `o` standing across `ped`'s way (heading `ux`, `uy`), ROUND_CLEAR_M
+  // clear of it: out past that end, across to beyond its far side, and on along the crossing from there.
+  walkRound(ped, o, ux, uy) {
+    const spec = o.spec || { length: 4.5, width: 1.9, rearOverhang: 1 }, c = Math.cos(o.psi), s = Math.sin(o.psi);
+    const local = o.toLocal(ped.x, ped.y), front = spec.length - spec.rearOverhang, clear = ROUND_CLEAR_M + PED.width / 2;
+    const end = local.ahead >= (front - spec.rearOverhang) / 2 ? front + clear : -spec.rearOverhang - clear;
+    const side = (ux * s - uy * c) >= 0 ? 1 : -1, far = side * (spec.width / 2 + clear);
+    const at = (ahead, right) => [o.x + c * ahead + s * right, o.y + s * ahead - c * right];
+    ped.path.unshift({ p: at(end, local.right), round: true }, { p: at(end, far), round: true });
   }
 
   mayCross(cross, t) {
