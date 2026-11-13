@@ -41,11 +41,11 @@ const turns = (planned, from, to) => planned.filter(([id], k) => id === from && 
 
 // A synthetic two-lane street: a long block, a short link (`link` m) and a junction where the way goes
 // on or turns right. Lane 0 is the left lane.
-function junction(link) {
+function junction(link, longLanes = 2) {
   const x0 = -200 - link, x1 = -link;
-  const edge = (id, from, to, pts) => ({ id, from, to, pts, length: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]), lanes: 2, lane_width: 3.5,
-    lane_offsets: [1.75, 5.25], asphalt: [-3.5, 7], parking: [0, 0], cls: "secondary", limit: 11.1, oneway: false });
-  const edges = [edge("long", "a", "b", [[x0, 0], [x1, 0]]), edge("link", "b", "c", [[x1, 0], [0, 0]]),
+  const edge = (id, from, to, pts, lanes = 2) => ({ id, from, to, pts, length: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]), lanes, lane_width: 3.5,
+    lane_offsets: [1.75, 5.25].slice(0, lanes), asphalt: [-3.5, 7], parking: [0, 0], cls: "secondary", limit: 11.1, oneway: false });
+  const edges = [edge("long", "a", "b", [[x0, 0], [x1, 0]], longLanes), edge("link", "b", "c", [[x1, 0], [0, 0]]),
     edge("on", "c", "d", [[0, 0], [200, 0]]), edge("right", "c", "r", [[0, 0], [0, -200]])];
   // (lanes right of each edge's centreline: y below an eastbound edge, x left of the southbound one)
   const lanes = edges.flatMap((e) => e.lane_offsets.map((o, idx) => ({ edge: e.id, idx,
@@ -65,6 +65,14 @@ for (const [link, reachable] of [[12, true], [25, false]]) {
   if (reachable) assert.ok(fromLeft > 0, `after a ${link} m link, the right turn from the left lane is still planned`);
   else assert.equal(fromLeft, 0, `after a ${link} m block, no right turn from the left lane`);
   assert.ok(fromCurb > 0, `from the curb lane of the ${link} m block, the right turn is planned`);
+}
+// A one-lane block widening to two only at the short link (Kitsilano e399, e402, e404): the long block
+// has no lane to change into, so there is no room for the turn from the link's left lane.
+{
+  const map = junction(12, 1);
+  let fromLeft = 0;
+  for (let seed = 1; seed <= 100; seed++) fromLeft += turns(plan(map, "link", 0, seed), "link", "right").length + turns(plan(map, "long", 0, seed, 100), "link", "right").filter((lane) => lane === 0).length;
+  assert.equal(fromLeft, 0, "after a one-lane block and a 12 m two-lane link, no right turn from the left lane");
 }
 console.log("Traffic plans a turn only from a lane it can reach the turn's lane from");
 process.exit(0);

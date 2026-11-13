@@ -34,16 +34,16 @@
   "deadlocks": 0,
   "fallbacks": 0,
   "violations_per_km": 0,
-  "avg_kmh": 14.84,
+  "avg_kmh": 14.83,
   "min_gap_m": 2.1,
   "min_ttc_s": 1.2,
   "hard_brakes": 0,
-  "rms_jerk": 2.9,
+  "rms_jerk": 2.91,
   "max_lat_accel": 4.73,
   "lane_rms_m": 0.21,
   "lane_changes": 3,
   "speeding_s": 0,
-  "decisions": 11213,
+  "decisions": 11222,
   "calls": 0,
   "tokens": 0,
   "cost_usd": 0
@@ -103,7 +103,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 44573
+   "wall_ms": 46001
   },
   {
    "id": "s1-2",
@@ -188,7 +188,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 70615
+   "wall_ms": 64127
   },
   {
    "id": "s1-3",
@@ -253,7 +253,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 33963
+   "wall_ms": 32052
   },
   {
    "id": "s1-4",
@@ -345,7 +345,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 93437
+   "wall_ms": 80319
   },
   {
    "id": "s1-5",
@@ -409,7 +409,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 55914
+   "wall_ms": 50374
   },
   {
    "id": "s1-6",
@@ -481,7 +481,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 77686
+   "wall_ms": 74418
   },
   {
    "id": "s1-7",
@@ -555,7 +555,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 87961
+   "wall_ms": 76527
   },
   {
    "id": "s1-8",
@@ -618,7 +618,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 76836
+   "wall_ms": 67816
   },
   {
    "id": "s1-9",
@@ -630,10 +630,10 @@
     "rights": 2
    },
    "arrived": true,
-   "time_s": 333.4,
-   "distance_m": 1490,
+   "time_s": 335.8,
+   "distance_m": 1491,
    "progress": 0.788,
-   "avg_kmh": 16.1,
+   "avg_kmh": 16,
    "collisions": 0,
    "at_fault": 0,
    "red_lights": 0,
@@ -655,17 +655,17 @@
    "min_ttc_s": 1.2,
    "min_headway_s": 1.18,
    "max_accel": 2.57,
-   "max_decel": -5.71,
+   "max_decel": -5.7,
    "hard_brakes": 0,
-   "rms_jerk": 3.22,
-   "max_jerk": 46.4,
+   "rms_jerk": 3.37,
+   "max_jerk": 55.1,
    "max_lat_accel": 5.67,
    "lane_rms_m": 0.4,
    "lane_max_m": 3.52,
    "lane_changes": 0,
    "speeding_s": 0,
-   "stopped_s": 47.6,
-   "decisions": 1193,
+   "stopped_s": 48.6,
+   "decisions": 1202,
    "calls": 0,
    "tokens": 0,
    "cost_usd": 0,
@@ -705,11 +705,11 @@
      }
     },
     {
-     "t": 333.3,
+     "t": 335.8,
      "type": "arrived"
     }
    ],
-   "wall_ms": 87969
+   "wall_ms": 82460
   },
   {
    "id": "s1-10",
@@ -774,7 +774,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 57106
+   "wall_ms": 51276
   },
   {
    "id": "s1-11",
@@ -839,7 +839,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 57769
+   "wall_ms": 39980
   },
   {
    "id": "s1-12",
@@ -911,7 +911,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 82533
+   "wall_ms": 79471
   }
  ]
 }

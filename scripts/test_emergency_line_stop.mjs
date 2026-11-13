@@ -212,5 +212,15 @@ console.log("✓ a queue that moves up a little and stops again still leaves the
   simulateAll(plain, snap2, world);
   assert.ok(plain.some((c) => c.sim?.collision?.id === "ambulance"), "ordinary traffic on that heading is still predicted to hit");
 }
-console.log("✓ an ambulance coming the other way is not predicted into a car at the kerb; ordinary traffic still is");
+// ...but its body is still where it is: one stopped in the car's lane ahead is still in the way.
+{
+  const { world } = setup({ control: null, front: 60, v: 8 });
+  ambulance(world, world.ego.x + 12, -1.6, Math.PI, 0, [[ARM, 1.6], [-ARM, 1.6]]);
+  const snap = buildSnapshot(world), candidates = sampleCandidates(snap, world);
+  simulateAll(candidates, snap, world);
+  const pull = candidates.find((c) => c.id === "pull_over");
+  assert.ok(pull, "pulling over is offered");
+  assert.equal(pull.sim?.collision?.id, "ambulance", "pulling over at speed is predicted into the ambulance standing in the lane");
+}
+console.log("✓ an ambulance coming the other way is not predicted into a car at the kerb; ordinary traffic still is, and a standing one is in the way");
 process.exit(0);

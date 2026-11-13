@@ -410,7 +410,8 @@ export class NpcPath {
       const x = this.edges[k], xe = this.map.edges.get(x.id);
       let end = x.sEnd - LC_END_M;
       if (x.control) end = Math.min(end, x.sStart + (x.control.s_line / Math.max(1, xe.length)) * (x.sEnd - x.sStart) - LC_END_M);
-      room += Math.max(0, end - Math.max(x.sStart, this.s ?? 0));
+      // (a street with fewer lanes than the turn's has none to change into)
+      if (xe.lanes >= e.lanes) room += Math.max(0, end - Math.max(x.sStart, this.s ?? 0));
       const before = this.edges[k - 1];
       if (!before || xe.length >= LINK_M || this.map.classifyTurn(this.map.turnAngle(before.id, x.id)) !== "straight") break;
     }

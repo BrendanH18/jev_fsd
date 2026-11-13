@@ -23,7 +23,7 @@
   "scenarios": 12,
   "pass_rate": 0.917,
   "arrived_rate": 1,
-  "km": 12.6,
+  "km": 12.61,
   "collisions": 0,
   "at_fault": 0,
   "red_lights": 0,
@@ -34,16 +34,16 @@
   "deadlocks": 0,
   "fallbacks": 0,
   "violations_per_km": 0,
-  "avg_kmh": 14.38,
+  "avg_kmh": 14.4,
   "min_gap_m": 1.9,
   "min_ttc_s": 1.2,
   "hard_brakes": 0,
-  "rms_jerk": 2.49,
-  "max_lat_accel": 3.27,
+  "rms_jerk": 2.48,
+  "max_lat_accel": 3.36,
   "lane_rms_m": 0.18,
   "lane_changes": 7,
   "speeding_s": 0,
-  "decisions": 12070,
+  "decisions": 12042,
   "calls": 0,
   "tokens": 0,
   "cost_usd": 0
@@ -103,7 +103,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 45284
+   "wall_ms": 47019
   },
   {
    "id": "s1-2",
@@ -197,7 +197,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 80568
+   "wall_ms": 73910
   },
   {
    "id": "s1-3",
@@ -271,7 +271,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 44829
+   "wall_ms": 40587
   },
   {
    "id": "s1-4",
@@ -283,10 +283,10 @@
     "rights": 0
    },
    "arrived": true,
-   "time_s": 358,
-   "distance_m": 1429,
+   "time_s": 350.4,
+   "distance_m": 1430,
    "progress": 0.984,
-   "avg_kmh": 14.4,
+   "avg_kmh": 14.7,
    "collisions": 0,
    "at_fault": 0,
    "red_lights": 0,
@@ -313,15 +313,15 @@
    "max_accel": 2.5,
    "max_decel": -5.38,
    "hard_brakes": 0,
-   "rms_jerk": 2.6,
+   "rms_jerk": 2.57,
    "max_jerk": 41.6,
-   "max_lat_accel": 3.5,
+   "max_lat_accel": 4.5,
    "lane_rms_m": 0.17,
-   "lane_max_m": 1.01,
+   "lane_max_m": 1.29,
    "lane_changes": 4,
    "speeding_s": 0,
-   "stopped_s": 76.2,
-   "decisions": 1359,
+   "stopped_s": 75.7,
+   "decisions": 1331,
    "calls": 0,
    "tokens": 0,
    "cost_usd": 0,
@@ -350,11 +350,11 @@
      "count": 3
     },
     {
-     "t": 357.9,
+     "t": 350.4,
      "type": "arrived"
     }
    ],
-   "wall_ms": 116621
+   "wall_ms": 102652
   },
   {
    "id": "s1-5",
@@ -417,7 +417,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 89170
+   "wall_ms": 85331
   },
   {
    "id": "s1-6",
@@ -498,7 +498,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 102367
+   "wall_ms": 87666
   },
   {
    "id": "s1-7",
@@ -563,7 +563,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 81704
+   "wall_ms": 78275
   },
   {
    "id": "s1-8",
@@ -626,7 +626,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 67254
+   "wall_ms": 61178
   },
   {
    "id": "s1-9",
@@ -692,7 +692,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 118933
+   "wall_ms": 95907
   },
   {
    "id": "s1-10",
@@ -758,7 +758,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 68148
+   "wall_ms": 63808
   },
   {
    "id": "s1-11",
@@ -824,7 +824,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 55594
+   "wall_ms": 50739
   },
   {
    "id": "s1-12",
@@ -893,7 +893,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 90476
+   "wall_ms": 85666
   }
  ]
 }

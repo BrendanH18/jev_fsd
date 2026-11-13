@@ -112,7 +112,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 81984
+   "wall_ms": 80332
   },
   {
    "id": "s1-2",
@@ -167,7 +167,7 @@
    ],
    "pass": false,
    "events": [],
-   "wall_ms": 153248
+   "wall_ms": 136442
   }
  ]
 }

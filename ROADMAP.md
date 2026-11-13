@@ -171,8 +171,8 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
     hard. The weekly blocking city matrix fails on this and the next one.
   - Kitsilano city snow `s1-4`: failures to yield to an emergency vehicle (Balsam and Arbutus Streets).
   - Edmonton `s1-2`: timeout on 81 Avenue NW. Winnipeg `s1-1`: failure to yield on Martha Street.
-  - Kitsilano 06:30 `s1-4`: failure to yield on Vine Street. Victoria seed 2 `s2-1`: a red light on
-    Quadra Street.
+  - Kitsilano 06:30 `s1-4`: failure to yield on Vine Street. Kitsilano parking `s1-10`: arrives on
+    Stephens Street but does not park.
   - Unprotected lefts in fog: 28 m of sight is too short to judge 11 m/s oncoming traffic
     (`docs/validation/night-2026-11-12.md`); the fog-night `s1-6` failure is gone for now only because
     traffic changed.

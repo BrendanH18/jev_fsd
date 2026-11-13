@@ -1,6 +1,6 @@
 # The other maps, second round, 12 November 2026 (ROADMAP 1.8)
 
-Starting tree: `dcfc663`. Final tree: `f5ffd31`. Node 22.23.4, Rules, lockstep, 40 traffic cars,
+Starting tree: `dcfc663`. Final tree: `f5ffd31` plus the two review fixes below. Node 22.23.4, Rules, lockstep, 40 traffic cars,
 `scripts/bench_node.mjs --diagnostics 1`, one server for every job. No live model calls, no new
 dependencies. Per-job results: [the JSON beside this note](other-maps-round2-2026-11-12.json).
 
@@ -30,9 +30,16 @@ tree, fixed them:
 
 Every fix has a focused Node check that fails without it.
 
+A review of the merged code (GPT-6.1 Sol) found two faults, fixed with a check each: an oncoming
+emergency vehicle was left out of the forward sims entirely, so one standing in the car's lane ahead was
+not in the way (its body now stays where it is; only its straight-on forecast is dropped,
+`test_emergency_line_stop.mjs`); and traffic counted a one-lane block before a short two-lane link as
+room to change lanes for a turn (`test_npc_turn_lane.mjs`).
+
 ## Results
 
-All 41 jobs (172 routes) on the final tree: **166/172**, from 160/172 after the first round's merge.
+All 41 jobs (172 routes) on the final tree: **166/172**, from 160/172 after the first round's merge
+(166/172 before the review fixes too, with Victoria seed 2 `s2-1` failing instead of parking `s1-10`).
 "Start" is `dcfc663`, where it was run.
 
 | Job | Start | Final |
@@ -45,16 +52,16 @@ All 41 jobs (172 routes) on the final tree: **166/172**, from 160/172 after the 
 | Kitsilano bare | 12/12 | 12/12 |
 | Toronto seed 2 | 0/2 | 2/2 |
 | Calgary seed 2 | 0/2 | 2/2 |
-| Victoria seed 2 | 0/2 | **1/2** (`s2-1`, a red light) |
+| Victoria seed 2 | 0/2 | 2/2 |
 | Kitsilano seed 3 | 2/2, 3 deadlock recoveries | 2/2, none |
 | Kitsilano, Toronto, Calgary, Victoria seeds 2–3 otherwise | not run | 8/8 |
 | Kitsilano 23:30 dry | 11/12 | 12/12 |
 | Kitsilano 06:30 dry | 11/12 | **11/12** (`s1-4`, a different route) |
 | Kitsilano 23:30 fog | 11/12 | 12/12 |
-| Kitsilano parking | 12/12 | 12/12 |
+| Kitsilano parking | 12/12 | **11/12** (`s1-10`, new: not parked, Stephens Street) |
 | Cover rows 0–12 | row 4 2/2 | 26/26 |
 
-Every original 1.8 failure is fixed. Six routes fail, four of which passed at the start. They are
+Every original 1.8 failure is fixed. Six routes fail, five of which passed at the start. They are
 left open (ROADMAP 1.8):
 
 - Kitsilano rain `s1-12`: a brake check at 149.3 s on Vine Street. A car closing from behind at a
@@ -65,7 +72,7 @@ left open (ROADMAP 1.8):
 - Edmonton `s1-2`: timeout on 81 Avenue NW.
 - Winnipeg `s1-1`: failure to yield to an emergency vehicle at 85.3 s on Martha Street.
 - Kitsilano 06:30 `s1-4`: failure to yield at 115.3 s on Vine Street.
-- Victoria seed 2 `s2-1`: a red light at 356.2 s on Quadra Street.
+- Kitsilano parking `s1-10`: arrives at 218.6 s on Stephens Street but does not park.
 
 The weekly blocking city matrix (`.github/workflows/bench.yml`) runs Kitsilano rain and snow, so it
 fails until the first two are fixed; city dry on every change passes.
@@ -76,7 +83,7 @@ fails until the first two are fixed; city dry on every change passes.
 traffic no longer turns from a lane it cannot leave (Toronto branch), and the car gives way at a
 junction past a stop sign set 30 m or more short of it (night branch). `s1-2` takes 142.8 s instead
 of 89.8 s, catching two red lights on West Broadway it used to make on green. Decisions 5,173 to
-5,263, average speed 23.77 to 23.16 km/h, safety brakes 7 and 7, RMS jerk 2.97 to 3.11.
+5,240, average speed 23.77 to 23.26 km/h, safety brakes 7 and 7, RMS jerk 2.97 to 3.15.
 
 ## Checks
 

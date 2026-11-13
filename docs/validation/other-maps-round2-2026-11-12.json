@@ -1,7 +1,7 @@
 {
  "date": "2026-11-12",
  "start_tree": "dcfc663",
- "final_tree": "f5ffd31",
+ "final_tree": "f5ffd31 + review fixes",
  "engine": "node v22.23.4",
  "brain": "rules",
  "mode": "lockstep",
@@ -561,6 +561,278 @@
   }
  },
  "final": {
+  "bare-kits": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-dry": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-kits-rain": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-12": [
+     "braked hard with a tailgater close behind"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-kits-snow": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-calgary": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-edmonton": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-2": [
+     "timeout"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "city-halifax": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-montreal": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-mount_pleasant": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-ottawa": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-quebec_city": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-saskatoon": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-toronto": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-victoria": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "city-winnipeg": {
+   "passed": 1,
+   "routes": 2,
+   "failures": {
+    "s1-1": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-2330": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "night-0630": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-4": [
+     "failed to yield"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "night-fog": {
+   "passed": 12,
+   "routes": 12,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "park": {
+   "passed": 11,
+   "routes": 12,
+   "failures": {
+    "s1-10": [
+     "not parked"
+    ]
+   },
+   "deadlocks": 0
+  },
+  "soak-toronto-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-victoria-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-kits-s2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-kits-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-toronto-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-calgary-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "soak-victoria-s3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-0": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-1": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-2": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-3": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-4": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-5": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-6": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-7": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-8": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-9": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-10": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-11": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  },
+  "cover-12": {
+   "passed": 2,
+   "routes": 2,
+   "failures": {},
+   "deadlocks": 0
+  }
+ },
+ "before_review": {
   "bare-kits": {
    "passed": 12,
    "routes": 12,

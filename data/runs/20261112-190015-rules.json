@@ -142,7 +142,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 52048
+   "wall_ms": 42450
   },
   {
    "id": "s1-2",
@@ -202,7 +202,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 33425
+   "wall_ms": 30766
   }
  ]
 }

@@ -30,7 +30,7 @@
   "stop_signs": 0,
   "failed_to_yield": 2,
   "off_road_s": 0,
-  "safety_brakes": 8,
+  "safety_brakes": 9,
   "deadlocks": 0,
   "fallbacks": 0,
   "violations_per_km": 0.15,
@@ -43,7 +43,7 @@
   "lane_rms_m": 0.27,
   "lane_changes": 3,
   "speeding_s": 0,
-  "decisions": 18588,
+  "decisions": 18609,
   "calls": 0,
   "tokens": 0,
   "cost_usd": 0
@@ -105,7 +105,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 64056
+   "wall_ms": 63846
   },
   {
    "id": "s1-2",
@@ -179,7 +179,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 109997
+   "wall_ms": 95334
   },
   {
    "id": "s1-3",
@@ -242,7 +242,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 110512
+   "wall_ms": 96676
   },
   {
    "id": "s1-4",
@@ -328,7 +328,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 299451
+   "wall_ms": 260397
   },
   {
    "id": "s1-5",
@@ -340,10 +340,10 @@
     "rights": 0
    },
    "arrived": true,
-   "time_s": 319.6,
+   "time_s": 325.2,
    "distance_m": 791,
    "progress": 0.747,
-   "avg_kmh": 8.9,
+   "avg_kmh": 8.8,
    "collisions": 0,
    "at_fault": 0,
    "red_lights": 0,
@@ -356,24 +356,24 @@
    "parking_conflicts": 0,
    "closure_entries": 0,
    "off_road_s": 0,
-   "safety_brakes": 0,
+   "safety_brakes": 1,
    "deadlocks": 0,
    "fallbacks": 0,
-   "min_gap_m": 4.6,
-   "min_ttc_s": 3.7,
-   "min_headway_s": 3.67,
+   "min_gap_m": 2,
+   "min_ttc_s": 1.6,
+   "min_headway_s": 1.64,
    "max_accel": 2.45,
    "max_decel": -2.45,
    "hard_brakes": 0,
-   "rms_jerk": 1.71,
-   "max_jerk": 15,
+   "rms_jerk": 1.7,
+   "max_jerk": 22.4,
    "max_lat_accel": 1.76,
-   "lane_rms_m": 0.21,
+   "lane_rms_m": 0.23,
    "lane_max_m": 0.59,
    "lane_changes": 0,
    "speeding_s": 0,
-   "stopped_s": 46.1,
-   "decisions": 1222,
+   "stopped_s": 48.9,
+   "decisions": 1243,
    "calls": 0,
    "tokens": 0,
    "cost_usd": 0,
@@ -388,11 +388,20 @@
      "count": 3
     },
     {
-     "t": 319.6,
+     "t": 268.8,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 5.21834758325688,
+      "gap": 1.9961880735356203
+     }
+    },
+    {
+     "t": 325.2,
      "type": "arrived"
     }
    ],
-   "wall_ms": 95771
+   "wall_ms": 87390
   },
   {
    "id": "s1-6",
@@ -466,7 +475,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 126685
+   "wall_ms": 106619
   },
   {
    "id": "s1-7",
@@ -545,7 +554,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 172506
+   "wall_ms": 153612
   },
   {
    "id": "s1-8",
@@ -627,7 +636,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 145118
+   "wall_ms": 116471
   },
   {
    "id": "s1-9",
@@ -704,7 +713,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 176340
+   "wall_ms": 157248
   },
   {
    "id": "s1-10",
@@ -771,7 +780,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 28463
+   "wall_ms": 29311
   },
   {
    "id": "s1-11",
@@ -845,7 +854,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 36782
+   "wall_ms": 35291
   },
   {
    "id": "s1-12",
@@ -912,7 +921,7 @@
      "type": "arrived"
     }
    ],
-   "wall_ms": 64550
+   "wall_ms": 60258
   }
  ]
 }

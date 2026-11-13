@@ -1,7 +1,7 @@
 # References after the second 1.8 round — 2026-11-12
 
 Rules, lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through `scripts/bench_node.mjs`, final
-tree `f5ffd31` (saved without the `--diagnostics` field). These replace every reference below. Fixes,
+tree (`f5ffd31` and the two review fixes; saved without the `--diagnostics` field). These replace every reference below. Fixes,
 causes and the full 41-job matrix are in [the validation record](validation/other-maps-round2-2026-11-12.md).
 
 | Run | Map | Preset | Weather | Routes | Passed | km | Notes |
@@ -9,7 +9,7 @@ causes and the full 41-job matrix are in [the validation record](validation/othe
 | `20261112-190000-rules` | Kitsilano | bare | dry | 12 | 12 | 10.53 | the bare reference; ten routes change (below) |
 | `20261112-190001-rules` | Kitsilano | city | dry | 12 | 12 | 12.81 | |
 | `20261112-190002-rules` | Kitsilano | city | fog | 12 | 12 | 12.6 | |
-| `20261112-190003-rules` | Kitsilano | city | rain | 12 | 11 | 12.6 | `s1-12` brake check (open, ROADMAP 1.8) |
+| `20261112-190003-rules` | Kitsilano | city | rain | 12 | 11 | 12.61 | `s1-12` brake check (open, ROADMAP 1.8) |
 | `20261112-190004-rules` | Kitsilano | city | snow | 12 | 11 | 13.65 | `s1-4` failed to yield (open) |
 | `20261112-190005-rules` | Calgary | city | dry | 2 | 2 | 1.4 | |
 | `20261112-190006-rules` | Edmonton | city | dry | 2 | 1 | 1.81 | `s1-2` timeout (open) |
@@ -27,11 +27,11 @@ causes and the full 41-job matrix are in [the validation record](validation/othe
 longer plans a turn from a lane the streets leave it no room to leave (`NpcPath.extend`), and the car
 gives way at a junction past a stop sign set 30 m or more short of it (`MapData.junctionPastStop`).
 `s1-2` goes from 89.8 s to 142.8 s (two red lights it used to make on green, and 8 s at a stop sign).
-Summary: decisions 5,173 to 5,263, average speed 23.77 to 23.16 km/h, safety brakes 7 and 7, RMS jerk
-2.97 to 3.11, maximum lateral acceleration 5.25 to 5.27.
+Summary: decisions 5,173 to 5,240, average speed 23.77 to 23.26 km/h, safety brakes 7 and 7, RMS jerk
+2.97 to 3.15, maximum lateral acceleration 5.25 to 5.24.
 
-**City dry.** Eleven of twelve routes change, all passing; decisions 10,073 to 10,611, average speed
-18.21 to 17.12 km/h, safety brakes 12 to 19.
+**City dry.** Eleven of twelve routes change, all passing; decisions 10,073 to 10,588, average speed
+18.21 to 17.15 km/h, safety brakes 12 to 18.
 
 # City smoke suite on the other maps — 2026-11-11 (ROADMAP 1.8)
 
