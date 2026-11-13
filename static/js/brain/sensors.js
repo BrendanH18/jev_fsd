@@ -191,6 +191,7 @@ const EV_STEER_M = 8;
 const EV_CROSS_M = 12;
 const EV_CLEAR_MPS = 10 / 3.6; // keep moving slowly enough to yield while finishing the lateral move
 const EV_HARD_DECEL = 6;
+const EV_OVERSHOOT_M = 1.5;   // how far a short stop overshoots
 
 export function buildSnapshot(world, executing = null) {
   const { ego, map, route } = world;
@@ -348,7 +349,7 @@ export function buildSnapshot(world, executing = null) {
     }
     const lane = snap.lane = laneState(route, p, executing && executing.law);
     snap.right_hook = rightHook(world, p, frontS, lane);
-    snap.emergency = emergencyYield(world, p, frontS, lane, visible);
+    snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
     snap.bus = busPullingOut(world, frontS, visible);
     if (world.pxo) {
@@ -790,7 +791,7 @@ function rightHook(world, p, frontS, lane) {
 // far right of its lane's centre it pulls over (`offset_m`); `clearing` when that is past a
 // junction, and `lead` (no stop) when the vehicle is stuck behind the car. The stop is chosen once
 // per call and remembered in `world.evYield`.
-function emergencyYield(world, p, frontS, lane, visible) {
+function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
   const { ego, route, map } = world;
   const evs = world.npcs.filter(isEmergency);
   // where the car is and will be over the next 20 m, along its route
@@ -808,19 +809,38 @@ function emergencyYield(world, p, frontS, lane, visible) {
   // (and again if the car could no longer stop there, or within the 1.5 m a short stop overshoots,
   // even braking hard, having been slow to start)
   // (well past it is handled below)
-  if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + 1.5 && (plan.stop + 1.5 - frontS) * 2 * EV_HARD_DECEL < v * v)) {
+  if (!plan || plan.id !== ev.id || plan.route !== route || (frontS <= plan.stop + EV_OVERSHOOT_M && (plan.stop + EV_OVERSHOOT_M - frontS) * 2 * EV_HARD_DECEL < v * v)) {
     const crossing = lane.shift ? 0 : Math.max(0, lane.lanes - 1 - lane.index) * EV_CROSS_M;
     let stop = frontS + Math.max(EV_STEER_M + crossing, v * v / (2 * EV_STOP_DECEL)), clearing = false;
     // junctions along the route from here to there: stop short of the first, or clear it
     // (from the street before this one: the car may still be in the junction it has just come through)
-    for (let i = Math.max(0, route.edgeIndexAt(p.s) - 1); i < route.edges.length - 1; i++) {
-      const e = map.edges.get(route.edges[i]), sNode = route.edgeStarts[i + 1];
+    // (where each node is along the polyline, not the summed edge lengths, which run metres ahead of it
+    // past rounded corners: Route.laneEdgeStarts)
+    const starts = route.laneEdgeStarts();
+    for (let i = Math.max(0, route.laneEdgeAt(p.s) - 1); i < route.edges.length - 1; i++) {
+      const e = map.edges.get(route.edges[i]), sNode = starts[i + 1];
       if (sNode - frontS > stop - frontS + 40) break;
       if (!isJunction(map, e.to)) continue;
       const half = map.crossingHalfWidth(e.id), line = route.controls.find((c) => c.edge === e.id);
       // (out of the box round its node, as the audit measures entering it)
       const short = Math.min(sNode - half - EV_SHORT_M, sNode - EV_BOX_M - 0.5, line ? line.sRoute - 0.5 : Infinity);
       const clear = sNode + half + ego.spec.length + 1 + EV_STEER_M;
+      // At or past that stop but still out of the junction (the crossing street and the box), slow enough
+      // to stop within the 1.5 m a short stop overshoots: stopped at its line or a little over it, or crept
+      // past a stop sign's line to look. It is short of the junction, not in it, and stops there: not on
+      // over its line (the audit takes holding a line stop as yielding, and moving on over the line as
+      // giving that up), over a signal's line where it is, and over a stop sign's line using what room
+      // there is up to the junction, and up to where it would wait to look, to pull over. Moving off
+      // through a light that is not red, it is on its way through: it clears the junction, as below.
+      const inside = Math.min(sNode - half, sNode - EV_BOX_M - 0.5), halt = v * v / (2 * EV_FIRM_DECEL);
+      const through = line?.control?.type === "signal" && v > 0.5 && intersection?.id === line.control.id && intersection.signal !== "red";
+      if (frontS > short && frontS + halt <= inside && halt <= EV_OVERSHOOT_M && !through) {
+        const over = !!line && frontS > line.sRoute;
+        const room = over && line.control?.type === "signal" ? frontS
+          : Math.min(stop, inside, line ? line.sPeek : Infinity, line && !over ? line.sRoute - 0.5 : Infinity);
+        stop = Math.max(frontS + halt, room);
+        break;
+      }
       if (frontS > short && frontS < clear) { stop = Math.max(stop, clear); clearing = true; continue; }
       if (short >= stop || short < frontS) continue;
       if (short - frontS >= v * v / (2 * EV_FIRM_DECEL)) stop = Math.max(frontS + 0.3, short);
@@ -841,7 +861,7 @@ function emergencyYield(world, p, frontS, lane, visible) {
   }
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
-  if (frontS > plan.stop + 1.5) plan.stop = Math.min(route.length - 1, frontS + (v > 0.3 ? v * v / (2 * EV_FIRM_DECEL) : 0));
+  if (frontS > plan.stop + EV_OVERSHOOT_M) plan.stop = Math.min(route.length - 1, frontS + (v > 0.3 ? v * v / (2 * EV_FIRM_DECEL) : 0));
   // The physical call owns drive-on authorization, including whether the car yielded first.
   // (but one drawing alongside to go round after all can turn across the car's nose: until it is past, the
   // car keeps still where it is)

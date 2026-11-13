@@ -125,6 +125,7 @@ const AUDIT_EV_PULL_AHEAD_M = 5;   // beside parked cars, the kerb this far ahea
 const AUDIT_EV_PULL_S = 4;
 const AUDIT_EV_SIDE_M = 8;
 const AUDIT_EV_LINE_M = 2;
+const AUDIT_EV_OVERSHOOT_M = 1.5;   // a short stop at a line can end this far over it, and still be a stop at it
 // Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
 // lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
 // or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
@@ -1365,20 +1366,22 @@ export class World {
         // yielding too. Capture this at the call, so stopping here later cannot excuse a missed
         // opportunity to pull over. Moving on ends the exception; blocking the vehicle is still
         // judged independently below.
-        const atLine = (control?.type === "stop" || control?.type === "signal") && Math.abs(ego.v) < 0.3 && toLine >= 0 && toLine <= AUDIT_EV_LINE_M;
+        // (a little over the line, as a short stop overshoots, is stopped at it too: as below, once it stops)
+        const atLine = (control?.type === "stop" || control?.type === "signal") && Math.abs(ego.v) < 0.3 && toLine >= -AUDIT_EV_OVERSHOOT_M && toLine <= AUDIT_EV_LINE_M;
         const v = Math.max(0, ego.v);
         // A crawl already running out of steering room before a control can finish
         // that stop. Judge the opportunity at the call, not from its later choice.
+        // (and one already a little over its line, still able to stop within that overshoot)
         const stopping = v * ego.spec.accelLag + v * v / (2 * AUDIT_EV_DECEL);
         const approachingLine = !atLine && (control?.type === "stop" || control?.type === "signal")
-          && v <= AUDIT_EV_MOVING_MPS && toLine >= v * v / (2 * comfort().hardDecel)
+          && v <= AUDIT_EV_MOVING_MPS && toLine + AUDIT_EV_OVERSHOOT_M >= v * v / (2 * comfort().hardDecel)
           && toLine <= stopping + AUDIT_EV_LINE_M;
         // (and likewise a crawl up to the hold line of a traffic car stopped to reverse into a space, or
         // reversing: the room beside and ahead of it is the parker's, sim/parkers.js)
         const hold = !queued && v <= AUDIT_EV_MOVING_MPS ? this.parkerHold(FRONT) : null;
         const approachingQueue = hold && hold.to_hold_m >= v * v / (2 * comfort().hardDecel) && hold.to_hold_m <= stopping + AUDIT_EV_LINE_M ? hold.parker : null;
         this.evCalls.set(ev.id, rec = { since: this.t, v0: v, lead: false, ahead: null,
-          ...(atLine ? { stoppedAtLine: [ego.x, ego.y] } : {}),
+          ...(atLine ? { stoppedAtLine: [ego.x, ego.y], ...(toLine < 0 ? { lineOvershoot: true } : {}) } : {}),
           ...(queued ? { stoppedInQueue: { id: queued.id, at: [ego.x, ego.y] } } : {}),
           ...(approachingLine ? { lineApproach: { edge: road.edge.id, control: control.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } } : {}),
           ...(approachingQueue ? { queueApproach: { id: approachingQueue.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } } : {}) });
@@ -1389,14 +1392,18 @@ export class World {
       }
       if (rec.lineApproach) {
         if (this.t > rec.lineApproach.until || road.edge?.id !== rec.lineApproach.edge || control?.id !== rec.lineApproach.control) delete rec.lineApproach;
-        else if (Math.abs(ego.v) < 0.3 && toLine >= -1.5 && toLine <= AUDIT_EV_LINE_M) {
+        else if (Math.abs(ego.v) < 0.3 && toLine >= -AUDIT_EV_OVERSHOOT_M && toLine <= AUDIT_EV_LINE_M) {
           rec.stoppedAtLine = [ego.x, ego.y]; rec.lineOvershoot = true;
           delete rec.lineApproach;
         }
       }
-      if (rec.stoppedAtLine && (toLine < (rec.lineOvershoot ? -1.5 : 0) || toLine > AUDIT_EV_LINE_M || Math.hypot(ego.x - rec.stoppedAtLine[0], ego.y - rec.stoppedAtLine[1]) > AUDIT_EV_LINE_M)) delete rec.stoppedAtLine;
+      if (rec.stoppedAtLine && (toLine < (rec.lineOvershoot ? -AUDIT_EV_OVERSHOOT_M : 0) || toLine > AUDIT_EV_LINE_M || Math.hypot(ego.x - rec.stoppedAtLine[0], ego.y - rec.stoppedAtLine[1]) > AUDIT_EV_LINE_M)) delete rec.stoppedAtLine;
       // (released from the queue, the car has as long to pull over as it had from the call)
-      if (rec.stoppedInQueue && (queued?.id !== rec.stoppedInQueue.id || Math.hypot(ego.x - rec.stoppedInQueue.at[0], ego.y - rec.stoppedInQueue.at[1]) > AUDIT_EV_LINE_M)) { delete rec.stoppedInQueue; rec.released = this.t; }
+      if (rec.stoppedInQueue && (queued?.id !== rec.stoppedInQueue.id || Math.hypot(ego.x - rec.stoppedInQueue.at[0], ego.y - rec.stoppedInQueue.at[1]) > AUDIT_EV_LINE_M)) { rec.releasedFrom = rec.stoppedInQueue.at; delete rec.stoppedInQueue; rec.released = this.t; }
+      // (but a queue that moves up a car's length or less and stops again within that time leaves it as
+      // boxed in as before: stopped in it again, it is queued again)
+      else if (!rec.stoppedInQueue && queued && rec.releasedFrom && this.t - rec.released < AUDIT_EV_PULL_S
+        && Math.hypot(ego.x - rec.releasedFrom[0], ego.y - rec.releasedFrom[1]) <= ego.spec.length) rec.stoppedInQueue = { id: queued.id, at: [ego.x, ego.y] };
       // (where its middle is along the car, from the car's middle)
       const [cx, cy] = ev.center, local = ego.toLocal(cx, cy), ahead = local.ahead - (ego.spec.length / 2 - ego.spec.rearOverhang), before = rec.ahead;
       rec.ahead = ahead;
@@ -1414,9 +1421,12 @@ export class World {
       const unmoved = level && after >= AUDIT_EV_PULL_S && !(this.t - rec.released < AUDIT_EV_PULL_S) && !pulled && !lead && !holdingLine && !holdingQueue && junction === null;
       // A second blocker directly in front of the car prevents it from driving on
       // when asked. Holding that safe stop is not the cause of this gridlock.
+      // (nor is still standing in the queue it was in at the call, with the queue still in front of it: it
+      // can neither pull over nor drive on, whether or not the vehicle has found a way past the queue's
+      // front, as one coming the other way did on West 5th Avenue in Kitsilano snow s1-9)
       // Turning changes the relative bearing of a siren behind the car. An authorized lead
       // remains a drive-on instruction, not a new crossing call as the car clears the junction.
-      if (late || unmoved || (!lead && entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !lead && !blockedInQueue)) {
+      if (late || unmoved || (!lead && entered && crossing && after >= AUDIT_EV_JUNCTION_S) || (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !lead && !blockedInQueue && !holdingQueue)) {
         this.evCounted.add(ev.id);
         this.violations.failed_to_yield++;
         this.events.push({ type: "failed_to_yield", to: "emergency vehicle", with: ev.id });
