@@ -51,7 +51,9 @@ assert.equal(sampleCandidates(snap, w).find(c => c.id === "pull_over").law.detou
   w.route = new Route(routeFromLanes(map, [map.lane("before", 0), map.lane("right", 0)]), map);
   const f = new NpcFleet(w, { count: 0, bikes: 0 });
   assert.equal(!!f.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 }), true);
-  const needed = w.route.edgeStarts[1] + map.crossingHalfWidth("before") + w.ego.spec.length + 1 + 8;
+  // (from where the polyline passes the node, as the stop is planned: the summed edge lengths run past it
+  // round the rounded corner, scripts/test_emergency_line_stop.mjs)
+  const needed = w.route.laneEdgeStarts()[1] + map.crossingHalfWidth("before") + w.ego.spec.length + 1 + 8;
   assert.equal(buildSnapshot(w).emergency.stop_s_route >= needed - 0.01, true, "steering room after clearing the corner");
   const en = needed - 3;
   w.snowbanks.narrowings = [{ id: "test" }]; w.snowbanks.alongRoute = () => ({ en, ex: en + 40 }); w.evYield = null;

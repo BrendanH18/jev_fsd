@@ -529,12 +529,19 @@ export function simulateAll(candidates, snap, world) {
   const { route, map } = world;
   const FRONT = world.ego.spec.length - world.ego.spec.rearOverhang;
   // (an emergency vehicle coming up behind stops for what it cannot get past: it is not predicted
-  // to run into the car)
-  const behindEv = (o) => isEmergency(o) && world.ego.toLocal(o.x, o.y).ahead < 0 && Math.abs(wrap(o.psi - world.ego.psi)) < Math.PI / 4;
+  // to run into the car; nor one coming the other way down the street, which moves across only to a
+  // gap that clears the car, or stops (sim/emergency.js threadGap). Still angled from a turn into the
+  // street, one went straight into a car standing at the kerb in the forward sims, and every pull-over
+  // was braked off, sim/emergency.js)
+  const alongEv = (o) => {
+    if (!isEmergency(o)) return false;
+    const ahead = world.ego.toLocal(o.x, o.y).ahead, rel = Math.abs(wrap(o.psi - world.ego.psi));
+    return (ahead < 0 && rel < Math.PI / 4) || (ahead > 0 && rel > Math.PI * 3 / 4);
+  };
   // (nor a tailgater close behind, sim/tailgaters.js: it brakes too, late; braking it could not match is
   // `brakes_hard_with_tailgater`, below)
   const tailgater = snap.tailgater?.vehicle || null;
-  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !behindEv(o) && o !== tailgater).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
+  const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !alongEv(o) && o !== tailgater).map((n) => ({ n, x: n.x, y: n.y, vx: Math.cos(n.psi) * n.v, vy: Math.sin(n.psi) * n.v }));
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
