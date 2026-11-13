@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The city world's second round of fixes on the other maps (ROADMAP 1.8,
+  `docs/validation/other-maps-round2-2026-11-12.md`): Toronto, Calgary and Victoria seed 2, the
+  Kitsilano seed 3 deadlocks, the night failures and the van stand-off now pass. Traffic no longer turns
+  across a lane it cannot leave, school buses avoid corners they cannot clear, plows keep to main
+  streets, parkers and pull-outs no longer stall the street, children walk round a car stopped across
+  their way home, and the car stops at its line for an emergency vehicle instead of treating the line as
+  the junction. Over 41 benchmark jobs Rules passes 166 of 172 routes; six remain open, including
+  Kitsilano rain `s1-12` and snow `s1-4`, which fail the weekly city matrix. The bare reference changes
+  on ten routes (`docs/rules-baseline.md`), and 8 of the 62 recorded Jev and DeepSeek challenge drives
+  no longer replay exactly.
+
 - First live model results (ROADMAP Phase 2), in `docs/model-results.md`: all 39 saved Jev cases
   pass against `jev-1.14.0`; Jev passes all 60 challenges and both road tests, as Rules and the
   cautious agent do, making 99.95% of its decisions itself, and DeepSeek V4.1 Flash passes 61 of 62
