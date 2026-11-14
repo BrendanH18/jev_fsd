@@ -8,6 +8,10 @@
 // --park 1, --hour 23.5 (both presets), --without geese,ice (city), --cover 0 (city pairwise row),
 // --diagnostics 1 (incident positions and actors), --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
 // (exit with status 1 if any route fails, as CI does).
+// --heldout 1 runs the map's held-out routes (bench/heldout.js; never debug against them,
+// docs/rules-baseline.md) instead of --seed/--count, and reports them as a held-out suite.
+// Each drive's line ends with its score, and a `scores` line before the summary gives the driver's
+// progress, pace, comfort, margin and time lost (bench/scores.js); neither is saved in the results.
 // Model recordings (static/js/brain/recording.js, docs/agents.md; a name ending .gz is gzipped): --record out.json keeps every answer a
 // model driver (--brain jev, decision:<name> or llm:<name>) gets, keyed by its request, with each drive's
 // result; --replay rec.json drives again from those answers with no model call and no key, taking the
@@ -20,14 +24,14 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((out, a, i, all) =>
 const fail = (message) => { console.error(message); process.exit(1); };
 // Every option takes a value; one without (parsed as `true`) or a misspelled one would otherwise
 // run the defaults.
-const OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "port", "only", "json", "check", "park", "hour", "without", "cover", "diagnostics", "record", "replay"];
+const OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "port", "only", "json", "check", "park", "hour", "without", "cover", "diagnostics", "record", "replay", "heldout"];
 for (const [name, value] of Object.entries(args)) {
   if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
   if (value === true) fail(`--${name} needs a value.`);
 }
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
 // A replay takes its driver, map and suite from the recording.
-const SUITE_OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "park", "hour", "without", "cover"];
+const SUITE_OPTIONS = ["map", "count", "seed", "npcs", "brain", "weather", "features", "park", "hour", "without", "cover", "heldout"];
 // (read here, checked once the modules load: they need the page's token first)
 let replayJson = null;
 if (args.replay) {
@@ -39,7 +43,7 @@ if (args.replay) {
   const b = replayJson.header.bench || {};
   Object.assign(args, { map: b.map, count: String(b.count), seed: String(b.seed), npcs: String(b.npcs), brain: replayJson.header.driver, weather: b.weather,
     features: b.features || "bare", ...(b.park ? { park: "1" } : {}), ...(b.hour !== undefined ? { hour: String(b.hour) } : {}),
-    ...(b.without?.length ? { without: b.without.join(",") } : {}), ...(b.cover !== undefined ? { cover: String(b.cover) } : {}) });
+    ...(b.without?.length ? { without: b.without.join(",") } : {}), ...(b.cover !== undefined ? { cover: String(b.cover) } : {}), ...(b.heldout ? { heldout: "1" } : {}) });
 }
 const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
 const page = await (await fetch(`${base}/bench`)).text();
@@ -53,6 +57,8 @@ const { MapData } = await import("../static/js/map/mapdata.js");
 const { buildSuite } = await import("../static/js/bench/scenarios.js");
 const { runScenario, suiteOptions, FEATURE_PRESETS, benchmarkConfig } = await import("../static/js/bench/runner.js");
 const { aggregate } = await import("../static/js/bench/metrics.js");
+const { driveScores, driverScores } = await import("../static/js/bench/scores.js");
+const { heldoutPlan, buildHeldoutSuite } = await import("../static/js/bench/heldout.js");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { agentDefinitions } = await import("../static/js/brain/registry.js");
 const recordingModule = args.record || args.replay ? await import("../static/js/brain/recording.js") : null;
@@ -89,7 +95,7 @@ const integer = (name, fallback, min) => {
   if (!Number.isSafeInteger(v) || v < min) fail(`--${name} must be a whole number of at least ${min}, not "${args[name]}".`);
   return v;
 };
-for (const name of ["park", "diagnostics"]) if (args[name] !== undefined && !["0", "1"].includes(args[name])) fail(`--${name} must be 0 or 1.`);
+for (const name of ["park", "diagnostics", "heldout"]) if (args[name] !== undefined && !["0", "1"].includes(args[name])) fail(`--${name} must be 0 or 1.`);
 if (args.hour !== undefined && !/^\d+(?:\.\d+)?$/.test(args.hour)) fail("--hour must be a number from 0 inclusive to 24 exclusive.");
 let options;
 try {
@@ -97,8 +103,12 @@ try {
     ...(args.hour !== undefined ? { hour: Number(args.hour) } : {}), without: args.without || [],
     ...(args.cover !== undefined ? { cover: integer("cover", 0, 0) } : {}) });
 } catch (error) { fail(error.message); }
-const config = { brain: String(args.brain || "rules"), count: integer("count", 12, 1), seed: integer("seed", 1, 0), npcs: integer("npcs", 40, 0),
-  mode: "lockstep", weather: String(args.weather || "dry"), ...options, map: preset, bbox: map.routingBbox, pack: map.pack.pack_version, engine: `node ${process.version}` };
+const heldout = args.heldout === "1";
+if (heldout && !replaying && (args.seed !== undefined || args.count !== undefined)) fail("--heldout sets the seeds and routes: drop --seed and --count.");
+// (a held-out run records its seeds; `seed` and `count` are the first seed and the number of routes)
+const plan = heldout ? heldoutPlan(preset) : null;
+const config = { brain: String(args.brain || "rules"), count: plan ? plan.seeds.length * plan.count : integer("count", 12, 1), seed: plan ? plan.seeds[0] : integer("seed", 1, 0), npcs: integer("npcs", 40, 0),
+  mode: "lockstep", weather: String(args.weather || "dry"), ...options, ...(plan ? { heldout: true, seeds: plan.seeds } : {}), map: preset, bbox: map.routingBbox, pack: map.pack.pack_version, engine: `node ${process.version}` };
 const features = config.features || "bare";
 let recording = replaying;
 if (args.record) {
@@ -111,7 +121,8 @@ if (args.record) {
 }
 if (replaying) try { recordingModule.checkMap(replaying, map); } catch (error) { fail(error.message); }
 // (a replay drives the recorded scenarios, so a router changed since cannot move them)
-const suite = replaying?.suite() || await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features, options) });
+const suite = replaying?.suite() || (heldout ? await buildHeldoutSuite(map, preset, suiteOptions(features, options))
+  : await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features, options) }));
 if (!suite.length) fail(`No routable scenarios on "${preset}".`);
 const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
@@ -139,9 +150,12 @@ for (const sc of suite) {
   }
   results.push(r);
   const hits = r.events.filter((e) => e.type === "collision").map((e) => `${e.with}:${e.kind}@${e.t}`).join(" ");
-  console.log(`${r.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} coll=${r.collisions}/${r.at_fault} off=${r.off_road_s} dl=${r.deadlocks} safety=${r.safety_brakes} lc=${r.lane_changes ?? "-"} ${hits}${r.pass ? "" : ` failures=${r.failures.join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}${r.model_recording ? ` model=${JSON.stringify(r.model_recording)}` : ""}`);
+  console.log(`${r.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} coll=${r.collisions}/${r.at_fault} off=${r.off_road_s} dl=${r.deadlocks} safety=${r.safety_brakes} lc=${r.lane_changes ?? "-"} ${hits}${r.pass ? "" : ` failures=${r.failures.join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}${r.model_recording ? ` model=${JSON.stringify(r.model_recording)}` : ""} score=${driveScores(r).score}`);
 }
 const summary = aggregate(results);
+// (computed for display only: bench/scores.js)
+console.log(`${heldout ? "held-out " : ""}scores ${JSON.stringify(driverScores(results))}`);
+if (heldout) console.log(`held-out suite (seeds ${config.seeds.join(", ")}): ${results.filter((r) => r.pass).length}/${results.length} passed; report apart from the tuned suites and never debug against it (docs/rules-baseline.md)`);
 if (args.json) (await import("node:fs")).writeFileSync(args.json, JSON.stringify({ config, summary, results }, null, 1));
 if (args.record) console.log(`recorded ${results.length} drives to ${args.record}`);
 // The runner's MessageChannel would keep Node alive; exit once the summary has been written out.

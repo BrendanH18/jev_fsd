@@ -2,6 +2,8 @@
 // run on the first map/seed, and city runs the map × seed product. Examples:
 // node --experimental-default-type=module scripts/soak.mjs --port 8381 --mode pairs --maps kitsilano --seeds 1
 // node --experimental-default-type=module scripts/soak.mjs --port 8381 --maps kitsilano,toronto,calgary,victoria --seeds 1,2,3 --shard 0 --shards 8 --json soak.json
+// --heldout 1 runs each map's held-out routes instead (bench/heldout.js, city only, one configuration
+// per map, labelled heldout/<map>); report them apart and never debug against them (docs/rules-baseline.md).
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,8 +13,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // freeDriveOptions' imports use common.js, which reads the token at module load.
 globalThis.document = { querySelector: () => null };
 const { coveringArray, FEATURE_NAMES } = await import("../static/js/bench/features.js");
-export function soakPlan({ mode = "all", maps = ["kitsilano", "toronto", "calgary", "victoria"], seeds = [1, 2, 3], count = 2, shard = 0, shards = 1 } = {}) {
+const { heldoutPlan } = await import("../static/js/bench/heldout.js");
+export function soakPlan({ mode = "all", maps = ["kitsilano", "toronto", "calgary", "victoria"], seeds = [1, 2, 3], count = 2, shard = 0, shards = 1, heldout = false } = {}) {
   if (!["all", "city", "pairs"].includes(mode)) throw new Error("mode must be all, city or pairs.");
+  // (held-out routes are the city suite on seeds no fix was tuned against; the covering rows keep their tuned seed)
+  if (heldout) {
+    if (mode === "pairs") throw new Error("held-out runs cover the city suite, not the covering rows.");
+    if (!maps.length || maps.some(m => typeof m !== "string" || !m.trim())) throw new Error("maps must contain map preset ids.");
+    if (!Number.isInteger(shards) || shards < 1 || !Number.isInteger(shard) || shard < 0 || shard >= shards) throw new Error("shard must be a zero-based index below shards.");
+    return maps.map(map => ({ id: `heldout/${map}`, map, ...heldoutPlan(map), heldout: true, options: { features: "city" } })).filter((_, i) => i % shards === shard);
+  }
   if (!maps.length || maps.some(m => typeof m !== "string" || !m.trim())) throw new Error("maps must contain map preset ids.");
   if (!seeds.length || seeds.some(s => !Number.isSafeInteger(s) || s < 0)) throw new Error("seeds must be nonnegative integers.");
   if (!Number.isInteger(count) || count < 1) throw new Error("count must be a positive integer.");
@@ -38,22 +48,26 @@ export function classifyResults(results) {
 export const soakFailed = r => !!(r.throws.length || r.stuck.length || r.collisions.length);
 
 async function main() {
-  const args = {}, allowed = ["port", "mode", "maps", "seeds", "count", "shard", "shards", "weather", "json"];
+  const args = {}, allowed = ["port", "mode", "maps", "seeds", "count", "shard", "shards", "weather", "json", "heldout"];
   for (let i = 2; i < process.argv.length; i += 2) {
     const name = process.argv[i].slice(2), value = process.argv[i + 1];
     if (!process.argv[i].startsWith("--") || !allowed.includes(name) || value === undefined || value.startsWith("--")) throw new Error(`Invalid soak option ${process.argv[i]} (expected --${allowed.join(", --")} and a value).`);
     args[name] = value;
   }
   const integer = (s, fallback) => s === undefined ? fallback : /^\d+$/.test(s) ? Number(s) : NaN;
-  const tasks = soakPlan({ mode: args.mode, maps: args.maps?.split(","), seeds: args.seeds?.split(",").map(s => integer(s)),
-    count: integer(args.count, 2), shard: integer(args.shard, 0), shards: integer(args.shards, 1) });
+  if (args.heldout !== undefined && !["0", "1"].includes(args.heldout)) throw new Error("--heldout must be 0 or 1.");
+  const heldout = args.heldout === "1";
+  if (heldout && (args.seeds !== undefined || args.count !== undefined)) throw new Error("--heldout sets the seeds and routes: drop --seeds and --count.");
+  const tasks = soakPlan({ mode: args.mode ?? (heldout ? "city" : undefined), maps: args.maps?.split(","), seeds: args.seeds?.split(",").map(s => integer(s)),
+    count: integer(args.count, 2), shard: integer(args.shard, 0), shards: integer(args.shards, 1), heldout });
   const directory = await mkdtemp(join(tmpdir(), "jev-soak-")), runs = [];
   let failed = false;
   try {
     for (const [index, task] of tasks.entries()) {
       const path = join(directory, `${index}.json`), options = task.options;
       const command = ["--experimental-default-type=module", fileURLToPath(new URL("bench_node.mjs", import.meta.url)),
-        "--port", args.port || process.env.PORT || "8331", "--map", task.map, "--seed", String(task.seed), "--count", String(task.count),
+        "--port", args.port || process.env.PORT || "8331", "--map", task.map,
+        ...(task.heldout ? ["--heldout", "1"] : ["--seed", String(task.seed), "--count", String(task.count)]),
         "--features", "city", "--weather", args.weather || "dry", "--diagnostics", "1", "--json", path,
         ...(options.cover !== undefined ? ["--cover", String(options.cover)] : [])];
       console.log(JSON.stringify({ configuration: task.id, ...task, weather: args.weather || "dry",
@@ -82,7 +96,7 @@ async function main() {
         console.error(JSON.stringify({ configuration: task.id, harness_error: error.message }));
       }
     }
-    const report = { schema: 1, weather: args.weather || "dry", shard: integer(args.shard, 0), shards: integer(args.shards, 1),
+    const report = { schema: 1, weather: args.weather || "dry", shard: integer(args.shard, 0), shards: integer(args.shards, 1), ...(heldout ? { heldout: true } : {}),
       audit_policy: "report-only; throws, deadlocks/timeouts and collisions fail", failed, runs };
     if (args.json) await writeFile(args.json, JSON.stringify(report, null, 1));
     console.log(JSON.stringify({ configurations: runs.length, failed, audit_policy: report.audit_policy }));
