@@ -454,3 +454,44 @@ body.photo-mode canvas#view { cursor: grab; }
 @media (max-width: 520px) { .photo-panel { left: var(--gap); width: auto; } }
 .model-tabs { display: flex; gap: 6px; margin: 4px 0 2px; }
 .model-tabs .llm-provider[aria-selected="true"] { color: var(--text); border-color: rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.12); }
+
+/* Touch driving controls (ui/touch.js): a strip along the bottom, with the HUD lifted above it so
+   no readout sits under a thumb. Photo mode hides them with everything else. */
+body.touch-driving { --touch-h: 140px; }
+body.touch-driving .hud { bottom: calc(var(--touch-h) + var(--replay-h, 0px)); }
+/* (the drive replay deck sits on the controls, and the HUD above both: --replay-h is its measured height) */
+body.touch-driving .replay-deck { bottom: calc(var(--touch-h) + 4px); }
+@media (min-width: 1081px), (max-width: 760px) {
+  body.touch-driving:has(.replay-deck:not([hidden])) .cluster { bottom: var(--gap); }
+}
+.touch-controls { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; height: var(--touch-h, 140px); padding: 8px var(--gap) calc(var(--gap) + env(safe-area-inset-bottom, 0px));
+  display: grid; grid-template-columns: minmax(150px, min(320px, 30vw)) 1fr auto; grid-template-areas: "steer buttons pedals"; align-items: end; gap: 10px;
+  pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; background: linear-gradient(to top, rgba(11, 14, 19, 0.55), transparent); }
+.touch-controls > * { pointer-events: auto; }
+.touch-steer { grid-area: steer; position: relative; height: 104px; border-radius: 18px; background: var(--panel); border: 1px solid var(--border); touch-action: none; --steer: 0; }
+.touch-steer-track { position: absolute; left: 30px; right: 30px; top: 46%; height: 4px; margin-top: -2px; border-radius: 2px; background: var(--border-strong); }
+.touch-steer-knob { position: absolute; top: 46%; left: calc(50% + var(--steer) * (50% - 40px)); width: 62px; height: 62px; margin: -31px 0 0 -31px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 11px; letter-spacing: 0.1em; color: var(--muted); background: var(--panel-solid); border: 1px solid var(--border-strong); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+.touch-steer.active { border-color: rgba(76, 194, 255, 0.45); }
+.touch-steer.active .touch-steer-knob { border-color: var(--accent); color: var(--accent); }
+.touch-caption { position: absolute; left: 0; right: 0; bottom: 7px; text-align: center; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+.touch-buttons { grid-area: buttons; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; align-self: end; }
+.touch-button { min-width: 44px; height: 36px; padding: 0 10px; border-radius: 10px; font: 600 11px var(--sans); letter-spacing: 0.04em; color: var(--text); background: var(--panel); border: 1px solid var(--border-strong); touch-action: manipulation; }
+.touch-button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.touch-pedals { grid-area: pedals; display: flex; align-items: end; gap: 10px; }
+.touch-pedal { width: 74px; height: 92px; display: grid; place-items: end center; padding-bottom: 12px; border-radius: 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  background: var(--panel); border: 1px solid var(--border-strong); touch-action: none; cursor: pointer; }
+.touch-throttle { height: 112px; color: var(--good); border-color: rgba(87, 210, 127, 0.5); }
+.touch-brake { color: var(--bad); border-color: rgba(255, 107, 107, 0.5); }
+.touch-throttle.active { background: rgba(87, 210, 127, 0.28); }
+.touch-brake.active { background: rgba(255, 107, 107, 0.28); }
+.touch-controls.autopilot .touch-steer, .touch-controls.autopilot .touch-pedal { opacity: 0.6; }
+@media (max-width: 760px) {
+  body.touch-driving { --touch-h: 178px; }
+  .touch-controls { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "buttons buttons" "steer pedals"; gap: 8px; }
+  .touch-steer { height: 100px; }
+  .touch-pedal { width: 66px; height: 88px; }
+  .touch-throttle { height: 100px; }
+  .touch-button { height: 34px; padding: 0 8px; flex: 1 1 0; }
+}
+@media (max-height: 460px) { body.touch-driving { --touch-h: 112px; } .touch-steer { height: 80px; } .touch-pedal, .touch-throttle { height: 80px; } }

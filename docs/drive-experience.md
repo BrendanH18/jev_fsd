@@ -38,9 +38,47 @@ with Ctrl, Cmd or Alt do not trigger driving actions.
 Below 900 px wide, the decision and incident cards are hidden and **Inspect JSON** moves into
 Settings. Short screens hide category bars and secondary telemetry. HUD columns scroll when
 necessary so settings and drive actions remain reachable. At very narrow widths the minimap
-and compact instruments sit below the scrollable left column. Small-screen layout does not
-add touch driving controls; driving still uses a keyboard. HUD transitions respect the system's
-reduced-motion preference.
+and compact instruments sit below the scrollable left column. On touch screens the on-screen
+driving controls below take the bottom strip and the HUD stands above them. HUD transitions respect
+the system's reduced-motion preference.
+
+### Gamepad and touch
+
+Both are input only: they drive through the keyboard's manual path (`World.stepManual`), and the
+simulation, scoring and autopilot are unchanged. A key is all or nothing; a stick, a trigger or the
+touch steering gives any amount from 0 to 1, which scales the same demand (half a trigger asks for
+half the acceleration, half the stick for half the steering angle, with the keyboard's 0.8 rad/s
+steering ramp and cornering limit). As with the keys, any driving input takes over from the
+autopilot, and nothing drives while a dialog is open.
+
+**Gamepad** (`static/js/ui/gamepad.js`, the browser Gamepad API, standard layout; Xbox names, the
+same places on a PlayStation pad). A toast names the pad when it connects; browsers expose a pad
+only after its first button press.
+
+| Control | Does |
+|---|---|
+| Left stick ←→, D-pad ←→ | Steer (15% stick dead zone) |
+| RT, D-pad ↑ | Accelerate |
+| LT, D-pad ↓ | Brake, then reverse once stopped (as `S`) |
+| A (held) | Brake hard (as `Space`) |
+| Y | Autopilot on or off (`J`) |
+| X | Next camera (`C`) |
+| B | Horn (`H`) |
+| LB / RB | Left / right indicator (`Q` / `E`) |
+| View | Reset to lane (`R`) |
+| Menu | Pause (`P`) |
+
+A pad without analog triggers accelerates with the left stick pushed up and brakes with it pulled
+down. Buttons act once on the press, never while held.
+
+**Touch** (`static/js/ui/touch.js`). Shown on coarse-pointer screens; `?touch=1` forces the controls
+on (to test on a desktop) and `?touch=0` off. On the left, a steering pad: put a finger down anywhere
+on it and slide sideways, up to full lock at 90 px; it centres when the finger lifts. On the right,
+the brake and accelerator pedals, held while pressed (the brake reverses once stopped). Between them,
+**Auto**, ◀ / ▶ indicators, **View**, **Pause** and **Reset**. Each control follows its own finger,
+so steering and a pedal work together. While the autopilot drives the steering pad and pedals dim;
+touching them takes over. The drive replay deck sits just above the controls and the HUD above both,
+so the speed, limit, minimap and trip card stay clear of the thumbs; photo mode hides the controls.
 
 ## Model v1
 
@@ -107,6 +145,15 @@ narrow-screen inspector. A final adjustment moves the compact cluster to the top
 and to the bottom below 760 px; this last breakpoint adjustment could not be visually repeated
 after the shared preview disconnected. These are desktop Chromium viewport checks, not
 physical-device tests.
+
+Gamepad and touch input is checked by `scripts/test_gamepad_touch.mjs` (dead zones, trigger and stick
+mapping, press edges, the `?touch=` override, combining sources, and booleans and full analog amounts
+driving `stepManual` identically) and on `/tests` (two-finger touch steering with a pedal, release,
+toggles, and half amounts in `stepManual`). The 2026-11-14 headless WKWebView screenshots
+(`SHOT_SIZE=390x844`, `820x1180`, `1180x820` and the 1440 × 900 default, `scripts/shot.swift`) drove
+the car with synthetic touch pointers and a fake `navigator.getGamepads`: 28–32 m in 4.5 s, with no
+HUD readout under the controls and none shown on the desktop. No physical pad or touch device was
+used.
 
 `node --experimental-default-type=module scripts/test_drive_score.mjs` runs 19 focused scoring
 tests, including violation caps, fresh-session baselines, pauses, duration, hard braking, manual

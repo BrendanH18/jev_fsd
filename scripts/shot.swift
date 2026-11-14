@@ -4,6 +4,7 @@
 //
 // Timeline: load -> settle (default 3 s) -> run pre_js -> wait -> run post_js -> snapshot.
 // Page errors, unhandled rejections, console.error and console.log are forwarded to stdout.
+// The viewport is 1440 x 900 CSS pixels; SHOT_SIZE=390x844 (WIDTHxHEIGHT) sets another, e.g. a phone's.
 
 import Cocoa
 import WebKit
@@ -46,7 +47,9 @@ let hook = """
 config.userContentController.addUserScript(WKUserScript(source: hook, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 config.userContentController.add(handler, name: "log")
 config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1440, height: 900), configuration: config)
+let size = (ProcessInfo.processInfo.environment["SHOT_SIZE"] ?? "1440x900").split(separator: "x").compactMap { Double($0) }
+let (viewW, viewH) = size.count == 2 ? (size[0], size[1]) : (1440.0, 900.0)
+let web = WKWebView(frame: NSRect(x: 0, y: 0, width: viewW, height: viewH), configuration: config)
 web.navigationDelegate = handler
 let window = NSWindow(contentRect: web.frame, styleMask: [.borderless], backing: .buffered, defer: false)
 window.contentView = web
