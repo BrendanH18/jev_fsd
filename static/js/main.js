@@ -539,6 +539,7 @@ export async function boot() {
   // ui/touch.js); they change nothing in the simulation.
   input.addSource(new GamepadInput({
     actions: input.actions,
+    blocked: () => !!document.querySelector("dialog[open]"),   // no buttons under a dialog, as with the keys
     onConnect: pad => hud.badge(`GAMEPAD CONNECTED · ${String(pad.id || "pad").split("(")[0].trim().slice(0, 32)} · RT go, LT brake, Y autopilot`, "", 3500),
     onDisconnect: () => hud.badge("GAMEPAD DISCONNECTED", "", 1500),
   }));

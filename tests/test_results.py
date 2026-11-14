@@ -39,6 +39,32 @@ class ResultsTest(unittest.TestCase):
             finally:
                 build_results.OUTPUT = original
 
+    def test_uncommitted_and_variant_runs_are_not_published(self):
+        # data/runs/ is gitignored, so any saved benchmark lands there; held-out and other variant
+        # runs are reported apart. Neither may change the published rows.
+        newest = max(build_results.committed_runs(), key=lambda p: json.loads(p.read_text())["name"])
+        run = json.loads(newest.read_text())
+        run["name"] = "99991231-235959-" + run["name"]
+        for r in run["results"]:
+            r["pass"] = False
+        local = build_results.RUNS / "99991231-235959-uncommitted-test.json"
+        local.write_text(json.dumps(run))
+        try:
+            self.assertNotIn(local.resolve(), [p.resolve() for p in build_results.committed_runs()])
+            self.assertEqual(build_results.build()["rows"], self.data["rows"])
+        finally:
+            local.unlink()
+        with tempfile.TemporaryDirectory() as tmp:
+            heldout = Path(tmp) / "heldout.json"
+            run["config"] = dict(run["config"], heldout=True)
+            heldout.write_text(json.dumps(run))
+            original = build_results.committed_runs
+            build_results.committed_runs = lambda: original() + [heldout]
+            try:
+                self.assertEqual(build_results.build()["rows"], self.data["rows"])
+            finally:
+                build_results.committed_runs = original
+
     def test_every_bundled_map_has_a_name(self):
         self.assertEqual(set(build_results.MAP_NAMES), set(PRESET_BBOXES))
 

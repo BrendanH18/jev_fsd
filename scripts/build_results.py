@@ -21,6 +21,7 @@ import argparse
 import gzip
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -177,13 +178,33 @@ def challenge_rows(drivers: dict) -> list[dict]:
     return rows
 
 
+def committed_runs() -> list[Path]:
+    """The runs in data/runs/ that git tracks. The folder is gitignored, so an ordinary saved benchmark
+    lands there too; only committed baselines are published."""
+    paths = sorted(RUNS.glob("*.json"))
+    try:
+        out = subprocess.run(["git", "ls-files", "-z", "--", str(RUNS)], cwd=ROOT, capture_output=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return paths   # not a git checkout (a release archive): everything there is what was shipped
+    tracked = {(ROOT / p).resolve() for p in out.stdout.decode().split("\0") if p}
+    return [p for p in paths if p.resolve() in tracked]
+
+
+# Suite variants that are reported elsewhere, never as the plain suite's cell: held-out routes
+# (bench/heldout.js, reported apart), destination parking, a time of day, features left out and
+# covering rows.
+VARIANT_KEYS = ("heldout", "park", "hour", "cover", "without")
+
+
 def run_rows() -> list[dict]:
     newest = {}
-    for path in sorted(RUNS.glob("*.json")):
+    for path in committed_runs():
         run = json.loads(path.read_text())
         config = run.get("config") or {}
         key = map_key(config)
         if not key or not run.get("results"):
+            continue
+        if any(config.get(k) not in (None, False, [], "") for k in VARIANT_KEYS):
             continue
         preset = config.get("features") or "bare"
         group = (config.get("brain"), preset, key, config.get("weather") or "dry", config.get("count"), config.get("seed"))
