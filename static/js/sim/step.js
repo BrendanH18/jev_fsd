@@ -3,6 +3,12 @@
 
 import { stepChallenge } from "../lab/challenges.js";
 import { stepOfficers } from "./traffic-officer.js";
+import { hooks } from "./features/index.js";
+
+// The registered features' steps (sim/features/index.js): before the traffic moves, and after it,
+// before the people on foot.
+const BEFORE_TRAFFIC = hooks("stepBeforeTraffic");
+const AFTER_TRAFFIC = hooks("stepAfterTraffic");
 
 export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   // (black ice, with that option on: whether the weather and the time favour it now, and its grip hook,
@@ -25,9 +31,7 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   // (who has come up to each narrowed stretch between snowbanks, and who has gone in, with that option
   // on: sim/snowbanks.js; before the traffic takes its turns)
   if (world.snowbanks?.enabled) world.snowbanks.step(dt);
-  // (a block on the car's way closed for an event now and then, with that option on: sim/road-closures.js;
-  // before the traffic chooses its way)
-  if (world.roadClosures?.enabled) world.roadClosures.step(world, fleet);
+  for (const step of BEFORE_TRAFFIC) step(world, fleet, dt);
   fleet.step(dt);
   // (contraflow cyclists, with that option on: sim/contraflow.js)
   if (world.contraflow.enabled) world.contraflow.step(dt);
@@ -36,8 +40,7 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   // (a ball rolling out from between parked cars, and the child after it, with that option on:
   // sim/ball-chase.js; before the crowd steps, so the child runs to where the ball is now)
   if (world.balls?.enabled) world.balls.step(dt);
-  // (Canada geese crossing the road, with that option on: sim/geese.js)
-  if (world.geese?.enabled) world.geese.step(dt);
+  for (const step of AFTER_TRAFFIC) step(world, fleet, dt);
   world.crowd.step(dt);
   world.t += dt;
   world.tick++;

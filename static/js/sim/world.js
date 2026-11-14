@@ -45,18 +45,22 @@ import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
 import { DrivewayReversers, auditReversers, boxGap, reverserHidden } from "./driveway-reversers.js";
-import { Potholes, auditPotholes } from "./potholes.js";
 import { BallChase, auditBalls } from "./ball-chase.js";
-import { Geese, auditGeese } from "./geese.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers, parkerConflict } from "./parkers.js";
-import { RoadClosures, auditRoadClosures } from "./road-closures.js";
+import { FEATURES, featureObstacle, hooks } from "./features/index.js";
 import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
 import { BlackIce, auditIce } from "./black-ice.js";
 import { Snowbanks, auditSnowbanks, bankHidden, keepAt, NARROW_FULL_M } from "./snowbanks.js";
 import { Puddles, auditPuddles } from "./puddles.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
+
+// The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
+const OBSTACLES_NEAR = hooks("obstacles");
+const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
+const AUDIT_AFTER_BALLS = hooks("audit", "balls");
+const AUDIT_AFTER_PARKERS = hooks("audit", "parkers");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -240,12 +244,8 @@ export class World {
   // what they can see (sim/sun-glare.js).
   // `driveways`: now and then a car backs out of a driveway near the car's way, and everyone gives it
   // room (sim/driveway-reversers.js).
-  // `potholes`: spring potholes in the lanes, which everyone eases round in the lane where there is
-  // room and otherwise slows for (sim/potholes.js).
   // `balls`: now and then a ball rolls out from between parked cars ahead, a child runs out after it,
   // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
-  // `geese`: now and then, by day, a gaggle of Canada geese crosses a street beside a park or water near
-  // the car's way, and everyone waits until the last one is off the road (sim/geese.js).
   // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
   // not brake-check it, and lets it by (sim/tailgaters.js).
   // `ice`: near freezing, black ice forms on bridges and in the shade of tall buildings, where everyone's
@@ -257,11 +257,10 @@ export class World {
   // the splash speed, rather than drench someone on the sidewalk beside one (sim/puddles.js).
   // `parkers`: now and then the traffic car ahead of the driven car parallel parks, and everyone behind
   // it stops well back and waits until it is in (sim/parkers.js).
-  // `roadClosures`: now and then a block on the car's route ahead is closed for an event, barricaded at
-  // both ends; the car re-plans round it once it sees a barricade (sim/road-closures.js).
   // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
   // obeys the officer rather than the lights (sim/traffic-officer.js).
-  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, potholes = false, balls = false, geese = false, tailgaters = false, ice = false, snowbanks = false, puddles = false, parkers = false, roadClosures = false, officers = false } = {}) {
+  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `roadClosures`.
+  constructor(map, { seed = 1, parked = PARKED_DENSITY, pedestrians = PEDESTRIANS, weather = "dry", vehicleSpec = CAR, buses = false, roadside = 0, workZones = 0, outages = 0, vans = 0, park = false, hazards = false, stepOuts = 0, closures = 0, passCyclists = false, calming = false, scrambles = false, guards = false, busLanes = false, pxo = false, restrictions = false, nightFlash = false, contraflow = false, highBeams = false, leftOnRed = false, redTurnSigns = false, amberLights = false, followingDistance = false, redRunners = false, sunGlare = false, driveways = false, balls = false, tailgaters = false, ice = false, snowbanks = false, puddles = false, parkers = false, officers = false, ...features } = {}) {
     this.map = map;
     // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
     // fresh red, whether one has committed near the car this drive, and the junction the audit watches
@@ -382,21 +381,11 @@ export class World {
     this.driveways = new DrivewayReversers(this, { enabled: driveways, seed });
     this.drivewaysSeen = false;
     this.drivewayCalls = new Map();
-    // spring potholes (sim/potholes.js): where they are, whether the car has come near one this drive,
-    // and the ones its wheels are going over
-    this.potholes = new Potholes(map, { enabled: potholes, seed });
-    this.potholesSeen = false;
-    this.potholeCalls = new Map();
     // a ball rolling out from between parked cars, and a child after it (sim/ball-chase.js): whether
     // they do, whether one has rolled out near the car this drive, and the audit's calls on each
     this.balls = new BallChase(this, { enabled: balls, seed });
     this.ballsSeen = false;
     this.ballCalls = new Map();
-    // Canada geese crossing the road (sim/geese.js): whether they do, whether a gaggle has crossed near
-    // the car this drive, and the gaggles the car has come too close to or hit
-    this.geese = new Geese(this, { enabled: geese, seed });
-    this.geeseSeen = false;
-    this.geeseCalls = new Map();
     // tailgaters (sim/tailgaters.js): whether traffic now and then closes up right behind the car, whether
     // one has followed it this drive, and the braking the audit follows
     this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
@@ -430,15 +419,17 @@ export class World {
     this.parkers = createParkers({ enabled: parkers, seed });
     this.parkersSeen = false;
     this.parkerCalls = new Map();
-    // road closures (sim/road-closures.js): the blocks closed for an event and their barricades, whether the
-    // car has come up to one this drive, and where its front was against each barricade line last tick
-    this.roadClosures = new RoadClosures({ enabled: roadClosures, seed });
-    this.roadClosuresSeen = false;
-    this.roadClosureCalls = new Map();
     // police officers directing traffic (sim/traffic-officer.js): whether they come, and whether the car has
     // come up to a junction one governs this drive
     this.officers = createOfficers({ enabled: officers, seed });
     this.officersSeen = false;
+    // each registered feature (sim/features/index.js): what it builds, whether it has met the car this
+    // drive, and its audit's calls
+    for (const f of FEATURES) {
+      this[f.key] = f.build(this, { enabled: features[f.key] ?? false, seed, map });
+      this[f.seen] = false;
+      this[f.calls] = new Map();
+    }
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -451,10 +442,10 @@ export class World {
     const out2 = this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
     // (and cars backing out of driveways, with that option on: sim/driveway-reversers.js)
     const out3 = this.driveways?.cars.length ? out2.concat(this.driveways.near(x, y, r)) : out2;
-    // (and Canada geese, with that option on: sim/geese.js)
-    const out4 = this.geese?.gaggles.length ? out3.concat(this.geese.near(x, y, r)) : out3;
-    // (and the barricades across a block closed for an event, with that option on: sim/road-closures.js)
-    return this.roadClosures?.list.length ? out4.concat(this.roadClosures.near(x, y, r)) : out4;
+    // (and what the registered features put in the road: sim/features/index.js)
+    let out4 = out3;
+    for (const near of OBSTACLES_NEAR) { const more = near(this, x, y, r); if (more) out4 = out4.concat(more); }
+    return out4;
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
@@ -570,15 +561,13 @@ export class World {
     this.contraflowCalls?.clear();
     this.runnerCall = null;
     this.drivewayCalls?.clear();
-    this.potholeCalls?.clear();
     this.ballCalls?.clear();
-    this.geeseCalls?.clear();
     this.tailgaterCall = null;
     this.iceCalls?.clear();
     this.snowbankCalls?.clear();
     this.puddleCalls?.clear();
     this.parkerCalls?.clear();
-    this.roadClosureCalls?.clear();
+    for (const f of FEATURES) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn]) for (const slot of p?.slots || []) if (slot.reserved?.owner === this.ego) slot.reserved = null;
     this.park = null; this.parking = null; this.parkHold = 0; this.parkedIn = null; this.kerbContact = false;
@@ -679,8 +668,8 @@ export class World {
         const relHeading = Math.abs(wrap(n.psi - this.ego.psi));
         // (reversing, the car is at fault for what it backs into)
         const backedInto = this.ego.v < -0.3 && egoCenterAhead < 0;
-        // (a goose, sim/geese.js, as a pedestrian: the car is at fault for one it drives into)
-        const fault = backedInto ? "ego" : n.kind === "pedestrian" || n.goose ? (this.ego.v < 0.5 ? "other" : "ego")
+        // (or what a registered feature counts as one, a goose: the car is at fault for one it drives into)
+        const fault = backedInto ? "ego" : n.kind === "pedestrian" || featureObstacle(n)?.likePedestrian ? (this.ego.v < 0.5 ? "other" : "ego")
           : this.ego.v < 0.5 || egoCenterAhead < -1 ? "other"
           : egoCenterAhead > 0 && (relHeading < Math.PI / 4 || n.v < 0.5) ? "ego" : "shared";
         const atFault = fault === "ego";
@@ -855,15 +844,15 @@ export class World {
     if (this.crossingGuards.enabled) this.auditGuards();
     if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
     if (this.driveways.enabled) auditReversers(this);
-    if (this.potholes.enabled) auditPotholes(this);
+    for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this);
     if (this.balls?.enabled) auditBalls(this);
-    if (this.geese.enabled) auditGeese(this);
+    for (const audit of AUDIT_AFTER_BALLS) audit(this);
     if (this.tailgaters?.enabled) auditTailgaters(this);
     if (this.ice?.enabled) auditIce(this);
     if (this.snowbanks?.enabled) auditSnowbanks(this);
     if (this.puddles?.enabled) auditPuddles(this);
     if (this.parkers?.enabled) auditParkers(this);
-    if (this.roadClosures?.enabled) auditRoadClosures(this);
+    for (const audit of AUDIT_AFTER_PARKERS) audit(this);
     this.auditKerb();
     leftSpace(this);
   }

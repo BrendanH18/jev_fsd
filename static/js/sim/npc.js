@@ -32,8 +32,6 @@ import { turnBanned } from "./turn-restrictions.js";
 // once it is coming into their lane (sim/driveway-reversers.js reverserYield).
 // With `balls` on, drivers who see a ball roll into the street slow to a speed from which they can stop
 // short of the gap it came from, until the child after it has come and gone (sim/ball-chase.js ballYield).
-// With `geese` on, drivers and cyclists slow for a gaggle of Canada geese coming up to the kerb ahead and
-// stop short of their way across until the last goose is off the roadway (sim/geese.js geeseYield).
 // With `ice` on, drivers and cyclists slow for black ice ahead, and for bridges in icy weather, and only
 // ease off on the ice; their tyres feel it through the shared car model (sim/black-ice.js npcIce).
 // With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
@@ -75,10 +73,15 @@ import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard
 import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
 import { reverserYield } from "./driveway-reversers.js";
-import { NPC_SHIFT_MPS as PH_SHIFT_MPS, npcPothole } from "./potholes.js";
 import { ballYield } from "./ball-chase.js";
-import { geeseYield } from "./geese.js";
-import { avoidClosure, closureHold } from "./road-closures.js";
+import { hookEntries, hooks } from "./features/index.js";
+
+// How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
+// re-plan round them, a move inside its lane, and where it stops for them; each where that feature's own
+// code used to be. (With `geese` on, say, drivers and cyclists slow for a gaggle of Canada geese coming up
+// to the kerb ahead and stop short of their way across until the last goose is off the roadway.)
+const TRAFFIC_START = hooks("trafficStart"), TRAFFIC_REPLAN = hooks("trafficReplan");
+const TRAFFIC_LANE = hookEntries("trafficLane", "contraflow"), TRAFFIC_YIELD = hooks("trafficYield");
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { manageParkers, parkerConflict, parkerStop, stepParker } from "./parkers.js";
 import { officerDirection } from "./traffic-officer.js";
@@ -774,8 +777,8 @@ export class NpcFleet {
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     const riders = world.contraflow?.riders || [];
     for (const n of [...this.vehicles]) {
-      // (with road closures on, every driver's way keeps out of a closed block: sim/road-closures.js)
-      if (world.roadClosures?.enabled && n.path) n.path.closures = world.roadClosures;
+      // (with road closures on, say, every driver's way keeps out of a closed block)
+      for (const start of TRAFFIC_START) start(world, n);
       if (n.frozen > 0) { n.frozen -= dt; n.v = 0; continue; }
       // a garbage truck standing at a stop while its crew empties the bins (sim/collection-truck.js)
       if (n.collect?.phase === "work" && this.collection.work(n, dt)) { n.a = 0; continue; }
@@ -848,8 +851,8 @@ export class NpcFleet {
           }
         }
       }
-      // (a way through a block closed for an event is re-planned while there is room: sim/road-closures.js)
-      if (world.roadClosures?.list.length && avoidClosure(world, n)) { proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s; }
+      // (a way through a block closed for an event, say, is re-planned while there is room)
+      for (const replan of TRAFFIC_REPLAN) if (replan(world, n)) { proj = projectPoint(path.pts, path.cum, [n.x, n.y]); path.s = proj.s; }
       path.extend();
       path.trim();
       const edge = path.currentEdge();
@@ -931,15 +934,18 @@ export class NpcFleet {
         n.cfShift = (n.cfShift || 0) + Math.max(-CF_SHIFT_MPS * dt, Math.min(CF_SHIFT_MPS * dt, (cf?.shift || 0) - (n.cfShift || 0)));
         offset += n.cfShift;
       }
-      // a pothole in its lane ahead (sim/potholes.js): ease over inside the lane where that takes both
-      // wheels clear of it (not while changing lanes or going round something), and otherwise slow to
-      // drive over it
-      const ph = world.potholes?.list.length && n.kind !== "bike" && !n.transit?.tram ? npcPothole(world, n, front) : null;
-      if (ph || n.phShift) {
-        const to = ph && !n.lc && !wzShift && !dpShift && !lzShift && !cyc && !n.pull ? ph.shift : 0;
-        n.phShift = (n.phShift || 0) + Math.max(-PH_SHIFT_MPS * dt, Math.min(PH_SHIFT_MPS * dt, to - (n.phShift || 0)));
-        offset += n.phShift;
+      // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
+      // while changing lanes or going round something), and its speed ceiling for it
+      const laneBusy = !!(n.lc || wzShift || dpShift || lzShift || cyc || n.pull), laneFx = {};
+      let featureLimit = Infinity;
+      for (const { key, run } of TRAFFIC_LANE) {
+        const r = run(world, n, front, laneBusy, dt);
+        laneFx[key] = r.result;
+        if (r.shift !== undefined) offset += r.shift;
+        if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
       }
+      // (puddles, not yet a registered feature, allow for the move round a pothole: sim/features/potholes.js)
+      const ph = laneFx.potholes;
       // a puddle at the kerb with someone within splash reach (sim/puddles.js): ease left inside the lane
       // where that takes the wheels out of it (not while off the middle of the lane for anything else, or
       // easing round a pothole), and otherwise slow below its splash speed, wherever in the lane it is going
@@ -1266,25 +1272,23 @@ export class NpcFleet {
         const g = rv.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
       }
-      // for Canada geese, slow while a gaggle comes up to the kerb ahead and stop short of their way across
-      // until the last is off the roadway (once it could stop there: otherwise it carries on) (sim/geese.js)
-      const gs = world.geese?.gaggles.length ? geeseYield(world, n, front) : null;
-      if (gs?.hold != null) {
-        const g = gs.hold - front;
-        if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
-      }
       // between snowbanks, short of the one-car stretch until it is its turn (once it could stop there:
       // otherwise it has the way) (sim/snowbanks.js)
       if (sb?.hold != null) {
         const g = sb.hold - front;
         if (g > -1 && g < gap && g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1) { gap = Math.max(0.05, g); leadV = 0; }
       }
-      // short of the barricade across a block closed for an event, on a way that could not be changed in
-      // time (sim/road-closures.js)
-      const rch = world.roadClosures?.list.length ? closureHold(world, n, front) : null;
-      if (rch) {
-        const g = rch.hold - front;
-        if (g > -1 && g < gap) { gap = Math.max(0.05, g); leadV = 0; }
+      // where a registered feature has it stop, and its speed ceiling: for Canada geese, say, slowing while a
+      // gaggle comes up to the kerb ahead and stopping short of their way across until the last is off the
+      // roadway (once it could stop there, `canStop`: otherwise it carries on); or short of the barricade
+      // across a block closed for an event, on a way that could not be changed in time
+      for (const yieldTo of TRAFFIC_YIELD) {
+        const y = yieldTo(world, n, front);
+        if (!y) continue;
+        if (y.limit != null) featureLimit = Math.min(featureLimit, y.limit);
+        if (y.hold == null) continue;
+        const g = y.hold - front;
+        if (g > -1 && g < gap && (!y.canStop || g > n.v * n.v / (2 * Math.min(4, comfort().hardDecel)) - 1)) { gap = Math.max(0.05, g); leadV = 0; }
       }
 
       // curvature-limited desired speed: slow in time for every bend in the next 40 m
@@ -1304,7 +1308,7 @@ export class NpcFleet {
       // (and, with black ice on, slowing for the ice ahead, and for bridges in icy weather, and easing off
       // on it: sim/black-ice.js; a streetcar's steel wheels do not feel it)
       const vIce = this.world.ice?.list.length && !n.transit?.tram ? npcIce(this.world, n, front)?.limit ?? Infinity : Infinity;
-      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, ph?.limit ?? Infinity, vBall, gs?.limit ?? Infinity, vIce, sb?.limit ?? Infinity, pd?.limit ?? Infinity);
+      const v0 = Math.min(isPlow(n) ? n.v0 : n.v0 * weather.speed, limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed, vCurve, flashCap, amberCap, runCap, n.pull ? 5 : Infinity, vCalm, vFollow, vGlare, rv?.limit ?? Infinity, featureLimit, vBall, vIce, sb?.limit ?? Infinity, pd?.limit ?? Infinity);
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
