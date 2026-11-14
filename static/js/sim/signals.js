@@ -89,7 +89,7 @@ export function timingPlan(inter, map, { scramble = false } = {}) {
   const groups = { A: { speed: 0, weight: 0, width: 0, arterial: false }, B: { speed: 0, weight: 0, width: 0, arterial: false } };
   for (const a of inter.approaches) {
     const e = map.edges.get(a.edge);
-    const g = groups[a.group];
+    const g = a.group === "A" ? groups.A : a.group === "B" ? groups.B : null;
     if (!e || !g) continue;
     g.speed = Math.max(g.speed, e.limit || 13.9);
     g.weight += (e.lanes || 1) * (e.limit || 13.9);
