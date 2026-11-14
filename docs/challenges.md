@@ -76,6 +76,6 @@ coaching score on its own doesn't count. How each driver did is in the
 
 Two **road tests** sit beside the challenges: a Class 5-style test in Kitsilano and a G2-style test
 in Toronto's Annex, each a longer drive on a fixed route with an examiner's directions and sheet
-(see the [README](../README.md#-take-on-the-challenges)).
+(see the [README](../README.md#take-the-test-yourself)).
 
 How challenges are built and checked: [docs/project-reference.md](project-reference.md).

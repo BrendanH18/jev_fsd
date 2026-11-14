@@ -40,6 +40,6 @@ Python server's route alternatives and ranking. Authored challenges are identica
 builds because their route construction and setup are shared. Load a published custom agent
 with a relative URL such as `./js/agents/my-agent.js`; a leading `/` points at the domain root.
 
-Use a desktop WebGL browser. Smaller layouts support inspecting the lab, but driving requires
-a keyboard. Quality defaults to High; choose Low on slower devices. There is no frame-rate
+Use a WebGL browser. Drive with the keyboard, a gamepad or the on-screen touch controls
+([gamepad and touch](drive-experience.md#gamepad-and-touch)). Quality defaults to High; choose Low on slower devices. There is no frame-rate
 guarantee or offline-install service worker.

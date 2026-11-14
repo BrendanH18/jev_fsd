@@ -6,7 +6,7 @@ probabilities) and **LLM** (any OpenAI-compatible chat model). Keys 1, 2 and 3 s
 Rules and LLM.
 
 Open `/arena` to evaluate Rules, Jev (when configured), the free cautious starter, your own
-decision models and LLM endpoints, or your own agent on eight fixed challenges. The public demo uses `arena.html` and supports browser agents.
+decision models and LLM endpoints, or your own agent on all 60 challenges (and the two road tests, if you tick the box). The public demo uses `arena.html` and supports browser agents.
 Select **Realtime** when comparing model latency or manual attempts; **Lockstep** waits for a
 decision and measures the resulting choices. Changing clocks changes the experiment.
 

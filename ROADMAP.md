@@ -349,9 +349,12 @@ Exit: the published comparison shows a difference between two models that the re
   after the licence line.
   *Done 14 November:* the one-line statement, a six-bullet list, the generated results table;
   challenges in `docs/challenges.md`.
-- [ ] **5.3 Make the repository page agree with the README.** (S) The GitHub description says "Jev
+- [x] **5.3 Make the repository page agree with the README.** (S) The GitHub description says "Jev
   drives the car"; the README says "Drive Lab". Settle it with [D1](#open-decisions), and set the
   homepage to the demo, which is empty today.
+  *Done 14 November:* the GitHub description is now the one-line statement, the homepage is the
+  demo, and `pyproject.toml` and the demo's social card say the same. The README was rewritten around
+  the first results as stories, with new screenshots in `docs/readme/`.
 - [x] **5.4 Split the reference.** (M) `docs/project-reference.md` is 2,608 lines. One page per
   feature, generated or linked from the feature registry of 3.1.
   *Done 14 November:* 53 pages in `docs/reference/` with an index; `project-reference.md` keeps the
