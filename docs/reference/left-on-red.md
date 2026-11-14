@@ -38,7 +38,7 @@ The saved Jev requests `data/snapshots/left_on_red_clear.json` and
 `left_on_red_traffic.json` cover driving after a full stop and waiting for traffic
 from the right; run them with `uv run scripts/verify_jev.py data/snapshots/left_on_red_*.json`.
 `scripts/test_drive_lab.mjs` also measures two complete saved arena evaluations
-(all challenges with Rules and cautious) and checks the 9 MB cap: 58.7% with
+(all challenges with Rules and cautious) and checks the 9 MB localStorage fallback cap: 58.7% with
 43 challenges, measured 2026-11-05.
 
 ## Agent rules

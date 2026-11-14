@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EVALUATION_SCHEMA, EVALUATION_HISTORY_KEY, validateEvaluation, readEvaluations, saveEvaluation,
-  compareResult, summarizeResults } from "../static/js/lab/history.js";
+  compareResult, summarizeResults, openEvaluationHistory } from "../static/js/lab/history.js";
 import { EvaluationTrace } from "../static/js/lab/trace.js";
 
 const result = { challenge: "door-zone", version: 1, map: "kitsilano", pack: 5, seed: 1042, weather: "dry", time: "afternoon", car: "compact",
@@ -160,4 +160,12 @@ test("trace limits explicitly label missing later context", () => {
   trace.event("timeout", "Time limit", 605);
   assert.equal(trace.decisions.length, 600); assert.equal(trace.events[0].decision_id, null); assert.equal(trace.export().trace_truncated, true);
 });
+// (the arena keeps history in IndexedDB, scripts/test_arena_storage.mjs; without it, as here in Node,
+// it is the localStorage history above)
+{
+  const store = new Map(), history = await openEvaluationHistory({ storage: { getItem: (k) => store.get(k), setItem: (k, v) => store.set(k, v) } });
+  assert.equal(history.kind, "localStorage"); await history.save(run);
+  assert.deepEqual(await history.list(), [run]); assert.deepEqual(readEvaluations({ getItem: (k) => store.get(k) }), [run]);
+  checks++; console.log("✓ without IndexedDB the arena's history is this localStorage history");
+}
 console.log(`${checks} arena history checks passed`);
