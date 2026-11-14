@@ -259,7 +259,7 @@ export class BlackIce {
     this.index(this.fixed || cond ? this.all : []);
   }
 
-  // Replace the patches (a challenge places its own: lab/black-ice-challenge.js); they lie on the road
+  // Replace the patches (a challenge places its own: lab/challenges/bridges-freeze-first.js); they lie on the road
   // whatever the conditions.
   setList(list) {
     this.fixed = true; this.all = list.filter(Boolean); this.key = "fixed";

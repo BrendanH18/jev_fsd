@@ -15,14 +15,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  checks:
-    name: Python and Node checks
+  python:
+    name: Python checks and Jev fixtures
     runs-on: namespace-profile-gitrunner
     timeout-minutes: 30
-    env:
-      # Seconds each scripts/test_*.mjs may run. The slowest (test_drive_lab.mjs) takes about
-      # two minutes; a failing assert on a sim object can grow without bound (see AGENTS.md).
-      NODE_TEST_TIMEOUT: 360
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,13 +30,43 @@ jobs:
         with:
           node-version: '22'
       - name: Python tests
+        # tests/test_parity.py runs the JavaScript side under Node; here a missing Node is a failure
+        env:
+          JEV_REQUIRE_NODE: 1
         run: uv run --locked python -m unittest discover tests
       - name: Offline Jev requests
         run: uv run --locked scripts/verify_jev.py --offline
+      - name: Jev fixtures match the current pipeline
+        run: node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
+
+  node:
+    # scripts/ci_shard.mjs deals the scripts/test_*.mjs out over the shards by measured run time
+    # (scripts/ci_test_times.json); scripts/test_ci_shard.mjs checks every file lands in exactly one
+    # and that this matrix lists every shard.
+    name: Node checks, shard ${{ matrix.shard }}
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    env:
+      # Seconds each scripts/test_*.mjs may run. The slowest (test_drive_lab.mjs) takes about
+      # two minutes; a failing assert on a sim object can grow without bound (see AGENTS.md).
+      NODE_TEST_TIMEOUT: 360
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
       - name: Node checks
         run: |
+          files=$(node scripts/ci_shard.mjs --shards 6 --shard ${{ matrix.shard }})
+          if [ -z "$files" ]; then echo "::error::shard ${{ matrix.shard }} has no Node checks"; exit 1; fi
           failed=()
-          for f in scripts/test_*.mjs; do
+          for f in $files; do
             echo "::group::$f"
             rc=0
             timeout --kill-after=10s "${NODE_TEST_TIMEOUT}s" node --experimental-default-type=module "$f" || rc=$?
@@ -61,13 +87,19 @@ jobs:
             printf '  %s\n' "${failed[@]}"
             exit 1
           fi
-      - name: Jev fixtures match the current pipeline
-        run: node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check
 
   browser:
-    name: Browser suites
+    name: Browser suite, ${{ matrix.title }}
     runs-on: namespace-profile-gitrunner
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - title: simulation, HUD, explorer and renderer
+            script: scripts/test_browser_pages.py
+          - title: arena evaluation, history and comparisons
+            script: scripts/test_arena_browser.py
     env:
       PLAYWRIGHT: playwright==1.64.0
     steps:
@@ -89,16 +121,14 @@ jobs:
           uv run --locked server.py > server.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8322/ && exit 0; sleep 1; done
           cat server.log; exit 1
-      - name: Simulation, HUD, explorer and renderer assertions
-        run: uv run --locked --with "$PLAYWRIGHT" python scripts/test_browser_pages.py
-      - name: Arena evaluation, history and comparisons
-        run: uv run --locked --with "$PLAYWRIGHT" python scripts/test_arena_browser.py
+      - name: Browser assertions
+        run: uv run --locked --with "$PLAYWRIGHT" python ${{ matrix.script }}
       - name: Server log
         if: failure()
         run: cat server.log
 
   build:
-    needs: [checks, browser]
+    needs: [python, node, browser]
     runs-on: namespace-profile-gitrunner
     timeout-minutes: 10
     steps:

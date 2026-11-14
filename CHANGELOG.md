@@ -2,6 +2,67 @@
 
 ## Unreleased
 
+- Features can now be added as records in a registry (`static/js/sim/features/`): potholes, geese
+  and road closures are each one record and one registration line, and the core (world, step, traffic,
+  sensing, candidates, decision state, LLM prompt, metrics) loops over the records instead of naming
+  them. The seeded bare and city suites, every challenge and road test, and the model recording give
+  identical results before and after (`docs/feature-interface.md`). New check:
+  `scripts/test_feature_registry.mjs`. (ROADMAP 3.1)
+- **Results where people look (ROADMAP 2.7).** `scripts/build_results.py` builds `data/results.json`
+  from the committed records (`data/results/`, `data/recordings/`, the newest `data/runs/` per driver,
+  map and weather), naming each row's source files, and rewrites the README's results table; `--check`
+  and `tests/test_results.py` fail when either is stale. A read-only leaderboard (`/results` locally,
+  `results.html` in the public demo, served by `GET /api/results`) shows the summary, every challenge
+  and road test per driver with links to drive or watch it, the city suite per map and weather, and the
+  command to replay each model recording. It is linked from the drive lab and the arena.
+- **README (ROADMAP 5.2).** It leads with the one-line statement, a short list and the results table.
+  The 60-row challenge table moved to `docs/challenges.md`, and the two stray paragraphs after the
+  licence line are gone.
+- Drives now get scores beyond pass or fail: progress, pace, comfort, margin kept, time lost and a
+  combined score (`bench/scores.js`). `/bench`, the arena and the Node scripts compute them when showing
+  results, so two passing drivers can be ranked. Saved results are unchanged. (ROADMAP 4.3)
+- Held-out routes that no fix was tuned against (`bench/heldout.js`: Kitsilano seeds 101–103, two
+  routes of seed 101 elsewhere), run with `--heldout 1` in `bench_node.mjs` and `soak.mjs` or the
+  `/bench` box, and reported apart. First Rules run: bare 10/12, city 8/12, recorded and not fixed.
+  (ROADMAP 4.4)
+- `scripts/driver_latitude.mjs` counts the decisions at which a driver could choose its way into
+  failing a challenge. Of 3,042 sampled decisions over 60 challenges, 28 leave room to fail, 24 of them
+  only through the emergency brake. (ROADMAP 4.1)
+- Drive with a gamepad or on a touch screen. A gamepad (left stick steers, RT/LT accelerate and brake,
+  A brakes hard, Y autopilot, X camera, B horn, LB/RB indicators, View reset, Menu pause) and on-screen
+  touch controls (slide-to-steer pad, brake and accelerator pedals, a toggle row; `?touch=1` /
+  `?touch=0` to force) feed the keyboard's manual-drive path with analog amounts; keyboard driving is
+  unchanged. On touch screens the HUD and replay deck stand above the controls. Fixed the replay deck
+  stretching the speed cluster between 760 and 1080 px wide. `scripts/shot.swift` takes
+  `SHOT_SIZE=WxH`.
+- The arena keeps saved evaluations in the browser's IndexedDB instead of localStorage, so they are no
+  longer limited to 9 MB: the newest 20 runs within 200 MB are kept, the oldest dropped first (never
+  the chosen baseline while another can go), and more if the browser's quota refuses a save. History
+  saved before moves there the first time the arena opens. Where IndexedDB is unavailable, such as some
+  private windows, the arena keeps the old limit of 10 runs within 9 MB in localStorage. (ROADMAP 3.6)
+- Every challenge is now a module of its own, `static/js/lab/challenges/<id>.js`, exporting its
+  definition and its scripted parts (`scenario`, `install`, `step`); what several share is in
+  `lab/challenges/shared/`, and `lab/challenges.js` is the ordered registry, exporting the same names
+  as before. The 19 `lab/*-challenge.js` files moved there. Every challenge and road test plays out
+  exactly as before (all 62 drives with Rules and the cautious agent compared field for field).
+  `scripts/test_challenge_modules.mjs` checks the layout. (ROADMAP 3.5)
+- CI runs the Node checks in six parallel shards, balanced by measured run time
+  (`scripts/ci_shard.mjs`, `scripts/ci_test_times.json`, checked by `scripts/test_ci_shard.mjs`), the
+  Python checks and Jev fixtures in their own job, and each browser suite in its own job. (ROADMAP 3.7)
+- `tests/test_parity.py` runs the Python and JavaScript copies of the turn angle and kind, the
+  sharp-turn rule and the lane-join geometry on the shared cases in `tests/fixtures/parity_cases.json`
+  (JavaScript side: `scripts/parity_js.mjs`). Three join cases disagree today and are recorded as known
+  differences: `joinLanes` skips the join for an outgoing piece under 3 m, and the two decide whether
+  to round a corner from different headings. (ROADMAP 3.8)
+- The project reference is now one page per topic in `docs/reference/`, with an index;
+  `docs/project-reference.md` points to it and keeps its old anchors. (ROADMAP 5.4)
+- `AGENTS.md` states the opt-in feature pattern once, with a table of every feature; each feature's
+  detailed rule is on its reference page (56 KB to 28 KB). (ROADMAP 3.4)
+- New guide: `docs/adding-a-challenge.md` (the admission rule, how a challenge is defined, the checks,
+  a worked example). (ROADMAP 5.5)
+- `tests/test_doc_links.py` checks every relative link and anchor in the README, `AGENTS.md`,
+  `ROADMAP.md` and `docs/`. It found two links to Rules runs that were never committed, now plain text.
+
 - The city world's second round of fixes on the other maps (ROADMAP 1.8,
   `docs/validation/other-maps-round2-2026-11-12.md`): Toronto, Calgary and Victoria seed 2, the
   Kitsilano seed 3 deadlocks, the night failures and the van stand-off now pass. Traffic no longer turns

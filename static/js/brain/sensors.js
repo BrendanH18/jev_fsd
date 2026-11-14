@@ -1,10 +1,8 @@
 import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
 import { reversingVehicle } from "../sim/driveway-reversers.js";
-import { potholeLimit, potholesAhead } from "../sim/potholes.js";
 import { puddleLimit, puddlesAhead } from "../sim/puddles.js";
 import { ballInRoad } from "../sim/ball-chase.js";
-import { geeseCrossing } from "../sim/geese.js";
 import { iceLimit, iceSensing, iceTurn } from "../sim/black-ice.js";
 import { snowbankAhead, WAIT_M as SNOWBANK_WAIT_M } from "../sim/snowbanks.js";
 import { parkerSensing } from "../sim/parkers.js";
@@ -64,7 +62,14 @@ import { EGO_ID, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL, THROUGH_M as L
 import { SPAN_M as WZ_SPAN_M, WZ_LIMIT_MPS, canStopFor as canStopForFlagger, detourOf, isWorkZone, marksOn, paddle, sideOf, stopKey } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
-import { STOP_DECEL as CLOSURE_STOP_DECEL, roadClosedSensing } from "../sim/road-closures.js";
+import { featureObstacle, hooks } from "../sim/features/index.js";
+
+// The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
+// what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
+const SENSE = { driveways: hooks("sense", "driveways"), balls: hooks("sense", "balls"), parkers: hooks("sense", "parkers") };
+const LIMIT = { driveways: hooks("limit", "driveways"), balls: hooks("limit", "balls") };
+const TARGET = { restrictions: hooks("target", "restrictions"), driveways: hooks("target", "driveways"), balls: hooks("target", "balls") };
+const HAZARD = { driveways: hooks("hazard", "driveways"), balls: hooks("hazard", "balls"), parkers: hooks("hazard", "parkers") };
 import { officerDirection, officerLight, officerSensing } from "../sim/traffic-officer.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -339,9 +344,9 @@ export function buildSnapshot(world, executing = null) {
     }
     const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, { list: world.crowd.list.filter((p) => visible.includes(p)) });
     if (cw) snap.pedestrian = { id: cw.ped.id, bumper_to_crosswalk_m: cw.s - (p.s + FRONT), s_route: cw.s, to_path_m: cw.toPath, speed: cw.ped.v, mid_block: !!cw.ped.crossing?.jaywalk };
-    // (geese, sim/geese.js, are waited for as a gaggle, never followed or passed; and a closed road's
-    // barricades, sim/road-closures.js, are stopped short of, or gone round by the detour)
-    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && !o.goose && !o.barricade);
+    // (what a registered feature puts in the road, geese or a closed road's barricades, is never followed
+    // or passed: sim/features/index.js)
+    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && !featureObstacle(o));
     if (world.busLanes) {
       route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
       const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
@@ -382,15 +387,11 @@ export function buildSnapshot(world, executing = null) {
     }
     // (cars backing out of driveways, with that option on: sim/driveway-reversers.js)
     if (world.driveways?.enabled) snap.reversing_vehicle = world.driveways.cars.length ? reversingVehicle(world, p, frontS, lane) : null;
-    // (spring potholes in the car's lane, with that option on: sim/potholes.js)
-    if (world.potholes?.enabled) {
-      const ph = potholesAhead(world, p, frontS, lane, road.limit);
-      snap.pothole = ph?.pothole || null; snap.potholes_ahead = ph?.ahead || null;
-    }
+    const senseCtx = { p, frontS, lane, road, route, visible };
+    for (const sense of SENSE.driveways) sense(world, snap, senseCtx);
     // (a ball rolled into the street ahead, a child maybe after it, with that option on: sim/ball-chase.js)
     if (world.balls?.enabled) snap.ball_in_road = world.balls.balls.length ? ballInRoad(world, p, frontS) : null;
-    // (Canada geese crossing the road, with that option on: sim/geese.js)
-    if (world.geese?.enabled) snap.geese_crossing = world.geese.gaggles.length ? geeseCrossing(world, p, frontS, lane) : null;
+    for (const sense of SENSE.balls) sense(world, snap, senseCtx);
     // (black ice the car has seen ahead, and a caution while conditions favour it, with that option on:
     // sim/black-ice.js)
     if (world.ice?.enabled) Object.assign(snap, iceSensing(world, p, frontS));
@@ -404,9 +405,7 @@ export function buildSnapshot(world, executing = null) {
     }
     // (a car ahead parallel parking, and the room it needs behind it, with that option on: sim/parkers.js)
     if (world.parkers?.enabled) snap.parking_ahead = world.parkers.active.length ? parkerSensing(world, p, frontS) : null;
-    // (a block closed for an event, seen at its barricades, with that option on: on the route, with no
-    // detour yet, or beside the detour: sim/road-closures.js)
-    if (world.roadClosures?.enabled) snap.road_closed = roadClosedSensing(world, route, frontS);
+    for (const sense of SENSE.parkers) sense(world, snap, senseCtx);
     // (a police officer directing traffic at the junction ahead, with that option on: sim/traffic-officer.js)
     if (world.officers?.enabled) snap.traffic_officer = snap.intersection?.officer || null;
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
@@ -505,16 +504,14 @@ export function buildSnapshot(world, executing = null) {
   if (snap.contraflow_cyclist?.entry_limit_mps != null) snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
   // (and coming up to a car backing out of a driveway: sim/driveway-reversers.js)
   if (snap.reversing_vehicle?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.reversing_vehicle.limit_mps);
-  // (and coming up to a pothole it cannot ease round in its lane, and over it: sim/potholes.js)
-  if (snap.potholes_ahead && snap.routeProj) for (const h of snap.potholes_ahead) if (!h.room) snap.limit = Math.min(snap.limit, potholeLimit(h, snap.routeProj.s));
+  for (const limit of LIMIT.driveways) limit(snap);
   // (and coming up to a puddle with someone near it that it cannot ease round in its lane, and through it:
   // sim/puddles.js)
   if (snap.puddles_ahead && snap.routeProj) for (const h of snap.puddles_ahead) if (!h.room) snap.limit = Math.min(snap.limit, puddleLimit(h, snap.routeProj.s));
   // (and, having seen a ball roll into the street, no faster than it can stop from short of the gap it
   // came from until the child after it has come and gone: sim/ball-chase.js)
   if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
-  // (and coming up to geese by the road, or crossing it: sim/geese.js)
-  if (snap.geese_crossing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.geese_crossing.limit_mps);
+  for (const limit of LIMIT.balls) limit(snap);
   // (and through a narrowed stretch between snowbanks, and up to a corner a snowbank hides: sim/snowbanks.js)
   if (snap.snowbank?.narrowing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.snowbank.narrowing.limit_mps);
   if (snap.snowbank?.corner) snap.limit = Math.min(snap.limit, snap.snowbank.corner.limit_mps);
@@ -1698,7 +1695,7 @@ function laneClearS(shift, fromCenter, toCenter) {
 function laneOptions(snap, world) {
   const { route, lane, ego } = snap;
   const p = snap.routeProj, s = p.s, FRONT = ego.front_m, REAR = world.ego.spec.rearOverhang;
-  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian" && !o.goose && !o.barricade);
+  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian" && !featureObstacle(o));
   const free = desiredSpeed({ ...snap, following: null }).v;
   const i = snap.intersection;
   const line = snap.control_line_m ?? (i ? i.bumper_to_line_m : Infinity);
@@ -1773,11 +1770,8 @@ export function desiredSpeed(snap) {
     v = Math.min(v, Math.sqrt(2 * decel * Math.max(0, snap.turn_restriction.distance_m - FRONT - 8)));
     reasons.push("prohibited turn; replan route");
   }
-  // (a road closed ahead on the route, with no detour yet: be able to stop short of it, sim/road-closures.js)
-  if (snap.road_closed?.on_route) {
-    v = Math.min(v, Math.sqrt(2 * Math.min(decel, CLOSURE_STOP_DECEL) * Math.max(0, snap.road_closed.bumper_to_stop_m)));
-    reasons.push("road closed ahead; replan route");
-  }
+  const targetCtx = { decel, FRONT, stopSpeedFor };
+  for (const target of TARGET.restrictions) v = target(snap, v, reasons, targetCtx);
   if (snap.visibility) {
     const visibleSpeed = snap.visibility.safe_speed_mps ?? visibilitySpeed(snap.visibility.range_m, FRONT);
     if (visibleSpeed < v) { v = visibleSpeed; reasons.push("limited visibility"); }
@@ -1897,22 +1891,14 @@ export function desiredSpeed(snap) {
     const vr = rv.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(rv.bumper_to_stop_m - 0.5, decel);
     if (vr < v) { v = vr; reasons.push("car backing out of a driveway"); }
   } else if (rv?.limit_mps != null && rv.limit_mps <= v + 0.05) reasons.push("car backing out ahead");
-  // a pothole it cannot ease round in its lane (sim/potholes.js): `limit` is already down to the speed
-  // to drive over it at
-  const slowFor = snap.potholes_ahead?.find((h) => !h.room);
-  if (slowFor && snap.routeProj && potholeLimit(slowFor, snap.routeProj.s) * Math.min(1, weather.speed) <= v + 0.05) reasons.push(slowFor.starts_in_m < 0 ? "over a pothole" : "pothole ahead: no room to go round");
+  for (const target of TARGET.driveways) v = target(snap, v, reasons, targetCtx);
   // a puddle with someone near it that it cannot ease round in its lane (sim/puddles.js): `limit` is
   // already below its splash speed
   const splashFor = snap.puddles_ahead?.find((h) => !h.room);
   if (splashFor && snap.routeProj && puddleLimit(splashFor, snap.routeProj.s) * Math.min(1, weather.speed) <= v + 0.05) reasons.push("puddle by the kerb: people on the sidewalk");
   // a ball rolled into the street (sim/ball-chase.js): `limit` is already down to the cover speed
   if (snap.ball_in_road?.limit_mps != null && snap.ball_in_road.limit_mps <= v + 0.05) reasons.push("ball in the road: a child may follow");
-  // Canada geese crossing the road (sim/geese.js): stop short of them until the last is off the road
-  const gc = snap.geese_crossing;
-  if (gc?.wait) {
-    const vg = gc.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(gc.bumper_to_stop_m - 0.5, decel);
-    if (vg < v) { v = vg; reasons.push("geese crossing"); }
-  } else if (gc?.limit_mps != null && gc.limit_mps <= v + 0.05) reasons.push("geese by the road");
+  for (const target of TARGET.balls) v = target(snap, v, reasons, targetCtx);
   // black ice seen ahead or under the car, or a bridge in icy weather (sim/black-ice.js): `limit` is
   // already down to it
   if (snap.ice_limit_mps != null && snap.ice_limit_mps <= v + 0.05) reasons.push(snap.black_ice?.on_ice ? "on black ice: no braking or sharp steering" : snap.black_ice ? "black ice ahead" : "bridges freeze first");
@@ -2121,9 +2107,9 @@ export function hazardFlags(snap) {
   if (snap.contraflow_cyclist) f.push("contraflow cyclist");
   if (snap.red_light_runner) f.push("red-light runner");
   if (snap.reversing_vehicle) f.push("reversing vehicle");
-  if (snap.pothole) f.push("pothole");
+  for (const flag of HAZARD.driveways) { const x = flag(snap); if (x) f.push(x); }
   if (snap.ball_in_road) f.push("ball in the road");
-  if (snap.geese_crossing) f.push("geese");
+  for (const flag of HAZARD.balls) { const x = flag(snap); if (x) f.push(x); }
   if (snap.tailgater) f.push("tailgater");
   if (snap.traffic_officer) f.push("traffic officer");
   if (snap.black_ice || (snap.ice_caution?.bridge && snap.ice_caution.bridge.starts_in_m < 80)) f.push("black ice");
@@ -2131,7 +2117,7 @@ export function hazardFlags(snap) {
   if (snap.snowbank?.corner) f.push("snowbank corner");
   if (snap.puddle_splash) f.push("puddle by the kerb");
   if (snap.parking_ahead) f.push("car parking ahead");
-  if (snap.road_closed) f.push("road closed");
+  for (const flag of HAZARD.parkers) { const x = flag(snap); if (x) f.push(x); }
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");

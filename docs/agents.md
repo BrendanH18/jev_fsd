@@ -10,6 +10,12 @@ decision models and LLM endpoints, or your own agent on eight fixed challenges. 
 Select **Realtime** when comparing model latency or manual attempts; **Lockstep** waits for a
 decision and measures the resulting choices. Changing clocks changes the experiment.
 
+Saved evaluations stay in this browser's IndexedDB (`lab/history.js`): the newest 20 runs, within
+200 MB, dropping the oldest first (never the chosen baseline while another can go) and more if the
+browser's quota refuses a save. History saved in localStorage by earlier versions moves there the
+first time the arena opens. Where IndexedDB is unavailable (some private windows, blocked storage)
+the arena keeps up to 10 runs in localStorage within 9 MB. Export a run to keep a permanent copy.
+
 Copy `static/js/agents/cautious.js` to `static/js/agents/my-agent.js`. Change its default
 definition's id and label, then open **Settings → Local agent module** and load
 `/js/agents/my-agent.js`. On a project-hosted Pages site use `./js/agents/my-agent.js` instead.
@@ -438,7 +444,7 @@ emergency brakes, fallbacks and termination events retain their simulation times
 Each result row, its details and each driver's summary also say who made the decisions: the share
 the driver answered itself, the share answered locally because nothing needed asking, and the share
 that fell back to Rules (`model_share`, `local_share`, `fallback_share`, with the counts beside
-them; see "Who made the decisions" in [the project reference](project-reference.md)). Only the
+them; see "Who made the decisions" in [the benchmark reference](reference/benchmarks.md)). Only the
 first is the driver's own work, so read a pass alongside it. Rules results report none of these.
 Arena hard-brake counts use the coaching model's events so the totals match the timeline.
 Expand an event to see the most recent executed decision, its age, selected candidate,

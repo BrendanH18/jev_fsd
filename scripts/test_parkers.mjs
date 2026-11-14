@@ -33,7 +33,7 @@ const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 const { failureCategory } = await import("../static/js/lab/examiner.js");
 const { Route } = await import("../static/js/map/route.js");
 const { routeFromLanes } = await import("../static/js/demo/routing.js");
-const { RP_GAP_M } = await import("../static/js/lab/parker-challenge.js");
+const { RP_GAP_M } = await import("../static/js/lab/challenges/room-to-park.js");
 
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }

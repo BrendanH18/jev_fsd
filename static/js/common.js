@@ -1,6 +1,7 @@
 // Small shared helpers: API calls with the session token, formatting, DOM building.
 
-const TOKEN = document.querySelector('meta[name="jev-csrf"]')?.content || "";
+// (no page in a Node check that only needs the pure helpers: bench/metrics.js loads the feature registry)
+const TOKEN = globalThis.document?.querySelector('meta[name="jev-csrf"]')?.content || "";
 
 export async function api(path, body, { signal } = {}) {
   if (document.querySelector('meta[name="jev-demo"]')) {

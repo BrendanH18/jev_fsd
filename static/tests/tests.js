@@ -342,6 +342,12 @@ async function run() {
     check("manual steering limits cornering demand at city speed", Math.abs(world.ego.delta) < 0.06 && Math.abs(world.ego.latAccel) < 5);
     for (let i = 0; i < 60; i++) world.stepManual(1 / 60, {});
     check("manual steering recentres after the key is released", Math.abs(world.ego.delta) < 1e-6);
+    // (a gamepad's stick and triggers, ui/gamepad.js, give amounts between: half asks for half)
+    const analog = new World(map, { parked: 0, pedestrians: 0 }), keyed = new World(map, { parked: 0, pedestrians: 0 });
+    for (let i = 0; i < 90; i++) { analog.stepManual(1 / 60, { left: 0.5 }); keyed.stepManual(1 / 60, { left: true }); }
+    const steered = Math.abs(analog.ego.delta / keyed.ego.delta - 0.5) < 1e-3;
+    for (let i = 0; i < 30; i++) { analog.stepManual(1 / 60, { throttle: 0.5 }); keyed.stepManual(1 / 60, { throttle: true }); }
+    check("half a stick and trigger steer and accelerate less than a key", steered && analog.ego.v > 0 && analog.ego.v < keyed.ego.v);
   }
   // Parallel parking (sim/parallel-park.js), on a straight street with a parking lane: a space between
   // two parked cars is found, and the car reverses into it, parallel and within 30 cm of the kerb,

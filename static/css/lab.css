@@ -20,6 +20,7 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .welcome-card strong, .challenge-card strong { color: #83d9c4; font-size: 12px; display: block; margin-top: 24px; }
 .lab-footer { border-top: 1px solid #ffffff12; padding-top: 20px; margin-top: 25px; font-size: 12px; color: #afc0cc; }
 .lab-footer a { color: #83d9c4; text-decoration: none; }
+.lab-footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
 .lab-footnote { margin: 16px 0 0; font-size: 11px; line-height: 1.6; color: #8da3b1; }
 .challenge-title { font-size: clamp(30px, 5vw, 52px); letter-spacing: -.045em; margin: 18px 0; }
 .challenge-driver { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; color: #afc0cc; }
@@ -68,6 +69,8 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .replay-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 body:has(.replay-deck:not([hidden])) .cluster { bottom: 68px; }
 body:has(.replay-controls:not([hidden])) .cluster { bottom: 180px; }
+/* (between 760 and 1080 px wide the cluster sits at the top: keep the deck from stretching it down) */
+@media (min-width: 761px) and (max-width: 1080px) { body:has(.replay-deck:not([hidden])) .cluster { bottom: auto; } }
 .report-share-status { font-size: 12px; color: #83d9c4; }
 .drive-dialog .dialog-footer { flex-wrap: wrap; gap: 8px; }
 .drive-dialog .dialog-footer > .muted { flex-basis: 100%; }

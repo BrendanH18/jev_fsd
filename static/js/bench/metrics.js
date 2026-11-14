@@ -2,6 +2,8 @@
 // comfort (acceleration, jerk, lateral acceleration), lane keeping, legality, and progress.
 // Kinematics are sampled every 0.1 s so the numbers describe the car, not integration noise.
 
+import { featureFailures, featureMetrics } from "../sim/features/index.js";
+
 const SAMPLE_S = 0.1;
 const HARD_BRAKE = -3.5;     // m/s^2, sustained for 0.2 s counts as a hard brake
 const SPEEDING = 1.1;        // over 110% of the limit counts as speeding
@@ -106,12 +108,12 @@ export class DriveMetrics {
       ...(world.redRunnersSeen ? { fresh_green_conflicts: v.fresh_green_conflicts || 0 } : {}),
       // (only for a drive a car backed out of a driveway near the car in: sim/driveway-reversers.js)
       ...(world.drivewaysSeen ? { reversing_conflicts: v.reversing_conflicts || 0 } : {}),
-      // (only for a drive in which the car came near a pothole: sim/potholes.js)
-      ...(world.potholesSeen ? { pothole_hits: v.pothole_hits || 0 } : {}),
+      // (and the registered features' metrics, each only for a drive in which the feature met the car:
+      // sim/features/index.js; the car coming near a pothole, say)
+      ...featureMetrics(world, v, "driveways"),
       // (only for a drive in which a ball rolled into the street near the car: sim/ball-chase.js)
       ...(world.ballsSeen ? { ball_warnings_ignored: v.ball_warnings_ignored || 0 } : {}),
-      // (only for a drive a gaggle of Canada geese crossed near the car in: sim/geese.js)
-      ...(world.geeseSeen ? { wildlife_conflicts: v.wildlife_conflicts || 0 } : {}),
+      ...featureMetrics(world, v, "balls"),
       // (only for a drive a tailgater followed the car in: sim/tailgaters.js)
       ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
       // (only for a drive in which the car came near black ice: sim/black-ice.js)
@@ -122,8 +124,7 @@ export class DriveMetrics {
       ...(world.puddlesSeen ? { pedestrians_splashed: v.pedestrians_splashed || 0 } : {}),
       // (only for a drive in which a car signalled to parallel park ahead of the car: sim/parkers.js)
       ...(world.parkersSeen ? { parking_conflicts: v.parking_conflicts || 0 } : {}),
-      // (only for a drive in which the car came up to a block closed for an event: sim/road-closures.js)
-      ...(world.roadClosuresSeen ? { closure_entries: v.closure_entries || 0 } : {}),
+      ...featureMetrics(world, v, "parkers"),
       // (only for a drive in which the car came up to a junction a police officer directed: sim/traffic-officer.js)
       ...(world.officersSeen ? { officer_violations: v.officer_violations || 0 } : {}),
       off_road_s: r(v.off_road_s),
@@ -184,15 +185,15 @@ export function failures(m) {
   if (m.contraflow_conflicts) f.push("cut off or squeezed a contraflow cyclist");
   if (m.fresh_green_conflicts) f.push("entered on green ahead of a car running the red");
   if (m.reversing_conflicts) f.push("squeezed past or failed to stop for a car backing out");
-  if (m.pothole_hits) f.push("hit a pothole too fast");
+  f.push(...featureFailures(m, "driveways"));
   if (m.ball_warnings_ignored) f.push("ignored a ball rolling into the street");
-  if (m.wildlife_conflicts) f.push("drove into or too close to geese crossing the road");
+  f.push(...featureFailures(m, "balls"));
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
   if (m.ice_overspeed) f.push("crossed black ice too fast, or braked or steered hard on it");
   if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
   if (m.pedestrians_splashed) f.push("splashed a pedestrian from a puddle");
   if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");
-  if (m.closure_entries) f.push("drove onto a closed road");
+  f.push(...featureFailures(m, "parkers"));
   if (m.officer_violations) f.push("went on when a police officer signalled stop");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)

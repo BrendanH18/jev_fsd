@@ -109,6 +109,177 @@ export function saveEvaluation(run, storage, keep = null) {
   return runs;
 }
 
+// Saved arena history lives in IndexedDB, where a run of every challenge (some 3.7 MB each with 60
+// challenges and two drivers) is not bound by localStorage's few megabytes. The newest
+// MAX_SAVED_RUNS runs are kept within MAX_SAVED_BYTES of JSON; older ones are dropped first, and a
+// browser quota (QuotaExceededError) drops more. Where IndexedDB is missing or throws (private
+// windows, blocked storage, Node), the store falls back to localStorage and its 9 MB cap above.
+// History saved in localStorage before is moved into IndexedDB once, and its key removed.
+export const EVALUATION_DB = "jev-fsd-arena";
+export const MAX_SAVED_RUNS = 20;
+export const MAX_SAVED_BYTES = 200 * 1024 * 1024;
+const RUNS = "evaluations", INDEX = "evaluation-index"; // (the index holds { id, created_at, bytes, ... }, cheap to list)
+const OPEN_TIMEOUT_MS = 5000;
+const request = r => new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+const finished = tx => new Promise((resolve, reject) => {
+  tx.oncomplete = () => resolve();
+  tx.onerror = tx.onabort = () => reject(tx.error || new DOMException("The transaction was aborted.", "AbortError"));
+});
+const same = (a, b) => a.created_at === b.created_at && a.status === b.status && a.count === b.count;
+const summary = (run, bytes) => ({ created_at: run.created_at, status: run.status, count: run.results.length, bytes });
+
+function openDatabase(indexedDB) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open(EVALUATION_DB, 1);
+    let late = false;
+    const timer = setTimeout(() => { late = true; reject(new Error("IndexedDB did not open.")); }, OPEN_TIMEOUT_MS);
+    open.onupgradeneeded = () => {
+      const db = open.result;
+      if (!db.objectStoreNames.contains(RUNS)) db.createObjectStore(RUNS);
+      if (!db.objectStoreNames.contains(INDEX)) db.createObjectStore(INDEX, { keyPath: "id" });
+    };
+    open.onsuccess = () => {
+      clearTimeout(timer);
+      const db = open.result;
+      if (late) { db.close(); return; } // (the page went on with the localStorage history)
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    open.onerror = () => { clearTimeout(timer); reject(open.error); };
+    open.onblocked = () => { clearTimeout(timer); late = true; reject(new Error("IndexedDB is blocked.")); };
+  });
+}
+
+// The pre-IndexedDB history, newest first, as a store with the same interface.
+function localHistory(storage) {
+  const local = () => storage || globalThis.localStorage;
+  return {
+    kind: "localStorage", limit: 10,
+    async list() { return readEvaluations(storage); },
+    async save(run, keep = null) { return saveEvaluation(run, storage, keep); },
+    async remove(run) {
+      const runs = readEvaluations(storage), json = JSON.stringify(run), at = runs.findIndex(r => JSON.stringify(r) === json);
+      const remaining = runs.filter((_, k) => k !== at);
+      local().setItem(EVALUATION_HISTORY_KEY, JSON.stringify(remaining));
+      return remaining;
+    },
+  };
+}
+
+function databaseHistory(db, { maxRuns, maxBytes }) {
+  let entries = []; // { id, run }, newest first
+  const ids = new WeakMap();
+  const runs = () => entries.map(e => e.run);
+  // (the index, newest first, and the runs not yet in memory)
+  async function refresh(index) {
+    const known = new Map(entries.map(e => [e.id, e.run])), missing = index.filter(i => !known.has(i.id));
+    if (missing.length) {
+      const tx = db.transaction(RUNS, "readonly"), store = tx.objectStore(RUNS);
+      const loaded = await Promise.all(missing.map(i => request(store.get(i.id))));
+      missing.forEach((i, k) => { try { if (loaded[k]) known.set(i.id, validateEvaluation(loaded[k])); } catch { /* a damaged record is left out */ } });
+    }
+    entries = index.filter(i => known.has(i.id)).map(i => ({ id: i.id, run: known.get(i.id) }));
+    for (const e of entries) ids.set(e.run, e.id);
+    return runs();
+  }
+  const sorted = index => index.sort((a, b) => b.id - a.id);
+  const readIndex = async () => sorted(await request(db.transaction(INDEX, "readonly").objectStore(INDEX).getAll()));
+  const keepId = keep => {
+    if (!keep) return null;
+    if (ids.has(keep)) return ids.get(keep);
+    const json = JSON.stringify(keep);
+    return entries.find(e => JSON.stringify(e.run) === json)?.id ?? null;
+  };
+  return {
+    kind: "indexedDB", limit: maxRuns,
+    async list() { try { return await refresh(await readIndex()); } catch { return runs(); } },
+    // Saves `run` as the newest, dropping the oldest runs to keep within the limits; `keep` (a saved
+    // run, such as the chosen baseline) is dropped only when nothing else is left to drop. Drops and
+    // the write are one transaction, so a failed save leaves the history as it was.
+    async save(run, keep = null) {
+      const validated = validateEvaluation(run), json = JSON.stringify(validated), bytes = new Blob([json]).size;
+      if (bytes > maxBytes) throw new Error("This evaluation is too large for browser history. Export it to keep a copy.");
+      const kept = keepId(keep);
+      for (let extra = 0; ; extra++) {
+        const tx = db.transaction([RUNS, INDEX], "readwrite"), store = tx.objectStore(RUNS), index = tx.objectStore(INDEX), done = finished(tx);
+        done.catch(() => { /* reported below */ });
+        let after, left = 0;
+        try {
+          const old = sorted(await request(index.getAll()));
+          // (never an id used before, even after the newest run is deleted: another tab may still map the
+          // old id to the run it named, and would delete the new one in its place)
+          const id = Math.max((old[0]?.id || 0) + 1, Date.now()), drop = new Set();
+          const droppable = () => old.findLast(i => !drop.has(i.id) && i.id !== kept) || old.findLast(i => !drop.has(i.id));
+          const total = () => old.reduce((sum, i) => sum + (drop.has(i.id) ? 0 : i.bytes), bytes);
+          while (old.length > drop.size && (old.length - drop.size + 1 > maxRuns || total() > maxBytes)) drop.add(droppable().id);
+          // (after the browser's quota refused the write `extra` times, as many more of the oldest)
+          for (let k = 0; k < extra && old.length > drop.size; k++) drop.add(droppable().id);
+          left = old.length - drop.size;
+          for (const key of drop) { store.delete(key); index.delete(key); }
+          store.put(validated, id); index.put({ id, ...summary(validated, bytes) });
+          after = [{ id, ...summary(validated, bytes) }, ...old.filter(i => !drop.has(i.id))];
+          await done;
+        } catch (error) {
+          try { tx.abort(); } catch { /* already finished */ }
+          if (error?.name === "QuotaExceededError" && left > 0) continue;
+          throw error;
+        }
+        entries = [{ id: after[0].id, run: validated }, ...entries.filter(e => after.some(i => i.id === e.id))];
+        return refresh(after);
+      }
+    },
+    async remove(run) {
+      const id = keepId(run);
+      if (id != null) {
+        const tx = db.transaction([RUNS, INDEX], "readwrite"), done = finished(tx);
+        tx.objectStore(RUNS).delete(id); tx.objectStore(INDEX).delete(id);
+        await done;
+      }
+      return refresh(await readIndex());
+    },
+  };
+}
+
+// Moves the localStorage history into the database, oldest first so the newest keeps the highest id,
+// leaving out runs already there (a move interrupted before the key was removed), then removes the key.
+async function migrate(db, storage) {
+  let raw;
+  try { raw = (storage || globalThis.localStorage).getItem(EVALUATION_HISTORY_KEY); } catch { return; }
+  if (raw == null) return;
+  const legacy = readEvaluations({ getItem: () => raw });
+  if (legacy.length) {
+    const tx = db.transaction([RUNS, INDEX], "readwrite"), store = tx.objectStore(RUNS), index = tx.objectStore(INDEX), done = finished(tx);
+    done.catch(() => { /* reported below */ });
+    try {
+      const old = await request(index.getAll());
+      let id = old.reduce((max, i) => Math.max(max, i.id), 0);
+      for (const run of [...legacy].reverse()) {
+        const json = JSON.stringify(run), entry = summary(run, new Blob([json]).size);
+        if (old.some(i => same(i, entry))) continue;
+        id++; store.put(run, id); index.put({ id, ...entry });
+      }
+      await done;
+    } catch (error) { try { tx.abort(); } catch { /* already finished */ } throw error; }
+  }
+  try { (storage || globalThis.localStorage).removeItem(EVALUATION_HISTORY_KEY); } catch { /* moved; the next open skips what is there */ }
+}
+
+// Opens the saved arena history: { kind, limit, list(), save(run, keep), remove(run) }, all async,
+// with runs newest first. Never rejects: without a working IndexedDB it is the localStorage history.
+export async function openEvaluationHistory({ indexedDB, storage, maxRuns = MAX_SAVED_RUNS, maxBytes = MAX_SAVED_BYTES } = {}) {
+  let db;
+  try {
+    indexedDB ??= globalThis.indexedDB;
+    if (!indexedDB) return localHistory(storage);
+    db = await openDatabase(indexedDB);
+    await migrate(db, storage);
+    return databaseHistory(db, { maxRuns, maxBytes });
+  } catch {
+    try { db?.close(); } catch { /* closing is best effort */ }
+    return localHistory(storage);
+  }
+}
+
 export function conditionDifferences(a, b) {
   const differences = Object.entries(CONDITIONS).filter(([k]) => a[k] == null || b[k] == null || a[k] !== b[k]).map(([, label]) => label);
   if (!a.engine_version || !b.engine_version || a.engine_version !== b.engine_version) differences.push("simulation version");

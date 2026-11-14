@@ -48,7 +48,9 @@ from jev.drives import suggested_drives
 
 VERSION = "0.2.0"
 STATIC = PROJECT_ROOT / "static"
-PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html", "/arena": "arena.html"}
+PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html", "/arena": "arena.html", "/results": "results.html"}
+# Every committed result (ROADMAP 2.7), built by scripts/build_results.py; /results shows it.
+RESULTS_FILE = PROJECT_ROOT / "data" / "results.json"
 MAX_BODY_BYTES = 1024 * 1024
 # A model recording keeps every answer of a benchmark run (static/js/brain/recording.js).
 MAX_RECORDING_BYTES = 32 * 1024 * 1024
@@ -404,6 +406,13 @@ def api_recordings(_body, query):
     return {"recordings": recordings}
 
 
+def api_results(_body, _query):
+    """The committed results (data/results.json), as the leaderboard page and the demo show them."""
+    if not RESULTS_FILE.is_file():
+        raise BadRequest("No results file: run uv run scripts/build_results.py")
+    return json.loads(RESULTS_FILE.read_text())
+
+
 ROUTES = {
     ("GET", "/api/status"): api_status,
     ("GET", "/api/map"): api_map,
@@ -426,6 +435,7 @@ ROUTES = {
     ("GET", "/api/bench/runs"): api_bench_runs,
     ("POST", "/api/recordings/save"): api_recording_save,
     ("GET", "/api/recordings"): api_recordings,
+    ("GET", "/api/results"): api_results,
 }
 
 CSP = ("default-src 'self'; script-src 'self' 'nonce-%s'; "

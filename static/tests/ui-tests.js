@@ -1,6 +1,8 @@
 // Run on /tests or from the simulator: await import('/tests/ui-tests.js').then(m => m.runUiTests())
 // Use the real page markup in a detached root so the live HUD and driver remain untouched.
 import { Hud } from '../js/ui/hud.js';
+import { TouchControls, STEER_RANGE_PX } from '../js/ui/touch.js';
+import { Input } from '../js/ui/input.js';
 
 export async function runUiTests() {
   const html = await fetch('/').then(r => r.text());
@@ -99,5 +101,37 @@ export async function runUiTests() {
   hud.update(state, 61000);
   check('The rolling decision rate expires while driving is stopped', hud.el.rate.textContent === '0');
   observer.disconnect();
+
+  // Touch driving controls (ui/touch.js): two fingers at once, one steering and one on a pedal, each
+  // tracked by its own pointer, reach the shared input; lifting them lets go; the toggles fire actions.
+  {
+    const touchRoot = document.createElement('div');
+    document.body.append(touchRoot);
+    let toggled = 0;
+    const touch = new TouchControls({ root: touchRoot, actions: { autopilot: () => toggled++ } });
+    const input = new Input({});
+    input.addSource(touch);
+    const pointer = (el, type, id, x = 0) => el.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: id === 1 }));
+    pointer(touch.wheel, 'pointerdown', 1, 200);
+    pointer(touch.pedalEls.throttle, 'pointerdown', 2);
+    pointer(touch.wheel, 'pointermove', 1, 200 - STEER_RANGE_PX / 2);
+    input.poll();
+    check('Touch steering and the accelerator work together', Math.abs(input.left - 0.5) < 1e-9 && input.right === 0 && input.throttle === 1 && input.anyDriving);
+    check('A second finger cannot take over the steering pad', (pointer(touch.wheel, 'pointerdown', 3, 0), pointer(touch.wheel, 'pointermove', 3, 999), input.poll(), Math.abs(input.left - 0.5) < 1e-9));
+    check('The pressed pedal shows its state', touch.pedalEls.throttle.getAttribute('aria-pressed') === 'true');
+    pointer(touch.wheel, 'pointerup', 1);
+    pointer(touch.pedalEls.throttle, 'pointerup', 2);
+    pointer(touch.pedalEls.brake, 'pointerdown', 4);
+    input.poll();
+    check('Lifting the fingers centres the wheel and lets the pedal go', input.left === 0 && input.right === 0 && input.throttle === 0 && input.brake === 1);
+    touch.release(); input.poll();
+    check('Releasing the controls stops all driving', !input.anyDriving);
+    touch.buttons.find(b => b.dataset.action === 'autopilot').click();
+    touch.setAutopilot(true);
+    check('Touch toggles fire their action and show the autopilot state', toggled === 1 && touch.el.classList.contains('autopilot'));
+    touch.el.hidden = true; pointer(touch.pedalEls.throttle, 'pointerdown', 5); input.poll();
+    check('Hidden touch controls do not drive', !input.anyDriving);
+    touchRoot.remove();
+  }
   return results;
 }

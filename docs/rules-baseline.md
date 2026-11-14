@@ -1,3 +1,65 @@
+# Held-out routes (ROADMAP 4.4)
+
+Every seed above has been driven, debugged and fixed against many times, so passing it says little
+about routes nobody has looked at. The held-out routes are suite seeds no fix was tuned against
+(`static/js/bench/heldout.js`): on Kitsilano twelve routes, four from each of seeds 101, 102 and 103
+(ids `s101-1` to `s103-4`), as many as its tuned suite; on every other map two routes from seed 101,
+as many as its tuned smoke suite.
+
+```sh
+node --experimental-default-type=module scripts/bench_node.mjs --map kitsilano --heldout 1 --features city
+node --experimental-default-type=module scripts/soak.mjs --heldout 1 --maps kitsilano,toronto,calgary,victoria
+```
+
+`--heldout 1` (and the **held-out routes** box on `/bench`) replaces `--seed` and `--count`; the saved
+config carries `heldout: true` and `seeds`, and the output labels the suite held out. Report
+held-out results apart from the tuned suites, in their own table, and never add them to a tuned
+pass count.
+
+**Policy.** Never debug against a held-out result: do not replay, diagnose or tune on a held-out
+route. When a held-out route fails, record the failure (route, failure, date, commit) and leave it;
+reproduce the same kind of failure on a fresh tuned seed (any seed outside `HELDOUT_SEEDS`) and fix
+it there. A held-out route that has been looked at closely no longer counts as held out: once that
+happens, replace the held-out seeds with new ones and say so here. `scripts/test_scores.mjs` checks
+that no committed tuned run and no CI job uses a held-out seed.
+
+| Date | Map | Preset | Weather | Routes | Passed | Record |
+|---|---|---|---|---|---|---|
+| 2026-11-14 | Kitsilano | bare | dry | 12 | 10 | [heldout-2026-11-14](validation/heldout-2026-11-14.md) |
+| 2026-11-14 | Kitsilano | city | dry | 12 | 8 | [heldout-2026-11-14](validation/heldout-2026-11-14.md) |
+
+# Scores beyond pass or fail (ROADMAP 4.3)
+
+Rules passes nearly every route, so pass or fail cannot rank two drivers that both pass. Every
+drive is also scored on progress, pace, comfort, margin kept and time lost (`static/js/bench/scores.js`,
+`SCORES_VERSION` 1), computed from the fields a result already records whenever results are shown:
+the `/bench` table and cards (with deltas against the compared run), the arena's rows and driver
+summaries, and the `scores` lines of `bench_node.mjs` and `arena_node.mjs`. Nothing is added to a
+saved result, so every earlier run and recording can be scored the same way.
+
+| Measure | Unit | Formula |
+|---|---|---|
+| progress | 0–1 | 1 if the car arrived, else `progress` (furthest point along the route) |
+| time lost | s, and s/km of route | `max(0, time_s − progress × L / 13.89)`: time beyond covering the progress made at 50 km/h, the Canadian urban default limit. L is the route's length (`tags.length_m`; arena results, which do not record it, use `distance_m`). It counts every stop, red lights included |
+| pace | 0–100 | `100 × min(1, (progress × L / 13.89) / time_s)` |
+| comfort | 0–100 | `100 × (0.4 J + 0.3 B + 0.3 Y)`; J: RMS jerk 1 → 6 m/s³; B: hard brakes per km driven 0 → 10; Y: peak lateral acceleration 2 → 7 m/s² (each 1 at the first value, 0 at the second, linear between) |
+| margin kept | 0–100 | 0 after a collision, else `100 × (0.4 T + 0.3 H + 0.3 S)`; T: smallest time to collision 4 → 1 s (none closing: 1); H: smallest time headway 2 → 0.5 s (no leader: 1); S: safety-filter emergency brakes per km driven 0 → 5 |
+| score | 0–100 | `progress × (pace + comfort + margin) / 3` |
+
+A driver's scores are the means over its drives (each drive weighs the same), with time lost summed
+and divided by the routes' total length. `rankDrivers` ranks drivers on the drives they all have:
+more passes first, then the higher mean score. On the 61 challenges both passed in the committed
+recordings, DeepSeek V4.1 Flash scores 64.7 and Jev 63.8 (margin 95.6 against 93.3, time lost 113.6
+against 119.3 s/km; comfort 59.2 against 60.4); on the ten Kitsilano city routes Rules and the
+cautious agent both passed (`20261112-190001-rules`, `20261111-172000-cautious`) the cautious agent
+scores 56.5 and Rules 47.1: it keeps more margin and loses more time. The thresholds are a choice,
+not a standard; change them only with a new `SCORES_VERSION`.
+
+Two recorded fields would make the scores sharper: the route's length for arena results (time lost
+there uses the distance driven, so a longer way round looks like less time lost), and the remaining
+route length when a road closure re-plans the route (a drive that does not arrive after a detour
+under-reports its progress).
+
 # References after the second 1.8 round — 2026-11-12
 
 Rules, lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through `scripts/bench_node.mjs`, final
@@ -1057,8 +1119,8 @@ is this change alone.
 As on the earlier 2026-10-22 record: production `/bench`, Rules, suite seed 1, 40 traffic cars,
 lockstep, in WebKit through `scripts/shot.swift` on macOS 27.0.1. Kitsilano ran 12 routes in dry,
 fog, rain and snow; the other eleven maps ran two-route dry smoke suites. The same suites also ran
-in V8 (Node 22.23.4) through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run is
-[`20261022-153156-rules.json`](../data/runs/20261022-153156-rules.json). The
+in V8 (Node 22.23.4) through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run was saved as
+`20261022-153156-rules.json` but never committed to `data/runs/`. The
 [machine-readable record](validation/rebaseline-2026-10-22b-rules.json) has every summary and
 per-route result, before and after, in both engines, and how often the car turned right on red.
 Night was not run.
@@ -1252,8 +1314,8 @@ change alone.
 As on 2026-10-19: production `/bench`, Rules, suite seed 1, 40 traffic cars, lockstep, in WebKit
 through `scripts/shot.swift` on macOS 27.0.1. Kitsilano ran 12 routes in dry, fog, rain and snow;
 the other eleven maps ran two-route dry smoke suites. The same suites also ran in V8 (Node 22.23.2)
-through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run is committed as
-[`20261020-093450-rules.json`](../data/runs/20261020-093450-rules.json). The
+through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run was saved as
+`20261020-093450-rules.json` but never committed to `data/runs/`. The
 [machine-readable record](validation/rebaseline-2026-10-20-rules.json) has every summary and
 per-route result, before and after, in both engines. Night was not run; `/bench` still has no
 time-of-day option.

@@ -7,6 +7,16 @@ expands the pilot decision and incident cards. **Settings** and keyboard help st
 
 ## Sixty authored challenges
 
+Each challenge is a module of its own, `static/js/lab/challenges/<id>.js`: its definition
+(`challenge`), the drive it sets up (`scenario`), what it places in the world (`install`) and what it
+does as the drive goes on (`step`, by default `stepAuthored`: set the hazard off once the car comes
+near). What several share (the chain-of-lanes route builder `laneScenario`, the base `world.challenge`
+state, oncoming, all-way and through traffic, the two amber and two following lessons) is in
+`lab/challenges/shared/`. `lab/challenges.js` is the ordered registry: it imports every module, lists
+them in the lab's order and exports `CHALLENGES`, `challengeById`, `challengeScenario`,
+`installChallenge`, `stepChallenge` and `challengeConfig`. Adding a challenge means writing its module,
+importing it there and adding it to `MODULES` where it belongs in the order.
+
 | Challenge | City | Situation |
 |---|---|---|
 | Fresh green | Edmonton, 106 Street NW | Red-light runners on (`redRunners`). Your light turns green at Whyte Avenue NW as a car that cannot stop runs its red across your way. Entering ahead of it (`fresh_green_conflicts`) fails the drive |
@@ -407,5 +417,5 @@ remark linked to a recorded event has the same rewind link as the report's event
 
 The arena includes road tests only when **Include road tests** is ticked, and shows each
 attempt's examiner verdict beside the audit result. Two saved runs of both tests with Rules and the
-cautious agent take 832,770 bytes, 8.8% of the 9 MB history cap. Checks:
+cautious agent take 832,770 bytes, 8.8% of the 9 MB localStorage fallback cap. Checks:
 `scripts/test_road_test.mjs` and `static/tests/road-test-tests.js` through `/tests`.

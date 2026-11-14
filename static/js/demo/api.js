@@ -35,8 +35,13 @@ export async function demoApi(path, body, { signal } = {}) {
   if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
   const url = new URL(path, "https://demo.local");
   if (url.pathname === "/api/maps") return { maps: await loadCatalog(signal) };
+  if (url.pathname === "/api/results") return json("results.json", signal);
   if (url.pathname === "/api/bench/runs") {
-    try { return { runs: JSON.parse(localStorage.getItem("jev-demo-runs") || "[]") }; } catch { return { runs: [] }; }
+    let runs = [];
+    try { runs = JSON.parse(localStorage.getItem("jev-demo-runs") || "[]"); } catch { runs = []; }
+    // ?name= reads one saved run, results and all, as the local server does (the comparison's scores)
+    const name = url.searchParams.get("name");
+    return name ? runs.find(r => r.name === name) || {} : { runs };
   }
   if (url.pathname === "/api/bench/save") {
     const name = `demo-${Date.now()}`, { runs } = await demoApi("/api/bench/runs");

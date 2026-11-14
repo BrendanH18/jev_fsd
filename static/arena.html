@@ -7,7 +7,7 @@
 </head>
 <body class="arena">
   <main>
-    <header><a class="brand" href="/">JEV / DRIVE LAB</a><a href="https://github.com/BrendanH18/jev_fsd" target="_blank" rel="noopener">GitHub ↗</a></header>
+    <header><a class="brand" href="/">JEV / DRIVE LAB</a><nav class="arena-nav"><a href="/results">Results</a><a href="https://github.com/BrendanH18/jev_fsd" target="_blank" rel="noopener">GitHub ↗</a></nav></header>
     <p class="eyebrow">REPEATABLE STREETS / MEASURABLE DECISIONS</p>
     <h1>Bring your own driver.</h1>
     <p class="intro">Six fixed challenges. Shared physics, sensing and safety checks. Save a run, compare drivers and inspect the decisions around each incident.</p>
@@ -34,7 +34,7 @@
       <p id="comparison-status" role="status">Choose a saved baseline to compare matching challenge conditions.</p>
       <div id="arena-summary" class="summary-grid"></div>
     </section>
-    <section aria-label="Evaluation results"><div class="table-wrap panel"><table><thead><tr><th>Agent / challenge</th><th>Outcome</th><th>Score</th><th>Time</th><th>Incidents</th><th>Hard brakes</th><th>p50</th><th>Cost</th></tr></thead><tbody id="arena-results"><tr><td colspan="8">Run an evaluation to see measured results.</td></tr></tbody></table></div></section>
+    <section aria-label="Evaluation results"><div class="table-wrap panel"><table><thead><tr><th>Agent / challenge</th><th>Outcome</th><th>Score</th><th title="Mean of pace, comfort and margin kept, times progress (bench/scores.js)">Ranking score</th><th>Time</th><th>Incidents</th><th>Hard brakes</th><th>p50</th><th>Cost</th></tr></thead><tbody id="arena-results"><tr><td colspan="9">Run an evaluation to see measured results.</td></tr></tbody></table></div></section>
     <p class="arena-note">These are local simulator results, not a verified public leaderboard. A pass requires arrival with no collision, red light, missed stop or failed yield, and less than one second off-road. The coaching score is a separate measure. Exported runs include challenge, map-pack and clock versions.</p>
     <section id="arena-details" class="panel run-details" aria-labelledby="details-heading" hidden>
       <h2 id="details-heading" tabindex="-1">Run details</h2><div id="details-content"></div>

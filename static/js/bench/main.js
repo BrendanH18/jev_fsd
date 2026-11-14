@@ -8,13 +8,17 @@ import { MapData } from "../map/mapdata.js";
 import { buildSuite } from "./scenarios.js";
 import { runScenario, yieldNow, suiteOptions, benchmarkConfig } from "./runner.js";
 import { aggregate } from "./metrics.js";
+import { driveScores, driverScores } from "./scores.js";
+import { buildHeldoutSuite, heldoutPlan } from "./heldout.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
 import { ModelRecording, recordingHeader, loadRecording, saveRecording, sameResult, mapFingerprint, checkMap, driverKind } from "../brain/recording.js";
 
 // [key, header, format, better: "low" | "high" | null]
+// (score, progress, comfort, margin and time lost are computed for display, never saved: bench/scores.js)
 const COLUMNS = [
+  ["score", "score", 1, "high"], ["comfort", "comfort", 1, "high"], ["margin", "margin", 1, "high"], ["time_lost_s_per_km", "lost s/km", 1, "low"],
   ["time_s", "time s", 1, "low"], ["avg_kmh", "km/h", 1, "high"],
   ["collisions", "coll", 0, "low"], ["at_fault", "at fault", 0, "low"], ["red_lights", "red", 0, "low"], ["stop_signs", "stop", 0, "low"], ["failed_to_yield", "yield", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
   ["min_gap_m", "min gap m", 1, "high"], ["min_ttc_s", "min TTC s", 1, "high"], ["max_decel", "max decel", 1, "high"],
@@ -23,7 +27,8 @@ const COLUMNS = [
   ["decisions", "decisions", 0, null], ["model_share", "model", "pct", "high"], ["local_share", "local", "pct", null], ["fallbacks", "fallbacks", 0, "low"], ["latency_p50_ms", "p50 ms", 0, "low"], ["cost_usd", "cost", "usd", null],
 ];
 const CARDS = [
-  ["pass_rate", "pass rate", "pct", "high"], ["violations_per_km", "violations / km", 2, "low"], ["collisions", "collisions", 0, "low"], ["at_fault", "at-fault collisions", 0, "low"],
+  ["pass_rate", "pass rate", "pct", "high"], ["score", "mean score", 1, "high"], ["progress", "mean progress", "pct", "high"], ["comfort", "mean comfort", 1, "high"],
+  ["margin", "mean margin kept", 1, "high"], ["time_lost_s_per_km", "time lost s/km", 1, "low"], ["violations_per_km", "violations / km", 2, "low"], ["collisions", "collisions", 0, "low"], ["at_fault", "at-fault collisions", 0, "low"],
   ["red_lights", "red lights run", 0, "low"], ["stop_signs", "stop signs rolled", 0, "low"], ["failed_to_yield", "failures to yield", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
   ["min_ttc_s", "worst TTC s", 1, "high"], ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "mean rms jerk", 2, "low"],
   ["lane_rms_m", "mean lane rms m", 2, "low"], ["avg_kmh", "mean km/h", 1, "high"], ["km", "km driven", 2, null],
@@ -40,6 +45,10 @@ const fmt = (v, f) => {
 };
 
 let map = null, status = null, stopRequested = false, running = false, lastRun = null;
+// The suite's scores beside its saved summary (bench/scores.js), and the compared runs' scores by name.
+const SCORE_KEYS = ["score", "progress", "comfort", "margin", "time_lost_s_per_km"];
+const pickScores = (results) => { const s = driverScores(results); return Object.fromEntries(SCORE_KEYS.map((k) => [k, s[k]])); };
+const compareScores = new Map();
 
 async function boot() {
   const params = new URLSearchParams(location.search), selection = params.get("bbox") || params.get("map");
@@ -61,7 +70,7 @@ async function boot() {
       $("#status").textContent = `Failed to run: ${err.message}`;
     });
   });
-  $("#compare").addEventListener("change", () => lastRun && render(lastRun));
+  $("#compare").addEventListener("change", () => { loadCompareScores().catch(() => { /* scores stay blank */ }); if (lastRun) render(lastRun); });
   await loadRuns();
 }
 
@@ -86,7 +95,7 @@ async function loadRuns() {
   const sel = $("#compare");
   const keep = sel.value;
   sel.replaceChildren(h("option", { value: "" }, "none"), ...runs.map((r) => h("option", { value: r.name },
-    `${r.name} · ${r.config?.brain} · ${r.config?.count} × seed ${r.config?.seed}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`)));
+    `${r.name} · ${r.config?.brain} · ${r.config?.heldout ? `held-out ${r.config.count} routes` : `${r.config?.count} × seed ${r.config?.seed}`}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`)));
   if (keep) sel.value = keep;
   sel._runs = runs;
 }
@@ -95,11 +104,13 @@ function runFromForm() {
   return run({
     brain: $("#brain").value, count: +$("#count").value, npcs: +$("#npcs").value,
     seed: +$("#seed").value, mode: $("#mode").value, weather: $("#weather").value, features: $("#features").value, park: $("#park").checked,
-    hour: $("#hour").value === "" ? undefined : +$("#hour").value, without: $("#without").value,
+    hour: $("#hour").value === "" ? undefined : +$("#hour").value, without: $("#without").value, heldout: $("#heldout").checked,
   });
 }
 
-export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, save = true, record = false, replay = null } = {}) {
+// heldout: the map's held-out routes (bench/heldout.js) instead of count and seed; never debug against
+// them (docs/rules-baseline.md).
+export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, heldout = false, save = true, record = false, replay = null } = {}) {
   // A replay takes its driver and suite from the recording (a saved name, its JSON, or a ModelRecording).
   const replaying = replay ? await loadRecording(replay) : null;
   if (replaying) {
@@ -107,21 +118,24 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
     if (b.bbox && b.bbox.join(",") !== map.routingBbox.join(",")) throw new Error(`The recording was made on ${b.map || b.bbox.join(",")}; open /bench?map=${b.map || b.bbox.join(",")} to replay it.`);
     checkMap(replaying, map);
     ({ count, npcs, seed, weather } = b);
-    ({ features = "bare", park = false, hour, without = [], cover } = b);
+    ({ features = "bare", park = false, hour, without = [], cover, heldout = false } = b);
     brain = replaying.header.driver;
   }
   if ((record || replaying) && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
   if (record && !replaying && !driverKind(brain)) throw new Error(`Only model drivers (jev, decision:<name>, llm:<name>) can be recorded, not "${brain}".`);
   const options = benchmarkConfig({ features, park, hour, without, cover });
+  const plan = heldout ? heldoutPlan(status.map.id) : null;
+  if (plan) { count = plan.seeds.length * plan.count; seed = plan.seeds[0]; }
   running = true; stopRequested = false;
   $("#run").textContent = "Stop";
   const definition = agentDefinitions().find(a => a.id === brain), endpoint = definition?.decision || definition?.llm;
-  const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, ...options, map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
+  const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, ...options, ...(plan ? { heldout: true, seeds: plan.seeds } : {}), map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
   const setStatus = (t) => { $("#status").textContent = t; };
   const recording = replaying || (record ? new ModelRecording({ header: recordingHeader({ driver: brain, brain: { endpoint }, model: brain === "jev" ? status.decision?.jev?.model : null,
     map: status.map.name, map_sha: mapFingerprint(map), seed, preset: features, weather, bench: config }) }) : null);
   setStatus("building the scenario suite…");
-  const suite = replaying?.suite() || await buildSuite(map, { count, seed, ...suiteOptions(features, options) });
+  const suite = replaying?.suite() || (plan ? await buildHeldoutSuite(map, status.map.id, suiteOptions(features, options))
+    : await buildSuite(map, { count, seed, ...suiteOptions(features, options) }));
   const state = { config, suite, results: [], summary: null };
   lastRun = state;
   render(state);
@@ -160,7 +174,16 @@ export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mo
 function compareSummary() {
   const name = $("#compare").value;
   const runs = $("#compare")._runs || [];
-  return name ? (runs.find((r) => r.name === name) || {}).summary : null;
+  return name ? { ...(runs.find((r) => r.name === name) || {}).summary, ...compareScores.get(name) } : null;
+}
+
+// The run list carries summaries only, so a compared run's scores come from its results, once.
+async function loadCompareScores() {
+  const name = $("#compare").value;
+  if (!name || compareScores.has(name)) return;
+  const saved = await api(`/api/bench/runs?name=${encodeURIComponent(name)}`);
+  compareScores.set(name, pickScores(saved.results || []));
+  if (lastRun && $("#compare").value === name) render(lastRun);
 }
 
 function delta(cur, prev, better, f) {
@@ -173,7 +196,7 @@ function delta(cur, prev, better, f) {
 
 function render(state) {
   const prev = compareSummary();
-  const s = state.summary;
+  const s = state.summary && { ...state.summary, ...pickScores(state.results) };
   $("#summary").replaceChildren(...(s ? CARDS.filter(([k]) => s[k] !== undefined).map(([k, label, f, better]) => h("div", { class: "card" },
     h("span", { class: "label" }, label),
     h("span", { class: "value" }, fmt(s[k], f)),
@@ -190,8 +213,9 @@ function render(state) {
       return h("tr", { class: state.current === i ? "running" : "" }, h("td", {}, i + 1), h("td", { class: "left" }, route),
         h("td", { class: "left muted" }, state.current === i ? "running…" : "queued"), ...COLUMNS.map(() => h("td", {}, "")), h("td", {}, ""));
     }
+    const scored = { ...r, ...driveScores(r) };
     const cells = COLUMNS.map(([k, , f]) => {
-      const v = r[k];
+      const v = scored[k];
       const warn = (k === "min_ttc_s" && v !== null && v < 2) || (k === "hard_brakes" && v > 0) || (k === "speeding_s" && v > 3) || (k === "safety_brakes" && v > 0);
       const bad = ["collisions", "at_fault", "red_lights", "stop_signs"].includes(k) && v > 0;
       return h("td", { class: bad ? "failed" : warn ? "warn" : "" }, fmt(v, f));
