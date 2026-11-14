@@ -66,6 +66,18 @@ class ResultsTest(unittest.TestCase):
             finally:
                 build_results.committed_runs = original
 
+    def test_a_newer_challenge_run_leads(self):
+        # a second published full run for a driver: its summary and the README take the newest
+        newer = [dict(r, date="2099-01-01", passed=0) for r in self.data["rows"] if r["driver"] == "rules" and r["suite"] == "challenges"]
+        original = build_results.challenge_rows
+        build_results.challenge_rows = lambda drivers: original(drivers) + newer
+        try:
+            rows = build_results.build()["rows"]
+        finally:
+            build_results.challenge_rows = original
+        first = next(r for r in rows if r["driver"] == "rules" and r["suite"] == "challenges")
+        self.assertEqual((first["date"], first["passed"]), ("2099-01-01", 0))
+
     def test_every_bundled_map_has_a_name(self):
         self.assertEqual(set(build_results.MAP_NAMES), set(PRESET_BBOXES))
 

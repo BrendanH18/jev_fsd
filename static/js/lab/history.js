@@ -206,7 +206,9 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
         let after, left = 0;
         try {
           const old = sorted(await request(index.getAll()));
-          const id = (old[0]?.id || 0) + 1, drop = new Set();
+          // (never an id used before, even after the newest run is deleted: another tab may still map the
+          // old id to the run it named, and would delete the new one in its place)
+          const id = Math.max((old[0]?.id || 0) + 1, Date.now()), drop = new Set();
           const droppable = () => old.findLast(i => !drop.has(i.id) && i.id !== kept) || old.findLast(i => !drop.has(i.id));
           const total = () => old.reduce((sum, i) => sum + (drop.has(i.id) ? 0 : i.bytes), bytes);
           while (old.length > drop.size && (old.length - drop.size + 1 > maxRuns || total() > maxBytes)) drop.add(droppable().id);

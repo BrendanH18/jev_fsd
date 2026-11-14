@@ -243,6 +243,9 @@ def build() -> dict:
     suite_order = {"challenges": 0, "city": 1, "bare": 2, "pilot": 3}
     map_order = {k: i for i, k in enumerate([HOME_MAP] + sorted(k for k in MAP_NAMES if k != HOME_MAP))}
     weather_order = {w: i for i, w in enumerate(WEATHERS)}
+    # newest first within equal keys (the sort is stable), so the README and the page, which take a driver's
+    # first challenge row, show its latest full run, with earlier ones kept after it as history
+    rows.sort(key=lambda r: r["date"] or "", reverse=True)
     rows.sort(key=lambda r: (order.get(r["driver"], len(order)), r["driver"], suite_order.get(r["suite"], 9),
                              map_order.get(r["map"], 99), r["map"] or "", weather_order.get(r["weather"], 9), r["label"]))
     used = list(dict.fromkeys(r["driver"] for r in rows))

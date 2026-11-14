@@ -226,11 +226,23 @@ await test("deleting one saved run keeps the others, after reopening too", async
   assert.deepEqual(times(await (await openEvaluationHistory({ indexedDB: idb, storage: local() })).list()), minutes(1));
 });
 
+await test("a deleted run's id is never used again, so another tab cannot delete the new run by it", async () => {
+  const idb = new FakeIndexedDB(), a = await openEvaluationHistory({ indexedDB: idb, storage: local() }), b = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await a.save(at(1)); await a.save(at(2));
+  const [newest, oldest] = await b.list();   // tab b knows both
+  await a.remove((await a.list())[0]);        // tab a deletes the newest and saves another
+  await a.save(at(3));
+  assert.deepEqual(times(await b.remove(newest)), minutes(3, 1));   // tab b deletes its stale newest: nothing else goes
+  assert.deepEqual(times(await b.remove(oldest)), minutes(3));
+  assert.deepEqual(times(await a.list()), minutes(3));
+});
+
 await test("a damaged record is left out, and runs saved in another tab are picked up", async () => {
   const idb = new FakeIndexedDB(), a = await openEvaluationHistory({ indexedDB: idb, storage: local() }), b = await openEvaluationHistory({ indexedDB: idb, storage: local() });
   await a.save(at(1)); await b.save(at(2));
   assert.deepEqual(times(await a.save(at(3))), minutes(3, 2, 1));
-  idb.dbs.get(EVALUATION_DB).stores.get("evaluations").records.set(2, { schema: "broken" });
+  const records = idb.dbs.get(EVALUATION_DB).stores.get("evaluations").records;
+  records.set([...records.keys()].sort((x, y) => x - y)[1], { schema: "broken" });
   assert.deepEqual(times(await (await openEvaluationHistory({ indexedDB: idb, storage: local() })).list()), minutes(3, 1));
 });
 
