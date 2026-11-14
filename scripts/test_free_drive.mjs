@@ -8,12 +8,17 @@ const { freeDriveOptions } = await import("../static/js/sim/free-drive.js");
 const { presetOptions, suiteOptions, setupScenario, FEATURE_PRESETS, CITY_HOUR } = await import("../static/js/bench/runner.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
+const { FEATURE_OPTIONS } = await import("../static/js/sim/features/index.js");
 
 const free = freeDriveOptions();
 const worldKeys = Object.keys(free.world).sort(), fleetKeys = Object.keys(free.fleet).sort();
-// Every option the World takes is a free-drive feature, apart from what each caller sets itself.
+// Every option the World takes is a free-drive feature, apart from what each caller sets itself: those
+// it names, and each registered feature's (sim/features/index.js), which it takes as `...features`.
 const worldSource = fs.readFileSync(new URL("../static/js/sim/world.js", import.meta.url), "utf8");
-const constructorOptions = worldSource.match(/constructor\(map, \{([^}]*)\} = \{\}\)/)[1].split(",").map((s) => s.trim().split(" ")[0]);
+const named = worldSource.match(/constructor\(map, \{([^}]*)\} = \{\}\)/)[1].split(",").map((s) => s.trim().split(" ")[0]);
+assert.ok(named.includes("...features"), "the World takes the registered features' options");
+const constructorOptions = [...named.filter((k) => k !== "...features"), ...FEATURE_OPTIONS];
+assert.equal(new Set(constructorOptions).size, constructorOptions.length, "no registered feature's option is also named by the World");
 assert.deepEqual(constructorOptions.filter((k) => !["seed", "parked", "weather", "vehicleSpec"].includes(k)).sort(), worldKeys);
 for (const key of worldKeys.filter((k) => k !== "pedestrians")) assert.ok(free.world[key], `free drives turn on ${key}`);
 for (const key of fleetKeys) assert.ok(free.fleet[key], `free drives turn on the fleet's ${key}`);
