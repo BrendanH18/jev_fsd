@@ -1363,7 +1363,7 @@ random stream, `obstaclesNear` returns what it did, and no metric changes.
 
 The challenge **Both ways** (`contraflow`, seed 40042) turns right from Rue Drolet into Rue Villeneuve
 Est (painted contraflow lane, 3.2 m of asphalt) at a junction without a sign while a cyclist comes out
-of it from the car's right (`lab/contraflow-challenge.js`). Focused checks:
+of it from the car's right (`lab/challenges/contraflow.js`). Focused checks:
 `node --experimental-default-type=module scripts/test_contraflow.mjs` and `tests/test_contraflow.py`.
 
 Limits: contraflow cyclists do not take part in all-way stop turn order or give-way priority for
@@ -1822,7 +1822,7 @@ SLOW TO 19 KM/H, and AI eyes lists the next one.
 
 **Pothole season** (`pothole-season`, seed 51042, Montréal, Rue Saint-Denis, rain): the block from
 Avenue Duluth Est toward Rue Rachel Est (`e212`, 176 m, one lane each way, 3.5 m, 40 km/h, no
-control along it). `lab/pothole-challenge.js` replaces the world's potholes with four in the car's
+control along it). `lab/challenges/pothole-season.js` replaces the world's potholes with four in the car's
 lane: 0.75 m right at 50 m (0.6 m wide, 6 cm), 0.6 m left at 90 m (0.6 m, 7 cm), a wide one across
 the middle at 128 m (1.6 m, 10 cm; the hazard) and a small one in the middle at 152 m. Rules and the
 cautious agent ease 0.55 m right and 0.4 m left round the first two, cross the wide one at about
@@ -2175,7 +2175,7 @@ lists the patch or the bridge.
 **Bridges freeze first** (`bridges-freeze-first`, seed 55042, Saskatoon, Traffic Bridge, dry, dawn):
 northbound from Nutana over the South Saskatchewan River: `e577` (the south approach), `e579`, the
 deck `e572` (226 m, one lane each way, 50 km/h, on the bridges layer) and `e475` (3rd Avenue South)
-to 9 m along it, short of the roundabout at Spadina Crescent. `lab/black-ice-challenge.js` puts one
+to 9 m along it, short of the roundabout at Spadina Crescent. `lab/challenges/bridges-freeze-first.js` puts one
 patch on the deck from 125 m to 212 m (grip 0.11), a local driver 30 m ahead of the car, both moving
 at 11 m/s, and a car waiting at the roundabout's yield line (on `e473`) until the driven car has
 stood still for 2 s or 45 s have passed. Rules and the cautious agent keep well back of the car
@@ -2359,7 +2359,7 @@ coach says to ease left or slow down.
 
 **Don't splash** (`dont-splash`, seed 59042, Vancouver, Mount Pleasant, Main Street, rain,
 afternoon): northbound in the kerb lane (lane 2 of three each way, 3.5 m, 50 km/h, no parking lane)
-along `e708` and `e666`. `lab/puddle-challenge.js` replaces the world's puddles with three: one by
+along `e708` and `e666`. `lab/challenges/dont-splash.js` replaces the world's puddles with three: one by
 the stop for the 8 and the 19 (46 m along `e708`, 1.3 m out from the kerb, 3 cm deep) where three
 people wait at the kerb, one on the next block (40 m along `e666`, 2.0 m out, 5 cm; no room in the
 lane) as someone walks up the sidewalk beside it, and a long shallow one further on with nobody
