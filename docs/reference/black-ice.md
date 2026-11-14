@@ -110,7 +110,7 @@ lists the patch or the bridge.
 **Bridges freeze first** (`bridges-freeze-first`, seed 55042, Saskatoon, Traffic Bridge, dry, dawn):
 northbound from Nutana over the South Saskatchewan River: `e577` (the south approach), `e579`, the
 deck `e572` (226 m, one lane each way, 50 km/h, on the bridges layer) and `e475` (3rd Avenue South)
-to 9 m along it, short of the roundabout at Spadina Crescent. `lab/black-ice-challenge.js` puts one
+to 9 m along it, short of the roundabout at Spadina Crescent. `lab/challenges/bridges-freeze-first.js` puts one
 patch on the deck from 125 m to 212 m (grip 0.11), a local driver 30 m ahead of the car, both moving
 at 11 m/s, and a car waiting at the roundabout's yield line (on `e473`) until the driven car has
 stood still for 2 s or 45 s have passed. Rules and the cautious agent keep well back of the car

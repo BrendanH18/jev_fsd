@@ -141,7 +141,7 @@ export class Puddles {
     this.setList(out);
   }
 
-  // Replace the puddles (a challenge places its own: lab/puddle-challenge.js).
+  // Replace the puddles (a challenge places its own: lab/challenges/dont-splash.js).
   setList(list) {
     this.list = list.filter(Boolean);
     this.grid = new Map(); this.byLane = new Map(); this.byId = new Map(); this.version++;

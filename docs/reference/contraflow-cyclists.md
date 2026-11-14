@@ -57,7 +57,7 @@ random stream, `obstaclesNear` returns what it did, and no metric changes.
 
 The challenge **Both ways** (`contraflow`, seed 40042) turns right from Rue Drolet into Rue Villeneuve
 Est (painted contraflow lane, 3.2 m of asphalt) at a junction without a sign while a cyclist comes out
-of it from the car's right (`lab/contraflow-challenge.js`). Focused checks:
+of it from the car's right (`lab/challenges/contraflow.js`). Focused checks:
 `node --experimental-default-type=module scripts/test_contraflow.mjs` and `tests/test_contraflow.py`.
 
 Limits: contraflow cyclists do not take part in all-way stop turn order or give-way priority for

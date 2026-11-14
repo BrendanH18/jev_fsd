@@ -83,7 +83,7 @@ coach says to ease left or slow down.
 
 **Don't splash** (`dont-splash`, seed 59042, Vancouver, Mount Pleasant, Main Street, rain,
 afternoon): northbound in the kerb lane (lane 2 of three each way, 3.5 m, 50 km/h, no parking lane)
-along `e708` and `e666`. `lab/puddle-challenge.js` replaces the world's puddles with three: one by
+along `e708` and `e666`. `lab/challenges/dont-splash.js` replaces the world's puddles with three: one by
 the stop for the 8 and the 19 (46 m along `e708`, 1.3 m out from the kerb, 3 cm deep) where three
 people wait at the kerb, one on the next block (40 m along `e666`, 2.0 m out, 5 cm; no room in the
 lane) as someone walks up the sidewalk beside it, and a long shallow one further on with nobody

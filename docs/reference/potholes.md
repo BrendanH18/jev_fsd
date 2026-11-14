@@ -73,7 +73,7 @@ SLOW TO 19 KM/H, and AI eyes lists the next one.
 
 **Pothole season** (`pothole-season`, seed 51042, Montréal, Rue Saint-Denis, rain): the block from
 Avenue Duluth Est toward Rue Rachel Est (`e212`, 176 m, one lane each way, 3.5 m, 40 km/h, no
-control along it). `lab/pothole-challenge.js` replaces the world's potholes with four in the car's
+control along it). `lab/challenges/pothole-season.js` replaces the world's potholes with four in the car's
 lane: 0.75 m right at 50 m (0.6 m wide, 6 cm), 0.6 m left at 90 m (0.6 m, 7 cm), a wide one across
 the middle at 128 m (1.6 m, 10 cm; the hazard) and a small one in the middle at 152 m. Rules and the
 cautious agent ease 0.55 m right and 0.4 m left round the first two, cross the wide one at about

@@ -26,12 +26,15 @@ Read the roadmap's own wording before you begin; it is the rule, and this list o
 
 ## How a challenge is defined
 
-A challenge has four parts. Where they live depends on the challenge: older ones keep everything in
-`static/js/lab/challenges.js`, newer ones keep their scripted parts in a module of their own (for
-example `static/js/lab/geese-challenge.js`), and the plan is for every challenge to have its own
-module. The parts are the same either way.
+A challenge has four parts, all in one module of its own, `static/js/lab/challenges/<id>.js`, named
+by its id. It exports `challenge` (the definition), `scenario(map, challenge)`, and optionally
+`install(world, fleet, challenge, scenario, at)` and `step(world, fleet)`. What several challenges
+share is in `static/js/lab/challenges/shared/` (`kit.js`: `laneScenario`, `installBase`,
+`stepAuthored`, oncoming, all-way and through traffic). `static/js/lab/challenges.js` is the ordered
+registry: import the new module there and add it to `MODULES` in lab order;
+`scripts/test_challenge_modules.mjs` checks the layout.
 
-1. **The entry in `CHALLENGES`** (`static/js/lab/challenges.js`): plain data the picker, the arena and
+1. **The definition** (the module's `challenge`, collected into `CHALLENGES` by `static/js/lab/challenges.js`): plain data the picker, the arena and
    the reports read.
 
    | Field | Meaning |
@@ -45,19 +48,19 @@ module. The parts are the same either way.
    | `version` | Bump it when an existing challenge's conditions change, so earlier results no longer compare. New challenges leave it out (version 1). |
    | `date`, `utcOffset`, `limit_s` | Optional: a date and time zone for the sky and the sun, and a time limit other than 180 s. |
 
-2. **The scenario** (`challengeScenario(map, challenge)` returns it): where the car starts (`start`:
+2. **The scenario** (the module's `scenario`, called by `challengeScenario(map, challenge)`): where the car starts (`start`:
    edge, lane, `s`, position, heading), its `route` (usually `routeFromLanes` from
    `static/js/demo/routing.js`, so no server is needed), the `goal`, `traffic_seed`, a `tags` summary,
    and one field describing the hazard's site (for example `geese: { edge, s, sigma }`). It must be
    deterministic: `test_drive_lab.mjs` builds it twice and compares.
 
-3. **Installing it** (`installChallenge(world, fleet, challenge, scenario)`): places the hazard's
+3. **Installing it** (the module's `install`, called by `installChallenge(world, fleet, challenge, scenario)`): places the hazard's
    actors from the scenario's field and merges their ids into `world.challenge`. Set
    `world.challenge.triggered` once the hazard is under way; the evaluation records the `hazard`
    event from it, and the checks require one. Background curb events are switched off for every
    challenge, so only the authored hazard happens.
 
-4. **Stepping it, if needed** (`stepChallenge(world, fleet)`): for a hazard that has to react to the
+4. **Stepping it, if needed** (the module's `step`, called by `stepChallenge(world, fleet)`; the default is `stepAuthored`): for a hazard that has to react to the
    car while the drive runs, such as a trigger distance or an actor that hands over to ordinary traffic.
 
 `setupChallenge` in `static/js/lab/evaluation.js` builds every challenge world, in the app, the
@@ -70,16 +73,16 @@ A new feature flag is added there.
 "Goose crossing" is one of the simplest recent challenges: one feature, one site, one group of actors
 and no scripted traffic.
 
-The entry in `CHALLENGES`:
+Its definition, exported as `challenge` from `static/js/lab/challenges/goose-crossing.js`:
 
 ```js
-{ id: "goose-crossing", title: "Goose crossing", map: "ottawa", weather: "dry", time: "afternoon",
+export const challenge = { id: "goose-crossing", title: "Goose crossing", map: "ottawa", weather: "dry", time: "afternoon",
   seed: 53042, icon: "⋯", difficulty: "Patience", hazard: "geese", geese: true, street: "Clemow Avenue",
   description: "Clemow Avenue in the Glebe runs between Central Park and Patterson's Creek Park, …",
   lesson: "Geese cross slowly in single file and often stop in the road. Stop well short of them …" },
 ```
 
-Its scripted parts are in `static/js/lab/geese-challenge.js`:
+Its scripted parts are in the same module:
 
 - `gooseSites(map, street)` finds the site from the map's data rather than hard-coding coordinates:
   a span of the parks layer with a park on both sides, on a two-way street with one lane each way,
@@ -92,13 +95,15 @@ Its scripted parts are in `static/js/lab/geese-challenge.js`:
   scripted to stand in the car's lane for `GS_STOP_S`, and returns `{ gaggleId, stopperId, at,
   triggered: true }`.
 
-And three one-line hooks join it to the rest:
+The module exports the hooks the registry calls, and one line joins it to the World options:
 
 ```js
-// challengeScenario
-if (challenge.hazard === "geese") return geeseScenario(map, challenge);
-// installChallenge
-if (scenario.geese) Object.assign(world.challenge, placeGeese(world, scenario.geese));
+// static/js/lab/challenges/goose-crossing.js
+export const scenario = geeseScenario;
+export function install(world, fleet, challenge, scenario) {
+  Object.assign(world.challenge, placeGeese(world, scenario.geese));
+}
+// static/js/lab/challenges.js: import it and list it in MODULES
 // setupChallenge (lab/evaluation.js), in the World options
 geese: !!challenge.geese,
 ```

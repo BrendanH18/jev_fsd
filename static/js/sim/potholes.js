@@ -178,7 +178,7 @@ export class Potholes {
     this.setList(out);
   }
 
-  // Replace the potholes (a challenge places its own: lab/pothole-challenge.js).
+  // Replace the potholes (a challenge places its own: lab/challenges/pothole-season.js).
   setList(list) {
     this.list = list.filter(Boolean);
     this.grid = new Map(); this.byLane = new Map(); this.version++;
