@@ -35,6 +35,7 @@ export async function demoApi(path, body, { signal } = {}) {
   if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
   const url = new URL(path, "https://demo.local");
   if (url.pathname === "/api/maps") return { maps: await loadCatalog(signal) };
+  if (url.pathname === "/api/results") return json("results.json", signal);
   if (url.pathname === "/api/bench/runs") {
     try { return { runs: JSON.parse(localStorage.getItem("jev-demo-runs") || "[]") }; } catch { return { runs: [] }; }
   }

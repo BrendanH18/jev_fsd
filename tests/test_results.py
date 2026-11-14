@@ -1,0 +1,74 @@
+"""data/results.json and the README's results table must match the committed records (ROADMAP 2.7)."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import helpers  # noqa: F401  (puts the repository on sys.path)
+from jev.config import PRESET_BBOXES
+
+ROOT = Path(__file__).resolve().parent.parent
+spec = importlib.util.spec_from_file_location("build_results", ROOT / "scripts" / "build_results.py")
+build_results = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(build_results)
+
+
+class ResultsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.data = build_results.build()
+
+    def test_committed_results_are_up_to_date(self):
+        self.assertEqual(build_results.main(["--check"]), 0,
+                         "data/results.json or README.md is stale: run uv run scripts/build_results.py")
+
+    def test_check_fails_when_the_file_is_stale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = Path(tmp) / "results.json"
+            data = json.loads(build_results.render(self.data))
+            data["rows"][0]["passed"] -= 1
+            stale.write_text(json.dumps(data))
+            original = build_results.OUTPUT
+            build_results.OUTPUT = stale
+            try:
+                self.assertEqual(build_results.main(["--check"]), 1)
+            finally:
+                build_results.OUTPUT = original
+
+    def test_every_bundled_map_has_a_name(self):
+        self.assertEqual(set(build_results.MAP_NAMES), set(PRESET_BBOXES))
+
+    def test_rows_name_committed_sources(self):
+        for row in self.data["rows"]:
+            self.assertLessEqual(row["passed"], row["total"])
+            self.assertEqual(row["passed"] == row["total"], not row["failed"], row["sources"])
+            for source in row["sources"] + ([row["recording"]] if row["recording"] else []):
+                self.assertTrue((ROOT / source).is_file(), source)
+            self.assertIn(row["driver"], self.data["drivers"])
+
+    def test_published_challenge_results(self):
+        rows = {(r["driver"], r["suite"]): r for r in self.data["rows"]}
+        # docs/model-results.md: the 60 challenges and the 2 road tests, 11 November 2026.
+        for driver, passed in (("rules", 62), ("cautious", 62), ("jev", 62), ("llm:deepseek", 61)):
+            row = rows[(driver, "challenges")]
+            self.assertEqual((row["passed"], row["total"]), (passed, 62), driver)
+        self.assertEqual([f["id"] for f in rows[("llm:deepseek", "challenges")]["failed"]], ["double-parked"])
+        self.assertEqual(rows[("jev", "challenges")]["model"], "jev-1.14.0")
+        self.assertEqual(rows[("jev", "challenges")]["model_decisions"], 12096)
+        self.assertEqual(round(rows[("llm:deepseek", "challenges")]["cost_usd"], 2), 2.55)
+        self.assertIsNotNone(rows[("jev", "challenges")]["recording"])
+        self.assertIsNone(rows[("rules", "challenges")]["recording"])
+
+    def test_city_rows_are_the_newest_runs(self):
+        city = [r for r in self.data["rows"] if r["suite"] == "city" and r["driver"] == "rules"]
+        self.assertEqual(len(city), 4 + 11)
+        snow = next(r for r in city if r["map"] == "kitsilano" and r["weather"] == "snow")
+        self.assertEqual(snow["sources"], ["data/runs/20261112-190004-rules.json"])
+
+
+if __name__ == "__main__":
+    unittest.main()

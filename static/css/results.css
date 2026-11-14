@@ -1,0 +1,20 @@
+/* The leaderboard page (results.html); built on arena.css. */
+.results header nav { display: flex; gap: 22px; flex-wrap: wrap; }
+.results header { margin-bottom: 45px; }
+.results section { margin-bottom: 34px; }
+.results h2 { font-size: 20px; margin: 0 0 12px; }
+.results #results-status, .results .results-note { color: #afc0cc; font-size: 12px; line-height: 1.7; max-width: 80ch; }
+.results #results-status { margin-bottom: 28px; }
+.results td { vertical-align: top; }
+.results td small { white-space: normal; max-width: 34ch; }
+.results .muted { color: var(--muted); }
+.results code { font: 11px var(--mono); color: #d6e2ea; }
+.results-matrix th, .results-matrix td { padding: 10px 12px; }
+.results-replay { padding: 22px; }
+.results-replay p { color: #afc0cc; font-size: 12px; line-height: 1.7; margin-top: 0; }
+.results-replay li { color: #afc0cc; font-size: 12px; line-height: 1.7; margin-bottom: 12px; }
+.results-replay pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 12px; margin: 6px 0 0; background: #0b131d; color: #d6e2ea; border-radius: 6px; font: 11px var(--mono); }
+.results-sources ul { columns: 2 280px; padding-left: 18px; font-size: 12px; line-height: 1.9; }
+@media(max-width:600px) { .results header nav { gap: 14px; } }
+.results th { white-space: normal; min-width: 90px; vertical-align: bottom; }
+.results .table-wrap > .results-note { padding: 14px 16px; margin: 0; }
