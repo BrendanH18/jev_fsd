@@ -41,6 +41,7 @@
     <label>park at destination <input id="park" type="checkbox"></label>
     <label>hour <input id="hour" type="number" min="0" max="23.99" step="0.5" placeholder="default"></label>
     <label>without (city) <input id="without" type="text" placeholder="geese,ice"></label>
+    <label title="The map's held-out routes, which no fix was tuned against (docs/rules-baseline.md); they replace the scenario count and suite seed">held-out routes <input id="heldout" type="checkbox"></label>
     <label>clock
       <select id="mode">
         <option value="lockstep">lockstep (waits for each decision)</option>
@@ -60,7 +61,8 @@
     </table>
   </section>
   <p class="muted foot">A drive passes when it arrives with no collision, red light, rolled stop sign, or a second or more off
-    the road. Comfort columns are reported, not graded. Lockstep with the Rules brain is fully reproducible: the same
+    the road. Comfort columns are reported, not graded. Score, comfort, margin and time lost rank drivers that both pass; they are
+    computed from the saved results when shown (formulas in bench/scores.js and docs/rules-baseline.md). Lockstep with the Rules brain is fully reproducible: the same
     suite seed gives the same numbers until the sim changes.</p>
 
   <script type="module" src="/js/bench/main.js"></script>

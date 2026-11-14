@@ -10,6 +10,7 @@ import { EVALUATION_SCHEMA, MAX_IMPORT_BYTES, validateEvaluation, openEvaluation
   compareResult, incidentCount, summarizeResults } from "./history.js";
 import { ROAD_TESTS } from "./road-tests.js";
 import { decidedByText } from "../bench/metrics.js";
+import { driveScores, rankDrivers, scoresText } from "../bench/scores.js";
 import { examine } from "./examiner.js";
 
 let running = false, stop = false, results = [], current = null, saved = [], history = null;
@@ -60,26 +61,34 @@ function render() {
       h("td", { class: r.pass ? "pass" : "fail" }, r.stopped ? "STOPPED" : r.pass ? "PASS" : r.failures.join(", "), roadTestVerdict(r),
         decidedByText(r) ? h("small", { class: "delta" }, `Decisions: ${decidedByText(r)}`) : null,
         before ? h("small", { class: "delta" }, before.pass === r.pass ? "Same outcome" : before.pass ? "Baseline passed" : "Baseline failed") : null),
-      h("td", {}, r.report.qualified ? r.report.score : "Practice"), h("td", {}, `${r.time_s}s`),
+      h("td", {}, r.report.qualified ? r.report.score : "Practice"),
+      // (computed from the result when shown, never saved: bench/scores.js)
+      ((s) => h("td", {}, s.score, h("small", { class: "delta" }, `comfort ${s.comfort} · margin ${s.margin} · lost ${s.time_lost_s_per_km ?? "–"} s/km`),
+        before ? h("small", { class: "delta" }, `${signed(s.score - driveScores(before).score, 1)} vs baseline`) : null))(driveScores(r)),
+      h("td", {}, `${r.time_s}s`),
       h("td", {}, incidentCount(r), before ? h("small", { class: "delta" }, `${signed(incidentCount(r) - incidentCount(before))} vs baseline`) : null),
       h("td", {}, r.hard_brakes, delta(r, before, "hard_brakes")),
       h("td", {}, r.latency_p50_ms == null ? "—" : `${r.latency_p50_ms} ms`, delta(r, before, "latency_p50_ms", n => `${signed(n)} ms`)),
       h("td", {}, usd(r.cost_usd), delta(r, before, "cost_usd", n => `${n > 0 ? "+" : n < 0 ? "−" : ""}${usd(Math.abs(n))}`)));
-  }) : [h("tr", {}, h("td", { colspan: 8 }, "Run an evaluation or import a saved export to see results."))]));
+  }) : [h("tr", {}, h("td", { colspan: 9 }, "Run an evaluation or import a saved export to see results."))]));
   $("#arena-export").disabled = !shown.length || running;
   $("#arena-delete").disabled = $("#arena-history").value === "current" || running;
   const matched = comparisons.filter(c => c.before).length;
   $("#comparison-status").textContent = baseline
     ? `${matched}/${shown.length} attempts match ${agentLabel(brain)} in the baseline. Deltas use matching conditions only; negative incidents, braking, latency and cost mean less. Imported results are self-reported.`
     : "Choose a saved baseline to compare matching challenge conditions. Imported results are self-reported.";
-  $("#arena-summary").replaceChildren(...[...new Set(shown.map(r => r.brain))].map(id => {
-    const rows = shown.filter(r => r.brain === id), summary = summarizeResults(rows);
+  // (drivers ranked on the challenges they all finished: more passes first, then the mean score)
+  const ids = [...new Set(shown.map(r => r.brain))];
+  const ranked = rankDrivers(ids.map(id => ({ driver: id, results: shown.filter(r => r.brain === id && !r.stopped) })));
+  $("#arena-summary").replaceChildren(...ids.map(id => {
+    const rows = shown.filter(r => r.brain === id), summary = summarizeResults(rows), place = ranked.ranking.find(e => e.driver === id);
     const pairs = rows.map(r => ({ r, c: baseline ? compareResult(r, baseline, brain) : {} })).filter(p => p.c.before);
     const after = summarizeResults(pairs.map(p => p.r)), before = summarizeResults(pairs.map(p => p.c.before));
     return h("article", { class: "agent-summary" }, h("h3", {}, agentLabel(id)),
       h("p", {}, `${percent(summary.pass_rate)} passes · ${summary.count} attempts · ${summary.incidents} incidents`),
       h("p", {}, `${summary.hard_brakes} hard brakes · ${summary.latency_p50_ms == null ? "—" : `${Math.round(summary.latency_p50_ms)} ms mean of run p50s`} · ${usd(summary.cost_usd)}`),
       decidedByText(summary) ? h("p", {}, `Decisions: ${decidedByText(summary)}`) : null,
+      place?.drives ? h("p", {}, `${ids.length > 1 ? `Ranked ${place.rank} of ${ids.length} on the ${place.drives} challenge${place.drives === 1 ? "" : "s"} every driver finished · ` : ""}${scoresText(place)}`) : null,
       pairs.length ? h("p", {}, `Matched ${pairs.length}: ${signed((after.pass_rate - before.pass_rate) * 100)} pp passes · ${signed(after.incidents - before.incidents)} incidents · ${signed(after.hard_brakes - before.hard_brakes)} hard brakes`,
         h("span", { class: "delta" }, `${after.latency_p50_ms == null || before.latency_p50_ms == null ? "— latency" : `${signed(after.latency_p50_ms - before.latency_p50_ms)} ms mean p50`} · ${signed(after.cost_usd - before.cost_usd, 6)} USD`)) : null);
   }));

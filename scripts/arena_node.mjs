@@ -48,6 +48,7 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const { evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { agentDefinitions } = await import("../static/js/brain/registry.js");
 const rec = await import("../static/js/brain/recording.js");
+const { driverScores } = await import("../static/js/bench/scores.js");
 
 const brain = String(args.brain || "rules");
 if (/^(?:decision|llm):/.test(brain) && !replayJson) {
@@ -132,6 +133,8 @@ for (const challenge of drives) {
     + `${r.model_recording ? ` rec=${JSON.stringify(r.model_recording)}` : ""}`);
 }
 if (budgetStop) console.log(budgetStop);
+// (progress, pace, comfort, margin and time lost, computed for display only: bench/scores.js)
+console.log(`scores ${JSON.stringify(driverScores(results.filter((r) => !r.stopped)))}`);
 const passed = results.filter((r) => r.pass).length;
 const cost = results.reduce((sum, r) => sum + (r.cost_usd || 0), 0);
 const summary = { brain, set, drives: results.length, passed, cost_usd: Math.round(cost * 1e6) / 1e6, engine: `node ${process.version}` };

@@ -1,0 +1,1303 @@
+{
+ "every_s": 1,
+ "force_s": 3,
+ "horizon_s": 6,
+ "engine": "node v22.23.4",
+ "results": [
+  {
+   "challenge": "door-zone",
+   "arrived": true,
+   "pass": true,
+   "decisions": 196,
+   "points": 62,
+   "with_alternatives": 62,
+   "room_to_fail": 0,
+   "branches": 547,
+   "failing_branches": 0,
+   "diverged_branches": 385,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 31.9,
+   "room": []
+  },
+  {
+   "challenge": "fog-junction",
+   "arrived": true,
+   "pass": true,
+   "decisions": 185,
+   "points": 71,
+   "with_alternatives": 71,
+   "room_to_fail": 0,
+   "branches": 432,
+   "failing_branches": 0,
+   "diverged_branches": 301,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 19.9,
+   "room": []
+  },
+  {
+   "challenge": "rain-crossing",
+   "arrived": true,
+   "pass": true,
+   "decisions": 166,
+   "points": 63,
+   "with_alternatives": 63,
+   "room_to_fail": 0,
+   "branches": 513,
+   "failing_branches": 0,
+   "diverged_branches": 392,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 30.2,
+   "room": []
+  },
+  {
+   "challenge": "snow-stop",
+   "arrived": true,
+   "pass": true,
+   "decisions": 227,
+   "points": 76,
+   "with_alternatives": 76,
+   "room_to_fail": 1,
+   "branches": 535,
+   "failing_branches": 1,
+   "diverged_branches": 372,
+   "failure_kinds": [
+    "stop sign"
+   ],
+   "exact_replay": true,
+   "wall_s": 25.4,
+   "room": [
+    {
+     "t": 75,
+     "failing": [
+      {
+       "id": "keep_lane_hold",
+       "failures": [
+        "stop sign"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "challenge": "curb-merge",
+   "arrived": true,
+   "pass": true,
+   "decisions": 83,
+   "points": 35,
+   "with_alternatives": 35,
+   "room_to_fail": 0,
+   "branches": 258,
+   "failing_branches": 0,
+   "diverged_branches": 157,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 10.4,
+   "room": []
+  },
+  {
+   "challenge": "blind-crossing",
+   "arrived": true,
+   "pass": true,
+   "decisions": 177,
+   "points": 98,
+   "with_alternatives": 98,
+   "room_to_fail": 0,
+   "branches": 618,
+   "failing_branches": 0,
+   "diverged_branches": 432,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 16,
+   "room": []
+  },
+  {
+   "challenge": "unprotected-left",
+   "arrived": true,
+   "pass": true,
+   "decisions": 92,
+   "points": 28,
+   "with_alternatives": 28,
+   "room_to_fail": 0,
+   "branches": 229,
+   "failing_branches": 0,
+   "diverged_branches": 178,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 16.6,
+   "room": []
+  },
+  {
+   "challenge": "right-on-red",
+   "arrived": true,
+   "pass": true,
+   "decisions": 220,
+   "points": 63,
+   "with_alternatives": 63,
+   "room_to_fail": 0,
+   "branches": 545,
+   "failing_branches": 0,
+   "diverged_branches": 379,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 41.8,
+   "room": []
+  },
+  {
+   "challenge": "four-way-stop",
+   "arrived": true,
+   "pass": true,
+   "decisions": 308,
+   "points": 85,
+   "with_alternatives": 85,
+   "room_to_fail": 0,
+   "branches": 396,
+   "failing_branches": 0,
+   "diverged_branches": 238,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 24.9,
+   "room": []
+  },
+  {
+   "challenge": "blind-corner",
+   "arrived": true,
+   "pass": true,
+   "decisions": 204,
+   "points": 61,
+   "with_alternatives": 61,
+   "room_to_fail": 0,
+   "branches": 348,
+   "failing_branches": 0,
+   "diverged_branches": 230,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 14.9,
+   "room": []
+  },
+  {
+   "challenge": "right-hook",
+   "arrived": true,
+   "pass": true,
+   "decisions": 194,
+   "points": 55,
+   "with_alternatives": 55,
+   "room_to_fail": 0,
+   "branches": 406,
+   "failing_branches": 0,
+   "diverged_branches": 280,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 18.7,
+   "room": []
+  },
+  {
+   "challenge": "lights-and-sirens",
+   "arrived": true,
+   "pass": true,
+   "decisions": 126,
+   "points": 43,
+   "with_alternatives": 43,
+   "room_to_fail": 0,
+   "branches": 309,
+   "failing_branches": 0,
+   "diverged_branches": 208,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 15.4,
+   "room": []
+  },
+  {
+   "challenge": "bus-pulling-out",
+   "arrived": true,
+   "pass": true,
+   "decisions": 170,
+   "points": 47,
+   "with_alternatives": 47,
+   "room_to_fail": 0,
+   "branches": 471,
+   "failing_branches": 0,
+   "diverged_branches": 394,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 40.2,
+   "room": []
+  },
+  {
+   "challenge": "multiple-threat",
+   "arrived": true,
+   "pass": true,
+   "decisions": 184,
+   "points": 93,
+   "with_alternatives": 93,
+   "room_to_fail": 0,
+   "branches": 647,
+   "failing_branches": 0,
+   "diverged_branches": 424,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 30.3,
+   "room": []
+  },
+  {
+   "challenge": "school-bus",
+   "arrived": true,
+   "pass": true,
+   "decisions": 168,
+   "points": 54,
+   "with_alternatives": 54,
+   "room_to_fail": 0,
+   "branches": 343,
+   "failing_branches": 0,
+   "diverged_branches": 210,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 14.9,
+   "room": []
+  },
+  {
+   "challenge": "school-zone",
+   "arrived": true,
+   "pass": true,
+   "decisions": 90,
+   "points": 33,
+   "with_alternatives": 33,
+   "room_to_fail": 0,
+   "branches": 214,
+   "failing_branches": 0,
+   "diverged_branches": 148,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 6.5,
+   "room": []
+  },
+  {
+   "challenge": "move-over",
+   "arrived": true,
+   "pass": true,
+   "decisions": 104,
+   "points": 35,
+   "with_alternatives": 35,
+   "room_to_fail": 0,
+   "branches": 267,
+   "failing_branches": 0,
+   "diverged_branches": 194,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 17.6,
+   "room": []
+  },
+  {
+   "challenge": "streetcar",
+   "arrived": true,
+   "pass": true,
+   "decisions": 231,
+   "points": 75,
+   "with_alternatives": 75,
+   "room_to_fail": 0,
+   "branches": 523,
+   "failing_branches": 0,
+   "diverged_branches": 302,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 44.9,
+   "room": []
+  },
+  {
+   "challenge": "level-crossing",
+   "arrived": true,
+   "pass": true,
+   "decisions": 265,
+   "points": 76,
+   "with_alternatives": 76,
+   "room_to_fail": 0,
+   "branches": 579,
+   "failing_branches": 0,
+   "diverged_branches": 370,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 51.1,
+   "room": []
+  },
+  {
+   "challenge": "junction-box",
+   "arrived": true,
+   "pass": true,
+   "decisions": 178,
+   "points": 51,
+   "with_alternatives": 51,
+   "room_to_fail": 0,
+   "branches": 443,
+   "failing_branches": 0,
+   "diverged_branches": 323,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 44.5,
+   "room": []
+  },
+  {
+   "challenge": "left-arrow",
+   "arrived": true,
+   "pass": true,
+   "decisions": 191,
+   "points": 55,
+   "with_alternatives": 55,
+   "room_to_fail": 0,
+   "branches": 371,
+   "failing_branches": 0,
+   "diverged_branches": 213,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 36.8,
+   "room": []
+  },
+  {
+   "challenge": "flagger",
+   "arrived": true,
+   "pass": true,
+   "decisions": 203,
+   "points": 54,
+   "with_alternatives": 54,
+   "room_to_fail": 0,
+   "branches": 285,
+   "failing_branches": 0,
+   "diverged_branches": 168,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 21.5,
+   "room": []
+  },
+  {
+   "challenge": "after-midnight",
+   "arrived": true,
+   "pass": true,
+   "decisions": 134,
+   "points": 45,
+   "with_alternatives": 45,
+   "room_to_fail": 0,
+   "branches": 329,
+   "failing_branches": 0,
+   "diverged_branches": 225,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 17.6,
+   "room": []
+  },
+  {
+   "challenge": "lights-out",
+   "arrived": true,
+   "pass": true,
+   "decisions": 171,
+   "points": 57,
+   "with_alternatives": 57,
+   "room_to_fail": 0,
+   "branches": 354,
+   "failing_branches": 0,
+   "diverged_branches": 230,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 20.3,
+   "room": []
+  },
+  {
+   "challenge": "double-parked",
+   "arrived": true,
+   "pass": true,
+   "decisions": 124,
+   "points": 33,
+   "with_alternatives": 33,
+   "room_to_fail": 0,
+   "branches": 208,
+   "failing_branches": 0,
+   "diverged_branches": 137,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 16.1,
+   "room": []
+  },
+  {
+   "challenge": "parallel-park",
+   "arrived": true,
+   "pass": true,
+   "decisions": 115,
+   "points": 34,
+   "with_alternatives": 34,
+   "room_to_fail": 0,
+   "branches": 226,
+   "failing_branches": 0,
+   "diverged_branches": 180,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 21.8,
+   "room": []
+  },
+  {
+   "challenge": "step-out",
+   "arrived": true,
+   "pass": true,
+   "decisions": 78,
+   "points": 24,
+   "with_alternatives": 24,
+   "room_to_fail": 0,
+   "branches": 178,
+   "failing_branches": 0,
+   "diverged_branches": 143,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 10,
+   "room": []
+  },
+  {
+   "challenge": "blind-left",
+   "arrived": true,
+   "pass": true,
+   "decisions": 179,
+   "points": 54,
+   "with_alternatives": 54,
+   "room_to_fail": 0,
+   "branches": 384,
+   "failing_branches": 0,
+   "diverged_branches": 262,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 23.9,
+   "room": []
+  },
+  {
+   "challenge": "snow-plow",
+   "arrived": true,
+   "pass": true,
+   "decisions": 272,
+   "points": 72,
+   "with_alternatives": 72,
+   "room_to_fail": 0,
+   "branches": 393,
+   "failing_branches": 0,
+   "diverged_branches": 313,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 19.7,
+   "room": []
+  },
+  {
+   "challenge": "zipper",
+   "arrived": true,
+   "pass": true,
+   "decisions": 154,
+   "points": 41,
+   "with_alternatives": 41,
+   "room_to_fail": 0,
+   "branches": 316,
+   "failing_branches": 0,
+   "diverged_branches": 180,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 45.2,
+   "room": []
+  },
+  {
+   "challenge": "cyclist-pass",
+   "arrived": true,
+   "pass": true,
+   "decisions": 99,
+   "points": 34,
+   "with_alternatives": 34,
+   "room_to_fail": 0,
+   "branches": 209,
+   "failing_branches": 0,
+   "diverged_branches": 150,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 26.6,
+   "room": []
+  },
+  {
+   "challenge": "speed-humps",
+   "arrived": true,
+   "pass": true,
+   "decisions": 79,
+   "points": 35,
+   "with_alternatives": 35,
+   "room_to_fail": 0,
+   "branches": 262,
+   "failing_branches": 0,
+   "diverged_branches": 191,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 10.5,
+   "room": []
+  },
+  {
+   "challenge": "scramble",
+   "arrived": true,
+   "pass": true,
+   "decisions": 323,
+   "points": 97,
+   "with_alternatives": 97,
+   "room_to_fail": 2,
+   "branches": 398,
+   "failing_branches": 3,
+   "diverged_branches": 250,
+   "failure_kinds": [
+    "failed to yield"
+   ],
+   "exact_replay": true,
+   "wall_s": 16.9,
+   "room": [
+    {
+     "t": 68,
+     "failing": [
+      {
+       "id": "right_0.5_hold",
+       "failures": [
+        "failed to yield"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 69,
+     "failing": [
+      {
+       "id": "keep_lane_hold",
+       "failures": [
+        "failed to yield"
+       ]
+      },
+      {
+       "id": "right_0.5_hold",
+       "failures": [
+        "failed to yield"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "challenge": "collection",
+   "arrived": true,
+   "pass": true,
+   "decisions": 126,
+   "points": 34,
+   "with_alternatives": 34,
+   "room_to_fail": 0,
+   "branches": 228,
+   "failing_branches": 0,
+   "diverged_branches": 159,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 17.2,
+   "room": []
+  },
+  {
+   "challenge": "crossing-guard",
+   "arrived": true,
+   "pass": true,
+   "decisions": 103,
+   "points": 31,
+   "with_alternatives": 31,
+   "room_to_fail": 0,
+   "branches": 173,
+   "failing_branches": 0,
+   "diverged_branches": 124,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 6.3,
+   "room": []
+  },
+  {
+   "challenge": "pxo-far-curb",
+   "arrived": true,
+   "pass": true,
+   "decisions": 71,
+   "points": 25,
+   "with_alternatives": 25,
+   "room_to_fail": 0,
+   "branches": 179,
+   "failing_branches": 0,
+   "diverged_branches": 134,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 6.5,
+   "room": []
+  },
+  {
+   "challenge": "bus-lanes",
+   "arrived": true,
+   "pass": true,
+   "decisions": 60,
+   "points": 20,
+   "with_alternatives": 20,
+   "room_to_fail": 0,
+   "branches": 166,
+   "failing_branches": 0,
+   "diverged_branches": 123,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 6.7,
+   "room": []
+  },
+  {
+   "challenge": "no-left-turn",
+   "arrived": true,
+   "pass": true,
+   "decisions": 402,
+   "points": 120,
+   "with_alternatives": 120,
+   "room_to_fail": 0,
+   "branches": 747,
+   "failing_branches": 0,
+   "diverged_branches": 503,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 37.7,
+   "room": []
+  },
+  {
+   "challenge": "contraflow",
+   "arrived": true,
+   "pass": true,
+   "decisions": 113,
+   "points": 30,
+   "with_alternatives": 30,
+   "room_to_fail": 0,
+   "branches": 213,
+   "failing_branches": 0,
+   "diverged_branches": 140,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 17.2,
+   "room": []
+  },
+  {
+   "challenge": "dip-your-lights",
+   "arrived": true,
+   "pass": true,
+   "decisions": 177,
+   "points": 74,
+   "with_alternatives": 74,
+   "room_to_fail": 0,
+   "branches": 795,
+   "failing_branches": 0,
+   "diverged_branches": 538,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 39,
+   "room": []
+  },
+  {
+   "challenge": "left-on-red",
+   "arrived": true,
+   "pass": true,
+   "decisions": 101,
+   "points": 31,
+   "with_alternatives": 31,
+   "room_to_fail": 0,
+   "branches": 266,
+   "failing_branches": 0,
+   "diverged_branches": 202,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 17,
+   "room": []
+  },
+  {
+   "challenge": "roundabout-gap",
+   "arrived": true,
+   "pass": true,
+   "decisions": 140,
+   "points": 38,
+   "with_alternatives": 38,
+   "room_to_fail": 0,
+   "branches": 396,
+   "failing_branches": 0,
+   "diverged_branches": 248,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 38.3,
+   "room": []
+  },
+  {
+   "challenge": "wait-for-green",
+   "arrived": true,
+   "pass": true,
+   "decisions": 190,
+   "points": 54,
+   "with_alternatives": 54,
+   "room_to_fail": 0,
+   "branches": 235,
+   "failing_branches": 0,
+   "diverged_branches": 157,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 10.3,
+   "room": []
+  },
+  {
+   "challenge": "amber-stop",
+   "arrived": true,
+   "pass": true,
+   "decisions": 152,
+   "points": 45,
+   "with_alternatives": 45,
+   "room_to_fail": 0,
+   "branches": 225,
+   "failing_branches": 0,
+   "diverged_branches": 127,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 8.1,
+   "room": []
+  },
+  {
+   "challenge": "amber-clear",
+   "arrived": true,
+   "pass": true,
+   "decisions": 43,
+   "points": 15,
+   "with_alternatives": 15,
+   "room_to_fail": 1,
+   "branches": 109,
+   "failing_branches": 1,
+   "diverged_branches": 82,
+   "failure_kinds": [
+    "red light"
+   ],
+   "exact_replay": true,
+   "wall_s": 3.2,
+   "room": [
+    {
+     "t": 46.7,
+     "failing": [
+      {
+       "id": "keep_lane_slow",
+       "failures": [
+        "red light"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "challenge": "brakes-ahead",
+   "arrived": true,
+   "pass": true,
+   "decisions": 97,
+   "points": 35,
+   "with_alternatives": 35,
+   "room_to_fail": 0,
+   "branches": 329,
+   "failing_branches": 0,
+   "diverged_branches": 209,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 19.4,
+   "room": []
+  },
+  {
+   "challenge": "make-room",
+   "arrived": true,
+   "pass": true,
+   "decisions": 72,
+   "points": 21,
+   "with_alternatives": 21,
+   "room_to_fail": 0,
+   "branches": 159,
+   "failing_branches": 0,
+   "diverged_branches": 139,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 16.4,
+   "room": []
+  },
+  {
+   "challenge": "fresh-green",
+   "arrived": true,
+   "pass": true,
+   "decisions": 73,
+   "points": 24,
+   "with_alternatives": 24,
+   "room_to_fail": 0,
+   "branches": 154,
+   "failing_branches": 0,
+   "diverged_branches": 111,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 7.1,
+   "room": []
+  },
+  {
+   "challenge": "into-the-sun",
+   "arrived": true,
+   "pass": true,
+   "decisions": 191,
+   "points": 66,
+   "with_alternatives": 66,
+   "room_to_fail": 0,
+   "branches": 415,
+   "failing_branches": 0,
+   "diverged_branches": 339,
+   "failure_kinds": [],
+   "exact_replay": false,
+   "wall_s": 17.7,
+   "room": []
+  },
+  {
+   "challenge": "reverse-lights",
+   "arrived": true,
+   "pass": true,
+   "decisions": 109,
+   "points": 32,
+   "with_alternatives": 32,
+   "room_to_fail": 0,
+   "branches": 208,
+   "failing_branches": 0,
+   "diverged_branches": 159,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 18.6,
+   "room": []
+  },
+  {
+   "challenge": "pothole-season",
+   "arrived": true,
+   "pass": true,
+   "decisions": 103,
+   "points": 27,
+   "with_alternatives": 27,
+   "room_to_fail": 0,
+   "branches": 224,
+   "failing_branches": 0,
+   "diverged_branches": 176,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 13.4,
+   "room": []
+  },
+  {
+   "challenge": "chasing-the-ball",
+   "arrived": true,
+   "pass": true,
+   "decisions": 95,
+   "points": 29,
+   "with_alternatives": 29,
+   "room_to_fail": 0,
+   "branches": 243,
+   "failing_branches": 0,
+   "diverged_branches": 173,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 18.9,
+   "room": []
+  },
+  {
+   "challenge": "goose-crossing",
+   "arrived": true,
+   "pass": true,
+   "decisions": 250,
+   "points": 68,
+   "with_alternatives": 68,
+   "room_to_fail": 0,
+   "branches": 270,
+   "failing_branches": 0,
+   "diverged_branches": 133,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 11.9,
+   "room": []
+  },
+  {
+   "challenge": "on-your-bumper",
+   "arrived": true,
+   "pass": true,
+   "decisions": 337,
+   "points": 91,
+   "with_alternatives": 91,
+   "room_to_fail": 7,
+   "branches": 389,
+   "failing_branches": 7,
+   "diverged_branches": 261,
+   "failure_kinds": [
+    "collision",
+    "braked hard with a tailgater close behind"
+   ],
+   "exact_replay": true,
+   "wall_s": 36,
+   "room": [
+    {
+     "t": 70.2,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "collision",
+        "braked hard with a tailgater close behind"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 71.2,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "braked hard with a tailgater close behind"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 76.2,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "collision",
+        "braked hard with a tailgater close behind"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 77.2,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "braked hard with a tailgater close behind"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 82.2,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "collision",
+        "braked hard with a tailgater close behind"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 83.2,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "collision",
+        "braked hard with a tailgater close behind"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 84.2,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "braked hard with a tailgater close behind"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "challenge": "bridges-freeze-first",
+   "arrived": true,
+   "pass": true,
+   "decisions": 150,
+   "points": 40,
+   "with_alternatives": 40,
+   "room_to_fail": 17,
+   "branches": 355,
+   "failing_branches": 17,
+   "diverged_branches": 203,
+   "failure_kinds": [
+    "crossed black ice too fast, or braked or steered hard on it"
+   ],
+   "exact_replay": true,
+   "wall_s": 54.8,
+   "room": [
+    {
+     "t": 17,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 18,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 19,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 20,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 21,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 22,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 23,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 24,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 25,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 26,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 27,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 28,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 29,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 30,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 31,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 32,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    },
+    {
+     "t": 33,
+     "failing": [
+      {
+       "id": "hard_brake",
+       "failures": [
+        "crossed black ice too fast, or braked or steered hard on it"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "challenge": "one-car-at-a-time",
+   "arrived": true,
+   "pass": true,
+   "decisions": 270,
+   "points": 76,
+   "with_alternatives": 76,
+   "room_to_fail": 0,
+   "branches": 694,
+   "failing_branches": 0,
+   "diverged_branches": 558,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 51.9,
+   "room": []
+  },
+  {
+   "challenge": "dont-splash",
+   "arrived": true,
+   "pass": true,
+   "decisions": 93,
+   "points": 28,
+   "with_alternatives": 28,
+   "room_to_fail": 0,
+   "branches": 216,
+   "failing_branches": 0,
+   "diverged_branches": 172,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 8.6,
+   "room": []
+  },
+  {
+   "challenge": "room-to-park",
+   "arrived": true,
+   "pass": true,
+   "decisions": 144,
+   "points": 42,
+   "with_alternatives": 42,
+   "room_to_fail": 0,
+   "branches": 189,
+   "failing_branches": 0,
+   "diverged_branches": 117,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 16.2,
+   "room": []
+  },
+  {
+   "challenge": "road-closed",
+   "arrived": true,
+   "pass": true,
+   "decisions": 195,
+   "points": 58,
+   "with_alternatives": 58,
+   "room_to_fail": 0,
+   "branches": 480,
+   "failing_branches": 0,
+   "diverged_branches": 358,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 26.6,
+   "room": []
+  },
+  {
+   "challenge": "follow-the-officer",
+   "arrived": true,
+   "pass": true,
+   "decisions": 165,
+   "points": 49,
+   "with_alternatives": 49,
+   "room_to_fail": 0,
+   "branches": 311,
+   "failing_branches": 0,
+   "diverged_branches": 166,
+   "failure_kinds": [],
+   "exact_replay": true,
+   "wall_s": 20.9,
+   "room": []
+  }
+ ],
+ "commit": "d547faf"
+}
