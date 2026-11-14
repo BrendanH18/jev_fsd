@@ -6,13 +6,13 @@ import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/regi
 import { registerLlmAgents, checkLlmEndpoints, llmSummary } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints, decisionSummary } from "../brain/decision.js";
 import { readHistory } from "../sim/drive-score.js";
-import { EVALUATION_SCHEMA, EVALUATION_HISTORY_KEY, MAX_IMPORT_BYTES, validateEvaluation, readEvaluations,
-  saveEvaluation, compareResult, incidentCount, summarizeResults } from "./history.js";
+import { EVALUATION_SCHEMA, MAX_IMPORT_BYTES, validateEvaluation, openEvaluationHistory,
+  compareResult, incidentCount, summarizeResults } from "./history.js";
 import { ROAD_TESTS } from "./road-tests.js";
 import { decidedByText } from "../bench/metrics.js";
 import { examine } from "./examiner.js";
 
-let running = false, stop = false, results = [], current = null, saved = [];
+let running = false, stop = false, results = [], current = null, saved = [], history = null;
 const agentLabel = id => agentDefinitions().find(a => a.id === id)?.label || id;
 const challengeLabel = id => CHALLENGES.find(c => c.id === id)?.title || ROAD_TESTS.find(t => t.id === id)?.title || id;
 // (a road test is also marked on the examiner's sheet, from its report: lab/examiner.js)
@@ -118,12 +118,14 @@ function busy(value) {
   $("#agents").querySelectorAll("input").forEach(i => { i.disabled = value || agentDefinitions().find(a => a.id === i.value)?.available === false; });
   if (!value) baselineAgents();
 }
-function persist(run) {
+async function persist(run) {
   try {
     const previousBaseline = baselineRun();
-    saved = saveEvaluation(run, undefined, previousBaseline); $("#history-status").textContent = "Saved on this browser. Up to 10 recent evaluations are retained within the storage limit; export a permanent copy.";
+    saved = await history.save(run, previousBaseline); $("#history-status").textContent = `Saved on this browser. Up to ${history.limit} recent evaluations are retained within the storage limit; export a permanent copy.`;
     historyControls();
-    const baselineIndex = previousBaseline ? saved.findIndex(r => JSON.stringify(r) === JSON.stringify(previousBaseline)) : -1;
+    // (IndexedDB keeps the saved run objects; the localStorage fallback reads fresh copies)
+    let baselineIndex = previousBaseline ? saved.indexOf(previousBaseline) : -1;
+    if (previousBaseline && baselineIndex < 0) baselineIndex = saved.findIndex(r => JSON.stringify(r) === JSON.stringify(previousBaseline));
     $("#arena-baseline").value = baselineIndex >= 0 ? String(baselineIndex) : ""; baselineAgents();
   } catch (error) { $("#history-status").textContent = `Could not save locally: ${error.message}. Export is still available.`; }
 }
@@ -150,7 +152,7 @@ async function run() {
   } catch (error) { current.status = "error"; $("#arena-status").textContent = `Evaluation failed: ${error.message}. Completed attempts are retained.`; }
   finally {
     running = false; busy(false); $("#arena-run").textContent = "Run evaluation";
-    if (results.length) persist(current); render();
+    if (results.length) await persist(current); render();
   }
 }
 async function importRun(file) {
@@ -159,21 +161,21 @@ async function importRun(file) {
     if (file.size > MAX_IMPORT_BYTES) throw new Error("Choose an export smaller than 5 MB.");
     const imported = validateEvaluation(JSON.parse(await file.text()));
     current = imported; results = imported.results; $("#arena-history").value = "current"; $("#arena-details").hidden = true;
-    persist(imported); render(); $("#arena-status").textContent = `Imported ${results.length} attempts. No agents were executed.`;
+    await persist(imported); render(); $("#arena-status").textContent = `Imported ${results.length} attempts. No agents were executed.`;
   } catch (error) { $("#history-status").textContent = `Import failed: ${error.message}`; }
   finally { $("#arena-import").value = ""; }
 }
 async function boot() {
-  saved = readEvaluations(); historyControls();
+  history = await openEvaluationHistory(); saved = await history.list(); historyControls();
   $("#arena-run").addEventListener("click", run);
   $("#arena-history").addEventListener("change", () => { $("#arena-details").hidden = true; render(); });
   $("#arena-baseline").addEventListener("change", () => { baselineAgents(); render(); });
   $("#arena-baseline-agent").addEventListener("change", render);
   $("#arena-import").addEventListener("change", event => importRun(event.target.files[0]));
-  $("#arena-delete").addEventListener("click", () => {
+  $("#arena-delete").addEventListener("click", async () => {
     try {
-      const index = Number($("#arena-history").value), remaining = saved.filter((_, i) => i !== index);
-      localStorage.setItem(EVALUATION_HISTORY_KEY, JSON.stringify(remaining)); saved = remaining;
+      const doomed = saved[Number($("#arena-history").value)];
+      if (doomed) saved = await history.remove(doomed);
       $("#arena-history").value = "current"; $("#arena-baseline").value = ""; $("#arena-details").hidden = true;
       historyControls(); render(); $("#history-status").textContent = "Saved evaluation deleted from this browser.";
     } catch { $("#history-status").textContent = "Could not delete: browser storage is unavailable."; }

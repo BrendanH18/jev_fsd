@@ -407,5 +407,5 @@ remark linked to a recorded event has the same rewind link as the report's event
 
 The arena includes road tests only when **Include road tests** is ticked, and shows each
 attempt's examiner verdict beside the audit result. Two saved runs of both tests with Rules and the
-cautious agent take 832,770 bytes, 8.8% of the 9 MB history cap. Checks:
+cautious agent take 832,770 bytes, 8.8% of the 9 MB localStorage fallback cap. Checks:
 `scripts/test_road_test.mjs` and `static/tests/road-test-tests.js` through `/tests`.
