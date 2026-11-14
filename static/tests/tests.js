@@ -440,7 +440,12 @@ async function run() {
   results.push(...await runPracticeTests());
   results.push(...await runRoadTestTests());
   const ok = results.filter((r) => r.ok).length;
-  out.innerHTML = results.map((r) => `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <span class="muted">${r.detail}</span>` : ""}`).join("\n") + `\n\n${ok}/${results.length} passed`;
+  // (built from text nodes: test names and details are data, never markup)
+  const span = (cls, text) => Object.assign(document.createElement("span"), { className: cls, textContent: text });
+  out.replaceChildren(...results.flatMap((r, i) => [
+    ...(i ? ["\n"] : []), span(r.ok ? "ok" : "fail", r.ok ? "PASS" : "FAIL"), ` ${r.name}`,
+    ...(r.detail ? [" ", span("muted", String(r.detail))] : []),
+  ]), `\n\n${ok}/${results.length} passed`);
   window.__results = results;
 }
 

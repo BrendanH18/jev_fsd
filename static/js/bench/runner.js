@@ -63,7 +63,7 @@ export function setupScenario(map, sc, { brain = "rules", npcs = 40, weather = "
   });
   if (style) autopilot.style = style;
   // (a model recording records or replays the driver's answers: brain/recording.js)
-  if (tape) autopilot.brains[brain] = tape.brainFor(autopilot, brain, autopilot.brains[brain]);
+  if (tape) autopilot.brains[brain] = tape.brainFor(autopilot, brain, brain !== "__proto__" && Object.hasOwn(autopilot.brains, brain) ? autopilot.brains[brain] : null);
   autopilot.setBrain(brain);
   world.route = new Route(sc.route, map, world.ego.spec);
   world.destination = sc.goal;

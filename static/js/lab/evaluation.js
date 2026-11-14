@@ -32,7 +32,7 @@ export function setupChallenge(map, challenge, { brain = "rules", onDecision = (
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: challenge.seed });
   const autopilot = new Autopilot(world, { onDecision, onEvent });
   // (a model recording records or replays the driver's answers: brain/recording.js)
-  if (tape) autopilot.brains[brain] = tape.brainFor(autopilot, brain, autopilot.brains[brain]);
+  if (tape) autopilot.brains[brain] = tape.brainFor(autopilot, brain, brain !== "__proto__" && Object.hasOwn(autopilot.brains, brain) ? autopilot.brains[brain] : null);
   autopilot.setBrain(brain);
   world.route = new Route(scenario.route, map, world.ego.spec); world.destination = scenario.goal;
   installChallenge(world, fleet, challenge, scenario); autopilot.setEnabled(true);
