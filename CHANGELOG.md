@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **README rewritten around people and stories.** It opens on a challenge you can try at once, tells the
+  first comparison as what happened (DeepSeek stuck behind the double-parked van, Rules' road-test
+  demerits), says plainly that the challenges mostly test the shared safety filter for now, and puts
+  "Take the test yourself" ahead of the reference material. New screenshots in `docs/readme/`
+  (`docs/drive-lab.png`, which showed "Six authored challenges", is gone). The Pages demo's social card
+  uses `docs/readme/social.jpg` with new text; the package description, the arena's intro and the
+  agent and demo docs no longer give stale challenge counts or say driving needs a keyboard.
 - Features can now be added as records in a registry (`static/js/sim/features/`): potholes, geese
   and road closures are each one record and one registration line, and the core (world, step, traffic,
   sensing, candidates, decision state, LLM prompt, metrics) loops over the records instead of naming

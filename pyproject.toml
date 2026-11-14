@@ -1,7 +1,7 @@
 [project]
 name = "jev-fsd"
 version = "0.2.0"
-description = "Drive Lab: an open-source driving simulator on real OpenStreetMap streets, with Rules and TypeSafe Jev agents"
+description = "Jev Drive Lab: a driving test for AI models, on real Canadian streets, that you can also take yourself"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -12,7 +12,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/BrendanH18/jev_fsd"
-Documentation = "https://github.com/BrendanH18/jev_fsd/blob/main/docs/project-reference.md"
+Documentation = "https://github.com/BrendanH18/jev_fsd/blob/main/docs/reference/README.md"
 Demo = "https://brendanh18.github.io/jev_fsd/"
 
 # Jev FSD is an application, not a library: `uv run server.py` installs the dependency into a

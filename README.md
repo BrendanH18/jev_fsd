@@ -1,27 +1,158 @@
+<div align="center">
+
 # Jev Drive Lab
 
 **A driving test for AI models, on real Canadian streets, that you can also take yourself.**
 
-[**▶ Play it in your browser**](https://brendanh18.github.io/jev_fsd/) — no install, no account, no API key.
-[**See the results**](https://brendanh18.github.io/jev_fsd/results.html) of every driver tested so far.
+[**▶ Play it in your browser**](https://brendanh18.github.io/jev_fsd/) &nbsp;·&nbsp;
+[**See how each AI drove**](https://brendanh18.github.io/jev_fsd/results.html) &nbsp;·&nbsp;
+[**Run it locally**](#run-it-yourself)
 
-![Jev Drive Lab on a tree-lined street in Kitsilano, Vancouver](docs/drive-lab.png)
+No install, no account and no API key for the browser version.<br>
+Try this first: open **Challenges**, choose **Flashing reds** and drive it yourself. Then let **Rules** take the same test.
 
-- **Real streets.** Twelve neighbourhoods in eleven Canadian cities, built from OpenStreetMap: lanes,
-  signals, stop signs, crosswalks, bus routes and bus lanes, streetcar tracks, speed humps and turn
-  restrictions.
-- **A busy city.** Traffic, cyclists and people on foot; buses, streetcars and school buses; ambulances
-  to pull over for, snow plows, garbage trucks, road crews and police officers directing traffic;
-  and the hazards drivers get wrong, from a child chasing a ball to black ice on a bridge.
-- **60 challenges and 2 road tests.** Each a fixed situation on a real street, from an unprotected
-  left in Ottawa to a scramble crossing in Victoria ([the full list](docs/challenges.md)).
-- **Any driver, the same test.** Rules, decision models such as Jev, any OpenAI-compatible LLM, your
-  own JavaScript agent, or you. Every driver shares the sensing, physics and safety checks, so the
-  results differ only by the decisions made.
-- **Every decision on the record.** Pause, rewind to the moment a door swung open, see what the driver
-  could see, what it considered and why it rejected each alternative, then take over.
-- **Repeatable.** Seeded routes, a lockstep clock, and model runs recorded so anyone can replay them
-  without a key.
+</div>
+
+![A school bus stopped with its red lights flashing on West 2nd Avenue in Kitsilano, Vancouver, as a child crosses in front of it. The driver's lines of sight fan out from the car, and the lesson card on the left explains BC's school bus law.](docs/readme/hero-school-bus.jpg)
+
+<p align="center"><sub><b>Flashing reds</b>, Kitsilano: a school bus on the other side of the road has stopped, and a child is
+crossing in front of it. Your lane is clear. Do you stop? (In BC you must.) The lines are what the driver can see.</sub></p>
+
+---
+
+Driving is mostly easy, and the rest of it happens in a couple of seconds. A ball rolls out from
+between two parked cars. A van is double-parked and you can't see what's coming round it. The power's
+out and the lights at Barrington and Morris are dark. Geese are crossing, and one of them has stopped
+in your lane.
+
+Jev Drive Lab puts those moments on real streets in twelve Canadian neighbourhoods, built from
+OpenStreetMap, and gives the wheel to whoever you like: a hand-written rule set, a decision model, a
+chat LLM, a JavaScript agent you wrote this afternoon, or you. The AI drivers share the same sensors,
+the same candidate manoeuvres, the same controller and the same safety checks, so when two of them end
+up with different results, it's because they made different decisions. You drive the same car on the
+same streets and are marked by the same rules, with your own hands on the wheel.
+
+Then you can rewind to the second before it went wrong, see what the driver saw and which options it
+turned down, and take the wheel yourself.
+
+> **Research simulator.** This is not, and won't become, software for controlling a real vehicle.
+
+## What happened when we handed AI the wheel
+
+The first full comparison ran in November 2026: two models and two hand-written drivers, each through
+all 60 challenges and both road tests.
+
+- **DeepSeek V4.1 Flash got stuck behind a van.** On Brunswick Avenue in Toronto, a delivery van is
+  double-parked in your lane. DeepSeek stopped behind it and stayed there. It answered "stop" to 577
+  of its 674 calls, though a safe way round was on offer at least 55 times, and after three minutes it
+  ran out of time. Rules got round in 33 seconds. That was DeepSeek's only failure: **61 of 62**.
+- **Jev passed all 62.** It made 12,096 of its 12,102 decisions itself, and the whole set cost
+  $1.26 in model calls.
+- **Rules passed its Class 5-style road test** with no violations and three demerits for braking
+  harshly, the most a repeated fault can cost. Like a lot of new drivers.
+- **Passing every challenge isn't the whole test.** The cautious starter agent passes all 62, then
+  fails 6 of its 12 snowy city drives in Kitsilano. That's what the seeded city suite is for: ordinary
+  routes with the city's hazards switched on.
+
+Every published model drive is committed as a recording of each answer the model gave, so anyone can replay it
+with one command, with no key and no model call ([how, and its limits](docs/model-results.md)). The
+full table is [below](#results).
+
+**One honest caveat.** An AI driver chooses among manoeuvres a shared safety filter has already
+screened, with a controller and an emergency brake underneath. We measured how much that leaves to
+the driver: in 55 of the 60 challenges, no option the filter let through led to a failure at any decision we
+sampled. So for
+now the challenges mostly test the filter, and the clearest way left to fail is DeepSeek's: by not
+making progress. Making them tell drivers apart is the next phase of the [roadmap](ROADMAP.md)
+([the measurement](docs/validation/driver-latitude-2026-11-14.md)).
+
+## Take the test yourself
+
+Everything an AI can drive, you can drive too, with the keyboard, a gamepad or a touch screen. You
+don't get the safety filter or the emergency brake.
+
+- **Practise the challenges.** Work through the library by city, skill or weather. Your clean,
+  unaided runs are saved in your browser, and each drive ends with a debrief: what went wrong, the
+  lesson behind the challenge, and links to rewind to each moment.
+- **Book a road test.** There's a Class 5-style test in Kitsilano and a G2-style test in Toronto's
+  Annex: a longer drive on a fixed route, an examiner giving directions, and an examiner's sheet at
+  the end. Any dangerous action fails you, and minor errors cost demerits. Run an AI through the same
+  test and see whether it passes the examiner. (They're styled on the provincial tests, not
+  affiliated with any licensing authority.)
+- **Or just drive.** Pick a city, a car, the weather and the time of day, and go. The sun follows
+  each city's real latitude, street lights come on at dusk, and photo mode (`O`) and a cinematic
+  camera (`C`) are there for the golden hour.
+
+<p align="center"><img width="560" src="docs/readme/road-test.jpg" alt="The examiner's sheet for the Kitsilano road test: Pass, no dangerous actions or violations, three demerits for braking harshly"></p>
+
+## Things that happen on these streets
+
+<img src="docs/readme/goose-crossing.jpg" alt="A family of Canada geese crossing Clemow Avenue in Ottawa, beside the street sign, as the car slows on its way towards them" width="100%">
+
+Sixty hand-built challenges, each on a real street with its own weather, time of day and traffic.
+Each one is a situation real drivers get wrong. A few of them:
+
+| Challenge | What happens |
+|---|---|
+| 🪿 **Goose crossing**, Ottawa | A family of geese crosses Clemow Avenue between two parks, and one stops in your lane. Wait for the last one. |
+| ⚽ **Chasing the ball**, Vancouver | A ball rolls out from between parked cars. Slow right down, because a child is about to run out after it. |
+| 🚑 **Lights and sirens**, Edmonton | An ambulance comes up behind you just before a junction. Pull over and stop, but not in the junction. |
+| 🔌 **Lights out**, Halifax | A storm has knocked out the signals. Treat the junction as an all-way stop and take your turn. |
+| 🚋 **Behind the doors**, Toronto | A 511 streetcar stops beside you with its doors open. Its riders are about to cross your lane. |
+| 🧊 **Bridges freeze first**, Saskatoon | Black ice on the Traffic Bridge, nearly invisible on a dry road. Ease off before you reach it. |
+| 🚶 **All walk**, Victoria | A scramble crossing by the Empress. No right on red here, so wait through the all-walk. |
+| 👮 **Follow the officer**, Toronto | An officer at Spadina and Bloor holds you on a green and waves you through a red. |
+
+[See all sixty →](docs/challenges.md)
+
+The rules are local. You can't turn right on red in Montréal, BC traffic stops both ways for a school
+bus's flashing reds, and Ontario has pedestrian crossovers. A challenge **passes** only if the driver
+arrives with no collision, no red light or stop sign run, no failure to yield and less than a second
+off the road (and, in Squeeze in, parks within 30 cm of the kerb). A good style score doesn't save a
+drive that broke a rule.
+
+## See what the AI saw
+
+![A recorded Rules drive with the AI eyes overlay: visible and hidden hazards, sight lines and the candidate manoeuvres](docs/drive-demo.gif)
+
+Turn on **AI eyes** to see the world the way the driver sees it: which hazards it can see, which ones
+a building is hiding, how far it can see in fog, where it thinks everyone else is going, and why it
+turned down each manoeuvre it considered.
+
+The last two minutes of every drive are recorded. Scrub back to the moment before a car door opened,
+then take over, swap in a different driver, or make it try another manoeuvre that passed the safety
+checks, and watch what happens.
+
+## Bring any driver
+
+| Driver | What it is | What you need |
+|---|---|---|
+| **Rules** | Plain code that scores each safe manoeuvre | Nothing. Free and offline. |
+| **Decision models** | Jev, or another model that answers typed questions with probabilities, through TypeSafe or OpenRouter's Decisions API | A key, or a local server |
+| **LLMs** | Any chat model behind an OpenAI-compatible API: OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama… | A key, or a local server |
+| **Your own agent** | A JavaScript module with one `decide()` function | A local clone and a text editor |
+
+Your own agent can be this small. Save it as `static/js/agents/my-driver.js`:
+
+```js
+export default {
+  id: "my-driver",
+  label: "My driver",
+  create: () => ({
+    async decide(snap, eligible) {
+      // eligible: the manoeuvres that passed the shared safety checks
+      const best = eligible.reduce((a, b) => (b.sim.progress_m > a.sim.progress_m ? b : a));
+      return { motion: "drive", candidateId: best.id,
+        meta: { source: "my-driver", model: "my-driver",
+                latency_ms: 0, input_tokens: 0, cost_usd: 0 } };
+    },
+  }),
+};
+```
+
+Load it from **Settings → Local agent module**, then put it up against Rules, Jev and your favourite
+LLM in the arena, which runs every challenge and compares safety, comfort, latency and cost. The
+[agent guide](docs/agents.md) has the starter template and step-by-step setup for every provider.
 
 ## Results
 
@@ -38,15 +169,18 @@ Built from the committed records (2026-11-11 to 2026-11-12) by `scripts/build_re
 One-challenge pilots: GPT-6 Luna (`openai/gpt-6-luna`) 1/1 (door-zone); Liquid d1 (`liquid/d1-20260930`) 1/1 (door-zone); Granite 4.2 3B (`granite4.2:3b`) 2/2 (dont-splash, left-on-red).
 <!-- results:end -->
 
-> This is a research simulator. It is not, and is not meant to become, software for controlling a
-> real vehicle.
+## Twelve neighbourhoods, four kinds of weather, any hour
 
-## What you can do
-
-### 🚗 Drive real neighbourhoods
-
-Twelve neighbourhoods across eleven Canadian cities ship with the project, so the app works offline
-once its dependencies are installed:
+<table>
+<tr>
+<td width="50%"><img src="docs/readme/weather-dry.jpg" alt="A dry afternoon on a tree-lined street in Kitsilano, Vancouver, with parked cars on both sides"></td>
+<td width="50%"><img src="docs/readme/weather-rain.jpg" alt="A rainy night in Montréal, with a street light and wet-road reflections"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/readme/weather-fog.jpg" alt="A foggy morning street in Victoria"></td>
+<td width="50%"><img src="docs/readme/weather-snow.jpg" alt="Snow on a residential street in Toronto"></td>
+</tr>
+</table>
 
 | Neighbourhood | City | | Neighbourhood | City |
 |---|---|---|---|---|
@@ -57,126 +191,42 @@ once its dependencies are installed:
 | Downtown | Halifax | | Exchange District | Winnipeg |
 | Old Strathcona | Edmonton | | Downtown & Nutana | Saskatoon |
 
-Each city has its own house colours and a stylized backdrop on the horizon: Citadel Hill in
-Halifax, a needle tower in Toronto, a river-valley truss bridge in Edmonton, the North Shore
-mountains behind Vancouver.
+The streets, lanes, signals, stop signs, marked crosswalks, bus lanes, speed humps and turn
+restrictions come from OpenStreetMap, with sensible defaults where a tag is missing. The city around
+them is full of traffic, cyclists and people on foot, plus buses, streetcars, snow plows, garbage
+trucks, road crews and police officers directing traffic. Each city has its own house colours and
+something on the horizon: Citadel Hill in Halifax, a river-valley truss bridge in Edmonton, the North
+Shore mountains behind Vancouver. All twelve ship with the project, so it works offline.
 
-Pick from six vehicles, including a city hatch, a sport coupe and a utility pickup. Each one has
-its own dimensions, mass, power and handling. Then choose a paint colour, the weather (dry, rain,
-fog or snow) and any time of day. The sun follows each city's real latitude, and street lights come
-on at dusk.
+## How a decision is made
 
-### 🏁 Take on the challenges
+Every AI driver goes through the same loop, every 650 ms on a clear road and every 250 ms near a
+hazard:
 
-Sixty hand-built scenarios test the situations real drivers get wrong, from a fresh green with a
-red-light runner coming to geese crossing between two parks in Ottawa. Each has its own street,
-seed, weather, time and traffic. [See all sixty](docs/challenges.md).
+```mermaid
+flowchart LR
+    A[Sense<br/>what's visible] --> B[Propose<br/>candidate manoeuvres]
+    B --> C[Simulate each<br/>3 s ahead]
+    C --> D[Filter out unsafe<br/>or illegal options]
+    D --> E[Driver chooses<br/>among survivors]
+    E --> F[Controller +<br/>emergency brake]
+```
 
-Drive them yourself, or set Rules, a decision model, an LLM or your own agent loose on the same
-seed and compare results. A pass means you arrived with no collision, no red light or stop sign
-run, no failure to yield, and less than a second off the road (and, in Squeeze in, parked within 30 cm
-of the kerb). A good coaching score on its own doesn't count.
+- **Sensing is honest.** Buildings block the view, fog and darkness shorten it, and a light you can't
+  see counts as unknown.
+- **Only the choice differs.** Physics, the controller and the emergency brake are shared, so
+  results come down to the decisions.
+- **Runs repeat.** Seeded routes and a lockstep clock give the same numbers every time on the same
+  simulation version and JavaScript engine. A recorded model run replays without the model; the
+  [model results](docs/model-results.md) say which revision replays each published run exactly.
+- **A wrong answer is never silent.** If a model's answer is late, malformed or fails, Rules drives
+  that step, the HUD says so, and the fallback counts against the model.
 
-The challenge library searches titles, cities, streets and lessons, with filters for city, skill,
-weather and your practice progress. It remembers your unchanged manual attempts and clean arrivals
-in this browser, separately from AI drives and the last 20 full drive reports. Retry an attempted
-challenge or choose **Practise next** to keep working through the library. Modified setups and
-replay takeovers do not count toward manual completion.
-In **Squeeze in**, stop inside the space and select **Finish & review** to check your parking.
-Challenge reports explain each reason a drive was not completed cleanly and show the authored
-lesson alongside the coaching grade. Select a retained event to rewind up to three seconds before
-it. Events outside the current recording stay readable and are labelled **Replay unavailable**.
+## Run it yourself
 
-**Road tests** sit beside the challenges: a Class 5-style test in Kitsilano and a G2-style test in
-Toronto's Annex, each a longer drive on a fixed route with an examiner's directions in the HUD and
-an examiner's sheet at the end. A dangerous action or violation fails; minor errors are demerits,
-grouped by category, with rewind links. Any driver can take one, so you can see whether an AI would
-be licensed; only your unchanged manual attempts are recorded, with your best result. These are
-styled on provincial road tests, not affiliated with any licensing authority.
-
-### 🧠 See through the AI's eyes
-
-Turn on **AI eyes** to see what the driver actually perceives. It shows which hazards are
-visible, which ones buildings are hiding, how far it can see in the fog, the trajectories it
-predicts for other road users, and the reason each candidate manoeuvre was rejected.
-
-![A recorded Rules drive with the perception overlay](docs/drive-demo.gif)
-
-### ⏪ Rewind and try a different decision
-
-The last two minutes of every drive are recorded. Scrub back, jump to the moment before an
-incident, take over manually, switch to a different driver, or force one of the other manoeuvres
-the AI considered. Then see how it plays out.
-
-### 📸 Photo mode and the cinematic camera
-
-Press **O** to freeze the world and step out of the car. The HUD disappears. You can orbit freely,
-or let the cinematic director frame the shot, then adjust exposure, contrast, saturation, vignette
-and even the time of day. **Save photo** downloads a clean PNG.
-
-The **cinematic** camera (press **C** to cycle to it) works like a car film director. It cuts
-between a roadside camera the car sweeps past, a low bumper chase, a slow helicopter orbit, a
-tracking shot from ahead and a wheel-height side profile.
-
-### 🤖 Three kinds of AI driver
-
-The HUD has one button for each kind of driver, and keys `1`, `2` and `3` select them:
-
-| Button | Key | What drives | Needs |
-|---|---|---|---|
-| **Rules** | `2` | Deterministic code that scores each safe manoeuvre | Nothing; free and offline |
-| **Decision ▾** | `1` | A decision model: Jev, or another model that answers typed questions with probabilities | A key for a hosted model, or a local server |
-| **LLM ▾** | `3` | Any chat model behind an OpenAI-compatible API | A key for a hosted model, or a local server |
-
-The public browser demo runs Rules and your own browser agents. Decision models and LLMs need the
-local app, whose server holds the keys.
-
-**Decision models** answer typed questions with probabilities instead of writing text. Jev is the
-built-in one. OpenRouter's Decisions API adds Perplexity Decider, Liquid d1, Microsoft Decision 1
-and others, and llama.cpp runs open ones such as Kev 4B on your own computer. Click **Decision ▾ →
-Connect a decision model…** and pick a provider:
-
-- **TypeSafe**: paste a key and Jev turns on at once. Other Jev versions, such as `jev-preview`,
-  can be added beside it for comparison.
-- **OpenRouter**: the list of decision models and their prices loads without a key; paste a key
-  to drive.
-- **llama.cpp**: a server on this computer, no key.
-- **Other**: any server that speaks the same protocol.
-
-Every model other than the built-in Jev becomes a driver called `decision:<name>`, and each one
-gets exactly the state and questions Jev gets, so comparisons are fair.
-
-**LLMs** work through the OpenAI Chat Completions protocol, so OpenAI, OpenRouter, Groq, vLLM,
-LM Studio, Ollama on your laptop and similar servers should all work. Click **LLM ▾ → Connect a
-model**, pick a provider, paste a key and choose a model. Each one becomes a driver called
-`llm:<name>`. The prompt is built from the same state Jev sees and lives in one file you can tweak.
-
-Either way, the key is saved to `.env` on the local server and never reaches the browser, the
-model drives straight away without a restart, and one OpenRouter key serves both kinds. The ▾
-menus switch between your models, and each button drives with the last one you chose. You can
-also list endpoints by hand in `data/decision-endpoints.json` and `data/llm-endpoints.json`
-(templates are in `data/`). Every model picks among the same safety-checked manoeuvres; when an
-answer is unusable, late or fails, Rules drives that step and the HUD says why. Both kinds of
-endpoint were checked live on 11 November 2026: decision models on TypeSafe (Jev) and OpenRouter
-(Liquid d1), LLMs on OpenRouter (GPT-6 Luna, GPT-6.1 Terra, DeepSeek V4.1 Flash) and on a local
-Ollama (Granite 4.2 3B).
-The [agent guide](docs/agents.md#decision-models-jev-and-others) has the details and copy-paste
-examples.
-
-### 🧪 Bring your own agent and compare
-
-Write a small JavaScript module with a `decide()` function, load it in **Settings**, and it drives
-under the same physics, sensing and safety checks as the built-in drivers. The
-[arena](http://127.0.0.1:8322/arena) runs the fixed challenge suite for any mix of Rules, decision
-models, LLMs and your own agents, and compares safety, comfort, latency and cost. It saves
-evaluations and lets you diff a run against a previous baseline. [`/bench`](http://127.0.0.1:8322/bench)
-runs a seeded suite of routes for one driver. See the [agent guide](docs/agents.md) for a starter
-template.
-
-## Quick start
-
-The fastest way to try it is the [browser demo](https://brendanh18.github.io/jev_fsd/). To run it
-locally with the full feature set, install [uv](https://docs.astral.sh/uv/) and run:
+The [browser demo](https://brendanh18.github.io/jev_fsd/) has Rules, the cautious starter agent, the
+challenges and the road tests. To load your own agent or connect a model, run it locally. You need
+[uv](https://docs.astral.sh/uv/), and uv fetches Python 3.10+ if you don't have it:
 
 ```sh
 git clone https://github.com/BrendanH18/jev_fsd
@@ -184,8 +234,8 @@ cd jev_fsd
 uv run server.py
 ```
 
-Open **<http://127.0.0.1:8322>** in a desktop browser with WebGL. There is no frontend build step.
-Python 3.10+ is all you need, and uv fetches a suitable version if you don't have one.
+Open **<http://127.0.0.1:8322>** in a desktop browser with WebGL. That's it: one Python dependency, no
+frontend build, and every map included.
 
 ### Controls
 
@@ -198,96 +248,56 @@ Python 3.10+ is all you need, and uv fetches a suitable version if you don't hav
 | `H` | Horn (with sound on) | | `R` | Reset to the lane |
 | `1` / `2` / `3` | Decision / Rules / LLM driver | | `?` | Show every shortcut |
 
-Click the minimap to set a destination, or open **Explore cities** for suggested drives. If keys
-stop responding after you use a menu, click the road view to give it focus again.
+A gamepad works too, and on touch screens the controls appear on screen
+([details](docs/drive-experience.md#gamepad-and-touch)). Click the minimap to set a destination, or open
+**Explore cities** for suggested drives.
 
-### Enabling the Jev model (optional)
+### Connecting a model
 
-The free **Rules** driver and the cautious starter agent work out of the box. **Jev** is a
-decision model served by [TypeSafe](https://console.typesafe.ai). To try it, click **Decision**
-(or press `1`): the **Connect a model** dialog opens on TypeSafe. Paste your key and choose
-**Save and drive**; Jev is available at once, without a restart. Or set it by hand:
+Click **Decision ▾** or **LLM ▾**, choose **Connect a model…**, pick a provider (TypeSafe for Jev,
+OpenRouter, Ollama, or any OpenAI-compatible server), paste a key and choose **Save and drive**. It
+starts driving straight away, without a restart, and one OpenRouter key covers both kinds.
 
-```sh
-cp .env.example .env
-# then set TYPESAFE_API_KEY=... in .env and restart the server
-```
-
-Your key stays on the local server and is never sent to the browser. A spend cap
-(`JEV_FSD_BUDGET_USD`, $1 per run by default) and a request-rate cap (`JEV_FSD_RPM`) limit live
-model calls. The spend cap counts the cost a provider reports for each call (`usage.cost`, which
-OpenRouter sends), else the configured prices; a call with neither counts as $0, and an endpoint
-with `rpm: 0` also skips the rate cap. This project is independent and not affiliated with TypeSafe AI.
-
-## How the AI drives
-
-Every driver, whether it's Rules, a decision model, an LLM or yours, goes through the same loop for every decision:
-
-```mermaid
-flowchart LR
-    A[Sense<br/>what's visible] --> B[Propose<br/>candidate manoeuvres]
-    B --> C[Simulate each<br/>3 s ahead]
-    C --> D[Filter out unsafe<br/>or illegal options]
-    D --> E[Driver chooses<br/>among survivors]
-    E --> F[Controller +<br/>emergency brake]
-```
-
-Sensing is honest. Buildings block line of sight, fog and darkness shorten it, and traffic lights
-you can't see are treated as unknown. Every driver shares the physics, the controller and the
-emergency brake, so differences in results come from decision-making alone.
-
-## Graphics
-
-The renderer uses [Three.js](https://threejs.org) with no build step and a vendored runtime. In
-**Settings → Graphics** you can choose:
-
-- **Low**: direct rendering without post-processing, for older laptops.
-- **High** (default): 4× multisampling with smooth leaf edges, SMAA, bloom, wet-road reflections
-  and a cinematic colour grade.
-- **Ultra**: adds ground-truth ambient occlusion, 4K shadow maps, sharper reflections and up to 2×
-  pixel ratio (which supersamples in place of multisampling).
-
-The sky is fully procedural. It has a physically placed sun and moon, stars, and a drifting cloud
-deck lit from the sun's side. The clouds follow the weather, glow orange at dusk, pick up the
-city's light at night, and show up in reflections on wet roads and car paint. Snow settles on
-upward-facing surfaces, and rain darkens and polishes the asphalt. Tree shadows sway with the
-leaves without crawling noise, and distant trees keep their colour and density.
-
-## Development
+Keys are saved to `.env` by your local server and are never sent back to the browser. A spend cap
+(`JEV_FSD_BUDGET_USD`, $1 per server run by default) and a rate cap (`JEV_FSD_RPM`) keep live runs
+from surprising you. To set Jev up by hand instead:
 
 ```sh
-uv run python -m unittest discover tests        # server, routing, maps, OSM pipeline, model endpoints
-node scripts/test_drive_lab.mjs                 # drive lab and replay features
-node scripts/test_arena_history.mjs             # saved evaluations and comparisons
-node scripts/test_cinematic_photo.mjs           # cinematic camera and photo mode
-node scripts/test_drive_score.mjs               # coaching score
-node scripts/test_decision_agent.mjs            # decision-model drivers (registry, answers, fallback)
-node scripts/test_llm_agent.mjs                 # LLM endpoint drivers (prompt, parsing, fallback)
-node scripts/test_lane_change.mjs               # lane changes (gaps, lane ends, a pass, turn lanes)
-node scripts/test_pull_out.mjs                  # pull-outs and a destination blocked by a parked car
-node scripts/test_left_turn.mjs                 # left turns at a signal yield to oncoming traffic
-node scripts/test_right_on_red.mjs              # right turns on red after a full stop, except in Montréal
-node scripts/test_all_way_stop.mjs              # turn order at all-way stops, left turns at stop signs
-node scripts/test_give_way.mjs                  # two-way stops, junctions without a sign, creeping forward to look
-node scripts/test_right_hook.mjs                # cyclists in the parking lane, right turns that wait for them
-node scripts/test_speed_zones.mjs               # school and playground zones, and the School zone challenge
-node scripts/test_roadside.mjs                  # slowing down and moving over for vehicles stopped with lights flashing
-node scripts/test_streetcars.mjs                # streetcars on their tracks, and stopping behind their open doors
-node scripts/test_level_crossings.mjs           # level crossings: stopping for a train, and never on the tracks
-node scripts/test_junction_box.mjs              # keeping a signal's junction clear: waiting at the line for room past it
-node scripts/test_advance_green.mjs             # advance greens and left arrows: phases, who goes, sensing, the audit
-node scripts/test_work_zones.mjs                # work zones with a flagger: the paddles' turns, traffic, the detour, the audit
-node scripts/test_outages.mjs                   # power cuts: dark signals as all-way stops, traffic, sensing, the audit
-python3 scripts/build_demo.py                   # build the static GitHub Pages demo
+cp .env.example .env    # then set TYPESAFE_API_KEY=... and restart the server
 ```
 
-Every `scripts/test_*.mjs` file is a standalone Node check. Node 22 or newer runs them directly; CI passes `--experimental-default-type=module` too.
-The [development reference](docs/reference/development.md) lists them all, along with the
-Playwright browser checks. CI runs every check on every pull request: the Python tests, all Node
-checks, the Jev fixture and offline request checks, and the browser, renderer and arena suites in
-headless Chromium. It then builds the Pages demo and deploys it from `main`. CI runs on
-[Namespace](https://namespace.so) runners, gives each Node check six minutes, and cancels a pull
-request's older run when a new commit is pushed.
+This project is independent and not affiliated with TypeSafe AI. Every provider, and how the spend
+cap counts, is covered in the [agent guide](docs/agents.md#decision-models-jev-and-others).
+
+## Contributing
+
+This project gets better with local knowledge more than with anything else. If you drive one of these
+streets and the simulator gets something wrong (a turn that's actually banned, a crosswalk in the wrong
+place, a rule your province does differently), please
+[open an issue](https://github.com/BrendanH18/jev_fsd/issues). Other especially welcome contributions:
+
+- **A driver.** Write an agent, or connect a model you're curious about, and share how it did.
+- **A challenge.** Something you've seen go wrong on a real road. See
+  [adding a challenge](docs/adding-a-challenge.md).
+- **A city.** New maps are Canadian, ideally one that brings a rule or a road layout the others
+  don't have ([custom maps](docs/reference/custom-maps.md)).
+- **Accessibility fixes** of any size.
+
+What's planned next is in the [roadmap](ROADMAP.md).
+
+### Development
+
+```sh
+uv run python -m unittest discover -s tests                  # Python: server, routing, maps, OSM pipeline, endpoints
+node --experimental-default-type=module scripts/test_drive_lab.mjs   # one of the standalone Node checks
+python3 scripts/build_demo.py                                # build the static GitHub Pages demo
+```
+
+Each `scripts/test_*.mjs` file is a standalone Node 22 check. The
+[development reference](docs/reference/development.md) lists them all, along with the browser suites.
+CI runs every check on every pull request and deploys the demo from `main`. If you change physics,
+sensing or planning, run a seeded `/bench` comparison before and after against the
+[Rules baseline](docs/rules-baseline.md).
 
 ```
 server.py          local HTTP server and API (stdlib only)
@@ -296,34 +306,25 @@ static/js/sim/     physics, traffic, pedestrians, signals, scoring
 static/js/brain/   sensing, candidate generation, safety filter, drivers
 static/js/render/  Three.js scene, sky, weather, cars, buildings, cameras
 static/js/ui/      HUD, Connect a model dialog, drive lab, photo mode
-static/js/lab/     challenges, recorder, replay, arena
+static/js/lab/     challenges, road tests, recorder, replay, arena
 data/maps/         bundled neighbourhood map packs
-data/*-endpoints.example.json   templates for your own decision-model and LLM endpoints
 ```
-
-If you change physics, sensing or planning, run a seeded comparison on `/bench` before and after;
-the committed Rules baseline is described in [docs/rules-baseline.md](docs/rules-baseline.md).
-Contributions are welcome. Agents, new scenarios, accessibility fixes and neighbourhood details
-are especially appreciated. To add a scenario, follow [adding a challenge](docs/adding-a-challenge.md).
 
 ## Further reading
 
-- [Drive lab, perception and replay](docs/drive-lab.md)
+- [The sixty challenges](docs/challenges.md) and the [drive lab, AI eyes and replay](docs/drive-lab.md)
+- [Model results](docs/model-results.md) and the [Rules baseline](docs/rules-baseline.md)
 - [Decision models, LLMs and your own agent](docs/agents.md)
-- [Scoring formula and driving details](docs/drive-experience.md)
+- [Drive coach, scoring and driving details](docs/drive-experience.md)
 - [Maps, attribution and custom extracts](docs/maps.md)
-- [Rules benchmark baseline](docs/rules-baseline.md)
-- [Rendering measurements](docs/render-performance.md)
-- [Browser demo build and deployment](docs/browser-demo.md)
-- [Full project reference](docs/reference/README.md)
-- [Changelog](CHANGELOG.md)
-- [Roadmap](ROADMAP.md)
+- [Rendering measurements](docs/render-performance.md) and the [browser demo build](docs/browser-demo.md)
+- [Full project reference](docs/reference/README.md), [changelog](CHANGELOG.md) and [roadmap](ROADMAP.md)
 
 ## Credits
 
-Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under
-the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Rendering by
-[Three.js](https://threejs.org) (MIT). Inspired by
+Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the
+[ODbL](https://opendatacommons.org/licenses/odbl/1-0/). Every street here exists because someone mapped
+it. Rendering by [Three.js](https://threejs.org) (MIT). Inspired by
 [JevPilot](https://github.com/standardagents/jevpilot).
 
 Released under the [MIT License](LICENSE).
