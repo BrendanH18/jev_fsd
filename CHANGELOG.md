@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Features can now be added as records in a registry (`static/js/sim/features/`): potholes, geese
+  and road closures are each one record and one registration line, and the core (world, step, traffic,
+  sensing, candidates, decision state, LLM prompt, metrics) loops over the records instead of naming
+  them. The seeded bare and city suites, every challenge and road test, and the model recording give
+  identical results before and after (`docs/feature-interface.md`). New check:
+  `scripts/test_feature_registry.mjs`. (ROADMAP 3.1)
 - **Results where people look (ROADMAP 2.7).** `scripts/build_results.py` builds `data/results.json`
   from the committed records (`data/results/`, `data/recordings/`, the newest `data/runs/` per driver,
   map and weather), naming each row's source files, and rewrites the README's results table; `--check`

@@ -253,13 +253,21 @@ Each recent feature edited the same core files: `sim/npc.js` (2,499 lines, with 
 `step`), `brain/sensors.js` (2,068), `brain/state.js`, `brain/candidates.js`, `sim/world.js`,
 `bench/metrics.js` and `AGENTS.md`. That is where the next interaction bug comes from.
 
-- [ ] **3.1 A feature interface.** (L) One record per feature: its option, what it builds in the
+- [x] **3.1 A feature interface.** (L) One record per feature: its option, what it builds in the
   world, its step, what it adds to sensing, its candidates and rejections, its model wording, how
   traffic yields to it, its audit, its metric, its failure text and its "seen" flag. The core loops
   over the registered features. Prove it on three (suggest potholes, geese and road closures), with
   the seeded suites and every challenge giving identical results before and after. "Identical"
   means every result field but the timings (`wall_ms` and decision latency), as in
   `docs/rules-baseline.md`.
+  *Done 14 November:* `static/js/sim/features/` holds the registry and the records for potholes,
+  geese and road closures; the core files no longer name them. Bare and city Kitsilano dry seed 1,
+  all 62 challenge and road-test drives and the model recording are identical before and after. A new
+  feature still needs a line in the drivers' preferences, checkpoints, the coach, the renderers and the
+  labels ([what is left](docs/feature-interface.md)). Found on the way: `snap` in `jev/routing.py` breaks
+  ties between equally near lanes in `set` order, so a re-planned route can differ between server
+  processes (Python's hash seed); comparisons need one server process or `PYTHONHASHSEED=0` until it
+  is made deterministic.
 - [ ] **3.2 Move the rest across.** (L) A few at a time, each with the same before-and-after record.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step`, the sensing pass and the one-line
   `needsMotionQuestion` test, once the features have moved out of them.
