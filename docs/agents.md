@@ -438,7 +438,7 @@ emergency brakes, fallbacks and termination events retain their simulation times
 Each result row, its details and each driver's summary also say who made the decisions: the share
 the driver answered itself, the share answered locally because nothing needed asking, and the share
 that fell back to Rules (`model_share`, `local_share`, `fallback_share`, with the counts beside
-them; see "Who made the decisions" in [the project reference](project-reference.md)). Only the
+them; see "Who made the decisions" in [the benchmark reference](reference/benchmarks.md)). Only the
 first is the driver's own work, so read a pass alongside it. Rules results report none of these.
 Arena hard-brake counts use the coaching model's events so the totals match the timeline.
 Expand an event to see the most recent executed decision, its age, selected candidate,

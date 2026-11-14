@@ -347,7 +347,7 @@ python3 scripts/build_demo.py                   # build the static GitHub Pages 
 ```
 
 Every `scripts/test_*.mjs` file is a standalone Node check. Node 22 or newer runs them directly; CI passes `--experimental-default-type=module` too.
-The [full reference](docs/project-reference.md#development) lists them all, along with the
+The [development reference](docs/reference/development.md) lists them all, along with the
 Playwright browser checks. CI runs every check on every pull request: the Python tests, all Node
 checks, the Jev fixture and offline request checks, and the browser, renderer and arena suites in
 headless Chromium. It then builds the Pages demo and deploys it from `main`. CI runs on
@@ -369,7 +369,7 @@ data/*-endpoints.example.json   templates for your own decision-model and LLM en
 If you change physics, sensing or planning, run a seeded comparison on `/bench` before and after;
 the committed Rules baseline is described in [docs/rules-baseline.md](docs/rules-baseline.md).
 Contributions are welcome. Agents, new scenarios, accessibility fixes and neighbourhood details
-are especially appreciated.
+are especially appreciated. To add a scenario, follow [adding a challenge](docs/adding-a-challenge.md).
 
 ## Further reading
 
@@ -380,7 +380,7 @@ are especially appreciated.
 - [Rules benchmark baseline](docs/rules-baseline.md)
 - [Rendering measurements](docs/render-performance.md)
 - [Browser demo build and deployment](docs/browser-demo.md)
-- [Full project reference](docs/project-reference.md)
+- [Full project reference](docs/reference/README.md)
 - [Changelog](CHANGELOG.md)
 - [Roadmap](ROADMAP.md)
 

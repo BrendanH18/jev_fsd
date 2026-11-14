@@ -1057,8 +1057,8 @@ is this change alone.
 As on the earlier 2026-10-22 record: production `/bench`, Rules, suite seed 1, 40 traffic cars,
 lockstep, in WebKit through `scripts/shot.swift` on macOS 27.0.1. Kitsilano ran 12 routes in dry,
 fog, rain and snow; the other eleven maps ran two-route dry smoke suites. The same suites also ran
-in V8 (Node 22.23.4) through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run is
-[`20261022-153156-rules.json`](../data/runs/20261022-153156-rules.json). The
+in V8 (Node 22.23.4) through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run was saved as
+`20261022-153156-rules.json` but never committed to `data/runs/`. The
 [machine-readable record](validation/rebaseline-2026-10-22b-rules.json) has every summary and
 per-route result, before and after, in both engines, and how often the car turned right on red.
 Night was not run.
@@ -1252,8 +1252,8 @@ change alone.
 As on 2026-10-19: production `/bench`, Rules, suite seed 1, 40 traffic cars, lockstep, in WebKit
 through `scripts/shot.swift` on macOS 27.0.1. Kitsilano ran 12 routes in dry, fog, rain and snow;
 the other eleven maps ran two-route dry smoke suites. The same suites also ran in V8 (Node 22.23.2)
-through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run is committed as
-[`20261020-093450-rules.json`](../data/runs/20261020-093450-rules.json). The
+through `scripts/bench_node.mjs`. The WebKit Kitsilano dry run was saved as
+`20261020-093450-rules.json` but never committed to `data/runs/`. The
 [machine-readable record](validation/rebaseline-2026-10-20-rules.json) has every summary and
 per-route result, before and after, in both engines. Night was not run; `/bench` still has no
 time-of-day option.

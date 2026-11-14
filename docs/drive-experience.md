@@ -138,7 +138,7 @@ dips for oncoming traffic within 150 m, when following within 60 m, on lit stree
 and in fog or snow. NPC cars dip too, and briefly flash if your lights glare them.
 More than 0.8 seconds of glare fails a Lab drive and lowers the coaching score.
 Use `?highbeams=0` to disable this feature. The simulator uses Ontario's distances;
-see the provincial rule distinction and sources in [project reference](project-reference.md#high-beams-simhigh-beamsjs).
+see the provincial rule distinction and sources in [high beams reference](reference/high-beams.md).
 
 
 ### Slow down into a low sun
