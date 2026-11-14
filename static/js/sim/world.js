@@ -639,17 +639,21 @@ export class World {
   }
 
   stepManual(dt, input) {
+    // A key gives all or nothing (true, or 1); a gamepad's stick and triggers or the touch controls
+    // (ui/gamepad.js, ui/touch.js) give any amount from 0 to 1, which scales the same demand.
+    const amount = v => Math.min(1, Math.max(0, Number(v) || 0));
+    const throttle = amount(input.throttle), brake = amount(input.brake);
     let accel = 0;
-    if (input.throttle) accel = this.ego.spec.maxAccel;
-    if (input.brake) accel = this.ego.v > 0.2 ? -6 : -1.5;  // brake, then gently reverse
+    if (throttle) accel = this.ego.spec.maxAccel * throttle;
+    if (brake) accel = this.ego.v > 0.2 ? -6 * brake : -1.5 * brake;  // brake, then gently reverse
     if (input.hardBrake) accel = -this.ego.spec.maxBrake;
     // Keys are binary, unlike a steering wheel. Limit their angle at speed to a comfortable
     // cornering demand, then ramp it so a tap does not ask for full lock in a fast bend.
     const maxAngle = Math.min(this.ego.spec.maxSteer, Math.atan(3.2 * this.ego.spec.wheelbase / Math.max(1, this.ego.v ** 2)));
-    const desired = (Number(!!input.left) - Number(!!input.right)) * maxAngle;
+    const desired = (amount(input.left) - amount(input.right)) * maxAngle;
     const steer = this.ego.delta + Math.max(-0.8 * dt, Math.min(0.8 * dt, desired - this.ego.delta));
-    if (input.brake && this.ego.v <= 0.2 && !input.hardBrake) {
-      this.ego.step(dt, { steer, accel: -1.5, reverse: true });
+    if (brake && this.ego.v <= 0.2 && !input.hardBrake) {
+      this.ego.step(dt, { steer, accel: -1.5 * brake, reverse: true });
       return;
     }
     this.ego.step(dt, { steer, accel });

@@ -80,6 +80,8 @@ import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
 import { Hud } from "./ui/hud.js";
 import { Input } from "./ui/input.js";
+import { GamepadInput } from "./ui/gamepad.js";
+import { TouchControls, touchWanted } from "./ui/touch.js";
 import { Panel } from "./ui/panel.js";
 import { Autopilot } from "./brain/brain.js";
 import { agentDefinitions, agentAvailable, pillarOf } from "./brain/registry.js";
@@ -533,6 +535,27 @@ export async function boot() {
     photo: () => photo.toggle(),
     escape: () => { if (photo.active) { photo.exit(); return; } hud.toggleKeys(false); panel.toggle(false); },
   });
+  // A gamepad and, on touch screens, the on-screen controls drive through the same input (ui/gamepad.js,
+  // ui/touch.js); they change nothing in the simulation.
+  input.addSource(new GamepadInput({
+    actions: input.actions,
+    onConnect: pad => hud.badge(`GAMEPAD CONNECTED · ${String(pad.id || "pad").split("(")[0].trim().slice(0, 32)} · RT go, LT brake, Y autopilot`, "", 3500),
+    onDisconnect: () => hud.badge("GAMEPAD DISCONNECTED", "", 1500),
+  }));
+  let touch = null;
+  const coarsePointer = window.matchMedia?.("(pointer: coarse)");
+  const showTouch = () => {
+    const on = touchWanted(location.search, coarsePointer?.matches);
+    if (on && !touch) touch = input.addSource(new TouchControls({ actions: input.actions }));
+    if (touch) { touch.el.hidden = !on; if (!on) touch.release(); }
+    document.body.classList.toggle("touch-driving", on);
+    // (the HUD stands above the drive replay deck too, which sits on the controls: app.css --replay-h)
+    const deck = document.querySelector(".replay-deck");
+    if (on && deck && !showTouch.deck && typeof ResizeObserver === "function") {
+      showTouch.deck = new ResizeObserver(() => document.body.style.setProperty("--replay-h", `${deck.offsetHeight ? deck.offsetHeight + 8 : 0}px`));
+      showTouch.deck.observe(deck);
+    }
+  };
 
   let pausedBeforeReport = false;
   driveReport = new DriveReport({
@@ -701,6 +724,9 @@ export async function boot() {
     onPerception: on => { perception.setEnabled(on); overlays.showCandidates = on || $("#show-candidates").checked;
       overlays.setCandidates(autopilot.lastDecision?.candidates, autopilot.lastDecision?.chosenId); },
   });
+  // (after the drive lab, whose replay deck the touch layout makes room for)
+  showTouch();
+  coarsePointer?.addEventListener?.("change", showTouch);
 
   async function setDestination(pt) {
     if (simulationError) return;
@@ -749,7 +775,7 @@ export async function boot() {
   }
   showPillars();
   checkEndpoints();
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, get drive() { return drive; }, get simulationError() { return simulationError; }, finishDrive, setTime: setHour };
+  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, input, get touch() { return touch; }, get drive() { return drive; }, get simulationError() { return simulationError; }, finishDrive, setTime: setHour };
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();
 
@@ -769,6 +795,8 @@ export async function boot() {
     // Schedule before stepping: a failed simulation must not permanently stop rendering or controls.
     if (!manual) requestAnimationFrame(frame);
     if (simulationError) world.paused = true;
+    input.poll();
+    touch?.setAutopilot(autopilot.enabled);
     lab.update(recorder, now);
     // never negative: headless runs advance the clock by hand, ahead of requestAnimationFrame
     const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
@@ -1142,5 +1170,5 @@ function readReplay() {
 
 const beamIndicator = document.createElement("div");
 beamIndicator.textContent = "≋ HIGH BEAM"; beamIndicator.hidden = true;
-beamIndicator.style.cssText = "position:fixed;right:24px;bottom:100px;color:#59aaff;background:#102341;padding:6px 10px;border-radius:6px;z-index:20;font:600 13px sans-serif;pointer-events:none";
+beamIndicator.style.cssText = "position:fixed;right:24px;bottom:calc(var(--touch-h, 0px) + 100px);color:#59aaff;background:#102341;padding:6px 10px;border-radius:6px;z-index:20;font:600 13px sans-serif;pointer-events:none";
 document.body.append(beamIndicator);
