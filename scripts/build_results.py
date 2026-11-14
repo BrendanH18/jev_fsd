@@ -204,7 +204,8 @@ def run_rows() -> list[dict]:
         key = map_key(config)
         if not key or not run.get("results"):
             continue
-        if any(config.get(k) not in (None, False, [], "") for k in VARIANT_KEYS):
+        # (`is`, not `in`: hour 0 and cover row 0 are variants, and 0 == False in Python)
+        if any(config.get(k) is not None and config.get(k) is not False and config.get(k) not in ([], "") for k in VARIANT_KEYS):
             continue
         preset = config.get("features") or "bare"
         group = (config.get("brain"), preset, key, config.get("weather") or "dry", config.get("count"), config.get("seed"))

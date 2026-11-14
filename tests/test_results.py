@@ -56,12 +56,13 @@ class ResultsTest(unittest.TestCase):
             local.unlink()
         with tempfile.TemporaryDirectory() as tmp:
             heldout = Path(tmp) / "heldout.json"
-            run["config"] = dict(run["config"], heldout=True)
-            heldout.write_text(json.dumps(run))
             original = build_results.committed_runs
             build_results.committed_runs = lambda: original() + [heldout]
             try:
-                self.assertEqual(build_results.build()["rows"], self.data["rows"])
+                # (hour 0 and cover row 0 are variants too, though 0 == False in Python)
+                for variant in ({"heldout": True}, {"hour": 0}, {"cover": 0}, {"park": True}, {"without": ["geese"]}):
+                    heldout.write_text(json.dumps(dict(run, config=dict(run["config"], **variant))))
+                    self.assertEqual(build_results.build()["rows"], self.data["rows"], variant)
             finally:
                 build_results.committed_runs = original
 
