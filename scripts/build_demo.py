@@ -35,12 +35,13 @@ def build(output: Path) -> None:
     output.mkdir(parents=True, exist_ok=True)
     for directory in ("js", "css", "vendor"):
         shutil.copytree(ROOT / "static" / directory, output / directory, dirs_exist_ok=True)
-    for page in ("index.html", "bench.html", "arena.html"):
+    for page in ("index.html", "bench.html", "arena.html", "results.html"):
         text = (ROOT / "static" / page).read_text()
         text = text.replace("<head>", '<head>\n  <meta name="jev-demo" content="rules-only">\n  <meta name="description" content="Drive real Canadian streets, challenge an AI driver, and inspect every decision. Free open-source browser simulator.">')
         text = text.replace("</head>", '<meta property="og:title" content="Jev Drive Lab — Can you beat the AI?">\n<meta property="og:description" content="Real Canadian streets. Twenty driving challenges. Inspect every decision.">\n<meta property="og:image" content="https://brendanh18.github.io/jev_fsd/assets/drive-lab.png">\n<meta name="twitter:card" content="summary_large_image">\n</head>')
         text = re.sub(r'(["\'])/(css|js|vendor)/', r'\1./\2/', text)
         text = text.replace('href="/"', 'href="./"')
+        text = re.sub(r'href="/(arena|bench|results)"', r'href="./\1.html"', text)
         text = text.replace('href="/favicon.svg"', 'href="./favicon.svg"')
         (output / page).write_text(text)
     data = output / "demo-data"
@@ -91,6 +92,8 @@ def build(output: Path) -> None:
         pack["utc_offset"] = item["utc_offset"]
         (data / f"{item['id']}.json").write_text(json.dumps(pack, separators=(",", ":")))
     (data / "catalog.json").write_text(json.dumps(maps, separators=(",", ":")))
+    # The committed results (scripts/build_results.py) for the leaderboard page.
+    shutil.copyfile(ROOT / "data" / "results.json", data / "results.json")
     (output / ".nojekyll").touch()
     shutil.copyfile(ROOT / "static" / "favicon.svg", output / "favicon.svg")
     (output / "assets").mkdir(exist_ok=True)

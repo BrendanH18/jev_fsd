@@ -168,3 +168,16 @@ class RecordingStoreTests(unittest.TestCase):
                 with self.assertRaises(server.BadRequest):
                     server.api_recordings({}, {"name": [name]})
         self.assertEqual(server.api_recordings({}, {}), {"recordings": []})
+
+
+class ResultsApiTests(unittest.TestCase):
+    def test_serves_the_committed_results(self):
+        data = server.api_results({}, {})
+        self.assertEqual(data["format"], "jev-results/1")
+        self.assertIn("/results", server.PAGES)
+
+    def test_missing_file_is_a_clear_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(server, "RESULTS_FILE", Path(tmp) / "results.json"):
+                with self.assertRaises(server.BadRequest):
+                    server.api_results({}, {})

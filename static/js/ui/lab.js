@@ -87,8 +87,13 @@ export class DriveLab {
         this.welcomeCard("02", "Can you beat the AI?", `${CHALLENGES.length} authored challenges. The same conditions for every driver.`, "Pick a challenge →", () => this.challenges()),
         this.welcomeCard("03", "Watch the AI drive", "Follow its choices, then rewind and try your own.", "Watch Rules →", () => this.scenic("rules"))),
       h("div", { class: "lab-footer" }, h("span", {}, "12 neighbourhoods · 11 Canadian cities · No key needed for Rules"),
-        h("a", { href: "https://github.com/BrendanH18/jev_fsd", target: "_blank", rel: "noopener" }, "Star on GitHub ↗")),
+        h("span", { class: "lab-footer-links" }, this.resultsLink(),
+          h("a", { href: "https://github.com/BrendanH18/jev_fsd", target: "_blank", rel: "noopener" }, "Star on GitHub ↗"))),
       h("p", { class: "lab-footnote" }, this.demo ? "Public browser demo · Rules and starter agents run locally in your browser. Keyboard driving on desktop." : "Local drive lab · WASD to drive · J for autopilot · P to pause. Research simulator.")));
+  }
+  // The leaderboard of committed results (results.html, ui/results.js).
+  resultsLink() {
+    return h("a", { href: appUrl(this.demo ? "results.html" : "results"), target: "_blank", rel: "noopener" }, "How the AI drivers did ↗");
   }
   welcomeCard(number, title, copy, action, onclick) {
     return h("button", { class: "welcome-card", onclick }, h("span", { class: "welcome-number" }, number), h("h2", {}, title), h("p", {}, copy), h("strong", {}, action));
@@ -171,7 +176,8 @@ export class DriveLab {
       h("div", { class: "challenge-library-actions" }, count, h("button", { class: "chip-button", onclick: reset }, "Clear filters"), next),
       grid, empty,
       h("div", { class: "lab-footer" }, h("button", { class: "chip-button", onclick: () => this.home() }, "← Drive lab"),
-        h("a", { href: appUrl(this.demo ? "arena.html" : "arena"), target: "_blank", rel: "noopener" }, "Evaluate agents ↗"))));
+        h("span", { class: "lab-footer-links" }, this.resultsLink(),
+          h("a", { href: appUrl(this.demo ? "arena.html" : "arena"), target: "_blank", rel: "noopener" }, "Evaluate agents ↗")))));
     render();
   }
   setAgent(name) { this.agent.value = name; }

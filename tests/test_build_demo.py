@@ -33,6 +33,13 @@ class BrowserDemoBuildTests(unittest.TestCase):
             for item in maps:
                 self.assertTrue((output / f"demo-data/{item['id']}.json").is_file())
             self.assertTrue((output / "arena.html").is_file())
+            # The leaderboard ships with the committed results, and its links stay inside the site.
+            results = (output / "results.html").read_text()
+            self.assertIn('name="jev-demo"', results)
+            self.assertIn('href="./arena.html"', results)
+            self.assertIn('href="./results.html"', (output / "arena.html").read_text())
+            self.assertNotIn('href="/', results)
+            self.assertEqual(json.loads((output / "demo-data/results.json").read_text())["format"], "jev-results/1")
             self.assertTrue((output / "LICENSE").is_file())
             self.assertEqual(list(output.rglob(".env*")), [])
             self.assertEqual(list(output.rglob("*.py")), [])

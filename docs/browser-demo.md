@@ -12,6 +12,11 @@ Routing and suggested drives run against the directed lane graph in the browser.
 the cautious starter make no model requests. Jev remains discoverable but requires the local
 Python application. Custom map downloads are also local-app features.
 
+`results.html` is the read-only leaderboard (`/results` on the local server): it shows
+`data/results.json`, which the build copies to `demo-data/results.json`. Rebuild that file with
+`uv run scripts/build_results.py` whenever a committed run or recording changes; `tests/test_results.py`
+fails until it is current.
+
 The build copies only frontend assets, curated map data, the license and attribution. It never
 copies `.env`, provider credentials, saved runs or local reports. Reports and demo benchmark
 runs use this browser's local storage. Arena history, baseline comparisons, JSON import/export

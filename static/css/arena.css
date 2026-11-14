@@ -3,6 +3,7 @@ body.arena { background: radial-gradient(ellipse at 80% 0, #193a34, #0b131d 50%)
 .arena main { max-width: 1150px; padding: 30px; margin: auto; }
 .arena header { display: flex; justify-content: space-between; margin-bottom: 65px; }
 .arena a { color: #83d9c4; text-decoration: none; }
+.arena-nav { display: flex; gap: 22px; }
 .arena .eyebrow { color: #83d9c4; font: 11px var(--mono); letter-spacing: .12em; }
 .arena h1 { font-size: clamp(36px, 6vw, 64px); letter-spacing: -.05em; margin: 18px 0; }
 .arena .intro { color: #afc0cc; line-height: 1.7; max-width: 600px; margin-bottom: 35px; }
