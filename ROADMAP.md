@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-11-12. This is the one place the plan lives. Update it when an item lands, when
+Last reviewed: 2026-11-14. This is the one place the plan lives. Update it when an item lands, when
 a priority changes, or when a decision under [Open decisions](#open-decisions) is made.
 
 ## What this project is for
@@ -238,8 +238,11 @@ cost $0.033.
   so a published run can be replayed exactly without a key, and CI can check that a recorded model
   drive still plays out the same. Done: model recordings (`brain/recording.js`, `bench_node.mjs
   --record`/`--replay`, `data/recordings/`, checked by `scripts/test_model_recording.mjs`; docs/agents.md).
-- [ ] **2.7 Show the results where people look.** (M) A results table at the top of the README and
+- [x] **2.7 Show the results where people look.** (M) A results table at the top of the README and
   a read-only leaderboard in the public demo, built from the committed runs.
+  *Done 14 November:* `data/results.json` from the committed runs (`scripts/build_results.py`,
+  checked by `tests/test_results.py`), the generated README table, and the `/results` leaderboard in the
+  app and the public demo. Committed recordings replay from the command line, not yet from the page.
 
 Exit: someone with no key can open the repository, see how each driver did, and replay any of the
 drives.
@@ -260,19 +263,35 @@ Each recent feature edited the same core files: `sim/npc.js` (2,499 lines, with 
 - [ ] **3.2 Move the rest across.** (L) A few at a time, each with the same before-and-after record.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step`, the sensing pass and the one-line
   `needsMotionQuestion` test, once the features have moved out of them.
-- [ ] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same
+- [x] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same
   thing: opt-in, own random stream, one shared conflict test, audit only once seen. State that
   pattern once, and move each feature's detail to the reference docs. Aim for under 12 KB.
-- [ ] **3.5 One layout for challenges.** (M) `lab/challenges.js` lists all 60 challenges in 2,030
+  *Done 14 November:* the pattern is stated once with a 32-row feature table; each feature's rule
+  moved word for word to its reference page. 56 KB to about 28 KB; the 12 KB aim would mean dropping rules.
+- [x] **3.5 One layout for challenges.** (M) `lab/challenges.js` lists all 60 challenges in 2,030
   lines, and 19 of them keep their scripted parts in files of their own. Give every challenge its
   own file.
-- [ ] **3.6 Arena storage before it fills.** (M) Two runs of every challenge with two drivers take
+  *Done 14 November:* each challenge is `static/js/lab/challenges/<id>.js` (definition, `scenario`,
+  `install`, `step`), shared parts in `lab/challenges/shared/`, and `lab/challenges.js` is the ordered
+  registry. Results identical for all 62 drives with Rules and the cautious agent.
+- [x] **3.6 Arena storage before it fills.** (M) Two runs of every challenge with two drivers take
   78.3% of the 9 MB history cap, 87.1% with the road tests, and each new challenge adds about 1.3%.
   Move saved runs to storage without that limit, or keep compact summaries and export the rest.
-- [ ] **3.7 Faster CI.** (S) The 76 Node checks run one after another in about ten minutes and the
+  *Done 14 November:* saved runs are in IndexedDB (`lab/history.js` `openEvaluationHistory`): the
+  newest 20 within 200 MB, the oldest evicted first and on a quota error, with a one-time move of the
+  localStorage history; the 9 MB localStorage cap is kept only as the fallback.
+- [x] **3.7 Faster CI.** (S) The 76 Node checks run one after another in about ten minutes and the
   browser suites take up to seventeen. Split both across parallel jobs.
-- [ ] **3.8 Keep the duplicated rules in step.** (S) The sharp-turn rule and the lane-join geometry
+  *Done 14 November:* six Node shards balanced by measured time (about 1.5 minutes each instead
+  of ten in a row), a Python job, and one job per browser suite.
+- [x] **3.8 Keep the duplicated rules in step.** (S) The sharp-turn rule and the lane-join geometry
   each exist in Python and in JavaScript. Add a check that runs both on the same cases.
+  *Done 14 November:* `tests/test_parity.py` compares both sides on
+  `tests/fixtures/parity_cases.json`. It found three lane-join disagreements (an outgoing piece under
+  3 m is chained, not joined, in JavaScript; edge versus 3 m lane headings for the 20° rounding
+  decision), recorded as known differences and left for a change that re-baselines routes; and exactly
+  130° is a U-turn in `sim/npc.js` (`<`) but not in Python or `demo/routing.js` (`>`), unreachable from
+  real geometry.
 - [ ] **3.9 Trace the engine difference.** (M) The same seed gives different results in V8 and
   WebKit, and the cause has never been found. Find the first step where they part.
 
@@ -284,16 +303,28 @@ Rules passes all 12 seeded routes and all 60 challenges, because each challenge 
 together with the behaviour that passes it. And every driver chooses only among manoeuvres that
 already passed the safety filter. Both make a pass easy to get and hard to learn from.
 
-- [ ] **4.1 Measure how much is left to the driver.** (M) For each challenge, count the decisions
+- [x] **4.1 Measure how much is left to the driver.** (M) For each challenge, count the decisions
   where the surviving candidates include one that leads to a failure. If that number is near zero,
   the challenge tests the filter and not the driver.
+  *Done 14 November:* `scripts/driver_latitude.mjs`. 28 of 3,042 sampled decisions leave room to
+  fail, 24 of them only through the emergency brake; 4, in three challenges (Winter composure, All walk,
+  Keep going safely), offer an ordinary manoeuvre that fails
+  ([record](docs/validation/driver-latitude-2026-11-14.md)). The challenges test the filter, which is
+  the case for 4.2.
 - [ ] **4.2 An open track.** (L) A second scoring mode in which the filter advises but does not
   remove options (collisions that are about to happen are still braked for), so a driver's own
   judgment decides the outcome. Keep the current mode as the "guarded" track.
-- [ ] **4.3 Scores beyond pass or fail.** (M) Report progress, comfort, margin kept and time lost
+- [x] **4.3 Scores beyond pass or fail.** (M) Report progress, comfort, margin kept and time lost
   as numbers per driver, so two passing drivers can still be ranked.
-- [ ] **4.4 Held-out seeds.** (S) Keep a set of seeds and routes that no fix was tuned against, and
+  *Done 14 November:* progress, pace, comfort, margin kept, time lost and a combined score
+  (`bench/scores.js`), computed from saved fields and shown on `/bench`, in the arena and by the Node
+  scripts; formulas in `docs/rules-baseline.md`. Jev and DeepSeek both pass 61 challenges they share and
+  score 63.8 and 64.7.
+- [x] **4.4 Held-out seeds.** (S) Keep a set of seeds and routes that no fix was tuned against, and
   report them separately.
+  *Done 14 November:* `bench/heldout.js` (`--heldout 1`): Kitsilano seeds 101 to 103 and two
+  routes of seed 101 on every other map. First Rules run on Kitsilano dry: bare 10/12, city 8/12
+  ([record](docs/validation/heldout-2026-11-14.md)), recorded and not fixed.
 - [ ] **4.5 A harder Rules baseline is not the goal.** Rules is the reference and the fallback.
   When it fails an open-track case, record that as a result; do not patch Rules until the case is
   understood.
@@ -304,17 +335,22 @@ Exit: the published comparison shows a difference between two models that the re
 
 - [ ] **5.1 Cut 0.3.0.** (S) Then release on a rhythm, so the unreleased section never reaches
   1,600 lines again.
-- [ ] **5.2 Rewrite the top of the README.** (M) Lead with what the project is and the results
+- [x] **5.2 Rewrite the top of the README.** (M) Lead with what the project is and the results
   table. The opening paragraph is one sentence of about 300 words listing every feature; replace it
   with a short list. Move the 60-row challenge table to the docs. Remove the two stray paragraphs
   after the licence line.
+  *Done 14 November:* the one-line statement, a six-bullet list, the generated results table;
+  challenges in `docs/challenges.md`.
 - [ ] **5.3 Make the repository page agree with the README.** (S) The GitHub description says "Jev
   drives the car"; the README says "Drive Lab". Settle it with [D1](#open-decisions), and set the
   homepage to the demo, which is empty today.
-- [ ] **5.4 Split the reference.** (M) `docs/project-reference.md` is 2,608 lines. One page per
+- [x] **5.4 Split the reference.** (M) `docs/project-reference.md` is 2,608 lines. One page per
   feature, generated or linked from the feature registry of 3.1.
-- [ ] **5.5 A guide to adding a challenge.** (S) The README invites scenario contributions; there
+  *Done 14 November:* 53 pages in `docs/reference/` with an index; `project-reference.md` keeps the
+  old anchors; `tests/test_doc_links.py` checks every doc link. Not yet generated from a feature registry.
+- [x] **5.5 A guide to adding a challenge.** (S) The README invites scenario contributions; there
   is no page that says how.
+  *Done 14 November:* `docs/adding-a-challenge.md`, linked from the README and the reference index.
 - [ ] **5.6 Tidy the repository.** (S) About 26 local branches and 15 worktrees are left over from
   merged work.
 
@@ -325,7 +361,8 @@ none committed:
 
 - Time of day and season as first-class benchmark conditions.
 - More Canadian cities, where a city brings a rule or a road layout the others lack.
-- Driving with a gamepad or on a touch screen; the demo needs a keyboard today.
+- ~~Driving with a gamepad or on a touch screen.~~ Done 14 November: `ui/gamepad.js`, `ui/touch.js`
+  (input only; see [Gamepad and touch](docs/drive-experience.md#gamepad-and-touch)).
 - Longer drives that string several situations together, like the road tests.
 
 ### Admission rule for new scenarios
