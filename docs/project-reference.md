@@ -988,6 +988,12 @@ the centre of the lane the car is in or moving into), lane changes, fault, safet
 brakes, gaps, tokens, cost and latency. This pass criterion is separate from the live coach's
 weighted score.
 
+**Scores and held-out routes.** So that two drivers that both pass can still be ranked, the table, the
+arena and the Node scripts also show each drive's progress, pace, comfort, margin kept and time lost
+and a combined score, computed from the saved fields when shown (`bench/scores.js`). The **held-out
+routes** box (`--heldout 1` in `bench_node.mjs` and `soak.mjs`) runs routes no fix was tuned against,
+reported apart. Formulas and the held-out policy are in the [Rules baseline](rules-baseline.md).
+
 **Who made the decisions.** A model can pass a drive that Rules mostly drove: many decisions need
 no question and are answered locally, and a timeout or an unusable answer falls back to Rules.
 So every driver but Rules also reports, per drive, where its decisions came from, counted by the
