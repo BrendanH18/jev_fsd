@@ -106,7 +106,7 @@ class ResultsTest(unittest.TestCase):
         city = [r for r in self.data["rows"] if r["suite"] == "city" and r["driver"] == "rules"]
         self.assertEqual(len(city), 4 + 11)
         snow = next(r for r in city if r["map"] == "kitsilano" and r["weather"] == "snow")
-        self.assertEqual(snow["sources"], ["data/runs/20261112-190004-rules.json"])
+        self.assertEqual(snow["sources"], ["data/runs/20261114-210004-rules.json"])
 
 
 if __name__ == "__main__":

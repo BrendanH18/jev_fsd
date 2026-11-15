@@ -1481,7 +1481,12 @@ export class World {
       if (!from || !outranks(this.map, from, g.edge, this)) return false;
       if (a && a.to_node_m / n.v >= AUDIT_ONCOMING_S) return false;
       const p = frontOnPath(this.ego, n, fx, fy);
-      return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S);
+      // (wholly short of its street's asphalt, in and out of the junction, waiting where it stops to look
+      // say, the car has given way, even as traffic keeping to the kerb, round a pothole say, passes within
+      // half the two widths of its front)
+      const next = n.path.edges[n.path.edges.findIndex((e) => e.id === from) + 1];
+      const clear = !!next && clearOf(this.ego, this.map.edges.get(from), false) && clearOf(this.ego, this.map.edges.get(next.id), true);
+      return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S) && !clear;
     });
     if (due) {
       g.counted = true;
@@ -1648,6 +1653,19 @@ function frontOnPath(ego, n, fx, fy) {
   const beside = own ? own.lateral : 0;
   if (!p || !(p.s > path.s) || Math.abs(p.lateral - beside) >= reach || p.distance >= reach + Math.abs(beside)) return null;
   return { s: p.s, ahead_m: p.s - path.s, along: Math.abs(wrap(ego.psi - headingAt(path.pts, path.cum, p.s))) < Math.PI / 6 };
+}
+
+// Whether every corner of a vehicle's body is beyond the same edge of a street's asphalt, taking the
+// street as the line of its first stretch (out of a junction) or its last (into one).
+function clearOf(v, edge, first) {
+  const pts = edge?.pts;
+  if (!pts || pts.length < 2 || !edge.asphalt) return false;
+  const [[ax, ay], [bx, by]] = first ? pts : pts.slice(-2), dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+  if (len < 1e-6) return false;
+  const c = Math.cos(v.psi), s = Math.sin(v.psi), half = v.spec.width / 2;
+  const lat = [v.spec.length - v.spec.rearOverhang, -v.spec.rearOverhang].flatMap((f) => [half, -half].map((w) =>
+    ((v.x + c * f + s * w - ax) * dy - (v.y + s * f - c * w - ay) * dx) / len));
+  return lat.every((l) => l < edge.asphalt[0]) || lat.every((l) => l > edge.asphalt[1]);
 }
 
 // The closest point to (x, y) on the stretch of a path between arc lengths s0 and s1 (searching

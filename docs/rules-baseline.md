@@ -60,6 +60,43 @@ there uses the distance driven, so a longer way round looks like less time lost)
 route length when a road closure re-plans the route (a drive that does not arrive after a detour
 under-reports its progress).
 
+# Weekly city matrix fixed — 2026-11-14
+
+Rules, lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through `scripts/bench_node.mjs`. These
+replace the Kitsilano and Toronto rows of the 2026-11-12 table below; the other maps' runs reproduce
+their references field for field, timings aside (Edmonton `s1-2` and Winnipeg `s1-1` still fail).
+
+| Run | Map | Preset | Weather | Routes | Passed | km | Notes |
+|---|---|---|---|---|---|---|---|
+| `20261114-210000-rules` | Kitsilano | bare | dry | 12 | 12 | 10.53 | the bare reference; `s1-7` 187.6 → 190.6 s |
+| `20261114-210001-rules` | Kitsilano | city | dry | 12 | 12 | 12.81 | unchanged |
+| `20261114-210002-rules` | Kitsilano | city | fog | 12 | 12 | 12.6 | unchanged |
+| `20261114-210003-rules` | Kitsilano | city | rain | 12 | 12 | 12.61 | `s1-12` passes (was a brake check) |
+| `20261114-210004-rules` | Kitsilano | city | snow | 12 | 12 | 13.65 | `s1-4` passes (was a failure to yield) |
+| `20261114-210005-rules` | Toronto | city | dry | 2 | 2 | 2.6 | `s1-2` 331.4 → 335.4 s |
+
+Three fixes:
+
+- **Rain `s1-12`.** A car following in the car's lane, just outside the tailgater test, was predicted
+  to keep its speed, so it ran into every stop for the Vine Street stop sign in the forward sims; with
+  nothing eligible the car fell back to a hard brake. A follower's predicted contact no longer makes a
+  stop the car must make, or a slowing short of a line it must stop at, unsafe
+  (`simulateAll`, `brain/candidates.js`; `scripts/test_follower_stop.mjs`). Braking in front of a
+  follower with nothing to stop for still counts.
+- **Snow `s1-4`.** The car waited at the Balsam Street stop sign 0.3 m short of West Broadway's
+  asphalt while a through car steered toward the kerb round a pothole. The give-way audit counted it
+  as in that car's way. While every corner of the car is short of that car's street's asphalt, the
+  audit now treats it as having given way, at a skew too (`auditGiveWay`, `clearOf`, `sim/world.js`;
+  `scripts/test_give_way.mjs`).
+- **Rain `s1-12`, uncovered by the first fix.** An emergency pull-over whose stop the queue ahead cut
+  shorter than planned kept the normal steering distance and stopped 0.14 m right, short of the 0.2 m
+  the audit needs. It now finishes its move within the stop (`steerAtStop`, `pull_over` in
+  `brain/candidates.js`; `scripts/test_emergency_short_stop.mjs`). Snow `s1-4` takes 746.4 → 801.4 s
+  through the traffic this changes.
+
+The 60 challenges and 2 road tests with Rules are identical, every field but timings, and the stub
+model recording replays unchanged.
+
 # References after the second 1.8 round — 2026-11-12
 
 Rules, lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through `scripts/bench_node.mjs`, final

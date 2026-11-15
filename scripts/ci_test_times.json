@@ -59,6 +59,7 @@
     "test_emergency_snowbank_stop.mjs": 0.1,
     "test_emergency_stand_down.mjs": 0.2,
     "test_emergency_traffic_stop.mjs": 0.2,
+    "test_follower_stop.mjs": 0.1,
     "test_following_challenges.mjs": 2.8,
     "test_following_integration.mjs": 0.1,
     "test_following_policy.mjs": 0,
