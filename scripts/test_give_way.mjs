@@ -30,14 +30,14 @@ const { rng } = await import("../static/js/common.js");
 const ARM = 150, LINE = ARM - 8, HALF = 1.6;
 const ARMS = { w: 180, e: 0, n: 90, s: -90 };
 const right = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy); return [dy / d, -dx / d]; };
-function junction({ stops = [], cls = {}, corner = false, intersections = [], arms = ARMS } = {}) {
+function junction({ stops = [], cls = {}, corner = false, intersections = [], arms = ARMS, asphalt = {} } = {}) {
   const ends = { c: [0, 0] }, edges = [], lanes = [], stopList = [];
   for (const [arm, deg] of Object.entries(arms)) ends[arm] = [ARM * Math.cos(deg * Math.PI / 180), ARM * Math.sin(deg * Math.PI / 180)].map((v) => Math.round(v * 1e6) / 1e6);
   for (const [arm] of Object.entries(arms)) for (const [id, from, to, inbound] of [[`${arm}_in`, arm, "c", true], [`${arm}_out`, "c", arm, false]]) {
     const pts = [ends[from], ends[to]], [rx, ry] = right(...pts);
     const signed = inbound && stops.includes(arm);
     if (signed) stopList.push({ id: `stop_${arm}`, edge: id, s_line: LINE, all_way: false, junction: "c" });
-    edges.push({ id, from, to, pts, length: ARM, lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: [-3.2, 3.2], parking: [0, 0],
+    edges.push({ id, from, to, pts, length: ARM, lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: asphalt[id] || [-3.2, 3.2], parking: [0, 0],
       cls: cls[arm] || "residential", limit: 11.1, oneway: false, name: arm === "w" || arm === "e" ? "West Street" : "North Street",
       ...(signed ? { control: { type: "stop", id: `stop_${arm}`, s_line: LINE, all_way: false } } : {}) });
     lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
@@ -355,6 +355,10 @@ const MINOR = junction({ cls: { n: "secondary", s: "secondary" } });
   assert.deepEqual(run(TWO_WAY, -2.9, 0.3), [["through traffic", "other"]], "stopped 0.3 m into the crossing road");
   assert.deepEqual(run(SKEW, -5.5, 0.6), [], "stopped short of a street crossing at a skew");
   assert.deepEqual(run(SKEW, -3.5, 0), [["through traffic", "other"]], "a front corner on the asphalt of a street crossing at a skew");
+  // (a street that widens past the junction, as West 10th Avenue does at Maple Street: clear of the
+  // asphalt the through car comes in on, the car is still on the asphalt it goes out on)
+  const WIDENS = junction({ stops: ["w", "e"], asphalt: { s_out: [-5.3, 5.3] } });
+  assert.deepEqual(run(WIDENS, -3.5, 0.3), [["through traffic", "other"]], "on the asphalt of the street the through car goes out on");
   console.log("✓ waiting short of the crossing road is giving way, even as traffic keeps close to the kerb");
 }
 

@@ -1481,9 +1481,12 @@ export class World {
       if (!from || !outranks(this.map, from, g.edge, this)) return false;
       if (a && a.to_node_m / n.v >= AUDIT_ONCOMING_S) return false;
       const p = frontOnPath(this.ego, n, fx, fy);
-      // (wholly short of that street's asphalt, waiting where it stops to look say, the car has given way,
-      // even as traffic keeping to the kerb, round a pothole say, passes within half the two widths of its front)
-      return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S) && !clearOf(this.ego, this.map.edges.get(from));
+      // (wholly short of its street's asphalt, in and out of the junction, waiting where it stops to look
+      // say, the car has given way, even as traffic keeping to the kerb, round a pothole say, passes within
+      // half the two widths of its front)
+      const next = n.path.edges[n.path.edges.findIndex((e) => e.id === from) + 1];
+      const clear = !!next && clearOf(this.ego, this.map.edges.get(from), false) && clearOf(this.ego, this.map.edges.get(next.id), true);
+      return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S) && !clear;
     });
     if (due) {
       g.counted = true;
@@ -1653,11 +1656,11 @@ function frontOnPath(ego, n, fx, fy) {
 }
 
 // Whether every corner of a vehicle's body is beyond the same edge of a street's asphalt, taking the
-// street as the line of its last stretch into the junction.
-function clearOf(v, edge) {
+// street as the line of its first stretch (out of a junction) or its last (into one).
+function clearOf(v, edge, first) {
   const pts = edge?.pts;
   if (!pts || pts.length < 2 || !edge.asphalt) return false;
-  const [ax, ay] = pts.at(-2), [bx, by] = pts.at(-1), dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+  const [[ax, ay], [bx, by]] = first ? pts : pts.slice(-2), dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
   if (len < 1e-6) return false;
   const c = Math.cos(v.psi), s = Math.sin(v.psi), half = v.spec.width / 2;
   const lat = [v.spec.length - v.spec.rearOverhang, -v.spec.rearOverhang].flatMap((f) => [half, -half].map((w) =>
