@@ -30,10 +30,10 @@ const { rng } = await import("../static/js/common.js");
 const ARM = 150, LINE = ARM - 8, HALF = 1.6;
 const ARMS = { w: 180, e: 0, n: 90, s: -90 };
 const right = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy); return [dy / d, -dx / d]; };
-function junction({ stops = [], cls = {}, corner = false, intersections = [] } = {}) {
+function junction({ stops = [], cls = {}, corner = false, intersections = [], arms = ARMS } = {}) {
   const ends = { c: [0, 0] }, edges = [], lanes = [], stopList = [];
-  for (const [arm, deg] of Object.entries(ARMS)) ends[arm] = [ARM * Math.cos(deg * Math.PI / 180), ARM * Math.sin(deg * Math.PI / 180)].map((v) => Math.round(v * 1e6) / 1e6);
-  for (const [arm] of Object.entries(ARMS)) for (const [id, from, to, inbound] of [[`${arm}_in`, arm, "c", true], [`${arm}_out`, "c", arm, false]]) {
+  for (const [arm, deg] of Object.entries(arms)) ends[arm] = [ARM * Math.cos(deg * Math.PI / 180), ARM * Math.sin(deg * Math.PI / 180)].map((v) => Math.round(v * 1e6) / 1e6);
+  for (const [arm] of Object.entries(arms)) for (const [id, from, to, inbound] of [[`${arm}_in`, arm, "c", true], [`${arm}_out`, "c", arm, false]]) {
     const pts = [ends[from], ends[to]], [rx, ry] = right(...pts);
     const signed = inbound && stops.includes(arm);
     if (signed) stopList.push({ id: `stop_${arm}`, edge: id, s_line: LINE, all_way: false, junction: "c" });
@@ -324,14 +324,16 @@ const MINOR = junction({ cls: { n: "secondary", s: "secondary" } });
 }
 
 {
-  // Waiting with its front short of the crossing road (where it stops to look, 0.3 m short of the
-  // asphalt at x = -3.2) the car has given way, even as a through car keeping 0.3 m towards the kerb
-  // (round a pothole, say) passes within half the two widths of its front; nosed into the road, it has not.
-  const run = (front) => {
-    const world = setup(TWO_WAY, { front: -8.5, v: 0 });
-    stopAt(world, -8.5);
+  // Waiting with its body wholly short of the crossing road (where it stops to look, 0.3 m short of the
+  // asphalt at x = -3.2) the car has given way, even as a through car keeping towards the kerb (round a
+  // pothole, say) passes within half the two widths of its front; nosed into the road, it has not. Where
+  // the street crosses at 60 degrees, a front corner reaches its asphalt first (the near corner from
+  // x = -5.14), so stopping 0.3 m short along the route is in the way.
+  const run = (j, front, shift) => {
+    const world = setup(j, { front: -9, v: 0 });
+    stopAt(world, -9);
     const other = npc(world, "other", "n", 40);
-    for (let x = -8.5; x < front; x += 1 / 30) {
+    for (let x = -9; x < front; x += 1 / 30) {
       Object.assign(world.ego, { x: egoX(Math.min(x + 1 / 30, front)), v: 1 });
       world.tick++; world.t += 1 / 30; world.audit(1 / 30, world.roadInfo());
     }
@@ -340,16 +342,19 @@ const MINOR = junction({ cls: { n: "secondary", s: "secondary" } });
     for (let k = 0; k < 90; k++) {
       world.tick++; world.t += 1 / 30;
       other.v = 10; other.path.s += 10 / 30;
-      const [x, y] = other.path.pointAt(other.path.s);
-      // (heading south, its right is west)
-      Object.assign(other, { x: x - 0.3, y, psi: other.path.headingAt(other.path.s) });
+      const [x, y] = other.path.pointAt(other.path.s), psi = other.path.headingAt(other.path.s);
+      // (`shift` metres to its right, towards the car)
+      Object.assign(other, { x: x + Math.sin(psi) * shift, y: y - Math.cos(psi) * shift, psi });
       world.audit(1 / 30, world.roadInfo());
       out.push(...world.events.filter((e) => e.type === "failed_to_yield").map((e) => [e.to, e.with]));
     }
     return out;
   };
-  assert.deepEqual(run(-3.5), [], "stopped short of the crossing road");
-  assert.deepEqual(run(-2.9), [["through traffic", "other"]], "stopped 0.3 m into the crossing road");
+  const SKEW = junction({ stops: ["w", "e"], arms: { w: 180, e: 0, n: 60, s: -120 } });
+  assert.deepEqual(run(TWO_WAY, -3.5, 0.3), [], "stopped short of the crossing road");
+  assert.deepEqual(run(TWO_WAY, -2.9, 0.3), [["through traffic", "other"]], "stopped 0.3 m into the crossing road");
+  assert.deepEqual(run(SKEW, -5.5, 0.6), [], "stopped short of a street crossing at a skew");
+  assert.deepEqual(run(SKEW, -3.5, 0), [["through traffic", "other"]], "a front corner on the asphalt of a street crossing at a skew");
   console.log("✓ waiting short of the crossing road is giving way, even as traffic keeps close to the kerb");
 }
 

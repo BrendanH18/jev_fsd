@@ -798,9 +798,6 @@ export class World {
         const junction = control.night_flash ? this.map.intersections.get(control.junction) : this.map.nodes.get(edge.to);
         this.giveWay = junction && ((control.type === "stop" && !control.all_way) || (control.type === "uncontrolled" && control.rule !== "major"))
           ? { node: junction.id ?? edge.to, centre: [junction.x, junction.y], edge: edge.id, to: control.type === "stop" || control.rule === "minor" ? "through traffic" : "traffic from the right", counted: false,
-            // where the crossing road's asphalt starts along the route (as for where the car stops to
-            // look, map/route.js `sPeek`): short of it, the car is not in that road's traffic's way
-            roadS: Number.isFinite(rc?.sJunction) ? rc.sJunction - this.map.crossingHalfWidth(edge.id) : null, route: this.route,
             // the traffic on its way when the car crossed its line (not a car that pulls out from
             // the curb, or turns into the street, after that: it must give way itself)
             coming: new Set(this.npcs.filter((n) => n.path?.pts && !n.pull && (approachTo(this.map, n, junction.id ?? edge.to) || Math.hypot(n.x - junction.x, n.y - junction.y) < AUDIT_BOX_M))) } : null;
@@ -825,7 +822,7 @@ export class World {
       this.egoStop.update(null, 0, 0, dt);
     }
     this.auditOncoming();
-    this.auditGiveWay(followsRoute ? frontS : null);
+    this.auditGiveWay();
     this.auditCyclists();
     this.auditEmergency(road);
     this.auditBuses();
@@ -1467,17 +1464,14 @@ export class World {
     }
   }
 
-  // (`frontS`: the front bumper along the route, null off it)
-  auditGiveWay(frontS) {
+  auditGiveWay() {
     const g = this.giveWay;
     if (!g) return;
     const FRONT = this.ego.spec.length - this.ego.spec.rearOverhang;
     const fx = this.ego.x + Math.cos(this.ego.psi) * FRONT, fy = this.ego.y + Math.sin(this.ego.psi) * FRONT;
     const [jx, jy] = g.centre;
     if (Math.hypot(fx - jx, fy - jy) > AUDIT_JUNCTION_M) { this.giveWay = null; return; }
-    // (still short of the crossing road, waiting where it looks from, say, it has given way: traffic
-    // keeping to the kerb, round a pothole say, can pass within half the two widths of its front)
-    if (g.counted || (g.roadS !== null && frontS !== null && g.route === this.route && frontS < g.roadS)) return;
+    if (g.counted) return;
     const due = this.npcs.find((n) => {
       if (n.v < 1 || !n.path?.pts || !g.coming.has(n)) return false;
       // the street it comes in on, from its plan: on its way to the junction, or in it
@@ -1487,7 +1481,9 @@ export class World {
       if (!from || !outranks(this.map, from, g.edge, this)) return false;
       if (a && a.to_node_m / n.v >= AUDIT_ONCOMING_S) return false;
       const p = frontOnPath(this.ego, n, fx, fy);
-      return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S);
+      // (wholly short of that street's asphalt, waiting where it stops to look say, the car has given way,
+      // even as traffic keeping to the kerb, round a pothole say, passes within half the two widths of its front)
+      return !!p && !(p.along && p.ahead_m / n.v >= AUDIT_ONCOMING_S) && !clearOf(this.ego, this.map.edges.get(from));
     });
     if (due) {
       g.counted = true;
@@ -1654,6 +1650,19 @@ function frontOnPath(ego, n, fx, fy) {
   const beside = own ? own.lateral : 0;
   if (!p || !(p.s > path.s) || Math.abs(p.lateral - beside) >= reach || p.distance >= reach + Math.abs(beside)) return null;
   return { s: p.s, ahead_m: p.s - path.s, along: Math.abs(wrap(ego.psi - headingAt(path.pts, path.cum, p.s))) < Math.PI / 6 };
+}
+
+// Whether every corner of a vehicle's body is beyond the same edge of a street's asphalt, taking the
+// street as the line of its last stretch into the junction.
+function clearOf(v, edge) {
+  const pts = edge?.pts;
+  if (!pts || pts.length < 2 || !edge.asphalt) return false;
+  const [ax, ay] = pts.at(-2), [bx, by] = pts.at(-1), dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+  if (len < 1e-6) return false;
+  const c = Math.cos(v.psi), s = Math.sin(v.psi), half = v.spec.width / 2;
+  const lat = [v.spec.length - v.spec.rearOverhang, -v.spec.rearOverhang].flatMap((f) => [half, -half].map((w) =>
+    ((v.x + c * f + s * w - ax) * dy - (v.y + s * f - c * w - ay) * dx) / len));
+  return lat.every((l) => l < edge.asphalt[0]) || lat.every((l) => l > edge.asphalt[1]);
 }
 
 // The closest point to (x, y) on the stretch of a path between arc lengths s0 and s1 (searching

@@ -85,8 +85,9 @@ Three fixes:
   follower with nothing to stop for still counts.
 - **Snow `s1-4`.** The car waited at the Balsam Street stop sign 0.3 m short of West Broadway's
   asphalt while a through car steered toward the kerb round a pothole. The give-way audit counted it
-  as in that car's way. While the car's front is still short of the crossing road on its route, the
-  audit now treats it as having given way (`auditGiveWay`, `sim/world.js`; `scripts/test_give_way.mjs`).
+  as in that car's way. While every corner of the car is short of that car's street's asphalt, the
+  audit now treats it as having given way, at a skew too (`auditGiveWay`, `clearOf`, `sim/world.js`;
+  `scripts/test_give_way.mjs`).
 - **Rain `s1-12`, uncovered by the first fix.** An emergency pull-over whose stop the queue ahead cut
   shorter than planned kept the normal steering distance and stopped 0.14 m right, short of the 0.2 m
   the audit needs. It now finishes its move within the stop (`steerAtStop`, `pull_over` in
