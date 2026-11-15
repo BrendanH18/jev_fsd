@@ -20,7 +20,7 @@ import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 import { wheelPoints } from "../sim/potholes.js";
 import { coverAfter } from "../sim/ball-chase.js";
-import { TAIL_EASE_MIN_MPS, TAIL_EASE_MPS, TAIL_GENTLEST_SLACK, TAIL_STOP_DECEL } from "../sim/tailgaters.js";
+import { TAIL_EASE_MIN_MPS, TAIL_EASE_MPS, TAIL_GENTLEST_SLACK, TAIL_STOP_DECEL, behindInLane } from "../sim/tailgaters.js";
 import { officerStopLaw } from "../sim/traffic-officer.js";
 import { earlySlows, iceSimCheck, iceStopDecel, patchesUnder } from "../sim/black-ice.js";
 import { lawSlows, simSplashes, splashTargets } from "../sim/puddles.js";
@@ -528,7 +528,10 @@ export function simulateAll(candidates, snap, world) {
   const tailgater = snap.tailgater?.vehicle || null;
   const npcs = (snap.observed || world.visibleObstaclesNear(world.ego.x, world.ego.y, 60)).filter((o) => !behindEv(o) && o !== tailgater).map((n) => {
     const v = oncomingEv(n) ? 0 : n.v;
-    return { n, x: n.x, y: n.y, vx: Math.cos(n.psi) * v, vy: Math.sin(n.psi) * v };
+    // (a vehicle following the car in its lane: going on at its speed, it runs into any stop the car makes,
+    // but keeping its gap is its job, so that never makes a stop the car must make unsafe: below)
+    const follower = n.kind !== "pedestrian" && !!n.spec && Number.isFinite(n.psi) && n.v > 0.5 && behindInLane(world.ego, n, 60) !== null;
+    return { n, x: n.x, y: n.y, vx: Math.cos(n.psi) * v, vy: Math.sin(n.psi) * v, follower };
   });
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
@@ -624,7 +627,7 @@ export function simulateAll(candidates, snap, world) {
     const trace = [[car.x, car.y]];
     let s = startS, hint = snap.routeProj ? route.hint : 0;
     let maxAccel = 0, maxDecel = 0, maxLat = 0, minClearance = Infinity, closesFollowingGap = false;
-    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, ballFast = false, iceCall = null, collision = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
+    let passesBus = false, passesCw = false, passesSchool = false, passesTram = false, passesRail = false, passesBox = false, passesFlagger = false, passesGuard = false, passesVan = false, passesMerge = false, passesLetIn = false, passesPlow = false, passesEv = false, pastTurnPoint = false, pastSpace = false, lateLeaving = false, pedCross = false, cutsOff = false, hooks = false, passesHold = false, pastHold = false, closePass = false, meets = false, cfCut = false, cfMeet = false, passesRunner = false, rvClose = false, ballFast = false, iceCall = null, collision = null, followerHit = null, staticHit = null, minGap = Infinity, staysOnRoad = true, staysInLane = true, crosses = false, lateral = 0, headingErr = 0, offroadFrac = 0, offSteps = 0;
     let intoNarrowing = false, splashes = false, intoParker = false;
     for (const x of checks) x.start();
     const steps = Math.round(HORIZON_S / SIM_DT);
@@ -761,13 +764,24 @@ export function simulateAll(candidates, snap, world) {
           // scenery: sim/features/index.js)
           const fixed = !!featureObstacle(o.n)?.fixed;
           if (fixed && !staticHit && obbOverlap(box, ob, 0.3)) staticHit = { id: o.n.id, t: Math.round(t * 10) / 10, kind: o.n.kind, static: true };
-          if (!collision && obbOverlap(box, ob, 0.3)) collision = fixed ? staticHit : { id: o.n.id, t: Math.round(t * 10) / 10, kind: Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4 ? "rear_end" : "crossing" };
+          if (!collision && obbOverlap(box, ob, 0.3)) {
+            const hit = fixed ? staticHit : { id: o.n.id, t: Math.round(t * 10) / 10, kind: Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4 ? "rear_end" : "crossing" };
+            if (o.follower && !fixed && car.v >= 0) followerHit ||= hit; else collision = hit;
+          }
         }
       }
       trace.push([car.x, car.y]);
     }
     // past the point it looks from and still moving: it has not stopped there to look
     if (pastHold && car.v > 0.2) passesHold = true;
+    // A stop the car must make: for a person, a guard, a train, or at a line it must stop at (not at a line
+    // it could drive through; at the line, giving way where there is no sign or signal, too: the case Rules
+    // stops at the line for). (In a bus lane while it is in effect, the car may still make one: below.)
+    const obliged = c.law.stopAtRoute != null && c.id !== "stop_at_destination"
+      && (c.id !== "stop_at_line" || !!mustStop || !!(control?.give_way?.wait_for && control.give_way.hold_s_route === control.s_line_route));
+    // A follower running into such a stop, or into any slowing short of a line the car must stop at, is the
+    // follower's to avoid: it never makes that unsafe. Into anything else, it does.
+    if (!collision && followerHit && !obliged && !(mustStop && !crosses)) collision = followerHit;
     c.trace = trace;
     c.sim = {
       max_accel: maxAccel, max_decel: maxDecel, max_lateral_accel: maxLat, min_clearance_m: minClearance,
@@ -782,11 +796,6 @@ export function simulateAll(candidates, snap, world) {
     // which only leaves the car fewer lanes to cross.
     const laneEnds = Number.isFinite(c.laneUntil) && (route && snap.onRoute) && c.law.kind !== "hard_brake" && c.change?.offer !== "return"
       && s + FRONT + Math.max(1, Math.abs(c.law.lane || 0)) * laneChangeLength(car.v) + LANE_RETURN_MARGIN_M > c.laneUntil;
-    // (in a bus lane while it is in effect, the car may still stop where it has to: for a person, a
-    // guard, a train, or at a line it must stop at; not at a line it could drive through)
-    // (at the line, giving way where there is no sign or signal, too: the case Rules stops at the line for)
-    const obliged = c.law.stopAtRoute != null && c.id !== "stop_at_destination"
-      && (c.id !== "stop_at_line" || !!mustStop || !!(control?.give_way?.wait_for && control.give_way.hold_s_route === control.s_line_route));
     // (a closed road's barricade ahead, say: going on into it is, first of all, onto a closed road)
     let reject = rejectBy(sims.first, c);
     if (reject) ;
