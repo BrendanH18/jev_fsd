@@ -307,9 +307,12 @@ export function sampleCandidates(snap, world) {
     }
     // An emergency vehicle calling on the car to give way: pull over to the right and stop there,
     // braking as gently as the stop was planned for.
+    // (a short pull-over finishes its move right within its stopping room: one planned short, and one the
+    // queue it stops behind cuts shorter than planned)
     const ev = snap.emergency;
     if (ev && ev.stop_s_route !== null) {
-      out.push({ id: "pull_over", laneUntil, law: { ...inLane({ kind: "lane", offset: ev.offset_m, vTarget: Math.min(approach, ev.max_speed_mps), stopAtRoute: stopAt(ev.stop_s_route - FRONT - 0.5), stopDecel: EV_STOP_DECEL, ...(ev.steer_at_stop ? { steerAtStop: true } : {}) }),
+      const mark = ev.stop_s_route - FRONT - 0.5, evStop = stopAt(mark), tight = ev.steer_at_stop || evStop < mark;
+      out.push({ id: "pull_over", laneUntil, law: { ...inLane({ kind: "lane", offset: ev.offset_m, vTarget: Math.min(approach, ev.max_speed_mps), stopAtRoute: evStop, stopDecel: EV_STOP_DECEL, ...(tight ? { steerAtStop: true } : {}) }),
           // Stopping before the narrowed stretch: pull right here, rather than pursuing its
           // upcoming move left into the shared corridor while trying to pull over.
           ...(detour.detour?.id?.startsWith("sb:") && ev.stop_s_route < snap.snowbank.narrowing.entry_s_route ? { detour: null } : {}) },

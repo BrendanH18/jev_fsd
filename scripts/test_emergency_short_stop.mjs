@@ -58,5 +58,39 @@ for (const weather of ["dry", "fog", "rain", "snow"]) {
   }
   assert.equal(world.violations.failed_to_yield, 0, `${weather}: yields as the ambulance draws level`);
 }
+// A stop cut short by the queue ahead, not by a line: the plan leaves ordinary steering room, but the car
+// stops behind the queue's last car, so it steers for that stop too. In Kitsilano city rain s1-12 a fire
+// truck called while the car crept at 1.1 m/s behind a queue on Balsam Street, cars parked close beside
+// it; pursuing the ordinary lookahead, it stopped 0.14 m right of its lane's centre, short of the 0.2 m
+// the audit takes as pulled over (here, 0.17 m).
+for (const weather of ["dry", "rain"]) {
+  const world = fixtureWorld({ weather }), front = world.ego.spec.length - world.ego.spec.rearOverhang;
+  Object.assign(world.ego, { x: 100, v: 1.1 });
+  // (cars parked close beside the lane: it pulls over only as far as they leave room)
+  for (let x = 92; x < 125; x += 6) world.parked.add(new Vehicle(x, -4, 0, 0));
+  // (the queue's last car, standing 5.5 m ahead)
+  const lead = new Vehicle(0, 0, 0, 0);
+  lead.x = 100 + front + 5.5 + lead.spec.rearOverhang; lead.id = "car_queue"; lead.kind = "car";
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0 }); fleet.nextPull = fleet.nextPark = Infinity;
+  // (the queue's last car stands still, outside the fleet's stepping)
+  world.npcs.push(lead);
+  const fleetStep = fleet.step.bind(fleet);
+  fleet.step = (dt) => { fleet.vehicles.splice(fleet.vehicles.indexOf(lead), 1); fleetStep(dt); fleet.vehicles.push(lead); };
+  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 80 });
+  assert.equal(!!ev, true); fleet.emergencyStep = () => {};
+  const snap = buildSnapshot(world);
+  assert.equal(snap.emergency.steer_at_stop, false, `${weather}: the plan alone leaves ordinary steering room`);
+  assert.equal(sampleCandidates(snap, world).find(c => c.id === "pull_over").law.steerAtStop, true, `${weather}: the queue's stop is short`);
+  const autopilot = new Autopilot(world); autopilot.setBrain("rules"); autopilot.setEnabled(true);
+  let touched = false;
+  for (let k = 0; k < 8 * 60; k++) {
+    stepWorld({ world, fleet, autopilot }, 1 / 60, world.t * 1000);
+    if (autopilot.firing) await autopilot.firing;
+    touched ||= obbOverlap(world.ego.obb(), lead.obb(), 0.3);
+  }
+  assert.equal(touched, false, `${weather}: stops clear of the queue`);
+  assert.equal(Math.abs(world.ego.v) < 0.05, true, `${weather}: stopped`);
+  assert.equal(world.roadInfo().lateral >= 0.2, true, `${weather}: pulled right before stopping behind the queue`);
+}
 console.log("Short emergency stops finish steering before the control line with full clearance");
 process.exit(0);
