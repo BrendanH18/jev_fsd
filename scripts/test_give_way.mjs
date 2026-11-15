@@ -324,6 +324,36 @@ const MINOR = junction({ cls: { n: "secondary", s: "secondary" } });
 }
 
 {
+  // Waiting with its front short of the crossing road (where it stops to look, 0.3 m short of the
+  // asphalt at x = -3.2) the car has given way, even as a through car keeping 0.3 m towards the kerb
+  // (round a pothole, say) passes within half the two widths of its front; nosed into the road, it has not.
+  const run = (front) => {
+    const world = setup(TWO_WAY, { front: -8.5, v: 0 });
+    stopAt(world, -8.5);
+    const other = npc(world, "other", "n", 40);
+    for (let x = -8.5; x < front; x += 1 / 30) {
+      Object.assign(world.ego, { x: egoX(Math.min(x + 1 / 30, front)), v: 1 });
+      world.tick++; world.t += 1 / 30; world.audit(1 / 30, world.roadInfo());
+    }
+    world.ego.v = 0;
+    const out = [];
+    for (let k = 0; k < 90; k++) {
+      world.tick++; world.t += 1 / 30;
+      other.v = 10; other.path.s += 10 / 30;
+      const [x, y] = other.path.pointAt(other.path.s);
+      // (heading south, its right is west)
+      Object.assign(other, { x: x - 0.3, y, psi: other.path.headingAt(other.path.s) });
+      world.audit(1 / 30, world.roadInfo());
+      out.push(...world.events.filter((e) => e.type === "failed_to_yield").map((e) => [e.to, e.with]));
+    }
+    return out;
+  };
+  assert.deepEqual(run(-3.5), [], "stopped short of the crossing road");
+  assert.deepEqual(run(-2.9), [["through traffic", "other"]], "stopped 0.3 m into the crossing road");
+  console.log("✓ waiting short of the crossing road is giving way, even as traffic keeps close to the kerb");
+}
+
+{
   // The shared emergency brake keeps steering along the manoeuvre's path. Braking for a car stopped
   // just off the path partway round a left turn, a held wheel would carry the car on into it.
   const world = setup(EQUAL, { front: -5, v: 7, exit: "n_out" });

@@ -798,6 +798,9 @@ export class World {
         const junction = control.night_flash ? this.map.intersections.get(control.junction) : this.map.nodes.get(edge.to);
         this.giveWay = junction && ((control.type === "stop" && !control.all_way) || (control.type === "uncontrolled" && control.rule !== "major"))
           ? { node: junction.id ?? edge.to, centre: [junction.x, junction.y], edge: edge.id, to: control.type === "stop" || control.rule === "minor" ? "through traffic" : "traffic from the right", counted: false,
+            // where the crossing road's asphalt starts along the route (as for where the car stops to
+            // look, map/route.js `sPeek`): short of it, the car is not in that road's traffic's way
+            roadS: Number.isFinite(rc?.sJunction) ? rc.sJunction - this.map.crossingHalfWidth(edge.id) : null, route: this.route,
             // the traffic on its way when the car crossed its line (not a car that pulls out from
             // the curb, or turns into the street, after that: it must give way itself)
             coming: new Set(this.npcs.filter((n) => n.path?.pts && !n.pull && (approachTo(this.map, n, junction.id ?? edge.to) || Math.hypot(n.x - junction.x, n.y - junction.y) < AUDIT_BOX_M))) } : null;
@@ -822,7 +825,7 @@ export class World {
       this.egoStop.update(null, 0, 0, dt);
     }
     this.auditOncoming();
-    this.auditGiveWay();
+    this.auditGiveWay(followsRoute ? frontS : null);
     this.auditCyclists();
     this.auditEmergency(road);
     this.auditBuses();
@@ -1464,14 +1467,17 @@ export class World {
     }
   }
 
-  auditGiveWay() {
+  // (`frontS`: the front bumper along the route, null off it)
+  auditGiveWay(frontS) {
     const g = this.giveWay;
     if (!g) return;
     const FRONT = this.ego.spec.length - this.ego.spec.rearOverhang;
     const fx = this.ego.x + Math.cos(this.ego.psi) * FRONT, fy = this.ego.y + Math.sin(this.ego.psi) * FRONT;
     const [jx, jy] = g.centre;
     if (Math.hypot(fx - jx, fy - jy) > AUDIT_JUNCTION_M) { this.giveWay = null; return; }
-    if (g.counted) return;
+    // (still short of the crossing road, waiting where it looks from, say, it has given way: traffic
+    // keeping to the kerb, round a pothole say, can pass within half the two widths of its front)
+    if (g.counted || (g.roadS !== null && frontS !== null && g.route === this.route && frontS < g.roadS)) return;
     const due = this.npcs.find((n) => {
       if (n.v < 1 || !n.path?.pts || !g.coming.has(n)) return false;
       // the street it comes in on, from its plan: on its way to the junction, or in it
