@@ -470,7 +470,7 @@
    "weather": "dry",
    "passed": 12,
    "total": 12,
-   "date": "2026-11-12",
+   "date": "2026-11-14",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -486,7 +486,7 @@
    "cost_basis": "none",
    "failed": [],
    "sources": [
-    "data/runs/20261112-190001-rules.json"
+    "data/runs/20261114-210001-rules.json"
    ],
    "recording": null
   },
@@ -499,7 +499,7 @@
    "weather": "fog",
    "passed": 12,
    "total": 12,
-   "date": "2026-11-12",
+   "date": "2026-11-14",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -515,7 +515,7 @@
    "cost_basis": "none",
    "failed": [],
    "sources": [
-    "data/runs/20261112-190002-rules.json"
+    "data/runs/20261114-210002-rules.json"
    ],
    "recording": null
   },
@@ -526,9 +526,9 @@
    "map": "kitsilano",
    "preset": "city",
    "weather": "rain",
-   "passed": 11,
+   "passed": 12,
    "total": 12,
-   "date": "2026-11-12",
+   "date": "2026-11-14",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -537,22 +537,14 @@
    "model_requested": null,
    "fallbacks": 0,
    "hard_brakes": 0,
-   "safety_brakes": 10,
-   "driving_s": 3173.0,
+   "safety_brakes": 11,
+   "driving_s": 3177.0,
    "km": 12.61,
    "cost_usd": 0,
    "cost_basis": "none",
-   "failed": [
-    {
-     "id": "s1-12",
-     "map": "kitsilano",
-     "failures": [
-      "braked hard with a tailgater close behind"
-     ]
-    }
-   ],
+   "failed": [],
    "sources": [
-    "data/runs/20261112-190003-rules.json"
+    "data/runs/20261114-210003-rules.json"
    ],
    "recording": null
   },
@@ -563,9 +555,9 @@
    "map": "kitsilano",
    "preset": "city",
    "weather": "snow",
-   "passed": 11,
+   "passed": 12,
    "total": 12,
-   "date": "2026-11-12",
+   "date": "2026-11-14",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -574,22 +566,14 @@
    "model_requested": null,
    "fallbacks": 0,
    "hard_brakes": 0,
-   "safety_brakes": 8,
-   "driving_s": 4927.9,
+   "safety_brakes": 9,
+   "driving_s": 4982.9,
    "km": 13.65,
    "cost_usd": 0,
    "cost_basis": "none",
-   "failed": [
-    {
-     "id": "s1-4",
-     "map": "kitsilano",
-     "failures": [
-      "failed to yield"
-     ]
-    }
-   ],
+   "failed": [],
    "sources": [
-    "data/runs/20261112-190004-rules.json"
+    "data/runs/20261114-210004-rules.json"
    ],
    "recording": null
   },
@@ -842,7 +826,7 @@
    "weather": "dry",
    "passed": 2,
    "total": 2,
-   "date": "2026-11-12",
+   "date": "2026-11-14",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -851,14 +835,14 @@
    "model_requested": null,
    "fallbacks": 0,
    "hard_brakes": 0,
-   "safety_brakes": 5,
-   "driving_s": 600.1,
+   "safety_brakes": 3,
+   "driving_s": 604.1,
    "km": 2.6,
    "cost_usd": 0,
    "cost_basis": "none",
    "failed": [],
    "sources": [
-    "data/runs/20261112-190013-rules.json"
+    "data/runs/20261114-210005-rules.json"
    ],
    "recording": null
   },
@@ -937,7 +921,7 @@
    "weather": "dry",
    "passed": 12,
    "total": 12,
-   "date": "2026-11-12",
+   "date": "2026-11-14",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -946,14 +930,14 @@
    "model_requested": null,
    "fallbacks": 0,
    "hard_brakes": 0,
-   "safety_brakes": 7,
-   "driving_s": 1625.9,
+   "safety_brakes": 8,
+   "driving_s": 1628.9,
    "km": 10.53,
    "cost_usd": 0,
    "cost_basis": "none",
    "failed": [],
    "sources": [
-    "data/runs/20261112-190000-rules.json"
+    "data/runs/20261114-210000-rules.json"
    ],
    "recording": null
   },

@@ -165,11 +165,9 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
   edge lengths, a plow on residential streets, waits at a narrow contraflow mouth, a parking manoeuvre
   given up after one overshoot), fixed in turn. Over 41 jobs (172 routes) on the final tree: **166/172**;
   new references in `docs/rules-baseline.md`, ten bare routes changed. Evidence:
-  `docs/validation/other-maps-round2-2026-11-12.md`. Still open, all found by the final run:
-  - Kitsilano city rain `s1-12`: a brake check with a car closing from behind at 0.92 s; the forward
-    sims assume a follower keeps its speed, so every stop for the sign is rejected and the car brakes
-    hard. The weekly blocking city matrix fails on this and the next one.
-  - Kitsilano city snow `s1-4`: failures to yield to an emergency vehicle (Balsam and Arbutus Streets).
+  `docs/validation/other-maps-round2-2026-11-12.md`. *Fixed 14 November:* the two routes that failed the
+  weekly city matrix (Kitsilano rain `s1-12`, a brake check; snow `s1-4`, a failure to yield). Kitsilano
+  is 12/12 in every weather again; see `docs/rules-baseline.md`. Still open, all found by the final run:
   - Edmonton `s1-2`: timeout on 81 Avenue NW. Winnipeg `s1-1`: failure to yield on Martha Street.
   - Kitsilano 06:30 `s1-4`: failure to yield on Vine Street. Kitsilano parking `s1-10`: arrives on
     Stephens Street but does not park.
