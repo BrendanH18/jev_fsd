@@ -8,10 +8,13 @@ import { isCyclistPass } from "../sim/cyclist-pass.js";
 
 // Passing a cyclist through the oncoming lane (sim/cyclist-pass.js) costs this to start, so the car
 // passes only for a clear gain; and staying behind one it cannot pass yet gains this.
-const PASS_CYCLIST_COST = 1.5, FOLLOW_CYCLIST_GAIN = 1.0;
+const PASS_CYCLIST_COST = 1.5,
+  FOLLOW_CYCLIST_GAIN = 1.0;
 
 export class RulesBrain {
-  constructor() { this.name = "rules"; }
+  constructor() {
+    this.name = "rules";
+  }
 
   decideSync(snap, eligible) {
     // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
@@ -22,11 +25,27 @@ export class RulesBrain {
     // (a road closed ahead with no detour yet, at the point the car stops for it: sim/road-closures.js)
     if (snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 1.5) stop = true;
     if (i) {
-      const brakeDist = v * v / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
+      const brakeDist = (v * v) / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
       // (a police officer directing traffic there decides, not the light: sim/traffic-officer.js; still rolling
       // up to the line, waiting for the officer brakes gently to a stop there by itself)
-      if (i.officer?.direction === "stop" && !i.entered && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -1 && (v < 0.5 || !eligible.some(c => c.id === "wait_for_officer"))) stop = true;
-      if (i.control === "signal" && !i.officer && (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") && !(i.right_on_red?.go || i.left_on_red?.go) && !i.entered && i.bumper_to_line_m < brakeDist + 6 && i.bumper_to_line_m > -1) stop = i.bumper_to_line_m < 1.5;
+      if (
+        i.officer?.direction === "stop" &&
+        !i.entered &&
+        i.bumper_to_line_m < 1.5 &&
+        i.bumper_to_line_m > -1 &&
+        (v < 0.5 || !eligible.some((c) => c.id === "wait_for_officer"))
+      )
+        stop = true;
+      if (
+        i.control === "signal" &&
+        !i.officer &&
+        (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") &&
+        !(i.right_on_red?.go || i.left_on_red?.go) &&
+        !i.entered &&
+        i.bumper_to_line_m < brakeDist + 6 &&
+        i.bumper_to_line_m > -1
+      )
+        stop = i.bumper_to_line_m < 1.5;
       if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) stop = true;
       if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) stop = true;
       if (waitsItsTurn(i) && i.bumper_to_line_m < 1.5) stop = true;
@@ -62,7 +81,8 @@ export class RulesBrain {
     // nothing by driving faster than that lane's traffic, since the car has to move into it anyway:
     // it joins a queue there from behind instead of driving past it.
     const l = snap.lane;
-    const toward = l && l.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
+    const toward =
+      l && l.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
     const vTurnLane = !l || !l.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
 
     const rs = snap.roadside_stop;
@@ -77,17 +97,57 @@ export class RulesBrain {
       // (a pull-over is judged by how near it ends to where it pulls over to, across lanes to the
       // kerb if need be: from the lane's centre, two lanes out, it would cost as much as its bonus)
       const laneErr = c.id === "pull_over" ? s.lane_err_end - (c.law.offset - c.law.center) : s.lane_err_end;
-      let cost = -1.0 * s.progress_m + 2.0 * Math.abs(laneErr) + 0.05 * Math.abs(s.heading_err_deg) + 0.8 * Math.abs(s.end_speed - vWant);
-      if (snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index) && c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx)) cost -= 20;
+      let cost =
+        -1.0 * s.progress_m +
+        2.0 * Math.abs(laneErr) +
+        0.05 * Math.abs(s.heading_err_deg) +
+        0.8 * Math.abs(s.end_speed - vWant);
+      if (
+        snap.bus_lane?.in_effect &&
+        !snap.bus_lane.entering_allowed &&
+        snap.bus_lane.lanes.includes(snap.lane?.index) &&
+        c.change &&
+        !snap.bus_lane.lanes.includes(c.law.laneIdx)
+      )
+        cost -= 20;
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
       if (c.id === "stop_at_line" && amberStop && !snap.emergency) cost -= 12;
-      if (c.id === "stop_at_line" && i && !i.entered && !i.officer && ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown" || (i.control === "stop" && !i.stop_completed) || waitsItsTurn(i) || (i.control === "yield" && i.cross_traffic_moving) || (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))) cost -= 6;
+      if (
+        c.id === "stop_at_line" &&
+        i &&
+        !i.entered &&
+        !i.officer &&
+        ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) ||
+          (i.signal === "yellow" && i.amber?.stop !== false) ||
+          i.signal === "unknown" ||
+          (i.control === "stop" && !i.stop_completed) ||
+          waitsItsTurn(i) ||
+          (i.control === "yield" && i.cross_traffic_moving) ||
+          (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))
+      )
+        cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_turn_restriction") cost -= 30;
       if (c.id === "stop_for_closure") cost -= 30;
-      if (c.id === "stop_for_oncoming" || c.id === "stop_for_cyclist" || c.id === "stop_to_turn_round" || c.id === "yield_to_bus" || c.id === "stop_at_crosswalk" || c.id === "stop_for_school_bus" || c.id === "stop_for_streetcar" || c.id === "stop_before_tracks" || c.id === "wait_short_of_junction" || c.id === "stop_for_flagger" || c.id === "stop_for_crossing_guard" || c.id === "wait_behind_van" || c.id === "wait_to_merge" || c.id === "let_merge_in") cost -= 6;
+      if (
+        c.id === "stop_for_oncoming" ||
+        c.id === "stop_for_cyclist" ||
+        c.id === "stop_to_turn_round" ||
+        c.id === "yield_to_bus" ||
+        c.id === "stop_at_crosswalk" ||
+        c.id === "stop_for_school_bus" ||
+        c.id === "stop_for_streetcar" ||
+        c.id === "stop_before_tracks" ||
+        c.id === "wait_short_of_junction" ||
+        c.id === "stop_for_flagger" ||
+        c.id === "stop_for_crossing_guard" ||
+        c.id === "wait_behind_van" ||
+        c.id === "wait_to_merge" ||
+        c.id === "let_merge_in"
+      )
+        cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       if (c.id === "wait_for_runner") cost -= 12;
       if (c.id === "yield_to_reversing" && snap.reversing_vehicle?.wait) cost -= 6;
@@ -142,9 +202,23 @@ export class RulesBrain {
       if (best === null || cost < best.cost) best = { c, cost };
     }
     // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
-    const motion = stop && !(amberStop && best?.c.id === "stop_at_line") && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park" ? "stop" : "drive";
-    return { ...(snap.headlights ? { headlights: beamChoice(snap) } : {}), motion, candidateId: best ? best.c.id : null, meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" }, answers: null };
+    const motion =
+      stop &&
+      !(amberStop && best?.c.id === "stop_at_line") &&
+      best?.c.law.kind !== "turnaround" &&
+      best?.c.law.kind !== "park"
+        ? "stop"
+        : "drive";
+    return {
+      ...(snap.headlights ? { headlights: beamChoice(snap) } : {}),
+      motion,
+      candidateId: best ? best.c.id : null,
+      meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" },
+      answers: null,
+    };
   }
 
-  async decide(snap, eligible) { return this.decideSync(snap, eligible); }
+  async decide(snap, eligible) {
+    return this.decideSync(snap, eligible);
+  }
 }

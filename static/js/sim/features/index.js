@@ -56,22 +56,34 @@ import potholes from "./potholes.js";
 import geese from "./geese.js";
 import roadClosures from "./road-closures.js";
 
-export const FEATURES = [
-  potholes,
-  geese,
-  roadClosures,
-];
+export const FEATURES = [potholes, geese, roadClosures];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
 // run, so `hooks` refuses to load one (and scripts/test_feature_registry.mjs checks every record).
 export const SLOTS = {
-  obstacles: ["end"], stepBeforeTraffic: ["end"], stepAfterTraffic: ["end"],
+  obstacles: ["end"],
+  stepBeforeTraffic: ["end"],
+  stepAfterTraffic: ["end"],
   audit: ["driveways", "balls", "parkers"],
-  sense: ["driveways", "balls", "parkers"], limit: ["driveways", "balls"], target: ["restrictions", "driveways", "balls"], hazard: ["driveways", "balls", "parkers"],
-  candidates: ["restrictions", "driveways", "balls"], adjust: ["balls"], brakeDetour: ["end"], sim: ["first", "driveways", "balls"],
-  state: ["restrictions", "driveways", "balls"], outcome: ["ids"], slowOutcome: ["lane"], clause: ["restrictions", "driveways", "ice"],
-  holdStill: ["driveways", "parkers"], prompt: ["restrictions", "driveways", "snowbanks"], metric: ["driveways", "balls", "parkers"],
-  trafficStart: ["end"], trafficReplan: ["end"], trafficLane: ["contraflow"], trafficYield: ["end"],
+  sense: ["driveways", "balls", "parkers"],
+  limit: ["driveways", "balls"],
+  target: ["restrictions", "driveways", "balls"],
+  hazard: ["driveways", "balls", "parkers"],
+  candidates: ["restrictions", "driveways", "balls"],
+  adjust: ["balls"],
+  brakeDetour: ["end"],
+  sim: ["first", "driveways", "balls"],
+  state: ["restrictions", "driveways", "balls"],
+  outcome: ["ids"],
+  slowOutcome: ["lane"],
+  clause: ["restrictions", "driveways", "ice"],
+  holdStill: ["driveways", "parkers"],
+  prompt: ["restrictions", "driveways", "snowbanks"],
+  metric: ["driveways", "balls", "parkers"],
+  trafficStart: ["end"],
+  trafficReplan: ["end"],
+  trafficLane: ["contraflow"],
+  trafficYield: ["end"],
 };
 // The fields of a record that are not hooks.
 const FIELDS = ["key", "seen", "calls", "build", "obstacle", "priority", "motion"];
@@ -79,17 +91,22 @@ const FIELDS = ["key", "seen", "calls", "build", "obstacle", "priority", "motion
 // What is wrong with record `f`, or null: a missing field, an unknown hook, or a hook at a slot the core
 // never runs.
 export function recordProblem(f) {
-  for (const k of ["key", "seen", "calls"]) if (typeof f[k] !== "string" || !f[k]) return `${f.key || "a record"} has no ${k}`;
+  for (const k of ["key", "seen", "calls"])
+    if (typeof f[k] !== "string" || !f[k]) return `${f.key || "a record"} has no ${k}`;
   if (typeof f.build !== "function") return `${f.key} has no build`;
   for (const [name, h] of Object.entries(f)) {
     if (FIELDS.includes(name)) continue;
     if (!SLOTS[name]) return `${f.key} has an unknown hook or field ${name}`;
     const at = typeof h === "function" ? "end" : h?.at || "end";
-    if (!SLOTS[name].includes(at)) return `${f.key}'s ${name} is at "${at}", which the core never runs: use ${SLOTS[name].join(", ")}`;
+    if (!SLOTS[name].includes(at))
+      return `${f.key}'s ${name} is at "${at}", which the core never runs: use ${SLOTS[name].join(", ")}`;
   }
   return null;
 }
-for (const f of FEATURES) { const problem = recordProblem(f); if (problem) throw new Error(`Feature registry: ${problem}.`); }
+for (const f of FEATURES) {
+  const problem = recordProblem(f);
+  if (problem) throw new Error(`Feature registry: ${problem}.`);
+}
 
 // The functions of hook `name` at `slot`, in registration order (bound to their record as `this`).
 export function hooks(name, slot = "end") {
@@ -106,7 +123,10 @@ export function hooks(name, slot = "end") {
 
 // The same, with the key of the record each belongs to: { key, run }.
 export const hookEntries = (name, slot = "end") => {
-  const fns = hooks(name, slot), keys = FEATURES.filter((f) => f[name] && (typeof f[name] === "function" ? "end" : f[name].at || "end") === slot).map((f) => f.key);
+  const fns = hooks(name, slot),
+    keys = FEATURES.filter(
+      (f) => f[name] && (typeof f[name] === "function" ? "end" : f[name].at || "end") === slot,
+    ).map((f) => f.key);
   return fns.map((run, i) => ({ key: keys[i], run }));
 };
 
@@ -135,10 +155,16 @@ export function featureMetrics(world, violations, slot) {
 }
 
 // The failure texts of the features at `slot`, for a drive's metrics `m`.
-export const featureFailures = (m, slot) => recordsAt("metric", slot).filter((f) => m[f.metric.name]).map((f) => f.metric.failure);
+export const featureFailures = (m, slot) =>
+  recordsAt("metric", slot)
+    .filter((f) => m[f.metric.name])
+    .map((f) => f.metric.failure);
 
 // The LLM system prompt's lines at `slot`, each with its newline.
-export const promptLines = (slot) => recordsAt("prompt", slot).map((f) => `${f.prompt.text}\n`).join("");
+export const promptLines = (slot) =>
+  recordsAt("prompt", slot)
+    .map((f) => `${f.prompt.text}\n`)
+    .join("");
 
 // Every World option a registered feature takes.
 export const FEATURE_OPTIONS = FEATURES.map((f) => f.key);

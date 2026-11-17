@@ -22,7 +22,11 @@ export class GroundReflection {
     this.scene = scene;
     this.camera = camera;
     // mipmapped, so the wet-road smear can read pre-blurred levels (see wetReflective)
-    this.rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+    this.rt = new THREE.WebGLRenderTarget(2, 2, {
+      type: THREE.HalfFloatType,
+      generateMipmaps: true,
+      minFilter: THREE.LinearMipmapLinearFilter,
+    });
     this.mirror = new THREE.PerspectiveCamera();
     this.enabled = true;
     this.resolutionScale = 0.25;
@@ -39,46 +43,67 @@ export class GroundReflection {
   setSamples(samples) {
     if (this.rt.samples === samples) return;
     this.rt.samples = samples;
-    this.rt.dispose();   // reallocated with the new sample count on next use
+    this.rt.dispose(); // reallocated with the new sample count on next use
   }
 
-  setSize(w, h) { this.rt.setSize(Math.max(2, Math.ceil(w * this.resolutionScale)), Math.max(2, Math.ceil(h * this.resolutionScale))); }
+  setSize(w, h) {
+    this.rt.setSize(Math.max(2, Math.ceil(w * this.resolutionScale)), Math.max(2, Math.ceil(h * this.resolutionScale)));
+  }
 
   render() {
     const strength = this.enabled ? lighting.wet.value : 0;
     reflection.strength.value = strength;
     if (strength <= 0) return false;
-    const cam = this.camera, m = this.mirror;
+    const cam = this.camera,
+      m = this.mirror;
     cam.updateMatrixWorld();
     // mirror the camera's position, view target, and up vector in the plane y = 0
     const pos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
     const dir = cam.getWorldDirection(this._v);
     const target = pos.clone().add(dir);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
-    pos.y = -pos.y; target.y = -target.y; up.y = -up.y;
+    pos.y = -pos.y;
+    target.y = -target.y;
+    up.y = -up.y;
     m.position.copy(pos);
     m.up.copy(up);
     m.lookAt(target);
-    m.fov = cam.fov; m.aspect = cam.aspect; m.near = cam.near; m.far = cam.far;
+    m.fov = cam.fov;
+    m.aspect = cam.aspect;
+    m.near = cam.near;
+    m.far = cam.far;
     m.updateProjectionMatrix();
     m.updateMatrixWorld();
-    reflection.matrix.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
-      .multiply(m.projectionMatrix).multiply(m.matrixWorldInverse);
+    reflection.matrix.value
+      .set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
+      .multiply(m.projectionMatrix)
+      .multiply(m.matrixWorldInverse);
     // Clip away geometry below the reflecting road, including the underside of curbs and light
     // pools. Use the same oblique near-plane construction as Three.js's Reflector.
     this._clipPlane.normal.set(0, 1, 0);
     this._clipPlane.constant = 0;
     this._clipPlane.applyMatrix4(m.matrixWorldInverse);
-    const plane = this._clipPlane, clip = this._clip, q = this._q, projection = m.projectionMatrix.elements;
+    const plane = this._clipPlane,
+      clip = this._clip,
+      q = this._q,
+      projection = m.projectionMatrix.elements;
     clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
-    q.set((Math.sign(clip.x) + projection[8]) / projection[0],
-      (Math.sign(clip.y) + projection[9]) / projection[5], -1, (1 + projection[10]) / projection[14]);
+    q.set(
+      (Math.sign(clip.x) + projection[8]) / projection[0],
+      (Math.sign(clip.y) + projection[9]) / projection[5],
+      -1,
+      (1 + projection[10]) / projection[14],
+    );
     clip.multiplyScalar(2 / clip.dot(q));
-    projection[2] = clip.x; projection[6] = clip.y; projection[10] = clip.z + 1; projection[14] = clip.w;
+    projection[2] = clip.x;
+    projection[6] = clip.y;
+    projection[10] = clip.z + 1;
+    projection[14] = clip.w;
     m.projectionMatrixInverse.copy(m.projectionMatrix).invert();
     const r = this.renderer;
-    const prevTarget = r.getRenderTarget(), prevTexture = reflection.texture.value;
-    reflection.strength.value = 0;   // the road does not reflect itself
+    const prevTarget = r.getRenderTarget(),
+      prevTexture = reflection.texture.value;
+    reflection.strength.value = 0; // the road does not reflect itself
     // A zero-strength shader branch still leaves its sampler bound. WebGL rejects drawing into
     // an attached texture that is also bound as input, so unbind it for the entire mirror pass.
     reflection.texture.value = null;
@@ -94,7 +119,9 @@ export class GroundReflection {
     return true;
   }
 
-  dispose() { this.rt.dispose(); }
+  dispose() {
+    this.rt.dispose();
+  }
 }
 
 // Make a road material show the reflection when wet. `gloss` scales it (paint reflects a little
@@ -108,14 +135,25 @@ export function wetReflective(material, gloss = 1) {
     shader.uniforms.reflStrength = reflection.strength;
     shader.uniforms.puddleMap = { value: macroTexture() };
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform mat4 reflMatrix;\nvarying vec4 vReflUv;\nvarying vec2 vGroundXZ;")
-      .replace("#include <project_vertex>", `#include <project_vertex>
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform mat4 reflMatrix;\nvarying vec4 vReflUv;\nvarying vec2 vGroundXZ;",
+      )
+      .replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
         vec4 reflWorld = modelMatrix * vec4( transformed, 1.0 );
         vReflUv = reflMatrix * reflWorld;
-        vGroundXZ = reflWorld.xz;`);
+        vGroundXZ = reflWorld.xz;`,
+      );
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform sampler2D tReflect;\nuniform sampler2D puddleMap;\nuniform float reflStrength;\nvarying vec4 vReflUv;\nvarying vec2 vGroundXZ;")
-      .replace("#include <opaque_fragment>", `
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform sampler2D tReflect;\nuniform sampler2D puddleMap;\nuniform float reflStrength;\nvarying vec4 vReflUv;\nvarying vec2 vGroundXZ;",
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        `
         if ( reflStrength > 0.0 && vReflUv.w > 0.0 ) {
           vec2 ruv = vReflUv.xy / vReflUv.w;
           // Fade out at the texture border instead of stretching clamped edge pixels into streaks.
@@ -137,7 +175,8 @@ export function wetReflective(material, gloss = 1) {
           float k = border * reflStrength * ${gloss.toFixed(2)} * clamp( fres * ( 0.55 + 0.9 * puddle ) + 0.12 * puddle, 0.0, 0.92 );
           outgoingLight = mix( outgoingLight, refl, k );
         }
-        #include <opaque_fragment>`);
+        #include <opaque_fragment>`,
+      );
   };
   const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey.bind(material) : () => "";
   material.customProgramCacheKey = () => `wet-${gloss}-${prevKey()}`;

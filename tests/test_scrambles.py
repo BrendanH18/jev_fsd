@@ -9,7 +9,7 @@ from jev.config import MAPS_DIR, PRESET_BBOXES
 from jev.osm import fetch
 from jev.osm.pack import pack_from_osm, pack_path
 from jev.osm.project import Projection
-from jev.osm.scrambles import (build_scrambles, load_scrambles, says_scramble, scrambles_from_osm, scrambles_path)
+from jev.osm.scrambles import build_scrambles, load_scrambles, says_scramble, scrambles_from_osm, scrambles_path
 from test_calming import write_osm
 from test_crossings import LAT0, LON0, avenue
 
@@ -31,12 +31,26 @@ def signalled(extra_nodes=(), extra_ways=()):
 
 class ScrambleTests(unittest.TestCase):
     def test_a_crossing_noted_as_a_scramble_makes_its_signal_one(self):
-        osm, bbox = signalled([(60, 8, 8, {"highway": "crossing", "crossing": "traffic_signals",
-                                            "note": "This is a scramble crossing, where foot traffic can cross in any direction"})])
+        osm, bbox = signalled(
+            [
+                (
+                    60,
+                    8,
+                    8,
+                    {
+                        "highway": "crossing",
+                        "crossing": "traffic_signals",
+                        "note": "This is a scramble crossing, where foot traffic can cross in any direction",
+                    },
+                )
+            ]
+        )
         pack = pack_from_osm(osm, bbox)
         self.assertEqual(len(pack["intersections"]), 1)
         out = scrambles_from_osm(osm, pack)
-        self.assertEqual([(s["signal"], s["source"]) for s in out["scrambles"]], [(pack["intersections"][0]["id"], "tagged")])
+        self.assertEqual(
+            [(s["signal"], s["source"]) for s in out["scrambles"]], [(pack["intersections"][0]["id"], "tagged")]
+        )
 
     def test_a_diagonal_crossing_footway_makes_it_one_and_a_square_one_does_not(self):
         square = [(70, -9, 9, {}), (71, 9, 9, {})]

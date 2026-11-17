@@ -40,8 +40,8 @@ from .project import Projection
 from .zones import _inside, _join, _to_segment
 
 PARKS_VERSION = "1"
-REACH_M = 25.0        # an area this near a street's centreline is beside it
-STEP_M = 2.0          # each street is checked this often along its centreline
+REACH_M = 25.0  # an area this near a street's centreline is beside it
+STEP_M = 2.0  # each street is checked this often along its centreline
 JOIN_M = 10.0
 MIN_SPAN_M = 20.0
 SIMPLIFY_M = 1.0
@@ -61,8 +61,9 @@ def load_parks(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_parks(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_parks(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached parks for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = parks_path(maps_dir, bbox)
@@ -73,7 +74,10 @@ def build_parks(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
         return None
     layer = parks_from_osm(parse_xml(xml_path), pack)
     path.write_text(json.dumps(layer, separators=(",", ":")))
-    log("map: built %s (%d parks and waters, %d street spans beside them)" % (path.name, len(layer["areas"]), len(layer["spans"])))
+    log(
+        "map: built %s (%d parks and waters, %d street spans beside them)"
+        % (path.name, len(layer["areas"]), len(layer["spans"]))
+    )
     return layer
 
 
@@ -106,8 +110,16 @@ def areas(osm: OsmData, proj: Projection) -> List[dict]:
         if kind in ("river", "canal"):
             lines = [g.douglas_peucker(r, SIMPLIFY_M) for r in rings if len(r) >= 2]
             if lines:
-                out.append({"id": aid, "kind": kind, "name": name, "rings": [], "closed": False,
-                            "lines": [[[g.r1(x), g.r1(y)] for x, y in line] for line in lines]})
+                out.append(
+                    {
+                        "id": aid,
+                        "kind": kind,
+                        "name": name,
+                        "rings": [],
+                        "closed": False,
+                        "lines": [[[g.r1(x), g.r1(y)] for x, y in line] for line in lines],
+                    }
+                )
             return
         rings = [r for r in rings if len(r) >= 3]
         closed = bool(rings) and all(r[0] == r[-1] for r in rings)
@@ -136,7 +148,9 @@ def areas(osm: OsmData, proj: Projection) -> List[dict]:
         kind = kind_of(r["tags"])
         if not kind or r["tags"].get("type") != "multipolygon":
             continue
-        parts = [ways[ref]["nodes"] for t, ref, role in r["members"] if t == "way" and role in ("outer", "") and ref in ways]
+        parts = [
+            ways[ref]["nodes"] for t, ref, role in r["members"] if t == "way" and role in ("outer", "") and ref in ways
+        ]
         keep(kind, "r%d" % r["id"], r["tags"].get("name", ""), [outline(nodes) for nodes in _join(parts)])
     return sorted(out, key=lambda a: a["id"])
 
@@ -171,7 +185,12 @@ def _nearest_on(p: Point, a: Point, b: Point) -> Point:
 
 def _box(area: dict, pad: float) -> Tuple[float, float, float, float]:
     pts = [q for ring in area["rings"] for q in ring] + [q for line in area["lines"] for q in line]
-    return (min(x for x, _ in pts) - pad, min(y for _, y in pts) - pad, max(x for x, _ in pts) + pad, max(y for _, y in pts) + pad)
+    return (
+        min(x for x, _ in pts) - pad,
+        min(y for _, y in pts) - pad,
+        max(x for x, _ in pts) + pad,
+        max(y for _, y in pts) + pad,
+    )
 
 
 def parks_from_osm(osm: OsmData, pack: dict) -> dict:
@@ -191,12 +210,18 @@ def parks_from_osm(osm: OsmData, pack: dict) -> dict:
         scale = e["length"] / cum[-1]
         ex = [x for x, _ in pts]
         ey = [y for _, y in pts]
-        near = [a for a in found if boxes[a["id"]][0] <= max(ex) and boxes[a["id"]][2] >= min(ex)
-                and boxes[a["id"]][1] <= max(ey) and boxes[a["id"]][3] >= min(ey)]
+        near = [
+            a
+            for a in found
+            if boxes[a["id"]][0] <= max(ex)
+            and boxes[a["id"]][2] >= min(ex)
+            and boxes[a["id"]][1] <= max(ey)
+            and boxes[a["id"]][3] >= min(ey)
+        ]
         if not near:
             continue
         n = max(1, int(math.ceil(cum[-1] / STEP_M)))
-        runs: List[list] = []   # [from, to, left, right]
+        runs: List[list] = []  # [from, to, left, right]
         for i in range(n + 1):
             s = cum[-1] * i / n
             p = g.point_at(pts, s, cum)
@@ -208,7 +233,9 @@ def parks_from_osm(osm: OsmData, pack: dict) -> dict:
                     continue
                 # (inside it, or with it straight ahead or behind along the street, it is either side)
                 lat = 0.0 if q is None else (q[0] - p[0]) * math.sin(h) - (q[1] - p[1]) * math.cos(h)
-                for side in (("left", "right") if q is None or abs(lat) < 0.5 * d else ("right",) if lat > 0 else ("left",)):
+                for side in (
+                    ("left", "right") if q is None or abs(lat) < 0.5 * d else ("right",) if lat > 0 else ("left",)
+                ):
                     if side not in sides or d < sides[side][0]:
                         sides[side] = (d, a["id"])
             if not sides:
@@ -226,8 +253,21 @@ def parks_from_osm(osm: OsmData, pack: dict) -> dict:
         for a, b, left, right in runs:
             if b - a < MIN_SPAN_M:
                 continue
-            spans.append({"edge": e["id"], "from": g.r1(a), "to": g.r1(min(b, e["length"])), "left": left, "right": right,
-                          "water": any(x is not None and is_water(kinds[x]) for x in (left, right)), "name": e.get("name", "")})
+            spans.append(
+                {
+                    "edge": e["id"],
+                    "from": g.r1(a),
+                    "to": g.r1(min(b, e["length"])),
+                    "left": left,
+                    "right": right,
+                    "water": any(x is not None and is_water(kinds[x]) for x in (left, right)),
+                    "name": e.get("name", ""),
+                }
+            )
     used = {x for sp in spans for x in (sp["left"], sp["right"]) if x}
-    return {"parks_version": PARKS_VERSION, "name": pack.get("name", ""),
-            "areas": [a for a in found if a["id"] in used], "spans": spans}
+    return {
+        "parks_version": PARKS_VERSION,
+        "name": pack.get("name", ""),
+        "areas": [a for a in found if a["id"] in used],
+        "spans": spans,
+    }

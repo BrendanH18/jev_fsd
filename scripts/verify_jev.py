@@ -49,7 +49,9 @@ def check(expect: dict, answers: dict) -> list:
 
 def main(argv: list) -> int:
     offline = "--offline" in argv[1:]
-    paths = [Path(p) for p in argv[1:] if p != "--offline"] or sorted(FIXTURES_DIR.glob("*.json")) + sorted(SNAPSHOTS_DIR.glob("*.json"))
+    paths = [Path(p) for p in argv[1:] if p != "--offline"] or sorted(FIXTURES_DIR.glob("*.json")) + sorted(
+        SNAPSHOTS_DIR.glob("*.json")
+    )
     if not paths:
         print("No snapshots. Save some from the app's JSON panel first.")
         return 1
@@ -99,7 +101,10 @@ def main(argv: list) -> int:
         status = "PASS" if not problems else "FAIL"
         if problems:
             failures += 1
-        print("%-28s %s  %4.0f ms  %5d tok  $%.6f" % (path.name, status, meta["latency_ms"], meta["input_tokens"], meta["cost_usd"]))
+        print(
+            "%-28s %s  %4.0f ms  %5d tok  $%.6f"
+            % (path.name, status, meta["latency_ms"], meta["input_tokens"], meta["cost_usd"])
+        )
         for p in parts:
             print("    " + p)
         for p in problems:

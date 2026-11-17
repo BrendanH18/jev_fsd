@@ -30,43 +30,100 @@ const { rng } = await import("../static/js/common.js");
 // Two-way streets crossing at the origin, one lane each way 3.2 m wide; stop lines 8 m before the
 // centre. The car comes from the west (travel +x, its lane at y = -1.6) and turns right to go south
 // (x = -1.6). Traffic from its left comes from the north, southbound in the same lane line.
-const ARM = 150, LINE = ARM - 8, HALF = 1.6;
+const ARM = 150,
+  LINE = ARM - 8,
+  HALF = 1.6;
 const FRONT = CAR.length - CAR.rearOverhang;
-const right = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy); return [dy / d, -dx / d]; };
+const right = (a, b) => {
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1],
+    d = Math.hypot(dx, dy);
+  return [dy / d, -dx / d];
+};
 const names = { w: "West Street", e: "West Street", n: "North Street", s: "North Street" };
 const groups = { w: "A", e: "A", n: "B", s: "B" };
 // (`arms` sets the angle of each arm, degrees counter-clockwise from east; `buildings` are footprints)
 function junction({ arms = { w: 180, e: 0, n: 90, s: -90 }, buildings = [] } = {}) {
-  const ends = { c: [0, 0] }, edges = [], lanes = [];
-  for (const [arm, deg] of Object.entries(arms)) ends[arm] = [ARM * Math.cos(deg * Math.PI / 180), ARM * Math.sin(deg * Math.PI / 180)].map((v) => Math.round(v * 1e6) / 1e6);
-  for (const [id, from, to, control, arm] of Object.keys(arms).flatMap((arm) => [[`${arm}_in`, arm, "c", true, arm], [`${arm}_out`, "c", arm, false, arm]])) {
-    const pts = [ends[from], ends[to]], [rx, ry] = right(...pts);
-    edges.push({ id, from, to, pts, length: ARM, lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: [-3.2, 3.2], parking: [0, 0],
-      cls: "secondary", limit: 13.9, oneway: false, name: names[arm], ...(control ? { control: { type: "signal", id: "sig", s_line: LINE, group: groups[arm] } } : {}) });
+  const ends = { c: [0, 0] },
+    edges = [],
+    lanes = [];
+  for (const [arm, deg] of Object.entries(arms))
+    ends[arm] = [ARM * Math.cos((deg * Math.PI) / 180), ARM * Math.sin((deg * Math.PI) / 180)].map(
+      (v) => Math.round(v * 1e6) / 1e6,
+    );
+  for (const [id, from, to, control, arm] of Object.keys(arms).flatMap((arm) => [
+    [`${arm}_in`, arm, "c", true, arm],
+    [`${arm}_out`, "c", arm, false, arm],
+  ])) {
+    const pts = [ends[from], ends[to]],
+      [rx, ry] = right(...pts);
+    edges.push({
+      id,
+      from,
+      to,
+      pts,
+      length: ARM,
+      lanes: 1,
+      lane_width: 3.2,
+      lane_offsets: [HALF],
+      asphalt: [-3.2, 3.2],
+      parking: [0, 0],
+      cls: "secondary",
+      limit: 13.9,
+      oneway: false,
+      name: names[arm],
+      ...(control ? { control: { type: "signal", id: "sig", s_line: LINE, group: groups[arm] } } : {}),
+    });
     lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
   }
-  const map = new MapData({ bbox: [0, 0, 1, 1], extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20], edges, lanes,
+  const map = new MapData({
+    bbox: [0, 0, 1, 1],
+    extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20],
+    edges,
+    lanes,
     nodes: Object.entries(ends).map(([id, [x, y]]) => ({ id, x, y })),
-    intersections: [{ id: "sig", x: 0, y: 0, offset_s: 0, vertices: ["c"], approaches: Object.keys(arms).map((a) => ({ edge: `${a}_in`, group: groups[a], s_line: LINE })) }],
-    stops: [], buildings });
+    intersections: [
+      {
+        id: "sig",
+        x: 0,
+        y: 0,
+        offset_s: 0,
+        vertices: ["c"],
+        approaches: Object.keys(arms).map((a) => ({ edge: `${a}_in`, group: groups[a], s_line: LINE })),
+      },
+    ],
+    stops: [],
+    buildings,
+  });
   const routeData = (exit, dir) => {
     const polyline = resample(joinLanes(map.lane("w_in", 0).pts, map.lane(exit, 0).pts));
-    return { id: `to_${exit}`, polyline, edges: ["w_in", exit], turns: dir ? [{ at_m: ARM, dir, street: names[exit[0]] }] : [], start_s: 0, goal_s: 120 };
+    return {
+      id: `to_${exit}`,
+      polyline,
+      edges: ["w_in", exit],
+      turns: dir ? [{ at_m: ARM, dir, street: names[exit[0]] }] : [],
+      start_s: 0,
+      goal_s: 120,
+    };
   };
   return { map, routeData };
 }
 function resample(pts) {
-  const cum = cumulative(pts), out = [];
+  const cum = cumulative(pts),
+    out = [];
   for (let s = 0; s < cum.at(-1); s += 1) out.push(pointAt(pts, cum, s));
   out.push(pts.at(-1));
   return out;
 }
 const { map, routeData } = junction();
-const RIGHT = routeData("s_out", "right"), STRAIGHT = routeData("e_out", null), LEFT = routeData("n_out", "left");
+const RIGHT = routeData("s_out", "right"),
+  STRAIGHT = routeData("e_out", null),
+  LEFT = routeData("n_out", "left");
 const plan = map.intersections.get("sig").plan;
 // red for the car (group A), green for the street from the left (group B), walk for people crossing
 // the car's street beside it; and a red with that walk already over
-const RED = plan.B.start + 1, LATE_RED = plan.B.start + 12;
+const RED = plan.B.start + 1,
+  LATE_RED = plan.B.start + 12;
 assert.equal(phaseOf(map.intersections.get("sig"), RED).A, "red");
 assert.equal(phaseOf(map.intersections.get("sig"), RED).B, "green");
 assert.equal(phaseOf(map.intersections.get("sig"), LATE_RED).A, "red");
@@ -78,8 +135,17 @@ function car(id, x, y, psi, v = 0, extra = {}) {
 }
 // from the left: southbound on North Street, `y` m north of the centre
 const fromLeft = (y, v = 11, extra = {}) => car("cross", -HALF, y, -Math.PI / 2, v, extra);
-const AT_LINE = -8 - 0.8 - FRONT;   // rear axle with the front bumper 0.8 m short of the line
-function setup({ x = AT_LINE, v = 0, npcs = [], route = RIGHT, weather = "dry", t = RED, on = map, stopped = false } = {}) {
+const AT_LINE = -8 - 0.8 - FRONT; // rear axle with the front bumper 0.8 m short of the line
+function setup({
+  x = AT_LINE,
+  v = 0,
+  npcs = [],
+  route = RIGHT,
+  weather = "dry",
+  t = RED,
+  on = map,
+  stopped = false,
+} = {}) {
   setWeather(weather);
   const world = new World(on, { parked: 0, pedestrians: 0, weather });
   world.t = t;
@@ -97,15 +163,29 @@ function decide(world) {
   const candidates = sampleCandidates(snap, world);
   return { snap, candidates, ...simulateAll(candidates, snap, world) };
 }
-const passesLine = (r) => r.eligible.some((c) => c.sim.progress_m + r.snap.ego.front_m + r.snap.routeProj.s > r.snap.intersection.s_line_route + 1);
+const passesLine = (r) =>
+  r.eligible.some(
+    (c) => c.sim.progress_m + r.snap.ego.front_m + r.snap.routeProj.s > r.snap.intersection.s_line_route + 1,
+  );
 
 {
   assert.equal(rightOnRedAllowed([-73.59, 45.516, -73.574, 45.528]), false, "Le Plateau, on the island of Montréal");
-  for (const bbox of [[-71.235, 46.805, -71.218, 46.815], [-73.52, 45.52, -73.50, 45.54], [-73.75, 45.56, -73.70, 45.58], [-123.17, 49.26, -123.15, 49.27]]) assert.equal(rightOnRedAllowed(bbox), true, String(bbox));
+  for (const bbox of [
+    [-71.235, 46.805, -71.218, 46.815],
+    [-73.52, 45.52, -73.5, 45.54],
+    [-73.75, 45.56, -73.7, 45.58],
+    [-123.17, 49.26, -123.15, 49.27],
+  ])
+    assert.equal(rightOnRedAllowed(bbox), true, String(bbox));
   const packs = fs.readdirSync(new URL("../data/maps/", import.meta.url)).filter((f) => f.endsWith(".pack.json"));
-  const banned = packs.map((f) => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${f}`, import.meta.url))))).filter((m) => !m.rightOnRed).map((m) => m.pack.name);
+  const banned = packs
+    .map((f) => new MapData(JSON.parse(fs.readFileSync(new URL(`../data/maps/${f}`, import.meta.url)))))
+    .filter((m) => !m.rightOnRed)
+    .map((m) => m.pack.name);
   assert.deepEqual(banned, ["bb9df59633e0"], "of the bundled maps, only Montréal bans it");
-  console.log("✓ right turns on red are allowed everywhere but the island of Montréal (Québec City, Longueuil and Laval allow them)");
+  console.log(
+    "✓ right turns on red are allowed everywhere but the island of Montréal (Québec City, Longueuil and Laval allow them)",
+  );
 }
 
 {
@@ -137,7 +217,11 @@ const passesLine = (r) => r.eligible.some((c) => c.sim.progress_m + r.snap.ego.f
 
 {
   // what does not get a right turn on red
-  assert.equal(decide(setup({ stopped: true, route: STRAIGHT })).snap.intersection.right_on_red, null, "going straight on");
+  assert.equal(
+    decide(setup({ stopped: true, route: STRAIGHT })).snap.intersection.right_on_red,
+    null,
+    "going straight on",
+  );
   assert.equal(decide(setup({ stopped: true, route: LEFT })).snap.intersection.right_on_red, null, "turning left");
   assert.equal(decide(setup({ stopped: true, t: 1 })).snap.intersection.right_on_red, null, "a green light");
   const montreal = junction();
@@ -157,38 +241,97 @@ const passesLine = (r) => r.eligible.some((c) => c.sim.progress_m + r.snap.ego.f
   assert.equal(near.snap.intersection.right_on_red.go, false);
   assert.ok(!passesLine(near), JSON.stringify(near.eligible.map((c) => c.id)));
   assert.equal(new RulesBrain().decideSync(near.snap, near.eligible).motion, "stop");
-  assert.equal(wait({ npcs: [fromLeft(78)] }).snap.intersection.right_on_red.go, true, "one 78 m out leaves time (6.5 s)");
+  assert.equal(
+    wait({ npcs: [fromLeft(78)] }).snap.intersection.right_on_red.go,
+    true,
+    "one 78 m out leaves time (6.5 s)",
+  );
   // beyond the 60 m traffic radius but within sight: 70 m out at 13.9 m/s is 4.6 s away
-  assert.equal(wait({ npcs: [fromLeft(70, 13.9)] }).snap.intersection.right_on_red.wait_for?.id, "cross", "one 70 m out at 50 km/h is too close");
-  assert.equal(wait({ npcs: [car("across", 3, HALF, Math.PI, 8)] }).snap.intersection.right_on_red.wait_for?.kind, "junction", "a car crossing the junction");
-  assert.equal(wait({ npcs: [car("across", 3, HALF, Math.PI, 0.3, { a: 1.5 })] }).snap.intersection.right_on_red.wait_for?.kind, "junction", "a car pulling away across the junction");
-  assert.equal(wait({ npcs: [fromLeft(40, 9, { a: -4 })] }).snap.intersection.right_on_red.go, true, "a car from the left braking to stop");
-  assert.equal(wait({ npcs: [car("away", HALF, 40, Math.PI / 2, 11)] }).snap.intersection.right_on_red.go, true, "a car going the other way");
-  assert.equal(wait({ npcs: [fromLeft(-20)] }).snap.intersection.right_on_red.go, true, "a car from the left already through");
+  assert.equal(
+    wait({ npcs: [fromLeft(70, 13.9)] }).snap.intersection.right_on_red.wait_for?.id,
+    "cross",
+    "one 70 m out at 50 km/h is too close",
+  );
+  assert.equal(
+    wait({ npcs: [car("across", 3, HALF, Math.PI, 8)] }).snap.intersection.right_on_red.wait_for?.kind,
+    "junction",
+    "a car crossing the junction",
+  );
+  assert.equal(
+    wait({ npcs: [car("across", 3, HALF, Math.PI, 0.3, { a: 1.5 })] }).snap.intersection.right_on_red.wait_for?.kind,
+    "junction",
+    "a car pulling away across the junction",
+  );
+  assert.equal(
+    wait({ npcs: [fromLeft(40, 9, { a: -4 })] }).snap.intersection.right_on_red.go,
+    true,
+    "a car from the left braking to stop",
+  );
+  assert.equal(
+    wait({ npcs: [car("away", HALF, 40, Math.PI / 2, 11)] }).snap.intersection.right_on_red.go,
+    true,
+    "a car going the other way",
+  );
+  assert.equal(
+    wait({ npcs: [fromLeft(-20)] }).snap.intersection.right_on_red.go,
+    true,
+    "a car from the left already through",
+  );
   // pulling away from its own line on the green counts too
   assert.equal(wait({ npcs: [fromLeft(12, 0.3, { a: 1.5 })] }).snap.intersection.right_on_red.wait_for?.id, "cross");
   // a building beside North Street hiding it from about 63 m out, short of the 79 m the car could see
-  const hidden = junction({ buildings: [{ pts: [[-2.8, 62], [-2.1, 62], [-2.1, 70], [-2.8, 70]], h: 10 }] });
-  const blind = decide(setup({ stopped: true, on: hidden.map, route: hidden.routeData("s_out", "right") })).snap.intersection.right_on_red;
+  const hidden = junction({
+    buildings: [
+      {
+        pts: [
+          [-2.8, 62],
+          [-2.1, 62],
+          [-2.1, 70],
+          [-2.8, 70],
+        ],
+        h: 10,
+      },
+    ],
+  });
+  const blind = decide(setup({ stopped: true, on: hidden.map, route: hidden.routeData("s_out", "right") })).snap
+    .intersection.right_on_red;
   assert.equal(blind.wait_for?.kind, "view", "a building hiding the street to its left from about 63 m out");
   const fog = wait({ weather: "fog" }).snap.intersection.right_on_red;
   assert.equal(fog.wait_for?.kind, "view", "in fog it cannot see far enough to its left");
-  for (const w of ["rain", "snow"]) assert.equal(wait({ weather: w }).snap.intersection.right_on_red.wait_for?.kind, "view", w);
+  for (const w of ["rain", "snow"])
+    assert.equal(wait({ weather: w }).snap.intersection.right_on_red.wait_for?.kind, "view", w);
   setWeather("dry");
   const night = setup({ stopped: true });
   night.visibility.setNight(1);
   assert.equal(decide(night).snap.intersection.right_on_red.wait_for?.kind, "view", "nor in the dark");
-  console.log("✓ it waits for a car from the left, a car in the junction and a short view; not for a braking car, one going away or one already through");
+  console.log(
+    "✓ it waits for a car from the left, a car in the junction and a short view; not for a braking car, one going away or one already through",
+  );
 }
 
 // A pedestrian at the curb on the car's side of the junction, about to cross West Street in front of
 // it (with the green for North Street), or one already on that crosswalk.
 function pedestrian(world, { crossing = false } = {}) {
-  const info = world.crowd.legsAt.get("c"), leg = info.list.find((l) => l.st.edge.id.startsWith("w"));
-  const side = leg.ends[1][1] < 0 ? 1 : -1, from = leg.ends[side], to = leg.ends[-side];
+  const info = world.crowd.legsAt.get("c"),
+    leg = info.list.find((l) => l.st.edge.id.startsWith("w"));
+  const side = leg.ends[1][1] < 0 ? 1 : -1,
+    from = leg.ends[side],
+    to = leg.ends[-side];
   const cross = { node: "c", leg, from, to };
   const at = crossing ? [from[0] + (to[0] - from[0]) * 0.3, from[1] + (to[1] - from[1]) * 0.3] : from;
-  const ped = new Pedestrian({ id: "ped", x: at[0], y: at[1], psi: Math.PI / 2, v: crossing ? 1.3 : 0, speed: 1.3, path: [{ p: to, cross }], crossing: crossing ? cross : null, waiting: 0, phase: 0, look: 1 });
+  const ped = new Pedestrian({
+    id: "ped",
+    x: at[0],
+    y: at[1],
+    psi: Math.PI / 2,
+    v: crossing ? 1.3 : 0,
+    speed: 1.3,
+    path: [{ p: to, cross }],
+    crossing: crossing ? cross : null,
+    waiting: 0,
+    phase: 0,
+    look: 1,
+  });
   world.crowd.list.push(ped);
   return ped;
 }
@@ -200,13 +343,19 @@ function pedestrian(world, { crossing = false } = {}) {
   assert.equal(k.wait_for?.kind, "pedestrian", "someone at the curb with the walk signal on");
   const late = setup({ stopped: true, t: LATE_RED });
   pedestrian(late);
-  assert.equal(decide(late).snap.intersection.right_on_red.go, true, "after the walk signal, someone waiting at the curb does not step off");
+  assert.equal(
+    decide(late).snap.intersection.right_on_red.go,
+    true,
+    "after the walk signal, someone waiting at the curb does not step off",
+  );
   const on = setup({ stopped: true, t: LATE_RED });
   pedestrian(on, { crossing: true });
   const o = decide(on).snap;
   assert.equal(o.intersection.right_on_red.wait_for?.kind, "pedestrian", "someone already on the crosswalk");
   assert.ok(o.pedestrian, "and the car stops for them as for any crossing");
-  console.log("✓ it waits for a pedestrian on the crosswalk ahead, or at the curb with the walk signal on or coming on");
+  console.log(
+    "✓ it waits for a pedestrian on the crosswalk ahead, or at the curb with the walk signal on or coming on",
+  );
 }
 
 {
@@ -215,14 +364,22 @@ function pedestrian(world, { crossing = false } = {}) {
   const state = toJevState(ready.snap, ready.candidates, {}, "test");
   assert.equal(state.intersection.turn, "right");
   assert.deepEqual(state.intersection.right_on_red, { allowed: true, stop_completed: true, clear: true });
-  assert.ok(situationClauses(ready.snap).some((c) => c.includes("a right turn on red is allowed") && c.includes("it may turn now")));
+  assert.ok(
+    situationClauses(ready.snap).some(
+      (c) => c.includes("a right turn on red is allowed") && c.includes("it may turn now"),
+    ),
+  );
   const { questions } = buildQuestions(ready.snap, ready.eligible);
   assert.ok(questions.motion.criteria.stop.includes("the car may turn right on red"));
   const { messages } = buildLlmPrompt(ready.snap, { state, questions });
   assert.ok(messages[0].content.includes("turn right on red"));
   const blocked = decide(setup({ stopped: true, npcs: [fromLeft(50)] }));
   assert.equal(toJevState(blocked.snap, blocked.candidates, {}, "test").intersection.right_on_red.wait_for, "cross");
-  assert.ok(situationClauses(blocked.snap).some((c) => c.includes("`cross` is coming from the left") && c.includes("Hold still")));
+  assert.ok(
+    situationClauses(blocked.snap).some(
+      (c) => c.includes("`cross` is coming from the left") && c.includes("Hold still"),
+    ),
+  );
   assert.ok(!buildQuestions(blocked.snap, blocked.eligible).questions.motion.criteria.stop.includes("right on red"));
   const before = decide(setup({ x: -40, v: 8 }));
   assert.ok(situationClauses(before.snap).some((c) => c.includes("only after a full stop")));
@@ -230,8 +387,15 @@ function pedestrian(world, { crossing = false } = {}) {
   const plain = decide(setup({ x: -40, v: 8, route: STRAIGHT }));
   assert.equal(toJevState(plain.snap, plain.candidates, {}, "test").intersection.right_on_red, undefined);
   assert.equal(toJevState(plain.snap, plain.candidates, {}, "test").intersection.turn, undefined);
-  assert.ok(situationClauses(plain.snap).includes("The signal 28 m ahead is red: keep rolling toward the line and stop just before it."), situationClauses(plain.snap).join(" | "));
-  console.log("✓ models get the turn, whether the stop is made and the way clear, what to wait for, and a situation line");
+  assert.ok(
+    situationClauses(plain.snap).includes(
+      "The signal 28 m ahead is red: keep rolling toward the line and stop just before it.",
+    ),
+    situationClauses(plain.snap).join(" | "),
+  );
+  console.log(
+    "✓ models get the turn, whether the stop is made and the way clear, what to wait for, and a situation line",
+  );
 }
 
 // Move the car along `path` from where it is at a steady speed, with traffic moving along its
@@ -245,8 +409,15 @@ function driveThrough(world, path, { speed = 5, seconds = 5 } = {}) {
     const [x, y] = path.pointAt(s);
     Object.assign(world.ego, { x, y, psi: path.headingAt(s), v: speed });
     for (const n of world.npcs) {
-      if (n.path) { n.path.s += n.v * dt; n.path.extend(); const [px, py] = n.path.pointAt(n.path.s); Object.assign(n, { x: px, y: py, psi: n.path.headingAt(n.path.s) }); }
-      else { n.x += Math.cos(n.psi) * n.v * dt; n.y += Math.sin(n.psi) * n.v * dt; }
+      if (n.path) {
+        n.path.s += n.v * dt;
+        n.path.extend();
+        const [px, py] = n.path.pointAt(n.path.s);
+        Object.assign(n, { x: px, y: py, psi: n.path.headingAt(n.path.s) });
+      } else {
+        n.x += Math.cos(n.psi) * n.v * dt;
+        n.y += Math.sin(n.psi) * n.v * dt;
+      }
     }
     world.t += dt;
     world.audit(dt, world.roadInfo());
@@ -258,13 +429,15 @@ const types = (events) => events.map((e) => e.type + (e.to ? `:${e.to}` : ""));
 
 {
   const run = ({ route = RIGHT, stopped = true, free = false, on = map, npcs = [], seconds = 5 } = {}) => {
-    const world = setup({ route, stopped, on, npcs }), path = world.route;
+    const world = setup({ route, stopped, on, npcs }),
+      path = world.route;
     if (free) world.route = world.destination = null;
     return { world, events: driveThrough(world, path, { seconds }) };
   };
   assert.deepEqual(types(run().events), [], "stopped, then turned right");
   // judged a right turn on leaving the junction on the street it turns into
-  const judged = setup({ stopped: true }), judgedPath = judged.route;
+  const judged = setup({ stopped: true }),
+    judgedPath = judged.route;
   driveThrough(judged, judgedPath, { seconds: 1.5 });
   const pending = judged.lastSignal?.rightOnRed;
   assert.equal(pending?.turned, false, "crossed the line on red after the stop");
@@ -280,56 +453,106 @@ const types = (events) => events.map((e) => e.type + (e.to ? `:${e.to}` : ""));
   const skew = junction({ arms: { w: 180, e: 0, n: 90, s: -35 } });
   const skewRoute = skew.routeData("s_out", "right");
   assert.equal(new Route(skewRoute, skew.map).controls[0].turn, "right");
-  assert.equal(decide(setup({ stopped: true, on: skew.map, route: skewRoute })).snap.intersection.right_on_red?.go, true);
+  assert.equal(
+    decide(setup({ stopped: true, on: skew.map, route: skewRoute })).snap.intersection.right_on_red?.go,
+    true,
+  );
   // there, a car coming down North Street heads 55 deg off the street the car turns into, but it
   // still comes from the left: wait for it
-  const skewWait = decide(setup({ stopped: true, on: skew.map, route: skewRoute, npcs: [fromLeft(30)] })).snap.intersection.right_on_red;
+  const skewWait = decide(setup({ stopped: true, on: skew.map, route: skewRoute, npcs: [fromLeft(30)] })).snap
+    .intersection.right_on_red;
   assert.equal(skewWait.go, false);
   assert.equal(skewWait.wait_for?.kind, "vehicle", JSON.stringify(skewWait.wait_for));
-  assert.deepEqual(types(run({ on: skew.map, route: skewRoute }).events), [], "a 35 deg right turn on red after a full stop");
-  const shallow = junction({ arms: { w: 180, e: 0, n: 90, s: -25.5 } }), shallowRoute = shallow.routeData("s_out", "right");
+  assert.deepEqual(
+    types(run({ on: skew.map, route: skewRoute }).events),
+    [],
+    "a 35 deg right turn on red after a full stop",
+  );
+  const shallow = junction({ arms: { w: 180, e: 0, n: 90, s: -25.5 } }),
+    shallowRoute = shallow.routeData("s_out", "right");
   assert.equal(new Route(shallowRoute, shallow.map).controls[0].turn, "right");
   assert.deepEqual(types(run({ on: shallow.map, route: shallowRoute }).events), [], "a 25.5 deg right turn on red");
   // a sharp right (123 deg, as from Kingsway onto East Broadway, which carries on 57 deg to the
   // left) faces no lane part way round, and the nearest is the far side of East Broadway
-  const kink = junction({ arms: { w: 180, e: 0, n: 57, s: -123 } }), kinkRoute = kink.routeData("s_out", "right");
+  const kink = junction({ arms: { w: 180, e: 0, n: 57, s: -123 } }),
+    kinkRoute = kink.routeData("s_out", "right");
   assert.equal(new Route(kinkRoute, kink.map).controls[0].turn, "right");
-  assert.deepEqual(types(run({ on: kink.map, route: kinkRoute, seconds: 12 }).events), [], "a 123 deg right turn on red");
+  assert.deepEqual(
+    types(run({ on: kink.map, route: kinkRoute, seconds: 12 }).events),
+    [],
+    "a 123 deg right turn on red",
+  );
   // on a junction wide enough to be 16 m out part way round, beside the far side's lane: not yet judged
   const midTurn = setup({ stopped: true, on: kink.map, route: kinkRoute });
   driveThrough(midTurn, midTurn.route, { seconds: 1.5 });
   const kinkPending = midTurn.lastSignal?.rightOnRed;
   assert.equal(kinkPending?.turned, false);
-  const sIn = kink.map.lane("s_in", 0), front = pointAt(sIn.pts, sIn.cum, sIn.cum.at(-1) - 16), psi = -61 * Math.PI / 180;
-  assert.equal(kink.map.classifyTurn(kink.map.turnAngle("w_in", kink.map.nearestLane(...front, psi, 8).lane.edgeRef.id)), "left", "the nearest lane leads off to the left");
+  const sIn = kink.map.lane("s_in", 0),
+    front = pointAt(sIn.pts, sIn.cum, sIn.cum.at(-1) - 16),
+    psi = (-61 * Math.PI) / 180;
+  assert.equal(
+    kink.map.classifyTurn(kink.map.turnAngle("w_in", kink.map.nearestLane(...front, psi, 8).lane.edgeRef.id)),
+    "left",
+    "the nearest lane leads off to the left",
+  );
   Object.assign(midTurn.ego, { x: front[0] - Math.cos(psi) * FRONT, y: front[1] - Math.sin(psi) * FRONT, psi });
   midTurn.events = [];
   midTurn.auditOncoming();
   assert.deepEqual(types(midTurn.events), [], "part way round a sharp right on red");
   assert.equal(midTurn.lastSignal?.rightOnRed, kinkPending, "still to be judged");
   // a sharp left (135 deg) leaves the junction behind its centre, and still runs the red
-  const sharp = junction({ arms: { w: 180, e: 0, n: 135, s: -90 } }), sharpRoute = sharp.routeData("n_out", "left");
+  const sharp = junction({ arms: { w: 180, e: 0, n: 135, s: -90 } }),
+    sharpRoute = sharp.routeData("n_out", "left");
   assert.equal(new Route(sharpRoute, sharp.map).controls[0].turn, "left");
-  assert.deepEqual(types(run({ on: sharp.map, route: sharpRoute, seconds: 12 }).events), ["red_light"], "stopped, then a 135 deg left");
-  assert.deepEqual(types(run({ on: sharp.map, route: sharpRoute, seconds: 12, free: true }).events), ["red_light"], "a 135 deg left, free drive");
+  assert.deepEqual(
+    types(run({ on: sharp.map, route: sharpRoute, seconds: 12 }).events),
+    ["red_light"],
+    "stopped, then a 135 deg left",
+  );
+  assert.deepEqual(
+    types(run({ on: sharp.map, route: sharpRoute, seconds: 12, free: true }).events),
+    ["red_light"],
+    "a 135 deg left, free drive",
+  );
   // a swerve toward the 25.5 deg exit, 15 m past the centre, then back into the lane straight on
   const veer = setup({ stopped: true, on: shallow.map, route: shallowRoute });
   driveThrough(veer, veer.route, { seconds: 1.5 });
   assert.ok(veer.lastSignal?.rightOnRed);
   veer.events = [];
-  for (const [x, y] of [[14 - FRONT, -5.6], [31 - FRONT, -HALF]]) { Object.assign(veer.ego, { x, y, psi: 0 }); veer.auditOncoming(); }
+  for (const [x, y] of [
+    [14 - FRONT, -5.6],
+    [31 - FRONT, -HALF],
+  ]) {
+    Object.assign(veer.ego, { x, y, psi: 0 });
+    veer.auditOncoming();
+  }
   assert.deepEqual(types(veer.events), ["red_light"], "a swerve toward a shallow right-hand exit, then straight on");
   // Saskatoon: 20th Street West bears right (29 deg) onto 15.8 m of 20th Street East, which then
   // carries on nearly straight; the right turn holds on the street after it
-  const sask = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/ca5573a8d934.v6.pack.json", import.meta.url))));
-  const bear = new World(sask, { parked: 0, pedestrians: 0 }), inter25 = sask.intersections.get("sig25");
-  const bearPts = resample(joinLanes(joinLanes(sask.lane("e397", 1).pts, sask.lane("e220", 1).pts), sask.lane("e562", 1).pts)), bearCum = cumulative(bearPts);
+  const sask = new MapData(
+    JSON.parse(fs.readFileSync(new URL("../data/maps/ca5573a8d934.v6.pack.json", import.meta.url))),
+  );
+  const bear = new World(sask, { parked: 0, pedestrians: 0 }),
+    inter25 = sask.intersections.get("sig25");
+  const bearPts = resample(
+      joinLanes(joinLanes(sask.lane("e397", 1).pts, sask.lane("e220", 1).pts), sask.lane("e562", 1).pts),
+    ),
+    bearCum = cumulative(bearPts);
   const bearApproach = sask.headingIn("e397");
-  bear.lastSignal = { centre: [inter25.x, inter25.y], nodes: sask.junctionNodes(inter25), approaches: new Set(inter25.approaches.map((a) => a.edge)), facing: bearApproach + Math.PI, exit: null, counted: false,
-    rightOnRed: { edge: "e397", approach: bearApproach, exit: bearApproach - Math.PI / 2, turned: false } };
+  bear.lastSignal = {
+    centre: [inter25.x, inter25.y],
+    nodes: sask.junctionNodes(inter25),
+    approaches: new Set(inter25.approaches.map((a) => a.edge)),
+    facing: bearApproach + Math.PI,
+    exit: null,
+    counted: false,
+    rightOnRed: { edge: "e397", approach: bearApproach, exit: bearApproach - Math.PI / 2, turned: false },
+  };
   const bearing = bear.lastSignal.rightOnRed;
   for (let s = 100; bear.lastSignal && s < bearCum.at(-1); s += 0.25) {
-    const [x, y] = pointAt(bearPts, bearCum, s), [x2, y2] = pointAt(bearPts, bearCum, s + 0.5), psi = Math.atan2(y2 - y, x2 - x);
+    const [x, y] = pointAt(bearPts, bearCum, s),
+      [x2, y2] = pointAt(bearPts, bearCum, s + 0.5),
+      psi = Math.atan2(y2 - y, x2 - x);
     Object.assign(bear.ego, { x: x - Math.cos(psi) * FRONT, y: y - Math.sin(psi) * FRONT, psi, v: 5 });
     bear.auditOncoming();
   }
@@ -338,25 +561,83 @@ const types = (events) => events.map((e) => e.type + (e.to ? `:${e.to}` : ""));
   // from 1 m past the line until it leaves the junction, along streets laid end to end from the
   // centre (`legs`: heading in degrees, length), beside another going straight on east
   const along = (legs) => {
-    const ends = { w: [-ARM, 0], c: [0, 0], e: [ARM, 0] }, edges = [], lanes = [], ids = ["w_in"];
-    const at = (p, deg, d) => [p[0] + d * Math.cos(deg * Math.PI / 180), p[1] + d * Math.sin(deg * Math.PI / 180)];
-    const links = [["w_in", "w", "c"], ["c_e", "c", "e"]];
-    legs.forEach(([deg, d], k) => { const from = k ? `p${k}` : "c"; ends[`p${k + 1}`] = at(ends[from], deg, d); links.push([`leg${k}`, from, `p${k + 1}`]); ids.push(`leg${k}`); });
+    const ends = { w: [-ARM, 0], c: [0, 0], e: [ARM, 0] },
+      edges = [],
+      lanes = [],
+      ids = ["w_in"];
+    const at = (p, deg, d) => [p[0] + d * Math.cos((deg * Math.PI) / 180), p[1] + d * Math.sin((deg * Math.PI) / 180)];
+    const links = [
+      ["w_in", "w", "c"],
+      ["c_e", "c", "e"],
+    ];
+    legs.forEach(([deg, d], k) => {
+      const from = k ? `p${k}` : "c";
+      ends[`p${k + 1}`] = at(ends[from], deg, d);
+      links.push([`leg${k}`, from, `p${k + 1}`]);
+      ids.push(`leg${k}`);
+    });
     for (const [id, from, to] of links) {
-      const pts = [ends[from], ends[to]], [rx, ry] = right(...pts), length = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
-      edges.push({ id, from, to, pts, length, lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: [-3.2, 3.2], parking: [0, 0], cls: "secondary", limit: 13.9, oneway: true, name: id,
-        ...(id === "w_in" ? { control: { type: "signal", id: "sig", s_line: LINE, group: "A" } } : {}) });
+      const pts = [ends[from], ends[to]],
+        [rx, ry] = right(...pts),
+        length = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
+      edges.push({
+        id,
+        from,
+        to,
+        pts,
+        length,
+        lanes: 1,
+        lane_width: 3.2,
+        lane_offsets: [HALF],
+        asphalt: [-3.2, 3.2],
+        parking: [0, 0],
+        cls: "secondary",
+        limit: 13.9,
+        oneway: true,
+        name: id,
+        ...(id === "w_in" ? { control: { type: "signal", id: "sig", s_line: LINE, group: "A" } } : {}),
+      });
       lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
     }
-    const m = new MapData({ bbox: [0, 0, 1, 1], extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20], edges, lanes, nodes: Object.entries(ends).map(([id, [x, y]]) => ({ id, x, y })),
-      intersections: [{ id: "sig", x: 0, y: 0, offset_s: 0, vertices: ["c"], approaches: [{ edge: "w_in", group: "A", s_line: LINE }] }], stops: [], buildings: [] });
-    const pts = resample(ids.slice(1).reduce((p, id) => joinLanes(p, m.lane(id, 0).pts), m.lane("w_in", 0).pts)), cum = cumulative(pts);
-    const turn = new Route({ id: "legs", polyline: pts, edges: ids, turns: [], start_s: 0, goal_s: 200 }, m).controls[0].turn;
-    const w = new World(m, { parked: 0, pedestrians: 0 }), inter = m.intersections.get("sig");
-    w.lastSignal = { centre: [0, 0], nodes: m.junctionNodes(inter), approaches: new Set(["w_in"]), facing: Math.PI, exit: null, counted: false, rightOnRed: { edge: "w_in", approach: 0, exit: -Math.PI / 2, turned: false } };
+    const m = new MapData({
+      bbox: [0, 0, 1, 1],
+      extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20],
+      edges,
+      lanes,
+      nodes: Object.entries(ends).map(([id, [x, y]]) => ({ id, x, y })),
+      intersections: [
+        {
+          id: "sig",
+          x: 0,
+          y: 0,
+          offset_s: 0,
+          vertices: ["c"],
+          approaches: [{ edge: "w_in", group: "A", s_line: LINE }],
+        },
+      ],
+      stops: [],
+      buildings: [],
+    });
+    const pts = resample(ids.slice(1).reduce((p, id) => joinLanes(p, m.lane(id, 0).pts), m.lane("w_in", 0).pts)),
+      cum = cumulative(pts);
+    const turn = new Route({ id: "legs", polyline: pts, edges: ids, turns: [], start_s: 0, goal_s: 200 }, m).controls[0]
+      .turn;
+    const w = new World(m, { parked: 0, pedestrians: 0 }),
+      inter = m.intersections.get("sig");
+    w.lastSignal = {
+      centre: [0, 0],
+      nodes: m.junctionNodes(inter),
+      approaches: new Set(["w_in"]),
+      facing: Math.PI,
+      exit: null,
+      counted: false,
+      rightOnRed: { edge: "w_in", approach: 0, exit: -Math.PI / 2, turned: false },
+    };
     const r = w.lastSignal.rightOnRed;
     for (let s = LINE + 1; w.lastSignal && s < cum.at(-1); s += 0.25) {
-      const [x, y] = pointAt(pts, cum, s), [x2, y2] = pointAt(pts, cum, s + 0.5), psi = Math.atan2(y2 - y, x2 - x);
+      const [x, y] = pointAt(pts, cum, s),
+        [x2, y2] = pointAt(pts, cum, s + 0.5),
+        psi = Math.atan2(y2 - y, x2 - x);
       Object.assign(w.ego, { x: x - Math.cos(psi) * FRONT, y: y - Math.sin(psi) * FRONT, psi, v: 5 });
       w.auditOncoming();
     }
@@ -364,26 +645,70 @@ const types = (events) => events.map((e) => e.type + (e.to ? `:${e.to}` : ""));
   };
   // by a street of `first` m bearing 29 deg right, then `then` m nearly straight on (10 deg right
   // of the approach), then on
-  const bearBy = (first, then) => along([[-29, first], [-10, then], [-10, ARM]]);
+  const bearBy = (first, then) =>
+    along([
+      [-29, first],
+      [-10, then],
+      [-10, ARM],
+    ]);
   assert.deepEqual(bearBy(12, 20), { turn: "right", events: [], turned: true }, "by a 12 m street bearing right");
-  assert.deepEqual(bearBy(20, 5), { turn: "right", events: [], turned: true }, "by a 20 m street bearing right, then 5 m on");
+  assert.deepEqual(
+    bearBy(20, 5),
+    { turn: "right", events: [], turned: true },
+    "by a 20 m street bearing right, then 5 m on",
+  );
   // straight on through the red, then right 8 m past the centre onto another street
-  assert.deepEqual(along([[0, 8], [-90, ARM]]), { turn: "straight", events: ["red_light"], turned: false }, "straight on, then right off that street");
+  assert.deepEqual(
+    along([
+      [0, 8],
+      [-90, ARM],
+    ]),
+    { turn: "straight", events: ["red_light"], turned: false },
+    "straight on, then right off that street",
+  );
   // a sharp lane change to the right just past the line, then straight on, is not a right turn
-  const swerve = new Route({ id: "swerve", edges: ["w_in", "e_out"], turns: [], start_s: 0, goal_s: 120,
-    polyline: resample([[-ARM, -HALF], [-8, -HALF], [-2, -HALF - 3.2], [ARM, -HALF - 3.2]]) }, map);
+  const swerve = new Route(
+    {
+      id: "swerve",
+      edges: ["w_in", "e_out"],
+      turns: [],
+      start_s: 0,
+      goal_s: 120,
+      polyline: resample([
+        [-ARM, -HALF],
+        [-8, -HALF],
+        [-2, -HALF - 3.2],
+        [ARM, -HALF - 3.2],
+      ]),
+    },
+    map,
+  );
   const swerving = setup({ stopped: true, route: STRAIGHT });
   // (this one-lane street's curb posts would stop the car; only the audit is under test here)
-  swerving.route = swerve; swerving.staticObstacles = { sweep: () => null, overlaps: () => [] };
-  assert.ok(Math.max(...[1, 3, 5].map((d) => Math.abs(swerve.headingAt(swerve.project(-8, -HALF).s + d)))) > 25 * Math.PI / 180, "the swerve turns more than 25 deg");
-  assert.deepEqual(types(driveThrough(swerving, swerve, { seconds: 8 })), ["red_light"], "a swerve to the right, then straight on");
+  swerving.route = swerve;
+  swerving.staticObstacles = { sweep: () => null, overlaps: () => [] };
+  assert.ok(
+    Math.max(...[1, 3, 5].map((d) => Math.abs(swerve.headingAt(swerve.project(-8, -HALF).s + d)))) >
+      (25 * Math.PI) / 180,
+    "the swerve turns more than 25 deg",
+  );
+  assert.deepEqual(
+    types(driveThrough(swerving, swerve, { seconds: 8 })),
+    ["red_light"],
+    "a swerve to the right, then straight on",
+  );
   const montreal = junction();
   montreal.map.rightOnRed = false;
-  assert.deepEqual(types(run({ on: montreal.map, route: montreal.routeData("s_out", "right") }).events), ["red_light"], "where it is not allowed");
+  assert.deepEqual(
+    types(run({ on: montreal.map, route: montreal.routeData("s_out", "right") }).events),
+    ["red_light"],
+    "where it is not allowed",
+  );
   // in front of a car from the left due within 2 s, on its way down North Street
   const cutOff = () => {
     const n = fromLeft(26, 11);
-    n.path = new NpcPath(map, rng(1)); n.path.start("n_in", 0, ARM - 26, [["s_out", 0]]);
+    n.path = new NpcPath(map, rng(1));
+    n.path.start("n_in", 0, ARM - 26, [["s_out", 0]]);
     return n;
   };
   assert.deepEqual(types(run({ npcs: [cutOff()] }).events), ["failed_to_yield:cross traffic"]);
@@ -395,8 +720,10 @@ const types = (events) => events.map((e) => e.type + (e.to ? `:${e.to}` : ""));
     driveThrough(w, w.route, { seconds: 1.5 });
     assert.ok(w.lastSignal?.rightOnRed);
     const n = fromLeft(-3, v);
-    n.path = new NpcPath(map, rng(1)); n.path.start("s_out", 0, 3);
-    w.npcs = [n]; w.events = [];
+    n.path = new NpcPath(map, rng(1));
+    n.path.start("s_out", 0, 3);
+    w.npcs = [n];
+    w.events = [];
     Object.assign(w.ego, { x: -HALF, y: -9 + FRONT, psi: -Math.PI / 2 });
     w.auditOncoming();
     return types(w.events);
@@ -408,20 +735,27 @@ const types = (events) => events.map((e) => e.type + (e.to ? `:${e.to}` : ""));
   const followed = setup({ stopped: true });
   driveThrough(followed, followed.route, { seconds: 1.5 });
   const follower = car("follower", 0, 0, -Math.PI / 2, 8);
-  follower.path = new NpcPath(map, rng(1)); follower.path.start("w_in", 0, ARM - 20, [["s_out", 0]]);
+  follower.path = new NpcPath(map, rng(1));
+  follower.path.start("w_in", 0, ARM - 20, [["s_out", 0]]);
   for (follower.path.s = 0; follower.path.pointAt(follower.path.s)[1] > -13; follower.path.s += 0.1);
   [follower.x, follower.y] = follower.path.pointAt(follower.path.s);
-  followed.npcs = [follower]; followed.events = [];
+  followed.npcs = [follower];
+  followed.events = [];
   Object.assign(followed.ego, { x: -HALF, y: -28 + FRONT, psi: -Math.PI / 2 });
   followed.auditOncoming();
   assert.deepEqual(types(followed.events), [], "a car following it round the corner");
   // nor while it is still in the junction, 8 m behind at 5 m/s
-  follower.path.start("w_in", 0, ARM - 20, [["s_out", 0]]); follower.path.s = 148;
-  [follower.x, follower.y] = follower.path.pointAt(148); follower.psi = follower.path.headingAt(148); follower.v = 5;
+  follower.path.start("w_in", 0, ARM - 20, [["s_out", 0]]);
+  follower.path.s = 148;
+  [follower.x, follower.y] = follower.path.pointAt(148);
+  follower.psi = follower.path.headingAt(148);
+  follower.v = 5;
   Object.assign(followed.ego, { x: -HALF, y: -12 + FRONT, psi: -Math.PI / 2, v: 5 });
   followed.auditOncoming();
   assert.deepEqual(types(followed.events), [], "a car following it round the corner, in the junction");
-  console.log("✓ the audit: a right on red after a full stop is legal; rolling it, or going straight or left after the stop, runs the red; cutting off traffic from the left fails to yield");
+  console.log(
+    "✓ the audit: a right on red after a full stop is legal; rolling it, or going straight or left after the stop, runs the red; cutting off traffic from the left fails to yield",
+  );
 }
 
 // closed loop: traffic moves at constant speed in its lane
@@ -429,7 +763,14 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
   const autopilot = new Autopilot(world);
   autopilot.brainName = "rules";
   autopilot.setEnabled(true);
-  const fleet = { step(dt) { for (const n of world.npcs) { n.x += Math.cos(n.psi) * n.v * dt; n.y += Math.sin(n.psi) * n.v * dt; } } };
+  const fleet = {
+    step(dt) {
+      for (const n of world.npcs) {
+        n.x += Math.cos(n.psi) * n.v * dt;
+        n.y += Math.sin(n.psi) * n.v * dt;
+      }
+    },
+  };
   const dt = 1 / 30;
   for (let i = 0; i < seconds / dt && world.route; i++) {
     stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
@@ -440,21 +781,40 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
 
 {
   // from 40 m out on a red: stop, wait for two cars from the left, turn, arrive, all before the green
-  const world = setup({ x: -40, v: 9, t: LATE_RED - 6, npcs: [fromLeft(110), Object.assign(fromLeft(140), { id: "second" })] });
-  let stoppedFor = 0, turnedAt = null;
-  drive(world, { seconds: 45, watch: (w, ap) => {
-    if (w.ego.v < 0.2 && w.ego.x < -8) stoppedFor += 1 / 30;
-    if (turnedAt === null && w.ego.y < -HALF - 2) turnedAt = { t: w.t, light: phaseOf(map.intersections.get("sig"), w.t).A, last: Math.max(...w.npcs.map((n) => n.y)) };
-  } });
+  const world = setup({
+    x: -40,
+    v: 9,
+    t: LATE_RED - 6,
+    npcs: [fromLeft(110), Object.assign(fromLeft(140), { id: "second" })],
+  });
+  let stoppedFor = 0,
+    turnedAt = null;
+  drive(world, {
+    seconds: 45,
+    watch: (w, ap) => {
+      if (w.ego.v < 0.2 && w.ego.x < -8) stoppedFor += 1 / 30;
+      if (turnedAt === null && w.ego.y < -HALF - 2)
+        turnedAt = {
+          t: w.t,
+          light: phaseOf(map.intersections.get("sig"), w.t).A,
+          last: Math.max(...w.npcs.map((n) => n.y)),
+        };
+    },
+  });
   assert.equal(world.violations.collisions, 0);
   assert.equal(world.violations.red_lights_run, 0);
   assert.equal(world.violations.failed_to_yield, 0);
   assert.equal(world.violations.safety_brakes, 0);
   assert.ok(stoppedFor > 0.7, `stopped at the line for ${stoppedFor.toFixed(1)} s`);
   assert.equal(turnedAt?.light, "red", "turned on the red");
-  assert.ok(turnedAt.last < -10, `after both cars from the left had gone by (the second was at y=${turnedAt?.last.toFixed(1)})`);
+  assert.ok(
+    turnedAt.last < -10,
+    `after both cars from the left had gone by (the second was at y=${turnedAt?.last.toFixed(1)})`,
+  );
   assert.ok(world.route === null, "arrived");
-  console.log(`✓ Rules stops for the red, waits for two cars from the left, and turns right on red ${(turnedAt.t - (LATE_RED - 6)).toFixed(1)} s after setting off`);
+  console.log(
+    `✓ Rules stops for the red, waits for two cars from the left, and turns right on red ${(turnedAt.t - (LATE_RED - 6)).toFixed(1)} s after setting off`,
+  );
 }
 
 {
@@ -462,8 +822,15 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
   // (it sets off 30 m before the line at 6 m/s, turning right onto North Street)
   const queue = (world, on = map) => {
     const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
-    const n = car("npc", -8 - 30 - FRONT, -HALF, 0, 6, { v0: 12, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
-    n.path = new NpcPath(on, rng(2)); n.path.start("w_in", 0, LINE - 30 - FRONT, [["s_out", 0]]);
+    const n = car("npc", -8 - 30 - FRONT, -HALF, 0, 6, {
+      v0: 12,
+      driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
+      stopMem: new StopMemory(),
+      frozen: 0,
+      waiting: 0,
+    });
+    n.path = new NpcPath(on, rng(2));
+    n.path.start("w_in", 0, LINE - 30 - FRONT, [["s_out", 0]]);
     fleet.vehicles.push(n);
     return { fleet, n };
   };
@@ -471,7 +838,11 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
   Object.assign(world.ego, { x: -HALF, y: 120, psi: -Math.PI / 2, v: 0 });
   const { fleet, n: npc } = queue(world);
   let stopped = 0;
-  for (let i = 0; i < 20 * 60 && npc.y > -20; i++) { fleet.step(1 / 60); world.t += 1 / 60; if (npc.v < 0.2 && npc.x < -8) stopped += 1 / 60; }
+  for (let i = 0; i < 20 * 60 && npc.y > -20; i++) {
+    fleet.step(1 / 60);
+    world.t += 1 / 60;
+    if (npc.v < 0.2 && npc.x < -8) stopped += 1 / 60;
+  }
   assert.ok(npc.y < -20, `turned right (at ${npc.x.toFixed(1)}, ${npc.y.toFixed(1)})`);
   assert.ok(stopped > 0.7, `after a full stop (${stopped.toFixed(1)} s)`);
   assert.equal(phaseOf(map.intersections.get("sig"), world.t).A, "red", "on the red");
@@ -479,10 +850,16 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
   const busy = setup({ route: null });
   Object.assign(busy.ego, { x: -HALF, y: 110, psi: -Math.PI / 2, v: 11 });
   const held = queue(busy);
-  let ahead = -Infinity, waited = 0;
+  let ahead = -Infinity,
+    waited = 0;
   for (let i = 0; i < 22 * 60 && held.n.y > -20; i++) {
-    held.fleet.step(1 / 60); busy.t += 1 / 60; busy.ego.y -= 11 / 60;
-    if (busy.ego.y > -6) { ahead = Math.max(ahead, held.n.x + FRONT); if (held.n.v < 0.2) waited += 1 / 60; }
+    held.fleet.step(1 / 60);
+    busy.t += 1 / 60;
+    busy.ego.y -= 11 / 60;
+    if (busy.ego.y > -6) {
+      ahead = Math.max(ahead, held.n.x + FRONT);
+      if (held.n.v < 0.2) waited += 1 / 60;
+    }
   }
   assert.ok(ahead < -8 + 0.5, `held behind the line (front at x=${ahead.toFixed(1)}) until the car had gone by`);
   assert.ok(waited > 0.7, `waiting ${waited.toFixed(1)} s`);
@@ -492,19 +869,30 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
   const strict = setup({ route: null, on: banned.map });
   Object.assign(strict.ego, { x: -HALF, y: 120, psi: -Math.PI / 2, v: 0 });
   const none = queue(strict, banned.map);
-  for (let i = 0; i < 15 * 60; i++) { none.fleet.step(1 / 60); strict.t += 1 / 60; }
+  for (let i = 0; i < 15 * 60; i++) {
+    none.fleet.step(1 / 60);
+    strict.t += 1 / 60;
+  }
   assert.ok(none.n.x < -8 - FRONT + 0.5, "and never where the map does not allow it");
-  console.log("✓ traffic cars turn right on red after a full stop, wait for the driven car coming from the left, and never on a map that bans it");
+  console.log(
+    "✓ traffic cars turn right on red after a full stop, wait for the driven car coming from the left, and never on a map that bans it",
+  );
 }
 
 {
   const challenge = CHALLENGES.find((c) => c.id === "right-on-red");
-  const calgary = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/a53c5bcf6438.v6.pack.json", import.meta.url))));
+  const calgary = new MapData(
+    JSON.parse(fs.readFileSync(new URL("../data/maps/a53c5bcf6438.v6.pack.json", import.meta.url))),
+  );
   const result = await evaluateChallenge(calgary, challenge);
   assert.equal(result.pass, true, JSON.stringify(result.report?.status));
-  const ids = result.events.filter((e) => e.type === "collision" || e.type === "red_light" || e.type === "failed_to_yield");
+  const ids = result.events.filter(
+    (e) => e.type === "collision" || e.type === "red_light" || e.type === "failed_to_yield",
+  );
   assert.deepEqual(ids, []);
-  console.log(`✓ the Right on red challenge (Calgary) passes with Rules in ${result.report?.time_s ?? result.time_s} s`);
+  console.log(
+    `✓ the Right on red challenge (Calgary) passes with Rules in ${result.report?.time_s ?? result.time_s} s`,
+  );
 }
 
 console.log("All right-on-red checks passed.");

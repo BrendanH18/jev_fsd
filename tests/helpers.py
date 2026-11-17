@@ -25,9 +25,13 @@ def fake_answers(questions, picks=None):
             out[qid] = {"type": "choice", "choice": chosen, "probabilities": probs, "confidence": 0.9}
         elif q["type"] == "score":
             n = len(q["criteria"])
-            out[qid] = {"type": "score", "score": pick if pick is not None else 0.0,
-                        "legend": {str(i): c for i, c in enumerate(q["criteria"])},
-                        "probabilities": {str(i): 1 / n for i in range(n)}, "confidence": 0.8}
+            out[qid] = {
+                "type": "score",
+                "score": pick if pick is not None else 0.0,
+                "legend": {str(i): c for i, c in enumerate(q["criteria"])},
+                "probabilities": {str(i): 1 / n for i in range(n)},
+                "confidence": 0.8,
+            }
         else:
             out[qid] = {"type": "noul", "noul": pick if pick is not None else 0.02}
     return out
@@ -46,8 +50,11 @@ class FakeClient:
     def system_one(self, state, questions):
         self.calls.append((state, questions))
         answers = fake_answers(questions, self.picker(state, questions))
-        return JevResult({"state": state, "model": self.model, "questions": questions},
-                         {"model": self.model, "answers": answers, "usage": {"input_tokens": self.input_tokens}}, 12.0)
+        return JevResult(
+            {"state": state, "model": self.model, "questions": questions},
+            {"model": self.model, "answers": answers, "usage": {"input_tokens": self.input_tokens}},
+            12.0,
+        )
 
 
 _PACK = None

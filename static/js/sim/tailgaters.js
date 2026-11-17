@@ -108,20 +108,43 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // The World's state: whether tailgaters come, their random stream, when the next may be picked, the one
 // tailgating now (its id), and the car's recent speeds (for its late reaction).
 export function createTailgaters({ enabled = false, seed = 1 } = {}) {
-  return { enabled: !!enabled, random: enabled ? rng(seed * 2654435761 + 56042) : null, next: enabled ? TAIL_FIRST_S : Infinity,
-    checkAt: 0, active: null, easing: null, committed: 0, hist: [], behind: false };
+  return {
+    enabled: !!enabled,
+    random: enabled ? rng(seed * 2654435761 + 56042) : null,
+    next: enabled ? TAIL_FIRST_S : Infinity,
+    checkAt: 0,
+    active: null,
+    easing: null,
+    committed: 0,
+    hist: [],
+    behind: false,
+  };
 }
 
 // Ordinary cars only: not cyclists, transit, school buses, trains, trucks at work, emergency vehicles,
 // plows, cars pulling out or parking, running a light, or passing a cyclist.
-const ordinary = (n) => n.kind !== "bike" && !n.transit && !n.school && !n.rail && !n.collect && !n.pull && !n.parking && !n.parker && !n.runner && !n.cyc
-  && !isPlow(n) && !isEmergency(n) && !isEmergencyVehicle(n);
+const ordinary = (n) =>
+  n.kind !== "bike" &&
+  !n.transit &&
+  !n.school &&
+  !n.rail &&
+  !n.collect &&
+  !n.pull &&
+  !n.parking &&
+  !n.parker &&
+  !n.runner &&
+  !n.cyc &&
+  !isPlow(n) &&
+  !isEmergency(n) &&
+  !isEmergencyVehicle(n);
 
 // How far `o` is behind `observer` in its lane, going its way: from its front bumper to the observer's
 // rear bumper (m), or null.
 export function behindInLane(observer, o, look = TAIL_LOOK_M) {
   if (Math.cos(wrap(o.psi - observer.psi)) < 0.87) return null;
-  const spec = observer.spec || CAR, os = o.spec || CAR, local = observer.toLocal(o.x, o.y);
+  const spec = observer.spec || CAR,
+    os = o.spec || CAR,
+    local = observer.toLocal(o.x, o.y);
   if (Math.abs(local.right) > TAIL_SIDE_M) return null;
   const gap = -spec.rearOverhang - (local.ahead + (os.length - os.rearOverhang) * Math.cos(wrap(o.psi - observer.psi)));
   return gap < -0.5 || gap > look ? null : gap;
@@ -132,7 +155,16 @@ export function behindInLane(observer, o, look = TAIL_LOOK_M) {
 export function tailgaterThreat(world, observer, others) {
   let best = null;
   for (const o of others) {
-    if (o === observer || !o.spec || o.kind === "bike" || o.kind === "pedestrian" || o.parked || o.goose || !(o.v >= TAIL_THREAT_MIN_MPS)) continue;
+    if (
+      o === observer ||
+      !o.spec ||
+      o.kind === "bike" ||
+      o.kind === "pedestrian" ||
+      o.parked ||
+      o.goose ||
+      !(o.v >= TAIL_THREAT_MIN_MPS)
+    )
+      continue;
     if (Math.abs(o.x - observer.x) > TAIL_LOOK_M + 10 || Math.abs(o.y - observer.y) > TAIL_LOOK_M + 10) continue;
     const gap = behindInLane(observer, o);
     if (gap === null) continue;
@@ -146,20 +178,43 @@ export function tailgaterThreat(world, observer, others) {
 // Make traffic car `n` a tailgater: its tailgating driver and its hurry, and its phase (for edging,
 // peeking and flashing), from the feature's stream.
 export function commitTailgater(world, n) {
-  const state = world.tailgaters, limit = world.map.edges.get(n.path?.currentEdge()?.id)?.limit ?? 11.2;
-  n.tailgate = { since: world.t, driver: n.driver, v0: n.v0, phase: state.random ? state.random() * TAIL_FLASH_EVERY_S : 0, close: false, lostFor: 0 };
-  n.driver = { ...(n.driver || {}), aMax: Math.max(n.driver?.aMax ?? 1.5, 2.2), b: 3.0, s0: TAIL_S0_M, T: TAIL_T, react: 0.3, lcRate: 0.5 };
+  const state = world.tailgaters,
+    limit = world.map.edges.get(n.path?.currentEdge()?.id)?.limit ?? 11.2;
+  n.tailgate = {
+    since: world.t,
+    driver: n.driver,
+    v0: n.v0,
+    phase: state.random ? state.random() * TAIL_FLASH_EVERY_S : 0,
+    close: false,
+    lostFor: 0,
+  };
+  n.driver = {
+    ...(n.driver || {}),
+    aMax: Math.max(n.driver?.aMax ?? 1.5, 2.2),
+    b: 3.0,
+    s0: TAIL_S0_M,
+    T: TAIL_T,
+    react: 0.3,
+    lcRate: 0.5,
+  };
   n.v0 = Math.max(n.v0 || 0, limit * TAIL_HURRY);
-  state.active = n.id; state.committed++; state.hist = [];
+  state.active = n.id;
+  state.committed++;
+  state.hist = [];
   return n.tailgate;
 }
 
 // It gives up: its own driver again, still in a bit of a hurry.
 function endTailgate(world, n) {
-  const state = world.tailgaters, tg = n.tailgate, limit = world.map.edges.get(n.path?.currentEdge()?.id)?.limit ?? 11.2;
-  n.driver = tg.driver; n.v0 = Math.max(tg.v0 || 0, limit * TAIL_AFTER);
+  const state = world.tailgaters,
+    tg = n.tailgate,
+    limit = world.map.edges.get(n.path?.currentEdge()?.id)?.limit ?? 11.2;
+  n.driver = tg.driver;
+  n.v0 = Math.max(tg.v0 || 0, limit * TAIL_AFTER);
   delete n.tailgate;
-  state.active = null; state.next = world.t + TAIL_COOLDOWN_S; state.hist = [];
+  state.active = null;
+  state.next = world.t + TAIL_COOLDOWN_S;
+  state.hist = [];
   state.easing = n.tgPeek ? n.id : null;
 }
 
@@ -168,7 +223,8 @@ const ease = (from, to, step) => from + Math.max(-step, Math.min(step, to - from
 // Each traffic step (NpcFleet.step, before the drivers move): the tailgater's edging, peeking and
 // giving up, and, now and then, a new one.
 export function manageTailgaters(world, fleet, dt) {
-  const state = world.tailgaters, ego = world.ego;
+  const state = world.tailgaters,
+    ego = world.ego;
   // (whether any vehicle is tailgating the car now, by the one test: for the coach, sim/drive-score.js)
   state.behind = !!tailgaterThreat(world, ego, world.npcs);
   if (state.easing) {
@@ -178,7 +234,12 @@ export function manageTailgaters(world, fleet, dt) {
   }
   if (state.active) {
     const n = fleet.vehicles.find((v) => v.id === state.active);
-    if (!n?.tailgate) { state.active = null; state.next = world.t + TAIL_COOLDOWN_S; state.hist = []; return; }
+    if (!n?.tailgate) {
+      state.active = null;
+      state.next = world.t + TAIL_COOLDOWN_S;
+      state.hist = [];
+      return;
+    }
     const tg = n.tailgate;
     state.hist.push([world.t, ego.v]);
     while (state.hist.length > 2 && state.hist[1][0] <= world.t - TAIL_REACT_S - TAIL_JUDGE_S) state.hist.shift();
@@ -187,9 +248,12 @@ export function manageTailgaters(world, fleet, dt) {
     if (tg.close) world.tailgatersSeen = true;
     tg.lostFor = gap === null ? tg.lostFor + dt : 0;
     const passed = ego.toLocal(n.x, n.y).ahead - n.spec.rearOverhang > ego.spec.length - ego.spec.rearOverhang;
-    if (passed || tg.lostFor > TAIL_LOST_S || world.t - tg.since > TAIL_MAX_S) { endTailgate(world, n); return; }
+    if (passed || tg.lostFor > TAIL_LOST_S || world.t - tg.since > TAIL_MAX_S) {
+      endTailgate(world, n);
+      return;
+    }
     const k = world.t - tg.since + tg.phase;
-    n.driver.T = TAIL_T * (1 + TAIL_EDGE * Math.sin(2 * Math.PI * k / TAIL_EDGE_S));
+    n.driver.T = TAIL_T * (1 + TAIL_EDGE * Math.sin((2 * Math.PI * k) / TAIL_EDGE_S));
     const peek = tg.close && k % TAIL_PEEK_EVERY_S > TAIL_PEEK_EVERY_S - TAIL_PEEK_FOR_S ? -TAIL_PEEK_M : 0;
     n.tgPeek = ease(n.tgPeek || 0, peek, TAIL_PEEK_MPS * dt);
     // (it may pull out and pass on the left, but from the leftmost lane it never cuts by on the right)
@@ -199,11 +263,21 @@ export function manageTailgaters(world, fleet, dt) {
   if (world.t < state.next || world.t < state.checkAt) return;
   state.checkAt = world.t + TAIL_CHECK_S;
   if (ego.v < TAIL_MIN_MPS) return;
-  let pick = null, best = Infinity;
+  let pick = null,
+    best = Infinity;
   for (const n of fleet.vehicles) {
-    if (!ordinary(n) || n.v < TAIL_MIN_MPS || Math.abs(n.x - ego.x) > TAIL_PICK_M + 10 || Math.abs(n.y - ego.y) > TAIL_PICK_M + 10) continue;
+    if (
+      !ordinary(n) ||
+      n.v < TAIL_MIN_MPS ||
+      Math.abs(n.x - ego.x) > TAIL_PICK_M + 10 ||
+      Math.abs(n.y - ego.y) > TAIL_PICK_M + 10
+    )
+      continue;
     const g = behindInLane(ego, n, TAIL_PICK_M);
-    if (g !== null && g < best) { best = g; pick = n; }
+    if (g !== null && g < best) {
+      best = g;
+      pick = n;
+    }
   }
   if (pick && state.random() < TAIL_CHANCE) commitTailgater(world, pick);
 }
@@ -211,9 +285,13 @@ export function manageTailgaters(world, fleet, dt) {
 // The car's speed as the tailgater sees it: TAIL_REACT_S ago (its brake lights noticed late), or `back`
 // seconds before that.
 export function tailgateLeadSpeed(world, back = 0) {
-  const h = world.tailgaters.hist, at = world.t - TAIL_REACT_S - back;
+  const h = world.tailgaters.hist,
+    at = world.t - TAIL_REACT_S - back;
   let v = h.length ? h[0][1] : world.ego.v;
-  for (const [t, s] of h) { if (t > at) break; v = s; }
+  for (const [t, s] of h) {
+    if (t > at) break;
+    v = s;
+  }
   return v;
 }
 
@@ -222,9 +300,11 @@ export function tailgateLeadSpeed(world, back = 0) {
 // car brakes on like that to a stop (from where it expects it to be by now). Infinity while it sees no
 // braking.
 export function tailgateBrake(world, n, gap) {
-  const seen = tailgateLeadSpeed(world), braking = (tailgateLeadSpeed(world, TAIL_JUDGE_S) - seen) / TAIL_JUDGE_S;
+  const seen = tailgateLeadSpeed(world),
+    braking = (tailgateLeadSpeed(world, TAIL_JUDGE_S) - seen) / TAIL_JUDGE_S;
   if (braking < 0.5) return Infinity;
-  const ahead = Math.max(0, seen - braking * TAIL_REACT_S), room = Math.max(0.5, gap - TAIL_S0_M + ahead * ahead / (2 * braking));
+  const ahead = Math.max(0, seen - braking * TAIL_REACT_S),
+    room = Math.max(0.5, gap - TAIL_S0_M + (ahead * ahead) / (2 * braking));
   return -Math.max(braking + TAIL_MATCH_MPS2, Math.max(0, n.v) ** 2 / (2 * room));
 }
 
@@ -240,26 +320,45 @@ export function tailgaterFlash(world, n) {
 // What the situation ahead requires of `ego` (m/s^2 of braking, and why), from the shared tests (see
 // the top of this file). `s`: its route arc length, where the caller has it (else it is projected).
 export function brakingNeed(world, ego = world.ego, s = null) {
-  const v = Math.max(0, ego.v), FRONT = ego.spec.length - ego.spec.rearOverhang;
-  let decel = 0, why = null;
-  const need = (d, what) => { const a = v * v / (2 * Math.max(0.5, d)); if (a > decel) { decel = a; why = what; } };
+  const v = Math.max(0, ego.v),
+    FRONT = ego.spec.length - ego.spec.rearOverhang;
+  let decel = 0,
+    why = null;
+  const need = (d, what) => {
+    const a = (v * v) / (2 * Math.max(0.5, d));
+    if (a > decel) {
+      decel = a;
+      why = what;
+    }
+  };
   // whatever is in its path ahead
   for (const o of world.obstaclesNear(ego.x, ego.y, NEED_LOOK_M)) {
     if (o === ego) continue;
-    const person = o.kind === "pedestrian" || !!o.goose, os = o.spec || CAR, local = ego.toLocal(o.x, o.y);
+    const person = o.kind === "pedestrian" || !!o.goose,
+      os = o.spec || CAR,
+      local = ego.toLocal(o.x, o.y);
     if (Math.abs(local.right) > ego.spec.width / 2 + (person ? 1.8 : (os.width || CAR.width) / 2 + 0.3)) continue;
-    const gap = local.ahead - FRONT - (person ? 0.3 : os.rearOverhang ?? CAR.rearOverhang);
+    const gap = local.ahead - FRONT - (person ? 0.3 : (os.rearOverhang ?? CAR.rearOverhang));
     if (gap < -0.5 || gap > NEED_LOOK_M) continue;
     const along = Number.isFinite(o.psi) ? Math.max(0, (o.v || 0) * Math.cos(wrap(o.psi - ego.psi))) : 0;
     const room = gap - (person ? 1 : FOLLOWING_STANDSTILL_M - 1);
     const what = person ? (o.goose ? "geese" : "person") : "vehicle ahead";
-    if (v > along) { const a = (v - along) ** 2 / (2 * Math.max(0.5, room)); if (a > decel) { decel = a; why = what; } }
+    if (v > along) {
+      const a = (v - along) ** 2 / (2 * Math.max(0.5, room));
+      if (a > decel) {
+        decel = a;
+        why = what;
+      }
+    }
     const braking = -(o.ax || 0);
-    if (braking > 0.5) need(room + along * along / (2 * braking), what);
+    if (braking > 0.5) need(room + (along * along) / (2 * braking), what);
   }
   const route = world.route;
   if (route) {
-    if (s === null) { const p = route.project(ego.x, ego.y); s = p.distance < 6 ? p.s : null; }
+    if (s === null) {
+      const p = route.project(ego.x, ego.y);
+      s = p.distance < 6 ? p.s : null;
+    }
     if (s !== null) {
       // a red light, or an amber it can stop for, or a stop sign not yet stopped at, at its line
       for (const c of route.controls) {
@@ -270,14 +369,22 @@ export function brakingNeed(world, ego = world.ego, s = null) {
         if (ctl.type === "signal") {
           const inter = world.map.intersections.get(ctl.id);
           const light = inter ? movementSignal(approachPhase(inter, c.edge, world.t), c.turn || "straight") : "red";
-          if (light === "red" || light === "flashing_red" || (light === "yellow" && d >= amberStoppingDistance(ego))) need(d - 0.5, light === "yellow" ? "amber light" : "red light");
-        } else if (ctl.type === "stop" && !(world.egoStop?.controlId === ctl.id && world.egoStop.completed)) need(d - 0.5, "stop sign");
+          if (light === "red" || light === "flashing_red" || (light === "yellow" && d >= amberStoppingDistance(ego)))
+            need(d - 0.5, light === "yellow" ? "amber light" : "red light");
+        } else if (ctl.type === "stop" && !(world.egoStop?.controlId === ctl.id && world.egoStop.completed))
+          need(d - 0.5, "stop sign");
       }
       // the route's bends, at comfortable cornering
       const lat = comfort().lat;
       for (let d = 0; d <= 60 && s + d < route.length; d += 3) {
         const vc = route.curveSpeedAt(s, d, lat);
-        if (Number.isFinite(vc) && v > vc) { const a = (v * v - vc * vc) / (2 * Math.max(3, d)); if (a > decel) { decel = a; why = "bend"; } }
+        if (Number.isFinite(vc) && v > vc) {
+          const a = (v * v - vc * vc) / (2 * Math.max(3, d));
+          if (a > decel) {
+            decel = a;
+            why = "bend";
+          }
+        }
       }
       // and the destination
       const left = route.length - 1 - s;
@@ -290,9 +397,13 @@ export function brakingNeed(world, ego = world.ego, s = null) {
 // The audit, each step: a brake check (see the top of this file), counted once a braking, as
 // `brake_checks` (`world.tailgaterCall` follows the braking).
 export function auditTailgaters(world) {
-  const ego = world.ego, decel = -(ego.ax || 0);
+  const ego = world.ego,
+    decel = -(ego.ax || 0);
   let call = world.tailgaterCall;
-  if (decel < BRAKE_RELEASE_DECEL) { world.tailgaterCall = null; return; }
+  if (decel < BRAKE_RELEASE_DECEL) {
+    world.tailgaterCall = null;
+    return;
+  }
   if (!call) {
     if (decel < BRAKE_CHECK_DECEL || ego.v < BRAKE_CHECK_MIN_MPS) return;
     call = world.tailgaterCall = { since: world.t, max: 0, need: 0, why: null, threat: null, counted: false };
@@ -300,24 +411,52 @@ export function auditTailgaters(world) {
   if (call.counted) return;
   call.max = Math.max(call.max, decel);
   const need = brakingNeed(world);
-  if (need.decel >= call.need) { call.need = need.decel; call.why = need.why; }
+  if (need.decel >= call.need) {
+    call.need = need.decel;
+    call.why = need.why;
+  }
   const threat = tailgaterThreat(world, ego, world.npcs);
   if (threat) call.threat = { id: threat.vehicle.id ?? null, headway_s: Math.round(threat.headway_s * 100) / 100 };
-  if (world.t - call.since + 1e-9 < BRAKE_CHECK_HOLD_S || !call.threat || call.max <= Math.max(BRAKE_CHECK_DECEL, call.need + BRAKE_CHECK_SLACK)) return;
+  if (
+    world.t - call.since + 1e-9 < BRAKE_CHECK_HOLD_S ||
+    !call.threat ||
+    call.max <= Math.max(BRAKE_CHECK_DECEL, call.need + BRAKE_CHECK_SLACK)
+  )
+    return;
   call.counted = true;
   world.violations.brake_checks = (world.violations.brake_checks || 0) + 1;
-  world.events.push({ type: "brake_check", with: call.threat.id, decel_mps2: Math.round(call.max * 10) / 10, need_mps2: Math.round(call.need * 10) / 10,
-    ...(call.why ? { ahead: call.why } : {}), headway_s: call.threat.headway_s });
+  world.events.push({
+    type: "brake_check",
+    with: call.threat.id,
+    decel_mps2: Math.round(call.max * 10) / 10,
+    need_mps2: Math.round(call.need * 10) / 10,
+    ...(call.why ? { ahead: call.why } : {}),
+    headway_s: call.threat.headway_s,
+  });
 }
 
 // The driven car's sensing: the tailgater behind it among `seen`, or null. `s`: its route arc length.
 export function tailgaterSensing(world, seen, s = null) {
   const threat = tailgaterThreat(world, world.ego, seen);
   if (!threat) return null;
-  const o = threat.vehicle, r1 = (x) => Math.round(x * 10) / 10, need = brakingNeed(world, world.ego, s);
-  return { id: o.id ?? null, vehicle: o, gap_m: r1(threat.gap_m), headway_s: Math.round(threat.headway_s * 100) / 100, speed: r1(o.v), closing_mps: r1(threat.closing_mps),
-    flashing: tailgaterFlash(world, o), need_mps2: r1(need.decel), need_for: need.why, gentle_mps2: r1(Math.max(TAIL_GENTLE_DECEL, need.decel + TAIL_NEED_SLACK)),
-    room_factor: TAIL_ROOM, lane_right: false, can_move_right: false };
+  const o = threat.vehicle,
+    r1 = (x) => Math.round(x * 10) / 10,
+    need = brakingNeed(world, world.ego, s);
+  return {
+    id: o.id ?? null,
+    vehicle: o,
+    gap_m: r1(threat.gap_m),
+    headway_s: Math.round(threat.headway_s * 100) / 100,
+    speed: r1(o.v),
+    closing_mps: r1(threat.closing_mps),
+    flashing: tailgaterFlash(world, o),
+    need_mps2: r1(need.decel),
+    need_for: need.why,
+    gentle_mps2: r1(Math.max(TAIL_GENTLE_DECEL, need.decel + TAIL_NEED_SLACK)),
+    room_factor: TAIL_ROOM,
+    lane_right: false,
+    can_move_right: false,
+  };
 }
 
 // The HUD line for a tailgater close behind: said once each time it changes.
@@ -325,5 +464,9 @@ export function tailgaterNotice(world, snap) {
   const t = snap?.tailgater ?? (world.tailgaters?.enabled ? tailgaterThreat(world, world.ego, world.npcs) : null);
   if (!t) return null;
   const right = !!snap?.tailgater?.can_move_right;
-  return { key: `${t.id ?? t.vehicle?.id}:${right}`, text: right ? "TAILGATER · MOVE RIGHT AND LET THEM BY" : "TAILGATER · LEAVE MORE ROOM AHEAD", wait: false };
+  return {
+    key: `${t.id ?? t.vehicle?.id}:${right}`,
+    text: right ? "TAILGATER · MOVE RIGHT AND LET THEM BY" : "TAILGATER · LEAVE MORE ROOM AHEAD",
+    wait: false,
+  };
 }

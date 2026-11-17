@@ -15,15 +15,15 @@ import { QUEUE_MPS, ROOM_M as SPARE_M } from "./rail.js";
 import { isEmergency } from "./emergency.js";
 
 export { QUEUE_MPS };
-export const STANDSTILL_M = 2.5;    // the gap a driver stops behind a stopped vehicle (traffic 2 m, Rules 2.5 m)
-export const ROOM_M = STANDSTILL_M + SPARE_M;   // what a driver needs past the box besides its own length
-export const ENTERED_M = 1;         // a front this far past the line waits there only if barely moving
-export const CREEP_MPS = 2;         // (and short of the street across)
-export const LOOK_M = 60;           // a line further ahead than this is not checked yet
-const PAST_LINE_M = 2;              // (a vehicle whose rear is not this far past the line is queued at it, not in the box)
-const STAY_M = 1.6;                 // a vehicle this near a driver's path is on it
+export const STANDSTILL_M = 2.5; // the gap a driver stops behind a stopped vehicle (traffic 2 m, Rules 2.5 m)
+export const ROOM_M = STANDSTILL_M + SPARE_M; // what a driver needs past the box besides its own length
+export const ENTERED_M = 1; // a front this far past the line waits there only if barely moving
+export const CREEP_MPS = 2; // (and short of the street across)
+export const LOOK_M = 60; // a line further ahead than this is not checked yet
+const PAST_LINE_M = 2; // (a vehicle whose rear is not this far past the line is queued at it, not in the box)
+const STAY_M = 1.6; // a vehicle this near a driver's path is on it
 const SAME_WAY = Math.PI / 3;
-const NEAR_M = 90;                  // (only vehicles this near the junction are looked at)
+const NEAR_M = 90; // (only vehicles this near the junction are looked at)
 
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -47,10 +47,21 @@ export function boxBlocker(pts, cum, line, far, spec, vehicles, self = null, cen
   const need = far + spec.length + ROOM_M;
   let best = null;
   for (const o of vehicles) {
-    if (o === self || o.kind === "pedestrian" || o.kind === "bike" || o.kind === "train" || o.kind === "door" || o.parked || o.parking || Math.abs(o.v) >= QUEUE_MPS) continue;
+    if (
+      o === self ||
+      o.kind === "pedestrian" ||
+      o.kind === "bike" ||
+      o.kind === "train" ||
+      o.kind === "door" ||
+      o.parked ||
+      o.parking ||
+      Math.abs(o.v) >= QUEUE_MPS
+    )
+      continue;
     if (centre && (Math.abs(o.x - centre[0]) > NEAR_M || Math.abs(o.y - centre[1]) > NEAR_M)) continue;
     const os = o.spec || o;
-    const rearX = o.x - Math.cos(o.psi) * (os.rearOverhang || 0), rearY = o.y - Math.sin(o.psi) * (os.rearOverhang || 0);
+    const rearX = o.x - Math.cos(o.psi) * (os.rearOverhang || 0),
+      rearY = o.y - Math.sin(o.psi) * (os.rearOverhang || 0);
     const q = projectPoint(pts, cum, [rearX, rearY], null);
     if (!q || q.s < line + PAST_LINE_M || q.s > need || q.distance > STAY_M + (os.width || 1.9) / 2) continue;
     if (Math.abs(wrap(o.psi - q.heading)) > SAME_WAY) continue;
@@ -85,7 +96,8 @@ export function signalBoxesAhead(map, path, front, v) {
 export function boxHold(map, n, front, vehicles) {
   if (n.kind === "bike" || (isEmergency(n) && n.siren)) return null;
   for (const b of signalBoxesAhead(map, n.path, front, n.v)) {
-    if (boxBlocker(n.path.pts, n.path.cum, b.line, b.far, n.spec, vehicles, n, b.centre)) return Math.max(0, b.line - front);
+    if (boxBlocker(n.path.pts, n.path.cum, b.line, b.far, n.spec, vehicles, n, b.centre))
+      return Math.max(0, b.line - front);
   }
   return null;
 }
@@ -100,7 +112,8 @@ export function routeBoxAhead(map, route, frontS, v) {
     if (frontS > far) continue;
     const toLine = c.sRoute - frontS;
     if (toLine > LOOK_M) return null;
-    const near = boxStart(map, c.edge, c.sJunction), toNear = near - frontS;
+    const near = boxStart(map, c.edge, c.sJunction),
+      toNear = near - frontS;
     return { c, line: c.sRoute, near, far, toLine, toNear, waits: waitsAt(toLine, toNear, v) };
   }
   return null;
@@ -110,12 +123,15 @@ export function routeBoxAhead(map, route, frontS, v) {
 // LOOK_M: while its light is not red (on a red it waits anyway) and traffic it can see past the
 // junction leaves no room for it, to wait at the line. { key, text }, or null.
 export function boxNotice(world) {
-  const route = world.route, ego = world.ego;
+  const route = world.route,
+    ego = world.ego;
   if (!route) return null;
   const p = route.project(ego.x, ego.y, route.hint);
   if (!p || p.distance > 4) return null;
   const box = routeBoxAhead(world.map, route, p.s + ego.spec.length - ego.spec.rearOverhang, ego.v);
   if (!box?.waits || world.light(box.c.control.id, box.c.edge, box.c.turn) === "red") return null;
   const visible = world.npcs.filter((n) => world.sees(ego, n));
-  return boxBlocker(route.pts, route.cum, box.line, box.far, ego.spec, visible, ego) ? { key: `${box.c.control.id}:${Math.round(box.line)}`, text: "JUNCTION · NO ROOM PAST IT · WAIT AT THE LINE" } : null;
+  return boxBlocker(route.pts, route.cum, box.line, box.far, ego.spec, visible, ego)
+    ? { key: `${box.c.control.id}:${Math.round(box.line)}`, text: "JUNCTION · NO ROOM PAST IT · WAIT AT THE LINE" }
+    : null;
 }

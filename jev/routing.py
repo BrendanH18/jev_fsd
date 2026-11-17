@@ -76,8 +76,14 @@ class Router:
 
     # Snapping
 
-    def snap(self, x: float, y: float, heading: Optional[float] = None, max_m: float = 60.0,
-             heading_tolerance: float = math.radians(60)) -> Optional[dict]:
+    def snap(
+        self,
+        x: float,
+        y: float,
+        heading: Optional[float] = None,
+        max_m: float = 60.0,
+        heading_tolerance: float = math.radians(60),
+    ) -> Optional[dict]:
         """Nearest lane point. With a heading, lanes pointing the other way are ignored (within
         the tolerance) unless nothing else is nearby."""
         cx, cy = int(math.floor(x / GRID_CELL_M)), int(math.floor(y / GRID_CELL_M))
@@ -128,9 +134,18 @@ class Router:
 
     # Search
 
-    def astar(self, start_edge: str, start_s: float, goal_edge: str, goal_s: float,
-              extra_cost: Optional[Dict[str, float]] = None, restrictions=False, hour=15.5, weekday=0,
-              avoid: Optional[frozenset] = None) -> Optional[Tuple[List[str], float]]:
+    def astar(
+        self,
+        start_edge: str,
+        start_s: float,
+        goal_edge: str,
+        goal_s: float,
+        extra_cost: Optional[Dict[str, float]] = None,
+        restrictions=False,
+        hour=15.5,
+        weekday=0,
+        avoid: Optional[frozenset] = None,
+    ) -> Optional[Tuple[List[str], float]]:
         """(edge sequence, cost) from start to goal, or None. Cost is travel time plus turn penalties.
         `avoid`: edges the search never enters (a block closed to traffic, static/js/sim/road-closures.js);
         the start edge itself is where the car already is."""
@@ -167,7 +182,9 @@ class Router:
                     node = parent[node]
                 return list(reversed(path)), best_g[cur]
             for nxt in self.successors(cur):
-                if restrictions and banned(self.pack.get("restrictions", {}).get("restrictions", []), cur, nxt, hour, weekday):
+                if restrictions and banned(
+                    self.pack.get("restrictions", {}).get("restrictions", []), cur, nxt, hour, weekday
+                ):
                     continue
                 if avoid and nxt in avoid:
                     continue
@@ -184,8 +201,16 @@ class Router:
                     counter += 1
         return None
 
-    def routes(self, start: dict, goal: dict, k: int = 1, restrictions=False, hour=15.5, weekday=0,
-               avoid: Optional[Sequence[str]] = None) -> List[dict]:
+    def routes(
+        self,
+        start: dict,
+        goal: dict,
+        k: int = 1,
+        restrictions=False,
+        hour=15.5,
+        weekday=0,
+        avoid: Optional[Sequence[str]] = None,
+    ) -> List[dict]:
         """`start` = {x, y, heading?}, `goal` = {x, y}. Up to k distinct routes, best first. `avoid`: edge
         ids no route may enter (a block closed for an event); empty, the routes are exactly as without it."""
         avoid = frozenset(avoid) if avoid else None
@@ -198,7 +223,16 @@ class Router:
         # pick the goal lane (direction) that is cheapest to reach
         t, first = None, None
         for cand in goals:
-            res = self.astar(s["edge"], s["s"], cand["edge"], cand["s"], restrictions=restrictions, hour=hour, weekday=weekday, avoid=avoid)
+            res = self.astar(
+                s["edge"],
+                s["s"],
+                cand["edge"],
+                cand["s"],
+                restrictions=restrictions,
+                hour=hour,
+                weekday=weekday,
+                avoid=avoid,
+            )
             if res and (first is None or res[1] < first[1]):
                 t, first = cand, res
         if t is None:
@@ -206,7 +240,21 @@ class Router:
         found: List[List[str]] = []
         extra: Dict[str, float] = {}
         for i in range(k):
-            res = first if i == 0 else self.astar(s["edge"], s["s"], t["edge"], t["s"], extra_cost=extra, restrictions=restrictions, hour=hour, weekday=weekday, avoid=avoid)
+            res = (
+                first
+                if i == 0
+                else self.astar(
+                    s["edge"],
+                    s["s"],
+                    t["edge"],
+                    t["s"],
+                    extra_cost=extra,
+                    restrictions=restrictions,
+                    hour=hour,
+                    weekday=weekday,
+                    avoid=avoid,
+                )
+            )
             if res is None:
                 break
             path = res[0]
@@ -232,8 +280,12 @@ class Router:
         while last + 1 < len(path) and self.edges[path[last + 1]].get("ring"):
             last += 1
         exit_edge = self.edges[path[last + 1]] if last + 1 < len(path) else None
-        return {"at_m": round(at, 1), "dir": "roundabout", "exit": _exits_between(self, path, first, last),
-                "street": exit_edge["name"] if exit_edge else ""}
+        return {
+            "at_m": round(at, 1),
+            "dir": "roundabout",
+            "exit": _exits_between(self, path, first, last),
+            "street": exit_edge["name"] if exit_edge else "",
+        }
 
     def _lane_index(self, path: Sequence[str], i: int) -> int:
         e = self.edges[path[i]]
@@ -284,7 +336,7 @@ class Router:
         at = 0.0
         for i in range(len(path) - 1):
             e = self.edges[path[i]]
-            at += (e["length"] - (start_snap["s"] if i == 0 else 0.0))
+            at += e["length"] - (start_snap["s"] if i == 0 else 0.0)
             nxt = self.edges[path[i + 1]]
             if e.get("ring") or nxt.get("ring"):
                 if nxt.get("ring") and not e.get("ring"):
@@ -353,27 +405,34 @@ def _round_corner(before: List[Tuple[float, float]], after: List[Tuple[float, fl
     if abs(denom) < 0.15:
         return None
     w = (s0[0] - e[0], s0[1] - e[1])
-    t = (w[0] * dout[1] - w[1] * dout[0]) / denom      # corner = e + t * din
-    u = (w[0] * din[1] - w[1] * din[0]) / denom        # corner = s0 + u * dout
+    t = (w[0] * dout[1] - w[1] * dout[0]) / denom  # corner = e + t * din
+    u = (w[0] * din[1] - w[1] * din[0]) / denom  # corner = s0 + u * dout
     if abs(t) > 15 or abs(u) > 15:
         return None
     corner = (e[0] + din[0] * t, e[1] + din[1] * t)
-    s_corner_b = cum_b[-1] + t          # corner position along `before`
-    s_corner_a = u                      # corner position along `after` (negative when before its start)
+    s_corner_b = cum_b[-1] + t  # corner position along `before`
+    s_corner_a = u  # corner position along `after` (negative when before its start)
     r = min(radius, max(0.5, s_corner_b / 2), max(0.5, (cum_a[-1] - s_corner_a) / 2))
     keep_b = max(0.0, s_corner_b - r)
     skip_a = max(0.0, s_corner_a + r)
     head = [p for p, c in zip(before, cum_b) if c < keep_b - 0.05]
-    head.append(g.point_at(before, keep_b, cum_b) if keep_b <= cum_b[-1] else
-                (e[0] + din[0] * (keep_b - cum_b[-1]), e[1] + din[1] * (keep_b - cum_b[-1])))
+    head.append(
+        g.point_at(before, keep_b, cum_b)
+        if keep_b <= cum_b[-1]
+        else (e[0] + din[0] * (keep_b - cum_b[-1]), e[1] + din[1] * (keep_b - cum_b[-1]))
+    )
     p0 = head[-1]
     p2 = g.point_at(after, skip_a, cum_a) if skip_a <= cum_a[-1] else (corner[0] + dout[0] * r, corner[1] + dout[1] * r)
     curve = []
     for k in range(1, 9):
         tt = k / 8
         uu = 1 - tt
-        curve.append((uu * uu * p0[0] + 2 * uu * tt * corner[0] + tt * tt * p2[0],
-                      uu * uu * p0[1] + 2 * uu * tt * corner[1] + tt * tt * p2[1]))
+        curve.append(
+            (
+                uu * uu * p0[0] + 2 * uu * tt * corner[0] + tt * tt * p2[0],
+                uu * uu * p0[1] + 2 * uu * tt * corner[1] + tt * tt * p2[1],
+            )
+        )
     tail = [p for p, c in zip(after, cum_a) if c > skip_a + 0.05]
     return head + curve + tail
 
@@ -399,8 +458,13 @@ def _summary(turns: List[dict], length: float, dest_street: str) -> str:
         head = "straight ahead"
     else:
         t = turns[0]
-        verb = ("make a U-turn" if t["dir"] == "uturn" else
-                "take exit %d at the roundabout" % t["exit"] if t["dir"] == "roundabout" else "turn %s" % t["dir"])
+        verb = (
+            "make a U-turn"
+            if t["dir"] == "uturn"
+            else "take exit %d at the roundabout" % t["exit"]
+            if t["dir"] == "roundabout"
+            else "turn %s" % t["dir"]
+        )
         head = "%s%s in %d m" % (verb, (" onto " + t["street"]) if t["street"] else "", round(t["at_m"]))
         if len(turns) > 1:
             head += ", then %d more turn%s" % (len(turns) - 1, "" if len(turns) == 2 else "s")
@@ -414,6 +478,10 @@ def _cells_of_polyline(pts: Sequence[Tuple[float, float]]) -> set:
         n = max(1, int(g.dist(pts[i], pts[i + 1]) / (GRID_CELL_M / 2)))
         for k in range(n + 1):
             t = k / n
-            cells.add((int(math.floor((x0 + (x1 - x0) * t) / GRID_CELL_M)),
-                       int(math.floor((y0 + (y1 - y0) * t) / GRID_CELL_M))))
+            cells.add(
+                (
+                    int(math.floor((x0 + (x1 - x0) * t) / GRID_CELL_M)),
+                    int(math.floor((y0 + (y1 - y0) * t) / GRID_CELL_M)),
+                )
+            )
     return cells

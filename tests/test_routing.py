@@ -27,6 +27,7 @@ class RouterTests(unittest.TestCase):
         # right lane to the left one across the junction, so the lanes cannot be read off it
         import json
         from pathlib import Path
+
         pack = json.loads((Path(__file__).resolve().parent.parent / "data/maps/8e99888cb743.v6.pack.json").read_text())
         route = Router(pack).build_route(["e668", "e142", "e125", "e123"], {"s": 63.14}, {"s": 20.68})
         self.assertEqual(route["lanes"], [2, 0, 0, 0])
@@ -45,9 +46,15 @@ class RouterTests(unittest.TestCase):
         # Lanes sit right of each street's centerline, so a naive end-to-start join at a right turn
         # makes the path step backwards. Every consecutive 1 m step must keep going forward.
         worst = 0.0
-        for start, goal in [((-120.0, -180.0, 0.0), (60.0, 100.0)), ((-120.0, -180.0, 0.0), (-180.0, 100.0)),
-                            ((60.0, 150.0, -math.pi / 2), (-150.0, -60.0)), ((-60.0, 60.0, 0.0), (60.0, -150.0))]:
-            routes = self.router.routes({"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]})
+        for start, goal in [
+            ((-120.0, -180.0, 0.0), (60.0, 100.0)),
+            ((-120.0, -180.0, 0.0), (-180.0, 100.0)),
+            ((60.0, 150.0, -math.pi / 2), (-150.0, -60.0)),
+            ((-60.0, 60.0, 0.0), (60.0, -150.0)),
+        ]:
+            routes = self.router.routes(
+                {"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]}
+            )
             self.assertTrue(routes)
             pl = routes[0]["polyline"]
             self.assertTrue(any(t["dir"] in ("left", "right") for t in routes[0]["turns"]))
@@ -110,9 +117,13 @@ class RouterTests(unittest.TestCase):
     # `avoid`, and no route enters them; an empty list changes nothing.
     def test_avoid_empty_leaves_routes_unchanged(self):
         for start, goal in [((-150.0, -180.0, 0.0), (60.0, 180.0)), ((60.0, 150.0, -math.pi / 2), (-150.0, -60.0))]:
-            a = self.router.routes({"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]}, k=3)
+            a = self.router.routes(
+                {"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]}, k=3
+            )
             for avoid in (None, [], ()):
-                b = self.router.routes({"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]}, k=3, avoid=avoid)
+                b = self.router.routes(
+                    {"x": start[0], "y": start[1], "heading": start[2]}, {"x": goal[0], "y": goal[1]}, k=3, avoid=avoid
+                )
                 self.assertEqual(a, b)
 
     def test_avoid_routes_round_a_closed_block(self):
@@ -131,7 +142,15 @@ class RouterTests(unittest.TestCase):
         self.assertNotEqual(detour[0]["edges"], first["edges"])
         # (the detour is joined like any route: it never backs up at its turns)
         pl = detour[0]["polyline"]
-        worst = max(abs(g.wrap_angle(math.atan2(pl[i + 1][1] - pl[i][1], pl[i + 1][0] - pl[i][0]) - math.atan2(pl[i][1] - pl[i - 1][1], pl[i][0] - pl[i - 1][0]))) for i in range(1, len(pl) - 1))
+        worst = max(
+            abs(
+                g.wrap_angle(
+                    math.atan2(pl[i + 1][1] - pl[i][1], pl[i + 1][0] - pl[i][0])
+                    - math.atan2(pl[i][1] - pl[i - 1][1], pl[i][0] - pl[i - 1][0])
+                )
+            )
+            for i in range(1, len(pl) - 1)
+        )
         self.assertLess(math.degrees(worst), 60)
 
     def test_avoid_everything_out_leaves_no_route(self):

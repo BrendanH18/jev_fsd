@@ -13,10 +13,28 @@ import { cumulative, headingAt, pointAt } from "../../map/mapdata.js";
 import { CAR } from "../../sim/vehicle.js";
 import { contraControl, contraflowOf } from "../../sim/contraflow.js";
 
-export const challenge = { id: "contraflow", title: "Both ways", map: "montreal", weather: "dry", time: "afternoon", seed: 40042, icon: "⇄", difficulty: "Anticipation", hazard: "contraflow", contraflow: true, street: "Rue Villeneuve Est",
-  description: "You turn right from Rue Drolet into Rue Villeneuve Est, in the Plateau: one-way for cars, but with a painted lane for cyclists riding the other way. One is coming out of it toward the junction.", lesson: "On a one-way street signed EXCEPT BICYCLES (in Québec, EXCEPTÉ VÉLOS), cyclists ride both ways, against the traffic on the driver's left. Look both ways before turning in, and let a cyclist coming out clear the junction first: at a junction without a sign, one coming from your right has the right of way anyway. Driving along such a street, keep right for a cyclist coming the other way, and stop to let them by where there isn't room to leave them at least 1 m." };
+export const challenge = {
+  id: "contraflow",
+  title: "Both ways",
+  map: "montreal",
+  weather: "dry",
+  time: "afternoon",
+  seed: 40042,
+  icon: "⇄",
+  difficulty: "Anticipation",
+  hazard: "contraflow",
+  contraflow: true,
+  street: "Rue Villeneuve Est",
+  description:
+    "You turn right from Rue Drolet into Rue Villeneuve Est, in the Plateau: one-way for cars, but with a painted lane for cyclists riding the other way. One is coming out of it toward the junction.",
+  lesson:
+    "On a one-way street signed EXCEPT BICYCLES (in Québec, EXCEPTÉ VÉLOS), cyclists ride both ways, against the traffic on the driver's left. Look both ways before turning in, and let a cyclist coming out clear the junction first: at a junction without a sign, one coming from your right has the right of way anyway. Driving along such a street, keep right for a cyclist coming the other way, and stop to let them by where there isn't room to leave them at least 1 m.",
+};
 
-export const CF_START_M = 45, CF_RIDER_M = 65, CF_RIDER_MPS = 4.5, CF_GOAL_M = 40;
+export const CF_START_M = 45,
+  CF_RIDER_M = 65,
+  CF_RIDER_MPS = 4.5,
+  CF_GOAL_M = 40;
 
 export function contraflowSites(map, street = null) {
   const sites = [];
@@ -27,30 +45,60 @@ export function contraflowSites(map, street = null) {
     if (control?.type !== "yield" || control.rule !== "equal") continue;
     for (const id of map.inn.get(e.from) || []) {
       const a = map.edges.get(id);
-      if (a.from === e.to || a.control || a.length < CF_START_M + 10 || map.classifyTurn(map.turnAngle(a.id, e.id)) !== "right" || map.priorityOf(a.id)?.rule !== "equal") continue;
+      if (
+        a.from === e.to ||
+        a.control ||
+        a.length < CF_START_M + 10 ||
+        map.classifyTurn(map.turnAngle(a.id, e.id)) !== "right" ||
+        map.priorityOf(a.id)?.rule !== "equal"
+      )
+        continue;
       sites.push({ edge: e.id, approach: a.id });
     }
   }
-  return sites.sort((x, y) => String(x.edge).localeCompare(String(y.edge)) || String(x.approach).localeCompare(String(y.approach)));
+  return sites.sort(
+    (x, y) => String(x.edge).localeCompare(String(y.edge)) || String(x.approach).localeCompare(String(y.approach)),
+  );
 }
 
 export function contraflowScenario(map, challenge) {
   const site = contraflowSites(map, challenge.street)[0];
-  if (!site) throw new Error(`No block of ${challenge.street} with a painted contraflow lane that a car turns right into at a junction without a sign.`);
-  const e = map.edges.get(site.edge), a = map.edges.get(site.approach);
-  const lane = map.lane(a.id, a.lanes - 1), into = map.lane(e.id, e.lanes - 1);
-  const front = CAR.length - CAR.rearOverhang, s = lane.length - CF_START_M * lane.length / a.length - front;
+  if (!site)
+    throw new Error(
+      `No block of ${challenge.street} with a painted contraflow lane that a car turns right into at a junction without a sign.`,
+    );
+  const e = map.edges.get(site.edge),
+    a = map.edges.get(site.approach);
+  const lane = map.lane(a.id, a.lanes - 1),
+    into = map.lane(e.id, e.lanes - 1);
+  const front = CAR.length - CAR.rearOverhang,
+    s = lane.length - (CF_START_M * lane.length) / a.length - front;
   const p = pointAt(lane.pts, lane.cum, s);
   // (the cyclist: on the block, or the contraflow block of the street before it, straight on)
-  const up = (map.inn.get(e.to) || []).map((id) => map.edges.get(id)).find((u) => contraflowOf(map, u.id) && u.from !== e.from && Math.abs(map.turnAngle(u.id, e.id)) < 0.3);
+  const up = (map.inn.get(e.to) || [])
+    .map((id) => map.edges.get(id))
+    .find((u) => contraflowOf(map, u.id) && u.from !== e.from && Math.abs(map.turnAngle(u.id, e.id)) < 0.3);
   // (the street straight on past the block, for the car; the next contraflow block, where it is one)
-  const on = (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((o) => o.to !== e.from && o.length > CF_GOAL_M + 10 && Math.abs(map.turnAngle(e.id, o.id)) < 0.3);
+  const on = (map.out.get(e.to) || [])
+    .map((id) => map.edges.get(id))
+    .find((o) => o.to !== e.from && o.length > CF_GOAL_M + 10 && Math.abs(map.turnAngle(e.id, o.id)) < 0.3);
   const ahead = on ? map.lane(on.id, on.lanes - 1) : null;
-  const route = ahead ? routeFromLanes(map, [lane, into, ahead], s, CF_GOAL_M * ahead.length / on.length) : routeFromLanes(map, [lane, into], s, CF_GOAL_M * into.length / e.length);
-  const rider = CF_RIDER_M <= e.length - 2 || !up ? { edge: e.id, at: Math.max(2, e.length - CF_RIDER_M) } : { edge: up.id, at: Math.max(2, up.length + e.length - CF_RIDER_M) };
-  return { id: challenge.id, start: { edge: lane.edge, lane: lane.idx, s, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, s) }, route, goal: route.polyline.at(-1), traffic_seed: challenge.seed,
+  const route = ahead
+    ? routeFromLanes(map, [lane, into, ahead], s, (CF_GOAL_M * ahead.length) / on.length)
+    : routeFromLanes(map, [lane, into], s, (CF_GOAL_M * into.length) / e.length);
+  const rider =
+    CF_RIDER_M <= e.length - 2 || !up
+      ? { edge: e.id, at: Math.max(2, e.length - CF_RIDER_M) }
+      : { edge: up.id, at: Math.max(2, up.length + e.length - CF_RIDER_M) };
+  return {
+    id: challenge.id,
+    start: { edge: lane.edge, lane: lane.idx, s, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, s) },
+    route,
+    goal: route.polyline.at(-1),
+    traffic_seed: challenge.seed,
     contraflow: { ...rider, v: CF_RIDER_MPS, junction: e.from, kind: contraflowOf(map, e.id).kind },
-    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 1 } };
+    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 1 },
+  };
 }
 
 // Put the cyclist down (World option `contraflow`, its own riders off), riding out of the block.

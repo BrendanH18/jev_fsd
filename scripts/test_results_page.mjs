@@ -5,7 +5,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
-const { checkResults, summary, challengeMatrix, cityGrid, recordings, fractionText, percentText, moneyText, WEATHERS } = await import("../static/js/lab/results.js");
+const { checkResults, summary, challengeMatrix, cityGrid, recordings, fractionText, percentText, moneyText, WEATHERS } =
+  await import("../static/js/lab/results.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 
@@ -13,13 +14,23 @@ const data = checkResults(JSON.parse(fs.readFileSync(new URL("../data/results.js
 const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
 const block = readme.slice(readme.indexOf("<!-- results:start -->"), readme.indexOf("<!-- results:end -->"));
 // README rows: | Driver | Model | challenges | Kitsilano weathers | other maps | own decisions | cost |
-const readmeRows = block.split("\n").filter(l => l.startsWith("| ") && !l.startsWith("| Driver")).map(l => l.split(" | ").map(c => c.replace(/^\| |\s\|$/g, "").trim()));
+const readmeRows = block
+  .split("\n")
+  .filter((l) => l.startsWith("| ") && !l.startsWith("| Driver"))
+  .map((l) => l.split(" | ").map((c) => c.replace(/^\| |\s\|$/g, "").trim()));
 let checks = 0;
-const test = (name, fn) => { fn(); checks++; console.log(`✓ ${name}`); };
+const test = (name, fn) => {
+  fn();
+  checks++;
+  console.log(`✓ ${name}`);
+};
 
 test("the page's summary has the README's drivers, in order", () => {
   const { drivers } = summary(data);
-  assert.deepEqual(drivers.map(d => d.label), readmeRows.map(r => r[0]));
+  assert.deepEqual(
+    drivers.map((d) => d.label),
+    readmeRows.map((r) => r[0]),
+  );
 });
 
 test("every summary cell matches the README table", () => {
@@ -27,34 +38,45 @@ test("every summary cell matches the README table", () => {
   drivers.forEach((d, i) => {
     const row = readmeRows[i];
     assert.ok(row[2].includes(fractionText(d.challenges)), `${d.label} challenges`);
-    const home = Object.values(d.home).some(Boolean) ? WEATHERS.map(w => (d.home[w] ? fractionText(d.home[w]) : "–")).join(" · ") : "not run";
+    const home = Object.values(d.home).some(Boolean)
+      ? WEATHERS.map((w) => (d.home[w] ? fractionText(d.home[w]) : "–")).join(" · ")
+      : "not run";
     assert.equal(row[3], home, `${d.label} Kitsilano`);
     assert.equal(row[4], fractionText(d.others), `${d.label} other maps`);
-    assert.equal(row[5], d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a", `${d.label} own decisions`);
+    assert.equal(
+      row[5],
+      d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a",
+      `${d.label} own decisions`,
+    );
     assert.equal(row[6], moneyText(d.cost), `${d.label} cost`);
   });
 });
 
 test("pilots are the drivers without a full run", () => {
   const { pilots } = summary(data);
-  assert.deepEqual(pilots.map(p => p.id).sort(), ["decision:liquid-d1", "llm:granite", "llm:luna"]);
+  assert.deepEqual(pilots.map((p) => p.id).sort(), ["decision:liquid-d1", "llm:granite", "llm:luna"]);
   for (const p of pilots) assert.ok(block.includes(`${p.label} (\`${p.model}\`) ${p.passed}/${p.total}`), p.id);
 });
 
 test("the challenge matrix covers every challenge and road test once", () => {
   const matrix = challengeMatrix(data);
-  const known = new Set([...CHALLENGES, ...ROAD_TESTS].map(c => c.id));
+  const known = new Set([...CHALLENGES, ...ROAD_TESTS].map((c) => c.id));
   assert.equal(matrix.rows.length, CHALLENGES.length + ROAD_TESTS.length);
   for (const row of matrix.rows) assert.ok(known.has(row.id), row.id);
   assert.deepEqual(matrix.drivers, ["rules", "cautious", "jev", "llm:deepseek"]);
-  const failed = matrix.rows.flatMap(r => r.cells.map((c, i) => (c && !c.pass ? `${matrix.drivers[i]} ${r.id}` : null))).filter(Boolean);
+  const failed = matrix.rows
+    .flatMap((r) => r.cells.map((c, i) => (c && !c.pass ? `${matrix.drivers[i]} ${r.id}` : null)))
+    .filter(Boolean);
   assert.deepEqual(failed, ["llm:deepseek double-parked"]);
 });
 
 test("the city grid has one row per map and weather, Kitsilano first", () => {
   const grid = cityGrid(data);
   assert.equal(grid.rows.length, 4 + 11);
-  assert.deepEqual(grid.rows.slice(0, 4).map(r => `${r.map} ${r.weather}`), WEATHERS.map(w => `kitsilano ${w}`));
+  assert.deepEqual(
+    grid.rows.slice(0, 4).map((r) => `${r.map} ${r.weather}`),
+    WEATHERS.map((w) => `kitsilano ${w}`),
+  );
   assert.deepEqual(grid.drivers, ["rules", "cautious"]);
   for (const row of grid.rows) assert.equal(row.cells.filter(Boolean).length, 2, `${row.map} ${row.weather}`);
 });

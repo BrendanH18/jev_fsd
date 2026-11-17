@@ -21,7 +21,13 @@ import { buildTracks, createStreetcarMesh, syncStreetcar } from "./render/street
 import { buildRail, createTrainMesh, syncTrain } from "./render/rail.js";
 import { crossingNotice, isTrain } from "./sim/rail.js";
 import { boxNotice } from "./sim/junction-box.js";
-import { IN_LANE_M as STREETCAR_IN_LANE_M, SIDE_M as STREETCAR_SIDE_M, doorsOpen, isStreetcar, streetcarRelation } from "./sim/streetcar.js";
+import {
+  IN_LANE_M as STREETCAR_IN_LANE_M,
+  SIDE_M as STREETCAR_SIDE_M,
+  doorsOpen,
+  isStreetcar,
+  streetcarRelation,
+} from "./sim/streetcar.js";
 import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
 import { ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
 import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
@@ -74,7 +80,19 @@ import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from 
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
 import { isEmergency, isEmergencyVehicle, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
-import { createCarMesh, syncCar, buildParkedCars, createBikeMesh, syncBike, addHeadlights, syncCarLights, hideParkedCar, restoreParkedCar, createDoorMesh, syncDoor } from "./render/cars.js";
+import {
+  createCarMesh,
+  syncCar,
+  buildParkedCars,
+  createBikeMesh,
+  syncBike,
+  addHeadlights,
+  syncCarLights,
+  hideParkedCar,
+  restoreParkedCar,
+  createDoorMesh,
+  syncDoor,
+} from "./render/cars.js";
 import { createPersonMesh, syncPerson } from "./render/people.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
@@ -86,7 +104,13 @@ import { Panel } from "./ui/panel.js";
 import { Autopilot } from "./brain/brain.js";
 import { agentDefinitions, agentAvailable, pillarOf } from "./brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints, llmSummary, defaultLlmId, llmBrainFor } from "./brain/llm.js";
-import { registerDecisionAgents, checkDecisionEndpoints, decisionSummary, defaultDecisionId, decisionBrainFor } from "./brain/decision.js";
+import {
+  registerDecisionAgents,
+  checkDecisionEndpoints,
+  decisionSummary,
+  defaultDecisionId,
+  decisionBrainFor,
+} from "./brain/decision.js";
 import { ModelSetup, ModelMenu, KINDS } from "./ui/model-setup.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
@@ -131,7 +155,8 @@ export async function boot() {
   let simulationError = null;
   const params = new URLSearchParams(location.search);
   const challenge = challengeById(params.get("challenge"));
-  if (params.has("challenge") && !challenge) throw new Error("Unknown challenge. Open the drive lab to choose an available challenge.");
+  if (params.has("challenge") && !challenge)
+    throw new Error("Unknown challenge. Open the drive lab to choose an available challenge.");
   if (challenge) for (const [key, value] of Object.entries(challengeConfig(challenge))) params.set(key, String(value));
   const replay = readReplay();
   const garage = vehicleOptions(replay ? new URLSearchParams() : params);
@@ -148,7 +173,11 @@ export async function boot() {
   const hud = new Hud();
   $("#current-city").textContent = status.map.synthetic ? "Practice grid" : status.map.label;
   let savedQuality;
-  try { savedQuality = localStorage.getItem("jev-fsd-quality"); } catch { /* preferences are optional */ }
+  try {
+    savedQuality = localStorage.getItem("jev-fsd-quality");
+  } catch {
+    /* preferences are optional */
+  }
   const quality = params.get("quality") || savedQuality || "high";
   let hour = replay?.hour ?? parseHour(params.get("time"));
   const clock = new WorldClock(hour, options.clockRate, Number(params.get("weekday") || 0));
@@ -167,7 +196,7 @@ export async function boot() {
   view.addScenery(buildRail(map));
   view.scene.add(buildSurroundings(map));
   view.scene.add(buildCityIdentity(map, status.map.id));
-  view.backdrop.visible = inVancouver(pack.origin);   // the North Shore mountains
+  view.backdrop.visible = inVancouver(pack.origin); // the North Shore mountains
   const egoMesh = createCarMesh(parseInt(garage.paint, 16), "ego", garage.vehicle.id);
   view.vehicleCamera = egoMesh.userData.hoodCamera;
   view.vehicleHeight = garage.vehicle.height;
@@ -179,17 +208,41 @@ export async function boot() {
   let lab;
   let challengeModified = false;
   let examinerPrompt = null;
-  let drive = null, arrivalPending = false, driveReport;
-  let decidedAtStart = null;   // the autopilot's decision counts when the drive started (bench/metrics.js)
+  let drive = null,
+    arrivalPending = false,
+    driveReport;
+  let decidedAtStart = null; // the autopilot's decision counts when the drive started (bench/metrics.js)
   const callbacks = {
-    onDecision: (d) => { hud.recordDecision(d.meta); panel.set(d); overlays.setCandidates(d.candidates, d.chosenId); },
+    onDecision: (d) => {
+      hud.recordDecision(d.meta);
+      panel.set(d);
+      overlays.setCandidates(d.candidates, d.chosenId);
+    },
     onEvent: (ev) => {
       recorder.mark(world.t, ev.type);
-      if (ev.type === "arrived") { arrivalPending = true; drive?.noteArrival(ev); hud.badge(ev.parked ? "PARKED" : ev.parked === false ? (ev.stuck ? "ARRIVED · STUCK PARTWAY IN" : "ARRIVED · STOPPED IN LANE") : "ARRIVED", "stop", 1500); hud.setAutopilot(false); overlays.setRoute(null); overlays.setCandidates(null); }
-      else if (ev.type === "safety") hud.badge("SAFETY BRAKE", "safety", 700);
+      if (ev.type === "arrived") {
+        arrivalPending = true;
+        drive?.noteArrival(ev);
+        hud.badge(
+          ev.parked
+            ? "PARKED"
+            : ev.parked === false
+              ? ev.stuck
+                ? "ARRIVED · STUCK PARTWAY IN"
+                : "ARRIVED · STOPPED IN LANE"
+              : "ARRIVED",
+          "stop",
+          1500,
+        );
+        hud.setAutopilot(false);
+        overlays.setRoute(null);
+        overlays.setCandidates(null);
+      } else if (ev.type === "safety") hud.badge("SAFETY BRAKE", "safety", 700);
       else if (ev.type === "fallback") hud.badge(`fallback: ${ev.error}`, "safety", 1800);
-      else if (ev.type === "reroute") { hud.badge(`re-routed (${ev.count} options)`, "", 1000); overlays.setRoute(world.route); }
-      else if (ev.type === "deadlock") hud.badge("DEADLOCK: creeping", "safety", 1200);
+      else if (ev.type === "reroute") {
+        hud.badge(`re-routed (${ev.count} options)`, "", 1000);
+        overlays.setRoute(world.route);
+      } else if (ev.type === "deadlock") hud.badge("DEADLOCK: creeping", "safety", 1200);
       else if (ev.type === "error") hud.badge(ev.error, "safety", 1500);
     },
   };
@@ -199,17 +252,38 @@ export async function boot() {
     ({ world, fleet, autopilot } = setupChallenge(map, challenge, callbacks));
     autopilot.setEnabled(false);
   } else if (replay) {
-    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, { brain: agentAvailable(replay.brain) ? replay.brain : "rules", npcs: replay.npcs, weather: replay.weather || "dry", features: replay.features || "bare", park: replay.park || false, hour: replay.hour, without: replay.without || [], cover: replay.cover, ...callbacks }));
+    ({ world, fleet, autopilot } = setupScenario(map, replay.scenario, {
+      brain: agentAvailable(replay.brain) ? replay.brain : "rules",
+      npcs: replay.npcs,
+      weather: replay.weather || "dry",
+      features: replay.features || "bare",
+      park: replay.park || false,
+      hour: replay.hour,
+      without: replay.without || [],
+      cover: replay.cover,
+      ...callbacks,
+    }));
   } else {
     // every opt-in feature of a free drive, each on unless its query parameter is "0" (sim/free-drive.js)
     const free = freeDriveOptions(params, { hour });
-    world = new World(map, { seed: options.seed, weather: params.get("weather") || "dry", vehicleSpec: garage.vehicle.spec, ...free.world });
+    world = new World(map, {
+      seed: options.seed,
+      weather: params.get("weather") || "dry",
+      vehicleSpec: garage.vehicle.spec,
+      ...free.world,
+    });
     fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, ...free.fleet });
     autopilot = new Autopilot(world, callbacks);
   }
   // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
   if (world.busLanes) view.scene.add(buildBusLanes(map));
-  if (world.restrictions || world.redTurnSigns) view.scene.add(buildRestrictions(map, [...(world.restrictions ? map.restrictions : []), ...(world.redTurnSigns ? map.redTurns : [])]));
+  if (world.restrictions || world.redTurnSigns)
+    view.scene.add(
+      buildRestrictions(map, [
+        ...(world.restrictions ? map.restrictions : []),
+        ...(world.redTurnSigns ? map.redTurns : []),
+      ]),
+    );
   if (world.calming) view.scene.add(buildCalming(map));
   // a low sun's flare and haze, where the world has sun glare (sim/sun-glare.js)
   const sunGlareView = world.sunGlare ? new SunGlareView(view.scene) : null;
@@ -248,20 +322,29 @@ export async function boot() {
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
   // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
   // work zone's closed stretch)
-  view.addScenery(buildParkedCars(world.parked.list.filter(c => !c.roadside && !c.workzone && !c.closure && !c.doubleParked)));
+  view.addScenery(
+    buildParkedCars(world.parked.list.filter((c) => !c.roadside && !c.workzone && !c.closure && !c.doubleParked)),
+  );
   const originalParked = world.parked.list.slice();
-  world.parked.added = world.parked.added.filter(c => c.roadside || c.workzone || c.closure || c.doubleParked);
+  world.parked.added = world.parked.added.filter((c) => c.roadside || c.workzone || c.closure || c.doubleParked);
   // (a mesh per person, by id: children get off school buses and go home)
   const pedMeshes = new Map();
   const pedMesh = (p) => {
-    if (!pedMeshes.has(p.id)) { const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker }); if (p.crossingGuard) addGuardSign(m); view.scene.add(m); pedMeshes.set(p.id, m); }
+    if (!pedMeshes.has(p.id)) {
+      const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker });
+      if (p.crossingGuard) addGuardSign(m);
+      view.scene.add(m);
+      pedMeshes.set(p.id, m);
+    }
     return pedMeshes.get(p.id);
   };
   world.crowd.list.forEach(pedMesh);
   const npcMeshes = new Map();
   const parkedMeshes = new Map();
   const doorMeshes = new Map();
-  const previousCars = new Map(), previousPeople = new Map(), previousEgo = {};
+  const previousCars = new Map(),
+    previousPeople = new Map(),
+    previousEgo = {};
   // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
   const syncFleetMeshes = () => {
     const ids = new Set();
@@ -270,52 +353,128 @@ export async function boot() {
     for (const n of [...fleet.vehicles, ...world.contraflow.riders, ...world.driveways.cars]) {
       ids.add(n.id);
       if (npcMeshes.has(n.id)) continue;
-      const m = n.kind === "bike" ? createBikeMesh(n.color, n.id) : isEmergencyVehicle(n) ? createEmergencyMesh(n.kind, n.id) : isBus(n) ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim()) : isStreetcar(n) ? createStreetcarMesh(n.id, n.headsign || n.ref || "") : isTrain(n) ? createTrainMesh(n.id) : isSchoolBus(n) ? createSchoolBusMesh(n.id) : isPlow(n) ? createPlowMesh(n) : isTruck(n) ? createTruckMesh(n) : n.kind === "delivery_van" ? createVanMesh(n) : createCarMesh(n.color, n.id, n.style ?? null);
+      const m =
+        n.kind === "bike"
+          ? createBikeMesh(n.color, n.id)
+          : isEmergencyVehicle(n)
+            ? createEmergencyMesh(n.kind, n.id)
+            : isBus(n)
+              ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim())
+              : isStreetcar(n)
+                ? createStreetcarMesh(n.id, n.headsign || n.ref || "")
+                : isTrain(n)
+                  ? createTrainMesh(n.id)
+                  : isSchoolBus(n)
+                    ? createSchoolBusMesh(n.id)
+                    : isPlow(n)
+                      ? createPlowMesh(n)
+                      : isTruck(n)
+                        ? createTruckMesh(n)
+                        : n.kind === "delivery_van"
+                          ? createVanMesh(n)
+                          : createCarMesh(n.color, n.id, n.style ?? null);
       view.scene.add(m);
       npcMeshes.set(n.id, m);
     }
-    for (const [id, m] of npcMeshes) if (!ids.has(id)) { view.scene.remove(m); npcMeshes.delete(id); previousCars.delete(id); }
+    for (const [id, m] of npcMeshes)
+      if (!ids.has(id)) {
+        view.scene.remove(m);
+        npcMeshes.delete(id);
+        previousCars.delete(id);
+      }
     for (const car of world.parked.added.splice(0)) {
       const zone = car.workzone ? world.workZones.zones.find((z) => z.closure === car) : null;
       const closure = car.closure ? world.laneClosures.zones.find((z) => z.closure === car) : null;
-      const m = car.roadside ? createRoadsideMesh(car) : zone ? createWorkZoneMesh(zone, map) : closure ? createLaneClosureMesh(closure, map) : car.doubleParked ? createVanMesh(car) : createCarMesh(car.color, car.id, car.style ?? null);
-      if (zone) syncWorkZone(m, zone); else if (closure) syncLaneClosure(m, closure); else (car.roadside ? syncRoadside : car.doubleParked ? syncVan : syncCar)(m, car);
+      const m = car.roadside
+        ? createRoadsideMesh(car)
+        : zone
+          ? createWorkZoneMesh(zone, map)
+          : closure
+            ? createLaneClosureMesh(closure, map)
+            : car.doubleParked
+              ? createVanMesh(car)
+              : createCarMesh(car.color, car.id, car.style ?? null);
+      if (zone) syncWorkZone(m, zone);
+      else if (closure) syncLaneClosure(m, closure);
+      else (car.roadside ? syncRoadside : car.doubleParked ? syncVan : syncCar)(m, car);
       view.scene.add(m);
       parkedMeshes.set(car.id, m);
     }
     for (const car of world.parked.removed.splice(0)) {
       hideParkedCar(car);
-      if (parkedMeshes.has(car.id)) { view.scene.remove(parkedMeshes.get(car.id)); parkedMeshes.delete(car.id); }
+      if (parkedMeshes.has(car.id)) {
+        view.scene.remove(parkedMeshes.get(car.id));
+        parkedMeshes.delete(car.id);
+      }
     }
     const doors = new Set();
     for (const door of world.parked.activeDoors) {
       doors.add(door.id);
-      if (!doorMeshes.has(door.id)) { const m = createDoorMesh(door.owner); view.scene.add(m); doorMeshes.set(door.id, m); }
+      if (!doorMeshes.has(door.id)) {
+        const m = createDoorMesh(door.owner);
+        view.scene.add(m);
+        doorMeshes.set(door.id, m);
+      }
       syncDoor(doorMeshes.get(door.id), door);
     }
-    for (const [id, m] of doorMeshes) if (!doors.has(id)) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); doorMeshes.delete(id); }
+    for (const [id, m] of doorMeshes)
+      if (!doors.has(id)) {
+        view.scene.remove(m);
+        m.traverse((o) => o.geometry?.dispose());
+        doorMeshes.delete(id);
+      }
   };
   syncFleetMeshes();
   world._road = world.roadInfo();
   if (!agentAvailable(autopilot.brainName)) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
-  panel.onShowCandidates = (on) => { overlays.showCandidates = on; if (!on) overlays.setCandidates(null); };
+  panel.onShowCandidates = (on) => {
+    overlays.showCandidates = on;
+    if (!on) overlays.setCandidates(null);
+  };
   const weatherView = new WeatherView(view);
   const applySky = () => {
     // (a sun glare challenge's clock has its date and time zone, and the sky draws that day's sun:
     // sim/sun-glare.js)
-    const sunDay = world.sunGlare && world.clock?.day !== undefined ? { day: world.clock.day, utcOffset: world.clock.utc_offset ?? pack.origin.lon / 15 } : {};
-    const a = atmosphereFor(hour, world.weather, { latitude: pack.origin.lat, longitude: pack.origin.lon, utcOffset: status.map.utc_offset ?? -7, ...sunDay });
-    view.setAtmosphere(a); tintSurroundings(a); world.visibility.setNight(a.night); syncClock();
+    const sunDay =
+      world.sunGlare && world.clock?.day !== undefined
+        ? { day: world.clock.day, utcOffset: world.clock.utc_offset ?? pack.origin.lon / 15 }
+        : {};
+    const a = atmosphereFor(hour, world.weather, {
+      latitude: pack.origin.lat,
+      longitude: pack.origin.lon,
+      utcOffset: status.map.utc_offset ?? -7,
+      ...sunDay,
+    });
+    view.setAtmosphere(a);
+    tintSurroundings(a);
+    world.visibility.setNight(a.night);
+    syncClock();
   };
   // school and playground zones go by the time of day (sim/speed-zones.js); a benchmark replay, as
   // the benchmark itself, drives none
   // (and, with sun glare on, so does the sun: a challenge's date and time zone stay; a free drive has the
   // sky's sun, at the city's offset: sim/sun-glare.js)
-  const sunClock = () => !world.sunGlare ? {} : world.clock?.day !== undefined ? { day: world.clock.day, ...(world.clock.utc_offset !== undefined ? { utc_offset: world.clock.utc_offset } : {}) }
-    : challenge ? {} : { utc_offset: status.map.utc_offset ?? -7 };
-  function syncClock() { if (!replay) world.setClock({ ...mapClock(hour, map), ...(world.restrictions || world.busLanes || world.redTurnSigns ? { weekday: clock.weekday } : {}), ...sunClock() }); }
+  const sunClock = () =>
+    !world.sunGlare
+      ? {}
+      : world.clock?.day !== undefined
+        ? {
+            day: world.clock.day,
+            ...(world.clock.utc_offset !== undefined ? { utc_offset: world.clock.utc_offset } : {}),
+          }
+        : challenge
+          ? {}
+          : { utc_offset: status.map.utc_offset ?? -7 };
+  function syncClock() {
+    if (!replay)
+      world.setClock({
+        ...mapClock(hour, map),
+        ...(world.restrictions || world.busLanes || world.redTurnSigns ? { weekday: clock.weekday } : {}),
+        ...sunClock(),
+      });
+  }
   clock.update(world.t);
   function rememberConditions() {
     const next = new URL(location.href);
@@ -328,43 +487,64 @@ export async function boot() {
   applySky();
   hud.setWeather(world.weather);
   hud.setTime(nearestPreset(hour));
-  hud.onWeatherChange((name) => { world.weather = setWeather(name).name; weatherView.apply(world.weather); applySky(); autopilot.bumpEpoch(); rememberConditions(); hud.badge(`weather: ${name}`, "", 800); });
+  hud.onWeatherChange((name) => {
+    world.weather = setWeather(name).name;
+    weatherView.apply(world.weather);
+    applySky();
+    autopilot.bumpEpoch();
+    rememberConditions();
+    hud.badge(`weather: ${name}`, "", 800);
+  });
   function setHour(value) {
     if (challenge && parseHour(value) !== clock.hour) challengeModified = true;
-    clock.setHour(parseHour(value), world.t); hour = clock.hour;
-    applySky(); hud.setTime(nearestPreset(hour)); autopilot.bumpEpoch(); rememberConditions();
+    clock.setHour(parseHour(value), world.t);
+    hour = clock.hour;
+    applySky();
+    hud.setTime(nearestPreset(hour));
+    autopilot.bumpEpoch();
+    rememberConditions();
   }
-  hud.onTimeChange((name) => { setHour(name); hud.badge(`time: ${formatClock(hour)}`, "", 800); });
+  hud.onTimeChange((name) => {
+    setHour(name);
+    hud.badge(`time: ${formatClock(hour)}`, "", 800);
+  });
   $("#clock-rate").value = String(clock.rate);
-  $("#clock-rate").addEventListener("change", ev => { clock.setRate(Number(ev.target.value), world.t); rememberConditions(); });
+  $("#clock-rate").addEventListener("change", (ev) => {
+    clock.setRate(Number(ev.target.value), world.t);
+    rememberConditions();
+  });
   const trafficSelect = $("#traffic-density");
-  const trafficCount = replay ? fleet.vehicles.filter(n => n.kind !== "bike").length : options.traffic;
-  if (![...trafficSelect.options].some(o => Number(o.value) === trafficCount)) {
+  const trafficCount = replay ? fleet.vehicles.filter((n) => n.kind !== "bike").length : options.traffic;
+  if (![...trafficSelect.options].some((o) => Number(o.value) === trafficCount)) {
     trafficSelect.add(new Option(`Custom · ${trafficCount}`, String(trafficCount)));
   }
   trafficSelect.value = String(trafficCount);
   $("#world-seed").value = String(replay ? replay.scenario.traffic_seed : options.seed);
-  let selectedVehicle = garage.vehicle, selectedPaint = garage.paint;
+  let selectedVehicle = garage.vehicle,
+    selectedPaint = garage.paint;
   function updateGarage() {
     $("#vehicle-options").style.setProperty("--vehicle-paint", `#${selectedPaint}`);
-    document.querySelectorAll("[data-vehicle]").forEach(button => {
+    document.querySelectorAll("[data-vehicle]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.vehicle === selectedVehicle.id));
     });
-    document.querySelectorAll("[data-paint]").forEach(button => {
+    document.querySelectorAll("[data-paint]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.paint === selectedPaint));
     });
     const spec = selectedVehicle.spec;
-    $("#vehicle-spec").textContent = `${selectedVehicle.name} · ${spec.length.toFixed(2)} × ${spec.width.toFixed(2)} m · ${spec.mass.toLocaleString()} kg · ${Math.round(spec.power / 1000)} kW at wheels · ${selectedVehicle.drive}`;
+    $("#vehicle-spec").textContent =
+      `${selectedVehicle.name} · ${spec.length.toFixed(2)} × ${spec.width.toFixed(2)} m · ${spec.mass.toLocaleString()} kg · ${Math.round(spec.power / 1000)} kW at wheels · ${selectedVehicle.drive}`;
   }
-  $("#vehicle-options").addEventListener("click", ev => {
+  $("#vehicle-options").addEventListener("click", (ev) => {
     const button = ev.target.closest("[data-vehicle]");
     if (!button) return;
-    selectedVehicle = getVehicleModel(button.dataset.vehicle); updateGarage();
+    selectedVehicle = getVehicleModel(button.dataset.vehicle);
+    updateGarage();
   });
-  $("#paint-options").addEventListener("click", ev => {
+  $("#paint-options").addEventListener("click", (ev) => {
     const button = ev.target.closest("[data-paint]");
     if (!button || !PAINT_COLORS.includes(button.dataset.paint)) return;
-    selectedPaint = button.dataset.paint; updateGarage();
+    selectedPaint = button.dataset.paint;
+    updateGarage();
   });
   updateGarage();
   $("#restart-world").addEventListener("click", () => {
@@ -373,30 +553,48 @@ export async function boot() {
     if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("world restarted")));
     autopilot.setEnabled(false);
     const next = new URL(location.href);
-    next.searchParams.delete("replay"); next.searchParams.delete("explore");
-    next.searchParams.set("seed", seed.value); next.searchParams.set("traffic", trafficSelect.value);
-    next.searchParams.set("car", selectedVehicle.id); next.searchParams.set("paint", selectedPaint);
-    next.searchParams.set("time", formatClock(hour)); next.searchParams.set("weather", world.weather);
-    next.searchParams.set("quality", view.quality); next.searchParams.set("clock", String(clock.rate));
+    next.searchParams.delete("replay");
+    next.searchParams.delete("explore");
+    next.searchParams.set("seed", seed.value);
+    next.searchParams.set("traffic", trafficSelect.value);
+    next.searchParams.set("car", selectedVehicle.id);
+    next.searchParams.set("paint", selectedPaint);
+    next.searchParams.set("time", formatClock(hour));
+    next.searchParams.set("weather", world.weather);
+    next.searchParams.set("quality", view.quality);
+    next.searchParams.set("clock", String(clock.rate));
     location.assign(next);
   });
   hud.onQualityChange((name) => {
     view.setQuality(name);
     hud.setQuality(view.quality);
-    try { localStorage.setItem("jev-fsd-quality", view.quality); } catch { /* preferences are optional */ }
+    try {
+      localStorage.setItem("jev-fsd-quality", view.quality);
+    } catch {
+      /* preferences are optional */
+    }
     hud.badge(`graphics: ${view.quality}`, "", 800);
   });
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt));
-  const showMapNote = () => hud.setMapNote(status.map.synthetic
-    ? `Synthetic grid (map fetch failed: ${status.map.error})`
-    : `© OpenStreetMap contributors (ODbL) · ${pack.edges.length} roads · ${pack.intersections.length} signals · ${pack.stops.length} stops`,
-  agentAvailable("jev") ? "" : "no TypeSafe key, Jev unavailable");
+  const showMapNote = () =>
+    hud.setMapNote(
+      status.map.synthetic
+        ? `Synthetic grid (map fetch failed: ${status.map.error})`
+        : `© OpenStreetMap contributors (ODbL) · ${pack.edges.length} roads · ${pack.intersections.length} signals · ${pack.stops.length} stops`,
+      agentAvailable("jev") ? "" : "no TypeSafe key, Jev unavailable",
+    );
   showMapNote();
 
   function toggleAutopilot() {
     if (simulationError || photo?.active) return;
-    if (lab?.reviewing) { lab.branch("manual"); return; }
-    if (!autopilot.enabled && !world.route) { hud.badge("set a destination first (click the minimap)", "", 1500); return; }
+    if (lab?.reviewing) {
+      lab.branch("manual");
+      return;
+    }
+    if (!autopilot.enabled && !world.route) {
+      hud.badge("set a destination first (click the minimap)", "", 1500);
+      return;
+    }
     autopilot.setEnabled(!autopilot.enabled);
     hud.setAutopilot(autopilot.enabled);
     hud.badge(autopilot.enabled ? `AUTOPILOT: ${autopilot.brainName.toUpperCase()}` : "MANUAL", "", 900);
@@ -407,31 +605,51 @@ export async function boot() {
   // defaults to Jev); their ▾ menus pick another or open the Connect a model dialog.
   const remembered = { decision: null, llm: null };
   let pausedBeforeSetup = false;
-  for (const pillar of Object.keys(remembered)) try { remembered[pillar] = localStorage.getItem(`jev-fsd-${pillar}`); } catch { /* preferences are optional */ }
-  const pillarDefault = pillar => {
+  for (const pillar of Object.keys(remembered))
+    try {
+      remembered[pillar] = localStorage.getItem(`jev-fsd-${pillar}`);
+    } catch {
+      /* preferences are optional */
+    }
+  const pillarDefault = (pillar) => {
     const current = pillarOf(autopilot.brainName) === pillar ? autopilot.brainName : remembered[pillar];
     return pillar === "decision" ? defaultDecisionId(current) : defaultLlmId(current);
   };
   function showPillars() {
     for (const pillar of ["decision", "llm"]) {
-      const d = agentDefinitions().find(agent => agent.id === pillarDefault(pillar));
-      hud.setPillar(pillar, { label: d?.label || "", available: d ? d.available !== false : false,
-        offered: pillar === "decision" || !status.demo, menu: !status.demo });
+      const d = agentDefinitions().find((agent) => agent.id === pillarDefault(pillar));
+      hud.setPillar(pillar, {
+        label: d?.label || "",
+        available: d ? d.available !== false : false,
+        offered: pillar === "decision" || !status.demo,
+        menu: !status.demo,
+      });
     }
   }
   const agentNote = () => `${decisionSummary(status)} ${llmSummary(status)}`;
-  function agentsChanged() { lab?.refreshAgents(agentNote()); showPillars(); showMapNote(); }
+  function agentsChanged() {
+    lab?.refreshAgents(agentNote());
+    showPillars();
+    showMapNote();
+  }
   // Models added, changed or removed in the setup dialog get fresh brains; removing the active one hands back to Rules.
   function syncBrains(changed) {
     for (const id of changed) {
       const brain = id.startsWith("decision:") ? decisionBrainFor(id) : llmBrainFor(id);
-      if (brain) autopilot.brains[id] = brain; else delete autopilot.brains[id];
-      if (autopilot.brainName === id) { if (brain) autopilot.bumpEpoch(); else selectBrain("rules"); }
+      if (brain) autopilot.brains[id] = brain;
+      else delete autopilot.brains[id];
+      if (autopilot.brainName === id) {
+        if (brain) autopilot.bumpEpoch();
+        else selectBrain("rules");
+      }
     }
   }
   async function checkEndpoints() {
-    const checks = [status.decision?.endpoints?.length && checkDecisionEndpoints(), status.llm?.endpoints?.length && checkLlmEndpoints()];
-    await Promise.allSettled(checks.filter(Boolean));   // a failed probe leaves the agent "configured"
+    const checks = [
+      status.decision?.endpoints?.length && checkDecisionEndpoints(),
+      status.llm?.endpoints?.length && checkLlmEndpoints(),
+    ];
+    await Promise.allSettled(checks.filter(Boolean)); // a failed probe leaves the agent "configured"
     agentsChanged();
   }
   async function modelsChanged(result) {
@@ -439,40 +657,76 @@ export async function boot() {
     if (result.llm) status.llm = result.llm;
     status.configured = !!status.decision?.jev?.configured;
     syncBrains([...registerDecisionAgents(status.decision), ...registerLlmAgents(status.llm)]);
-    setup.setStatus("decision", status.decision); setup.setStatus("llm", status.llm);
+    setup.setStatus("decision", status.decision);
+    setup.setStatus("llm", status.llm);
     agentsChanged();
     await checkEndpoints();
   }
-  const setup = new ModelSetup({ onSaved: modelsChanged, onUse: id => selectBrain(id),
-    onPause: on => { if (on) { pausedBeforeSetup = world.paused; world.paused = true; input.keys.clear(); } else world.paused = pausedBeforeSetup; } });
-  setup.setStatus("decision", status.decision); setup.setStatus("llm", status.llm);
-  new ModelMenu($("#decision-menu-toggle"), { agents: KINDS.decision.agents, onPick: id => selectBrain(id), onSetup: () => setup.open("decision"),
-    current: () => pillarDefault("decision"), label: "decision models" });
-  new ModelMenu($("#llm-menu-toggle"), { agents: KINDS.llm.agents, onPick: id => selectBrain(id), onSetup: () => setup.open("llm"),
-    current: () => pillarDefault("llm") });
+  const setup = new ModelSetup({
+    onSaved: modelsChanged,
+    onUse: (id) => selectBrain(id),
+    onPause: (on) => {
+      if (on) {
+        pausedBeforeSetup = world.paused;
+        world.paused = true;
+        input.keys.clear();
+      } else world.paused = pausedBeforeSetup;
+    },
+  });
+  setup.setStatus("decision", status.decision);
+  setup.setStatus("llm", status.llm);
+  new ModelMenu($("#decision-menu-toggle"), {
+    agents: KINDS.decision.agents,
+    onPick: (id) => selectBrain(id),
+    onSetup: () => setup.open("decision"),
+    current: () => pillarDefault("decision"),
+    label: "decision models",
+  });
+  new ModelMenu($("#llm-menu-toggle"), {
+    agents: KINDS.llm.agents,
+    onPick: (id) => selectBrain(id),
+    onSetup: () => setup.open("llm"),
+    current: () => pillarDefault("llm"),
+  });
   function selectBrain(name) {
     if (name === "decision" || name === "llm") {
       const pillar = name;
       name = pillarDefault(pillar);
-      if (!name) { hud.setBrain(autopilot.brainName); setup.open(pillar); return; }
+      if (!name) {
+        hud.setBrain(autopilot.brainName);
+        setup.open(pillar);
+        return;
+      }
     }
-    if (!autopilot.brains[name]) { hud.badge("Unknown agent. Choose a driver in Settings.", "safety", 1500); return; }
-    const definition = agentDefinitions().find(agent => agent.id === name);
+    if (!autopilot.brains[name]) {
+      hud.badge("Unknown agent. Choose a driver in Settings.", "safety", 1500);
+      return;
+    }
+    const definition = agentDefinitions().find((agent) => agent.id === name);
     if (definition?.available === false) {
-      hud.badge(`${definition.label}: ${definition.note || "unavailable"}`, "safety", 2200); hud.setBrain(autopilot.brainName);
+      hud.badge(`${definition.label}: ${definition.note || "unavailable"}`, "safety", 2200);
+      hud.setBrain(autopilot.brainName);
       // No key yet: offer to add one (Jev's is the TypeSafe key).
       const endpoint = definition.decision || definition.llm;
-      if (!status.demo && (name === "jev" || (endpoint && !endpoint.usable))) setup.open(pillarOf(name), name === "jev" ? "typesafe" : null);
+      if (!status.demo && (name === "jev" || (endpoint && !endpoint.usable)))
+        setup.open(pillarOf(name), name === "jev" ? "typesafe" : null);
       return;
     }
     const pillar = pillarOf(name);
-    if (pillar in remembered) { remembered[pillar] = name; try { localStorage.setItem(`jev-fsd-${pillar}`, name); } catch { /* preferences are optional */ } }
+    if (pillar in remembered) {
+      remembered[pillar] = name;
+      try {
+        localStorage.setItem(`jev-fsd-${pillar}`, name);
+      } catch {
+        /* preferences are optional */
+      }
+    }
     showPillars();
     if (name === autopilot.brainName) return;
     autopilot.setBrain(name);
     hud.setBrain(name);
     lab?.setAgent(name);
-    const label = agentDefinitions().find(agent => agent.id === name)?.label || name;
+    const label = agentDefinitions().find((agent) => agent.id === name)?.label || name;
     hud.badge(`brain: ${label}`, "", 800);
   }
   hud.onBrainChange(selectBrain);
@@ -483,36 +737,75 @@ export async function boot() {
     $("#camera-view").textContent = `View: ${orbit ? "360°" : view.mode}`;
     if (photo?.active) photo.setCamera(view.mode);
     $("#camera-orbit").setAttribute("aria-pressed", String(orbit));
-    $("#orbit-actions").hidden = !orbit; $("#camera-help").hidden = !orbit;
+    $("#orbit-actions").hidden = !orbit;
+    $("#camera-help").hidden = !orbit;
   }
-  function enableOrbit() { if (view.mode !== "orbit") { view.setCamera("orbit"); cameraChanged(); } }
-  const switchCamera = () => { view.toggleCamera(); cameraChanged(); hud.badge(`camera: ${view.mode === "orbit" ? "360°" : view.mode}`, "", 700); };
+  function enableOrbit() {
+    if (view.mode !== "orbit") {
+      view.setCamera("orbit");
+      cameraChanged();
+    }
+  }
+  const switchCamera = () => {
+    view.toggleCamera();
+    cameraChanged();
+    hud.badge(`camera: ${view.mode === "orbit" ? "360°" : view.mode}`, "", 700);
+  };
   $("#camera-view").addEventListener("click", switchCamera);
-  $("#camera-orbit").addEventListener("click", () => { view.setCamera(view.mode === "orbit" ? "chase" : "orbit"); cameraChanged(); });
-  const zoomCamera = delta => { enableOrbit(); view.orbit.zoom(delta, world.ego.spec); };
+  $("#camera-orbit").addEventListener("click", () => {
+    view.setCamera(view.mode === "orbit" ? "chase" : "orbit");
+    cameraChanged();
+  });
+  const zoomCamera = (delta) => {
+    enableOrbit();
+    view.orbit.zoom(delta, world.ego.spec);
+  };
   $("#camera-zoom-out").addEventListener("click", () => zoomCamera(160));
   $("#camera-zoom-in").addEventListener("click", () => zoomCamera(-160));
-  $("#camera-recenter").addEventListener("click", () => { view.orbit.reset(); });
-  new OrbitControls($("#view"), {
-    rotate: (dx, dy) => { enableOrbit(); view.orbit.rotate(dx, dy); },
-    zoom: zoomCamera,
-    pinch: scale => { enableOrbit(); view.orbit.setDistance(view.orbit.distance * scale, world.ego.spec); },
+  $("#camera-recenter").addEventListener("click", () => {
+    view.orbit.reset();
   });
-  $("#camera-motion").addEventListener("change", ev => { view.cameraMotion = ev.target.checked; });
+  new OrbitControls($("#view"), {
+    rotate: (dx, dy) => {
+      enableOrbit();
+      view.orbit.rotate(dx, dy);
+    },
+    zoom: zoomCamera,
+    pinch: (scale) => {
+      enableOrbit();
+      view.orbit.setDistance(view.orbit.distance * scale, world.ego.spec);
+    },
+  });
+  $("#camera-motion").addEventListener("change", (ev) => {
+    view.cameraMotion = ev.target.checked;
+  });
   let pausedBeforePhoto = false;
   const photo = new PhotoMode({
     view,
     place: status.map.synthetic ? "practice grid" : status.map.label,
     getHour: () => hour,
-    setHour: value => setHour(value),
-    onEnter: () => { pausedBeforePhoto = world.paused; world.paused = true; input.keys.clear(); hud.toggleKeys(false); },
-    onExit: () => { input.keys.clear(); world.paused = lab?.reviewing ? true : pausedBeforePhoto; cameraChanged(); $("#view").focus({ preventScroll: true }); },
+    setHour: (value) => setHour(value),
+    onEnter: () => {
+      pausedBeforePhoto = world.paused;
+      world.paused = true;
+      input.keys.clear();
+      hud.toggleKeys(false);
+    },
+    onExit: () => {
+      input.keys.clear();
+      world.paused = lab?.reviewing ? true : pausedBeforePhoto;
+      cameraChanged();
+      $("#view").focus({ preventScroll: true });
+    },
   });
   $("#photo-mode").addEventListener("click", () => photo.enter());
   let manualSignal = null;
   function togglePause() {
-    if (simulationError || photo?.active) return;   // photo mode holds the world still until it closes
-    if (lab?.reviewing) { lab.live(); return; }
+    if (simulationError || photo?.active) return; // photo mode holds the world still until it closes
+    if (lab?.reviewing) {
+      lab.live();
+      return;
+    }
     world.paused = !world.paused;
     hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700);
   }
@@ -525,35 +818,66 @@ export async function boot() {
   const input = new Input({
     autopilot: toggleAutopilot,
     camera: switchCamera,
-    signalLeft: () => signal("left"), signalRight: () => signal("right"), horn: () => audio.horn(),
-    reset: () => { if (photo.active) return; if (challenge) challengeModified = true; drive?.reset(); world.resetToLane(); autopilot.bumpEpoch(); autopilot.executing = null; },
+    signalLeft: () => signal("left"),
+    signalRight: () => signal("right"),
+    horn: () => audio.horn(),
+    reset: () => {
+      if (photo.active) return;
+      if (challenge) challengeModified = true;
+      drive?.reset();
+      world.resetToLane();
+      autopilot.bumpEpoch();
+      autopilot.executing = null;
+    },
     pause: togglePause,
     brain1: () => selectBrain("decision"),
     brain2: () => selectBrain("rules"),
     brain3: () => selectBrain("llm"),
     help: () => hud.toggleKeys(),
     photo: () => photo.toggle(),
-    escape: () => { if (photo.active) { photo.exit(); return; } hud.toggleKeys(false); panel.toggle(false); },
+    escape: () => {
+      if (photo.active) {
+        photo.exit();
+        return;
+      }
+      hud.toggleKeys(false);
+      panel.toggle(false);
+    },
   });
   // A gamepad and, on touch screens, the on-screen controls drive through the same input (ui/gamepad.js,
   // ui/touch.js); they change nothing in the simulation.
-  input.addSource(new GamepadInput({
-    actions: input.actions,
-    blocked: () => !!document.querySelector("dialog[open]"),   // no buttons under a dialog, as with the keys
-    onConnect: pad => hud.badge(`GAMEPAD CONNECTED · ${String(pad.id || "pad").split("(")[0].trim().slice(0, 32)} · RT go, LT brake, Y autopilot`, "", 3500),
-    onDisconnect: () => hud.badge("GAMEPAD DISCONNECTED", "", 1500),
-  }));
+  input.addSource(
+    new GamepadInput({
+      actions: input.actions,
+      blocked: () => !!document.querySelector("dialog[open]"), // no buttons under a dialog, as with the keys
+      onConnect: (pad) =>
+        hud.badge(
+          `GAMEPAD CONNECTED · ${String(pad.id || "pad")
+            .split("(")[0]
+            .trim()
+            .slice(0, 32)} · RT go, LT brake, Y autopilot`,
+          "",
+          3500,
+        ),
+      onDisconnect: () => hud.badge("GAMEPAD DISCONNECTED", "", 1500),
+    }),
+  );
   let touch = null;
   const coarsePointer = window.matchMedia?.("(pointer: coarse)");
   const showTouch = () => {
     const on = touchWanted(location.search, coarsePointer?.matches);
     if (on && !touch) touch = input.addSource(new TouchControls({ actions: input.actions }));
-    if (touch) { touch.el.hidden = !on; if (!on) touch.release(); }
+    if (touch) {
+      touch.el.hidden = !on;
+      if (!on) touch.release();
+    }
     document.body.classList.toggle("touch-driving", on);
     // (the HUD stands above the drive replay deck too, which sits on the controls: app.css --replay-h)
     const deck = document.querySelector(".replay-deck");
     if (on && deck && !showTouch.deck && typeof ResizeObserver === "function") {
-      showTouch.deck = new ResizeObserver(() => document.body.style.setProperty("--replay-h", `${deck.offsetHeight ? deck.offsetHeight + 8 : 0}px`));
+      showTouch.deck = new ResizeObserver(() =>
+        document.body.style.setProperty("--replay-h", `${deck.offsetHeight ? deck.offsetHeight + 8 : 0}px`),
+      );
       showTouch.deck.observe(deck);
     }
   };
@@ -563,14 +887,27 @@ export async function boot() {
     onFinish: () => finishDrive("finished"),
     onNewDrive: () => explorer.open(),
     getReplayTarget: (report, incident) => reportIncidentTarget(recorder, report, incident),
-    onReplay: index => { lab.update(recorder, performance.now()); lab.openReplay(index); },
-    onOpen: () => { pausedBeforeReport = world.paused; world.paused = true; },
-    onClose: () => { world.paused = lab?.reviewing ? true : pausedBeforeReport; },
+    onReplay: (index) => {
+      lab.update(recorder, performance.now());
+      lab.openReplay(index);
+    },
+    onOpen: () => {
+      pausedBeforeReport = world.paused;
+      world.paused = true;
+    },
+    onClose: () => {
+      world.paused = lab?.reviewing ? true : pausedBeforeReport;
+    },
   });
   function startDrive(title, route = null) {
     if (challenge && drive) challengeModified = true; // Only the original authored attempt counts.
     if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("replaced")));
-    drive = new DriveScore(world, { title, route, map: pack.synthetic ? "Practice grid" : status.map.label, driver: autopilot.enabled ? autopilot.brainName : "manual" });
+    drive = new DriveScore(world, {
+      title,
+      route,
+      map: pack.synthetic ? "Practice grid" : status.map.label,
+      driver: autopilot.enabled ? autopilot.brainName : "manual",
+    });
     if (challenge?.roadTest) drive.observer = new RoadTestObserver(); // (the road test's examiner: lab/examiner.js)
     arrivalPending = false;
     recorder.reset();
@@ -585,7 +922,8 @@ export async function boot() {
   function withDecidedBy(report) {
     if (!["manual", "rules"].includes(report.driver ?? drive?.driver) && decidedAtStart) {
       const decided = decidedByCounts(autopilot.decidedBy, decidedAtStart);
-      if (decided.model_share !== null && Object.values(decided).every((n) => n === null || n >= 0)) Object.assign(report, decided);
+      if (decided.model_share !== null && Object.values(decided).every((n) => n === null || n >= 0))
+        Object.assign(report, decided);
     }
     return report;
   }
@@ -594,33 +932,62 @@ export async function boot() {
     if (!drive || drive.finished) return;
     if (drive.simulationError) reason = "error";
     // A manual driver finishes parking with the review button; the AI reports its own arrival.
-    if (reason === "finished" && challenge?.park && drive.driver === "manual" && world.route && Math.abs(world.ego.v) < 0.05) {
-      const car = world.ego, spec = car.spec;
-      const space = spacesAlong(world, world.route, spec).find(p => {
-        const f = frameOf(car, p), side = spec.width / 2 * Math.abs(Math.sin(f.phi));
-        return parkedPose(car, p, world).within_kerb
-          && f.u - spec.rearOverhang * Math.cos(f.phi) - side >= p.sFrom
-          && f.u + (spec.length - spec.rearOverhang) * Math.cos(f.phi) + side <= p.sTo;
+    if (
+      reason === "finished" &&
+      challenge?.park &&
+      drive.driver === "manual" &&
+      world.route &&
+      Math.abs(world.ego.v) < 0.05
+    ) {
+      const car = world.ego,
+        spec = car.spec;
+      const space = spacesAlong(world, world.route, spec).find((p) => {
+        const f = frameOf(car, p),
+          side = (spec.width / 2) * Math.abs(Math.sin(f.phi));
+        return (
+          parkedPose(car, p, world).within_kerb &&
+          f.u - spec.rearOverhang * Math.cos(f.phi) - side >= p.sFrom &&
+          f.u + (spec.length - spec.rearOverhang) * Math.cos(f.phi) + side <= p.sTo
+        );
       });
-      if (space) { drive.noteArrival({ parked: true, ...parkedPose(car, space, world) }); reason = "arrived"; }
+      if (space) {
+        drive.noteArrival({ parked: true, ...parkedPose(car, space, world) });
+        reason = "arrived";
+      }
     }
-    if (autopilot.enabled) { autopilot.setEnabled(false); hud.setAutopilot(false); overlays.setCandidates(null); }
+    if (autopilot.enabled) {
+      autopilot.setEnabled(false);
+      hud.setAutopilot(false);
+      overlays.setCandidates(null);
+    }
     const report = drive.finish(reason);
-    report.config = challenge ? challengeConfig(challenge) : { map: status.map.id, seed: options.seed, traffic: options.traffic,
-      weather: world.weather, time: formatClock(hour), clock: clock.rate, car: garage.vehicle.id };
+    report.config = challenge
+      ? challengeConfig(challenge)
+      : {
+          map: status.map.id,
+          seed: options.seed,
+          traffic: options.traffic,
+          weather: world.weather,
+          time: formatClock(hour),
+          clock: clock.rate,
+          car: garage.vehicle.id,
+        };
     report.branched = recorder.branched;
     report.recording_id = recorder.recordingId;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
     withDecidedBy(report);
     if (challenge) {
-      const practice = challenge.roadTest ? saveRoadTest(challenge, report, examine(challenge, report)) : savePractice(challenge, report);
+      const practice = challenge.roadTest
+        ? saveRoadTest(challenge, report, examine(challenge, report))
+        : savePractice(challenge, report);
       lab.practice = practice;
       report.practice = { outcome: practice.outcome, saved: practice.available };
     }
     recorder.record({ world, fleet, autopilot, drive, clock }, true);
     const saved = saveDrive(report);
-    driveReport.lastUpdate = -Infinity; driveReport.update(drive);
+    driveReport.lastUpdate = -Infinity;
+    driveReport.update(drive);
     driveReport.show(report, saved);
   }
 
@@ -628,17 +995,27 @@ export async function boot() {
   const explorer = new Explorer({
     map: status.map,
     getStart: () => ({ x: world.ego.x, y: world.ego.y, heading: world.ego.psi }),
-    onOpen: () => { if (lab?.reviewing) lab.live(); pausedBeforeExplorer = world.paused; world.paused = true; },
-    onClose: () => { world.paused = pausedBeforeExplorer; },
+    onOpen: () => {
+      if (lab?.reviewing) lab.live();
+      pausedBeforeExplorer = world.paused;
+      world.paused = true;
+    },
+    onClose: () => {
+      world.paused = pausedBeforeExplorer;
+    },
     onDrive: (d) => applyRoute(d.route, d.destination, d.title),
     onMap: (id) => {
       if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("map changed")));
       autopilot.setEnabled(false);
       const next = new URL(location.href);
-      next.searchParams.delete("bbox"); next.searchParams.delete("replay");
-      next.searchParams.delete("challenge"); next.searchParams.delete("drive");
-      next.searchParams.set("map", id); next.searchParams.set("explore", "1");
-      next.searchParams.set("weather", world.weather); next.searchParams.set("time", formatClock(hour));
+      next.searchParams.delete("bbox");
+      next.searchParams.delete("replay");
+      next.searchParams.delete("challenge");
+      next.searchParams.delete("drive");
+      next.searchParams.set("map", id);
+      next.searchParams.set("explore", "1");
+      next.searchParams.set("weather", world.weather);
+      next.searchParams.set("time", formatClock(hour));
       next.searchParams.set("clock", String(clock.rate));
       next.searchParams.set("quality", view.quality);
       location.assign(next);
@@ -652,9 +1029,20 @@ export async function boot() {
     if (simulationError) return false;
     const generation = ++routeGeneration;
     if (world.restrictions && !checked) {
-      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
+      const res = await api("/api/route", {
+        bbox: status.map.bbox.join(","),
+        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+        to: { x: pt[0], y: pt[1] },
+        k: 1,
+        ...(world.restrictions
+          ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 }
+          : {}),
+      });
       if (generation !== routeGeneration || simulationError) return false;
-      if (!res.routes.length) { hud.badge("No legal route to this destination", "safety", 2200); return false; }
+      if (!res.routes.length) {
+        hud.badge("No legal route to this destination", "safety", 2200);
+        return false;
+      }
       data = res.routes[0];
     }
 
@@ -662,7 +1050,8 @@ export async function boot() {
     world.destination = pt;
     world.route = new Route(data, map, world.ego.spec);
     overlays.setRoute(world.route);
-    autopilot.bumpEpoch(); autopilot.executing = null;
+    autopilot.bumpEpoch();
+    autopilot.executing = null;
     hud.badge(`route: ${world.route.summary}`, "", 2200);
     if (!autopilot.enabled) toggleAutopilot();
     startDrive(title || `Drive to ${map.nearestLane(...pt)?.lane.edgeRef.name || "your destination"}`, world.route);
@@ -670,60 +1059,139 @@ export async function boot() {
   }
 
   let pausedBeforeLab = false;
-  const replayTarget = { world, fleet, autopilot, clock, setDrive: restored => { drive = restored; } };
+  const replayTarget = {
+    world,
+    fleet,
+    autopilot,
+    clock,
+    setDrive: (restored) => {
+      drive = restored;
+    },
+  };
   function restoreFrame(index) {
-    recorder.restore(index, replayTarget); input.keys.clear(); arrivalPending = false;
-    previousCars.clear(); previousPeople.clear(); capturePose(world.ego, previousEgo);
+    recorder.restore(index, replayTarget);
+    input.keys.clear();
+    arrivalPending = false;
+    previousCars.clear();
+    previousPeople.clear();
+    capturePose(world.ego, previousEgo);
     for (const car of originalParked) hideParkedCar(car);
     for (const car of world.parked.list) restoreParkedCar(car);
-    world.parked.added = world.parked.list.filter(c => !c.instances && !parkedMeshes.has(c.id));
-    for (const [id, mesh] of parkedMeshes) mesh.visible = world.parked.list.some(c => c.id === id);
-    for (const mesh of doorMeshes.values()) { view.scene.remove(mesh); mesh.traverse(o => o.geometry?.dispose()); }
+    world.parked.added = world.parked.list.filter((c) => !c.instances && !parkedMeshes.has(c.id));
+    for (const [id, mesh] of parkedMeshes) mesh.visible = world.parked.list.some((c) => c.id === id);
+    for (const mesh of doorMeshes.values()) {
+      view.scene.remove(mesh);
+      mesh.traverse((o) => o.geometry?.dispose());
+    }
     doorMeshes.clear();
-    world._road = world.roadInfo(); panel.set(autopilot.lastDecision); hud.setBrain(autopilot.brainName); lab.setAgent(autopilot.brainName);
-    hud.setAutopilot(autopilot.enabled); overlays.setRoute(world.route); overlays.setCandidates(autopilot.lastDecision?.candidates, autopilot.lastDecision?.chosenId);
-    hour = clock.hour; setWeather(world.weather); weatherView.apply(world.weather); applySky(); hud.setWeather(world.weather);
-    skyAt = world.t; acc = 0; lastConditions = "";
+    world._road = world.roadInfo();
+    panel.set(autopilot.lastDecision);
+    hud.setBrain(autopilot.brainName);
+    lab.setAgent(autopilot.brainName);
+    hud.setAutopilot(autopilot.enabled);
+    overlays.setRoute(world.route);
+    overlays.setCandidates(autopilot.lastDecision?.candidates, autopilot.lastDecision?.chosenId);
+    hour = clock.hour;
+    setWeather(world.weather);
+    weatherView.apply(world.weather);
+    applySky();
+    hud.setWeather(world.weather);
+    skyAt = world.t;
+    acc = 0;
+    lastConditions = "";
     manualSignal = world.ego.signal && !autopilot.enabled ? { t: world.t, heading: world.ego.psi } : null;
-    driveReport.lastUpdate = -Infinity; driveReport.update(drive);
+    driveReport.lastUpdate = -Infinity;
+    driveReport.update(drive);
   }
-  lab = new DriveLab({ city: { ...status.map, ...cityStyle }, demo: !!status.demo, agentNote: agentNote(), onConnectModel: () => setup.open(),
-    onPause: on => { if (on) { if (lab?.reviewing) lab.live(); pausedBeforeLab = world.paused; world.paused = true; input.keys.clear(); } else world.paused = pausedBeforeLab; },
-    onScenic: async driver => {
-      const { drives } = await api("/api/drives", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi } });
+  lab = new DriveLab({
+    city: { ...status.map, ...cityStyle },
+    demo: !!status.demo,
+    agentNote: agentNote(),
+    onConnectModel: () => setup.open(),
+    onPause: (on) => {
+      if (on) {
+        if (lab?.reviewing) lab.live();
+        pausedBeforeLab = world.paused;
+        world.paused = true;
+        input.keys.clear();
+      } else world.paused = pausedBeforeLab;
+    },
+    onScenic: async (driver) => {
+      const { drives } = await api("/api/drives", {
+        bbox: status.map.bbox.join(","),
+        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+      });
       if (!drives.length) throw new Error("Try another position or city in Explore cities.");
-      setHour("golden"); selectBrain("rules"); if (!(await applyRoute(drives[0].route, drives[0].destination, drives[0].title))) return;
-      if (driver === "manual") { autopilot.setEnabled(false); hud.setAutopilot(false); drive.driver = "manual"; }
+      setHour("golden");
+      selectBrain("rules");
+      if (!(await applyRoute(drives[0].route, drives[0].destination, drives[0].title))) return;
+      if (driver === "manual") {
+        autopilot.setEnabled(false);
+        hud.setAutopilot(false);
+        drive.driver = "manual";
+      }
       world.paused = false;
     },
     onSeek: restoreFrame,
-    onLive: () => { restoreFrame(recorder.frames.length - 1); recorder.restoreSpend(autopilot); world.paused = false; },
+    onLive: () => {
+      restoreFrame(recorder.frames.length - 1);
+      recorder.restoreSpend(autopilot);
+      world.paused = false;
+    },
     onBranch: (index, driver) => {
       restoreFrame(index);
       let alternative, branchSnap, candidates;
       if (driver.startsWith("candidate:")) {
-        branchSnap = buildSnapshot(world); candidates = sampleCandidates(branchSnap, world);
+        branchSnap = buildSnapshot(world);
+        candidates = sampleCandidates(branchSnap, world);
         const { eligible } = simulateAll(candidates, branchSnap, world);
-        alternative = eligible.find(c => c.id === driver.slice(10));
-        if (!alternative) { hud.badge("That manoeuvre no longer passes safety checks. Choose another.", "safety", 2000); return false; }
+        alternative = eligible.find((c) => c.id === driver.slice(10));
+        if (!alternative) {
+          hud.badge("That manoeuvre no longer passes safety checks. Choose another.", "safety", 2000);
+          return false;
+        }
       }
       recorder.branch(index);
       recorder.restoreSpend(autopilot);
-      if (drive) { drive.finished = null; drive.driver = "mixed"; drive.incident("takeover", alternative ? "Replay branch with an alternate manoeuvre" : `Replay branch with ${driver}`); }
+      if (drive) {
+        drive.finished = null;
+        drive.driver = "mixed";
+        drive.incident(
+          "takeover",
+          alternative ? "Replay branch with an alternate manoeuvre" : `Replay branch with ${driver}`,
+        );
+      }
       if (alternative) {
         autopilot.setEnabled(true);
-        autopilot.apply({ motion: alternative.law.vTarget <= 0.1 ? "stop" : "drive", candidateId: alternative.id,
-          meta: { source: "replay_choice", model: "replay", latency_ms: 0, input_tokens: 0, cost_usd: 0 } }, branchSnap, candidates,
-          { state: autopilot.lastDecision?.state || {}, questions: {}, flags: [] });
+        autopilot.apply(
+          {
+            motion: alternative.law.vTarget <= 0.1 ? "stop" : "drive",
+            candidateId: alternative.id,
+            meta: { source: "replay_choice", model: "replay", latency_ms: 0, input_tokens: 0, cost_usd: 0 },
+          },
+          branchSnap,
+          candidates,
+          { state: autopilot.lastDecision?.state || {}, questions: {}, flags: [] },
+        );
         autopilot.lastStart = world.t * 1000 + 1000;
       } else if (driver === "manual") autopilot.setEnabled(false);
-      else { selectBrain(driver); autopilot.setEnabled(!!world.route); }
+      else {
+        selectBrain(driver);
+        autopilot.setEnabled(!!world.route);
+      }
       if (!alternative) autopilot.executing = null;
-      world.paused = false; hud.setAutopilot(autopilot.enabled);
+      world.paused = false;
+      hud.setAutopilot(autopilot.enabled);
     },
-    onAgent: (name, definition) => { if (definition) autopilot.brains[name] = definition.create(); selectBrain(name); },
-    onPerception: on => { perception.setEnabled(on); overlays.showCandidates = on || $("#show-candidates").checked;
-      overlays.setCandidates(autopilot.lastDecision?.candidates, autopilot.lastDecision?.chosenId); },
+    onAgent: (name, definition) => {
+      if (definition) autopilot.brains[name] = definition.create();
+      selectBrain(name);
+    },
+    onPerception: (on) => {
+      perception.setEnabled(on);
+      overlays.showCandidates = on || $("#show-candidates").checked;
+      overlays.setCandidates(autopilot.lastDecision?.candidates, autopilot.lastDecision?.chosenId);
+    },
   });
   // (after the drive lab, whose replay deck the touch layout makes room for)
   showTouch();
@@ -732,11 +1200,22 @@ export async function boot() {
   async function setDestination(pt) {
     if (simulationError) return;
     if (lab?.reviewing) lab.live();
-    const generation = ++routeGeneration;  // (a destination picked after this one, whose route comes back first, wins)
+    const generation = ++routeGeneration; // (a destination picked after this one, whose route comes back first, wins)
     try {
-      const res = await api("/api/route", { bbox: status.map.bbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: pt[0], y: pt[1] }, k: 1, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}) });
+      const res = await api("/api/route", {
+        bbox: status.map.bbox.join(","),
+        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+        to: { x: pt[0], y: pt[1] },
+        k: 1,
+        ...(world.restrictions
+          ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 }
+          : {}),
+      });
       if (generation !== routeGeneration) return;
-      if (!res.routes.length) { hud.badge("no route to that point", "safety", 1500); return; }
+      if (!res.routes.length) {
+        hud.badge("no route to that point", "safety", 1500);
+        return;
+      }
       await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
     } catch (err) {
       hud.badge(`routing failed: ${err.message}`, "safety", 2000);
@@ -744,17 +1223,31 @@ export async function boot() {
   }
 
   // Turn-by-turn guidance for manual drivers; the autopilot's own snapshot is used when it drives.
-  let cachedNav = null, navRoute = null, navAt = -Infinity;
+  let cachedNav = null,
+    navRoute = null,
+    navAt = -Infinity;
   function routeNav(now) {
     const route = world.route;
-    if (!route) { navRoute = null; cachedNav = null; return null; }
+    if (!route) {
+      navRoute = null;
+      cachedNav = null;
+      return null;
+    }
     if (route === navRoute && now - navAt < 100) return cachedNav;
-    navRoute = route; navAt = now;
+    navRoute = route;
+    navAt = now;
     const p = route.project(world.ego.x, world.ego.y);
-    if (p.distance > 25) return cachedNav = null;
-    const remaining = route.remaining(p.s), next = route.turnsAfter(p.s)[0];
-    return cachedNav = { next_turn: next ? next.dir : "none", exit: next?.exit ?? null, turn_in_m: next ? next.at_m - p.s : remaining,
-      turn_street: next?.street || "", remaining_m: remaining, arrived: remaining < 3.5 };
+    if (p.distance > 25) return (cachedNav = null);
+    const remaining = route.remaining(p.s),
+      next = route.turnsAfter(p.s)[0];
+    return (cachedNav = {
+      next_turn: next ? next.dir : "none",
+      exit: next?.exit ?? null,
+      turn_in_m: next ? next.at_m - p.s : remaining,
+      turn_street: next?.street || "",
+      remaining_m: remaining,
+      arrived: remaining < 3.5,
+    });
   }
 
   $("#loading").hidden = true;
@@ -762,11 +1255,17 @@ export async function boot() {
   if (challenge) {
     const driver = params.get("drive") || "manual";
     selectBrain(driver === "manual" ? "rules" : driver);
-    autopilot.setEnabled(driver !== "manual"); hud.setAutopilot(autopilot.enabled);
-    overlays.setRoute(world.route); startDrive(challenge.title, world.route);
+    autopilot.setEnabled(driver !== "manual");
+    hud.setAutopilot(autopilot.enabled);
+    overlays.setRoute(world.route);
+    startDrive(challenge.title, world.route);
     if (challenge.roadTest) examinerPrompt = new ExaminerPrompt(challenge, world.route);
-    $(".hud-top-left").append(examinerPrompt?.element || h("div", { class: "challenge-banner" }, h("strong", {}, challenge.title), challenge.lesson));
-    for (const selector of ["#weather", "#time", "#clock-rate", "#traffic-density", "#world-seed", "#restart-world"]) $(selector).disabled = true;
+    $(".hud-top-left").append(
+      examinerPrompt?.element ||
+        h("div", { class: "challenge-banner" }, h("strong", {}, challenge.title), challenge.lesson),
+    );
+    for (const selector of ["#weather", "#time", "#clock-rate", "#traffic-density", "#world-seed", "#restart-world"])
+      $(selector).disabled = true;
   }
   if (replay) {
     overlays.setRoute(world.route);
@@ -776,22 +1275,86 @@ export async function boot() {
   }
   showPillars();
   checkEndpoints();
-  window.__jev = { world, map, view, autopilot, fleet, setDestination, overlays, signs, audio, cockpit, clock, driveReport, explorer, egoMesh, vehicle: garage.vehicle, recorder, lab, perception, photo, input, get touch() { return touch; }, get drive() { return drive; }, get simulationError() { return simulationError; }, finishDrive, setTime: setHour };
+  window.__jev = {
+    world,
+    map,
+    view,
+    autopilot,
+    fleet,
+    setDestination,
+    overlays,
+    signs,
+    audio,
+    cockpit,
+    clock,
+    driveReport,
+    explorer,
+    egoMesh,
+    vehicle: garage.vehicle,
+    recorder,
+    lab,
+    perception,
+    photo,
+    input,
+    get touch() {
+      return touch;
+    },
+    get drive() {
+      return drive;
+    },
+    get simulationError() {
+      return simulationError;
+    },
+    finishDrive,
+    setTime: setHour,
+  };
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();
 
   let last = performance.now();
   let acc = 0;
   let announcedPothole = null;
-  let indicatorLit = false, announcedEv = null, announcedAt = -Infinity, announcedBus = null, announcedCrosswalk = null, announcedSchool = null, announcedZone = null, announcedRoadside = null, announcedStreetcar = null, announcedCrossing = null, announcedBox = null, announcedAdvance = null, announcedWorkZone = null, announcedClosure = null, announcedOutage = null, announcedNightFlash = null, announcedVan = null, announcedPlow = null, announcedPark = null, announcedHazard = null, announcedTraffic = null, announcedCyclist = null, announcedCalming = null, announcedScramble = null, announcedLeftRed = null, announcedGuard = null, announcedContraflow = null, announcedRunner = null, announcedGlare = null, announcedReversing = null, announcedGeese = null;
-  let announcedTailgater = null, announcedRoadClosed = null;
+  let indicatorLit = false,
+    announcedEv = null,
+    announcedAt = -Infinity,
+    announcedBus = null,
+    announcedCrosswalk = null,
+    announcedSchool = null,
+    announcedZone = null,
+    announcedRoadside = null,
+    announcedStreetcar = null,
+    announcedCrossing = null,
+    announcedBox = null,
+    announcedAdvance = null,
+    announcedWorkZone = null,
+    announcedClosure = null,
+    announcedOutage = null,
+    announcedNightFlash = null,
+    announcedVan = null,
+    announcedPlow = null,
+    announcedPark = null,
+    announcedHazard = null,
+    announcedTraffic = null,
+    announcedCyclist = null,
+    announcedCalming = null,
+    announcedScramble = null,
+    announcedLeftRed = null,
+    announcedGuard = null,
+    announcedContraflow = null,
+    announcedRunner = null,
+    announcedGlare = null,
+    announcedReversing = null,
+    announcedGeese = null;
+  let announcedTailgater = null,
+    announcedRoadClosed = null;
   let announcedOfficer = null;
   let announcedBall = null;
   let announcedIce = null;
   let announcedSnowbank = null;
   let announcedPuddle = null;
   let announcedParker = null;
-  let lastConditions = "", skyAt = world.t;
+  let lastConditions = "",
+    skyAt = world.t;
   function frame(now) {
     // Schedule before stepping: a failed simulation must not permanently stop rendering or controls.
     if (!manual) requestAnimationFrame(frame);
@@ -807,14 +1370,17 @@ export async function boot() {
       let steps = 0;
       while (acc >= FIXED_DT && steps < 5) {
         if (input.anyDriving && (!drive || drive.finished)) startDrive("Free drive");
-        if (autopilot.enabled && input.anyDriving) { toggleAutopilot(); }
+        if (autopilot.enabled && input.anyDriving) {
+          toggleAutopilot();
+        }
         if (drive && !drive.finished && !arrivalPending) {
           const driver = autopilot.enabled ? autopilot.brainName : "manual";
           if (driver !== drive.driver) drive.driver = "mixed";
         }
         capturePose(world.ego, previousEgo);
         for (const car of fleet.vehicles) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
-        for (const bike of world.contraflow.riders) previousCars.set(bike.id, capturePose(bike, previousCars.get(bike.id)));
+        for (const bike of world.contraflow.riders)
+          previousCars.set(bike.id, capturePose(bike, previousCars.get(bike.id)));
         for (const car of world.driveways.cars) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
         for (const p of world.crowd.list) previousPeople.set(p.id, capturePose(p, previousPeople.get(p.id)));
         try {
@@ -823,51 +1389,103 @@ export async function boot() {
           simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
           console.error("Simulation stopped", error);
           world.paused = true;
-          autopilot.setEnabled(false); hud.setAutopilot(false);
-          input.keys.clear(); acc = 0;
+          autopilot.setEnabled(false);
+          hud.setAutopilot(false);
+          input.keys.clear();
+          acc = 0;
           drive?.incident("simulation_error", simulationError);
-          document.body.append(h("div", { id: "simulation-error", class: "simulation-error", role: "alert" },
-            h("strong", {}, "Drive stopped after a simulation error"),
-            h("p", {}, simulationError),
-            h("button", { class: "chip-button", onclick: () => location.reload() }, "Restart drive")));
+          document.body.append(
+            h(
+              "div",
+              { id: "simulation-error", class: "simulation-error", role: "alert" },
+              h("strong", {}, "Drive stopped after a simulation error"),
+              h("p", {}, simulationError),
+              h("button", { class: "chip-button", onclick: () => location.reload() }, "Restart drive"),
+            ),
+          );
           break;
         }
         if (drive && !drive.finished && !autopilot.enabled && world.route && Math.abs(world.ego.v) < 0.5) {
           const projection = world.route.project(world.ego.x, world.ego.y);
           if (projection.distance < 4 && world.route.remaining(projection.s) < 3.5) {
-            arrivalPending = true; world.route = null; world.destination = null; overlays.setRoute(null); overlays.setCandidates(null);
+            arrivalPending = true;
+            world.route = null;
+            world.destination = null;
+            overlays.setRoute(null);
+            overlays.setCandidates(null);
             hud.badge("ARRIVED", "stop", 1500);
           }
         }
         drive?.record(world, world._road, FIXED_DT);
-        if (arrivalPending) { arrivalPending = false; finishDrive("arrived"); }
+        if (arrivalPending) {
+          arrivalPending = false;
+          finishDrive("arrived");
+        }
         for (const ev of world.events) {
           recorder.mark(world.t, ev.type);
-          if (ev.type === "collision") { hud.flash(); hud.badge(`COLLISION · ${(ev.kind || "object").replace(/_/g, " ").toUpperCase()}`, "alert", 1500); }
-          else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "alert", 1500);
-          else if (ev.type === "stop_sign") hud.badge(ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : ev.dark ? "NO STOP AT A DARK SIGNAL" : "RAN A STOP SIGN", "alert", 1500);
+          if (ev.type === "collision") {
+            hud.flash();
+            hud.badge(`COLLISION · ${(ev.kind || "object").replace(/_/g, " ").toUpperCase()}`, "alert", 1500);
+          } else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "alert", 1500);
+          else if (ev.type === "stop_sign")
+            hud.badge(
+              ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : ev.dark ? "NO STOP AT A DARK SIGNAL" : "RAN A STOP SIGN",
+              "alert",
+              1500,
+            );
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
           else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
           else if (ev.type === "close_pass") hud.badge("PASSED A CYCLIST TOO CLOSE", "alert", 1500);
           else if (ev.type === "contraflow_conflict") hud.badge("MET A CONTRAFLOW CYCLIST TOO CLOSE", "alert", 1500);
-          else if (ev.type === "officer_violation") hud.badge("WENT ON WHILE THE OFFICER SIGNALLED STOP", "alert", 1500);
-          else if (ev.type === "fresh_green_conflict") hud.badge("ENTERED AHEAD OF A CAR RUNNING THE RED", "alert", 1500);
+          else if (ev.type === "officer_violation")
+            hud.badge("WENT ON WHILE THE OFFICER SIGNALLED STOP", "alert", 1500);
+          else if (ev.type === "fresh_green_conflict")
+            hud.badge("ENTERED AHEAD OF A CAR RUNNING THE RED", "alert", 1500);
           else if (ev.type === "pothole_hit") hud.badge(`HIT A POTHOLE AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
-          else if (ev.type === "ball_warning_ignored") hud.badge("TOO FAST PAST WHERE A BALL ROLLED OUT", "alert", 1500);
-          else if (ev.type === "reversing_conflict") hud.badge(ev.reason === "close_pass" ? "SQUEEZED PAST A CAR BACKING OUT" : "DID NOT STOP FOR A CAR BACKING OUT", "alert", 1500);
+          else if (ev.type === "ball_warning_ignored")
+            hud.badge("TOO FAST PAST WHERE A BALL ROLLED OUT", "alert", 1500);
+          else if (ev.type === "reversing_conflict")
+            hud.badge(
+              ev.reason === "close_pass" ? "SQUEEZED PAST A CAR BACKING OUT" : "DID NOT STOP FOR A CAR BACKING OUT",
+              "alert",
+              1500,
+            );
           else if (ev.type === "brake_check") hud.badge("BRAKE CHECK · TAILGATER BEHIND", "alert", 1500);
-          else if (ev.type === "parking_conflict") hud.badge(ev.reason === "passed" ? "WENT ROUND A CAR PARKING" : "BLOCKED A CAR PARKING", "alert", 1500);
-          else if (ev.type === "snowbank_conflict") hud.badge(ev.reason === "oncoming_inside" ? "DROVE INTO THE NARROW STRETCH WITH A CAR IN IT" : "DROVE INTO THE NARROW STRETCH OUT OF TURN", "alert", 1500);
-          else if (ev.type === "wildlife_conflict") hud.badge(ev.reason === "hit" ? "HIT A GOOSE" : "DROVE ON TOO CLOSE TO THE GEESE", "alert", 1500);
-          else if (ev.type === "ice_overspeed") hud.badge(ev.reason === "fast" ? `ONTO BLACK ICE AT ${Math.round(ev.kmh)} KM/H` : ev.reason === "skid" ? "SKIDDED ON BLACK ICE" : `${ev.reason === "brake" ? "BRAKED" : "ACCELERATED"} HARD ON BLACK ICE`, "alert", 1500);
-          else if (ev.type === "pedestrian_splashed") hud.badge(`SPLASHED A PEDESTRIAN AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
-          else if (ev.type === "passed_crossing_guard") hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
+          else if (ev.type === "parking_conflict")
+            hud.badge(ev.reason === "passed" ? "WENT ROUND A CAR PARKING" : "BLOCKED A CAR PARKING", "alert", 1500);
+          else if (ev.type === "snowbank_conflict")
+            hud.badge(
+              ev.reason === "oncoming_inside"
+                ? "DROVE INTO THE NARROW STRETCH WITH A CAR IN IT"
+                : "DROVE INTO THE NARROW STRETCH OUT OF TURN",
+              "alert",
+              1500,
+            );
+          else if (ev.type === "wildlife_conflict")
+            hud.badge(ev.reason === "hit" ? "HIT A GOOSE" : "DROVE ON TOO CLOSE TO THE GEESE", "alert", 1500);
+          else if (ev.type === "ice_overspeed")
+            hud.badge(
+              ev.reason === "fast"
+                ? `ONTO BLACK ICE AT ${Math.round(ev.kmh)} KM/H`
+                : ev.reason === "skid"
+                  ? "SKIDDED ON BLACK ICE"
+                  : `${ev.reason === "brake" ? "BRAKED" : "ACCELERATED"} HARD ON BLACK ICE`,
+              "alert",
+              1500,
+            );
+          else if (ev.type === "pedestrian_splashed")
+            hud.badge(`SPLASHED A PEDESTRIAN AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
+          else if (ev.type === "passed_crossing_guard")
+            hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
         acc -= FIXED_DT;
         steps++;
-        if (world.paused) { acc = 0; break; }
+        if (world.paused) {
+          acc = 0;
+          break;
+        }
       }
     }
     hour = clock.update(world.t);
@@ -877,27 +1495,53 @@ export async function boot() {
       skyAt = world.t;
     }
     const conditions = `${garage.vehicle.name} · ${formatClock(hour)} · ${world.weather[0].toUpperCase() + world.weather.slice(1)} · ${Math.round(world.visibility.range)} m sight`;
-    if (conditions !== lastConditions) { $("#world-conditions").textContent = conditions; lastConditions = conditions; }
+    if (conditions !== lastConditions) {
+      $("#world-conditions").textContent = conditions;
+      lastConditions = conditions;
+    }
     const pauseButton = $("#pause-world");
     if (pauseButton.getAttribute("aria-pressed") !== String(world.paused)) {
-      pauseButton.setAttribute("aria-pressed", String(world.paused)); pauseButton.textContent = world.paused ? "Resume" : "Pause";
+      pauseButton.setAttribute("aria-pressed", String(world.paused));
+      pauseButton.textContent = world.paused ? "Resume" : "Pause";
     }
     const alpha = world.paused || photo.active ? 1 : acc / FIXED_DT;
     const replayNext = lab.reviewing ? recorder.frames[Number(lab.slider.value) + 1]?.state : null;
     const replayAlpha = lab.replayAlpha;
-    const renderEgo = replayNext ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
-      : Number.isFinite(previousEgo.x) ? interpolatePose(world.ego, previousEgo, alpha) : world.ego;
+    const renderEgo = replayNext
+      ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
+      : Number.isFinite(previousEgo.x)
+        ? interpolatePose(world.ego, previousEgo, alpha)
+        : world.ego;
     for (const inter of map.intersections.values()) {
       // (with an advance green, each approach shows its own lights; with the power out, none do)
       const dark = world.outages.isDark(inter.id);
-      roads.signals.set(inter.id, inter.plan?.advance ? Object.fromEntries(inter.approaches.map((a) => [`@${a.edge}`, dark ? "dark" : approachPhase(inter, a.edge, world.t)]))
-        : dark ? { A: "dark", B: "dark" } : world.phase(inter.id), world.t);
-      roads.signals.setPed(inter.id, dark ? { A: "dark", B: "dark" } : { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) }, world.t);
+      roads.signals.set(
+        inter.id,
+        inter.plan?.advance
+          ? Object.fromEntries(
+              inter.approaches.map((a) => [`@${a.edge}`, dark ? "dark" : approachPhase(inter, a.edge, world.t)]),
+            )
+          : dark
+            ? { A: "dark", B: "dark" }
+            : world.phase(inter.id),
+        world.t,
+      );
+      roads.signals.setPed(
+        inter.id,
+        dark ? { A: "dark", B: "dark" } : { A: pedPhase(inter, "A", world.t), B: pedPhase(inter, "B", world.t) },
+        world.t,
+      );
     }
     syncFleetMeshes();
     if (manualSignal && !autopilot.enabled) {
-      const turned = Math.abs(Math.atan2(Math.sin(world.ego.psi - manualSignal.heading), Math.cos(world.ego.psi - manualSignal.heading))) > 0.5;
-      if (world.t - manualSignal.t > 12 || (turned && Math.abs(world.ego.delta) < 0.08)) { world.ego.signal = null; manualSignal = null; }
+      const turned =
+        Math.abs(
+          Math.atan2(Math.sin(world.ego.psi - manualSignal.heading), Math.cos(world.ego.psi - manualSignal.heading)),
+        ) > 0.5;
+      if (world.t - manualSignal.t > 12 || (turned && Math.abs(world.ego.delta) < 0.08)) {
+        world.ego.signal = null;
+        manualSignal = null;
+      }
     }
     const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
     if (world.highBeams) renderEgo.highBeam = !!world.ego.highBeam;
@@ -909,27 +1553,55 @@ export async function boot() {
     if (world.potholes.enabled) potholeJolt(world, egoMesh, renderEgo, dt, world.calming);
     pxoRendering?.update();
     for (const n of fleet.vehicles) {
-      const next = replayNext?.fleet.vehicles.find(v => v.id === n.id), pose = { ...(next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha)) };
+      const next = replayNext?.fleet.vehicles.find((v) => v.id === n.id),
+        pose = {
+          ...(next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha)),
+        };
       if (world.highBeams) pose.highBeam = npcHighBeam(world, n);
-      (n.kind === "bike" ? syncBike : isEmergencyVehicle(n) ? syncEmergency : isBus(n) ? syncBus : isStreetcar(n) ? syncStreetcar : isTrain(n) ? syncTrain : isSchoolBus(n) ? syncSchoolBus : isPlow(n) ? syncPlow : isTruck(n) ? syncTruck : n.kind === "delivery_van" ? syncVan : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
+      (n.kind === "bike"
+        ? syncBike
+        : isEmergencyVehicle(n)
+          ? syncEmergency
+          : isBus(n)
+            ? syncBus
+            : isStreetcar(n)
+              ? syncStreetcar
+              : isTrain(n)
+                ? syncTrain
+                : isSchoolBus(n)
+                  ? syncSchoolBus
+                  : isPlow(n)
+                    ? syncPlow
+                    : isTruck(n)
+                      ? syncTruck
+                      : n.kind === "delivery_van"
+                        ? syncVan
+                        : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
       if (world.calming && n.kind !== "bike" && !isTrain(n)) rideOver(map, npcMeshes.get(n.id), pose);
-      if (world.potholes.enabled && n.kind !== "bike" && !isTrain(n) && !isStreetcar(n)) potholeJolt(world, npcMeshes.get(n.id), pose, dt, world.calming);
+      if (world.potholes.enabled && n.kind !== "bike" && !isTrain(n) && !isStreetcar(n))
+        potholeJolt(world, npcMeshes.get(n.id), pose, dt, world.calming);
       // (a tailgater flashing its headlights: sim/tailgaters.js, render-only)
       if (n.tailgate && world.tailgaters?.enabled) syncTailgaterFlash(npcMeshes.get(n.id), tailgaterFlash(world, n));
       // (a car parallel parking: its reverse lamps lit while it backs in, as for driveway reversers: sim/parkers.js)
       if (world.parkers?.enabled) syncReverseLamps(npcMeshes.get(n.id), n);
     }
     for (const n of world.contraflow.riders) {
-      const next = replayNext?.world.contraflow?.riders.find(v => v.id === n.id), pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
+      const next = replayNext?.world.contraflow?.riders.find((v) => v.id === n.id),
+        pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
       if (npcMeshes.has(n.id)) syncBike(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
     }
     for (const n of world.driveways.cars) {
-      const next = replayNext?.world.driveways?.cars.find(v => v.id === n.id), pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
-      if (npcMeshes.has(n.id)) { syncCar(npcMeshes.get(n.id), pose, dt, world.t, lightsOn); syncReverseLamps(npcMeshes.get(n.id), n); }
+      const next = replayNext?.world.driveways?.cars.find((v) => v.id === n.id),
+        pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
+      if (npcMeshes.has(n.id)) {
+        syncCar(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
+        syncReverseLamps(npcMeshes.get(n.id), n);
+      }
     }
     for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
     // (a police officer's cruiser parked in a bay at the corner, its lights on: sim/traffic-officer.js)
-    for (const o of world.officers?.list || []) if (o.cruiser?.parked) syncRoadside(parkedMeshes.get(o.cruiser.id), o.cruiser.vehicle, dt, world.t, lightsOn);
+    for (const o of world.officers?.list || [])
+      if (o.cruiser?.parked) syncRoadside(parkedMeshes.get(o.cruiser.id), o.cruiser.vehicle, dt, world.t, lightsOn);
     for (const z of world.workZones.zones) syncWorkZone(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
     for (const z of world.laneClosures.zones) syncLaneClosure(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
     // (a garbage truck at a stop is in traffic, and drawn there: sim/collection-truck.js)
@@ -939,181 +1611,353 @@ export async function boot() {
     const call = evs.length ? nearestCall(world.ego, evs) : null;
     // (kept up for as long as it calls on the car)
     if (call && (call.ev.id !== announcedEv || world.t - announcedAt > 1)) {
-      announcedEv = call.ev.id; announcedAt = world.t;
-      hud.badge(`${EMERGENCY_NAMES[call.ev.kind].toUpperCase()} ${call.relation === "behind" ? "BEHIND" : call.relation === "ahead" ? "AHEAD" : `FROM THE ${call.relation.toUpperCase()}`} · PULL OVER AND STOP`, "safety", 2500);
+      announcedEv = call.ev.id;
+      announcedAt = world.t;
+      hud.badge(
+        `${EMERGENCY_NAMES[call.ev.kind].toUpperCase()} ${call.relation === "behind" ? "BEHIND" : call.relation === "ahead" ? "AHEAD" : `FROM THE ${call.relation.toUpperCase()}`} · PULL OVER AND STOP`,
+        "safety",
+        2500,
+      );
     }
-    const nearestEv = evs.reduce((best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)), Infinity);
+    const nearestEv = evs.reduce(
+      (best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)),
+      Infinity,
+    );
     audio.siren(nearestEv, world.t, world.paused || document.hidden);
     // a bus ahead signalling to pull out from its stop, with the right of way: say so once
     const bus = fleet.buses?.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
     const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
-    if (bus && busKey !== announcedBus) { announcedBus = busKey; hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500); }
+    if (bus && busKey !== announcedBus) {
+      announcedBus = busKey;
+      hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500);
+    }
     // a vehicle stopped at a crosswalk ahead in the next lane, that the car must not pass: say so once
-    const cw = world.crowd.marked.find((c) => { const d = frontTo(c, world.ego); return d !== null && d > 0 && d < 50 && !looked(world, c); });
+    const cw = world.crowd.marked.find((c) => {
+      const d = frontTo(c, world.ego);
+      return d !== null && d > 0 && d < 50 && !looked(world, c);
+    });
     const stopped = cw && stoppedAt(world, cw, world.ego).find((n) => world.visibility.sees(world.ego, n));
     const cwKey = stopped ? `${cw.id}:${stopped.id}` : null;
-    if (stopped && cwKey !== announcedCrosswalk) { announcedCrosswalk = cwKey; hud.badge(`${isBus(stopped) ? "BUS" : "CAR"} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500); }
+    if (stopped && cwKey !== announcedCrosswalk) {
+      announcedCrosswalk = cwKey;
+      hud.badge(`${isBus(stopped) ? "BUS" : "CAR"} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500);
+    }
     // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
-    const school = fleet.schoolBuses?.find((b) => { const r = redsOn(b) && schoolBusRelation(world.ego, b); return r && r.ahead_m > 0 && r.ahead_m < 70 && Math.abs(r.right_m) < SCHOOL_SIDE_M && world.visibility.sees(world.ego, b); });
+    const school = fleet.schoolBuses?.find((b) => {
+      const r = redsOn(b) && schoolBusRelation(world.ego, b);
+      return (
+        r &&
+        r.ahead_m > 0 &&
+        r.ahead_m < 70 &&
+        Math.abs(r.right_m) < SCHOOL_SIDE_M &&
+        world.visibility.sees(world.ego, b)
+      );
+    });
     const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
-    if (school && schoolKey !== announcedSchool) { announcedSchool = schoolKey; hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500); }
+    if (school && schoolKey !== announcedSchool) {
+      announcedSchool = schoolKey;
+      hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500);
+    }
     // a streetcar ahead with its doors open, that the car must stop behind: say so once
-    const tram = fleet.streetcars?.find((c) => { const r = doorsOpen(c) && streetcarRelation(world.ego, c); return r && r.ahead_m > 0 && r.ahead_m < 70 && r.right_m > -STREETCAR_IN_LANE_M && r.right_m < STREETCAR_SIDE_M && world.visibility.sees(world.ego, c); });
+    const tram = fleet.streetcars?.find((c) => {
+      const r = doorsOpen(c) && streetcarRelation(world.ego, c);
+      return (
+        r &&
+        r.ahead_m > 0 &&
+        r.ahead_m < 70 &&
+        r.right_m > -STREETCAR_IN_LANE_M &&
+        r.right_m < STREETCAR_SIDE_M &&
+        world.visibility.sees(world.ego, c)
+      );
+    });
     const tramKey = tram ? `${tram.id}:${tram.transit.departures}` : null;
-    if (tram && tramKey !== announcedStreetcar) { announcedStreetcar = tramKey; hud.badge("STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS", "safety", 2500); }
+    if (tram && tramKey !== announcedStreetcar) {
+      announcedStreetcar = tramKey;
+      hud.badge("STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS", "safety", 2500);
+    }
     // a level crossing ahead to wait at, for a train coming or for room past the tracks: say so once,
     // and sound the gong of a train ringing nearby
     const crossing = crossingNotice(world);
-    if (crossing && crossing.key !== announcedCrossing) { announcedCrossing = crossing.key; hud.badge(crossing.text, "safety", 2500); }
+    if (crossing && crossing.key !== announcedCrossing) {
+      announcedCrossing = crossing.key;
+      hud.badge(crossing.text, "safety", 2500);
+    }
     if (!crossing) announcedCrossing = null;
     // a signal ahead the car could not clear, for traffic past the junction: say so once
     const box = boxNotice(world);
-    if (box && box.key !== announcedBox) { announcedBox = box.key; hud.badge(box.text, "safety", 2500); }
+    if (box && box.key !== announcedBox) {
+      announcedBox = box.key;
+      hud.badge(box.text, "safety", 2500);
+    }
     if (!box) announcedBox = null;
     // an advance green on the car's approach: whether its turn is protected, or the arrow is not its
     // light: say so once
     const advance = advanceNotice(world);
-    if (advance && advance.key !== announcedAdvance) { announcedAdvance = advance.key; hud.badge(advance.text, advance.protected ? "stop" : "safety", 2500); }
+    if (advance && advance.key !== announcedAdvance) {
+      announcedAdvance = advance.key;
+      hud.badge(advance.text, advance.protected ? "stop" : "safety", 2500);
+    }
     if (!advance) announcedAdvance = null;
     // a work zone ahead: what its flagger shows the car, said once each time the paddle turns
     const workZone = workZoneNotice(world);
-    if (workZone && workZone.key !== announcedWorkZone) { announcedWorkZone = workZone.key; hud.badge(workZone.text, workZone.stop ? "safety" : "", 2500); }
+    if (workZone && workZone.key !== announcedWorkZone) {
+      announcedWorkZone = workZone.key;
+      hud.badge(workZone.text, workZone.stop ? "safety" : "", 2500);
+    }
     if (!workZone) announcedWorkZone = null;
     // a lane closed ahead: use both lanes to the merge point, then take turns (said again as the turn changes)
     const closure = laneClosureNotice(world);
-    if (closure && closure.key !== announcedClosure) { announcedClosure = closure.key; hud.badge(closure.text, closure.stop ? "safety" : "", 2500); }
+    if (closure && closure.key !== announcedClosure) {
+      announcedClosure = closure.key;
+      hud.badge(closure.text, closure.stop ? "safety" : "", 2500);
+    }
     if (!closure) announcedClosure = null;
     // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
     const nightNotice = nightFlashNotice(world);
-    if (nightNotice && nightNotice.key !== announcedNightFlash) { announcedNightFlash = nightNotice.key; hud.badge(nightNotice.text, "stop", 2500); }
+    if (nightNotice && nightNotice.key !== announcedNightFlash) {
+      announcedNightFlash = nightNotice.key;
+      hud.badge(nightNotice.text, "stop", 2500);
+    }
     if (!nightNotice) announcedNightFlash = null;
     const outage = outageNotice(world);
-    if (outage && outage.key !== announcedOutage) { announcedOutage = outage.key; hud.badge(outage.text, outage.stop ? "safety" : "stop", 2500); }
+    if (outage && outage.key !== announcedOutage) {
+      announcedOutage = outage.key;
+      hud.badge(outage.text, outage.stop ? "safety" : "stop", 2500);
+    }
     if (!outage) announcedOutage = null;
     // a van double-parked in the car's lane ahead: wait behind it, or the way round is clear
     const van = vanNotice(world);
-    if (van && van.key !== announcedVan) { announcedVan = van.key; hud.badge(van.text, van.wait ? "safety" : "", 2500); }
+    if (van && van.key !== announcedVan) {
+      announcedVan = van.key;
+      hud.badge(van.text, van.wait ? "safety" : "", 2500);
+    }
     if (!van) announcedVan = null;
     // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
     const plowLine = plowNotice(world);
-    if (plowLine && plowLine.key !== announcedPlow) { announcedPlow = plowLine.key; hud.badge(plowLine.text, plowLine.wait ? "safety" : "", 2500); }
+    if (plowLine && plowLine.key !== announcedPlow) {
+      announcedPlow = plowLine.key;
+      hud.badge(plowLine.text, plowLine.wait ? "safety" : "", 2500);
+    }
     if (!plowLine) announcedPlow = null;
     // parking at the destination: the space, checking behind, reversing in, parked
     const parkLine = parkNotice(world);
-    if (parkLine && parkLine.key !== announcedPark) { announcedPark = parkLine.key; hud.badge(parkLine.text, parkLine.wait ? "safety" : "stop", 2500); }
+    if (parkLine && parkLine.key !== announcedPark) {
+      announcedPark = parkLine.key;
+      hud.badge(parkLine.text, parkLine.wait ? "safety" : "stop", 2500);
+    }
     if (!parkLine) announcedPark = null;
     // cars parked at the kerb that hide the sidewalk ahead, and someone stepping out from between them
     const hazardLine = hazardNotice(world);
-    if (hazardLine && hazardLine.key !== announcedHazard) { announcedHazard = hazardLine.key; hud.badge(hazardLine.text, hazardLine.wait ? "safety" : "", 2500); }
+    if (hazardLine && hazardLine.key !== announcedHazard) {
+      announcedHazard = hazardLine.key;
+      hud.badge(hazardLine.text, hazardLine.wait ? "safety" : "", 2500);
+    }
     if (!hazardLine) announcedHazard = null;
     // a vehicle hiding a lane the car must give way to (sim/hidden-traffic.js)
     const trafficLine = trafficNotice(world, autopilot.snap);
-    if (trafficLine && trafficLine.key !== announcedTraffic) { announcedTraffic = trafficLine.key; hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500); }
+    if (trafficLine && trafficLine.key !== announcedTraffic) {
+      announcedTraffic = trafficLine.key;
+      hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500);
+    }
     if (!trafficLine) announcedTraffic = null;
     // a cyclist riding in the lane ahead, on a street with one lane each way: stay behind, and why, or
     // the way is clear to pass with the minimum passing distance (said again as that changes)
     const cyclistLine = cyclistNotice(world);
-    if (cyclistLine && cyclistLine.key !== announcedCyclist) { announcedCyclist = cyclistLine.key; hud.badge(cyclistLine.text, cyclistLine.wait ? "safety" : "", 2500); }
+    if (cyclistLine && cyclistLine.key !== announcedCyclist) {
+      announcedCyclist = cyclistLine.key;
+      hud.badge(cyclistLine.text, cyclistLine.wait ? "safety" : "", 2500);
+    }
     if (!cyclistLine) announcedCyclist = null;
     // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
     const contraLine = contraflowNotice(world, autopilot.snap);
-    if (contraLine && contraLine.key !== announcedContraflow) { announcedContraflow = contraLine.key; hud.badge(contraLine.text, contraLine.wait ? "safety" : "", 2500); }
+    if (contraLine && contraLine.key !== announcedContraflow) {
+      announcedContraflow = contraLine.key;
+      hud.badge(contraLine.text, contraLine.wait ? "safety" : "", 2500);
+    }
     if (!contraLine) announcedContraflow = null;
     // a car running the red across the car's way as its light is green: wait at the line
     // (sim/red-light-runner.js)
     const runnerLine = runnerNotice(world, autopilot.snap);
-    if (runnerLine && runnerLine.key !== announcedRunner) { announcedRunner = runnerLine.key; hud.badge(runnerLine.text, runnerLine.wait ? "safety" : "alert", 2500); }
+    if (runnerLine && runnerLine.key !== announcedRunner) {
+      announcedRunner = runnerLine.key;
+      hud.badge(runnerLine.text, runnerLine.wait ? "safety" : "alert", 2500);
+    }
     if (!runnerLine) announcedRunner = null;
     // a car backing out of a driveway ahead (sim/driveway-reversers.js)
-    const reverseLine = world.driveways.enabled ? reverserNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
-    if (reverseLine && reverseLine.key !== announcedReversing) { announcedReversing = reverseLine.key; hud.badge(reverseLine.text, reverseLine.wait ? "safety" : "", 2500); }
+    const reverseLine = world.driveways.enabled
+      ? reverserNotice(autopilot.enabled ? autopilot.snap : null, world)
+      : null;
+    if (reverseLine && reverseLine.key !== announcedReversing) {
+      announcedReversing = reverseLine.key;
+      hud.badge(reverseLine.text, reverseLine.wait ? "safety" : "", 2500);
+    }
     if (!reverseLine) announcedReversing = null;
     // a pothole in the car's lane ahead: going round it in the lane, or slowing to drive over it
     // (sim/potholes.js)
     const potholeLine = potholeNotice(world, autopilot.enabled ? autopilot.snap : null);
-    if (potholeLine && potholeLine.key !== announcedPothole) { announcedPothole = potholeLine.key; hud.badge(potholeLine.text, potholeLine.slow ? "safety" : "", 2000); }
+    if (potholeLine && potholeLine.key !== announcedPothole) {
+      announcedPothole = potholeLine.key;
+      hud.badge(potholeLine.text, potholeLine.slow ? "safety" : "", 2000);
+    }
     if (!potholeLine) announcedPothole = null;
     // a ball rolled into the street ahead: a child may follow (sim/ball-chase.js)
     const ballLine = ballView ? ballNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (ballLine && ballLine.key !== announcedBall) { announcedBall = ballLine.key; hud.badge(ballLine.text, "safety", 2500); }
+    if (ballLine && ballLine.key !== announcedBall) {
+      announcedBall = ballLine.key;
+      hud.badge(ballLine.text, "safety", 2500);
+    }
     if (!ballLine) announcedBall = null;
     // Canada geese by the road ahead, or crossing it: wait for the last one (sim/geese.js)
     const geeseLine = world.geese.enabled ? geeseNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
-    if (geeseLine && geeseLine.key !== announcedGeese) { announcedGeese = geeseLine.key; hud.badge(geeseLine.text, geeseLine.wait ? "safety" : "", 2500); }
+    if (geeseLine && geeseLine.key !== announcedGeese) {
+      announcedGeese = geeseLine.key;
+      hud.badge(geeseLine.text, geeseLine.wait ? "safety" : "", 2500);
+    }
     if (!geeseLine) announcedGeese = null;
     // a car tailgating the driven car: leave more room ahead, and let it by (sim/tailgaters.js)
-    const tailLine = world.tailgaters?.enabled ? tailgaterNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (tailLine && tailLine.key !== announcedTailgater) { announcedTailgater = tailLine.key; hud.badge(tailLine.text, "safety", 2500); }
+    const tailLine = world.tailgaters?.enabled
+      ? tailgaterNotice(world, autopilot.enabled ? autopilot.snap : null)
+      : null;
+    if (tailLine && tailLine.key !== announcedTailgater) {
+      announcedTailgater = tailLine.key;
+      hud.badge(tailLine.text, "safety", 2500);
+    }
     if (!tailLine) announcedTailgater = null;
     // a road closed ahead for an event: follow the detour (sim/road-closures.js)
     const closedLine = closureView ? roadClosedNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
-    if (closedLine && closedLine.key !== announcedRoadClosed) { announcedRoadClosed = closedLine.key; hud.badge(closedLine.text, closedLine.stop ? "safety" : "", 3000); }
+    if (closedLine && closedLine.key !== announcedRoadClosed) {
+      announcedRoadClosed = closedLine.key;
+      hud.badge(closedLine.text, closedLine.stop ? "safety" : "", 3000);
+    }
     if (!closedLine) announcedRoadClosed = null;
     // a police officer directing traffic at the junction ahead: their direction, not the light's (sim/traffic-officer.js)
-    const officerLine = world.officers?.enabled ? officerNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (officerLine && officerLine.key !== announcedOfficer) { announcedOfficer = officerLine.key; hud.badge(officerLine.text, officerLine.wait ? "alert" : "safety", 2500); }
+    const officerLine = world.officers?.enabled
+      ? officerNotice(world, autopilot.enabled ? autopilot.snap : null)
+      : null;
+    if (officerLine && officerLine.key !== announcedOfficer) {
+      announcedOfficer = officerLine.key;
+      hud.badge(officerLine.text, officerLine.wait ? "alert" : "safety", 2500);
+    }
     if (!officerLine) announcedOfficer = null;
     // black ice seen ahead, or under the car, or a bridge coming up while it is near freezing
     // (sim/black-ice.js)
     const iceLine = iceView ? iceNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (iceLine && iceLine.key !== announcedIce) { announcedIce = iceLine.key; hud.badge(iceLine.text, iceLine.slow ? "safety" : "", 2500); }
+    if (iceLine && iceLine.key !== announcedIce) {
+      announcedIce = iceLine.key;
+      hud.badge(iceLine.text, iceLine.slow ? "safety" : "", 2500);
+    }
     if (!iceLine) announcedIce = null;
     // a puddle at the kerb with people beside it: ease left in the lane, or slow (sim/puddles.js)
     const puddleLine = puddleView ? puddleNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (puddleLine && puddleLine.key !== announcedPuddle) { announcedPuddle = puddleLine.key; hud.badge(puddleLine.text, puddleLine.slow ? "safety" : "", 2500); }
+    if (puddleLine && puddleLine.key !== announcedPuddle) {
+      announcedPuddle = puddleLine.key;
+      hud.badge(puddleLine.text, puddleLine.slow ? "safety" : "", 2500);
+    }
     if (!puddleLine) announcedPuddle = null;
     // snowbanks: taking turns through a stretch they narrow to one car, and creeping up to a corner they
     // hide (sim/snowbanks.js)
     const snowLine = world.snowbanks?.enabled ? snowbankNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (snowLine && snowLine.key !== announcedSnowbank) { announcedSnowbank = snowLine.key; hud.badge(snowLine.text, snowLine.wait ? "safety" : "", 2500); }
+    if (snowLine && snowLine.key !== announcedSnowbank) {
+      announcedSnowbank = snowLine.key;
+      hud.badge(snowLine.text, snowLine.wait ? "safety" : "", 2500);
+    }
     if (!snowLine) announcedSnowbank = null;
     // a car ahead parallel parking: stop well back and wait until it is in (sim/parkers.js)
     const parkerLine = world.parkers?.enabled ? parkerNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (parkerLine && parkerLine.key !== announcedParker) { announcedParker = parkerLine.key; hud.badge(parkerLine.text, "safety", 2500); }
+    if (parkerLine && parkerLine.key !== announcedParker) {
+      announcedParker = parkerLine.key;
+      hud.badge(parkerLine.text, "safety", 2500);
+    }
     if (!parkerLine) announcedParker = null;
     // a speed hump or the like on the route ahead: the speed to take it at (said again once over it)
     const calmingLine = calmingNotice(world);
-    if (calmingLine && calmingLine.key !== announcedCalming) { announcedCalming = calmingLine.key; hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000); }
+    if (calmingLine && calmingLine.key !== announcedCalming) {
+      announcedCalming = calmingLine.key;
+      hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000);
+    }
     if (!calmingLine) announcedCalming = null;
     // driving into a low sun: slowing to what the car can see (said again when that changes)
     const glareLine = sunGlareNotice(world);
-    if (glareLine && glareLine.key !== announcedGlare) { announcedGlare = glareLine.key; hud.badge(glareLine.text, glareLine.slow ? "safety" : "", 2500); }
+    if (glareLine && glareLine.key !== announcedGlare) {
+      announcedGlare = glareLine.key;
+      hud.badge(glareLine.text, glareLine.slow ? "safety" : "", 2500);
+    }
     if (!glareLine) announcedGlare = null;
     // a scramble crossing ahead: every light red while people cross every way; no right turn on red
     const leftRed = autopilot.snap?.intersection?.left_on_red;
     const leftRedKey = leftRed ? `${autopilot.snap.intersection.id}:${leftRed.stop_completed}:${leftRed.clear}` : null;
-    if (leftRedKey && leftRedKey !== announcedLeftRed) hud.badge(leftRed.go ? "LEFT ON RED · CLEAR TO TURN" : !leftRed.stop_completed ? "LEFT ON RED · FULL STOP FIRST" : "LEFT ON RED · YIELD TO PEDESTRIANS AND TRAFFIC", "safety", 2500);
+    if (leftRedKey && leftRedKey !== announcedLeftRed)
+      hud.badge(
+        leftRed.go
+          ? "LEFT ON RED · CLEAR TO TURN"
+          : !leftRed.stop_completed
+            ? "LEFT ON RED · FULL STOP FIRST"
+            : "LEFT ON RED · YIELD TO PEDESTRIANS AND TRAFFIC",
+        "safety",
+        2500,
+      );
     announcedLeftRed = leftRedKey;
     const scrambleLine = scrambleNotice(world);
-    if (scrambleLine && scrambleLine.key !== announcedScramble) { announcedScramble = scrambleLine.key; hud.badge(scrambleLine.text, "safety", 2500); }
+    if (scrambleLine && scrambleLine.key !== announcedScramble) {
+      announcedScramble = scrambleLine.key;
+      hud.badge(scrambleLine.text, "safety", 2500);
+    }
     if (!scrambleLine) announcedScramble = null;
     // a school crossing guard ahead: children waiting to cross, or the STOP sign up until everyone is
     // across (said once each time)
     const guardLine = guardNotice(world);
-    if (guardLine && guardLine.key !== announcedGuard) { announcedGuard = guardLine.key; hud.badge(guardLine.text, guardLine.stop ? "safety" : "", 2500); }
+    if (guardLine && guardLine.key !== announcedGuard) {
+      announcedGuard = guardLine.key;
+      hud.badge(guardLine.text, guardLine.stop ? "safety" : "", 2500);
+    }
     if (!guardLine) announcedGuard = null;
-    const ringing = (fleet.trains || []).filter((n) => n.rail.gong).map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
+    const ringing = (fleet.trains || [])
+      .filter((n) => n.rail.gong)
+      .map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
     // a vehicle stopped at the roadside ahead with its lights flashing: say so once
     // (and to move over, in the lane next to it where there is another going the car's way)
-    const roadsideAhead = world.roadside.vehicles.map((v) => ({ v, r: roadsideRelation(world.ego, v) })).find(({ v, r }) => r && r.ahead_m < 70 && world.sees(world.ego, v));
+    const roadsideAhead = world.roadside.vehicles
+      .map((v) => ({ v, r: roadsideRelation(world.ego, v) }))
+      .find(({ v, r }) => r && r.ahead_m < 70 && world.sees(world.ego, v));
     if (roadsideAhead && roadsideAhead.v.id !== announcedRoadside) {
       announcedRoadside = roadsideAhead.v.id;
-      const moveOver = roadsideAhead.r.adjacent && (map.nearestLane(world.ego.x, world.ego.y, world.ego.psi, 6)?.lane.edgeRef.lanes || 1) > 1;
-      hud.badge(`${ROADSIDE_NAMES[roadsideAhead.v.kind].toUpperCase()} · LIGHTS FLASHING · SLOW TO ${Math.round(passLimit(world._road?.limit ?? 11.2) * 3.6)}${moveOver ? " · MOVE OVER" : ""}`, "safety", 2500);
+      const moveOver =
+        roadsideAhead.r.adjacent &&
+        (map.nearestLane(world.ego.x, world.ego.y, world.ego.psi, 6)?.lane.edgeRef.lanes || 1) > 1;
+      hud.badge(
+        `${ROADSIDE_NAMES[roadsideAhead.v.kind].toUpperCase()} · LIGHTS FLASHING · SLOW TO ${Math.round(passLimit(world._road?.limit ?? 11.2) * 3.6)}${moveOver ? " · MOVE OVER" : ""}`,
+        "safety",
+        2500,
+      );
     }
     // into a school or playground zone in effect: say so once
     const zone = world._road?.zone;
-    if (zone && zone.id !== announcedZone) hud.badge(`${ZONE_NAMES[zone.kind].toUpperCase()} · ${Math.round(world._road.limit * 3.6)} KM/H`, "", 2500);
+    if (zone && zone.id !== announcedZone)
+      hud.badge(`${ZONE_NAMES[zone.kind].toUpperCase()} · ${Math.round(world._road.limit * 3.6)} KM/H`, "", 2500);
     announcedZone = zone?.id ?? null;
     const here = new Set();
     for (const p of world.crowd.list) {
       here.add(p.id);
-      const next = replayNext?.world.crowd.list.find(v => v.id === p.id);
-      syncPerson(pedMesh(p), next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha), view.camera, world.weather === "rain");
+      const next = replayNext?.world.crowd.list.find((v) => v.id === p.id);
+      syncPerson(
+        pedMesh(p),
+        next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha),
+        view.camera,
+        world.weather === "rain",
+      );
       if (p.crossingGuard) syncGuardSign(pedMesh(p), p);
     }
-    for (const [id, m] of pedMeshes) if (!here.has(id)) { m.visible = false; if (id.startsWith("kid_") || id.startsWith("rider_") || id.startsWith("stepout_") || id.startsWith("crew_")) { view.scene.remove(m); m.traverse((o) => o.geometry?.dispose()); pedMeshes.delete(id); previousPeople.delete(id); } }
+    for (const [id, m] of pedMeshes)
+      if (!here.has(id)) {
+        m.visible = false;
+        if (id.startsWith("kid_") || id.startsWith("rider_") || id.startsWith("stepout_") || id.startsWith("crew_")) {
+          view.scene.remove(m);
+          m.traverse((o) => o.geometry?.dispose());
+          pedMeshes.delete(id);
+          previousPeople.delete(id);
+        }
+      }
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision, autopilot.executing));
     weatherView.update(dt);
@@ -1135,10 +1979,27 @@ export async function boot() {
     indicatorLit = blink;
     $("#left-indicator").classList.toggle("active", !!blink && world.ego.signal === "left");
     $("#right-indicator").classList.toggle("active", !!blink && world.ego.signal === "right");
-    minimap.draw({ ego: world.ego, npcs: world.contraflow.riders.length ? [...fleet.vehicles, ...world.contraflow.riders] : fleet.vehicles, route: world.route, destination: world.destination });
+    minimap.draw({
+      ego: world.ego,
+      npcs: world.contraflow.riders.length ? [...fleet.vehicles, ...world.contraflow.riders] : fleet.vehicles,
+      route: world.route,
+      destination: world.destination,
+    });
     const snap = autopilot.enabled ? autopilot.snap : null;
-    hud.update({ ego: world.ego, road: world._road, nav: snap?.nav || routeNav(now), violations: world.violations,
-      decision: autopilot.lastDecision, totals: autopilot.totals, paused: world.paused, autopilot: autopilot.enabled, hasRoute: !!world.route }, now);
+    hud.update(
+      {
+        ego: world.ego,
+        road: world._road,
+        nav: snap?.nav || routeNav(now),
+        violations: world.violations,
+        decision: autopilot.lastDecision,
+        totals: autopilot.totals,
+        paused: world.paused,
+        autopilot: autopilot.enabled,
+        hasRoute: !!world.route,
+      },
+      now,
+    );
     panel.render(now);
     driveReport.update(drive, now);
     examinerPrompt?.update(world, drive, now);
@@ -1149,27 +2010,40 @@ export async function boot() {
   let manual = false;
   window.__jev.advance = (seconds, fps = 30) => {
     manual = true;
-    try { for (let t = 0; t < seconds; t += 1 / fps) frame(last + 1000 / fps); }
-    finally { manual = false; }
+    try {
+      for (let t = 0; t < seconds; t += 1 / fps) frame(last + 1000 / fps);
+    } finally {
+      manual = false;
+    }
   };
   requestAnimationFrame(frame);
 }
 
 function nearestPreset(hour) {
-  let best = "afternoon", d = Infinity;
+  let best = "afternoon",
+    d = Infinity;
   for (const [name, h] of Object.entries(TIME_PRESETS)) {
     const x = Math.abs(h - hour);
-    if (x < d) { d = x; best = name; }
+    if (x < d) {
+      d = x;
+      best = name;
+    }
   }
   return best;
 }
 
 function readReplay() {
   if (!new URLSearchParams(location.search).has("replay")) return null;
-  try { return JSON.parse(localStorage.getItem("jev-fsd-replay")); } catch { return null; }
+  try {
+    return JSON.parse(localStorage.getItem("jev-fsd-replay"));
+  } catch {
+    return null;
+  }
 }
 
 const beamIndicator = document.createElement("div");
-beamIndicator.textContent = "≋ HIGH BEAM"; beamIndicator.hidden = true;
-beamIndicator.style.cssText = "position:fixed;right:24px;bottom:calc(var(--touch-h, 0px) + 100px);color:#59aaff;background:#102341;padding:6px 10px;border-radius:6px;z-index:20;font:600 13px sans-serif;pointer-events:none";
+beamIndicator.textContent = "≋ HIGH BEAM";
+beamIndicator.hidden = true;
+beamIndicator.style.cssText =
+  "position:fixed;right:24px;bottom:calc(var(--touch-h, 0px) + 100px);color:#59aaff;background:#102341;padding:6px 10px;border-radius:6px;z-index:20;font:600 13px sans-serif;pointer-events:none";
 document.body.append(beamIndicator);

@@ -9,10 +9,22 @@ const { obbOverlap } = await import("../static/js/sim/collision.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 for (const weather of ["dry", "rain", "snow"]) {
   setWeather(weather);
-  const n = new Vehicle(40, 0, 0, 0), ego = new Vehicle(47.63, 0, 0, 0);
-  const pts = [[0, 0], [400, 0]], cum = cumulative(pts);
-  n.path = { pts, cum, length: 400, pointAt: (s) => pointAt(pts, cum, s), headingAt: (s) => headingAt(pts, cum, s),
-    offsetPointAt: (s, d) => [s, -d], project: (x, y) => projectPoint(pts, cum, [x, y]) };
+  const n = new Vehicle(40, 0, 0, 0),
+    ego = new Vehicle(47.63, 0, 0, 0);
+  const pts = [
+      [0, 0],
+      [400, 0],
+    ],
+    cum = cumulative(pts);
+  n.path = {
+    pts,
+    cum,
+    length: 400,
+    pointAt: (s) => pointAt(pts, cum, s),
+    headingAt: (s) => headingAt(pts, cum, s),
+    offsetPointAt: (s, d) => [s, -d],
+    project: (x, y) => projectPoint(pts, cum, [x, y]),
+  };
   n.parking = { start: 40, end: 90, lat: 2, t: 0, slot: {} };
   const fleet = { world: { ego, followingDistance: true, obstaclesNear: () => [n] }, vehicles: [n] };
   let touched = false;

@@ -12,7 +12,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const SCRIPTS = fileURLToPath(new URL(".", import.meta.url));
 
 export function testFiles(dir = SCRIPTS) {
-  return readdirSync(dir).filter((f) => /^test_.*\.mjs$/.test(f)).sort();
+  return readdirSync(dir)
+    .filter((f) => /^test_.*\.mjs$/.test(f))
+    .sort();
 }
 
 export function measuredTimes(path = `${SCRIPTS}ci_test_times.json`) {
@@ -21,7 +23,10 @@ export function measuredTimes(path = `${SCRIPTS}ci_test_times.json`) {
 
 // [{ files, seconds }] for `count` shards; files are bare names (test_x.mjs).
 export function plan(files, times, count) {
-  const known = files.map((f) => times[f]).filter((s) => Number.isFinite(s)).sort((a, b) => a - b);
+  const known = files
+    .map((f) => times[f])
+    .filter((s) => Number.isFinite(s))
+    .sort((a, b) => a - b);
   const fallback = known.length ? known[known.length >> 1] : 1;
   const cost = (f) => (Number.isFinite(times[f]) ? times[f] : fallback);
   const shards = Array.from({ length: count }, () => ({ files: [], seconds: 0 }));
@@ -37,19 +42,30 @@ export function plan(files, times, count) {
 }
 
 function main(argv) {
-  const arg = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
+  const arg = (name) => {
+    const i = argv.indexOf(name);
+    return i >= 0 ? argv[i + 1] : undefined;
+  };
   const count = Number(arg("--shards"));
   if (!Number.isInteger(count) || count < 1) throw new Error("--shards N (a positive whole number) is required");
   const shards = plan(testFiles(), measuredTimes(), count);
   if (argv.includes("--plan")) {
-    shards.forEach((s, i) => console.log(`shard ${i}: ${s.files.length} files, about ${Math.round(s.seconds)} s\n  ${s.files.join("\n  ")}`));
+    shards.forEach((s, i) =>
+      console.log(`shard ${i}: ${s.files.length} files, about ${Math.round(s.seconds)} s\n  ${s.files.join("\n  ")}`),
+    );
     return;
   }
   const index = Number(arg("--shard"));
-  if (!Number.isInteger(index) || index < 0 || index >= count) throw new Error(`--shard must be a whole number from 0 to ${count - 1}`);
+  if (!Number.isInteger(index) || index < 0 || index >= count)
+    throw new Error(`--shard must be a whole number from 0 to ${count - 1}`);
   for (const f of shards[index].files) console.log(`scripts/${f}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { main(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
+  try {
+    main(process.argv.slice(2));
+  } catch (e) {
+    console.error(e.message);
+    process.exit(2);
+  }
 }

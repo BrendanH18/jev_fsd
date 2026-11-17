@@ -34,7 +34,7 @@ def split_host(host_header: str) -> tuple:
     host = (host_header or "").strip().lower()
     if host.startswith("["):
         end = host.find("]")
-        name, rest = host[: end + 1], host[end + 1:]
+        name, rest = host[: end + 1], host[end + 1 :]
     elif host.count(":") == 1:
         name, rest = host.split(":", 1)
         rest = ":" + rest
@@ -57,8 +57,9 @@ def allowed_origins(port: int) -> tuple:
     return tuple("http://%s:%d" % (name, port) for name in LOOPBACK_HOSTS)
 
 
-def check_request(method: str, headers: Mapping[str, str], token: str, port: int,
-                  has_body: bool = False) -> Optional[str]:
+def check_request(
+    method: str, headers: Mapping[str, str], token: str, port: int, has_body: bool = False
+) -> Optional[str]:
     """Return None when the request may proceed, otherwise a short reason for the 403."""
     if not host_allowed(headers.get("Host"), port):
         return "host"

@@ -16,7 +16,19 @@ const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { detourAt, lateralAt } = await import("../static/js/sim/controller.js");
 const { obbOverlap } = await import("../static/js/sim/collision.js");
-const { CLEAR_S, SLOW_MAX_S, SLOW_MIN_S, SPAN_M, WORK_ZONE_COUNT, WZ_LIMIT_MPS, marksOn, paddle, stopKey, workZoneNotice, workZoneSites } = await import("../static/js/sim/work-zone.js");
+const {
+  CLEAR_S,
+  SLOW_MAX_S,
+  SLOW_MIN_S,
+  SPAN_M,
+  WORK_ZONE_COUNT,
+  WZ_LIMIT_MPS,
+  marksOn,
+  paddle,
+  stopKey,
+  workZoneNotice,
+  workZoneSites,
+} = await import("../static/js/sim/work-zone.js");
 const { DriveScore, SPEED_GRACE_MPS } = await import("../static/js/sim/drive-score.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
@@ -29,7 +41,11 @@ const { Route } = await import("../static/js/map/route.js");
 const { routeFromLanes } = await import("../static/js/demo/routing.js");
 
 let checks = 0;
-async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
+async function test(name, fn) {
+  await fn();
+  checks++;
+  console.log(`✓ ${name}`);
+}
 const root = new URL("../data/maps/", import.meta.url);
 const load = (key) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
@@ -46,7 +62,9 @@ const idle = { enabled: false, step() {} };
 const FRONT = CAR.length - CAR.rearOverhang;
 // Queen Street, Ottawa: two-way, one lane each way, 40 km/h. Its eastbound edge's lane is the one
 // closed, the stop line for that side 90 m along it.
-const CLOSED = "e103", OPEN = "e104", A = 90;
+const CLOSED = "e103",
+  OPEN = "e104",
+  A = 90;
 const QUEEN = OTT.edges.get(CLOSED);
 function queen({ phase = "open", parked = 0 } = {}) {
   setWeather("dry");
@@ -56,63 +74,118 @@ function queen({ phase = "open", parked = 0 } = {}) {
 }
 // The car with its front `back` metres short of side `side`'s stop line, at `v`, on a route straight on.
 function drive(world, zone, { side = "closed", back = 40, v = 0 } = {}) {
-  const edge = side === "closed" ? CLOSED : OPEN, lane = OTT.lane(edge, 0), s = marksOn(zone, side).line - back - FRONT;
+  const edge = side === "closed" ? CLOSED : OPEN,
+    lane = OTT.lane(edge, 0),
+    s = marksOn(zone, side).line - back - FRONT;
   world.placeOnLane(lane, s);
   world.ego.v = v;
   world.resetContactHistory();
-  const next = OTT.successors(edge).map((id) => OTT.lane(id, 0)).sort((a, b) => Math.abs(OTT.turnAngle(edge, a.edge)) - Math.abs(OTT.turnAngle(edge, b.edge)))[0];
+  const next = OTT.successors(edge)
+    .map((id) => OTT.lane(id, 0))
+    .sort((a, b) => Math.abs(OTT.turnAngle(edge, a.edge)) - Math.abs(OTT.turnAngle(edge, b.edge)))[0];
   world.route = new Route(routeFromLanes(OTT, [lane, next], s, next.length - 5), OTT, world.ego.spec);
   return lane;
 }
 // A car of the traffic on `edge`, its front `back` metres short of that side's stop line.
 function car(world, fleet, zone, side, back, id) {
-  const edge = side === "closed" ? CLOSED : OPEN, lane = OTT.lane(edge, 0), s = marksOn(zone, side).line - back - FRONT;
-  const p = pointAt(lane.pts, lane.cum, s), n = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), 0);
-  Object.assign(n, { id, color: 0x8d9299, v0: 11, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 }, stopMem: new StopMemory(), path: new NpcPath(OTT, fleet.random), frozen: 0, waiting: 0 });
+  const edge = side === "closed" ? CLOSED : OPEN,
+    lane = OTT.lane(edge, 0),
+    s = marksOn(zone, side).line - back - FRONT;
+  const p = pointAt(lane.pts, lane.cum, s),
+    n = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), 0);
+  Object.assign(n, {
+    id,
+    color: 0x8d9299,
+    v0: 11,
+    driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
+    stopMem: new StopMemory(),
+    path: new NpcPath(OTT, fleet.random),
+    frozen: 0,
+    waiting: 0,
+  });
   n.path.start(edge, 0, s);
   fleet.vehicles.push(n);
   return n;
 }
 // Where a vehicle's front is along its side's edge.
-const frontOn = (zone, side, v) => { const e = OTT.edges.get(zone[side]); return projectPoint(e.pts, e.cum, [v.x, v.y], null).s + FRONT; };
+const frontOn = (zone, side, v) => {
+  const e = OTT.edges.get(zone[side]);
+  return projectPoint(e.pts, e.cum, [v.x, v.y], null).s + FRONT;
+};
 // How far right of the closed side's centre line a vehicle is.
-const lateralOn = (v, zone = null) => { const e = zone ? OTT.edges.get(zone.closed) : QUEEN; return projectPoint(e.pts, e.cum, [v.x, v.y], null).lateral; };
+const lateralOn = (v, zone = null) => {
+  const e = zone ? OTT.edges.get(zone.closed) : QUEEN;
+  return projectPoint(e.pts, e.cum, [v.x, v.y], null).lateral;
+};
 
 await test("zones go only on straight two-way blocks with one lane each way, clear of crosswalks, transit, level crossings and junctions", () => {
   const sites = workZoneSites(OTT);
   assert.ok(sites.length > 10, `${sites.length} sites in Centretown`);
   const routed = new Set((OTT.transit?.routes || []).flatMap((r) => r.runs.flatMap((run) => run.edges)));
   for (const s of sites) {
-    const e = OTT.edges.get(s.closed), o = OTT.edges.get(s.open);
+    const e = OTT.edges.get(s.closed),
+      o = OTT.edges.get(s.open);
     assert.ok(!e.oneway && e.lanes === 1 && o.lanes === 1 && o.from === e.to && o.to === e.from);
-    assert.ok(!OTT.crosswalks.some((c) => c.edge === e.id || c.edge === o.id) && !routed.has(e.id) && !routed.has(o.id));
-    assert.ok(s.lo >= 20 && s.hi + SPAN_M <= Math.min(e.length, e.control?.s_line ?? e.length) - 20 + 1e-6, "clear of the junctions and their lines");
+    assert.ok(
+      !OTT.crosswalks.some((c) => c.edge === e.id || c.edge === o.id) && !routed.has(e.id) && !routed.has(o.id),
+    );
+    assert.ok(
+      s.lo >= 20 && s.hi + SPAN_M <= Math.min(e.length, e.control?.s_line ?? e.length) - 20 + 1e-6,
+      "clear of the junctions and their lines",
+    );
   }
-  assert.ok(sites.some((s) => s.closed === CLOSED) && sites.some((s) => s.closed === OPEN), "either side of Queen Street can be the one closed");
+  assert.ok(
+    sites.some((s) => s.closed === CLOSED) && sites.some((s) => s.closed === OPEN),
+    "either side of Queen Street can be the one closed",
+  );
 });
 
 await test("the layout: a stop line at each end, a 30 m taper each way, and the closed stretch over the closed lane and its parking lane", () => {
   const { world, zone } = queen({ parked: 0.9 });
   assert.equal(zone.b - zone.a, SPAN_M);
-  assert.equal(zone.shift, -(QUEEN.lane_offsets[0] + OTT.edges.get(OPEN).lane_offsets[0]), "from the closed lane's centre to the open one's");
-  const box = zone.closure.obb(), e = QUEEN, h = headingAt(e.pts, e.cum, zone.r);
-  const local = (s, lat) => { const p = pointAt(e.pts, e.cum, s); return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat]; };
+  assert.equal(
+    zone.shift,
+    -(QUEEN.lane_offsets[0] + OTT.edges.get(OPEN).lane_offsets[0]),
+    "from the closed lane's centre to the open one's",
+  );
+  const box = zone.closure.obb(),
+    e = QUEEN,
+    h = headingAt(e.pts, e.cum, zone.r);
+  const local = (s, lat) => {
+    const p = pointAt(e.pts, e.cum, s);
+    return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
+  };
   const inside = ([x, y]) => obbOverlap(box, { center: [x, y], heading: h, halfLength: 0.05, halfWidth: 0.05 });
   const lane = QUEEN.lane_offsets[0];
-  assert.ok(inside(local(zone.r + 1, lane)) && inside(local(zone.f - 1, QUEEN.asphalt[1] - 0.5)), "the closed lane and its parking lane");
-  assert.ok(!inside(local((zone.r + zone.f) / 2, -0.3)) && !inside(local(zone.r - 1, lane)), "not the open lane, nor short of the work");
+  assert.ok(
+    inside(local(zone.r + 1, lane)) && inside(local(zone.f - 1, QUEEN.asphalt[1] - 0.5)),
+    "the closed lane and its parking lane",
+  );
+  assert.ok(
+    !inside(local((zone.r + zone.f) / 2, -0.3)) && !inside(local(zone.r - 1, lane)),
+    "not the open lane, nor short of the work",
+  );
   assert.ok(world.parked.list.includes(zone.closure));
   const bays = world.parked.slots.filter((slot) => zone.bays.includes(slot));
-  assert.ok(bays.length > 4 && bays.every((b) => b.reserved?.owner === zone.closure && !b.occupant), "nobody parked along it, and nobody parks there");
+  assert.ok(
+    bays.length > 4 && bays.every((b) => b.reserved?.owner === zone.closure && !b.occupant),
+    "nobody parked along it, and nobody parks there",
+  );
   world.workZones.retire(zone);
   assert.ok(!world.parked.list.includes(zone.closure) && bays.every((b) => !b.reserved));
 });
 
 await test("the detour: across over the taper, all the way past the work, back over the taper; nothing outside it", () => {
   const d = { from: 10, full: 40, back: 70, to: 100, shift: -3.5 };
-  assert.equal(detourAt(d, 5), 0); assert.equal(detourAt(d, 100), 0); assert.equal(detourAt(null, 50), 0);
-  assert.equal(detourAt(d, 40), -3.5); assert.equal(detourAt(d, 55), -3.5);
-  assert.ok(Math.abs(detourAt(d, 25) + 1.75) < 1e-9 && Math.abs(detourAt(d, 85) + 1.75) < 1e-9, "halfway across at the taper's middle");
+  assert.equal(detourAt(d, 5), 0);
+  assert.equal(detourAt(d, 100), 0);
+  assert.equal(detourAt(null, 50), 0);
+  assert.equal(detourAt(d, 40), -3.5);
+  assert.equal(detourAt(d, 55), -3.5);
+  assert.ok(
+    Math.abs(detourAt(d, 25) + 1.75) < 1e-9 && Math.abs(detourAt(d, 85) + 1.75) < 1e-9,
+    "halfway across at the taper's middle",
+  );
   assert.equal(lateralAt({ kind: "lane", offset: 0.5, detour: d }, 55), -3);
   assert.equal(lateralAt({ kind: "lane", offset: 0.5 }, 55), 0.5, "a law without one is unchanged");
 });
@@ -125,7 +198,9 @@ await test("the flaggers: SLOW stays while nobody waits at the other end; then S
   const waiter = car(world, fleet, zone, "closed", 3, "waiter");
   const through = car(world, fleet, zone, "open", 0, "through");
   through.v = 6;
-  let clearAt = null, slowAt = null, clearWhileOccupied = 0;
+  let clearAt = null,
+    slowAt = null,
+    clearWhileOccupied = 0;
   for (let i = 0; i < 60 * 60 && slowAt === null; i++) {
     step({ world, fleet, autopilot: idle });
     if (zone.phase === "clear" && clearAt === null) clearAt = world.t;
@@ -156,7 +231,9 @@ await test("traffic: it stops at its line for STOP, and under SLOW the closed si
   zone.held = false;
   world.workZones.turn(zone, "closed");
   zone.held = true;
-  let maxV = 0, minLat = Infinity, touched = false;
+  let maxV = 0,
+    minLat = Infinity,
+    touched = false;
   for (let i = 0; i < 60 * 25; i++) {
     step({ world, fleet, autopilot: idle });
     const f = frontOn(zone, "closed", n);
@@ -181,7 +258,10 @@ await test("a driver too close to stop when the paddle turns goes on through, an
   world.workZones.turn(zone, "clear");
   zone.next = "open";
   let sawOccupied = false;
-  for (let i = 0; i < 60 * 20; i++) { step({ world, fleet, autopilot: idle }); if (zone.phase === "clear" && world.workZones.occupied(zone)) sawOccupied = true; }
+  for (let i = 0; i < 60 * 20; i++) {
+    step({ world, fleet, autopilot: idle });
+    if (zone.phase === "clear" && world.workZones.occupied(zone)) sawOccupied = true;
+  }
   assert.ok(frontOn(zone, "closed", n) > zone.d1, "it carried on");
   assert.ok(sawOccupied && zone.phase === "open", "and the open side got SLOW only once it was out");
 });
@@ -213,30 +293,46 @@ await test("a soak: traffic both ways through the zone for three minutes, with n
   // (a car on each side 70 m short of its line, where that spot is free)
   const feed = () => {
     for (const side of ["closed", "open"]) {
-      const lane = OTT.lane(side === "closed" ? CLOSED : OPEN, 0), p = pointAt(lane.pts, lane.cum, marksOn(zone, side).line - 70 - FRONT);
+      const lane = OTT.lane(side === "closed" ? CLOSED : OPEN, 0),
+        p = pointAt(lane.pts, lane.cum, marksOn(zone, side).line - 70 - FRONT);
       if (fleet.vehicles.some((n) => Math.hypot(n.x - p[0], n.y - p[1]) < 12)) continue;
       car(world, fleet, zone, side, 70, `feed_${side}_${k++}`);
     }
   };
-  let hits = 0, inside = 0, turns = 0, phase = zone.phase;
+  let hits = 0,
+    inside = 0,
+    turns = 0,
+    phase = zone.phase;
   const crossed = { closed: 0, open: 0 };
   const seen = new Map();
   for (let i = 0; i < 60 * 180; i++) {
     if (i % (60 * 9) === 0) feed();
     step({ world, fleet, autopilot: idle });
-    if (zone.phase !== phase) { phase = zone.phase; turns++; }
+    if (zone.phase !== phase) {
+      phase = zone.phase;
+      turns++;
+    }
     if (i % 6) continue;
     const near = fleet.vehicles.filter((n) => Math.hypot(n.x - zone.x, n.y - zone.y) < SPAN_M);
     for (const n of near) {
       if (obbOverlap(n.obb(), zone.closure.obb())) inside++;
       for (const m of near) if (m !== n && m.id < n.id && obbOverlap(n.obb(), m.obb())) hits++;
-      if (n.id.startsWith("feed_")) { const side = n.id.split("_")[1]; if (frontOn(zone, side, n) > marksOn(zone, side).to && !seen.get(n.id)) { seen.set(n.id, true); crossed[side]++; } }
+      if (n.id.startsWith("feed_")) {
+        const side = n.id.split("_")[1];
+        if (frontOn(zone, side, n) > marksOn(zone, side).to && !seen.get(n.id)) {
+          seen.set(n.id, true);
+          crossed[side]++;
+        }
+      }
     }
   }
   assert.equal(inside, 0, "nobody in the closed stretch");
   assert.equal(hits, 0, "no two vehicles touching near the zone");
   assert.ok(turns >= 6, `${turns} turns of the paddles`);
-  assert.ok(crossed.closed >= 5 && crossed.open >= 5, `${crossed.closed} cars through round the work, ${crossed.open} the other way`);
+  assert.ok(
+    crossed.closed >= 5 && crossed.open >= 5,
+    `${crossed.closed} cars through round the work, ${crossed.open} the other way`,
+  );
 });
 
 await test("sensing: on the closed side the car stops at the line for STOP, and every manoeuvre goes round the work", () => {
@@ -246,18 +342,27 @@ await test("sensing: on the closed side the car stops at the line for STOP, and 
   const w = snap.work_zone;
   assert.ok(w && w.side === "closed" && w.paddle === "stop" && w.wait, "a stop it owes");
   assert.ok(Math.abs(w.bumper_to_stop_m - 40) < 1.5, `${w.bumper_to_stop_m.toFixed(1)} m to the line`);
-  assert.ok(w.detour && w.detour.shift === zone.shift && w.detour.from > w.stop_s_route && w.detour.to < w.one_lane.to_s + 0.5);
+  assert.ok(
+    w.detour && w.detour.shift === zone.shift && w.detour.from > w.stop_s_route && w.detour.to < w.one_lane.to_s + 0.5,
+  );
   assert.ok(snap.limit <= Math.sqrt(WZ_LIMIT_MPS ** 2 + 2 * 2.5 * 0.6 * 35) + 0.01, "slowing to the zone's limit");
   const cands = sampleCandidates(snap, world);
   assert.ok(cands.some((c) => c.id === "stop_for_flagger"));
-  assert.ok(cands.filter((c) => c.law.kind === "lane" || c.law.kind === "hard_brake").every((c) => c.law.detour === w.detour), "round the work, whatever it does");
+  assert.ok(
+    cands.filter((c) => c.law.kind === "lane" || c.law.kind === "hard_brake").every((c) => c.law.detour === w.detour),
+    "round the work, whatever it does",
+  );
   const { eligible } = simulateAll(cands, snap, world);
   // (a manoeuvre that would carry it past the line is ruled out)
   world.ego.v = 11;
   drive(world, zone, { side: "closed", back: 6, v: 4 });
-  const near = buildSnapshot(world), all = sampleCandidates(near, world);
+  const near = buildSnapshot(world),
+    all = sampleCandidates(near, world);
   simulateAll(all, near, world);
-  assert.ok(all.some((c) => c.reject === "runs_flagger_stop"), "going on is ruled out");
+  assert.ok(
+    all.some((c) => c.reject === "runs_flagger_stop"),
+    "going on is ruled out",
+  );
   assert.ok(eligible.length > 0);
 });
 
@@ -294,13 +399,17 @@ await test("a car that turned up too close to stop when the paddle turned to STO
 await test("models are told: the zone in the state, a situation line, the motion criterion and the prompt", () => {
   const { world, zone } = queen({ phase: "open" });
   drive(world, zone, { side: "closed", back: 30, v: 6 });
-  const snap = buildSnapshot(world), cands = sampleCandidates(snap, world);
+  const snap = buildSnapshot(world),
+    cands = sampleCandidates(snap, world);
   simulateAll(cands, snap, world);
   const state = toJevState(snap, cands, {});
   assert.equal(state.work_zone.flagger, "STOP");
   assert.ok(state.work_zone.stop && state.work_zone.wait_in_m > 25 && /closed/.test(state.work_zone.lane));
   const line = situationClauses(snap).find((c) => c.includes("work zone"));
-  assert.ok(line && /Stop at the line/.test(line) && /stop_for_flagger/.test(line) && /through the other lane/.test(line), line);
+  assert.ok(
+    line && /Stop at the line/.test(line) && /stop_for_flagger/.test(line) && /through the other lane/.test(line),
+    line,
+  );
   assert.ok(state.candidates.some((c) => c.id === "stop_for_flagger" && /short of the flagger/.test(c.outcome)));
   assert.ok(/stop_for_flagger/.test(SYSTEM_PROMPT));
   world.workZones.turn(zone, "closed");
@@ -315,11 +424,15 @@ await test("the audit: going past STOP once it was owed is a missed stop, counte
     world.route = null;
     const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 });
     let s = projectPoint(lane.pts, lane.cum, [world.ego.x, world.ego.y], null).s;
-    const events = [], score = new DriveScore(world);
+    const events = [],
+      score = new DriveScore(world);
     for (let i = 0; i < 60 * 6; i++) {
       s += v / 60;
       const p = pointAt(lane.pts, lane.cum, s);
-      world.ego.x = p[0]; world.ego.y = p[1]; world.ego.psi = headingAt(lane.pts, lane.cum, s); world.ego.v = v;
+      world.ego.x = p[0];
+      world.ego.y = p[1];
+      world.ego.psi = headingAt(lane.pts, lane.cum, s);
+      world.ego.v = v;
       const road = step({ world, fleet, autopilot: idle });
       score.record(world, road, 1 / 60);
       events.push(...world.events.filter((e) => e.type === "stop_sign"));
@@ -329,7 +442,11 @@ await test("the audit: going past STOP once it was owed is a missed stop, counte
   const owed = run(30, 6);
   assert.equal(owed.world.violations.stop_signs_run, 1);
   assert.ok(owed.events.length === 1 && owed.events[0].flagger);
-  assert.ok(owed.score.flagger_stops_run === 1 && owed.score.stop_signs === 1 && owed.score.tips.some((t) => /flagger’s STOP paddle/.test(t)));
+  assert.ok(
+    owed.score.flagger_stops_run === 1 &&
+      owed.score.stop_signs === 1 &&
+      owed.score.tips.some((t) => /flagger’s STOP paddle/.test(t)),
+  );
   const late = run(4, 10);
   assert.equal(late.world.violations.stop_signs_run, 0, "4 m short at 36 km/h: it could not stop");
   assert.equal(late.score.flagger_stops_run, 0);
@@ -350,7 +467,10 @@ await test("coaching: too fast through a work zone, with a tip", () => {
     score.record(world, road, 1 / 60);
   }
   const snap = score.snapshot();
-  assert.ok(11 > WZ_LIMIT_MPS + SPEED_GRACE_MPS && snap.work_zone_speeding_s > 2, `${snap.work_zone_speeding_s} s too fast`);
+  assert.ok(
+    11 > WZ_LIMIT_MPS + SPEED_GRACE_MPS && snap.work_zone_speeding_s > 2,
+    `${snap.work_zone_speeding_s} s too fast`,
+  );
   assert.ok(snap.incidents.some((i) => i.type === "work_zone_speeding"));
   assert.ok(snap.tips.some((t) => /30 km\/h through a work zone/.test(t)));
 });
@@ -392,9 +512,18 @@ await test("a restored checkpoint ties the zones back to the live world", () => 
   recorder.record({ world, fleet: ctx.fleet, autopilot: ctx.autopilot, drive: {}, clock: {} }, true);
   const before = world.workZones.zones.map((z) => z.id);
   world.workZones.retire(world.workZones.zones[0]);
-  const target = { world, fleet: ctx.fleet, autopilot: ctx.autopilot, clock: { setHour() {}, update() {} }, setDrive() {} };
+  const target = {
+    world,
+    fleet: ctx.fleet,
+    autopilot: ctx.autopilot,
+    clock: { setHour() {}, update() {} },
+    setDrive() {},
+  };
   recorder.restore(0, target);
-  assert.deepEqual(world.workZones.zones.map((z) => z.id), before);
+  assert.deepEqual(
+    world.workZones.zones.map((z) => z.id),
+    before,
+  );
   assert.ok(world.parked.list.includes(world.workZones.zones[0].closure), "the same closed stretch, still parked");
   assert.ok(world.workZones.world === world, "stepping it steps the live world");
 });
@@ -404,11 +533,21 @@ await test("the challenge, closed loop: Rules and the cautious agent wait at the
   assert.equal(challenge.map, "ottawa");
   for (const brain of ["rules", "cautious"]) {
     let arrived = false;
-    const ctx = setupChallenge(OTT, challenge, { brain, onEvent: (e) => { if (e.type === "arrived") arrived = true; } });
-    const { world, fleet, autopilot } = ctx, zone = world.workZones.zones[0], score = new DriveScore(world);
+    const ctx = setupChallenge(OTT, challenge, {
+      brain,
+      onEvent: (e) => {
+        if (e.type === "arrived") arrived = true;
+      },
+    });
+    const { world, fleet, autopilot } = ctx,
+      zone = world.workZones.zones[0],
+      score = new DriveScore(world);
     assert.equal(OTT.edges.get(zone.closed).name, "Queen Street", "on Queen Street");
     assert.equal(world.route.edges[0], zone.closed, "the car's lane closed");
-    let inOneLaneOnStop = 0, waited = 0, met = 0, minLat = Infinity;
+    let inOneLaneOnStop = 0,
+      waited = 0,
+      met = 0,
+      minLat = Infinity;
     while (world.t < 120 && autopilot.enabled && !arrived) {
       const road = step({ world, fleet, autopilot });
       score.record(world, road, 1 / 60);
@@ -417,11 +556,18 @@ await test("the challenge, closed loop: Rules and the cautious agent wait at the
       if (paddle(zone, "closed") === "stop" && f > zone.d0 && f < zone.d1) inOneLaneOnStop++;
       if (world.ego.v < 0.1 && f < zone.a + 1 && f > zone.a - 3) waited += 1 / 60;
       if (f > zone.d0 && f < zone.d1) minLat = Math.min(minLat, lateralOn(world.ego, zone));
-      for (const id of world.challenge.zoneCarIds) { const n = fleet.vehicles.find((v) => v.id === id); if (n && Math.hypot(n.x - world.ego.x, n.y - world.ego.y) < 8) met++; }
+      for (const id of world.challenge.zoneCarIds) {
+        const n = fleet.vehicles.find((v) => v.id === id);
+        if (n && Math.hypot(n.x - world.ego.x, n.y - world.ego.y) < 8) met++;
+      }
     }
     const v = world.violations;
     assert.ok(arrived, `${brain} arrives`);
-    assert.equal(v.collisions + v.stop_signs_run + v.failed_to_yield + v.red_lights_run + v.safety_brakes, 0, `${brain}: ${JSON.stringify(v)}`);
+    assert.equal(
+      v.collisions + v.stop_signs_run + v.failed_to_yield + v.red_lights_run + v.safety_brakes,
+      0,
+      `${brain}: ${JSON.stringify(v)}`,
+    );
     assert.equal(inOneLaneOnStop, 0, `${brain} never in the one lane on STOP`);
     assert.ok(waited > 8, `${brain} waited ${waited.toFixed(1)} s at the line`);
     assert.ok(met > 0, "while the oncoming cars came by");

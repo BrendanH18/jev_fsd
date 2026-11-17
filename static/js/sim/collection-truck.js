@@ -45,8 +45,8 @@ export const BIN_S = [3, 5];
 export const CREW_CLEAR_M = 1.5;
 export const CREW_PASS_MPS = 2;
 const STOP_DECEL = 1.2;
-const BOARD_S = 1.0;                  // (a worker back at the step climbs on)
-const STEP_M = 1.2;                   // (a worker less than this behind the truck's rear is at its step)
+const BOARD_S = 1.0; // (a worker back at the step climbs on)
+const STEP_M = 1.2; // (a worker less than this behind the truck's rear is at its step)
 // Free drive: where trucks start (out of the car's sight), how long one works the area, and how far
 // from the car it must be, out of its sight, before it goes.
 const SPAWN_M = [150, 450];
@@ -64,7 +64,10 @@ const siteCache = new WeakMap();
 export function truckSites(map) {
   if (siteCache.has(map)) return siteCache.get(map);
   const extra = COLLECTION_TRUCK.length - DELIVERY_VAN.length;
-  const sites = vanSites(map).filter((s) => QUIET.has(map.edges.get(s.edge).cls)).map((s) => ({ ...s, hi: s.hi - extra })).filter((s) => s.hi > s.lo);
+  const sites = vanSites(map)
+    .filter((s) => QUIET.has(map.edges.get(s.edge).cls))
+    .map((s) => ({ ...s, hi: s.hi - extra }))
+    .filter((s) => s.hi > s.lo);
   const byEdge = new Map(sites.map((s) => [s.edge, s]));
   siteCache.set(map, { sites, byEdge });
   return siteCache.get(map);
@@ -72,7 +75,8 @@ export function truckSites(map) {
 
 // A point `lat` metres right of edge `e`'s centre line, `s` along it.
 function at(e, s, lat) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
 }
 
@@ -83,12 +87,16 @@ function at(e, s, lat) {
 // or on its step, is out of the way.)
 export function crewInRoad(world, d, observer = null) {
   if (!d.truck) return null;
-  const e = world.map.edges.get(d.edge), laneC = e.lane_offsets?.[0] ?? e.lane_width / 2, half = d.van.spec.width / 2;
+  const e = world.map.edges.get(d.edge),
+    laneC = e.lane_offsets?.[0] ?? e.lane_width / 2,
+    half = d.van.spec.width / 2;
   for (const p of world.crowd?.list || []) {
     if (p.crew !== d.id) continue;
-    const q = projectPoint(e.pts, e.cum, [p.x, p.y], null), across = !!p.crossing || p.path.some((w) => w.cross?.worker);
+    const q = projectPoint(e.pts, e.cum, [p.x, p.y], null),
+      across = !!p.crossing || p.path.some((w) => w.cross?.worker);
     if (!q || q.s < d.detour.from - 4 || q.s > d.detour.to + 4) continue;
-    const left = q.lateral < laneC - half - 0.1 && q.lateral > e.asphalt[0] - 0.3, behind = q.s < d.rear - STEP_M && q.lateral < laneC + half + 0.3;
+    const left = q.lateral < laneC - half - 0.1 && q.lateral > e.asphalt[0] - 0.3,
+      behind = q.s < d.rear - STEP_M && q.lateral < laneC + half + 0.3;
     if (!left && !behind && !across) continue;
     if (observer && !world.sees(observer, p)) continue;
     return p;
@@ -119,11 +127,32 @@ export class CollectionTrucks {
   // A truck on `lane`, its rear axle `s` along it, at `v`, driving on as traffic (`planned`: the edges
   // it takes next, before it picks its own turns). `held`: a challenge's truck stands where it is put.
   add(lane, s, v = 0, planned = [], { color = null, path = null } = {}) {
-    const p = pointAt(lane.pts, lane.cum, s), n = ++this.made;
+    const p = pointAt(lane.pts, lane.cum, s),
+      n = ++this.made;
     const truck = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, COLLECTION_TRUCK);
-    Object.assign(truck, { id: `truck_${n}`, kind: "collection_truck", color: color ?? TRUCK_COLORS[(n - 1) % TRUCK_COLORS.length], v0: TRUCK_MPS, beacons: true,
-      driver: { aMax: 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0,
-      collect: { phase: "drive", odo: 0, every: this.every(), stop: null, t: 0, dwell: 0, record: null, crew: [], shift: SHIFT_S[0] + (this.random ? this.random() : 0) * (SHIFT_S[1] - SHIFT_S[0]), worked: 0 } });
+    Object.assign(truck, {
+      id: `truck_${n}`,
+      kind: "collection_truck",
+      color: color ?? TRUCK_COLORS[(n - 1) % TRUCK_COLORS.length],
+      v0: TRUCK_MPS,
+      beacons: true,
+      driver: { aMax: 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.8, lcRate: 0 },
+      stopMem: new StopMemory(),
+      frozen: 0,
+      waiting: 0,
+      collect: {
+        phase: "drive",
+        odo: 0,
+        every: this.every(),
+        stop: null,
+        t: 0,
+        dwell: 0,
+        record: null,
+        crew: [],
+        shift: SHIFT_S[0] + (this.random ? this.random() : 0) * (SHIFT_S[1] - SHIFT_S[0]),
+        worked: 0,
+      },
+    });
     truck.path = path || this.makePath(this.world.map, this.random);
     truck.path.start(lane.edge, lane.idx, s, planned);
     this.fleet.vehicles.push(truck);
@@ -131,18 +160,26 @@ export class CollectionTrucks {
     return truck;
   }
 
-  every() { return STOP_EVERY_M[0] + (this.random ? this.random() : 0.5) * (STOP_EVERY_M[1] - STOP_EVERY_M[0]); }
+  every() {
+    return STOP_EVERY_M[0] + (this.random ? this.random() : 0.5) * (STOP_EVERY_M[1] - STOP_EVERY_M[0]);
+  }
 
   // Trucks in a free drive: one put down here that has done its shift, or is far from the car, out of
   // its sight and driving, goes; and by day, out of fog, another is put down when there are too few.
   manage(dt) {
-    const world = this.world, ego = world.ego;
+    const world = this.world,
+      ego = world.ego;
     for (const n of [...this.trucks]) {
       const c = n.collect;
       // (one a challenge put down stays)
       if (!c.free || c.held || c.phase !== "drive") continue;
       const far = Math.hypot(n.x - ego.x, n.y - ego.y) > GONE_M;
-      if ((far || c.worked > c.shift) && !world.visibility.canSee(ego, n.x, n.y) && (far || Math.hypot(n.x - ego.x, n.y - ego.y) > SPAWN_M[0])) this.remove(n);
+      if (
+        (far || c.worked > c.shift) &&
+        !world.visibility.canSee(ego, n.x, n.y) &&
+        (far || Math.hypot(n.x - ego.x, n.y - ego.y) > SPAWN_M[0])
+      )
+        this.remove(n);
     }
     if (this.target && this.trucks.length < this.target && (this.next -= dt) <= 0) {
       this.next = RETRY_S;
@@ -161,13 +198,26 @@ export class CollectionTrucks {
 
   // A truck on a collection street SPAWN_M from the car, out of its sight and clear of other traffic.
   spawn() {
-    const world = this.world, ego = world.ego, { sites } = truckSites(world.map), random = this.random;
+    const world = this.world,
+      ego = world.ego,
+      { sites } = truckSites(world.map),
+      random = this.random;
     for (let attempt = 0; sites.length && attempt < 20; attempt++) {
-      const site = sites[Math.floor(random() * sites.length)], lane = world.map.lane(site.edge, 0), e = world.map.edges.get(site.edge);
-      const rear = site.lo + random() * (site.hi - site.lo), s = (rear + COLLECTION_TRUCK.rearOverhang) * lane.length / e.length, p = pointAt(lane.pts, lane.cum, s);
+      const site = sites[Math.floor(random() * sites.length)],
+        lane = world.map.lane(site.edge, 0),
+        e = world.map.edges.get(site.edge);
+      const rear = site.lo + random() * (site.hi - site.lo),
+        s = ((rear + COLLECTION_TRUCK.rearOverhang) * lane.length) / e.length,
+        p = pointAt(lane.pts, lane.cum, s);
       const dist = Math.hypot(p[0] - ego.x, p[1] - ego.y);
       if (dist < SPAWN_M[0] || dist > SPAWN_M[1] || world.visibility.canSee(ego, p[0], p[1])) continue;
-      if (this.fleet.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < COLLECTION_TRUCK.length + 8) || world.workZones?.covers(p[0], p[1]) || world.laneClosures?.covers(p[0], p[1]) || world.doubleParked?.covers(p[0], p[1])) continue;
+      if (
+        this.fleet.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < COLLECTION_TRUCK.length + 8) ||
+        world.workZones?.covers(p[0], p[1]) ||
+        world.laneClosures?.covers(p[0], p[1]) ||
+        world.doubleParked?.covers(p[0], p[1])
+      )
+        continue;
       const truck = this.add(lane, s, 0);
       truck.collect.free = true;
       return truck;
@@ -178,29 +228,44 @@ export class CollectionTrucks {
   // One step of truck `n`'s collection (see the top of this file): where it stops, as metres from its
   // front (null when it is not stopping), or "work" while it stands at a stop.
   plan(n, front, dt) {
-    const c = n.collect, world = this.world, map = world.map;
+    const c = n.collect,
+      world = this.world,
+      map = world.map;
     if (c.phase === "drive") {
       c.odo += Math.max(0, n.v) * dt;
       c.worked += dt;
       // (at its collecting pace on a collection street, and no faster than DRIVE_MPS elsewhere)
-      const pe = n.path.edges.find((x) => x.sEnd > front), site = pe && truckSites(map).byEdge.get(pe.id);
+      const pe = n.path.edges.find((x) => x.sEnd > front),
+        site = pe && truckSites(map).byEdge.get(pe.id);
       n.v0 = site ? TRUCK_MPS : DRIVE_MPS;
       if (c.odo >= c.every) {
         // (on a collection street, a little way on, where it can slow to a stop gently)
         if (site) {
-          const e = map.edges.get(pe.id), k = (pe.sEnd - pe.sStart) / Math.max(1, e.length);
-          const rear = (front - pe.sStart) / k - COLLECTION_TRUCK.length + n.v * n.v / (2 * STOP_DECEL) + 2;
-          if (rear >= site.lo && rear <= site.hi && this.clearToStop(e, rear)) c.stop = { edge: pe.id, rear }, c.phase = "approach";
+          const e = map.edges.get(pe.id),
+            k = (pe.sEnd - pe.sStart) / Math.max(1, e.length);
+          const rear = (front - pe.sStart) / k - COLLECTION_TRUCK.length + (n.v * n.v) / (2 * STOP_DECEL) + 2;
+          if (rear >= site.lo && rear <= site.hi && this.clearToStop(e, rear))
+            (c.stop = { edge: pe.id, rear }), (c.phase = "approach");
         }
       }
     }
     if (c.phase === "approach") {
       const pe = n.path.edges.find((x) => x.id === c.stop.edge && x.sEnd > n.path.s - 5);
-      if (!pe) { Object.assign(c, { phase: "drive", stop: null }); return null; }
-      const e = map.edges.get(pe.id), k = (pe.sEnd - pe.sStart) / Math.max(1, e.length);
+      if (!pe) {
+        Object.assign(c, { phase: "drive", stop: null });
+        return null;
+      }
+      const e = map.edges.get(pe.id),
+        k = (pe.sEnd - pe.sStart) / Math.max(1, e.length);
       const to = pe.sStart + (c.stop.rear + COLLECTION_TRUCK.length) * k - front;
-      if (to < -3) { Object.assign(c, { phase: "drive", stop: null }); return null; }
-      if (n.v < 0.2 && to < 2.5) { this.arrive(n); return "work"; }
+      if (to < -3) {
+        Object.assign(c, { phase: "drive", stop: null });
+        return null;
+      }
+      if (n.v < 0.2 && to < 2.5) {
+        this.arrive(n);
+        return "work";
+      }
       return to + (n.driver.s0 || 0) - 0.5;
     }
     return null;
@@ -209,8 +274,14 @@ export class CollectionTrucks {
   // Whether a truck can stop with its rear `rear` along edge `e`: not where a van stands, or a work zone,
   // a lane closure or a vehicle at the roadside, and nobody alongside it there.
   clearToStop(e, rear) {
-    const world = this.world, mid = at(e, rear + COLLECTION_TRUCK.length / 2, 0);
-    if (world.doubleParked?.vans.some((d) => (d.edge === e.id || d.opposite === e.id) && Math.hypot(d.x - mid[0], d.y - mid[1]) < 60)) return false;
+    const world = this.world,
+      mid = at(e, rear + COLLECTION_TRUCK.length / 2, 0);
+    if (
+      world.doubleParked?.vans.some(
+        (d) => (d.edge === e.id || d.opposite === e.id) && Math.hypot(d.x - mid[0], d.y - mid[1]) < 60,
+      )
+    )
+      return false;
     if (world.workZones?.covers(mid[0], mid[1]) || world.laneClosures?.covers(mid[0], mid[1])) return false;
     if ((world.roadside?.vehicles || []).some((v) => Math.hypot(v.x - mid[0], v.y - mid[1]) < 40)) return false;
     return true;
@@ -220,10 +291,15 @@ export class CollectionTrucks {
   // and its crew gets down.
   // (`cross`: a challenge has a worker cross the street, whatever the stream says)
   arrive(n, { cross = null } = {}) {
-    const c = n.collect, world = this.world, e = world.map.edges.get(c.stop.edge);
-    const q = projectPoint(e.pts, e.cum, [n.x, n.y], null), rear = (q ? q.s : c.stop.rear + COLLECTION_TRUCK.rearOverhang) - COLLECTION_TRUCK.rearOverhang;
-    n.v = 0; n.a = 0;
-    n.doubleParked = true; n.hazards = true;
+    const c = n.collect,
+      world = this.world,
+      e = world.map.edges.get(c.stop.edge);
+    const q = projectPoint(e.pts, e.cum, [n.x, n.y], null),
+      rear = (q ? q.s : c.stop.rear + COLLECTION_TRUCK.rearOverhang) - COLLECTION_TRUCK.rearOverhang;
+    n.v = 0;
+    n.a = 0;
+    n.doubleParked = true;
+    n.hazards = true;
     c.record = world.doubleParked.placeTruck(n, { edge: e.id, rear, wait: TRUCK_WAIT_M, name: TRUCK_NAME });
     Object.assign(c, { phase: "work", t: 0, dwell: DWELL_S[0] + this.random() * (DWELL_S[1] - DWELL_S[0]) });
     world.collectionSeen = true;
@@ -248,23 +324,49 @@ export class CollectionTrucks {
     const c = n.collect;
     if (c.record) this.world.doubleParked.release(c.record);
     c.record = null;
-    n.doubleParked = false; n.hazards = false;
+    n.doubleParked = false;
+    n.hazards = false;
   }
 
   // The crew at a stop with its rear `rear` along `e`: a worker from the rear step to the bins at the
   // kerb beside it and back; with `cross`, another across the street behind it, from its left rear
   // corner to the far kerb's bins and back. Each climbs back on at the step, and is gone.
   crewOut(n, e, d, cross) {
-    const world = this.world, random = this.random, L = e.cum[e.cum.length - 1], scale = L / Math.max(1, e.length);
-    const back = d.rear - 0.8, lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
+    const world = this.world,
+      random = this.random,
+      L = e.cum[e.cum.length - 1],
+      scale = L / Math.max(1, e.length);
+    const back = d.rear - 0.8,
+      lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
     const kerb = (side) => at(e, back * scale, side > 0 ? e.asphalt[1] + 0.4 : e.asphalt[0] - 0.4);
     const step = (side) => at(e, back * scale, lane + side * (COLLECTION_TRUCK.width / 2 - 0.3));
     const make = (side, crossing) => {
-      const from = step(side), to = kerb(side), wait = BIN_S[0] + random() * (BIN_S[1] - BIN_S[0]);
-      const go = crossing ? { node: null, from, to, jaywalk: true, worker: n.id } : null, home = crossing ? { node: null, from: to, to: from, jaywalk: true, worker: n.id } : null;
-      const p = new Pedestrian({ id: `crew_${++this.crewMade}`, x: from[0], y: from[1], psi: headingAt(e.pts, e.cum, back * scale) + (side > 0 ? -Math.PI / 2 : Math.PI / 2), v: 0,
-        speed: CREW_MPS, worker: true, crew: d.id, truck: n.id, home: true, pause: side > 0 ? 0.6 : 1.4, look: Math.floor(random() * 1e6), waiting: 0, phase: 0, crossing: null,
-        path: [{ p: to, ...(go ? { cross: go } : {}), wait }, { p: from, ...(home ? { cross: home } : {}), wait: BOARD_S }] });
+      const from = step(side),
+        to = kerb(side),
+        wait = BIN_S[0] + random() * (BIN_S[1] - BIN_S[0]);
+      const go = crossing ? { node: null, from, to, jaywalk: true, worker: n.id } : null,
+        home = crossing ? { node: null, from: to, to: from, jaywalk: true, worker: n.id } : null;
+      const p = new Pedestrian({
+        id: `crew_${++this.crewMade}`,
+        x: from[0],
+        y: from[1],
+        psi: headingAt(e.pts, e.cum, back * scale) + (side > 0 ? -Math.PI / 2 : Math.PI / 2),
+        v: 0,
+        speed: CREW_MPS,
+        worker: true,
+        crew: d.id,
+        truck: n.id,
+        home: true,
+        pause: side > 0 ? 0.6 : 1.4,
+        look: Math.floor(random() * 1e6),
+        waiting: 0,
+        phase: 0,
+        crossing: null,
+        path: [
+          { p: to, ...(go ? { cross: go } : {}), wait },
+          { p: from, ...(home ? { cross: home } : {}), wait: BOARD_S },
+        ],
+      });
       world.crowd.list.push(p);
       n.collect.crew.push(p);
       return p;

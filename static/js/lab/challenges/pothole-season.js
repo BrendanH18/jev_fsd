@@ -11,10 +11,27 @@ import { routeFromLanes } from "../../demo/routing.js";
 import { pointAt, headingAt, cumulative } from "../../map/mapdata.js";
 import { potholeOnLane } from "../../sim/potholes.js";
 
-export const challenge = { id: "pothole-season", title: "Pothole season", map: "montreal", weather: "rain", time: "afternoon", seed: 51042, icon: "◍", difficulty: "Control", hazard: "potholes", potholes: true, street: "Rue Saint-Denis",
-  description: "Spring on Rue Saint-Denis, in the Plateau: the frost is coming out of the ground and the rain has filled a run of potholes in your lane. Some you can ease round without leaving the lane; one wide one you can't.", lesson: "Look well ahead for potholes, especially when they are full of water and look like any puddle. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one." };
+export const challenge = {
+  id: "pothole-season",
+  title: "Pothole season",
+  map: "montreal",
+  weather: "rain",
+  time: "afternoon",
+  seed: 51042,
+  icon: "◍",
+  difficulty: "Control",
+  hazard: "potholes",
+  potholes: true,
+  street: "Rue Saint-Denis",
+  description:
+    "Spring on Rue Saint-Denis, in the Plateau: the frost is coming out of the ground and the rain has filled a run of potholes in your lane. Some you can ease round without leaving the lane; one wide one you can't.",
+  lesson:
+    "Look well ahead for potholes, especially when they are full of water and look like any puddle. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.",
+};
 
-const EDGE = "e212", START_S = 8, GOAL_S = 168;
+const EDGE = "e212",
+  START_S = 8,
+  GOAL_S = 168;
 // Each pothole: metres along the lane, right of its centre, half its length and width, and its depth.
 export const PH_POTHOLES = [
   { s: 50, offset: 0.75, a: 0.35, b: 0.3, depth: 0.06 },
@@ -25,18 +42,35 @@ export const PH_POTHOLES = [
 
 export function potholeScenario(map, challenge) {
   const e = map.edges.get(EDGE);
-  if (e?.name !== challenge.street || e.lanes !== 1 || e.oneway) throw new Error("Pothole season needs Montréal's Rue Saint-Denis.");
-  const lane = map.lane(EDGE, 0), p = pointAt(lane.pts, lane.cum, START_S);
+  if (e?.name !== challenge.street || e.lanes !== 1 || e.oneway)
+    throw new Error("Pothole season needs Montréal's Rue Saint-Denis.");
+  const lane = map.lane(EDGE, 0),
+    p = pointAt(lane.pts, lane.cum, START_S);
   const route = routeFromLanes(map, [lane], START_S, GOAL_S);
-  return { id: challenge.id, start: { edge: EDGE, lane: 0, s: START_S, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, START_S) },
-    route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, potholes: { edge: EDGE, lane: 0, list: PH_POTHOLES },
-    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 0 } };
+  return {
+    id: challenge.id,
+    start: { edge: EDGE, lane: 0, s: START_S, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, START_S) },
+    route,
+    goal: route.polyline.at(-1),
+    traffic_seed: challenge.seed,
+    potholes: { edge: EDGE, lane: 0, list: PH_POTHOLES },
+    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 0 },
+  };
 }
 
 // The run of potholes, in place of the world's own; the hazard is the wide one.
 export function installPotholes(world, scenario) {
   const { edge, lane, list } = scenario.potholes;
-  const placed = list.map((p, i) => potholeOnLane(world.map, edge, lane, p.s, { id: `challenge_pothole_${i + 1}`, offset: p.offset, a: p.a, b: p.b, depth: p.depth, shape: 51042 + i * 7919 }));
+  const placed = list.map((p, i) =>
+    potholeOnLane(world.map, edge, lane, p.s, {
+      id: `challenge_pothole_${i + 1}`,
+      offset: p.offset,
+      a: p.a,
+      b: p.b,
+      depth: p.depth,
+      shape: 51042 + i * 7919,
+    }),
+  );
   world.potholes.setList(placed);
   const wide = placed[list.findIndex((p) => p.wide)];
   Object.assign(world.challenge, { at: [wide.x, wide.y], potholeIds: placed.map((h) => h.id), widePothole: wide.id });

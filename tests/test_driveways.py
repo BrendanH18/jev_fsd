@@ -17,8 +17,21 @@ PROJ = Projection(ORIGIN["lat"], ORIGIN["lon"])
 
 def street(eid="e0", frm="n1", to="n2", pts=((0, 0), (100, 0)), oneway=False, **extra):
     length = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
-    return {"id": eid, "from": frm, "to": to, "pts": [list(p) for p in pts], "length": length, "lanes": 1, "lane_width": 3.3,
-            "oneway": oneway, "name": "Test Street", "asphalt": [-5.5, 5.5], "parking": [2.2, 2.2], "lane_offsets": [1.65], **extra}
+    return {
+        "id": eid,
+        "from": frm,
+        "to": to,
+        "pts": [list(p) for p in pts],
+        "length": length,
+        "lanes": 1,
+        "lane_width": 3.3,
+        "oneway": oneway,
+        "name": "Test Street",
+        "asphalt": [-5.5, 5.5],
+        "parking": [2.2, 2.2],
+        "lane_offsets": [1.65],
+        **extra,
+    }
 
 
 def osm_with(*ways):

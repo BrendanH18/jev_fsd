@@ -16,25 +16,111 @@ const { EV_BOX_M } = await import("../static/js/sim/emergency.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 
-const ARM = 150, LINE = 135, FRONT = CAR.length - CAR.rearOverhang;
+const ARM = 150,
+  LINE = 135,
+  FRONT = CAR.length - CAR.rearOverhang;
 // A four-way junction at the origin; the car comes in from the west along `w_in` (`control` on it, or none).
 // `drift` makes the summed edge length of `w_in` run past its polyline, as rounded corners do along a route.
-function setup({ control = "signal", drift = 0, front = LINE - 0.5, v = 0, lateral = 0, line = LINE, crossHalf = 3.2 } = {}) {
-  const nodes = [{ id: "w", x: -ARM, y: 0 }, { id: "c", x: 0, y: 0 }, { id: "e", x: ARM, y: 0 }, { id: "n", x: 0, y: ARM }, { id: "s", x: 0, y: -ARM }];
-  const edges = [], lanes = [];
-  for (const arm of ["w", "e", "n", "s"]) for (const inbound of [true, false]) {
-    const from = inbound ? arm : "c", to = inbound ? "c" : arm, a = nodes.find((n) => n.id === from), b = nodes.find((n) => n.id === to);
-    const id = `${arm}_${inbound ? "in" : "out"}`, pts = [[a.x, a.y], [b.x, b.y]], rx = (b.y - a.y) / ARM, ry = -(b.x - a.x) / ARM;
-    const ctl = inbound && control ? { control: { type: control, id: control === "signal" ? "sig" : `stop_${arm}`, s_line: line, group: ["w", "e"].includes(arm) ? "A" : "B" } } : {};
-    edges.push({ id, from, to, pts, length: ARM + (id === "w_in" ? drift : 0), lanes: 1, lane_width: 3.2, lane_offsets: [1.6], asphalt: ["n", "s"].includes(arm) ? [-crossHalf, crossHalf] : [-3.2, 3.2], parking: [0, 0],
-      cls: "residential", limit: 13.9, oneway: false, name: `${arm} Street`, ...ctl });
-    lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * 1.6, y + ry * 1.6]) });
-  }
-  const intersections = control === "signal" ? [{ id: "sig", x: 0, y: 0, offset_s: 0, vertices: ["c"], approaches: edges.filter((e) => e.control).map((e) => ({ edge: e.id, group: e.control.group, s_line: line })) }] : [];
-  const map = new MapData({ bbox: [0, 0, 1, 1], extent: [-170, -170, 170, 170], edges, lanes, nodes, buildings: [], stops: [], intersections });
+function setup({
+  control = "signal",
+  drift = 0,
+  front = LINE - 0.5,
+  v = 0,
+  lateral = 0,
+  line = LINE,
+  crossHalf = 3.2,
+} = {}) {
+  const nodes = [
+    { id: "w", x: -ARM, y: 0 },
+    { id: "c", x: 0, y: 0 },
+    { id: "e", x: ARM, y: 0 },
+    { id: "n", x: 0, y: ARM },
+    { id: "s", x: 0, y: -ARM },
+  ];
+  const edges = [],
+    lanes = [];
+  for (const arm of ["w", "e", "n", "s"])
+    for (const inbound of [true, false]) {
+      const from = inbound ? arm : "c",
+        to = inbound ? "c" : arm,
+        a = nodes.find((n) => n.id === from),
+        b = nodes.find((n) => n.id === to);
+      const id = `${arm}_${inbound ? "in" : "out"}`,
+        pts = [
+          [a.x, a.y],
+          [b.x, b.y],
+        ],
+        rx = (b.y - a.y) / ARM,
+        ry = -(b.x - a.x) / ARM;
+      const ctl =
+        inbound && control
+          ? {
+              control: {
+                type: control,
+                id: control === "signal" ? "sig" : `stop_${arm}`,
+                s_line: line,
+                group: ["w", "e"].includes(arm) ? "A" : "B",
+              },
+            }
+          : {};
+      edges.push({
+        id,
+        from,
+        to,
+        pts,
+        length: ARM + (id === "w_in" ? drift : 0),
+        lanes: 1,
+        lane_width: 3.2,
+        lane_offsets: [1.6],
+        asphalt: ["n", "s"].includes(arm) ? [-crossHalf, crossHalf] : [-3.2, 3.2],
+        parking: [0, 0],
+        cls: "residential",
+        limit: 13.9,
+        oneway: false,
+        name: `${arm} Street`,
+        ...ctl,
+      });
+      lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * 1.6, y + ry * 1.6]) });
+    }
+  const intersections =
+    control === "signal"
+      ? [
+          {
+            id: "sig",
+            x: 0,
+            y: 0,
+            offset_s: 0,
+            vertices: ["c"],
+            approaches: edges
+              .filter((e) => e.control)
+              .map((e) => ({ edge: e.id, group: e.control.group, s_line: line })),
+          },
+        ]
+      : [];
+  const map = new MapData({
+    bbox: [0, 0, 1, 1],
+    extent: [-170, -170, 170, 170],
+    edges,
+    lanes,
+    nodes,
+    buildings: [],
+    stops: [],
+    intersections,
+  });
   const world = new World(map, { parked: 0, pedestrians: 0 });
   Object.assign(world.ego, { x: -ARM + front - FRONT, y: -1.6 - lateral, psi: 0, v });
-  world.route = new Route({ id: "east", polyline: [[-ARM, -1.6], [ARM, -1.6]], edges: ["w_in", "e_out"], turns: [] }, map);
+  world.route = new Route(
+    {
+      id: "east",
+      polyline: [
+        [-ARM, -1.6],
+        [ARM, -1.6],
+      ],
+      edges: ["w_in", "e_out"],
+      turns: [],
+    },
+    map,
+  );
   return { world, map };
 }
 // An ambulance with its siren on along a lane polyline `pts` (sim/emergency.js), at (x, y) heading `psi`.
@@ -42,13 +128,23 @@ function ambulance(world, x, y, psi, v, pts) {
   const path = { pts, cum: cumulative(pts) };
   path.length = path.cum.at(-1);
   path.s = Math.hypot(x - pts[0][0], y - pts[0][1]);
-  const ev = Object.assign(new Vehicle(x, y, psi, v, AMBULANCE), { id: "ambulance", kind: "ambulance", siren: true, path });
+  const ev = Object.assign(new Vehicle(x, y, psi, v, AMBULANCE), {
+    id: "ambulance",
+    kind: "ambulance",
+    siren: true,
+    path,
+  });
   world.npcs.push(ev);
   return ev;
 }
 // one coming the other way down the street, 60 m ahead
-const oncoming = (world) => ambulance(world, world.ego.x + 60, 1.6, Math.PI, 8, [[ARM, 1.6], [-ARM, 1.6]]);
-const lineAt = -ARM + LINE, nodeAt = 0;
+const oncoming = (world) =>
+  ambulance(world, world.ego.x + 60, 1.6, Math.PI, 8, [
+    [ARM, 1.6],
+    [-ARM, 1.6],
+  ]);
+const lineAt = -ARM + LINE,
+  nodeAt = 0;
 const plan = (world) => buildSnapshot(world).emergency;
 
 // Stopped exactly where Rules stops for a red light, 0.5 m short of the line: not in the junction.
@@ -82,7 +178,10 @@ const plan = (world) => buildSnapshot(world).emergency;
   const em = plan(world);
   assert.equal(em.clearing, false, "crept up to look, it is short of the junction");
   const stopX = -ARM + em.stop_s_route;
-  assert.ok(stopX <= nodeAt - EV_BOX_M - 0.5 + 1e-6 && stopX <= nodeAt - 3.2 + 1e-6, `its front stops out of the box (${(nodeAt - stopX).toFixed(1)} m from the node)`);
+  assert.ok(
+    stopX <= nodeAt - EV_BOX_M - 0.5 + 1e-6 && stopX <= nodeAt - 3.2 + 1e-6,
+    `its front stops out of the box (${(nodeAt - stopX).toFixed(1)} m from the node)`,
+  );
   assert.ok(em.bumper_to_stop_m > 0.3, "with room to pull over in");
 }
 // Stopped at a stop sign whose line is 8.7 m from the node, past the stop 2.5 m short of the crossing street:
@@ -94,7 +193,10 @@ const plan = (world) => buildSnapshot(world).emergency;
   oncoming(world);
   const em = plan(world);
   assert.equal(em.clearing, false);
-  assert.ok(em.stop_s_route <= line - 0.5 + 1e-6, `it stops short of its line (${(em.stop_s_route - line).toFixed(2)} m)`);
+  assert.ok(
+    em.stop_s_route <= line - 0.5 + 1e-6,
+    `it stops short of its line (${(em.stop_s_route - line).toFixed(2)} m)`,
+  );
 }
 // And at a signal 0.3 m short of its line, past the stop 0.5 m short of it: it holds there.
 {
@@ -102,7 +204,10 @@ const plan = (world) => buildSnapshot(world).emergency;
   oncoming(world);
   const em = plan(world);
   assert.equal(em.clearing, false);
-  assert.ok(em.bumper_to_stop_m < 0.05 && em.stop_s_route <= LINE, `it holds where it is (${em.bumper_to_stop_m.toFixed(2)} m)`);
+  assert.ok(
+    em.bumper_to_stop_m < 0.05 && em.stop_s_route <= LINE,
+    `it holds where it is (${em.bumper_to_stop_m.toFixed(2)} m)`,
+  );
 }
 // Moving off over its line on a green (Kitsilano city fog s1-10, 2.4 m/s, 0.1 m over: stopping there left it in
 // the lane over the line) it is on its way through, and clears the junction as before; at a red it holds.
@@ -121,7 +226,9 @@ for (const light of ["green", "red"]) {
   oncoming(world);
   assert.equal(plan(world).clearing, true, "at 8 m/s over the line it clears the junction");
 }
-console.log("✓ at or just over a control line, the car is short of the junction: it holds there, or pulls over before it");
+console.log(
+  "✓ at or just over a control line, the car is short of the junction: it holds there, or pulls over before it",
+);
 
 // The junction's node where the polyline has it, not 7 m on by summed edge lengths (Montréal s1-2).
 {
@@ -131,7 +238,10 @@ console.log("✓ at or just over a control line, the car is short of the junctio
   const em = plan(world);
   assert.equal(em.clearing, false);
   const stopX = -ARM + em.stop_s_route;
-  assert.ok(stopX <= nodeAt - EV_BOX_M - 0.5 + 1e-6, `it stops out of the box round the node (${(nodeAt - stopX).toFixed(1)} m from it)`);
+  assert.ok(
+    stopX <= nodeAt - EV_BOX_M - 0.5 + 1e-6,
+    `it stops out of the box round the node (${(nodeAt - stopX).toFixed(1)} m from it)`,
+  );
 }
 console.log("✓ the stop short of a junction is placed by the polyline, out of the box round its node");
 
@@ -139,11 +249,22 @@ console.log("✓ the stop short of a junction is placed by the polyline, out of 
 // the line stop as the vehicle goes by is yielding; well over it, with room to pull over, it is not.
 function auditPass(front, v, settle) {
   const { world } = setup({ control: "signal", front, v });
-  const ev = ambulance(world, world.ego.x + 70, 1.6, Math.PI, 4, [[ARM, 1.6], [-ARM, 1.6]]);
+  const ev = ambulance(world, world.ego.x + 70, 1.6, Math.PI, 4, [
+    [ARM, 1.6],
+    [-ARM, 1.6],
+  ]);
   world.auditEmergency(world.roadInfo());
-  if (settle) { world.ego.x += settle; world.ego.v = 0; world.t = 1; world.auditEmergency(world.roadInfo()); }
+  if (settle) {
+    world.ego.x += settle;
+    world.ego.v = 0;
+    world.t = 1;
+    world.auditEmergency(world.roadInfo());
+  }
   const middle = world.ego.spec.length / 2 - world.ego.spec.rearOverhang;
-  for (const [t, ahead] of [[9.9, 0.1], [10, -0.1]]) {
+  for (const [t, ahead] of [
+    [9.9, 0.1],
+    [10, -0.1],
+  ]) {
     ev.x = world.ego.x + middle + ahead + ev.spec.length / 2 - ev.spec.rearOverhang;
     ev.path.s = ARM - ev.x;
     world.t = t;
@@ -152,7 +273,11 @@ function auditPass(front, v, settle) {
   return world.violations.failed_to_yield;
 }
 assert.equal(auditPass(LINE + 0.4, 0, 0), 0, "stopped 0.4 m over the line at the call, holding it is yielding");
-assert.equal(auditPass(LINE + 0.26, 0.43, 0.03), 0, "rolling the last centimetres of a stop 0.26 m over the line, likewise");
+assert.equal(
+  auditPass(LINE + 0.26, 0.43, 0.03),
+  0,
+  "rolling the last centimetres of a stop 0.26 m over the line, likewise",
+);
 assert.equal(auditPass(LINE + 2.5, 0, 0), 1, "2.5 m over the line is not a line stop: it had room to pull over");
 console.log("✓ the audit takes a line stop that overshot a little, at the call, as it does after an approach");
 
@@ -161,16 +286,33 @@ console.log("✓ the audit takes a line stop that overshot a little, at the call
 // release leaves to pull over, and having moved up a car's length or less, the car is as boxed in as before.
 function queuePass(moveUp, requeueAt) {
   const { world } = setup({ control: null, front: 60 });
-  const ev = ambulance(world, world.ego.x + 70, 1.6, Math.PI, 4, [[ARM, 1.6], [-ARM, 1.6]]);
-  const lead = Object.assign(new Vehicle(world.ego.x + world.ego.spec.length + 2.8, world.ego.y, 0, 0), { id: "queue" });
+  const ev = ambulance(world, world.ego.x + 70, 1.6, Math.PI, 4, [
+    [ARM, 1.6],
+    [-ARM, 1.6],
+  ]);
+  const lead = Object.assign(new Vehicle(world.ego.x + world.ego.spec.length + 2.8, world.ego.y, 0, 0), {
+    id: "queue",
+  });
   world.npcs.push(lead);
   world.auditEmergency(world.roadInfo());
   // (the queue moves off, and the car after it)
-  lead.v = 1.5; world.t = 1; world.auditEmergency(world.roadInfo());
-  lead.x += moveUp; world.ego.x += moveUp; world.ego.v = 0.5; world.t = requeueAt - 0.5; world.auditEmergency(world.roadInfo());
-  lead.v = 0; world.ego.v = 0; world.t = requeueAt; world.auditEmergency(world.roadInfo());
+  lead.v = 1.5;
+  world.t = 1;
+  world.auditEmergency(world.roadInfo());
+  lead.x += moveUp;
+  world.ego.x += moveUp;
+  world.ego.v = 0.5;
+  world.t = requeueAt - 0.5;
+  world.auditEmergency(world.roadInfo());
+  lead.v = 0;
+  world.ego.v = 0;
+  world.t = requeueAt;
+  world.auditEmergency(world.roadInfo());
   const middle = world.ego.spec.length / 2 - world.ego.spec.rearOverhang;
-  for (const [t, ahead] of [[9.9, 0.1], [10, -0.1]]) {
+  for (const [t, ahead] of [
+    [9.9, 0.1],
+    [10, -0.1],
+  ]) {
     ev.x = world.ego.x + middle + ahead + ev.spec.length / 2 - ev.spec.rearOverhang;
     ev.path.s = ARM - ev.x;
     world.t = t;
@@ -180,47 +322,85 @@ function queuePass(moveUp, requeueAt) {
 }
 assert.equal(queuePass(1.6, 4.5), 0, "moved up 1.6 m with the queue and stopped in it again: still queued");
 assert.equal(queuePass(12, 4.5), 1, "moved up 12 m: it had the room to pull over");
-assert.equal(queuePass(1.6, 6), 1, "stopped in it again only after the time a release leaves: it had that time to pull over");
+assert.equal(
+  queuePass(1.6, 6),
+  1,
+  "stopped in it again only after the time a release leaves: it had that time to pull over",
+);
 // Still standing in the queue it was in at the call, the car is not what holds up a vehicle that has found a way
 // past the queue's front but not past the car (Kitsilano snow s1-9, a fire truck coming the other way).
 for (const queuedAtCall of [true, false]) {
   const { world } = setup({ control: null, front: 60, v: queuedAtCall ? 0 : 3 });
-  const ev = ambulance(world, world.ego.x + 25, -0.7, Math.PI, 0, [[ARM, 1.6], [-ARM, 1.6]]);
-  world.npcs.push(Object.assign(new Vehicle(world.ego.x + world.ego.spec.length + 2.8, world.ego.y, 0, 0), { id: "queue" }));
+  const ev = ambulance(world, world.ego.x + 25, -0.7, Math.PI, 0, [
+    [ARM, 1.6],
+    [-ARM, 1.6],
+  ]);
+  world.npcs.push(
+    Object.assign(new Vehicle(world.ego.x + world.ego.spec.length + 2.8, world.ego.y, 0, 0), { id: "queue" }),
+  );
   world.auditEmergency(world.roadInfo());
-  world.ego.v = 0; world.t = 7; ev.blockedBy = [world.ego]; ev.blockedFor = 7;
+  world.ego.v = 0;
+  world.t = 7;
+  ev.blockedBy = [world.ego];
+  ev.blockedFor = 7;
   world.auditEmergency(world.roadInfo());
-  assert.equal(world.violations.failed_to_yield, queuedAtCall ? 0 : 1, queuedAtCall ? "held in its queue, it is not the cause" : "a car that came up to the queue after the call still is");
+  assert.equal(
+    world.violations.failed_to_yield,
+    queuedAtCall ? 0 : 1,
+    queuedAtCall ? "held in its queue, it is not the cause" : "a car that came up to the queue after the call still is",
+  );
 }
-console.log("✓ a queue that moves up a little and stops again still leaves the car queued, and is not what holds a vehicle up");
+console.log(
+  "✓ a queue that moves up a little and stops again still leaves the car queued, and is not what holds a vehicle up",
+);
 
 // The forward sims: an ambulance coming the other way, still angled across the road from its turn into the
 // street, is not predicted to drive into a car stopped at the kerb (Kitsilano snow s1-4).
 {
   const { world } = setup({ control: null, front: 60 });
-  const ev = ambulance(world, world.ego.x + 18, 1.6, Math.PI + 0.5, 4, [[ARM, 1.6], [-ARM, 1.6]]);
+  const ev = ambulance(world, world.ego.x + 18, 1.6, Math.PI + 0.5, 4, [
+    [ARM, 1.6],
+    [-ARM, 1.6],
+  ]);
   const snap = buildSnapshot(world);
   assert.ok(snap.emergency, "the ambulance calls on the car");
   const candidates = sampleCandidates(snap, world);
   simulateAll(candidates, snap, world);
   const hit = candidates.filter((c) => c.sim?.collision?.id === "ambulance").map((c) => c.id);
   assert.equal(hit.length, 0, `no candidate is predicted to be run into by the ambulance (${hit.join(", ")})`);
-  assert.ok(candidates.some((c) => c.id === "pull_over" && c.eligible), "pulling over stays eligible");
+  assert.ok(
+    candidates.some((c) => c.id === "pull_over" && c.eligible),
+    "pulling over stays eligible",
+  );
   // (the same vehicle with its siren off is ordinary traffic, predicted straight on along its heading)
   ev.siren = false;
-  const snap2 = buildSnapshot(world), plain = sampleCandidates(snap2, world);
+  const snap2 = buildSnapshot(world),
+    plain = sampleCandidates(snap2, world);
   simulateAll(plain, snap2, world);
-  assert.ok(plain.some((c) => c.sim?.collision?.id === "ambulance"), "ordinary traffic on that heading is still predicted to hit");
+  assert.ok(
+    plain.some((c) => c.sim?.collision?.id === "ambulance"),
+    "ordinary traffic on that heading is still predicted to hit",
+  );
 }
 // ...but its body is still where it is: one stopped in the car's lane ahead is still in the way.
 {
   const { world } = setup({ control: null, front: 60, v: 8 });
-  ambulance(world, world.ego.x + 12, -1.6, Math.PI, 0, [[ARM, 1.6], [-ARM, 1.6]]);
-  const snap = buildSnapshot(world), candidates = sampleCandidates(snap, world);
+  ambulance(world, world.ego.x + 12, -1.6, Math.PI, 0, [
+    [ARM, 1.6],
+    [-ARM, 1.6],
+  ]);
+  const snap = buildSnapshot(world),
+    candidates = sampleCandidates(snap, world);
   simulateAll(candidates, snap, world);
   const pull = candidates.find((c) => c.id === "pull_over");
   assert.ok(pull, "pulling over is offered");
-  assert.equal(pull.sim?.collision?.id, "ambulance", "pulling over at speed is predicted into the ambulance standing in the lane");
+  assert.equal(
+    pull.sim?.collision?.id,
+    "ambulance",
+    "pulling over at speed is predicted into the ambulance standing in the lane",
+  );
 }
-console.log("✓ an ambulance coming the other way is not predicted into a car at the kerb; ordinary traffic still is, and a standing one is in the way");
+console.log(
+  "✓ an ambulance coming the other way is not predicted into a car at the kerb; ordinary traffic still is, and a standing one is in the way",
+);
 process.exit(0);

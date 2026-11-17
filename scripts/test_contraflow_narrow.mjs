@@ -24,17 +24,35 @@ const { obbOverlap } = await import("../static/js/sim/collision.js");
 const { rng } = await import("../static/js/common.js");
 
 let checks = 0;
-async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
+async function test(name, fn) {
+  await fn();
+  checks++;
+  console.log(`✓ ${name}`);
+}
 const root = new URL("../data/maps/", import.meta.url);
 const pack = JSON.parse(fs.readFileSync(new URL("8e99888cb743.v6.pack.json", root)));
-for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks", "bridges"]) {
+for (const name of [
+  "transit",
+  "crossings",
+  "zones",
+  "rail",
+  "calming",
+  "scrambles",
+  "buslanes",
+  "restrictions",
+  "contraflow",
+  "driveways",
+  "parks",
+  "bridges",
+]) {
   const url = [2, 1].map((v) => new URL(`8e99888cb743.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
   if (url) pack[name] = JSON.parse(fs.readFileSync(url));
 }
 const QC = new MapData(pack);
 // Charest Est (e560, signal sig15, group A) into Rue Caron (e549, contraflow); Caron's other block (e746,
 // group B) beyond the junction.
-const CHAREST = "e560", CARON = "e549";
+const CHAREST = "e560",
+  CARON = "e549";
 const FRONT = CAR.length - CAR.rearOverhang;
 const DT = 1 / 60;
 
@@ -46,7 +64,11 @@ function world({ officers = false } = {}) {
 }
 // The driven car far off, out of sight of Rue Caron.
 function egoAway(w) {
-  const lane = QC.laneList.filter((l) => Math.hypot(l.pts[0][0] + 110, l.pts[0][1] - 245) > 230).sort((a, b) => Math.hypot(a.pts[0][0] + 110, a.pts[0][1] - 245) - Math.hypot(b.pts[0][0] + 110, b.pts[0][1] - 245))[0];
+  const lane = QC.laneList
+    .filter((l) => Math.hypot(l.pts[0][0] + 110, l.pts[0][1] - 245) > 230)
+    .sort(
+      (a, b) => Math.hypot(a.pts[0][0] + 110, a.pts[0][1] - 245) - Math.hypot(b.pts[0][0] + 110, b.pts[0][1] - 245),
+    )[0];
   w.placeOnLane(lane, Math.min(5, lane.length / 2));
 }
 // A rider on Rue Caron, its rear axle `at` metres along its way from Caron's far end, standing at a stop
@@ -82,11 +104,19 @@ await test("traffic turning in waits at its own signal line for a rider standing
   const w = world();
   egoAway(w);
   heldRider(w);
-  for (const [front, v] of [[85, 4], [95, 2]]) {
-    const d = trafficCar(front, v), y = trafficYield(w, d, front);
-    const line = lineOf(d.path, CHAREST), caron = d.path.edges.find((g) => g.id === CARON).sStart;
+  for (const [front, v] of [
+    [85, 4],
+    [95, 2],
+  ]) {
+    const d = trafficCar(front, v),
+      y = trafficYield(w, d, front);
+    const line = lineOf(d.path, CHAREST),
+      caron = d.path.edges.find((g) => g.id === CARON).sStart;
     assert.ok(y && y.hold !== null, `a hold from ${front} m`);
-    assert.ok(y.hold <= line + 0.01, `waits at the line (${line.toFixed(1)}), not at ${y.hold.toFixed(1)} past Caron's start ${caron.toFixed(1)}`);
+    assert.ok(
+      y.hold <= line + 0.01,
+      `waits at the line (${line.toFixed(1)}), not at ${y.hold.toFixed(1)} past Caron's start ${caron.toFixed(1)}`,
+    );
     // (the room is the narrow street's: on Charest the car could move over far further)
     assert.ok(y.shift <= 0.5, `moves over ${y.shift.toFixed(2)} m at most`);
   }
@@ -96,7 +126,8 @@ await test("traffic already past where it could stop short of the junction still
   const w = world();
   egoAway(w);
   const n = heldRider(w);
-  const d = trafficCar(112, 4), y = trafficYield(w, d, 112);
+  const d = trafficCar(112, 4),
+    y = trafficYield(w, d, 112);
   assert.ok(y && y.hold !== null && y.hold > 112, "a hold ahead of it");
   const [rx, ry] = n.path.pointAt(n.path.s);
   const [hx, hy] = d.path.pointAt(y.hold);
@@ -109,7 +140,8 @@ await test("a rider held at its line, a car standing face to face in its way, ri
   // (the officer waves Charest, group A, and holds Caron, the rider's axis, for good)
   assert.ok(placeOfficer(w, "sig15", { wave: "A", phase: "A" }));
   const n = w.contraflow.place({ edge: CARON, at: 30, v: 2 });
-  const lane = QC.lane(CARON, 0), [x, y] = pointAt(lane.pts, lane.cum, 6);
+  const lane = QC.lane(CARON, 0),
+    [x, y] = pointAt(lane.pts, lane.cum, 6);
   const car = new Vehicle(x, y, headingAt(lane.pts, lane.cum, 6), 0, CAR);
   car.id = "car_standing";
   w.npcs.push(car);
@@ -128,7 +160,10 @@ await test("a rider squeezes by the driven car standing face to face, short of m
   const w = world();
   const n = w.contraflow.place({ edge: CARON, at: 8, v: 3 });
   // (the car facing it 20 m on, 0.35 m right of its lane's centre: 0.1 m short of all the room there is)
-  const lane = QC.lane(CARON, 0), s = 22, h = headingAt(lane.pts, lane.cum, s), [x, y] = pointAt(lane.pts, lane.cum, s);
+  const lane = QC.lane(CARON, 0),
+    s = 22,
+    h = headingAt(lane.pts, lane.cum, s),
+    [x, y] = pointAt(lane.pts, lane.cum, s);
   w.placeOnLane(lane, s);
   Object.assign(w.ego, { x: x + Math.sin(h) * 0.35, y: y - Math.cos(h) * 0.35, psi: h, v: 0 });
   let passed = false;

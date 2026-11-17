@@ -9,18 +9,32 @@ const { StopMemory } = await import("../static/js/sim/signals.js");
 const { pointAt, headingAt } = await import("../static/js/map/mapdata.js");
 const { snowbankYield } = await import("../static/js/sim/snowbanks.js");
 const { obbOverlap } = await import("../static/js/sim/collision.js");
-const map = kitsilano(), world = new World(map, { parked: 0, pedestrians: 0, weather: "snow", snowbanks: true, followingDistance: true });
+const map = kitsilano(),
+  world = new World(map, { parked: 0, pedestrians: 0, weather: "snow", snowbanks: true, followingDistance: true });
 Object.assign(world.ego, { x: -220, y: 120 });
 world.snowbanks.build({ narrowings: [{ edge: "e111", a: 15, b: 67 }] });
-const fleet = new NpcFleet(world, { count: 0, bikes: 0 }); fleet.nextPull = fleet.nextPark = Infinity;
+const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
+fleet.nextPull = fleet.nextPark = Infinity;
 const bus = fleet.addSchoolBus(map.lane("e331", 0), 140, 3);
-bus.path.start("e331", 0, 140, [["e111", 0], ["e322", 0]]); bus.school.every = Infinity;
-const lane = map.lane("e112", 0), at = 63, p = pointAt(lane.pts, lane.cum, at);
+bus.path.start("e331", 0, 140, [
+  ["e111", 0],
+  ["e322", 0],
+]);
+bus.school.every = Infinity;
+const lane = map.lane("e112", 0),
+  at = 63,
+  p = pointAt(lane.pts, lane.cum, at);
 const car = Object.assign(new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, at), 2), {
-  id: "oncoming", v0: 6, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
-  stopMem: new StopMemory(), frozen: 0, waiting: 0,
+  id: "oncoming",
+  v0: 6,
+  driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
+  stopMem: new StopMemory(),
+  frozen: 0,
+  waiting: 0,
 });
-car.path = new NpcPath(map, () => 0.5); car.path.start("e112", 0, at, [["e330", 0]]); fleet.vehicles.push(car);
+car.path = new NpcPath(map, () => 0.5);
+car.path.start("e112", 0, at, [["e330", 0]]);
+fleet.vehicles.push(car);
 world.snowbanks.step(1 / 60);
 const plan = snowbankYield(world, bus, bus.path.s + bus.spec.length - bus.spec.rearOverhang);
 assert.equal(plan.turn.mayEnter, false);
@@ -36,15 +50,23 @@ world.snowbanks.build({ narrowings: [{ edge: "e111", a: 15, b: 67 }] });
 for (const n of [bus, car]) for (const pe of n.path.edges) delete pe.snowbank;
 // A car already beyond the bank still needs to reach and leave its stop line.
 const pose = { x: car.x, y: car.y, psi: car.psi, v: car.v, s: car.path.s };
-Object.assign(car, { x: -169.86, y: 67.32, psi: 1.55, v: 0 }); car.path.s = 78.33;
+Object.assign(car, { x: -169.86, y: 67.32, psi: 1.55, v: 0 });
+car.path.s = 78.33;
 world.snowbanks.step(1 / 60);
 const exitPlan = snowbankYield(world, bus, bus.path.s + bus.spec.length - bus.spec.rearOverhang);
 assert.equal(exitPlan.turn.mayEnter, true, "the opposing car is already out of the narrow stretch");
-assert.ok(exitPlan.hold < bus.path.edges[1].sStart - 5, "keep the junction exit clear until that car leaves its approach");
-Object.assign(car, { x: pose.x, y: pose.y, psi: pose.psi, v: pose.v }); car.path.s = pose.s;
+assert.ok(
+  exitPlan.hold < bus.path.edges[1].sStart - 5,
+  "keep the junction exit clear until that car leaves its approach",
+);
+Object.assign(car, { x: pose.x, y: pose.y, psi: pose.psi, v: pose.v });
+car.path.s = pose.s;
 let hit = false;
 for (let k = 0; k < 45 * 60; k++) {
-  world.snowbanks.step(1 / 60); fleet.step(1 / 60); world.t += 1 / 60; world.tick++;
+  world.snowbanks.step(1 / 60);
+  fleet.step(1 / 60);
+  world.t += 1 / 60;
+  world.tick++;
   hit ||= obbOverlap(bus.obb(), car.obb());
 }
 assert.equal(hit, false);

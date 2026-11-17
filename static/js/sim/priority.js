@@ -18,7 +18,7 @@ import { wrap } from "./world.js";
 // has looked (World.egoPeek remembers it until the car leaves for the next junction).
 export const PEEK_SHORT_M = 0.3;
 export const PEEK_AT_M = 1.0;
-const LOOK_AHEAD_M = 120;   // a vehicle's path is searched this far ahead for the junction
+const LOOK_AHEAD_M = 120; // a vehicle's path is searched this far ahead for the junction
 
 // The level of the street `edgeId` leads in on, or null where it has a signal, a roundabout's
 // yield line or no junction at its end.
@@ -38,8 +38,9 @@ export function levelOf(map, edgeId, world = null) {
 export function outranks(map, b, a, world = null) {
   if (a === b) return false;
   const rel = wrap(map.headingIn(b) - map.headingIn(a));
-  if (Math.abs(rel) < Math.PI / 6 || Math.abs(rel) > Math.PI * 5 / 6) return false;
-  const la = levelOf(map, a, world), lb = levelOf(map, b, world);
+  if (Math.abs(rel) < Math.PI / 6 || Math.abs(rel) > (Math.PI * 5) / 6) return false;
+  const la = levelOf(map, a, world),
+    lb = levelOf(map, b, world);
   if (la === null || lb === null) return false;
   return lb > la || (lb === la && rel > 0);
 }
@@ -54,11 +55,12 @@ export function approachTo(map, v, node, usePath = true) {
   if (inter) {
     for (const id of inter.vertices || []) {
       const a = approachTo(map, v, id, usePath);
-      if (a && inter.approaches.some(b => b.edge === a.edge)) return a;
+      if (a && inter.approaches.some((b) => b.edge === a.edge)) return a;
     }
     return null;
   }
-  const spec = v.spec || CAR, front = spec.length - spec.rearOverhang;
+  const spec = v.spec || CAR,
+    front = spec.length - spec.rearOverhang;
   const path = usePath && v.path?.edges ? v.path : null;
   if (path) {
     for (const e of path.edges) {

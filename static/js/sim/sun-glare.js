@@ -33,28 +33,33 @@ import { sunAngles } from "./speed-zones.js";
 import { comfort } from "./vehicle.js";
 import { current as weather } from "./weather.js";
 
-export const GLARE_MAX_ELEVATION_DEG = 20;  // higher, the visor and roof shade the driver's eyes
+export const GLARE_MAX_ELEVATION_DEG = 20; // higher, the visor and roof shade the driver's eyes
 export const GLARE_FULL_ELEVATION_DEG = 10; // at or below this (and above the horizon), full glare
-export const GLARE_HALF_ANGLE_DEG = 30;     // the sun this far off the heading no longer dazzles
-export const GLARE_FULL_ANGLE_DEG = 10;     // within this of the heading, full glare
-export const GLARE_VIEW_DEG = 35;           // what lies within this of the sun's bearing is washed out
-export const GLARE_SIGHT_LOSS = 0.65;       // at full severity, forward sight drops by this share
+export const GLARE_HALF_ANGLE_DEG = 30; // the sun this far off the heading no longer dazzles
+export const GLARE_FULL_ANGLE_DEG = 10; // within this of the heading, full glare
+export const GLARE_VIEW_DEG = 35; // what lies within this of the sun's bearing is washed out
+export const GLARE_SIGHT_LOSS = 0.65; // at full severity, forward sight drops by this share
 export const GLARE_MIN_SIGHT_M = 20;
-export const GLARE_REACTION_S = 1;          // (as sensing's visibility speed: a second to react,
-export const GLARE_MARGIN_M = 5;            //  and stopped this far short of what comes into view)
-export const GLARE_TOLERANCE_MPS = 1;       // the audit allows this much over the ceiling
+export const GLARE_REACTION_S = 1; // (as sensing's visibility speed: a second to react,
+export const GLARE_MARGIN_M = 5; //  and stopped this far short of what comes into view)
+export const GLARE_TOLERANCE_MPS = 1; // the audit allows this much over the ceiling
 export const GLARE_SPEEDING_THRESHOLD_S = 1; // more than this over the ceiling fails a drive
 export const DEFAULT_SUN_DATE = "late September (as the sky draws it)";
 
 const RAD = Math.PI / 180;
-const smooth = (t) => { const x = Math.max(0, Math.min(1, t)); return x * x * (3 - 2 * x); };
-const wrapDeg = (d) => ((d % 360) + 540) % 360 - 180;
+const smooth = (t) => {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+};
+const wrapDeg = (d) => (((d % 360) + 540) % 360) - 180;
 
 // "MM-DD" -> day of the year (1..365, a common year).
 export function dayOfYear(date) {
   const m = String(date).match(/^(\d{1,2})-(\d{1,2})$/);
   if (!m) return null;
-  const month = +m[1], day = +m[2], days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const month = +m[1],
+    day = +m[2],
+    days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   if (month < 1 || month > 12 || day < 1 || day > days[month - 1]) return null;
   return days.slice(0, month - 1).reduce((a, b) => a + b, 0) + day;
 }
@@ -64,13 +69,31 @@ export function dayOfYear(date) {
 // and the equation of time `eot_min`.
 export function solarAngles(hour, { latitude, longitude, utcOffset = null, day }) {
   const tz = Number.isFinite(utcOffset) ? utcOffset : longitude / 15;
-  const g = 2 * Math.PI / 365 * (day - 1 + (hour - tz - 12) / 24);
-  const eot = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
-  const declination = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g)
-    + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  const g = ((2 * Math.PI) / 365) * (day - 1 + (hour - tz - 12) / 24);
+  const eot =
+    229.18 *
+    (0.000075 +
+      0.001868 * Math.cos(g) -
+      0.032077 * Math.sin(g) -
+      0.014615 * Math.cos(2 * g) -
+      0.040849 * Math.sin(2 * g));
+  const declination =
+    0.006918 -
+    0.399912 * Math.cos(g) +
+    0.070257 * Math.sin(g) -
+    0.006758 * Math.cos(2 * g) +
+    0.000907 * Math.sin(2 * g) -
+    0.002697 * Math.cos(3 * g) +
+    0.00148 * Math.sin(3 * g);
   const trueSolarMin = hour * 60 + eot + 4 * longitude - 60 * tz;
-  const H = (trueSolarMin / 4 - 180) * RAD, lat = latitude * RAD;
-  const elevation = Math.asin(Math.max(-1, Math.min(1, Math.sin(lat) * Math.sin(declination) + Math.cos(lat) * Math.cos(declination) * Math.cos(H))));
+  const H = (trueSolarMin / 4 - 180) * RAD,
+    lat = latitude * RAD;
+  const elevation = Math.asin(
+    Math.max(
+      -1,
+      Math.min(1, Math.sin(lat) * Math.sin(declination) + Math.cos(lat) * Math.cos(declination) * Math.cos(H)),
+    ),
+  );
   return { elevation, H, latitude: lat, declination, eot_min: eot };
 }
 
@@ -86,16 +109,22 @@ export function azimuthOf({ elevation: el, H, latitude, declination }) {
 export function sunLocation(map, clock) {
   const origin = map?.pack?.origin;
   if (!origin || !clock) return null;
-  return { latitude: origin.lat, longitude: origin.lon, utcOffset: Number.isFinite(clock.utc_offset) ? clock.utc_offset : origin.lon / 15,
-    ...(Number.isFinite(clock.day) ? { day: clock.day } : {}) };
+  return {
+    latitude: origin.lat,
+    longitude: origin.lon,
+    utcOffset: Number.isFinite(clock.utc_offset) ? clock.utc_offset : origin.lon / 15,
+    ...(Number.isFinite(clock.day) ? { day: clock.day } : {}),
+  };
 }
 
 // The sun over a world: { elevation_deg, azimuth_deg (compass) }, or null without a clock or origin.
 const sunMemo = new WeakMap();
 export function sunOf(world) {
-  const clock = world.clock, loc = sunLocation(world.map, clock);
+  const clock = world.clock,
+    loc = sunLocation(world.map, clock);
   if (!loc) return null;
-  const key = `${clock.hour}|${loc.day}|${loc.utcOffset}`, memo = sunMemo.get(world);
+  const key = `${clock.hour}|${loc.day}|${loc.utcOffset}`,
+    memo = sunMemo.get(world);
   if (memo?.key === key) return memo.sun;
   const a = Number.isFinite(loc.day) ? solarAngles(clock.hour, loc) : sunAngles(clock.hour, loc);
   const sun = { elevation_deg: a.elevation / RAD, azimuth_deg: azimuthOf(a) / RAD };
@@ -104,12 +133,14 @@ export function sunOf(world) {
 }
 
 // Compass bearing (deg) of sim heading `psi` (rad, counter-clockwise from east).
-export const bearingOf = (psi) => ((90 - psi / RAD) % 360 + 360) % 360;
+export const bearingOf = (psi) => (((90 - psi / RAD) % 360) + 360) % 360;
 
 // The speed a vehicle can stop from within `sight` metres: a second to react, then braking at
 // comfort().decel, GLARE_MARGIN_M short (the rule sensing's visibility speed uses).
 export function glareCeiling(sight, front) {
-  const decel = comfort().decel, room = Math.max(0, sight - front - GLARE_MARGIN_M), br = decel * GLARE_REACTION_S;
+  const decel = comfort().decel,
+    room = Math.max(0, sight - front - GLARE_MARGIN_M),
+    br = decel * GLARE_REACTION_S;
   return Math.sqrt(br * br + 2 * decel * room) - br;
 }
 
@@ -122,20 +153,28 @@ export function glareFor(world, car = world.ego) {
   const off = Math.abs(wrapDeg(bearingOf(car.psi) - sun.azimuth_deg));
   if (off >= GLARE_HALF_ANGLE_DEG) return null;
   const align = 1 - smooth((off - GLARE_FULL_ANGLE_DEG) / (GLARE_HALF_ANGLE_DEG - GLARE_FULL_ANGLE_DEG));
-  const low = 1 - smooth((sun.elevation_deg - GLARE_FULL_ELEVATION_DEG) / (GLARE_MAX_ELEVATION_DEG - GLARE_FULL_ELEVATION_DEG));
+  const low =
+    1 - smooth((sun.elevation_deg - GLARE_FULL_ELEVATION_DEG) / (GLARE_MAX_ELEVATION_DEG - GLARE_FULL_ELEVATION_DEG));
   const severity = align * low;
   if (severity < 0.05) return null;
   const range = world.visibility.range;
   const sight = Math.min(range, Math.max(GLARE_MIN_SIGHT_M, range * (1 - GLARE_SIGHT_LOSS * severity)));
   const spec = car.spec;
-  return { severity, sight_m: sight, ceiling_mps: glareCeiling(sight, spec.length - spec.rearOverhang), off_deg: off,
-    sun_azimuth_deg: sun.azimuth_deg, sun_elevation_deg: sun.elevation_deg };
+  return {
+    severity,
+    sight_m: sight,
+    ceiling_mps: glareCeiling(sight, spec.length - spec.rearOverhang),
+    off_deg: off,
+    sun_azimuth_deg: sun.azimuth_deg,
+    sun_elevation_deg: sun.elevation_deg,
+  };
 }
 
 // The driven car's glare, memoised on what it depends on (visibility asks for it per object seen).
 const egoMemo = new WeakMap();
 export function egoGlare(world) {
-  const ego = world.ego, c = world.clock;
+  const ego = world.ego,
+    c = world.clock;
   const key = `${ego.psi}|${c?.hour}|${c?.day}|${c?.utc_offset}|${weather.name}|${world.visibility.night}|${world.sunGlare}`;
   const memo = egoMemo.get(world);
   if (memo?.key === key) return memo.glare;
@@ -163,26 +202,38 @@ export function npcGlareCeiling(world, car) {
 export function sunGlareSensing(world) {
   const g = egoGlare(world);
   if (!g) return null;
-  return { severity: Math.round(g.severity * 100) / 100, sight_m: Math.round(g.sight_m), ceiling_mps: g.ceiling_mps,
-    sun_azimuth_deg: Math.round(g.sun_azimuth_deg), sun_elevation_deg: Math.round(g.sun_elevation_deg * 10) / 10, off_heading_deg: Math.round(g.off_deg) };
+  return {
+    severity: Math.round(g.severity * 100) / 100,
+    sight_m: Math.round(g.sight_m),
+    ceiling_mps: g.ceiling_mps,
+    sun_azimuth_deg: Math.round(g.sun_azimuth_deg),
+    sun_elevation_deg: Math.round(g.sun_elevation_deg * 10) / 10,
+    off_heading_deg: Math.round(g.off_deg),
+  };
 }
 
 // The audit (World.audit, every tick): time more than GLARE_TOLERANCE_MPS over the ceiling, once the
 // car has had a second to react and time to slow at comfort().decel from when the glare (or a lower
 // ceiling) came on. `world.sunGlareCall` keeps that allowance.
 export function auditSunGlare(world, dt) {
-  const g = egoGlare(world), ego = world.ego;
-  if (!g) { world.sunGlareCall = null; return; }
+  const g = egoGlare(world),
+    ego = world.ego;
+  if (!g) {
+    world.sunGlareCall = null;
+    return;
+  }
   world.sunGlareSeen = true;
   const allow = () => world.t + GLARE_REACTION_S + Math.max(0, ego.v - g.ceiling_mps) / comfort().decel;
   let call = world.sunGlareCall;
   if (!call) call = world.sunGlareCall = { ceiling: g.ceiling_mps, grace: allow() };
-  else if (g.ceiling_mps < call.ceiling - 0.25) Object.assign(call, { ceiling: g.ceiling_mps, grace: Math.max(call.grace, allow()) });
+  else if (g.ceiling_mps < call.ceiling - 0.25)
+    Object.assign(call, { ceiling: g.ceiling_mps, grace: Math.max(call.grace, allow()) });
   else if (g.ceiling_mps > call.ceiling) call.ceiling = g.ceiling_mps;
   if (world.t < call.grace || ego.v <= g.ceiling_mps + GLARE_TOLERANCE_MPS) return;
   const before = world.violations.glare_speeding_seconds || 0;
   world.violations.glare_speeding_seconds = before + dt;
-  if (before <= GLARE_SPEEDING_THRESHOLD_S && world.violations.glare_speeding_seconds > GLARE_SPEEDING_THRESHOLD_S) world.events.push({ type: "sun_glare" });
+  if (before <= GLARE_SPEEDING_THRESHOLD_S && world.violations.glare_speeding_seconds > GLARE_SPEEDING_THRESHOLD_S)
+    world.events.push({ type: "sun_glare" });
 }
 
 // What the HUD tells the driver: { key, text, slow }, or null.
@@ -190,6 +241,11 @@ export function sunGlareNotice(world) {
   if (!world.sunGlare) return null;
   const g = egoGlare(world);
   if (!g) return null;
-  const kmh = Math.round(g.ceiling_mps * 3.6), slow = world.ego.v > g.ceiling_mps + 0.5;
-  return { key: slow ? "slow" : "ok", slow, text: slow ? `SUN GLARE: SLOWING · ${kmh} KM/H` : `SUN GLARE · SIGHT ${Math.round(g.sight_m)} M` };
+  const kmh = Math.round(g.ceiling_mps * 3.6),
+    slow = world.ego.v > g.ceiling_mps + 0.5;
+  return {
+    key: slow ? "slow" : "ok",
+    slow,
+    text: slow ? `SUN GLARE: SLOWING · ${kmh} KM/H` : `SUN GLARE · SIGHT ${Math.round(g.sight_m)} M`,
+  };
 }

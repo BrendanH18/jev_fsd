@@ -167,7 +167,7 @@ def offset_polyline(pts: Sequence[Point], d: float) -> Polyline:
                 scale = 1.0
             else:
                 nx, ny = sx / ln, sy / ln
-                cos_half = (n1[0] * nx + n1[1] * ny)
+                cos_half = n1[0] * nx + n1[1] * ny
                 scale = 1.0 / max(cos_half, 1e-6)
         length = min(abs(d) * scale, limit)
         sign = 1.0 if d > 0 else -1.0
@@ -187,8 +187,12 @@ def fillet(a: Point, corner: Point, b: Point, radius: float, steps: int = 8) -> 
     for k in range(steps + 1):
         t = k / steps
         u = 1 - t
-        out.append((u * u * p0[0] + 2 * u * t * corner[0] + t * t * p2[0],
-                    u * u * p0[1] + 2 * u * t * corner[1] + t * t * p2[1]))
+        out.append(
+            (
+                u * u * p0[0] + 2 * u * t * corner[0] + t * t * p2[0],
+                u * u * p0[1] + 2 * u * t * corner[1] + t * t * p2[1],
+            )
+        )
     return out
 
 

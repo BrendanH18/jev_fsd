@@ -23,8 +23,11 @@ class ResultsTest(unittest.TestCase):
         cls.data = build_results.build()
 
     def test_committed_results_are_up_to_date(self):
-        self.assertEqual(build_results.main(["--check"]), 0,
-                         "data/results.json or README.md is stale: run uv run scripts/build_results.py")
+        self.assertEqual(
+            build_results.main(["--check"]),
+            0,
+            "data/results.json or README.md is stale: run uv run scripts/build_results.py",
+        )
 
     def test_check_fails_when_the_file_is_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -68,7 +71,11 @@ class ResultsTest(unittest.TestCase):
 
     def test_a_newer_challenge_run_leads(self):
         # a second published full run for a driver: its summary and the README take the newest
-        newer = [dict(r, date="2099-01-01", passed=0) for r in self.data["rows"] if r["driver"] == "rules" and r["suite"] == "challenges"]
+        newer = [
+            dict(r, date="2099-01-01", passed=0)
+            for r in self.data["rows"]
+            if r["driver"] == "rules" and r["suite"] == "challenges"
+        ]
         original = build_results.challenge_rows
         build_results.challenge_rows = lambda drivers: original(drivers) + newer
         try:

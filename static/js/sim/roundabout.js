@@ -2,8 +2,8 @@
 // driver at the yield line waits while a circulating vehicle would reach the entry within a few
 // seconds, or is passing it now.
 
-const YIELD_HORIZON_S = 3.5;   // a gap shorter than this is not taken
-const PASSING_M = 3.5;         // a vehicle this close to the entry along the ring blocks it
+const YIELD_HORIZON_S = 3.5; // a gap shorter than this is not taken
+const PASSING_M = 3.5; // a vehicle this close to the entry along the ring blocks it
 
 // True when a vehicle circulating in roundabout `rb` blocks entering at the ring vertex `node`.
 // `extra` seconds widen the window for a driver still approaching the line, who will get there
@@ -41,11 +41,14 @@ export function ringJoining(rb, node, vehicles, extra = 0) {
   const entry = Math.atan2(node.y - rb.y, node.x - rb.x);
   for (const o of vehicles) {
     if (o.v < 0.5) continue;
-    const dx = rb.x - o.x, dy = rb.y - o.y, d = Math.hypot(dx, dy), out = d - rb.outer_r;
+    const dx = rb.x - o.x,
+      dy = rb.y - o.y,
+      d = Math.hypot(dx, dy),
+      out = d - rb.outer_r;
     if (out <= 1 || out > JOIN_LOOK_M) continue;
     if ((dx * Math.cos(o.psi) + dy * Math.sin(o.psi)) / d < 0.5) continue;
     // (brake lights: stopping at its own line)
-    if (o.a < -0.5 && o.v * o.v / (-2 * o.a) < out) continue;
+    if (o.a < -0.5 && (o.v * o.v) / (-2 * o.a) < out) continue;
     // the arc from its entry round to this one (one coming in at this entry is queueing, not joining)
     let ahead = dir * (entry - Math.atan2(-dy, -dx));
     ahead = ((ahead % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);

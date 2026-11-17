@@ -11,7 +11,7 @@ export class WorldClock {
   update(simTime) {
     if (!Number.isFinite(simTime)) return this.hour;
     if (this.lastTime !== null) {
-      const next = this.hour + Math.max(0, simTime - this.lastTime) * this.rate / 3600;
+      const next = this.hour + (Math.max(0, simTime - this.lastTime) * this.rate) / 3600;
       this.weekday = (this.weekday + Math.floor(next / 24)) % 7;
       this.hour = normalizeHour(next);
     }
@@ -19,8 +19,14 @@ export class WorldClock {
     return this.hour;
   }
 
-  setHour(hour, simTime) { this.update(simTime); this.hour = normalizeHour(hour); }
-  setRate(rate, simTime) { this.update(simTime); this.rate = validRate(rate); }
+  setHour(hour, simTime) {
+    this.update(simTime);
+    this.hour = normalizeHour(hour);
+  }
+  setRate(rate, simTime) {
+    this.update(simTime);
+    this.rate = validRate(rate);
+  }
 }
 
 export function formatClock(hour) {
@@ -41,11 +47,19 @@ export function worldOptions(params, defaultTraffic = 40) {
   };
 }
 
-const normalizeHour = hour => Number.isFinite(hour) ? ((hour % 24) + 24) % 24 : 15.5;
-const validRate = rate => [0, 1, 60].includes(rate) ? rate : 0;
+const normalizeHour = (hour) => (Number.isFinite(hour) ? ((hour % 24) + 24) % 24 : 15.5);
+const validRate = (rate) => ([0, 1, 60].includes(rate) ? rate : 0);
 
 // Parse "17:30", "17.5", or a named preset into hours.
-export const TIME_PRESETS = { dawn: 7.1, morning: 9.0, noon: 13.2, afternoon: 15.5, golden: 18.3, dusk: 19.2, night: 22.5 };
+export const TIME_PRESETS = {
+  dawn: 7.1,
+  morning: 9.0,
+  noon: 13.2,
+  afternoon: 15.5,
+  golden: 18.3,
+  dusk: 19.2,
+  night: 22.5,
+};
 export function parseHour(value, fallback = TIME_PRESETS.afternoon) {
   if (value === null || value === undefined || value === "") return fallback;
   if (TIME_PRESETS[value] !== undefined) return TIME_PRESETS[value];

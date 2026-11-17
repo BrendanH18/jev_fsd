@@ -26,12 +26,18 @@ export const QUEUE_GAP_M = [1.8, 4.5];
 // The curb lanes a challenge may start in: of the kind its hazard needs (a parking lane for a door or
 // a car pulling out, a signal, a stop sign, else no control at all) where the map has them.
 export function plainLanes(map, hazard) {
-  let lanes = map.laneList.filter(l => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
-  const matching = lanes.filter(l => ["door", "pull"].includes(hazard) ? l.edgeRef.parking?.[1] > 0
-    : hazard === "signal" ? l.edgeRef.control?.type === "signal"
-    : hazard === "stop" ? l.edgeRef.control?.type === "stop" : !l.edgeRef.control);
+  let lanes = map.laneList.filter((l) => l.length > 110 && l.idx === l.edgeRef.lanes - 1 && !l.edgeRef.ring);
+  const matching = lanes.filter((l) =>
+    ["door", "pull"].includes(hazard)
+      ? l.edgeRef.parking?.[1] > 0
+      : hazard === "signal"
+        ? l.edgeRef.control?.type === "signal"
+        : hazard === "stop"
+          ? l.edgeRef.control?.type === "stop"
+          : !l.edgeRef.control,
+  );
   if (matching.length) lanes = matching;
-  if (!lanes.length) lanes = map.laneList.filter(l => l.length > 65 && !l.edgeRef.ring);
+  if (!lanes.length) lanes = map.laneList.filter((l) => l.length > 65 && !l.edgeRef.ring);
   if (!lanes.length) throw new Error("This map has no suitable challenge lane.");
   lanes.sort((a, b) => String(a.edge).localeCompare(String(b.edge)) || a.idx - b.idx);
   return lanes;
@@ -58,28 +64,61 @@ export function laneScenario(map, challenge, find = null) {
   const plan = find ? find(map, challenge, random, lanes) : null;
   const start = plan ? plan.lane : lanes[Math.floor(random() * lanes.length)];
   const startS = plan ? plan.startS : Math.max(8, Math.min(20, start.length * 0.15));
-  const chain = [start], seen = new Set([start.edge]);
+  const chain = [start],
+    seen = new Set([start.edge]);
   let length = start.length - startS;
-  for (const lane of plan?.through || []) { chain.push(lane); seen.add(lane.edge); length += lane.length; }
+  for (const lane of plan?.through || []) {
+    chain.push(lane);
+    seen.add(lane.edge);
+    length += lane.length;
+  }
   const extend = plan?.extend ?? 260;
   for (let i = 0; i < 12 && extend && length < extend; i++) {
     const previous = chain.at(-1);
-    const successors = map.successors(previous.edge).filter(id => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < 130 * Math.PI / 180);
-    successors.sort((a, b) => Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) || String(a).localeCompare(String(b)));
+    const successors = map
+      .successors(previous.edge)
+      .filter((id) => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < (130 * Math.PI) / 180);
+    successors.sort(
+      (a, b) =>
+        Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) ||
+        String(a).localeCompare(String(b)),
+    );
     if (!successors.length) break;
-    const id = successors[0], edge = map.edges.get(id), turn = map.classifyTurn(map.turnAngle(previous.edge, id));
+    const id = successors[0],
+      edge = map.edges.get(id),
+      turn = map.classifyTurn(map.turnAngle(previous.edge, id));
     const lane = map.lane(id, turn === "left" ? 0 : edge.lanes - 1);
-    chain.push(lane); seen.add(id); length += lane.length;
+    chain.push(lane);
+    seen.add(id);
+    length += lane.length;
   }
-  const last = chain.at(-1), goal = plan?.goalS;
+  const last = chain.at(-1),
+    goal = plan?.goalS;
   const goalS = goal === undefined ? last.length - 10 : typeof goal === "function" ? goal(last, length) : goal;
   const route = routeFromLanes(map, chain, startS, Math.max(10, goalS));
   const p = pointAt(start.pts, start.cum, startS);
-  return { id: challenge.id, start: { edge: start.edge, lane: start.idx, s: startS, x: p[0], y: p[1], psi: headingAt(start.pts, start.cum, startS) },
-    route, goal: route.polyline.at(-1), traffic_seed: challenge.seed,
+  return {
+    id: challenge.id,
+    start: {
+      edge: start.edge,
+      lane: start.idx,
+      s: startS,
+      x: p[0],
+      y: p[1],
+      psi: headingAt(start.pts, start.cum, startS),
+    },
+    route,
+    goal: route.polyline.at(-1),
+    traffic_seed: challenge.seed,
     ...(plan?.fields || {}),
-    tags: { length_m: Math.round(length), signals: chain.filter(l => l.edgeRef.control?.type === "signal").length,
-      stops: chain.filter(l => l.edgeRef.control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
+    tags: {
+      length_m: Math.round(length),
+      signals: chain.filter((l) => l.edgeRef.control?.type === "signal").length,
+      stops: chain.filter((l) => l.edgeRef.control?.type === "stop").length,
+      lefts: route.turns.filter((t) => t.dir === "left").length,
+      rights: route.turns.filter((t) => t.dir === "right").length,
+    },
+  };
 }
 
 // --- Installing ----------------------------------------------------------------------------------
@@ -88,16 +127,38 @@ export function laneScenario(map, challenge, find = null) {
 // oncoming hazard at the stop line, a cyclist or emergency vehicle at the end of the lane, else 65 m on.
 export function installBase(world, challenge, scenario) {
   const lane = world.map.lane(scenario.start.edge, scenario.start.lane);
-  const hazardS = scenario.crossing?.hazardS ?? scenario.multiThreat?.s ?? scenario.child?.s ?? (scenario.oncoming || scenario.blindLeft || scenario.allWay || scenario.twoWay ? lane.edgeRef.control.s_line : scenario.cyclist || scenario.emergency ? lane.length : Math.min(lane.length - 15, scenario.start.s + 65));
-  const p = pointAt(lane.pts, lane.cum, hazardS), psi = headingAt(lane.pts, lane.cum, hazardS);
-  const offset = right => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
-  world.challenge = { id: challenge.id, hazard: challenge.hazard, triggered: false, at: p, carId: null, pedestrianId: null, ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}), ...(scenario.allWay ? { allWay: scenario.allWay } : {}), ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}), ...(scenario.emergency ? { emergency: scenario.emergency } : {}) };
+  const hazardS =
+    scenario.crossing?.hazardS ??
+    scenario.multiThreat?.s ??
+    scenario.child?.s ??
+    (scenario.oncoming || scenario.blindLeft || scenario.allWay || scenario.twoWay
+      ? lane.edgeRef.control.s_line
+      : scenario.cyclist || scenario.emergency
+        ? lane.length
+        : Math.min(lane.length - 15, scenario.start.s + 65));
+  const p = pointAt(lane.pts, lane.cum, hazardS),
+    psi = headingAt(lane.pts, lane.cum, hazardS);
+  const offset = (right) => [p[0] + Math.sin(psi) * right, p[1] - Math.cos(psi) * right];
+  world.challenge = {
+    id: challenge.id,
+    hazard: challenge.hazard,
+    triggered: false,
+    at: p,
+    carId: null,
+    pedestrianId: null,
+    ...(scenario.oncoming ? { oncoming: scenario.oncoming } : {}),
+    ...(scenario.allWay ? { allWay: scenario.allWay } : {}),
+    ...(scenario.twoWay ? { twoWay: scenario.twoWay, stopId: lane.edgeRef.control.id } : {}),
+    ...(scenario.emergency ? { emergency: scenario.emergency } : {}),
+  };
   return { lane, hazardS, p, psi, offset };
 }
 
 // Background curb events are disabled to isolate the authored hazard.
 export function finishInstall(world, fleet) {
-  world.parked.nextDoor = 1e9; fleet.nextPark = 1e9; fleet.nextPull = 1e9;
+  world.parked.nextDoor = 1e9;
+  fleet.nextPark = 1e9;
+  fleet.nextPull = 1e9;
 }
 
 // A car parked at the curb beside the hazard point (The door zone, Joining the flow).
@@ -105,28 +166,44 @@ export function placeCurbCar(world, { lane, hazardS, p, psi, offset }) {
   const ep = pointAt(lane.edgeRef.pts, lane.edgeRef.cum, hazardS);
   const laneOffset = (p[0] - ep[0]) * Math.sin(psi) - (p[1] - ep[1]) * Math.cos(psi);
   const curb = Math.max(2.4, lane.edgeRef.asphalt[1] - (lane.edgeRef.parking?.[1] || 2.4) / 2 - laneOffset);
-  const cp = offset(curb), car = new Vehicle(cp[0], cp[1], psi, 0);
+  const cp = offset(curb),
+    car = new Vehicle(cp[0], cp[1], psi, 0);
   Object.assign(car, { id: "challenge_parked", color: 0xd9b685, curb: "right", edge: lane.edge });
-  world.parked.add(car); world.challenge.carId = car.id;
+  world.parked.add(car);
+  world.challenge.carId = car.id;
 }
 
 // A person waiting to walk across the street at the hazard point, from the scenario's `crossing`
 // where it has one (Rain check, Around the corner).
 export function placeCrossingPedestrian(world, challenge, scenario, { psi, offset }) {
-  const from = scenario.crossing?.from || offset(5.5), to = scenario.crossing?.to || offset(-5.5);
+  const from = scenario.crossing?.from || offset(5.5),
+    to = scenario.crossing?.to || offset(-5.5);
   const crossing = { node: null, from, to, jaywalk: true };
-  const ped = new Pedestrian({ id: "challenge_pedestrian", x: from[0], y: from[1], psi: psi + Math.PI / 2,
-    v: 0, speed: 1.35, path: [{ p: to, cross: crossing }], crossing: null, waiting: 0, phase: 0, look: challenge.seed,
-    at: null });
+  const ped = new Pedestrian({
+    id: "challenge_pedestrian",
+    x: from[0],
+    y: from[1],
+    psi: psi + Math.PI / 2,
+    v: 0,
+    speed: 1.35,
+    path: [{ p: to, cross: crossing }],
+    crossing: null,
+    waiting: 0,
+    phase: 0,
+    look: challenge.seed,
+    at: null,
+  });
   ped.frozen = 1e6;
-  world.crowd.list.push(ped); world.challenge.pedestrianId = ped.id;
+  world.crowd.list.push(ped);
+  world.challenge.pedestrianId = ped.id;
 }
 
 // --- Stepping ------------------------------------------------------------------------------------
 
 // Triggers: the hazard's point less than `m` ahead of the car's rear axle, or of its front.
 export const reach = (m) => (local) => local.ahead < m;
-export const frontWithin = (m) => (local, world) => local.ahead < m + world.ego.spec.length - world.ego.spec.rearOverhang;
+export const frontWithin = (m) => (local, world) =>
+  local.ahead < m + world.ego.spec.length - world.ego.spec.rearOverhang;
 
 // Once (with the hazard still ahead) `trigger(local, world, state)` holds, `release` sets it off;
 // `follow` runs every step after that check. A pedestrian who has reached the end of their path stops
@@ -139,14 +216,18 @@ export function stepAuthored(world, fleet, { trigger = reach(43), release = null
     if (release) release(world, fleet, state);
   }
   if (follow) follow(world, fleet, state);
-  const ped = state.pedestrianId && world.crowd.list.find(p => p.id === state.pedestrianId);
-  if (ped && !ped.path.length) { ped.frozen = 1e6; ped.v = 0; }
+  const ped = state.pedestrianId && world.crowd.list.find((p) => p.id === state.pedestrianId);
+  if (ped && !ped.path.length) {
+    ped.frozen = 1e6;
+    ped.v = 0;
+  }
 }
 
 // The challenge's pedestrian sets off along their path.
 export function releasePedestrian(world, state) {
-  const ped = world.crowd.list.find(p => p.id === state.pedestrianId);
-  ped.frozen = 0; ped.crossing = ped.path[0].cross;
+  const ped = world.crowd.list.find((p) => p.id === state.pedestrianId);
+  ped.frozen = 0;
+  ped.crossing = ped.path[0].cross;
 }
 
 // --- Traffic set off at the trigger --------------------------------------------------------------
@@ -158,23 +239,37 @@ export function releasePedestrian(world, state) {
 // Where each oncoming car starts: [edge, s, edges before the approach's own], or null when there is
 // no room. A start before the approach begins is on the street leading straight into it.
 export function oncomingStarts(map, edge) {
-  const approach = map.edges.get(edge), line = approach.control.s_line;
-  return [line - 60, line - 80].map(s => {
+  const approach = map.edges.get(edge),
+    line = approach.control.s_line;
+  return [line - 60, line - 80].map((s) => {
     if (s >= 2) return [edge, s, []];
-    const before = (map.inn.get(approach.from) || []).find(p => map.classifyTurn(map.turnAngle(p, edge)) === "straight" && map.edges.get(p).length + s > 2);
+    const before = (map.inn.get(approach.from) || []).find(
+      (p) => map.classifyTurn(map.turnAngle(p, edge)) === "straight" && map.edges.get(p).length + s > 2,
+    );
     return before ? [before, s + map.edges.get(before).length, [[edge, 0]]] : null;
   });
 }
 export function releaseOncoming(world, fleet, { edge, then, lane: which }) {
-  const map = world.map, v = Math.min(11, map.edges.get(edge).limit || 11);
-  const laneOf = (id) => which === "curb" ? map.edges.get(id).lanes - 1 : 0;
+  const map = world.map,
+    v = Math.min(11, map.edges.get(edge).limit || 11);
+  const laneOf = (id) => (which === "curb" ? map.edges.get(id).lanes - 1 : 0);
   return oncomingStarts(map, edge).map(([id, s, through], i) => {
     const plan = [...through.map(([e]) => [e, laneOf(e)]), [then, laneOf(then)]];
-    const lane = map.lane(id, laneOf(id)), p = pointAt(lane.pts, lane.cum, s);
+    const lane = map.lane(id, laneOf(id)),
+      p = pointAt(lane.pts, lane.cum, s);
     const car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
-    Object.assign(car, { id: `challenge_${which === "curb" ? "cross" : "oncoming"}_${i + 1}`, color: i ? 0x2b3a55 : 0x9b1e1e, v0: v, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
-      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
-    car.path.start(id, laneOf(id), s, plan); fleet.vehicles.push(car);
+    Object.assign(car, {
+      id: `challenge_${which === "curb" ? "cross" : "oncoming"}_${i + 1}`,
+      color: i ? 0x2b3a55 : 0x9b1e1e,
+      v0: v,
+      driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
+      stopMem: new StopMemory(),
+      path: new NpcPath(map, fleet.random),
+      frozen: 0,
+      waiting: 0,
+    });
+    car.path.start(id, laneOf(id), s, plan);
+    fleet.vehicles.push(car);
     return car.id;
   });
 }
@@ -192,22 +287,32 @@ export function oncomingSites(map) {
   for (const edge of map.edges.values()) {
     const control = edge.control;
     if (control?.type !== "signal" || edge.length < 90 || control.s_line < 75) continue;
-    const left = map.successors(edge.id).find(id => map.classifyTurn(map.turnAngle(edge.id, id)) === "left" && map.edges.get(id).length > 60);
-    const opposite = (map.inn.get(edge.to) || []).find(id => {
+    const left = map
+      .successors(edge.id)
+      .find((id) => map.classifyTurn(map.turnAngle(edge.id, id)) === "left" && map.edges.get(id).length > 60);
+    const opposite = (map.inn.get(edge.to) || []).find((id) => {
       const other = map.edges.get(id);
-      return id !== edge.id && other.control?.type === "signal" && other.control.id === control.id && other.control.s_line > 70
-        && Math.abs(Math.abs(wrapAngle(map.headingIn(id) - map.headingIn(edge.id))) - Math.PI) < 0.35;
+      return (
+        id !== edge.id &&
+        other.control?.type === "signal" &&
+        other.control.id === control.id &&
+        other.control.s_line > 70 &&
+        Math.abs(Math.abs(wrapAngle(map.headingIn(id) - map.headingIn(edge.id))) - Math.PI) < 0.35
+      );
     });
-    const straight = opposite && map.successors(opposite).find(id => map.classifyTurn(map.turnAngle(opposite, id)) === "straight");
+    const straight =
+      opposite && map.successors(opposite).find((id) => map.classifyTurn(map.turnAngle(opposite, id)) === "straight");
     const inter = map.intersections.get(control.id);
     if (!left || !straight || !inter || !oncomingStarts(map, opposite).every(Boolean)) continue;
     let green = true;
     // (a plain green: not an advance green, under which the turn would be protected)
-    for (let t = LEFT_GREEN_S[0]; t <= LEFT_GREEN_S[1] && green; t += 0.5) green = approachPhase(inter, edge.id, t) === "green" && approachPhase(inter, opposite, t) === "green";
+    for (let t = LEFT_GREEN_S[0]; t <= LEFT_GREEN_S[1] && green; t += 0.5)
+      green = approachPhase(inter, edge.id, t) === "green" && approachPhase(inter, opposite, t) === "green";
     if (green) sites.push({ lane: map.lane(edge.id, 0), left, opposite, straight });
   }
   sites.sort((a, b) => String(a.lane.edge).localeCompare(String(b.lane.edge)));
-  leftSites.set(map, sites); return sites;
+  leftSites.set(map, sites);
+  return sites;
 }
 
 // At an all-way stop, with the car 45 m from its line: from the right, a hesitant driver 22 m from
@@ -220,17 +325,30 @@ export function allWayCars(map, site) {
     { id: "challenge_right_1", edge: site.fromRight, back: 22, then: site.across, v: 7, react: 3 },
     { id: "challenge_right_2", edge: site.fromRight, back: 32, then: site.across, v: 7, react: 0.6 },
     { id: "challenge_oncoming_left", edge: site.opposite, back: 55, then: site.left, v: 9, react: 0.6 },
-  ].filter(c => map.edges.get(c.edge).control.s_line - c.back >= 2);
+  ].filter((c) => map.edges.get(c.edge).control.s_line - c.back >= 2);
 }
 export function releaseAllWay(world, fleet, cars) {
   const map = world.map;
   return cars.map(({ id, edge, back, then, v, react }, i) => {
-    const e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), s = e.control.s_line - back;
-    const turn = map.classifyTurn(map.turnAngle(edge, then)), next = map.edges.get(then);
-    const p = pointAt(lane.pts, lane.cum, s), car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
-    Object.assign(car, { id, color: [0x9b1e1e, 0x2b3a55, 0xeeeeea][i % 3], v0: Math.min(11, e.limit || 11), driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react, lcRate: 0 },
-      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
-    car.path.start(edge, lane.idx, s, [[then, turn === "left" ? 0 : Math.min(lane.idx, next.lanes - 1)]]); fleet.vehicles.push(car);
+    const e = map.edges.get(edge),
+      lane = map.lane(edge, e.lanes - 1),
+      s = e.control.s_line - back;
+    const turn = map.classifyTurn(map.turnAngle(edge, then)),
+      next = map.edges.get(then);
+    const p = pointAt(lane.pts, lane.cum, s),
+      car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
+    Object.assign(car, {
+      id,
+      color: [0x9b1e1e, 0x2b3a55, 0xeeeeea][i % 3],
+      v0: Math.min(11, e.limit || 11),
+      driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react, lcRate: 0 },
+      stopMem: new StopMemory(),
+      path: new NpcPath(map, fleet.random),
+      frozen: 0,
+      waiting: 0,
+    });
+    car.path.start(edge, lane.idx, s, [[then, turn === "left" ? 0 : Math.min(lane.idx, next.lanes - 1)]]);
+    fleet.vehicles.push(car);
     return car.id;
   });
 }
@@ -240,12 +358,24 @@ export function releaseAllWay(world, fleet, cars) {
 export function releaseThrough(world, fleet, cars) {
   const map = world.map;
   return cars.map(({ id, start: [edge, s, through], then }, i) => {
-    const e = map.edges.get(edge), lane = map.lane(edge, e.lanes - 1), v = Math.min(10, e.limit || 10);
-    const plan = [...through, then].map(id => [id, map.edges.get(id).lanes - 1]);
-    const p = pointAt(lane.pts, lane.cum, s), car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
-    Object.assign(car, { id, color: [0x9b1e1e, 0x2b3a55][i % 2], v0: v, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.6, lcRate: 0 },
-      stopMem: new StopMemory(), path: new NpcPath(map, fleet.random), frozen: 0, waiting: 0 });
-    car.path.start(edge, lane.idx, s, plan); fleet.vehicles.push(car);
+    const e = map.edges.get(edge),
+      lane = map.lane(edge, e.lanes - 1),
+      v = Math.min(10, e.limit || 10);
+    const plan = [...through, then].map((id) => [id, map.edges.get(id).lanes - 1]);
+    const p = pointAt(lane.pts, lane.cum, s),
+      car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
+    Object.assign(car, {
+      id,
+      color: [0x9b1e1e, 0x2b3a55][i % 2],
+      v0: v,
+      driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.6, lcRate: 0 },
+      stopMem: new StopMemory(),
+      path: new NpcPath(map, fleet.random),
+      frozen: 0,
+      waiting: 0,
+    });
+    car.path.start(edge, lane.idx, s, plan);
+    fleet.vehicles.push(car);
     return car.id;
   });
 }

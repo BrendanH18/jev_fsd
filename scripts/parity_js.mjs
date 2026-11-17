@@ -18,22 +18,49 @@ const key = (p) => `${p[0]},${p[1]}`;
 // A pack of single-lane one-way edges whose lane is the edge's own line, joined where their ends meet.
 function packOf(lines) {
   const nodes = new Map();
-  const node = (p) => { if (!nodes.has(key(p))) nodes.set(key(p), { id: `n${nodes.size}`, x: p[0], y: p[1] }); return nodes.get(key(p)).id; };
+  const node = (p) => {
+    if (!nodes.has(key(p))) nodes.set(key(p), { id: `n${nodes.size}`, x: p[0], y: p[1] });
+    return nodes.get(key(p)).id;
+  };
   const edges = Object.entries(lines).map(([id, pts]) => ({
-    id, from: node(pts[0]), to: node(pts.at(-1)), pts, lanes: 1, lane_offsets: [0], length: length(pts),
-    name: id, oneway: true, limit: 13.9, cls: "residential",
+    id,
+    from: node(pts[0]),
+    to: node(pts.at(-1)),
+    pts,
+    lanes: 1,
+    lane_offsets: [0],
+    length: length(pts),
+    name: id,
+    oneway: true,
+    limit: 13.9,
+    cls: "residential",
   }));
-  return new MapData({ bbox: [0, 0, 1, 1], extent: {}, nodes: [...nodes.values()], edges, lanes: edges.map((e) => ({ edge: e.id, idx: 0, pts: e.pts })), intersections: [], stops: [] });
+  return new MapData({
+    bbox: [0, 0, 1, 1],
+    extent: {},
+    nodes: [...nodes.values()],
+    edges,
+    lanes: edges.map((e) => ({ edge: e.id, idx: 0, pts: e.pts })),
+    intersections: [],
+    stops: [],
+  });
 }
 
-const at = (pts, f) => { const a = pts[0], b = pts.at(-1); return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f }; };
+const at = (pts, f) => {
+  const a = pts[0],
+    b = pts.at(-1);
+  return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f };
+};
 
 const turns = cases.turns.map((c) => {
   // a second way on, straight ahead, so that "out" is never the only successor
-  const end = c.in.at(-1), dir = [end[0] - c.in.at(-2)[0], end[1] - c.in.at(-2)[1]], n = Math.hypot(...dir);
-  const map = packOf({ in: c.in, out: c.out, ahead: [end, [end[0] + dir[0] / n * 50, end[1] + dir[1] / n * 50]] });
+  const end = c.in.at(-1),
+    dir = [end[0] - c.in.at(-2)[0], end[1] - c.in.at(-2)[1]],
+    n = Math.hypot(...dir);
+  const map = packOf({ in: c.in, out: c.out, ahead: [end, [end[0] + (dir[0] / n) * 50, end[1] + (dir[1] / n) * 50]] });
   const angle = map.turnAngle("in", "out");
-  const from = at(c.in, 0.2), to = at(c.out, 0.8);
+  const from = at(c.in, 0.2),
+    to = at(c.out, 0.8);
   const route = browserRoute(map, { ...from, heading: Math.atan2(dir[1], dir[0]) }, to);
   return {
     name: c.name,

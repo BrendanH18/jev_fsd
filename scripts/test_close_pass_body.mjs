@@ -16,26 +16,93 @@ const { Vehicle, BIKE } = await import("../static/js/sim/vehicle.js");
 // A two-way street, one 3.5 m lane each way, 50 km/h (a metre's passing distance); the car's lane
 // centre at y = 0 and a cyclist stopped in it, 2.6 m to the right of it.
 function street() {
-  const e = { id: "in", from: "w", to: "c", pts: [[-200, 1.75], [200, 1.75]], length: 400, lanes: 1, lane_width: 3.5, lane_offsets: [1.75],
-    asphalt: [-3.5, 3.5], parking: [0, 0], cls: "residential", limit: 13.8, oneway: false };
-  const back = { ...e, id: "out", from: "c", to: "w", pts: [[200, 1.75], [-200, 1.75]] };
-  const map = new MapData({ bbox: [0, 0, 1, 1], extent: [-220, -20, 220, 20], nodes: [{ id: "w", x: -200, y: 1.75 }, { id: "c", x: 200, y: 1.75 }],
-    edges: [e, back], lanes: [{ edge: "in", idx: 0, pts: [[-200, 0], [200, 0]] }, { edge: "out", idx: 0, pts: [[200, 3.5], [-200, 3.5]] }],
-    intersections: [], stops: [], buildings: [] });
+  const e = {
+    id: "in",
+    from: "w",
+    to: "c",
+    pts: [
+      [-200, 1.75],
+      [200, 1.75],
+    ],
+    length: 400,
+    lanes: 1,
+    lane_width: 3.5,
+    lane_offsets: [1.75],
+    asphalt: [-3.5, 3.5],
+    parking: [0, 0],
+    cls: "residential",
+    limit: 13.8,
+    oneway: false,
+  };
+  const back = {
+    ...e,
+    id: "out",
+    from: "c",
+    to: "w",
+    pts: [
+      [200, 1.75],
+      [-200, 1.75],
+    ],
+  };
+  const map = new MapData({
+    bbox: [0, 0, 1, 1],
+    extent: [-220, -20, 220, 20],
+    nodes: [
+      { id: "w", x: -200, y: 1.75 },
+      { id: "c", x: 200, y: 1.75 },
+    ],
+    edges: [e, back],
+    lanes: [
+      {
+        edge: "in",
+        idx: 0,
+        pts: [
+          [-200, 0],
+          [200, 0],
+        ],
+      },
+      {
+        edge: "out",
+        idx: 0,
+        pts: [
+          [200, 3.5],
+          [-200, 3.5],
+        ],
+      },
+    ],
+    intersections: [],
+    stops: [],
+    buildings: [],
+  });
   const world = new World(map, { parked: 0, pedestrians: 0, passCyclists: true });
-  world.route = new Route({ id: "r", polyline: [[-200, 0], [200, 0]], edges: ["in"], turns: [] }, map);
+  world.route = new Route(
+    {
+      id: "r",
+      polyline: [
+        [-200, 0],
+        [200, 0],
+      ],
+      edges: ["in"],
+      turns: [],
+    },
+    map,
+  );
   world.npcs.push(Object.assign(new Vehicle(0, -2.6, 0, 0, BIKE), { id: "bike_t", kind: "bike" }));
   return world;
 }
 // The car going by on a straight line at heading `-angle` (toward the cyclist's side), its rear axle `y0`
 // from the lane's centre where it is level with the cyclist: the close passes counted.
 function pass(angle, y0) {
-  const world = street(), road = { limit: 13.8 };
+  const world = street(),
+    road = { limit: 13.8 };
   for (let d = -16; d <= 16; d += 0.1) {
     Object.assign(world.ego, { x: d * Math.cos(angle), y: y0 - d * Math.sin(angle), psi: -angle, v: 5 });
     world.auditCyclistPasses(road);
   }
-  return { count: world.violations.close_passes || 0, clearance: world.events.find((e) => e.type === "close_pass")?.clearance_m ?? null };
+  return {
+    count: world.violations.close_passes || 0,
+    clearance: world.events.find((e) => e.type === "close_pass")?.clearance_m ?? null,
+  };
 }
 
 const parallel = pass(0, -0.5);

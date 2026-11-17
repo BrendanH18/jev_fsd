@@ -22,7 +22,8 @@ export const toThree = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 // accumulates frames to average that noise away, so partly shadowed surfaces (the dappled inside
 // of every tree crown above all) wore a fixed screen-space dot pattern that crawled as the camera
 // moved. A fixed 3x3 tent of hardware-filtered compares is about as soft and has no noise.
-const NOISY_PCF = /float phi = interleavedGradientNoise\( gl_FragCoord\.xy \) \* PI2;\s*shadow = \(\s*(?:texture\( shadowMap, vec3\( shadowCoord\.xy \+ vogelDiskSample\( \d, 5, phi \) \* radius, shadowCoord\.z \) \)\s*\+?\s*){5}\) \* 0\.2;/;
+const NOISY_PCF =
+  /float phi = interleavedGradientNoise\( gl_FragCoord\.xy \) \* PI2;\s*shadow = \(\s*(?:texture\( shadowMap, vec3\( shadowCoord\.xy \+ vogelDiskSample\( \d, 5, phi \) \* radius, shadowCoord\.z \) \)\s*\+?\s*){5}\) \* 0\.2;/;
 export const STABLE_PCF = `vec2 tap = texelSize * max( shadowRadius * 0.5, 0.5 );
 				shadow = 0.0;
 				for ( int sx = - 1; sx <= 1; sx ++ ) for ( int sy = - 1; sy <= 1; sy ++ ) {
@@ -36,7 +37,19 @@ if (NOISY_PCF.test(THREE.ShaderChunk.shadowmap_pars_fragment)) {
   console.warn("scene: PCF shadow chunk changed; keeping Three's default filter");
 }
 
-export const LAYER = { sky: -100, grass: -50, water: -46, sidewalk: -40, curb: -38, asphalt: -30, patch: -28, islandCurb: -27, island: -26, marking: -20, pool: -10 };
+export const LAYER = {
+  sky: -100,
+  grass: -50,
+  water: -46,
+  sidewalk: -40,
+  curb: -38,
+  asphalt: -30,
+  patch: -28,
+  islandCurb: -27,
+  island: -26,
+  marking: -20,
+  pool: -10,
+};
 
 // Only the base plane writes depth. Color layers use a small raster depth bias to pass the test
 // against that plane, retaining depth tests against other geometry without stacking depth errors.
@@ -56,7 +69,7 @@ export function groundLayer(mesh, order) {
   return mesh;
 }
 
-const SHADOW_HALF = 70;          // meters of shadow coverage around the car
+const SHADOW_HALF = 70; // meters of shadow coverage around the car
 
 function skyMaterial() {
   return new THREE.ShaderMaterial({
@@ -187,7 +200,14 @@ export class SceneView {
     this.scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff0dc, 3.0);
     sun.castShadow = true;
-    Object.assign(sun.shadow.camera, { left: -SHADOW_HALF, right: SHADOW_HALF, top: SHADOW_HALF, bottom: -SHADOW_HALF, near: 1, far: 800 });
+    Object.assign(sun.shadow.camera, {
+      left: -SHADOW_HALF,
+      right: SHADOW_HALF,
+      top: SHADOW_HALF,
+      bottom: -SHADOW_HALF,
+      near: 1,
+      far: 800,
+    });
     sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.04;
@@ -198,7 +218,14 @@ export class SceneView {
 
     const [x0, y0, x1, y1] = extent;
     const size = Math.max(x1 - x0, y1 - y0) + 6000;
-    const grassMat = snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, metalness: 0 }), 0.06, 0.3), "grass");
+    const grassMat = snowable(
+      withMacroVariation(
+        new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, metalness: 0 }),
+        0.06,
+        0.3,
+      ),
+      "grass",
+    );
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), grassMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((x0 + x1) / 2, 0, -(y0 + y1) / 2);
@@ -221,11 +248,17 @@ export class SceneView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
     if (this.sun.shadow.mapSize.x !== q.shadowMap) {
       this.sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
-      if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
+      if (this.sun.shadow.map) {
+        this.sun.shadow.map.dispose();
+        this.sun.shadow.map = null;
+      }
     }
     if (q.post && !this.post) this.post = new PostFX(this.renderer, this.scene, this.camera, { ao: q.ao });
     if (q.post && this.post) this.post.setAO(q.ao);
-    if (!q.post && this.post) { this.post.dispose(); this.post = null; }
+    if (!q.post && this.post) {
+      this.post.dispose();
+      this.post = null;
+    }
     this.reflection.enabled = q.post;
     this.reflection.resolutionScale = q.reflectionScale;
     this.applyCoverage();
@@ -239,8 +272,12 @@ export class SceneView {
   setAtmosphere(a) {
     this.atmosphere = a;
     const u = this.sky.material.uniforms;
-    u.zenith.value.copy(a.sky.zenith); u.horizon.value.copy(a.sky.horizon); u.groundColor.value.copy(a.sky.ground);
-    u.glowColor.value.copy(a.sky.glow); u.sunColor.value.copy(a.sky.sun); u.sunDir.value.copy(a.sun.dir);
+    u.zenith.value.copy(a.sky.zenith);
+    u.horizon.value.copy(a.sky.horizon);
+    u.groundColor.value.copy(a.sky.ground);
+    u.glowColor.value.copy(a.sky.glow);
+    u.sunColor.value.copy(a.sky.sun);
+    u.sunDir.value.copy(a.sun.dir);
     u.sunGlow.value = a.sunGlow;
     u.stars.value = a.stars;
     u.cloudCover.value = a.clouds.cover;
@@ -270,7 +307,8 @@ export class SceneView {
 
   // Exposure in stops and grade offsets chosen in photo mode, layered on the current atmosphere.
   setLook(changes = {}) {
-    for (const [key, value] of Object.entries(changes)) if (key in this.look && Number.isFinite(value)) this.look[key] = value;
+    for (const [key, value] of Object.entries(changes))
+      if (key in this.look && Number.isFinite(value)) this.look[key] = value;
     this.applyLook();
     return { ...this.look };
   }
@@ -294,7 +332,8 @@ export class SceneView {
   buildEnvironment() {
     const envScene = new THREE.Scene();
     const mat = skyMaterial();
-    for (const [k, v] of Object.entries(this.sky.material.uniforms)) mat.uniforms[k].value = v.value.clone ? v.value.clone() : v.value;
+    for (const [k, v] of Object.entries(this.sky.material.uniforms))
+      mat.uniforms[k].value = v.value.clone ? v.value.clone() : v.value;
     mat.uniforms.stars.value = 0;
     mat.depthTest = true;
     envScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), mat));
@@ -328,7 +367,8 @@ export class SceneView {
   }
 
   resize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = window.innerWidth,
+      h = window.innerHeight;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -344,14 +384,18 @@ export class SceneView {
 
   setCamera(mode) {
     this.mode = mode;
-    this.camPos.set(0, 0, 0);   // snap rather than swoop between very different views
+    this.camPos.set(0, 0, 0); // snap rather than swoop between very different views
     if (mode === "cinematic") this.cinematic.reset();
     return this.mode;
   }
 
   updateCamera(ego, dt) {
-    const fx = Math.cos(ego.psi), fy = Math.sin(ego.psi);
-    let target, look, up = new THREE.Vector3(0, 1, 0), lerp = 1 - Math.pow(0.002, dt);
+    const fx = Math.cos(ego.psi),
+      fy = Math.sin(ego.psi);
+    let target,
+      look,
+      up = new THREE.Vector3(0, 1, 0),
+      lerp = 1 - Math.pow(0.002, dt);
     this.camera.fov = this.mode === "hood" ? 64 : 58;
     if (this.mode === "cinematic") {
       const shot = this.cinematic.pose(ego, dt, this.vehicleHeight);
@@ -380,18 +424,29 @@ export class SceneView {
       look = toThree(ego.x + fx * 30, ego.y + fy * 30, hood.y - 0.42);
       if (this.cameraMotion !== false) {
         const smooth = 1 - Math.exp(-8 * dt);
-        this.cameraPitch = (this.cameraPitch || 0) + (THREE.MathUtils.clamp((ego.ax || 0) * 0.006, -0.035, 0.025) - (this.cameraPitch || 0)) * smooth;
-        this.cameraRoll = (this.cameraRoll || 0) + (THREE.MathUtils.clamp((ego.latAccel || 0) * 0.005, -0.03, 0.03) - (this.cameraRoll || 0)) * smooth;
+        this.cameraPitch =
+          (this.cameraPitch || 0) +
+          (THREE.MathUtils.clamp((ego.ax || 0) * 0.006, -0.035, 0.025) - (this.cameraPitch || 0)) * smooth;
+        this.cameraRoll =
+          (this.cameraRoll || 0) +
+          (THREE.MathUtils.clamp((ego.latAccel || 0) * 0.005, -0.03, 0.03) - (this.cameraRoll || 0)) * smooth;
         look.y += this.cameraPitch * 30;
         up.set(Math.sin(ego.psi) * this.cameraRoll, 1, Math.cos(ego.psi) * this.cameraRoll).normalize();
       }
       lerp = 1;
     } else {
       const extra = Math.max(0, (ego.spec?.length || 4.5) - 4.5);
-      target = toThree(ego.x - fx * (8 + extra), ego.y - fy * (8 + extra), 3.1 + Math.max(0, (this.vehicleHeight || 1.45) - 1.45));
+      target = toThree(
+        ego.x - fx * (8 + extra),
+        ego.y - fy * (8 + extra),
+        3.1 + Math.max(0, (this.vehicleHeight || 1.45) - 1.45),
+      );
       look = toThree(ego.x + fx * 8, ego.y + fy * 8, 1.1);
     }
-    if (this.camPos.lengthSq() === 0) { this.camPos.copy(target); this.camLook.copy(look); }
+    if (this.camPos.lengthSq() === 0) {
+      this.camPos.copy(target);
+      this.camLook.copy(look);
+    }
     this.camPos.lerp(target, lerp);
     this.camLook.lerp(look, lerp);
     this.camera.position.copy(this.camPos);
@@ -425,8 +480,11 @@ export class SceneView {
   }
 
   addScenery(object) {
-    object.traverse(child => {
-      if (child.isLOD) { child.autoUpdate = false; this.sceneryLODs.push(child); }
+    object.traverse((child) => {
+      if (child.isLOD) {
+        child.autoUpdate = false;
+        this.sceneryLODs.push(child);
+      }
     });
     this.scene.add(object);
     this.applyCoverage();
@@ -441,7 +499,10 @@ export class SceneView {
     this.reflection?.setSamples(this.post ? this.post.sceneRT.samples : 0);
     this.scene.traverse((o) => {
       const m = o.material;
-      if (m?.userData?.coverageEdges && m.alphaToCoverage !== on) { m.alphaToCoverage = on; m.needsUpdate = true; }
+      if (m?.userData?.coverageEdges && m.alphaToCoverage !== on) {
+        m.alphaToCoverage = on;
+        m.needsUpdate = true;
+      }
     });
   }
 }

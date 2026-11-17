@@ -16,11 +16,30 @@ import { sidewalkOffset, GUTTER, CURB } from "../../map/streets.js";
 import { Pedestrian } from "../../sim/pedestrians.js";
 import { puddleOnLane } from "../../sim/puddles.js";
 
-export const challenge = { id: "dont-splash", title: "Don't splash", map: "mount_pleasant", weather: "rain", time: "afternoon", seed: 59042, icon: "☂", difficulty: "Courtesy", hazard: "puddles", puddles: true, street: "Main Street",
-  description: "Rain on Main Street in Mount Pleasant. You're in the kerb lane, where the gutter has flooded: people wait at the bus stop right beside one puddle, someone is walking up the sidewalk beside a deeper one, and further on a puddle has nobody near it at all.", lesson: "In the rain, watch for puddles by the kerb and for people beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down until you're through. Splashing a pedestrian is careless driving. A puddle with nobody near is just water." };
+export const challenge = {
+  id: "dont-splash",
+  title: "Don't splash",
+  map: "mount_pleasant",
+  weather: "rain",
+  time: "afternoon",
+  seed: 59042,
+  icon: "☂",
+  difficulty: "Courtesy",
+  hazard: "puddles",
+  puddles: true,
+  street: "Main Street",
+  description:
+    "Rain on Main Street in Mount Pleasant. You're in the kerb lane, where the gutter has flooded: people wait at the bus stop right beside one puddle, someone is walking up the sidewalk beside a deeper one, and further on a puddle has nobody near it at all.",
+  lesson:
+    "In the rain, watch for puddles by the kerb and for people beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down until you're through. Splashing a pedestrian is careless driving. A puddle with nobody near is just water.",
+};
 
 // The route, edge by edge (the kerb lane of each), where it starts and ends, and the speed it starts at.
-const CHAIN = ["e708", "e666"], KERB_LANE = 2, START_S = 4, START_MPS = 11, GOAL_S = 88;
+const CHAIN = ["e708", "e666"],
+  KERB_LANE = 2,
+  START_S = 4,
+  START_MPS = 11,
+  GOAL_S = 88;
 // Each puddle: its edge, metres along the kerb lane, how far it reaches out from the kerb, half its
 // length, and its depth.
 export const SPLASH_PUDDLES = [
@@ -30,38 +49,97 @@ export const SPLASH_PUDDLES = [
 ];
 // The people waiting at the bus stop (metres along e708, and out from the kerb face), and the one
 // walking up the sidewalk on e666 (from, to: metres along it) at WALK_MPS.
-const WAITING = [[40, 0.8], [44, 1.1], [48.5, 0.7]], WALK = { edge: "e666", from: 24, to: 70 }, WALK_MPS = 1.3;
+const WAITING = [
+    [40, 0.8],
+    [44, 1.1],
+    [48.5, 0.7],
+  ],
+  WALK = { edge: "e666", from: 24, to: 70 },
+  WALK_MPS = 1.3;
 
 export function puddleScenario(map, challenge) {
   const e = map.edges.get(CHAIN[0]);
-  if (e?.name !== challenge.street || e.lanes !== 3 || !CHAIN.every((id) => map.edges.get(id)?.lanes === 3)) throw new Error("Don't splash needs Vancouver's Main Street in Mount Pleasant.");
-  const lanes = CHAIN.map((id) => map.lane(id, KERB_LANE)), route = routeFromLanes(map, lanes, START_S, GOAL_S);
-  const l = lanes[0], p = pointAt(l.pts, l.cum, START_S);
-  return { id: challenge.id, start: { edge: CHAIN[0], lane: KERB_LANE, s: START_S, x: p[0], y: p[1], psi: headingAt(l.pts, l.cum, START_S) },
-    route, goal: route.polyline.at(-1), traffic_seed: challenge.seed, puddles: { lane: KERB_LANE, list: SPLASH_PUDDLES },
-    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 0 } };
+  if (e?.name !== challenge.street || e.lanes !== 3 || !CHAIN.every((id) => map.edges.get(id)?.lanes === 3))
+    throw new Error("Don't splash needs Vancouver's Main Street in Mount Pleasant.");
+  const lanes = CHAIN.map((id) => map.lane(id, KERB_LANE)),
+    route = routeFromLanes(map, lanes, START_S, GOAL_S);
+  const l = lanes[0],
+    p = pointAt(l.pts, l.cum, START_S);
+  return {
+    id: challenge.id,
+    start: { edge: CHAIN[0], lane: KERB_LANE, s: START_S, x: p[0], y: p[1], psi: headingAt(l.pts, l.cum, START_S) },
+    route,
+    goal: route.polyline.at(-1),
+    traffic_seed: challenge.seed,
+    puddles: { lane: KERB_LANE, list: SPLASH_PUDDLES },
+    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 0 },
+  };
 }
 
 // A point `out` metres right of edge `e`'s centreline, `s` along it.
 function sidePoint(e, s, out) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * out, p[1] - Math.cos(h) * out];
 }
 
 // The puddles, in place of the world's own; the people at the bus stop; and the one walking.
 export function installPuddles(world, scenario) {
-  const map = world.map, { lane, list } = scenario.puddles;
-  const placed = list.map((q, i) => puddleOnLane(map, q.edge, lane, q.s, { id: `challenge_puddle_${i + 1}`, width: q.width, a: q.a, depth: q.depth, shape: 59042 + i * 7919 }));
+  const map = world.map,
+    { lane, list } = scenario.puddles;
+  const placed = list.map((q, i) =>
+    puddleOnLane(map, q.edge, lane, q.s, {
+      id: `challenge_puddle_${i + 1}`,
+      width: q.width,
+      a: q.a,
+      depth: q.depth,
+      shape: 59042 + i * 7919,
+    }),
+  );
   world.puddles.setList(placed);
-  const stop = map.edges.get(CHAIN[0]), kerb = stop.asphalt[1] + GUTTER + CURB;
+  const stop = map.edges.get(CHAIN[0]),
+    kerb = stop.asphalt[1] + GUTTER + CURB;
   WAITING.forEach(([s, out], i) => {
-    const [x, y] = sidePoint(stop, s, kerb + out), h = headingAt(stop.pts, stop.cum, s);
-    world.crowd.list.push(new Pedestrian({ id: `challenge_waiting_${i + 1}`, x, y, psi: h + Math.PI / 2 + (i - 1) * 0.5, v: 0, speed: 1.2, path: [], crossing: null, waiting: 0, phase: i * 1.7, look: 59042 + i * 31, held: true }));
+    const [x, y] = sidePoint(stop, s, kerb + out),
+      h = headingAt(stop.pts, stop.cum, s);
+    world.crowd.list.push(
+      new Pedestrian({
+        id: `challenge_waiting_${i + 1}`,
+        x,
+        y,
+        psi: h + Math.PI / 2 + (i - 1) * 0.5,
+        v: 0,
+        speed: 1.2,
+        path: [],
+        crossing: null,
+        waiting: 0,
+        phase: i * 1.7,
+        look: 59042 + i * 31,
+        held: true,
+      }),
+    );
   });
-  const e = map.edges.get(WALK.edge), walk = sidewalkOffset(e, 1), path = [];
+  const e = map.edges.get(WALK.edge),
+    walk = sidewalkOffset(e, 1),
+    path = [];
   for (let s = WALK.from + 4; s <= WALK.to; s += 4) path.push({ p: sidePoint(e, s, walk) });
   const [x, y] = sidePoint(e, WALK.from, walk);
-  world.crowd.list.push(new Pedestrian({ id: "challenge_walker", x, y, psi: headingAt(e.pts, e.cum, WALK.from), v: 0, speed: WALK_MPS, path, crossing: null, waiting: 0, phase: 0, look: 59042 + 97, home: true }));
+  world.crowd.list.push(
+    new Pedestrian({
+      id: "challenge_walker",
+      x,
+      y,
+      psi: headingAt(e.pts, e.cum, WALK.from),
+      v: 0,
+      speed: WALK_MPS,
+      path,
+      crossing: null,
+      waiting: 0,
+      phase: 0,
+      look: 59042 + 97,
+      home: true,
+    }),
+  );
   world.ego.v = START_MPS;
   Object.assign(world.challenge, { at: [placed[0].x, placed[0].y], puddleIds: placed.map((h) => h.id), puddles: true });
 }

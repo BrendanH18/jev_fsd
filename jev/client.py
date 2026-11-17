@@ -24,12 +24,13 @@ from .config import Settings
 
 try:  # the official SDK needs Python >= 3.10
     import typesafe_sdk
-    from typesafe_sdk import (RetryPolicy, TypeSafeAPIConnectionError, TypeSafeAPIError, TypeSafeClient,
-                              TypeSafeError)
+    from typesafe_sdk import RetryPolicy, TypeSafeAPIConnectionError, TypeSafeAPIError, TypeSafeClient, TypeSafeError
+
     SDK_VERSION: Optional[str] = getattr(typesafe_sdk, "__version__", None)
     if SDK_VERSION is None:
         try:
             from importlib.metadata import version as _pkg_version
+
             SDK_VERSION = _pkg_version("typesafe-sdk")
         except Exception:  # noqa: BLE001
             SDK_VERSION = "unknown"
@@ -106,15 +107,18 @@ class SpendGuard:
                 raise JevError(
                     "This server run has spent its $%.2f budget (%d live calls). Restart it with "
                     "JEV_FSD_BUDGET_USD=<amount> to allow more." % (self.budget_usd, self.live_calls),
-                    status=402)
+                    status=402,
+                )
             if not rate:
                 return
             now = time.monotonic()
             while self._times and self._times[0] < now - 60:
                 self._times.popleft()
             if self.rpm > 0 and len(self._times) >= self.rpm:
-                raise JevError("Local rate limit: more than %d live calls in the last minute. Wait a moment."
-                               % self.rpm, status=429)
+                raise JevError(
+                    "Local rate limit: more than %d live calls in the last minute. Wait a moment." % self.rpm,
+                    status=429,
+                )
             self._times.append(now)
 
     def record(self, result) -> None:
@@ -126,13 +130,24 @@ class SpendGuard:
 
     def snapshot(self) -> dict:
         with self._lock:
-            return {"budget_usd": self.budget_usd, "spent_usd": self.spent_usd, "live_calls": self.live_calls,
-                    "input_tokens": self.input_tokens, "output_tokens": self.output_tokens, "rpm": self.rpm}
+            return {
+                "budget_usd": self.budget_usd,
+                "spent_usd": self.spent_usd,
+                "live_calls": self.live_calls,
+                "input_tokens": self.input_tokens,
+                "output_tokens": self.output_tokens,
+                "rpm": self.rpm,
+            }
 
 
 class JevClient:
-    def __init__(self, settings: Optional[Settings] = None, guard: Optional[SpendGuard] = None,
-                 api_key: Optional[str] = None, timeout: float = 30.0):
+    def __init__(
+        self,
+        settings: Optional[Settings] = None,
+        guard: Optional[SpendGuard] = None,
+        api_key: Optional[str] = None,
+        timeout: float = 30.0,
+    ):
         self.settings = settings or Settings()
         self.timeout = timeout
         self._memory_key = api_key
@@ -180,8 +195,11 @@ class JevClient:
     def system_one(self, state: Any, questions: Dict[str, dict]) -> JevResult:
         payload = {"state": state, "model": self.model, "questions": questions}
         if not self.api_key:
-            raise JevError("No TypeSafe API key yet. Paste one in the app (Decision ▾ > Connect a decision "
-                           "model > TypeSafe), or add TYPESAFE_API_KEY to .env.", status=401)
+            raise JevError(
+                "No TypeSafe API key yet. Paste one in the app (Decision ▾ > Connect a decision "
+                "model > TypeSafe), or add TYPESAFE_API_KEY to .env.",
+                status=401,
+            )
         self.guard.check()
         started = time.perf_counter()
         response = self._post_system_one(payload)
@@ -211,9 +229,13 @@ class JevClient:
         with self._lock:
             key = self.api_key
             if self._sdk is None or self._sdk_key != key:
-                self._sdk = TypeSafeClient(api_key=key, model=self.model, base_url=self.base_url,
-                                           timeout=self.timeout,
-                                           retry=RetryPolicy(max_retries=3, timeout=self.timeout))
+                self._sdk = TypeSafeClient(
+                    api_key=key,
+                    model=self.model,
+                    base_url=self.base_url,
+                    timeout=self.timeout,
+                    retry=RetryPolicy(max_retries=3, timeout=self.timeout),
+                )
                 self._sdk_key = key
             return self._sdk
 
@@ -237,9 +259,15 @@ class JevClient:
         while True:
             attempt += 1
             req = urllib.request.Request(
-                self.base_url + path, data=data, method=method,
-                headers={"Authorization": "Bearer " + (self.api_key or ""), "Content-Type": "application/json",
-                         "User-Agent": "jev-fsd/0.2.0 (stdlib)"})
+                self.base_url + path,
+                data=data,
+                method=method,
+                headers={
+                    "Authorization": "Bearer " + (self.api_key or ""),
+                    "Content-Type": "application/json",
+                    "User-Agent": "jev-fsd/0.2.0 (stdlib)",
+                },
+            )
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     return json.loads(resp.read().decode()), attempt
@@ -306,6 +334,5 @@ def chosen(answer: dict) -> tuple:
 def ranked(answer: dict, limit: int = 3) -> list:
     probs = answer.get("probabilities", {})
     return [
-        {"value": k, "prob": float(v)}
-        for k, v in sorted(probs.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+        {"value": k, "prob": float(v)} for k, v in sorted(probs.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     ]

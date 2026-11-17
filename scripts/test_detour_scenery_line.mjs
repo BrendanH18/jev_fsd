@@ -18,14 +18,66 @@ const { lateralAt } = await import("../static/js/sim/controller.js");
 // all of it in effect where the car is; `scenery`: whether something stands in the lane ahead.
 function rig(lateral, shift, { scenery = true, line = false } = {}) {
   // a two-way street with two lanes each way: the car's lane centre 1.75 m right of the centreline
-  const street = { id: "street", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300, cls: "secondary", lanes: 2,
-    lane_offsets: [1.75, 5.25], lane_width: 3.5, asphalt: [-7, 7], parking: [0, 0], limit: 13.9 };
-  const map = new MapData({ extent: [-10, -20, 310, 20], nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }],
-    edges: [street], lanes: [{ edge: "street", idx: 0, pts: [[0, -1.75], [300, -1.75]] }, { edge: "street", idx: 1, pts: [[0, -5.25], [300, -5.25]] }],
-    intersections: [], stops: [], buildings: [] });
+  const street = {
+    id: "street",
+    from: "a",
+    to: "b",
+    pts: [
+      [0, 0],
+      [300, 0],
+    ],
+    length: 300,
+    cls: "secondary",
+    lanes: 2,
+    lane_offsets: [1.75, 5.25],
+    lane_width: 3.5,
+    asphalt: [-7, 7],
+    parking: [0, 0],
+    limit: 13.9,
+  };
+  const map = new MapData({
+    extent: [-10, -20, 310, 20],
+    nodes: [
+      { id: "a", x: 0, y: 0 },
+      { id: "b", x: 300, y: 0 },
+    ],
+    edges: [street],
+    lanes: [
+      {
+        edge: "street",
+        idx: 0,
+        pts: [
+          [0, -1.75],
+          [300, -1.75],
+        ],
+      },
+      {
+        edge: "street",
+        idx: 1,
+        pts: [
+          [0, -5.25],
+          [300, -5.25],
+        ],
+      },
+    ],
+    intersections: [],
+    stops: [],
+    buildings: [],
+  });
   const world = new World(map, { parked: 0, pedestrians: 0 });
   Object.assign(world.ego, { x: 100, y: -1.75 - lateral, psi: 0, v: 7 });
-  world.route = new Route({ id: "straight", polyline: [[0, -1.75], [300, -1.75]], edges: ["street"], turns: [] }, map);
+  world.route = new Route(
+    {
+      id: "straight",
+      polyline: [
+        [0, -1.75],
+        [300, -1.75],
+      ],
+      edges: ["street"],
+      turns: [],
+    },
+    map,
+  );
   // (a building's corner over the lane ahead, as far as the candidates can tell)
   if (scenery) world.staticObstacles.touching = () => ({ id: "corner" });
   const snap = buildSnapshot(world);
@@ -36,9 +88,15 @@ function rig(lateral, shift, { scenery = true, line = false } = {}) {
   // Where each law steers the car now, metres right of the route's lane centre.
   const aim = (id) => {
     const c = list.find((k) => k.id === id);
-    return c ? Math.round(lateralAt({ ...c.law, s0: snap.routeProj.s }, snap.routeProj.s, world.route) * 100) / 100 : null;
+    return c
+      ? Math.round(lateralAt({ ...c.law, s0: snap.routeProj.s }, snap.routeProj.s, world.route) * 100) / 100
+      : null;
   };
-  return { brake: aim("hard_brake"), stop: aim("stop_at_line"), laneLateral: Math.round(snap.lane.lateral * 100) / 100 };
+  return {
+    brake: aim("hard_brake"),
+    stop: aim("stop_at_line"),
+    laneLateral: Math.round(snap.lane.lateral * 100) / 100,
+  };
 }
 
 // A metre left round a work zone, right on its detour line: brake and stop on that line, not a metre

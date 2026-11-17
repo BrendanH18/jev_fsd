@@ -11,11 +11,15 @@ const CLOSURE_COACH = "Road closed ahead. Follow the detour; never drive past th
 // What the coach says while a tailgater is close behind (sim/tailgaters.js).
 const TAILGATER_COACH = "Someone’s on your bumper. Leave more room ahead, brake early and gently, and let them by.";
 // What the coach says coming up too fast to a puddle at the kerb with someone beside it (sim/puddles.js).
-const PUDDLE_COACH = "Puddle by the kerb, people beside it. Ease left in your lane, or slow right down, so you don’t splash them.";
+const PUDDLE_COACH =
+  "Puddle by the kerb, people beside it. Ease left in your lane, or slow right down, so you don’t splash them.";
 // And while waiting behind a car parallel parking ahead (sim/parkers.js).
 const PARKER_COACH = "The car ahead is parallel parking. Stay well back, leave it room to reverse in, and wait.";
 // What the coach says coming up to a police officer directing traffic (sim/traffic-officer.js).
-const OFFICER_COACH = { stop: "The officer is holding your way. Stop at the line, even on a green.", go: "The officer is waving you through. Go, even on a red, and yield to anyone in the junction." };
+const OFFICER_COACH = {
+  stop: "The officer is holding your way. Stop at the line, even on a green.",
+  go: "The officer is waving you through. Go, even on a red, and yield to anyone in the junction.",
+};
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
 export const SPEED_GRACE_MPS = 5 / 3.6;
@@ -25,31 +29,53 @@ const round = (n, digits = 1) => Math.round(n * 10 ** digits) / 10 ** digits;
 // is following it too closely (sim/snow-plow.js).
 const PLOW_CLOSE_SLACK_M = 10;
 const FOLLOWING_RECOVERY_S = 5;
-const COUNTERS = { collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield" };
+const COUNTERS = {
+  collisions: "Collision",
+  red_lights_run: "Red light",
+  stop_signs_run: "Missed stop",
+  failed_to_yield: "Failed to yield",
+};
 
 export class DriveScore {
   constructor(world, { title = "Free drive", map = "", driver = "manual", route = null } = {}) {
-    this.title = title; this.map = map; this.driver = driver; this.route = route;
-    this.baseline = { ...world.violations }; this.lastCounters = { ...world.violations };
+    this.title = title;
+    this.map = map;
+    this.driver = driver;
+    this.route = route;
+    this.baseline = { ...world.violations };
+    this.lastCounters = { ...world.violations };
     this.amberLightsSeen = false;
-    this.glareSeconds = 0; this.highBeamsSeen = false;
+    this.glareSeconds = 0;
+    this.highBeamsSeen = false;
     // (too fast to stop within sight while driving into a low sun: sim/sun-glare.js)
-    this.glareSpeeding = 0; this.sunGlareSeen = false;
-    this.elapsed = 0; this.distance = 0; this.moving = 0; this.speeding = 0;
+    this.glareSpeeding = 0;
+    this.sunGlareSeen = false;
+    this.elapsed = 0;
+    this.distance = 0;
+    this.moving = 0;
+    this.speeding = 0;
     // (of which in a school or playground zone in effect, and the zone it was last counted in)
-    this.zoneSpeeding = 0; this.zoneCounted = null;
+    this.zoneSpeeding = 0;
+    this.zoneCounted = null;
     // (passing a vehicle stopped at the roadside with its lights flashing: too fast, and without
     // moving over, and the vehicles each was counted for)
-    this.roadsideSpeeding = 0; this.noMoveOver = 0; this.roadsideCounted = new Set(); this.moveOverCounted = new Set();
+    this.roadsideSpeeding = 0;
+    this.noMoveOver = 0;
+    this.roadsideCounted = new Set();
+    this.moveOverCounted = new Set();
     // (the vehicles the car had room to move over for, on the way up to them)
     this.moveOverRoom = new Set();
     // (standing on the tracks at a level crossing, sim/rail.js: how often, and where it last was)
-    this.onTracks = 0; this.tracksCounted = null;
+    this.onTracks = 0;
+    this.tracksCounted = null;
     // (standing in a signal's junction with no room past it, sim/junction-box.js: how often, and where)
-    this.blockedJunctions = 0; this.boxCounted = null;
+    this.blockedJunctions = 0;
+    this.boxCounted = null;
     // (through a work zone, sim/work-zone.js: too fast, the zones that was counted for, and going past
     // a flagger's STOP paddle, which the audit counts as a missed stop)
-    this.workZoneSpeeding = 0; this.workZoneCounted = new Set(); this.flaggerStops = 0;
+    this.workZoneSpeeding = 0;
+    this.workZoneCounted = new Set();
+    this.flaggerStops = 0;
     // (a missed stop, or going out of turn, at a signal whose lights are out: sim/outage.js)
     this.darkSignals = 0;
     // (going round a double-parked van into the way of oncoming traffic, which the audit counts as a
@@ -57,110 +83,176 @@ export class DriveScore {
     this.vanCutoffs = 0;
     // (parking at the destination, sim/parallel-park.js: how it ended, and the kerb strikes on the way in
     // or out; reported only for a drive with parking)
-    this.parking = null; this.kerbStrikes = 0;
+    this.parking = null;
+    this.kerbStrikes = 0;
     // (with hidden hazards on, sim/hidden-hazards.js: beside cars parked at the kerb that hide the
     // sidewalk, faster than the car could stop from for someone stepping out, and the streets (each
     // side of each) that was counted for; reported only for a drive with hidden hazards)
-    this.hazards = !!world.hazards; this.blindSpeeding = 0; this.blindCounted = new Set();
+    this.hazards = !!world.hazards;
+    this.blindSpeeding = 0;
+    this.blindCounted = new Set();
     // (and with hidden traffic, sim/hidden-traffic.js: failures to yield to a vehicle the car could
     // not see as it pulled out, hidden behind another)
     this.hiddenCutoffs = 0;
     // (with a snow plow at work, sim/snow-plow.js: time following one too closely, passing one on the
     // right, and moving back in front of one too soon after passing it on the left; reported only for
     // a drive a plow worked in)
-    this.plows = false; this.plowClose = 0; this.plowCounted = null; this.plowRightPasses = 0; this.plowCutIns = 0;
+    this.plows = false;
+    this.plowClose = 0;
+    this.plowCounted = null;
+    this.plowRightPasses = 0;
+    this.plowCutIns = 0;
     // (with a lane closure, sim/lane-closure.js: merging out of turn, not letting someone in, and merging
     // early; reported only for a drive a closure stood in)
-    this.closures = false; this.mergeCutIns = 0; this.mergeTurnsTaken = 0; this.earlyMerges = 0;
+    this.closures = false;
+    this.mergeCutIns = 0;
+    this.mergeTurnsTaken = 0;
+    this.earlyMerges = 0;
     // (with traffic passing cyclists, sim/cyclist-pass.js: passing one closer than the minimum passing
     // distance, and into the way of oncoming traffic; reported only for such a drive)
-    this.cyclists = !!world.passCyclists; this.closePasses = 0; this.cyclistCutoffs = 0;
+    this.cyclists = !!world.passCyclists;
+    this.closePasses = 0;
+    this.cyclistCutoffs = 0;
     // (crossing a speed hump, table, cushion or bump much too fast: sim/traffic-calming.js)
     this.busLanesSeen = false;
-    this.pxoUsed = false; this.pxoEarlyGoes = 0;
-    this.illegalTurns = 0; this.restricted = false;
-    this.humpHits = 0; this.calmed = false;
+    this.pxoUsed = false;
+    this.pxoEarlyGoes = 0;
+    this.illegalTurns = 0;
+    this.restricted = false;
+    this.humpHits = 0;
+    this.calmed = false;
     // (turning right on red at a scramble crossing, which the audit counts as a red light: sim/signals.js)
     this.scrambleReds = 0;
     // (passing a garbage truck's crew too close: sim/collection-truck.js; reported once a truck collected)
-    this.crewPasses = 0; this.collected = false;
+    this.crewPasses = 0;
+    this.collected = false;
     // (with school crossing guards, sim/crossing-guard.js: driving past one's STOP sign; reported only for
     // a drive a guard held it up in)
-    this.guards = false; this.guardViolations = 0;
+    this.guards = false;
+    this.guardViolations = 0;
     // (with contraflow cyclists, sim/contraflow.js: meeting one with less than the minimum passing
     // distance, and cutting one off; reported only for a drive one rode near the car in)
-    this.contraflow = false; this.contraflowMeets = 0; this.contraflowCutoffs = 0;
+    this.contraflow = false;
+    this.contraflowMeets = 0;
+    this.contraflowCutoffs = 0;
     // (with red-light runners, sim/red-light-runner.js: entering on green ahead of one; reported only
     // for a drive one committed near the car in)
-    this.redRunnersSeen = false; this.runnerConflicts = 0;
+    this.redRunnersSeen = false;
+    this.runnerConflicts = 0;
     // (with cars backing out of driveways, sim/driveway-reversers.js: squeezing past one, or not stopping
     // for one in the lane; reported only for a drive one backed out near the car in)
-    this.driveways = false; this.reversingConflicts = 0;
+    this.driveways = false;
+    this.reversingConflicts = 0;
     // (with spring potholes, sim/potholes.js: a wheel into one faster than its safe speed; reported only
     // for a drive in which the car came near one)
-    this.potholes = false; this.potholeHits = 0;
+    this.potholes = false;
+    this.potholeHits = 0;
     // (with balls rolling into the street, sim/ball-chase.js: passing the gap one came out of faster than
     // the car could stop from; reported only for a drive one rolled out near the car in)
-    this.balls = false; this.ballWarnings = 0;
+    this.balls = false;
+    this.ballWarnings = 0;
     // (with Canada geese, sim/geese.js: moving close to one on the road, or hitting one; reported only for
     // a drive a gaggle crossed near the car in)
-    this.geese = false; this.wildlifeConflicts = 0;
+    this.geese = false;
+    this.wildlifeConflicts = 0;
     // (with tailgaters, sim/tailgaters.js: braking hard with one close behind when nothing ahead called for
     // it; reported only for a drive one followed the car in)
-    this.tailgaters = false; this.brakeChecks = 0;
+    this.tailgaters = false;
+    this.brakeChecks = 0;
     // (with police officers directing traffic, sim/traffic-officer.js: going on into the junction while the
     // officer held the car; reported only for a drive in which the car came up to one)
-    this.officers = false; this.officerViolations = 0;
+    this.officers = false;
+    this.officerViolations = 0;
     // (with black ice, sim/black-ice.js: crossing a patch too fast, or braking, accelerating or skidding
     // on one; reported only for a drive in which the car came near one)
-    this.ice = false; this.iceOverspeed = 0;
+    this.ice = false;
+    this.iceOverspeed = 0;
     // (with snowbanks, sim/snowbanks.js: going into a stretch they narrow to one car while it was the turn
     // of one coming the other way; reported only for a drive in which the car came up to one)
-    this.snowbanks = false; this.snowbankConflicts = 0;
+    this.snowbanks = false;
+    this.snowbankConflicts = 0;
     // (with puddles, sim/puddles.js: each person splashed from one; reported only for a drive in which the
     // car came up to one with someone near it)
-    this.puddles = false; this.splashes = 0;
+    this.puddles = false;
+    this.splashes = 0;
     // (with traffic parallel parking, sim/parkers.js: blocking the room one needs to reverse into, or going
     // round it; reported only for a drive in which one signalled to park ahead of the car)
-    this.parkers = false; this.parkingConflicts = 0;
+    this.parkers = false;
+    this.parkingConflicts = 0;
     // (with road closures, sim/road-closures.js: driving past a barricade onto a closed block; reported only
     // for a drive in which the car came up to one)
-    this.roadClosures = false; this.closureEntries = 0;
-    this.closeFollowing = 0; this.danger = 0; this.offRoad = 0; this.wrongWay = 0;
+    this.roadClosures = false;
+    this.closureEntries = 0;
+    this.closeFollowing = 0;
+    this.danger = 0;
+    this.offRoad = 0;
+    this.wrongWay = 0;
     this.followingEnabled = !!world.followingDistance;
-    this.followingState = null; this.followingMessage = null;
+    this.followingState = null;
+    this.followingMessage = null;
     this.followingMet = new Set();
-    this.followingNearby = new Map(); this.followingPose = null;
+    this.followingNearby = new Map();
+    this.followingPose = null;
     this.followingRecovery = 0;
-    this.harsh = 0; this.cornering = 0; this.jerk = 0; this.resets = 0;
-    this.sample = 0; this.lastV = world.ego.v; this.lastA = null; this.brakingFor = 0;
-    this.brakingCounted = false; this.lastGap = Infinity; this.lastTtc = Infinity;
+    this.harsh = 0;
+    this.cornering = 0;
+    this.jerk = 0;
+    this.resets = 0;
+    this.sample = 0;
+    this.lastV = world.ego.v;
+    this.lastA = null;
+    this.brakingFor = 0;
+    this.brakingCounted = false;
+    this.lastGap = Infinity;
+    this.lastTtc = Infinity;
     this.laneHeading = null;
-    this.hardBrakes = 0; this.minGap = Infinity; this.maxSpeed = 0; this.progress = 0;
-    this.incidents = []; this.coach = "Settle in. Look ahead and leave room.";
-    this.finished = null; this.startedAt = new Date().toISOString();
+    this.hardBrakes = 0;
+    this.minGap = Infinity;
+    this.maxSpeed = 0;
+    this.progress = 0;
+    this.incidents = [];
+    this.coach = "Settle in. Look ahead and leave room.";
+    this.finished = null;
+    this.startedAt = new Date().toISOString();
   }
 
   // The autopilot's arrival, with parking at the destination (Autopilot.step's "arrived" event):
   // parked, and how well, or stopped in its lane.
   noteArrival(ev) {
     if (this.finished || ev?.parked === undefined) return;
-    this.parking = ev.parked ? { result: "parked", kerb_m: ev.kerb_m, angle_deg: ev.angle_deg, within_kerb: !!ev.within_kerb, legs: ev.legs }
+    this.parking = ev.parked
+      ? { result: "parked", kerb_m: ev.kerb_m, angle_deg: ev.angle_deg, within_kerb: !!ev.within_kerb, legs: ev.legs }
       : { result: ev.stuck ? "stuck partway in" : "stopped in lane" };
-    this.incident("parking", ev.parked ? `Parked, ${Math.round(ev.kerb_m * 100)} cm from the kerb` : ev.stuck ? "Gave up partway into the space" : "No space to park in: stopped in the lane");
+    this.incident(
+      "parking",
+      ev.parked
+        ? `Parked, ${Math.round(ev.kerb_m * 100)} cm from the kerb`
+        : ev.stuck
+          ? "Gave up partway into the space"
+          : "No space to park in: stopped in the lane",
+    );
   }
 
   incident(type, message, extra = {}) {
     if (type === "simulation_error" && !this.finished) this.simulationError = message;
-    if (this.incidents.length < 100) this.incidents.push({ type, message, at_s: round(this.elapsed), at_m: Math.round(this.distance), ...extra });
+    if (this.incidents.length < 100)
+      this.incidents.push({ type, message, at_s: round(this.elapsed), at_m: Math.round(this.distance), ...extra });
   }
 
-  reset() { this.resets++; this.incident("reset", "Returned the car to its lane"); this.lastA = null; this.lastV = null; }
+  reset() {
+    this.resets++;
+    this.incident("reset", "Returned the car to its lane");
+    this.lastA = null;
+    this.lastV = null;
+  }
 
   record(world, road, dt) {
     if (this.finished || !Number.isFinite(dt) || dt <= 0 || world.paused) return;
-    const ego = world.ego, speed = Math.abs(ego.v);
-    this.elapsed += dt; this.distance += speed * dt; this.maxSpeed = Math.max(this.maxSpeed, speed);
+    const ego = world.ego,
+      speed = Math.abs(ego.v);
+    this.elapsed += dt;
+    this.distance += speed * dt;
+    this.maxSpeed = Math.max(this.maxSpeed, speed);
     // (a road test's examiner, lab/examiner.js: attached only to road test drives)
     this.observer?.record(world, road, dt, this);
     if (speed > 0.5) this.moving += dt;
@@ -170,42 +262,68 @@ export class DriveScore {
     // (going round a work zone's closed stretch through the other lane, sim/work-zone.js, is not, and
     // nor is going round a double-parked van through the oncoming lane, sim/double-parked.js)
     // (a lane closure's limit holds the same way, from its merge point: sim/lane-closure.js)
-    const zonePass = world.workZones?.passing(road?.limit ?? 11.2) || world.laneClosures?.passing(road?.limit ?? 11.2) || null;
-    const wrongWay = !!road?.on_road && speed > 2 && Math.cos(headingError) < 0 && zonePass?.side !== "closed" && !world.doubleParked?.passing() && !(this.cyclists && world.passingCyclist?.());
+    const zonePass =
+      world.workZones?.passing(road?.limit ?? 11.2) || world.laneClosures?.passing(road?.limit ?? 11.2) || null;
+    const wrongWay =
+      !!road?.on_road &&
+      speed > 2 &&
+      Math.cos(headingError) < 0 &&
+      zonePass?.side !== "closed" &&
+      !world.doubleParked?.passing() &&
+      !(this.cyclists && world.passingCyclist?.());
     if (speeding) this.speeding += dt;
     const zone = road?.zone;
     if (speeding && zone) {
       this.zoneSpeeding += dt;
-      if (this.zoneCounted !== zone.id) { this.zoneCounted = zone.id; this.incident("zone_speeding", `Speeding in a ${zone.kind} zone`, { zone: zone.id }); }
+      if (this.zoneCounted !== zone.id) {
+        this.zoneCounted = zone.id;
+        this.incident("zone_speeding", `Speeding in a ${zone.kind} zone`, { zone: zone.id });
+      }
     }
     if (!zone) this.zoneCounted = null;
     // slow down and move over (sim/roadside.js): past a vehicle stopped at the roadside with its lights
     // flashing, its speed is the limit; drawing level with it in the lane next to it, where there is
     // another lane going the car's way that was clear at some point on the way up, is not moving over
-    const passing = world.roadside?.passing(road?.limit ?? 11.2) || null, name = passing?.name;
+    const passing = world.roadside?.passing(road?.limit ?? 11.2) || null,
+      name = passing?.name;
     const roadsideFast = !!passing && speed > passing.limit + SPEED_GRACE_MPS;
     if (roadsideFast) {
       this.roadsideSpeeding += dt;
       if (!speeding) this.speeding += dt;
-      if (!this.roadsideCounted.has(passing.vehicle.id)) { this.roadsideCounted.add(passing.vehicle.id); this.incident("roadside_speeding", `Passed a stopped ${name} too fast`, { vehicle: passing.vehicle.id }); }
+      if (!this.roadsideCounted.has(passing.vehicle.id)) {
+        this.roadsideCounted.add(passing.vehicle.id);
+        this.incident("roadside_speeding", `Passed a stopped ${name} too fast`, { vehicle: passing.vehicle.id });
+      }
     }
     if (passing?.room && passing.relation.ahead_m > 0) this.moveOverRoom.add(passing.vehicle.id);
-    if (passing && passing.relation.adjacent && passing.other_lane && passing.relation.ahead_m <= 0 && speed > 1 && this.moveOverRoom.has(passing.vehicle.id) && !this.moveOverCounted.has(passing.vehicle.id)) {
-      this.moveOverCounted.add(passing.vehicle.id); this.noMoveOver++;
+    if (
+      passing &&
+      passing.relation.adjacent &&
+      passing.other_lane &&
+      passing.relation.ahead_m <= 0 &&
+      speed > 1 &&
+      this.moveOverRoom.has(passing.vehicle.id) &&
+      !this.moveOverCounted.has(passing.vehicle.id)
+    ) {
+      this.moveOverCounted.add(passing.vehicle.id);
+      this.noMoveOver++;
       this.incident("no_move_over", `Didn’t move over for a stopped ${name}`, { vehicle: passing.vehicle.id });
     }
     // never stop on the tracks at a level crossing (sim/rail.js): standing on them for a second is
     // counted once a visit
     const tracks = world.onTracks;
     if (tracks && tracks.still > 1 && this.tracksCounted !== `${tracks.id}:${tracks.since}`) {
-      this.tracksCounted = `${tracks.id}:${tracks.since}`; this.onTracks++;
+      this.tracksCounted = `${tracks.id}:${tracks.since}`;
+      this.onTracks++;
       this.incident("stopped_on_tracks", "Stopped on the tracks", { crossing: tracks.id });
     }
     // don't block the junction (sim/junction-box.js): standing in it for a second with traffic past it
     // leaving no room is counted once a visit
-    const box = world.inBox, blocking = box?.blocked && box.still > 0.5;
+    const box = world.inBox,
+      blocking = box?.blocked && box.still > 0.5;
     if (blocking && box.still > 1 && this.boxCounted !== `${box.key}:${box.since}`) {
-      this.boxCounted = `${box.key}:${box.since}`; this.blockedJunctions++;
+      this.boxCounted = `${box.key}:${box.since}`;
+      this.blockedJunctions++;
       this.incident("blocked_junction", "Stopped in the junction", { junction: box.id });
     }
     // a work zone (sim/work-zone.js): its limit holds from the stop line to the end of the one-lane
@@ -214,7 +332,10 @@ export class DriveScore {
     if (workZoneFast) {
       this.workZoneSpeeding += dt;
       if (!speeding) this.speeding += dt;
-      if (!this.workZoneCounted.has(zonePass.zone.id)) { this.workZoneCounted.add(zonePass.zone.id); this.incident("work_zone_speeding", "Too fast through a work zone", { zone: zonePass.zone.id }); }
+      if (!this.workZoneCounted.has(zonePass.zone.id)) {
+        this.workZoneCounted.add(zonePass.zone.id);
+        this.incident("work_zone_speeding", "Too fast through a work zone", { zone: zonePass.zone.id });
+      }
     }
     // cars parked at the kerb that hide the sidewalk (sim/hidden-hazards.js): within STEP_OUT_M of them,
     // the blind-spot speed holds
@@ -223,7 +344,12 @@ export class DriveScore {
     if (blindFast) {
       this.blindSpeeding += dt;
       const key = `${blind.edge}:${blind.side}`;
-      if (!this.blindCounted.has(key)) { this.blindCounted.add(key); this.incident("blind_spot_speeding", "Passed parked cars too fast to stop for someone stepping out", { edge: blind.edge }); }
+      if (!this.blindCounted.has(key)) {
+        this.blindCounted.add(key);
+        this.incident("blind_spot_speeding", "Passed parked cars too fast to stop for someone stepping out", {
+          edge: blind.edge,
+        });
+      }
     }
     // a snow plow (sim/snow-plow.js): stay back of it
     if (world.plowsSeen) this.plows = true;
@@ -245,55 +371,242 @@ export class DriveScore {
     // (a school crossing guard ahead holding up the STOP sign: sim/crossing-guard.js)
     const guardSign = this.guards && !!world.crossingGuards?.notice()?.stop;
     const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
-    const plowClose = !!plow?.holds && speed > 1 && plow.rel.gap_m > -1 && plow.rel.gap_m < plow.keep - PLOW_CLOSE_SLACK_M;
+    const plowClose =
+      !!plow?.holds && speed > 1 && plow.rel.gap_m > -1 && plow.rel.gap_m < plow.keep - PLOW_CLOSE_SLACK_M;
     if (plowClose) {
       this.plowClose += dt;
-      if (this.plowCounted !== plow.plow.id) { this.plowCounted = plow.plow.id; this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id }); }
+      if (this.plowCounted !== plow.plow.id) {
+        this.plowCounted = plow.plow.id;
+        this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id });
+      }
     }
     if (world.amberLightsSeen) this.amberLightsSeen = true;
     if (world.busLanesSeen) this.busLanesSeen = true;
-    if (world.highBeamsSeen) { this.highBeamsSeen = true; this.glareSeconds = Math.max(0, (world.violations.glare_seconds || 0) - (this.baseline.glare_seconds || 0)); }
-    if (this.glareSeconds > 0.8 && !this.glareRecorded) { this.glareRecorded = true; this.incident("glare", "Failed to dip high beams"); }
-    if (world.sunGlareSeen) { this.sunGlareSeen = true; this.glareSpeeding = Math.max(0, (world.violations.glare_speeding_seconds || 0) - (this.baseline.glare_speeding_seconds || 0)); }
-    if (this.glareSpeeding > 1 && !this.sunGlareRecorded) { this.sunGlareRecorded = true; this.incident("sun_glare", "Drove too fast to stop within sight in sun glare"); }
+    if (world.highBeamsSeen) {
+      this.highBeamsSeen = true;
+      this.glareSeconds = Math.max(0, (world.violations.glare_seconds || 0) - (this.baseline.glare_seconds || 0));
+    }
+    if (this.glareSeconds > 0.8 && !this.glareRecorded) {
+      this.glareRecorded = true;
+      this.incident("glare", "Failed to dip high beams");
+    }
+    if (world.sunGlareSeen) {
+      this.sunGlareSeen = true;
+      this.glareSpeeding = Math.max(
+        0,
+        (world.violations.glare_speeding_seconds || 0) - (this.baseline.glare_speeding_seconds || 0),
+      );
+    }
+    if (this.glareSpeeding > 1 && !this.sunGlareRecorded) {
+      this.sunGlareRecorded = true;
+      this.incident("sun_glare", "Drove too fast to stop within sight in sun glare");
+    }
     if (world.pxoSeen) this.pxoUsed = true;
-    if (world.restrictionsSeen) { this.restricted = true; this.illegalTurns = (world.violations.illegal_turns || 0) - (this.baseline.illegal_turns || 0); }
+    if (world.restrictionsSeen) {
+      this.restricted = true;
+      this.illegalTurns = (world.violations.illegal_turns || 0) - (this.baseline.illegal_turns || 0);
+    }
     if (world.calmingSeen) this.calmed = true;
     if (world.collectionSeen) this.collected = true;
     for (const ev of world.events || []) {
-      if (ev.type === "passed_plow_on_right") { this.plowRightPasses++; this.incident("plow_right_pass", "Passed a snow plow on the right", { plow: ev.plow }); }
-      if (ev.type === "merged_out_of_turn") { this.mergeCutIns++; this.incident("merge_cut_in", "Merged out of turn: forced in ahead of the car whose turn it was", { zone: ev.zone, cut: ev.cut }); }
-      if (ev.type === "took_merge_turn") { this.mergeTurnsTaken++; this.incident("merge_turn_taken", "Didn’t let the car in the closed lane take its turn at the merge", { zone: ev.zone }); }
-      if (ev.type === "merged_early") { this.earlyMerges++; this.incident("early_merge", "Merged early instead of using the lane to the merge point", { zone: ev.zone }); }
-      if (ev.type === "cut_in_front_of_plow") { this.plowCutIns++; this.incident("plow_cut_in", "Moved back in too close in front of a snow plow", { plow: ev.plow }); }
+      if (ev.type === "passed_plow_on_right") {
+        this.plowRightPasses++;
+        this.incident("plow_right_pass", "Passed a snow plow on the right", { plow: ev.plow });
+      }
+      if (ev.type === "merged_out_of_turn") {
+        this.mergeCutIns++;
+        this.incident("merge_cut_in", "Merged out of turn: forced in ahead of the car whose turn it was", {
+          zone: ev.zone,
+          cut: ev.cut,
+        });
+      }
+      if (ev.type === "took_merge_turn") {
+        this.mergeTurnsTaken++;
+        this.incident("merge_turn_taken", "Didn’t let the car in the closed lane take its turn at the merge", {
+          zone: ev.zone,
+        });
+      }
+      if (ev.type === "merged_early") {
+        this.earlyMerges++;
+        this.incident("early_merge", "Merged early instead of using the lane to the merge point", { zone: ev.zone });
+      }
+      if (ev.type === "cut_in_front_of_plow") {
+        this.plowCutIns++;
+        this.incident("plow_cut_in", "Moved back in too close in front of a snow plow", { plow: ev.plow });
+      }
       if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
       if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "failed_to_yield" && ev.double_parked) this.vanCutoffs++;
-      if (ev.type === "amber_light") this.incident("amber_light", ev.reason === "sped_up" ? "Sped up to beat an amber light" : "Passed amber when a safe stop was possible");
+      if (ev.type === "amber_light")
+        this.incident(
+          "amber_light",
+          ev.reason === "sped_up" ? "Sped up to beat an amber light" : "Passed amber when a safe stop was possible",
+        );
       if (ev.type === "red_light" && ev.scramble) this.scrambleReds++;
-      if (ev.type === "pxo_early_go") { this.pxoEarlyGoes++; this.incident("pxo_early_go", "Left a pedestrian crossover before everyone reached the far curb"); }
-      if (ev.type === "crew_close_pass") { this.crewPasses++; this.incident("crew_close_pass", "Passed a garbage crew worker too close", { worker: ev.worker, clearance_m: ev.clearance_m, kmh: ev.kmh }); }
-      if (ev.type === "illegal_turn") this.incident("illegal_turn", "Made a prohibited turn", { from: ev.from, to: ev.to });
-      if (ev.type === "hump_hit") { this.humpHits++; this.incident("hump_hit", `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`, { device: ev.device, kmh: ev.kmh }); }
-      if (ev.type === "close_pass") { this.closePasses++; this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
+      if (ev.type === "pxo_early_go") {
+        this.pxoEarlyGoes++;
+        this.incident("pxo_early_go", "Left a pedestrian crossover before everyone reached the far curb");
+      }
+      if (ev.type === "crew_close_pass") {
+        this.crewPasses++;
+        this.incident("crew_close_pass", "Passed a garbage crew worker too close", {
+          worker: ev.worker,
+          clearance_m: ev.clearance_m,
+          kmh: ev.kmh,
+        });
+      }
+      if (ev.type === "illegal_turn")
+        this.incident("illegal_turn", "Made a prohibited turn", { from: ev.from, to: ev.to });
+      if (ev.type === "hump_hit") {
+        this.humpHits++;
+        this.incident(
+          "hump_hit",
+          `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`,
+          { device: ev.device, kmh: ev.kmh },
+        );
+      }
+      if (ev.type === "close_pass") {
+        this.closePasses++;
+        this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", {
+          cyclist: ev.with,
+          clearance_m: ev.clearance_m,
+          min_m: ev.min_m,
+        });
+      }
       if (ev.type === "failed_to_yield" && ev.cyclist_pass) this.cyclistCutoffs++;
-      if (ev.type === "pedestrian_splashed") { this.splashes++; this.incident("pedestrian_splashed", `Splashed a pedestrian from a puddle at ${Math.round(ev.kmh)} km/h`, { puddle: ev.puddle, person: ev.person, kmh: ev.kmh, splash_kmh: ev.splash_kmh }); }
-      if (ev.type === "pothole_hit") { this.potholeHits++; this.incident("pothole_hit", `Hit a pothole at ${Math.round(ev.kmh)} km/h`, { pothole: ev.pothole, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
-      if (ev.type === "ball_warning_ignored") { this.ballWarnings++; this.incident("ball_warning_ignored", "Drove on past where a ball rolled out, too fast to stop for a child after it", { ball: ev.ball, kmh: ev.kmh }); }
-      if (ev.type === "reversing_conflict") { this.reversingConflicts++; this.incident("reversing_conflict", ev.reason === "close_pass" ? "Squeezed past a car backing out of a driveway" : "Did not stop for a car backing out into the lane", { car: ev.with, clearance_m: ev.clearance_m }); }
-      if (ev.type === "closure_entry") { this.closureEntries++; this.incident("closure_entry", `Drove past a ROAD CLOSED barricade onto ${ev.street || "a closed street"}`, { closure: ev.closure }); }
-      if (ev.type === "officer_violation") { this.officerViolations++; this.incident("officer_violation", "Went on into the junction while the police officer signalled stop", { officer: ev.officer, junction: ev.junction }); }
-      if (ev.type === "brake_check") { this.brakeChecks++; this.incident("brake_check", "Braked hard with a tailgater close behind, with nothing ahead calling for it", { with: ev.with, decel_mps2: ev.decel_mps2, need_mps2: ev.need_mps2 }); }
-      if (ev.type === "ice_overspeed") { this.iceOverspeed++; this.incident("ice_overspeed", ev.reason === "fast" ? `Crossed black ice at ${Math.round(ev.kmh)} km/h` : ev.reason === "skid" ? "Skidded on black ice" : `${ev.reason === "brake" ? "Braked" : "Accelerated"} hard on black ice`, { patch: ev.patch, reason: ev.reason, kmh: ev.kmh, safe_kmh: ev.safe_kmh }); }
-      if (ev.type === "parking_conflict") { this.parkingConflicts++; this.incident("parking_conflict", ev.reason === "passed" ? "Went round a car while it was parallel parking" : "Blocked the room a car parallel parking needed to reverse into", { with: ev.with, phase: ev.phase }); }
-      if (ev.type === "snowbank_conflict") { this.snowbankConflicts++; this.incident("snowbank_conflict", ev.reason === "oncoming_inside" ? "Drove into the stretch narrowed by snowbanks with an oncoming car already in it" : ev.reason === "forced_to_stop" ? "Drove into the stretch narrowed by snowbanks in front of an oncoming car too close to stop" : "Drove into the stretch narrowed by snowbanks out of turn", { with: ev.with, narrowing: ev.narrowing }); }
-      if (ev.type === "wildlife_conflict") { this.wildlifeConflicts++; this.incident("wildlife_conflict", ev.reason === "hit" ? "Hit a goose crossing the road" : "Drove on too close to geese crossing the road", { goose: ev.with, gaggle: ev.gaggle, ...(ev.clearance_m !== undefined ? { clearance_m: ev.clearance_m } : {}) }); }
-      if (ev.type === "contraflow_conflict") { this.contraflowMeets++; this.incident("contraflow_meet", "Met a cyclist riding against the one-way with less than the minimum passing distance", { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m }); }
-      if (ev.type === "fresh_green_conflict") { this.runnerConflicts++; this.incident("fresh_green_conflict", "Entered on green ahead of a car running the red", { with: ev.with }); }
-      if (ev.type === "failed_to_yield" && ev.contraflow) { this.contraflowCutoffs++; this.incident("contraflow_cutoff", "Cut off a cyclist riding against the one-way", { cyclist: ev.with }); }
-      if (ev.type === "passed_crossing_guard") { this.guardViolations++; this.incident("guard_violation", "Drove past a school crossing guard’s STOP sign", { guard: ev.guard, in_road: ev.in_road }); }
-      if (ev.type === "failed_to_yield" && ev.unseen) { this.hiddenCutoffs++; this.incident("hidden_cutoff", "Pulled out in front of a vehicle hidden behind another", { with: ev.with }); }
-      if (ev.type === "kerb_strike") { this.kerbStrikes++; this.incident("kerb", ev.reversing ? "Backed a wheel onto the kerb" : "Drove a wheel onto the kerb"); }
+      if (ev.type === "pedestrian_splashed") {
+        this.splashes++;
+        this.incident("pedestrian_splashed", `Splashed a pedestrian from a puddle at ${Math.round(ev.kmh)} km/h`, {
+          puddle: ev.puddle,
+          person: ev.person,
+          kmh: ev.kmh,
+          splash_kmh: ev.splash_kmh,
+        });
+      }
+      if (ev.type === "pothole_hit") {
+        this.potholeHits++;
+        this.incident("pothole_hit", `Hit a pothole at ${Math.round(ev.kmh)} km/h`, {
+          pothole: ev.pothole,
+          kmh: ev.kmh,
+          safe_kmh: ev.safe_kmh,
+        });
+      }
+      if (ev.type === "ball_warning_ignored") {
+        this.ballWarnings++;
+        this.incident(
+          "ball_warning_ignored",
+          "Drove on past where a ball rolled out, too fast to stop for a child after it",
+          { ball: ev.ball, kmh: ev.kmh },
+        );
+      }
+      if (ev.type === "reversing_conflict") {
+        this.reversingConflicts++;
+        this.incident(
+          "reversing_conflict",
+          ev.reason === "close_pass"
+            ? "Squeezed past a car backing out of a driveway"
+            : "Did not stop for a car backing out into the lane",
+          { car: ev.with, clearance_m: ev.clearance_m },
+        );
+      }
+      if (ev.type === "closure_entry") {
+        this.closureEntries++;
+        this.incident("closure_entry", `Drove past a ROAD CLOSED barricade onto ${ev.street || "a closed street"}`, {
+          closure: ev.closure,
+        });
+      }
+      if (ev.type === "officer_violation") {
+        this.officerViolations++;
+        this.incident("officer_violation", "Went on into the junction while the police officer signalled stop", {
+          officer: ev.officer,
+          junction: ev.junction,
+        });
+      }
+      if (ev.type === "brake_check") {
+        this.brakeChecks++;
+        this.incident("brake_check", "Braked hard with a tailgater close behind, with nothing ahead calling for it", {
+          with: ev.with,
+          decel_mps2: ev.decel_mps2,
+          need_mps2: ev.need_mps2,
+        });
+      }
+      if (ev.type === "ice_overspeed") {
+        this.iceOverspeed++;
+        this.incident(
+          "ice_overspeed",
+          ev.reason === "fast"
+            ? `Crossed black ice at ${Math.round(ev.kmh)} km/h`
+            : ev.reason === "skid"
+              ? "Skidded on black ice"
+              : `${ev.reason === "brake" ? "Braked" : "Accelerated"} hard on black ice`,
+          { patch: ev.patch, reason: ev.reason, kmh: ev.kmh, safe_kmh: ev.safe_kmh },
+        );
+      }
+      if (ev.type === "parking_conflict") {
+        this.parkingConflicts++;
+        this.incident(
+          "parking_conflict",
+          ev.reason === "passed"
+            ? "Went round a car while it was parallel parking"
+            : "Blocked the room a car parallel parking needed to reverse into",
+          { with: ev.with, phase: ev.phase },
+        );
+      }
+      if (ev.type === "snowbank_conflict") {
+        this.snowbankConflicts++;
+        this.incident(
+          "snowbank_conflict",
+          ev.reason === "oncoming_inside"
+            ? "Drove into the stretch narrowed by snowbanks with an oncoming car already in it"
+            : ev.reason === "forced_to_stop"
+              ? "Drove into the stretch narrowed by snowbanks in front of an oncoming car too close to stop"
+              : "Drove into the stretch narrowed by snowbanks out of turn",
+          { with: ev.with, narrowing: ev.narrowing },
+        );
+      }
+      if (ev.type === "wildlife_conflict") {
+        this.wildlifeConflicts++;
+        this.incident(
+          "wildlife_conflict",
+          ev.reason === "hit" ? "Hit a goose crossing the road" : "Drove on too close to geese crossing the road",
+          {
+            goose: ev.with,
+            gaggle: ev.gaggle,
+            ...(ev.clearance_m !== undefined ? { clearance_m: ev.clearance_m } : {}),
+          },
+        );
+      }
+      if (ev.type === "contraflow_conflict") {
+        this.contraflowMeets++;
+        this.incident(
+          "contraflow_meet",
+          "Met a cyclist riding against the one-way with less than the minimum passing distance",
+          { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m },
+        );
+      }
+      if (ev.type === "fresh_green_conflict") {
+        this.runnerConflicts++;
+        this.incident("fresh_green_conflict", "Entered on green ahead of a car running the red", { with: ev.with });
+      }
+      if (ev.type === "failed_to_yield" && ev.contraflow) {
+        this.contraflowCutoffs++;
+        this.incident("contraflow_cutoff", "Cut off a cyclist riding against the one-way", { cyclist: ev.with });
+      }
+      if (ev.type === "passed_crossing_guard") {
+        this.guardViolations++;
+        this.incident("guard_violation", "Drove past a school crossing guard’s STOP sign", {
+          guard: ev.guard,
+          in_road: ev.in_road,
+        });
+      }
+      if (ev.type === "failed_to_yield" && ev.unseen) {
+        this.hiddenCutoffs++;
+        this.incident("hidden_cutoff", "Pulled out in front of a vehicle hidden behind another", { with: ev.with });
+      }
+      if (ev.type === "kerb_strike") {
+        this.kerbStrikes++;
+        this.incident("kerb", ev.reversing ? "Backed a wheel onto the kerb" : "Drove a wheel onto the kerb");
+      }
     }
     if (offRoad) this.offRoad += dt;
     if (wrongWay) this.wrongWay += dt;
@@ -307,92 +620,166 @@ export class DriveScore {
       if (count) this.incident(key, message, { count });
     }
     this.lastCounters = { ...world.violations };
-    this.coach = offRoad ? "Ease off and return to the road."
-      : wrongWay ? "Check your direction of travel."
-      : guardSign && speed > 1 ? "Stop for the crossing guard, and wait until everyone is across."
-      : speeding && zone ? `Slow to ${Math.round(road.limit * 3.6)}. You’re in a ${zone.kind} zone.`
-      : tracks?.still > 0.5 ? "Clear the tracks. Never stop on them."
-      : blocking ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
-      : workZoneFast ? `Slow to ${Math.round(zonePass.limit * 3.6)}. You’re in a work zone.`
-      : plowClose ? `Drop back. Stay ${plow.keep} m behind the snow plow.`
-      : blindFast ? `Slow to ${Math.round(blind.limit_mps * 3.6)}. Parked cars hide the sidewalk: someone could step out.`
-      : roadsideFast ? `Slow to ${Math.round(passing.limit * 3.6)} and move over. A ${name} is stopped with its lights flashing.`
-      : speeding ? "Ease off. You’re above the speed limit."
-      : Math.abs(ego.latAccel || 0) > 3 ? "Slow down before the bend."
-      : this.lastTtc < 1.5 ? "Brake gently now. The gap is closing."
-      : this.followingEnabled && this.followingMessage ? this.followingMessage
-      : !this.followingEnabled && this.lastGap / Math.max(speed, 0.1) < 1.2 ? "Leave more space to the vehicle ahead."
-      : "Look ahead. Keep your inputs smooth.";
+    this.coach = offRoad
+      ? "Ease off and return to the road."
+      : wrongWay
+        ? "Check your direction of travel."
+        : guardSign && speed > 1
+          ? "Stop for the crossing guard, and wait until everyone is across."
+          : speeding && zone
+            ? `Slow to ${Math.round(road.limit * 3.6)}. You’re in a ${zone.kind} zone.`
+            : tracks?.still > 0.5
+              ? "Clear the tracks. Never stop on them."
+              : blocking
+                ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
+                : workZoneFast
+                  ? `Slow to ${Math.round(zonePass.limit * 3.6)}. You’re in a work zone.`
+                  : plowClose
+                    ? `Drop back. Stay ${plow.keep} m behind the snow plow.`
+                    : blindFast
+                      ? `Slow to ${Math.round(blind.limit_mps * 3.6)}. Parked cars hide the sidewalk: someone could step out.`
+                      : roadsideFast
+                        ? `Slow to ${Math.round(passing.limit * 3.6)} and move over. A ${name} is stopped with its lights flashing.`
+                        : speeding
+                          ? "Ease off. You’re above the speed limit."
+                          : Math.abs(ego.latAccel || 0) > 3
+                            ? "Slow down before the bend."
+                            : this.lastTtc < 1.5
+                              ? "Brake gently now. The gap is closing."
+                              : this.followingEnabled && this.followingMessage
+                                ? this.followingMessage
+                                : !this.followingEnabled && this.lastGap / Math.max(speed, 0.1) < 1.2
+                                  ? "Leave more space to the vehicle ahead."
+                                  : "Look ahead. Keep your inputs smooth.";
     // (a tailgater close behind, with that option on: sim/tailgaters.js `behind`)
-    if (world.tailgaters?.behind && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = TAILGATER_COACH;
+    if (world.tailgaters?.behind && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5)
+      this.coach = TAILGATER_COACH;
     // (too fast for a puddle at the kerb with someone beside it, with that option on: sim/puddles.js `puddleWarn`)
     if (world.puddleWarn && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = PUDDLE_COACH;
     // (behind a car parallel parking ahead, with that option on: sim/parkers.js `behind`)
     if (world.parkers?.behind && !offRoad && !wrongWay) this.coach = PARKER_COACH;
     // (a road closed ahead that the car has seen, with that option on: sim/road-closures.js)
-    if (world.roadClosures?.known.size && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5 && knownAhead(world)) this.coach = CLOSURE_COACH;
+    if (
+      world.roadClosures?.known.size &&
+      !offRoad &&
+      !wrongWay &&
+      !speeding &&
+      this.lastTtc >= 1.5 &&
+      knownAhead(world)
+    )
+      this.coach = CLOSURE_COACH;
     // (a police officer directing traffic at the junction ahead, with that option on: sim/traffic-officer.js)
     const officer = world.officers?.list.length ? officerNotice(world, null) : null;
-    if (officer && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5) this.coach = OFFICER_COACH[officer.wait ? "stop" : "go"];
+    if (officer && !offRoad && !wrongWay && !speeding && this.lastTtc >= 1.5)
+      this.coach = OFFICER_COACH[officer.wait ? "stop" : "go"];
 
     this.sample += dt;
     if (this.sample + 1e-9 < 0.1) return;
-    const h = this.sample; this.sample = 0;
+    const h = this.sample;
+    this.sample = 0;
     // Navigation favours lanes aligned with the car. Evaluate direction from the physically
     // closest lane instead, without penalising ambiguous junction mouths.
     if (world.map?.nearestLane) {
       const nearest = world.map.nearestLane(ego.x, ego.y, null, 12);
-      this.laneHeading = nearest && nearest.distance < 2.3 && nearest.s > 6 && nearest.s < nearest.lane.length - 6 ? nearest.heading : null;
+      this.laneHeading =
+        nearest && nearest.distance < 2.3 && nearest.s > 6 && nearest.s < nearest.lane.length - 6
+          ? nearest.heading
+          : null;
     }
     if (this.lastV !== null) {
       const a = (ego.v - this.lastV) / h;
       if (a < -3.5) {
-        this.harsh += h; this.brakingFor += h;
-        if (this.brakingFor + 1e-9 >= 0.2 && !this.brakingCounted) { this.brakingCounted = true; this.hardBrakes++; this.incident("hard_brake", "Hard braking"); }
-      } else { this.brakingFor = 0; this.brakingCounted = false; }
+        this.harsh += h;
+        this.brakingFor += h;
+        if (this.brakingFor + 1e-9 >= 0.2 && !this.brakingCounted) {
+          this.brakingCounted = true;
+          this.hardBrakes++;
+          this.incident("hard_brake", "Hard braking");
+        }
+      } else {
+        this.brakingFor = 0;
+        this.brakingCounted = false;
+      }
       if (this.lastA !== null && Math.abs((a - this.lastA) / h) > 5) this.jerk += h;
       this.lastA = a;
     }
     this.lastV = ego.v;
     // Use physical gaps, including objects outside the driver's observation. This evaluates the
     // drive, not what the model believed it could see. At most ten local queries per second.
-    let gap = Infinity, ttc = Infinity, leader = null, dangerWith = null;
-    const nextNearby = this.followingEnabled ? new Map() : null, pose = this.followingPose;
-    const egoSideMove = pose ? Math.abs((ego.x - pose.x) * Math.sin(pose.psi) - (ego.y - pose.y) * Math.cos(pose.psi)) : 0;
-    if (speed > 2) for (const other of world.obstaclesNear(ego.x, ego.y, this.followingEnabled ? Math.max(60, speed * 6 + 20) : 35)) {
-      const [x, y] = other.center || [other.x, other.y];
-      const rel = ego.toLocal(x, y);
-      const corridor = (ego.spec?.width || 1.9) / 2 + 0.45 + (other.spec?.width || other.width || 1.8) / 2;
-      if (nextNearby && other.spec) nextNearby.set(other.id, { x, y, right: rel.right });
-      if (rel.ahead <= 0 || Math.abs(rel.right) > corridor) continue;
-      const front = ego.spec ? ego.spec.length - ego.spec.rearOverhang : 3.6;
-      const g = rel.ahead - front - (other.spec?.length || other.length || 0.6) / 2;
-      if (g <= 0) continue; // physical overlaps belong to collision auditing
-      gap = Math.min(gap, g);
-      const forwardSpeed = (other.v || 0) * Math.cos((other.psi || 0) - ego.psi);
-      if (speed - forwardSpeed > 0.5 && g / (speed - forwardSpeed) < ttc) { ttc = g / (speed - forwardSpeed); dangerWith = other; }
-      if (this.followingEnabled && other.spec && other.kind !== "pedestrian" && Math.cos((other.psi || 0) - ego.psi) > Math.SQRT1_2
-        && (!leader || g < leader.gap_m)) {
-        const previous = this.followingNearby.get(other.id);
-        const otherSideMove = previous && pose ? Math.abs((x - previous.x) * Math.sin(pose.psi) - (y - previous.y) * Math.cos(pose.psi)) : 0;
-        leader = { id: other.id, gap_m: g, speed: Math.max(0, forwardSpeed), vehicle: other,
-          entered: !!previous && Math.abs(previous.right) > corridor && otherSideMove > egoSideMove + 0.005 };
+    let gap = Infinity,
+      ttc = Infinity,
+      leader = null,
+      dangerWith = null;
+    const nextNearby = this.followingEnabled ? new Map() : null,
+      pose = this.followingPose;
+    const egoSideMove = pose
+      ? Math.abs((ego.x - pose.x) * Math.sin(pose.psi) - (ego.y - pose.y) * Math.cos(pose.psi))
+      : 0;
+    if (speed > 2)
+      for (const other of world.obstaclesNear(
+        ego.x,
+        ego.y,
+        this.followingEnabled ? Math.max(60, speed * 6 + 20) : 35,
+      )) {
+        const [x, y] = other.center || [other.x, other.y];
+        const rel = ego.toLocal(x, y);
+        const corridor = (ego.spec?.width || 1.9) / 2 + 0.45 + (other.spec?.width || other.width || 1.8) / 2;
+        if (nextNearby && other.spec) nextNearby.set(other.id, { x, y, right: rel.right });
+        if (rel.ahead <= 0 || Math.abs(rel.right) > corridor) continue;
+        const front = ego.spec ? ego.spec.length - ego.spec.rearOverhang : 3.6;
+        const g = rel.ahead - front - (other.spec?.length || other.length || 0.6) / 2;
+        if (g <= 0) continue; // physical overlaps belong to collision auditing
+        gap = Math.min(gap, g);
+        const forwardSpeed = (other.v || 0) * Math.cos((other.psi || 0) - ego.psi);
+        if (speed - forwardSpeed > 0.5 && g / (speed - forwardSpeed) < ttc) {
+          ttc = g / (speed - forwardSpeed);
+          dangerWith = other;
+        }
+        if (
+          this.followingEnabled &&
+          other.spec &&
+          other.kind !== "pedestrian" &&
+          Math.cos((other.psi || 0) - ego.psi) > Math.SQRT1_2 &&
+          (!leader || g < leader.gap_m)
+        ) {
+          const previous = this.followingNearby.get(other.id);
+          const otherSideMove =
+            previous && pose
+              ? Math.abs((x - previous.x) * Math.sin(pose.psi) - (y - previous.y) * Math.cos(pose.psi))
+              : 0;
+          leader = {
+            id: other.id,
+            gap_m: g,
+            speed: Math.max(0, forwardSpeed),
+            vehicle: other,
+            entered: !!previous && Math.abs(previous.right) > corridor && otherSideMove > egoSideMove + 0.005,
+          };
+        }
       }
-    }
     this.minGap = Math.min(this.minGap, gap);
-    this.lastGap = gap; this.lastTtc = ttc;
+    this.lastGap = gap;
+    this.lastTtc = ttc;
     let recovering = false;
     if (this.followingEnabled) {
       this.followingMessage = null;
       if (leader) {
-        const policy = followingPolicy(ego, leader), short = leader.gap_m < policy.target_gap_m - 1;
+        const policy = followingPolicy(ego, leader),
+          short = leader.gap_m < policy.target_gap_m - 1;
         const previous = this.followingState;
         if (previous?.id !== leader.id) {
           // A new leader can take away a gap the driver had already left. Allow a bounded
           // response window, not a permanent exemption for continuing to tailgate it.
-          this.followingState = { id: leader.id, until: this.elapsed + (leader.entered && short && !this.followingMet.has(leader.id) ? FOLLOWING_RECOVERY_S : 0) };
+          this.followingState = {
+            id: leader.id,
+            until:
+              this.elapsed + (leader.entered && short && !this.followingMet.has(leader.id) ? FOLLOWING_RECOVERY_S : 0),
+          };
           this.followingMet.add(leader.id);
-          if (this.followingState.until > this.elapsed) this.incident("following_recovery", "A vehicle entered the following gap: ease off and rebuild space", { gap_m: round(leader.gap_m), target_gap_m: round(policy.target_gap_m) });
+          if (this.followingState.until > this.elapsed)
+            this.incident("following_recovery", "A vehicle entered the following gap: ease off and rebuild space", {
+              gap_m: round(leader.gap_m),
+              target_gap_m: round(policy.target_gap_m),
+            });
         }
         recovering = short && this.elapsed < this.followingState.until;
         if (recovering) this.followingRecovery += h;
@@ -410,18 +797,66 @@ export class DriveScore {
       else if (world.parkers?.behind) this.coach = PARKER_COACH;
       else if (officer) this.coach = OFFICER_COACH[officer.wait ? "stop" : "go"];
       else if (this.followingMessage) this.coach = this.followingMessage;
-      else if (!this.followingEnabled && gap / Math.max(speed, 0.1) < 1.2) this.coach = "Leave more space to the vehicle ahead.";
+      else if (!this.followingEnabled && gap / Math.max(speed, 0.1) < 1.2)
+        this.coach = "Leave more space to the vehicle ahead.";
     }
   }
 
   snapshot() {
     const delta = (k) => Math.max(0, (this.lastCounters[k] || 0) - (this.baseline[k] || 0));
-    const collisions = delta("collisions"), atFault = delta("collisions_at_fault");
-    const reds = delta("red_lights_run"), stops = delta("stop_signs_run"), yields = delta("failed_to_yield");
+    const collisions = delta("collisions"),
+      atFault = delta("collisions_at_fault");
+    const reds = delta("red_lights_run"),
+      stops = delta("stop_signs_run"),
+      yields = delta("failed_to_yield");
     const categories = {
-      safety: Math.round(clamp(100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2 - this.plowClose * 0.6 - this.crewPasses * 20 - this.pxoEarlyGoes * 20 - this.glareSeconds * 5 - this.runnerConflicts * 25 - this.glareSpeeding * 3 - this.reversingConflicts * 20 - this.ballWarnings * 25 - this.wildlifeConflicts * 20 - this.iceOverspeed * 20)),
-      legality: Math.round(clamp(100 - delta("amber_lights_run") * 25 - this.illegalTurns * 25 - delta("bus_lane_driving") * .5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2 - this.noMoveOver * 10 - this.plowRightPasses * 20 - this.plowCutIns * 10 - this.mergeCutIns * 20 - this.mergeTurnsTaken * 10 - this.closePasses * 20 - this.guardViolations * 25 - this.contraflowMeets * 20 - this.snowbankConflicts * 20 - this.parkingConflicts * 20)),
-      comfort: Math.round(clamp(100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8 - this.potholeHits * 10)),
+      safety: Math.round(
+        clamp(
+          100 -
+            collisions * 35 -
+            atFault * 15 -
+            this.danger * 3 -
+            this.closeFollowing * 0.6 -
+            this.blindSpeeding * 1.2 -
+            this.plowClose * 0.6 -
+            this.crewPasses * 20 -
+            this.pxoEarlyGoes * 20 -
+            this.glareSeconds * 5 -
+            this.runnerConflicts * 25 -
+            this.glareSpeeding * 3 -
+            this.reversingConflicts * 20 -
+            this.ballWarnings * 25 -
+            this.wildlifeConflicts * 20 -
+            this.iceOverspeed * 20,
+        ),
+      ),
+      legality: Math.round(
+        clamp(
+          100 -
+            delta("amber_lights_run") * 25 -
+            this.illegalTurns * 25 -
+            delta("bus_lane_driving") * 0.5 -
+            reds * 35 -
+            stops * 20 -
+            yields * 25 -
+            this.speeding * 1.2 -
+            this.noMoveOver * 10 -
+            this.plowRightPasses * 20 -
+            this.plowCutIns * 10 -
+            this.mergeCutIns * 20 -
+            this.mergeTurnsTaken * 10 -
+            this.closePasses * 20 -
+            this.guardViolations * 25 -
+            this.contraflowMeets * 20 -
+            this.snowbankConflicts * 20 -
+            this.parkingConflicts * 20,
+        ),
+      ),
+      comfort: Math.round(
+        clamp(
+          100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8 - this.humpHits * 8 - this.potholeHits * 10,
+        ),
+      ),
       control: Math.round(clamp(100 - this.offRoad * 5 - this.wrongWay * 3 - this.resets * 15)),
     };
     // (a brake check with a tailgater close behind costs as much safety as a close call: sim/tailgaters.js)
@@ -429,80 +864,260 @@ export class DriveScore {
     // (splashing someone from a puddle is careless driving: sim/puddles.js)
     if (this.splashes) categories.legality = Math.max(0, categories.legality - this.splashes * 20);
     // (as does driving past a closed road's barricade, and it is against the law: sim/road-closures.js)
-    if (this.closureEntries) { categories.safety = Math.max(0, categories.safety - this.closureEntries * 20); categories.legality = Math.max(0, categories.legality - this.closureEntries * 25); }
+    if (this.closureEntries) {
+      categories.safety = Math.max(0, categories.safety - this.closureEntries * 20);
+      categories.legality = Math.max(0, categories.legality - this.closureEntries * 25);
+    }
     // (going on while a police officer held the car costs as much as a red light: sim/traffic-officer.js)
     if (this.officerViolations) categories.legality = Math.max(0, categories.legality - this.officerViolations * 35);
-    let score = Math.round(Object.entries(SCORE_WEIGHTS).reduce((sum, [key, weight]) => sum + categories[key] * weight, 0));
+    let score = Math.round(
+      Object.entries(SCORE_WEIGHTS).reduce((sum, [key, weight]) => sum + categories[key] * weight, 0),
+    );
     // A collision or a red-light violation cannot be averaged into an excellent drive.
     if (collisions) score = Math.min(score, 59);
-    if (reds || yields || delta("amber_lights_run") || this.runnerConflicts || this.officerViolations) score = Math.min(score, 69);
+    if (reds || yields || delta("amber_lights_run") || this.runnerConflicts || this.officerViolations)
+      score = Math.min(score, 69);
     const qualified = this.distance >= 100 && this.elapsed >= 10;
-    const grade = !qualified ? "—" : score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "E";
+    const grade = !qualified
+      ? "—"
+      : score >= 90
+        ? "A"
+        : score >= 80
+          ? "B"
+          : score >= 70
+            ? "C"
+            : score >= 60
+              ? "D"
+              : "E";
     const tips = [];
-    if (collisions) tips.push("Leave more stopping room and anticipate crossing traffic. Collision fault is reported separately.");
-    if (delta("amber_lights_run")) tips.push("When the light turns amber, stop if you can do so safely. If you are too close to stop safely, continue carefully without speeding up; keep yielding to people and traffic, and never enter on red.");
+    if (collisions)
+      tips.push("Leave more stopping room and anticipate crossing traffic. Collision fault is reported separately.");
+    if (delta("amber_lights_run"))
+      tips.push(
+        "When the light turns amber, stop if you can do so safely. If you are too close to stop safely, continue carefully without speeding up; keep yielding to people and traffic, and never enter on red.",
+      );
     if (reds || stops || yields) tips.push("Slow early for junctions. Stop fully and check crossings before entering.");
-    if (this.zoneSpeeding > 1) tips.push("Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.");
+    if (this.zoneSpeeding > 1)
+      tips.push(
+        "Slow to 30 km/h in school and playground zones while they are in effect. Children can step out from anywhere.",
+      );
     else if (this.speeding > 1) tips.push("Watch the speed-limit sign, especially when entering residential streets.");
-    if (this.roadsideSpeeding > 0.5 || this.noMoveOver) tips.push("Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.");
-    if (this.blindSpeeding > 0.5) tips.push("Beside cars parked at the kerb on quiet streets and in school zones, slow to a speed you can stop from in about 15 m. Someone can step out from between them before you can see them.");
-    if (this.darkSignals) tips.push("Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.");
-    if (this.hiddenCutoffs) tips.push("A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.");
-    if (this.plowRightPasses) tips.push("Never pass a snow plow on the right. Its blade throws snow and debris that way, and a wing blade can reach well into the next lane.");
-    if (this.plowClose > 1 || this.plowCutIns) tips.push("Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h). Pass one only on the left, where you can see the road ahead is clear, and move back in well ahead of it.");
-    if (this.mergeCutIns || this.mergeTurnsTaken) tips.push("Where a lane is closed, zipper merge: use both lanes right up to the merge point, then take turns, one vehicle from each lane. Don't force your way in out of turn, and don't close the gap on someone whose turn it is.");
-    if (this.earlyMerges) tips.push("In slow traffic, don't merge early into the open lane. Stay in your lane to the merge point and take your turn there: using both lanes keeps the queue shorter, and everyone gets through sooner.");
-    if (this.contraflowMeets || this.contraflowCutoffs) tips.push("On a one-way street where cyclists may ride both ways, look both ways. Before turning or going straight into one, check for a cyclist coming out of it against the traffic, on your left, and let them clear the junction first. Driving along one, keep right for a cyclist coming the other way, and where that doesn't leave them at least 1 m (1.5 m above 50 km/h), stop and let them go by.");
-    if (this.runnerConflicts) tips.push("When your light turns green, don't just go: look both ways and check that cross traffic has stopped. A driver trying to beat a stale amber may run the red; let anyone who cannot stop clear the junction first.");
-    if (this.potholeHits) tips.push("Look well ahead for potholes, especially in spring and when they are full of water. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.");
-    if (this.ballWarnings) tips.push("A ball bouncing into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb.");
-    if (this.splashes) tips.push("In the rain, watch for puddles by the kerb, at corners and over drains, and for people on the sidewalk or waiting at a bus stop beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down, below about 20 km/h, until you're through. Splashing someone is careless driving.");
-    if (this.officerViolations) tips.push("Where a police officer is directing traffic, follow the officer, not the lights: stop at the line when they hold you, even on a green, and go when they wave you through, even on a red, still yielding to anyone in the junction.");
-    if (this.brakeChecks) tips.push("Never brake-check a tailgater: they can't stop in time. Increase your gap to the car ahead so you can brake early and gently, don't speed up to please them, and let them by: move into the right lane when it's safe, or ease off a little so they can pass.");
-    if (this.parkingConflicts) tips.push("A car ahead signalling and stopping beside a gap in the parked cars is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses.");
-    if (this.closureEntries) tips.push("A ROAD CLOSED barricade closes the whole street to traffic, however empty it looks. Turn off at the junction before it and follow the detour; if you only see it late, stop short of it and find another way.");
-    if (this.snowbankConflicts) tips.push("Where snowbanks push the parked cars out and leave room for only one car, take turns: whoever is already in the narrow stretch, or got to it first, goes first. Wait at your end until the oncoming car is through, and keep to the middle, slowly, when it is your turn.");
-    if (this.wildlifeConflicts) tips.push("Geese and their goslings cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them or creep toward them.");
-    if (this.iceOverspeed) tips.push("Near freezing, expect black ice on bridges, overpasses and shaded stretches, even when the road looks only dry or damp. Slow down before them, on the dry road, and cross the ice steadily: no braking, accelerating or sharp steering on it. If you are already on it, ease off and keep the wheel straight.");
-    if (this.reversingConflicts) tips.push("Watch driveways for reversing lights. Slow down when a car is backing out ahead, and once it is coming into your lane, stop and give it room to finish; never try to squeeze past behind it.");
-    if (this.guardViolations) tips.push("When a school crossing guard holds up the STOP sign, stop before the crosswalk and stay stopped until the guard and every child are off the road, not just out of your lane. Slow down whenever children wait at the curb with a guard.");
-    if (this.closePasses) tips.push("Give cyclists room: leave at least 1 m when you pass one where the limit is 50 km/h or less, 1.5 m above. On a street with one lane each way that means moving into the oncoming lane, so stay behind until it is clear.");
-    if (this.cyclistCutoffs) tips.push("Passing a cyclist through the oncoming lane, wait behind them until that lane is clear for the whole pass and back. Oncoming traffic has the right of way.");
-    if (this.vanCutoffs) tips.push("Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.");
-    if (this.kerbStrikes) tips.push("Parking, creep in slowly and stop before a wheel touches the kerb. Turn the wheel only while the car is moving if you have to, and check your mirror on the kerb side.");
-    if (this.parking?.result === "parked" && !this.parking.within_kerb) tips.push("Park parallel to the kerb with your wheels within 30 cm of it. If you end up further out, pull forward and reverse in again.");
-    if (this.parking?.result === "stuck partway in") tips.push("Choose a space at least one and a half times your car's length, and start with your rear bumper level with the car in front, about a door's width from it.");
-    if (this.flaggerStops) tips.push("At a work zone, stop for the flagger’s STOP paddle and wait for it to turn to SLOW. Traffic coming the other way has the one lane until then.");
-    if (this.workZoneSpeeding > 0.5) tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
-    if (this.blockedJunctions) tips.push("Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.");
-    if (this.onTracks) tips.push("Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.");
-    if (this.closeFollowing > 1 || this.danger > 0.5) tips.push(this.followingEnabled
-      ? "Leave room for reaction and braking, with more space on slippery roads. If someone merges into your gap, ease off to rebuild it; brake firmly if needed to avoid a collision."
-      : "Aim for at least a two-second following gap when conditions allow.");
+    if (this.roadsideSpeeding > 0.5 || this.noMoveOver)
+      tips.push(
+        "Passing a vehicle stopped with its lights flashing, slow to 40 km/h (70 where the limit is 80 or more) and move out of the lane next to it if you can. People work right beside it.",
+      );
+    if (this.blindSpeeding > 0.5)
+      tips.push(
+        "Beside cars parked at the kerb on quiet streets and in school zones, slow to a speed you can stop from in about 15 m. Someone can step out from between them before you can see them.",
+      );
+    if (this.darkSignals)
+      tips.push(
+        "Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.",
+      );
+    if (this.hiddenCutoffs)
+      tips.push(
+        "A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.",
+      );
+    if (this.plowRightPasses)
+      tips.push(
+        "Never pass a snow plow on the right. Its blade throws snow and debris that way, and a wing blade can reach well into the next lane.",
+      );
+    if (this.plowClose > 1 || this.plowCutIns)
+      tips.push(
+        "Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h). Pass one only on the left, where you can see the road ahead is clear, and move back in well ahead of it.",
+      );
+    if (this.mergeCutIns || this.mergeTurnsTaken)
+      tips.push(
+        "Where a lane is closed, zipper merge: use both lanes right up to the merge point, then take turns, one vehicle from each lane. Don't force your way in out of turn, and don't close the gap on someone whose turn it is.",
+      );
+    if (this.earlyMerges)
+      tips.push(
+        "In slow traffic, don't merge early into the open lane. Stay in your lane to the merge point and take your turn there: using both lanes keeps the queue shorter, and everyone gets through sooner.",
+      );
+    if (this.contraflowMeets || this.contraflowCutoffs)
+      tips.push(
+        "On a one-way street where cyclists may ride both ways, look both ways. Before turning or going straight into one, check for a cyclist coming out of it against the traffic, on your left, and let them clear the junction first. Driving along one, keep right for a cyclist coming the other way, and where that doesn't leave them at least 1 m (1.5 m above 50 km/h), stop and let them go by.",
+      );
+    if (this.runnerConflicts)
+      tips.push(
+        "When your light turns green, don't just go: look both ways and check that cross traffic has stopped. A driver trying to beat a stale amber may run the red; let anyone who cannot stop clear the junction first.",
+      );
+    if (this.potholeHits)
+      tips.push(
+        "Look well ahead for potholes, especially in spring and when they are full of water. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.",
+      );
+    if (this.ballWarnings)
+      tips.push(
+        "A ball bouncing into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb.",
+      );
+    if (this.splashes)
+      tips.push(
+        "In the rain, watch for puddles by the kerb, at corners and over drains, and for people on the sidewalk or waiting at a bus stop beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down, below about 20 km/h, until you're through. Splashing someone is careless driving.",
+      );
+    if (this.officerViolations)
+      tips.push(
+        "Where a police officer is directing traffic, follow the officer, not the lights: stop at the line when they hold you, even on a green, and go when they wave you through, even on a red, still yielding to anyone in the junction.",
+      );
+    if (this.brakeChecks)
+      tips.push(
+        "Never brake-check a tailgater: they can't stop in time. Increase your gap to the car ahead so you can brake early and gently, don't speed up to please them, and let them by: move into the right lane when it's safe, or ease off a little so they can pass.",
+      );
+    if (this.parkingConflicts)
+      tips.push(
+        "A car ahead signalling and stopping beside a gap in the parked cars is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses.",
+      );
+    if (this.closureEntries)
+      tips.push(
+        "A ROAD CLOSED barricade closes the whole street to traffic, however empty it looks. Turn off at the junction before it and follow the detour; if you only see it late, stop short of it and find another way.",
+      );
+    if (this.snowbankConflicts)
+      tips.push(
+        "Where snowbanks push the parked cars out and leave room for only one car, take turns: whoever is already in the narrow stretch, or got to it first, goes first. Wait at your end until the oncoming car is through, and keep to the middle, slowly, when it is your turn.",
+      );
+    if (this.wildlifeConflicts)
+      tips.push(
+        "Geese and their goslings cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them or creep toward them.",
+      );
+    if (this.iceOverspeed)
+      tips.push(
+        "Near freezing, expect black ice on bridges, overpasses and shaded stretches, even when the road looks only dry or damp. Slow down before them, on the dry road, and cross the ice steadily: no braking, accelerating or sharp steering on it. If you are already on it, ease off and keep the wheel straight.",
+      );
+    if (this.reversingConflicts)
+      tips.push(
+        "Watch driveways for reversing lights. Slow down when a car is backing out ahead, and once it is coming into your lane, stop and give it room to finish; never try to squeeze past behind it.",
+      );
+    if (this.guardViolations)
+      tips.push(
+        "When a school crossing guard holds up the STOP sign, stop before the crosswalk and stay stopped until the guard and every child are off the road, not just out of your lane. Slow down whenever children wait at the curb with a guard.",
+      );
+    if (this.closePasses)
+      tips.push(
+        "Give cyclists room: leave at least 1 m when you pass one where the limit is 50 km/h or less, 1.5 m above. On a street with one lane each way that means moving into the oncoming lane, so stay behind until it is clear.",
+      );
+    if (this.cyclistCutoffs)
+      tips.push(
+        "Passing a cyclist through the oncoming lane, wait behind them until that lane is clear for the whole pass and back. Oncoming traffic has the right of way.",
+      );
+    if (this.vanCutoffs)
+      tips.push(
+        "Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.",
+      );
+    if (this.kerbStrikes)
+      tips.push(
+        "Parking, creep in slowly and stop before a wheel touches the kerb. Turn the wheel only while the car is moving if you have to, and check your mirror on the kerb side.",
+      );
+    if (this.parking?.result === "parked" && !this.parking.within_kerb)
+      tips.push(
+        "Park parallel to the kerb with your wheels within 30 cm of it. If you end up further out, pull forward and reverse in again.",
+      );
+    if (this.parking?.result === "stuck partway in")
+      tips.push(
+        "Choose a space at least one and a half times your car's length, and start with your rear bumper level with the car in front, about a door's width from it.",
+      );
+    if (this.flaggerStops)
+      tips.push(
+        "At a work zone, stop for the flagger’s STOP paddle and wait for it to turn to SLOW. Traffic coming the other way has the one lane until then.",
+      );
+    if (this.workZoneSpeeding > 0.5)
+      tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
+    if (this.blockedJunctions)
+      tips.push(
+        "Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.",
+      );
+    if (this.onTracks)
+      tips.push(
+        "Never stop on the tracks at a level crossing. Wait short of them, at least 5 m back from the nearest rail, until there is room for all of your car past them.",
+      );
+    if (this.closeFollowing > 1 || this.danger > 0.5)
+      tips.push(
+        this.followingEnabled
+          ? "Leave room for reaction and braking, with more space on slippery roads. If someone merges into your gap, ease off to rebuild it; brake firmly if needed to avoid a collision."
+          : "Aim for at least a two-second following gap when conditions allow.",
+      );
     if (this.glareSeconds > 0.8) tips.push("Dip high beams for oncoming and leading vehicles, fog and snow.");
-    if (this.glareSpeeding > 1) tips.push("When the sun is in your eyes, slow down to what you can see, leave more room, and look for signals and people early.");
-    if (this.pxoEarlyGoes) tips.push("At an Ontario pedestrian crossover, stay stopped until everyone has reached the far curb across the whole roadway.");
-    if (this.crewPasses) tips.push("Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.");
-    if (this.scrambleReds) tips.push("At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.");
-    if (delta("bus_lane_driving") > 1) tips.push("Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.");
-    if (this.illegalTurns) tips.push("Obey turn restriction signs while their posted hours apply; follow a legal route around the block.");
-    if (this.humpHits) tips.push("Slow right down for speed humps: 30 km/h for a hump or a cushion, 40 for a speed table and a crawl for a bump. Brake before it, not on it, and keep to that speed until the rear wheels are over.");
-    if (this.harsh + this.jerk + this.cornering > 2) tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
-    if (this.offRoad + this.wrongWay > 0.5 || this.resets) tips.push("Keep to your lane and plan turns before reaching the junction.");
+    if (this.glareSpeeding > 1)
+      tips.push(
+        "When the sun is in your eyes, slow down to what you can see, leave more room, and look for signals and people early.",
+      );
+    if (this.pxoEarlyGoes)
+      tips.push(
+        "At an Ontario pedestrian crossover, stay stopped until everyone has reached the far curb across the whole roadway.",
+      );
+    if (this.crewPasses)
+      tips.push(
+        "Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.",
+      );
+    if (this.scrambleReds)
+      tips.push(
+        "At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.",
+      );
+    if (delta("bus_lane_driving") > 1)
+      tips.push(
+        "Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.",
+      );
+    if (this.illegalTurns)
+      tips.push("Obey turn restriction signs while their posted hours apply; follow a legal route around the block.");
+    if (this.humpHits)
+      tips.push(
+        "Slow right down for speed humps: 30 km/h for a hump or a cushion, 40 for a speed table and a crawl for a bump. Brake before it, not on it, and keep to that speed until the rear wheels are over.",
+      );
+    if (this.harsh + this.jerk + this.cornering > 2)
+      tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
+    if (this.offRoad + this.wrongWay > 0.5 || this.resets)
+      tips.push("Keep to your lane and plan turns before reaching the junction.");
     if (!qualified) tips.push("Drive at least 100 m and 10 seconds to receive a grade.");
     if (!tips.length) tips.push("A composed drive. Keep scanning ahead and make room for people crossing.");
-    return { model_version: SCORE_VERSION, title: this.title, map: this.map, driver: this.driver,
-      started_at: this.startedAt, status: this.simulationError ? "error" : this.finished || "active", score, grade, qualified, categories,
+    return {
+      model_version: SCORE_VERSION,
+      title: this.title,
+      map: this.map,
+      driver: this.driver,
+      started_at: this.startedAt,
+      status: this.simulationError ? "error" : this.finished || "active",
+      score,
+      grade,
+      qualified,
+      categories,
       ...(this.simulationError ? { simulation_error: this.simulationError } : {}),
-      elapsed_s: round(this.elapsed), distance_m: Math.round(this.distance), moving_s: round(this.moving),
-      max_kmh: round(this.maxSpeed * 3.6), progress: round(clamp(this.progress, 0, 1), 3),
-      collisions, at_fault: atFault, red_lights: reds, stop_signs: stops, failed_to_yield: yields,
-      speeding_s: round(this.speeding), zone_speeding_s: round(this.zoneSpeeding), roadside_speeding_s: round(this.roadsideSpeeding), no_move_over: this.noMoveOver, work_zone_speeding_s: round(this.workZoneSpeeding), flagger_stops_run: this.flaggerStops, van_cutoffs: this.vanCutoffs, stopped_on_tracks: this.onTracks, blocked_junction: this.blockedJunctions, off_road_s: round(this.offRoad), wrong_way_s: round(this.wrongWay),
-      close_following_s: round(this.closeFollowing), danger_s: round(this.danger), hard_brakes: this.hardBrakes,
-      ...(this.followingEnabled ? { following_policy: "grip-and-response-v1", following_recovery_s: round(this.followingRecovery) } : {}),
-      min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null, resets: this.resets,
-      ...(this.plows ? { plow_close_s: round(this.plowClose), plow_right_passes: this.plowRightPasses, plow_cut_ins: this.plowCutIns } : {}),
-      ...(this.closures ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges } : {}),
+      elapsed_s: round(this.elapsed),
+      distance_m: Math.round(this.distance),
+      moving_s: round(this.moving),
+      max_kmh: round(this.maxSpeed * 3.6),
+      progress: round(clamp(this.progress, 0, 1), 3),
+      collisions,
+      at_fault: atFault,
+      red_lights: reds,
+      stop_signs: stops,
+      failed_to_yield: yields,
+      speeding_s: round(this.speeding),
+      zone_speeding_s: round(this.zoneSpeeding),
+      roadside_speeding_s: round(this.roadsideSpeeding),
+      no_move_over: this.noMoveOver,
+      work_zone_speeding_s: round(this.workZoneSpeeding),
+      flagger_stops_run: this.flaggerStops,
+      van_cutoffs: this.vanCutoffs,
+      stopped_on_tracks: this.onTracks,
+      blocked_junction: this.blockedJunctions,
+      off_road_s: round(this.offRoad),
+      wrong_way_s: round(this.wrongWay),
+      close_following_s: round(this.closeFollowing),
+      danger_s: round(this.danger),
+      hard_brakes: this.hardBrakes,
+      ...(this.followingEnabled
+        ? { following_policy: "grip-and-response-v1", following_recovery_s: round(this.followingRecovery) }
+        : {}),
+      min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null,
+      resets: this.resets,
+      ...(this.plows
+        ? {
+            plow_close_s: round(this.plowClose),
+            plow_right_passes: this.plowRightPasses,
+            plow_cut_ins: this.plowCutIns,
+          }
+        : {}),
+      ...(this.closures
+        ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges }
+        : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
       ...(this.amberLightsSeen ? { amber_lights_run: delta("amber_lights_run") } : {}),
@@ -525,13 +1140,27 @@ export class DriveScore {
       ...(this.puddles ? { pedestrians_splashed: this.splashes } : {}),
       ...(this.parkers ? { parking_conflicts: this.parkingConflicts } : {}),
       ...(this.roadClosures ? { closure_entries: this.closureEntries } : {}),
-      ...(this.contraflow ? { contraflow_conflicts: this.contraflowMeets + this.contraflowCutoffs, contraflow_meets: this.contraflowMeets, contraflow_cutoffs: this.contraflowCutoffs } : {}),
+      ...(this.contraflow
+        ? {
+            contraflow_conflicts: this.contraflowMeets + this.contraflowCutoffs,
+            contraflow_meets: this.contraflowMeets,
+            contraflow_cutoffs: this.contraflowCutoffs,
+          }
+        : {}),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
-      ...(this.parking || this.kerbStrikes ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } } : {}),
-      coach: this.coach, tips, incidents: this.incidents.map(i => ({ ...i })) };
+      ...(this.parking || this.kerbStrikes
+        ? { parking: { ...(this.parking || { result: "not yet" }), kerb_strikes: this.kerbStrikes } }
+        : {}),
+      coach: this.coach,
+      tips,
+      incidents: this.incidents.map((i) => ({ ...i })),
+    };
   }
 
-  finish(status = "finished") { this.finished ||= status; return this.snapshot(); }
+  finish(status = "finished") {
+    this.finished ||= status;
+    return this.snapshot();
+  }
 }
 
 export const HISTORY_KEY = "jev-fsd-drives-v1";
@@ -539,16 +1168,31 @@ export function readHistory(storage) {
   try {
     storage ||= globalThis.localStorage;
     const data = JSON.parse(storage.getItem(HISTORY_KEY));
-    return Array.isArray(data) ? data.filter(d => d?.model_version === SCORE_VERSION && Number.isFinite(d.score)
-      && typeof d.title === "string" && typeof d.map === "string" && Array.isArray(d.tips) && Array.isArray(d.incidents)
-      && Object.keys(SCORE_WEIGHTS).every(key => Number.isFinite(d.categories?.[key]))).slice(0, 20) : [];
+    return Array.isArray(data)
+      ? data
+          .filter(
+            (d) =>
+              d?.model_version === SCORE_VERSION &&
+              Number.isFinite(d.score) &&
+              typeof d.title === "string" &&
+              typeof d.map === "string" &&
+              Array.isArray(d.tips) &&
+              Array.isArray(d.incidents) &&
+              Object.keys(SCORE_WEIGHTS).every((key) => Number.isFinite(d.categories?.[key])),
+          )
+          .slice(0, 20)
+      : [];
+  } catch {
+    return [];
   }
-  catch { return []; }
 }
 export function saveDrive(report, storage) {
   try {
     storage ||= globalThis.localStorage;
     const history = [report, ...readHistory(storage)].slice(0, 20);
-    storage.setItem(HISTORY_KEY, JSON.stringify(history)); return true;
-  } catch { return false; }
+    storage.setItem(HISTORY_KEY, JSON.stringify(history));
+    return true;
+  } catch {
+    return false;
+  }
 }

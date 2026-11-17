@@ -15,8 +15,22 @@ const PRESETS = {
   snow: { snow: 1, particles: "snow" },
 };
 // how much snow each kind of surface keeps (plowed and driven roads keep the least)
-const SNOW_COVER = { grass: 0.95, roof: 0.92, concrete: 0.8, curb: 0.7, leaf: 0.55, asphalt: 0.42, paint: 0.35, car: 0.8 };
-const WET = { asphalt: { color: 0.62, roughness: 0.28, env: 1.6 }, concrete: { color: 0.78, roughness: 0.55, env: 1.0 }, curb: { color: 0.8, roughness: 0.6, env: 1.0 }, paint: { color: 0.85, roughness: 0.35, env: 1.3 } };
+const SNOW_COVER = {
+  grass: 0.95,
+  roof: 0.92,
+  concrete: 0.8,
+  curb: 0.7,
+  leaf: 0.55,
+  asphalt: 0.42,
+  paint: 0.35,
+  car: 0.8,
+};
+const WET = {
+  asphalt: { color: 0.62, roughness: 0.28, env: 1.6 },
+  concrete: { color: 0.78, roughness: 0.55, env: 1.0 },
+  curb: { color: 0.8, roughness: 0.6, env: 1.0 },
+  paint: { color: 0.85, roughness: 0.35, env: 1.3 },
+};
 
 // Make a material able to show snow on its upward faces; the amount is a uniform set later.
 export function snowable(material, surface) {
@@ -29,18 +43,26 @@ export function snowable(material, surface) {
     shader.uniforms.uSnow = uniform;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vUp;")
-      .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+      .replace(
+        "#include <beginnormal_vertex>",
+        `#include <beginnormal_vertex>
         vec3 upN = objectNormal;
         #ifdef USE_INSTANCING
           upN = mat3(instanceMatrix) * upN;
         #endif
-        vUp = normalize(mat3(modelMatrix) * upN).y;`);
+        vUp = normalize(mat3(modelMatrix) * upN).y;`,
+      );
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vUp;\nuniform float uSnow;")
-      .replace("#include <map_fragment>", `#include <map_fragment>
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.98), uSnow * smoothstep(0.35, 0.85, vUp));`);
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.98), uSnow * smoothstep(0.35, 0.85, vUp));`,
+      );
   };
-  const prevKey = Object.prototype.hasOwnProperty.call(material, "customProgramCacheKey") ? material.customProgramCacheKey : null;
+  const prevKey = Object.prototype.hasOwnProperty.call(material, "customProgramCacheKey")
+    ? material.customProgramCacheKey
+    : null;
   material.customProgramCacheKey = () => `snow-${surface}-${prevKey ? prevKey() : ""}`;
   material.needsUpdate = true;
   return material;
@@ -63,8 +85,11 @@ export class WeatherView {
       for (const m of mats) {
         const surface = m.userData.surface;
         if (!surface) continue;
-        if (!m.userData.base) m.userData.base = { color: m.color.clone(), roughness: m.roughness, env: m.envMapIntensity ?? 1 };
-        const base = m.userData.base, wet = (P.wet || 0) * (WET[surface] ? 1 : 0), w = WET[surface];
+        if (!m.userData.base)
+          m.userData.base = { color: m.color.clone(), roughness: m.roughness, env: m.envMapIntensity ?? 1 };
+        const base = m.userData.base,
+          wet = (P.wet || 0) * (WET[surface] ? 1 : 0),
+          w = WET[surface];
         m.color.copy(base.color).multiplyScalar(wet ? 1 - (1 - w.color) * wet : 1);
         m.roughness = wet ? base.roughness + (w.roughness - base.roughness) * wet : base.roughness;
         m.envMapIntensity = wet ? base.env + (w.env - base.env) * wet : base.env;
@@ -76,7 +101,10 @@ export class WeatherView {
 
   setParticles(kind) {
     for (const k of ["rain", "snow"]) {
-      if (this[k]) { this.view.scene.remove(this[k].mesh); this[k] = null; }
+      if (this[k]) {
+        this.view.scene.remove(this[k].mesh);
+        this[k] = null;
+      }
     }
     if (kind === "rain") this.rain = makeRain();
     if (kind === "snow") this.snow = makeSnow();
@@ -98,7 +126,10 @@ function makeRain(count = 5000) {
   const pos = new Float32Array(count * 6);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  const mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xb8c2cc, transparent: true, opacity: 0.45, depthWrite: false }));
+  const mesh = new THREE.LineSegments(
+    geo,
+    new THREE.LineBasicMaterial({ color: 0xb8c2cc, transparent: true, opacity: 0.45, depthWrite: false }),
+  );
   mesh.frustumCulled = false;
   let t = 0;
   return {
@@ -128,10 +159,19 @@ function makeSnow(count = 6000) {
   // Three sets `scale` to half the CSS height but `size` to the flake size times the pixel ratio,
   // so `size / FLAKE` is the pixel ratio and the cap is 1.5% of the view height on any screen.
   const FLAKE = 0.12;
-  const material = new THREE.PointsMaterial({ color: 0xffffff, size: FLAKE, map: flakeTexture(), transparent: true, opacity: 0.95, depthWrite: false });
+  const material = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: FLAKE,
+    map: flakeTexture(),
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  });
   material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace("#include <fog_vertex>",
-      `#include <fog_vertex>\n  gl_PointSize = min( gl_PointSize, scale * 0.03 * size / ${FLAKE.toFixed(2)} );`);
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <fog_vertex>",
+      `#include <fog_vertex>\n  gl_PointSize = min( gl_PointSize, scale * 0.03 * size / ${FLAKE.toFixed(2)} );`,
+    );
   };
   const mesh = new THREE.Points(geo, material);
   mesh.frustumCulled = false;

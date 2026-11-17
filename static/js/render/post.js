@@ -74,7 +74,10 @@ export class PostFX {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.45, 1.0);
     this.output = new OutputPass();
     this.gradeRT = new THREE.WebGLRenderTarget(w, h);
-    this.grade = new THREE.ShaderMaterial({ ...GradeShader, uniforms: THREE.UniformsUtils.clone(GradeShader.uniforms) });
+    this.grade = new THREE.ShaderMaterial({
+      ...GradeShader,
+      uniforms: THREE.UniformsUtils.clone(GradeShader.uniforms),
+    });
     this.grade.uniforms.aspect.value = w / Math.max(1, h);
     this.gradeQuad = new FullScreenQuad(this.grade);
     this.smaa = new SMAAPass();
@@ -101,8 +104,10 @@ export class PostFX {
       this.sceneRT = this.sceneTarget(width, height, enabled);
     }
     if (!enabled) {
-      this.ao?.dispose(); this.blendRT?.dispose();
-      this.ao = null; this.blendRT = null;
+      this.ao?.dispose();
+      this.blendRT?.dispose();
+      this.ao = null;
+      this.blendRT = null;
       return;
     }
     if (this.ao) return;
@@ -113,13 +118,23 @@ export class PostFX {
     // the foot of every wall, and the corners of eaves and window reveals.
     this.ao = new GTAOPass(this.scene, this.camera, Math.ceil(w / 2), Math.ceil(h / 2));
     this.ao.setGBuffer(depthTexture);
-    this.ao.updateGtaoMaterial({ radius: 1.5, distanceExponent: 1.5, thickness: 1.8, scale: 1.6, samples: 12, distanceFallOff: 1.0 });
+    this.ao.updateGtaoMaterial({
+      radius: 1.5,
+      distanceExponent: 1.5,
+      thickness: 1.8,
+      scale: 1.6,
+      samples: 12,
+      distanceFallOff: 1.0,
+    });
     this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 3, rings: 2, samples: 8 });
     this.ao.blendIntensity = 1.0;
     // depth-reconstructed normals are noise a few hundred meters out (depth precision runs out),
     // and occlusion there is invisible anyway: fade it away with distance
     const m = this.ao.gtaoMaterial;
-    m.fragmentShader = m.fragmentShader.replace("ao = pow(ao, scale);", "ao = pow(ao, scale);\n\t\t\tao = mix(ao, 1.0, smoothstep(60.0, 160.0, -viewPos.z));");
+    m.fragmentShader = m.fragmentShader.replace(
+      "ao = pow(ao, scale);",
+      "ao = pow(ao, scale);\n\t\t\tao = mix(ao, 1.0, smoothstep(60.0, 160.0, -viewPos.z));",
+    );
     m.needsUpdate = true;
   }
 
@@ -158,13 +173,13 @@ export class PostFX {
       this.ao.render(r, this.blendRT, this.sceneRT);
       source = this.blendRT;
     }
-    this.bloom.render(r, null, source);             // adds the glow in place
-    this.output.render(r, this.ldrRT, source);      // tone map
+    this.bloom.render(r, null, source); // adds the glow in place
+    this.output.render(r, this.ldrRT, source); // tone map
     this.grade.uniforms.tDiffuse.value = this.ldrRT.texture;
     this.grade.uniforms.seed.value = (this.grade.uniforms.seed.value + 1) % 64;
     r.setRenderTarget(this.gradeRT);
-    this.gradeQuad.render(r);                         // colour grade, vignette, dither
-    this.smaa.render(r, null, this.gradeRT);          // antialias to the screen
+    this.gradeQuad.render(r); // colour grade, vignette, dither
+    this.smaa.render(r, null, this.gradeRT); // antialias to the screen
   }
 
   dispose() {

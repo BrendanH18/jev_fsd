@@ -24,25 +24,16 @@ export function area(pts) {
 
 function convexHull(points) {
   const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) =>
-    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lo = [],
     up = [];
   for (const p of pts) {
-    while (
-      lo.length >= 2 &&
-      cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0
-    )
-      lo.pop();
+    while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop();
     lo.push(p);
   }
   for (let i = pts.length - 1; i >= 0; i--) {
     const p = pts[i];
-    while (
-      up.length >= 2 &&
-      cross(up[up.length - 2], up[up.length - 1], p) <= 0
-    )
-      up.pop();
+    while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop();
     up.push(p);
   }
   up.pop();
@@ -117,15 +108,11 @@ export function houseExterior(map, r, key) {
       z1,
       id: `${part}:${key}:${boxes.length}`,
     });
-  const near =
-    typeof map.nearestLane === "function"
-      ? map.nearestLane(r.cx, r.cy, null, 45)
-      : null;
+  const near = typeof map.nearestLane === "function" ? map.nearestLane(r.cx, r.cy, null, 45) : null;
   if (!near) return boxes;
   const e = near.lane.edgeRef,
     side = near.lateral > 0 ? 1 : -1;
-  const walkBack =
-    Math.abs(sidewalkOffset(e, side) - near.lane.offset) + streetOf(e)[1] / 2;
+  const walkBack = Math.abs(sidewalkOffset(e, side) - near.lane.offset) + streetOf(e)[1] / 2;
   const dx = near.point[0] - r.cx,
     dy = near.point[1] - r.cy,
     d = Math.hypot(dx, dy) || 1,
@@ -154,17 +141,7 @@ export function houseExterior(map, r, key) {
     add("porch", px, py, nx, ny, depth / 2, width / 2, 0, 0.62);
     for (let k = 0; k < 3; k++) {
       const sd = depth / 2 + 0.16 + k * 0.3;
-      add(
-        "porch_step",
-        px + nx * sd,
-        py + ny * sd,
-        nx,
-        ny,
-        0.16,
-        0.7,
-        0,
-        0.62 - (k + 1) * 0.18,
-      );
+      add("porch_step", px + nx * sd, py + ny * sd, nx, ny, 0.16, 0.7, 0, 0.62 - (k + 1) * 0.18);
     }
     for (const s of [-1, 1])
       add(
@@ -178,28 +155,8 @@ export function houseExterior(map, r, key) {
         0.62,
         2.85,
       );
-    add(
-      "porch_roof",
-      px + nx * 0.15,
-      py + ny * 0.15,
-      nx,
-      ny,
-      depth / 2 + 0.3,
-      width / 2 + 0.25,
-      2.85,
-      3,
-    );
-    add(
-      "door",
-      wx + nx * 0.03 + tx * shift,
-      wy + ny * 0.03 + ty * shift,
-      nx,
-      ny,
-      0.03,
-      0.5,
-      0.62,
-      2.7,
-    );
+    add("porch_roof", px + nx * 0.15, py + ny * 0.15, nx, ny, depth / 2 + 0.3, width / 2 + 0.25, 2.85, 3);
+    add("door", wx + nx * 0.03 + tx * shift, wy + ny * 0.03 + ty * shift, nx, ny, 0.03, 0.5, 0.62, 2.7);
   }
   if (hash01(key, 47) < 0.35 && yard > 4)
     add(
@@ -240,13 +197,7 @@ export function buildingShapes(map) {
       a = Math.abs(area(pts)),
       kind = h > 13 || a > 450 ? "block" : "house",
       r = kind === "house" ? minRect(pts) : null;
-    const pitched = !!(
-      r &&
-      a / r.area > 0.7 &&
-      r.hw <= 8.5 &&
-      r.hw >= 1.5 &&
-      hash01(i, 3) < 0.92
-    );
+    const pitched = !!(r && a / r.area > 0.7 && r.hw <= 8.5 && r.hw >= 1.5 && hash01(i, 3) < 0.92);
     out.push({
       pts,
       i,

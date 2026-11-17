@@ -12,17 +12,28 @@ from jev.osm.pack import pack_path
 
 class WayTagTests(unittest.TestCase):
     def test_shared_street(self):
-        self.assertEqual(way_contraflow({"highway": "residential", "oneway": "yes", "oneway:bicycle": "no"})[:2], ("shared", "left"))
+        self.assertEqual(
+            way_contraflow({"highway": "residential", "oneway": "yes", "oneway:bicycle": "no"})[:2], ("shared", "left")
+        )
         self.assertEqual(way_contraflow({"oneway": "yes", "cycleway": "opposite"})[:2], ("shared", "left"))
         self.assertEqual(way_contraflow({"oneway": "yes", "bicycle:backward": "yes"})[:2], ("shared", "left"))
 
     def test_painted_lane_against_the_traffic(self):
-        self.assertEqual(way_contraflow({"oneway": "yes", "cycleway:left": "lane", "cycleway:left:oneway": "-1"})[:2], ("lane", "left"))
+        self.assertEqual(
+            way_contraflow({"oneway": "yes", "cycleway:left": "lane", "cycleway:left:oneway": "-1"})[:2],
+            ("lane", "left"),
+        )
         self.assertEqual(way_contraflow({"oneway": "yes", "cycleway:left": "opposite_lane"})[:2], ("lane", "left"))
         self.assertEqual(way_contraflow({"oneway": "yes", "cycleway": "opposite_lane"})[:2], ("lane", "left"))
-        self.assertEqual(way_contraflow({"oneway": "yes", "cycleway:left": "track", "cycleway:left:oneway": "no"})[:2], ("track", "left"))
+        self.assertEqual(
+            way_contraflow({"oneway": "yes", "cycleway:left": "track", "cycleway:left:oneway": "no"})[:2],
+            ("track", "left"),
+        )
         # (a lane on a oneway=-1 way runs against the traffic when it runs the way's own way)
-        self.assertEqual(way_contraflow({"oneway": "-1", "cycleway:right": "lane", "cycleway:right:oneway": "yes"})[:2], ("lane", "right"))
+        self.assertEqual(
+            way_contraflow({"oneway": "-1", "cycleway:right": "lane", "cycleway:right:oneway": "yes"})[:2],
+            ("lane", "right"),
+        )
 
     def test_lanes_with_the_traffic_are_not_contraflow(self):
         self.assertIsNone(way_contraflow({"oneway": "yes", "cycleway:right": "lane"}))
@@ -38,9 +49,20 @@ class MappingTests(unittest.TestCase):
         osm.add_node(1, 45.52, -73.58)
         osm.add_node(2, 45.52, -73.579)
         osm.add_way(10, [1, 2], {"highway": "residential", "name": "Rue X", **tags})
-        edge = {"id": "e0", "from": "n1" if forward else "n2", "to": "n2" if forward else "n1", "pts": [[0, 0], [78, 0]] if forward else [[78, 0], [0, 0]],
-                "length": 78, "lanes": 1, "oneway": oneway, "name": "Rue X", **({"ring": True} if ring else {})}
-        return contraflow_from_osm(osm, {"origin": {"lat": 45.52, "lon": -73.58}, "edges": [edge], "name": "test"})["edges"]
+        edge = {
+            "id": "e0",
+            "from": "n1" if forward else "n2",
+            "to": "n2" if forward else "n1",
+            "pts": [[0, 0], [78, 0]] if forward else [[78, 0], [0, 0]],
+            "length": 78,
+            "lanes": 1,
+            "oneway": oneway,
+            "name": "Rue X",
+            **({"ring": True} if ring else {}),
+        }
+        return contraflow_from_osm(osm, {"origin": {"lat": 45.52, "lon": -73.58}, "edges": [edge], "name": "test"})[
+            "edges"
+        ]
 
     def test_one_way_edge(self):
         out = self.build({"oneway": "yes", "cycleway:left": "lane", "cycleway:left:oneway": "-1"})
@@ -59,7 +81,16 @@ class MappingTests(unittest.TestCase):
         osm.add_node(1, 45.52, -73.58)
         osm.add_node(3, 45.52, -73.578)
         osm.add_way(11, [1, 3], {"highway": "residential", "name": "Rue X", "oneway": "yes", "oneway:bicycle": "no"})
-        edge = {"id": "e7", "from": "n5", "to": "n6", "pts": [[1, 0], [77, 0]], "length": 76, "lanes": 1, "oneway": True, "name": "Rue X"}
+        edge = {
+            "id": "e7",
+            "from": "n5",
+            "to": "n6",
+            "pts": [[1, 0], [77, 0]],
+            "length": 76,
+            "lanes": 1,
+            "oneway": True,
+            "name": "Rue X",
+        }
         out = contraflow_from_osm(osm, {"origin": {"lat": 45.52, "lon": -73.58}, "edges": [edge]})["edges"]
         self.assertEqual([e["edge"] for e in out], ["e7"])
 

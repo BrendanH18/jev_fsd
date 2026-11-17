@@ -26,28 +26,41 @@ import { obbOverlap } from "./collision.js";
 import { segmentHitsBox } from "./crosswalk.js";
 
 export const PEDESTRIANS = 60;
-export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 };   // footprint for collisions
+export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 }; // footprint for collisions
 // Part-way across, held up this long by a vehicle standing just short of their way (one stopped for them,
 // its bumper at their line, say), someone walks round its nearer end, ROUND_CLEAR_M clear of it.
 const ROUND_S = 3;
 const ROUND_CLEAR_M = 0.55;
-const ROUND_GRAZE_M = 0.1;   // (a way passing no further into its body than this only grazes it)
+const ROUND_GRAZE_M = 0.1; // (a way passing no further into its body than this only grazes it)
 
 export class Pedestrian {
-  constructor(props) { Object.assign(this, props); this.spec = PED; this.kind = "pedestrian"; this.a = 0; this.frozen = 0; }
-  get center() { return [this.x, this.y]; }
-  obb() { return { center: [this.x, this.y], heading: this.psi, halfLength: PED.length / 2, halfWidth: PED.width / 2 }; }
+  constructor(props) {
+    Object.assign(this, props);
+    this.spec = PED;
+    this.kind = "pedestrian";
+    this.a = 0;
+    this.frozen = 0;
+  }
+  get center() {
+    return [this.x, this.y];
+  }
+  obb() {
+    return { center: [this.x, this.y], heading: this.psi, halfLength: PED.length / 2, halfWidth: PED.width / 2 };
+  }
   toLocal(px, py) {
-    const dx = px - this.x, dy = py - this.y, c = Math.cos(this.psi), s = Math.sin(this.psi);
+    const dx = px - this.x,
+      dy = py - this.y,
+      c = Math.cos(this.psi),
+      s = Math.sin(this.psi);
     return { ahead: dx * c + dy * s, right: dx * s - dy * c };
   }
 }
-const CROSS_BEYOND_CURB_M = 1.6;   // crosswalk center past the cross street's asphalt edge
-const GAP_S = 5;                   // an approaching vehicle closer than this in time blocks a crossing
-const JAYWALK_GAP_S = 8;           // a mid-block crossing waits for a longer gap
-const JAYWALK_P = 0.14;            // chance a walk along a quiet block ends up crossing mid-block
+const CROSS_BEYOND_CURB_M = 1.6; // crosswalk center past the cross street's asphalt edge
+const GAP_S = 5; // an approaching vehicle closer than this in time blocks a crossing
+const JAYWALK_GAP_S = 8; // a mid-block crossing waits for a longer gap
+const JAYWALK_P = 0.14; // chance a walk along a quiet block ends up crossing mid-block
 const QUIET = new Set(["residential", "unclassified", "living_street"]);
-const YIELD_AHEAD_M = 3.0;         // a pedestrian still this far short of the car's path counts
+const YIELD_AHEAD_M = 3.0; // a pedestrian still this far short of the car's path counts
 // At a marked crosswalk a pedestrian must not step off when a vehicle is so close that its driver
 // could not yield (BC MVA s. 179(2)): one that would need to brake harder than this, after this
 // long to react, waits for it to go by. Half of those walking past one cross there.
@@ -64,8 +77,8 @@ export class Crowd {
     this.world = world;
     this.map = world.map;
     this.random = rng(seed * 31337 + 11);
-    this.habits = rng(seed * 4099 + 29);   // walking speeds and jaywalking, apart from the routes
-    this.marking = rng(seed * 7919 + 43);  // crossing at marked crosswalks, apart from both
+    this.habits = rng(seed * 4099 + 29); // walking speeds and jaywalking, apart from the routes
+    this.marking = rng(seed * 7919 + 43); // crossing at marked crosswalks, apart from both
     this.list = [];
     this.kids = 0;
     this.build();
@@ -92,14 +105,25 @@ export class Crowd {
       const e0 = map.edges.get(c.edge);
       const st = e0 && streets.get([e0.from, e0.to].sort().join("|") + "|" + Math.round(e0.length));
       if (!st) continue;
-      const e = st.edge, s = projectPoint(e.pts, e.cum, [c.x, c.y]).s;
-      const cw = { id: c.id, ...(c.pxo ? { pxo: true, beacons: c.beacons } : {}), st, s, markings: c.markings, ends: { 1: offsetPoint(e, s, sidewalkOffset(e, 1)), [-1]: offsetPoint(e, s, sidewalkOffset(e, -1)) } };
+      const e = st.edge,
+        s = projectPoint(e.pts, e.cum, [c.x, c.y]).s;
+      const cw = {
+        id: c.id,
+        ...(c.pxo ? { pxo: true, beacons: c.beacons } : {}),
+        st,
+        s,
+        markings: c.markings,
+        ends: { 1: offsetPoint(e, s, sidewalkOffset(e, 1)), [-1]: offsetPoint(e, s, sidewalkOffset(e, -1)) },
+      };
       (st.crosswalks ||= []).push(cw);
       this.marked.push(cw);
     }
     const legs = new Map();
     for (const st of this.streets) {
-      for (const [node, out] of [[st.edge.from, true], [st.edge.to, false]]) {
+      for (const [node, out] of [
+        [st.edge.from, true],
+        [st.edge.to, false],
+      ]) {
         if (!legs.has(node)) legs.set(node, []);
         legs.get(node).push({ st, out });
       }
@@ -114,12 +138,16 @@ export class Crowd {
       for (const l of list) half = Math.max(half, Math.abs(l.st.edge.asphalt[0]), Math.abs(l.st.edge.asphalt[1]));
       const inter = [...map.intersections.values()].find((i) => i.vertices && i.vertices.includes(node)) || null;
       for (const l of list) {
-        const e = l.st.edge, L = e.cum[e.cum.length - 1];
+        const e = l.st.edge,
+          L = e.cum[e.cum.length - 1];
         const d = Math.min(L / 2, list.length >= 3 ? half + CROSS_BEYOND_CURB_M : 0.5);
-        l.s = l.out ? d : L - d;                 // position along the base edge
+        l.s = l.out ? d : L - d; // position along the base edge
         if (this.pxo) {
-          const pxo = this.marked.find(c => c.pxo && c.st === l.st && Math.abs(c.s - l.s) < 16);
-          if (pxo) { l.s = pxo.s; l.pxo = pxo.id; }
+          const pxo = this.marked.find((c) => c.pxo && c.st === l.st && Math.abs(c.s - l.s) < 16);
+          if (pxo) {
+            l.s = pxo.s;
+            l.pxo = pxo.id;
+          }
         }
         l.ends = {};
         for (const side of [1, -1]) l.ends[side] = offsetPoint(e, l.s, sidewalkOffset(e, side));
@@ -132,42 +160,69 @@ export class Crowd {
   spawn(count) {
     const total = this.streets.reduce((a, st) => a + st.edge.length, 0);
     for (let k = 0, attempts = 0; k < count && attempts < count * 10; attempts++) {
-      let pick = this.random() * total, st = this.streets[0];
-      for (const x of this.streets) { pick -= x.edge.length; if (pick <= 0) { st = x; break; } }
+      let pick = this.random() * total,
+        st = this.streets[0];
+      for (const x of this.streets) {
+        pick -= x.edge.length;
+        if (pick <= 0) {
+          st = x;
+          break;
+        }
+      }
       const e = st.edge;
       if (!this.legsAt.has(e.from) || !this.legsAt.has(e.to)) continue;
       const side = this.random() < 0.5 ? 1 : -1;
       const dir = this.random() < 0.5 ? 1 : -1;
-      const a = this.leg(e.from, st).s, b = this.leg(e.to, st).s;
+      const a = this.leg(e.from, st).s,
+        b = this.leg(e.to, st).s;
       if (b - a < 4) continue;
       const s = a + this.random() * (b - a);
       const p = offsetPoint(e, s, sidewalkOffset(e, side));
       const ped = new Pedestrian({
-        id: `ped_${++k}`, x: p[0], y: p[1], psi: 0, v: 0,
-        speed: 1.1 + this.random() * 0.5, path: [], crossing: null, waiting: 0, phase: this.random() * 6,
+        id: `ped_${++k}`,
+        x: p[0],
+        y: p[1],
+        psi: 0,
+        v: 0,
+        speed: 1.1 + this.random() * 0.5,
+        path: [],
+        crossing: null,
+        waiting: 0,
+        phase: this.random() * 6,
         look: Math.floor(this.random() * 1e6),
       });
-      if (this.habits() < 0.12) ped.speed = 0.75 + this.habits() * 0.25;   // older or unhurried
+      if (this.habits() < 0.12) ped.speed = 0.75 + this.habits() * 0.25; // older or unhurried
       this.walkAlong(ped, st, side, s, dir);
       this.list.push(ped);
     }
   }
 
-  leg(node, st) { return this.legsAt.get(node).list.find((l) => l.st === st); }
+  leg(node, st) {
+    return this.legsAt.get(node).list.find((l) => l.st === st);
+  }
 
   // The street (one entry for both directions of a two-way street) edge `e` is on, or undefined.
-  streetOf(e) { return this.streetIndex.get([e.from, e.to].sort().join("|") + "|" + Math.round(e.length)); }
+  streetOf(e) {
+    return this.streetIndex.get([e.from, e.to].sort().join("|") + "|" + Math.round(e.length));
+  }
 
   // A child getting off school bus `bus`, stopped on street edge `e` (sim/school-bus.js), by its front
   // door: to the sidewalk beside it or (`cross`) forward past its front and across the street,
   // CROSS_AHEAD_M in front of it, to the far sidewalk; then 20 to 40 m along the sidewalk, and home
   // (off the map). `random`: the stream to draw from.
   alight(bus, e, cross, random) {
-    const bs = bus.spec, c = Math.cos(bus.psi), s = Math.sin(bus.psi), front = bs.length - bs.rearOverhang, side = bs.width / 2 + 0.4;
+    const bs = bus.spec,
+      c = Math.cos(bus.psi),
+      s = Math.sin(bus.psi),
+      front = bs.length - bs.rearOverhang,
+      side = bs.width / 2 + 0.4;
     const at = (ahead, right) => [bus.x + c * ahead + s * right, bus.y + s * ahead - c * right];
-    const L = e.cum[e.cum.length - 1], along = (p) => projectPoint(e.pts, e.cum, p).s;
-    const door = at(front - 1.3, side), path = [];
-    let walk = 1, s0;
+    const L = e.cum[e.cum.length - 1],
+      along = (p) => projectPoint(e.pts, e.cum, p).s;
+    const door = at(front - 1.3, side),
+      path = [];
+    let walk = 1,
+      s0;
     if (cross) {
       const from = at(front + CROSS_AHEAD_M, side);
       s0 = along(from);
@@ -178,10 +233,26 @@ export class Crowd {
       s0 = along(door);
       path.push({ p: offsetPoint(e, s0, sidewalkOffset(e, 1)) });
     }
-    const dir = random() < 0.5 ? 1 : -1, len = 20 + random() * 20;
-    for (let u = 5; u <= len; u += 5) path.push({ p: offsetPoint(e, Math.max(2, Math.min(L - 2, s0 + dir * u)), sidewalkOffset(e, walk)) });
-    const kid = new Pedestrian({ id: `kid_${++this.kids}`, x: door[0], y: door[1], psi: bus.psi - Math.PI / 2, v: 0, speed: 1.15 + random() * 0.35,
-      path, crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), child: true, school: bus.id, home: true });
+    const dir = random() < 0.5 ? 1 : -1,
+      len = 20 + random() * 20;
+    for (let u = 5; u <= len; u += 5)
+      path.push({ p: offsetPoint(e, Math.max(2, Math.min(L - 2, s0 + dir * u)), sidewalkOffset(e, walk)) });
+    const kid = new Pedestrian({
+      id: `kid_${++this.kids}`,
+      x: door[0],
+      y: door[1],
+      psi: bus.psi - Math.PI / 2,
+      v: 0,
+      speed: 1.15 + random() * 0.35,
+      path,
+      crossing: null,
+      waiting: 0,
+      phase: 0,
+      look: Math.floor(random() * 1e6),
+      child: true,
+      school: bus.id,
+      home: true,
+    });
     this.list.push(kid);
     return kid;
   }
@@ -190,12 +261,30 @@ export class Crowd {
   // doors (one of the back three, at random): across the lane beside it to the sidewalk, once nothing
   // coming is too close to stop; then 20 to 40 m along the sidewalk, and away (off the map).
   rideOff(car, e, random) {
-    const door = doorPoints(car)[1 + Math.floor(random() * 3)], s0 = projectPoint(e.pts, e.cum, door).s, L = e.cum[e.cum.length - 1];
-    const curb = offsetPoint(e, s0, sidewalkOffset(e, 1)), path = [{ p: curb, cross: { node: null, from: door, to: curb, jaywalk: true, streetcar: car.id } }];
-    const dir = random() < 0.5 ? 1 : -1, len = 20 + random() * 20;
-    for (let u = 5; u <= len; u += 5) path.push({ p: offsetPoint(e, Math.max(2, Math.min(L - 2, s0 + dir * u)), sidewalkOffset(e, 1)) });
-    const rider = new Pedestrian({ id: `rider_${++this.kids}`, x: door[0], y: door[1], psi: car.psi - Math.PI / 2, v: 0, speed: 1.2 + random() * 0.3,
-      path, crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), streetcar: car.id, home: true });
+    const door = doorPoints(car)[1 + Math.floor(random() * 3)],
+      s0 = projectPoint(e.pts, e.cum, door).s,
+      L = e.cum[e.cum.length - 1];
+    const curb = offsetPoint(e, s0, sidewalkOffset(e, 1)),
+      path = [{ p: curb, cross: { node: null, from: door, to: curb, jaywalk: true, streetcar: car.id } }];
+    const dir = random() < 0.5 ? 1 : -1,
+      len = 20 + random() * 20;
+    for (let u = 5; u <= len; u += 5)
+      path.push({ p: offsetPoint(e, Math.max(2, Math.min(L - 2, s0 + dir * u)), sidewalkOffset(e, 1)) });
+    const rider = new Pedestrian({
+      id: `rider_${++this.kids}`,
+      x: door[0],
+      y: door[1],
+      psi: car.psi - Math.PI / 2,
+      v: 0,
+      speed: 1.2 + random() * 0.3,
+      path,
+      crossing: null,
+      waiting: 0,
+      phase: 0,
+      look: Math.floor(random() * 1e6),
+      streetcar: car.id,
+      home: true,
+    });
     this.list.push(rider);
     return rider;
   }
@@ -204,11 +293,30 @@ export class Crowd {
   // short of one of its doors (any of the four), out across the lane beside it to the door, once
   // nothing coming is too close to stop; there they get on.
   rideOn(car, e, random) {
-    const door = doorPoints(car)[Math.floor(random() * 4)], s0 = projectPoint(e.pts, e.cum, door).s, L = e.cum[e.cum.length - 1];
-    const start = offsetPoint(e, Math.max(2, Math.min(L - 2, s0 - 2 - random() * 4)), sidewalkOffset(e, 1)), curb = offsetPoint(e, s0, sidewalkOffset(e, 1));
-    const rider = new Pedestrian({ id: `rider_${++this.kids}`, x: start[0], y: start[1], psi: car.psi, v: 0, speed: 1.2 + random() * 0.3,
-      path: [{ p: curb }, { p: door, cross: { node: null, from: curb, to: door, jaywalk: true, streetcar: car.id, boarding: true } }], crossing: null, waiting: 0, phase: 0,
-      look: Math.floor(random() * 1e6), streetcar: car.id, boarding: true, home: true });
+    const door = doorPoints(car)[Math.floor(random() * 4)],
+      s0 = projectPoint(e.pts, e.cum, door).s,
+      L = e.cum[e.cum.length - 1];
+    const start = offsetPoint(e, Math.max(2, Math.min(L - 2, s0 - 2 - random() * 4)), sidewalkOffset(e, 1)),
+      curb = offsetPoint(e, s0, sidewalkOffset(e, 1));
+    const rider = new Pedestrian({
+      id: `rider_${++this.kids}`,
+      x: start[0],
+      y: start[1],
+      psi: car.psi,
+      v: 0,
+      speed: 1.2 + random() * 0.3,
+      path: [
+        { p: curb },
+        { p: door, cross: { node: null, from: curb, to: door, jaywalk: true, streetcar: car.id, boarding: true } },
+      ],
+      crossing: null,
+      waiting: 0,
+      phase: 0,
+      look: Math.floor(random() * 1e6),
+      streetcar: car.id,
+      boarding: true,
+      home: true,
+    });
     this.list.push(rider);
     return rider;
   }
@@ -216,7 +324,8 @@ export class Crowd {
   // A rider still at the curb when the streetcar's doors close has missed it: they walk off along the
   // sidewalk, and away.
   missed(rider, e) {
-    const s0 = projectPoint(e.pts, e.cum, [rider.x, rider.y]).s, L = e.cum[e.cum.length - 1];
+    const s0 = projectPoint(e.pts, e.cum, [rider.x, rider.y]).s,
+      L = e.cum[e.cum.length - 1];
     rider.path = [{ p: offsetPoint(e, Math.max(2, Math.min(L - 2, s0 - 25)), sidewalkOffset(e, 1)) }];
     rider.boarding = false;
     rider.streetcar = null;
@@ -233,7 +342,8 @@ export class Crowd {
     const lat = sidewalkOffset(e, side);
     // walking past a marked crosswalk, often cross there; else now and then, on a quiet block, cut
     // across to the other sidewalk partway along
-    const marked = (st.crosswalks || []).filter((c) => (c.s - s) * dir > 1 && (end - c.s) * dir > 1)
+    const marked = (st.crosswalks || [])
+      .filter((c) => (c.s - s) * dir > 1 && (end - c.s) * dir > 1)
       .sort((a, b) => (a.s - b.s) * dir)[0];
     const atMarked = marked && this.marking() < MARKED_P ? marked : null;
     let cross = atMarked ? atMarked.s : null;
@@ -250,14 +360,16 @@ export class Crowd {
     else if (atMarked) {
       // straight across, kerb to kerb, then on along the other side
       walk(s, cross, lat);
-      const from = atMarked.ends[side], to = atMarked.ends[-side];
+      const from = atMarked.ends[side],
+        to = atMarked.ends[-side];
       path.push({ p: to, cross: { node: null, marked: atMarked.id, from, to } });
       walk(cross, end, sidewalkOffset(e, -side));
       side = -side;
     } else {
       walk(s, cross, lat);
       const other = sidewalkOffset(e, -side);
-      const from = offsetPoint(e, cross, lat), to = offsetPoint(e, cross + dir * 2.5, other);
+      const from = offsetPoint(e, cross, lat),
+        to = offsetPoint(e, cross + dir * 2.5, other);
       path.push({ p: to, cross: { node: null, from, to, jaywalk: true } });
       walk(cross + dir * 2.5, end, other);
       side = -side;
@@ -269,25 +381,30 @@ export class Crowd {
   // At a corner: turn onto the next street, cross this one, or cross the next one.
   plan(ped) {
     const { node, st, side } = ped.at;
-    if (ped.at.turnBack) { this.walkAlong(ped, st, side, ped.at.s, -ped.at.dir); return; }
+    if (ped.at.turnBack) {
+      this.walkAlong(ped, st, side, ped.at.s, -ped.at.dir);
+      return;
+    }
     const info = this.legsAt.get(node);
     const here = this.leg(node, st);
     const from = here.ends[side];
     const others = info.list.filter((l) => l !== here);
     // the corner shares a block with the nearest sidewalk end of another leg
     let corner = null;
-    for (const l of others) for (const sd of [1, -1]) {
-      const d = dist(l.ends[sd], from);
-      if (!corner || d < corner.d) corner = { leg: l, side: sd, d };
-    }
+    for (const l of others)
+      for (const sd of [1, -1]) {
+        const d = dist(l.ends[sd], from);
+        if (!corner || d < corner.d) corner = { leg: l, side: sd, d };
+      }
     // at a scramble crossing, now and then straight across the junction to the farthest corner, on the
     // all-walk (only there is anything drawn for it)
     if (info.junction && isScramble(info.inter) && others.length >= 2 && this.random() < DIAGONAL_P) {
       let far = null;
-      for (const l of others) for (const sd of [1, -1]) {
-        const d = dist(l.ends[sd], from);
-        if (!far || d > far.d) far = { leg: l, side: sd, d };
-      }
+      for (const l of others)
+        for (const sd of [1, -1]) {
+          const d = dist(l.ends[sd], from);
+          if (!far || d > far.d) far = { leg: l, side: sd, d };
+        }
       const to = far.leg.ends[far.side];
       ped.path = [{ p: to, cross: { node, leg: far.leg, from, to, diagonal: true } }];
       ped.then = { st: far.leg.st, side: far.side, s: far.leg.s, dir: far.leg.out ? 1 : -1 };
@@ -299,13 +416,17 @@ export class Crowd {
     if (!others.length || (info.junction && r < 0.2)) {
       // cross the street we are on (at a dead end, turn back along the other side)
       target = { leg: here, side: -side };
-      if (info.junction) moves.push({ p: here.ends[-side], cross: { node, leg: here, from: from, to: here.ends[-side] } });
+      if (info.junction)
+        moves.push({ p: here.ends[-side], cross: { node, leg: here, from: from, to: here.ends[-side] } });
       else moves.push({ p: here.ends[-side] });
     } else if (info.junction && r < 0.55) {
       // round the corner, then cross the street there, continuing straight ahead
       moves.push({ p: corner.leg.ends[corner.side] });
       target = { leg: corner.leg, side: -corner.side };
-      moves.push({ p: corner.leg.ends[-corner.side], cross: { node, leg: corner.leg, from: corner.leg.ends[corner.side], to: corner.leg.ends[-corner.side] } });
+      moves.push({
+        p: corner.leg.ends[-corner.side],
+        cross: { node, leg: corner.leg, from: corner.leg.ends[corner.side], to: corner.leg.ends[-corner.side] },
+      });
     } else {
       moves.push({ p: corner.leg.ends[corner.side] });
       target = { leg: corner.leg, side: corner.side };
@@ -320,26 +441,48 @@ export class Crowd {
     const t = this.world.t;
     let home = false;
     for (const ped of this.list) {
-      if (ped.frozen > 0) { ped.frozen -= dt; ped.v = 0; continue; }   // knocked down
-      if (ped.held) { ped.v = 0; continue; }                            // (waiting for a challenge to start)
-      if (ped.pause > 0) { ped.pause -= dt; ped.v = 0; continue; }     // (a garbage crew at the bins, or climbing on)
-      if (ped.guard) continue;                                          // (a crossing guard and the children with them: sim/crossing-guard.js)
-      if (!ped.path.length && ped.home) { home = ped.gone = true; continue; }
+      if (ped.frozen > 0) {
+        ped.frozen -= dt;
+        ped.v = 0;
+        continue;
+      } // knocked down
+      if (ped.held) {
+        ped.v = 0;
+        continue;
+      } // (waiting for a challenge to start)
+      if (ped.pause > 0) {
+        ped.pause -= dt;
+        ped.v = 0;
+        continue;
+      } // (a garbage crew at the bins, or climbing on)
+      if (ped.guard) continue; // (a crossing guard and the children with them: sim/crossing-guard.js)
+      if (!ped.path.length && ped.home) {
+        home = ped.gone = true;
+        continue;
+      }
       if (!ped.path.length) {
-        if (ped.then) { this.walkAlong(ped, ped.then.st, ped.then.side, ped.then.s, ped.then.dir); ped.then = null; }
-        else this.plan(ped);
+        if (ped.then) {
+          this.walkAlong(ped, ped.then.st, ped.then.side, ped.then.s, ped.then.dir);
+          ped.then = null;
+        } else this.plan(ped);
         continue;
       }
       const wp = ped.path[0];
       if (this.pxo && wp.cross?.leg?.pxo && !wp.cross.diagonal) wp.cross.marked = wp.cross.leg.pxo;
       if (wp.cross && !ped.crossing) {
         // at the curb: wait for the walk phase or a safe gap
-        if ((!ped.dart && this.occupiedCrossing(ped, wp.cross)) || !this.mayCross(wp.cross, t)) { ped.v = 0; ped.waiting += dt; continue; }
+        if ((!ped.dart && this.occupiedCrossing(ped, wp.cross)) || !this.mayCross(wp.cross, t)) {
+          ped.v = 0;
+          ped.waiting += dt;
+          continue;
+        }
         ped.crossing = wp.cross;
         ped.waiting = 0;
       }
-      const dx = wp.p[0] - ped.x, dy = wp.p[1] - ped.y, d = Math.hypot(dx, dy);
-      let v = ped.crossing ? ped.speed * 1.15 : ped.speed;   // people hurry across
+      const dx = wp.p[0] - ped.x,
+        dy = wp.p[1] - ped.y,
+        d = Math.hypot(dx, dy);
+      let v = ped.crossing ? ped.speed * 1.15 : ped.speed; // people hurry across
       // (a child darting out, `dart`, runs without looking: see the School zone challenge)
       if (ped.crossing && !ped.dart) {
         const react = this.threat(ped, dx / (d || 1), dy / (d || 1));
@@ -347,16 +490,30 @@ export class Crowd {
           ped.v = 0;
           // (held up by a vehicle standing just short of their way, its bumper at the line, not across it
           // (that one they wait for): after a while, round it)
-          const o = this.standing, box = o?.obb(), body = o && !segmentHitsBox([ped.x, ped.y], wp.p, { ...box, halfLength: box.halfLength - ROUND_GRAZE_M, halfWidth: box.halfWidth - ROUND_GRAZE_M }) ? o : null;
+          const o = this.standing,
+            box = o?.obb(),
+            body =
+              o &&
+              !segmentHitsBox([ped.x, ped.y], wp.p, {
+                ...box,
+                halfLength: box.halfLength - ROUND_GRAZE_M,
+                halfWidth: box.halfWidth - ROUND_GRAZE_M,
+              })
+                ? o
+                : null;
           ped.roundWait = body ? (ped.roundWait || 0) + dt : 0;
-          if (body && ped.roundWait > ROUND_S && !wp.round) { ped.roundWait = 0; this.walkRound(ped, body, dx / (d || 1), dy / (d || 1)); }
+          if (body && ped.roundWait > ROUND_S && !wp.round) {
+            ped.roundWait = 0;
+            this.walkRound(ped, body, dx / (d || 1), dy / (d || 1));
+          }
           continue;
         }
         ped.roundWait = 0;
         if (react === "hurry") v = Math.max(v, 2.4);
       }
       if (d <= v * dt) {
-        ped.x = wp.p[0]; ped.y = wp.p[1];
+        ped.x = wp.p[0];
+        ped.y = wp.p[1];
         ped.path.shift();
         if (wp.cross) ped.crossing = null;
         if (wp.wait) ped.pause = wp.wait;
@@ -374,12 +531,22 @@ export class Crowd {
   // Wait on the sidewalk before starting a crossing occupied by a slow/stopped body. Starting
   // anyway, then waiting beside that body, makes the driver yield to someone who cannot cross.
   occupiedCrossing(ped, cross) {
-    return [this.world.ego, ...this.world.npcs].some(o => {
+    return [this.world.ego, ...this.world.npcs].some((o) => {
       // Riders start/end at their own streetcar's door; its padded body is not another car
       // blocking their crossing. mayCross still requires its doors to be open for boarding.
-      if (Math.abs(o.v) >= 2 || (cross.streetcar && cross.streetcar === o.id) || (ped.boarding && ped.streetcar === o.id)) return false;
-      const box = o.obb(), margin = Math.max(PED.length, PED.width) / 2 + 0.1;
-      return segmentHitsBox(cross.from, cross.to, { ...box, halfLength: box.halfLength + margin, halfWidth: box.halfWidth + margin });
+      if (
+        Math.abs(o.v) >= 2 ||
+        (cross.streetcar && cross.streetcar === o.id) ||
+        (ped.boarding && ped.streetcar === o.id)
+      )
+        return false;
+      const box = o.obb(),
+        margin = Math.max(PED.length, PED.width) / 2 + 0.1;
+      return segmentHitsBox(cross.from, cross.to, {
+        ...box,
+        halfLength: box.halfLength + margin,
+        halfWidth: box.halfWidth + margin,
+      });
     });
   }
 
@@ -392,23 +559,33 @@ export class Crowd {
       // A stopped car has no arrival time, but still occupies the crosswalk. Wait short of its
       // body; someone already caught beside/in it can continue out instead of being trapped.
       // A boarding rider deliberately enters their own streetcar through its open door.
-      if (!(ped.boarding && ped.streetcar === o.id) && Math.abs(o.v) < (o.kind === "bike" ? 2 : 0.5) && Math.abs(o.x - ped.x) < 15 && Math.abs(o.y - ped.y) < 15) {
-        const body = ped.obb(), ahead = { ...body, heading: Math.atan2(uy, ux), center: [ped.x + ux * 0.4, ped.y + uy * 0.4] };
-        if (obbOverlap(ahead, o.obb(), 0.1) && !obbOverlap(body, o.obb())) { this.standing = o; return "wait"; }
+      if (
+        !(ped.boarding && ped.streetcar === o.id) &&
+        Math.abs(o.v) < (o.kind === "bike" ? 2 : 0.5) &&
+        Math.abs(o.x - ped.x) < 15 &&
+        Math.abs(o.y - ped.y) < 15
+      ) {
+        const body = ped.obb(),
+          ahead = { ...body, heading: Math.atan2(uy, ux), center: [ped.x + ux * 0.4, ped.y + uy * 0.4] };
+        if (obbOverlap(ahead, o.obb(), 0.1) && !obbOverlap(body, o.obb())) {
+          this.standing = o;
+          return "wait";
+        }
       }
       if (o.v < 2 || Math.abs(o.x - ped.x) > 40 || Math.abs(o.y - ped.y) > 40) continue;
       const local = o.toLocal(ped.x, ped.y);
-      const front = (o.spec ? o.spec.length - o.spec.rearOverhang : 3.6);
+      const front = o.spec ? o.spec.length - o.spec.rearOverhang : 3.6;
       const ahead = local.ahead - front;
       if (ahead < -0.5 || ahead > 30) continue;
-      const stopDist = o.v * o.v / (2 * 4) + o.v * 0.5;   // what a driver braking now would need
-      if (ahead > stopDist + 2 && (o.a || 0) < -1) continue;   // it is braking in time
+      const stopDist = (o.v * o.v) / (2 * 4) + o.v * 0.5; // what a driver braking now would need
+      if (ahead > stopDist + 2 && (o.a || 0) < -1) continue; // it is braking in time
       if (ahead / o.v > 3) continue;
       const half = (o.spec ? o.spec.width : 1.9) / 2 + 0.6;
       if (Math.abs(local.right) < half) return "hurry";
       // beside its path: step in only if walking away from it
-      const c = Math.cos(o.psi), s = Math.sin(o.psi);
-      const towardRight = ux * s - uy * c;   // + means walking to the car's right
+      const c = Math.cos(o.psi),
+        s = Math.sin(o.psi);
+      const towardRight = ux * s - uy * c; // + means walking to the car's right
       if (Math.abs(local.right) < half + 2.5 && Math.sign(towardRight) === -Math.sign(local.right)) return "wait";
     }
     return null;
@@ -417,10 +594,15 @@ export class Crowd {
   // Round the nearer end of vehicle `o` standing across `ped`'s way (heading `ux`, `uy`), ROUND_CLEAR_M
   // clear of it: out past that end, across to beyond its far side, and on along the crossing from there.
   walkRound(ped, o, ux, uy) {
-    const spec = o.spec || { length: 4.5, width: 1.9, rearOverhang: 1 }, c = Math.cos(o.psi), s = Math.sin(o.psi);
-    const local = o.toLocal(ped.x, ped.y), front = spec.length - spec.rearOverhang, clear = ROUND_CLEAR_M + PED.width / 2;
+    const spec = o.spec || { length: 4.5, width: 1.9, rearOverhang: 1 },
+      c = Math.cos(o.psi),
+      s = Math.sin(o.psi);
+    const local = o.toLocal(ped.x, ped.y),
+      front = spec.length - spec.rearOverhang,
+      clear = ROUND_CLEAR_M + PED.width / 2;
     const end = local.ahead >= (front - spec.rearOverhang) / 2 ? front + clear : -spec.rearOverhang - clear;
-    const side = (ux * s - uy * c) >= 0 ? 1 : -1, far = side * (spec.width / 2 + clear);
+    const side = ux * s - uy * c >= 0 ? 1 : -1,
+      far = side * (spec.width / 2 + clear);
     const at = (ahead, right) => [o.x + c * ahead + s * right, o.y + s * ahead - c * right];
     ped.path.unshift({ p: at(end, local.right), round: true }, { p: at(end, far), round: true });
   }
@@ -437,15 +619,26 @@ export class Crowd {
     // (a garbage truck's crew crosses behind it once nothing moving would reach them within
     // WORKER_GAP_S: sim/collection-truck.js)
     if (cross.worker) return this.clearFor(cross, WORKER_GAP_S, 60);
-    if (cross.school) return redsOn(this.world.npcs.find((v) => v.id === cross.school)) ? this.canStopFor(cross) : this.clearFor(cross, JAYWALK_GAP_S, 70);
+    if (cross.school)
+      return redsOn(this.world.npcs.find((v) => v.id === cross.school))
+        ? this.canStopFor(cross)
+        : this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.jaywalk) return this.clearFor(cross, JAYWALK_GAP_S, 70);
     if (cross.marked) return this.canStopFor(cross);
     const info = this.legsAt.get(cross.node);
     // (a police officer directing traffic there: walk with the axis they wave, sim/traffic-officer.js)
-    const officer = info.inter && cross.leg.group && this.world.officers?.list.length ? officerWalk(this.world, info.inter.id, cross.leg.group === "A" ? "B" : "A") : null;
+    const officer =
+      info.inter && cross.leg.group && this.world.officers?.list.length
+        ? officerWalk(this.world, info.inter.id, cross.leg.group === "A" ? "B" : "A")
+        : null;
     if (officer !== null) return officer;
     // (with a signal's lights out, its walk signals are out too: cross on a gap, as where there is none)
-    if (info.inter && cross.leg.group && !this.world.outages?.isDark(info.inter.id) && !flashing(info.inter, this.world)) {
+    if (
+      info.inter &&
+      cross.leg.group &&
+      !this.world.outages?.isDark(info.inter.id) &&
+      !flashing(info.inter, this.world)
+    ) {
       // walk with the parallel traffic, and only step off on the walk signal
       return pedPhase(info.inter, cross.leg.group === "A" ? "B" : "A", t) === "walk";
     }
@@ -459,17 +652,19 @@ export class Crowd {
     const mid = [(cross.from[0] + cross.to[0]) / 2, (cross.from[1] + cross.to[1]) / 2];
     const half = dist(cross.from, cross.to) / 2;
     for (const o of [this.world.ego, ...this.world.npcs]) {
-      const dx = mid[0] - o.x, dy = mid[1] - o.y;
+      const dx = mid[0] - o.x,
+        dy = mid[1] - o.y;
       if (Math.abs(dx) > 80 || Math.abs(dy) > 80) continue;
       const ahead = dx * Math.cos(o.psi) + dy * Math.sin(o.psi);
       const side = Math.abs(dx * Math.sin(o.psi) - dy * Math.cos(o.psi));
       if (side > half + 1) continue;
-      const front = o.spec ? o.spec.length - o.spec.rearOverhang : 3.6, rear = o.spec ? o.spec.rearOverhang : 1;
+      const front = o.spec ? o.spec.length - o.spec.rearOverhang : 3.6,
+        rear = o.spec ? o.spec.rearOverhang : 1;
       const room = ahead - front - 1.5;
-      if (ahead + rear + 1.5 < 0) continue;   // gone by
-      if (room < 0.5) return false;           // in the crosswalk, or at its edge
+      if (ahead + rear + 1.5 < 0) continue; // gone by
+      if (room < 0.5) return false; // in the crosswalk, or at its edge
       const v = Math.max(0, o.v);
-      if (v > 0.5 && room < v * MARKED_REACT_S + v * v / (2 * MARKED_DECEL)) return false;
+      if (v > 0.5 && room < v * MARKED_REACT_S + (v * v) / (2 * MARKED_DECEL)) return false;
     }
     return true;
   }
@@ -480,7 +675,8 @@ export class Crowd {
     const half = dist(cross.from, cross.to) / 2 + 2;
     for (const o of [this.world.ego, ...this.world.npcs]) {
       if (Math.abs(o.v) < 0.5) continue;
-      const dx = mid[0] - o.x, dy = mid[1] - o.y;
+      const dx = mid[0] - o.x,
+        dy = mid[1] - o.y;
       const ahead = dx * Math.cos(o.psi) + dy * Math.sin(o.psi);
       if (ahead < -2 || Math.hypot(dx, dy) > range) continue;
       const side = Math.abs(dx * Math.sin(o.psi) - dy * Math.cos(o.psi));
@@ -491,7 +687,9 @@ export class Crowd {
   }
 
   // Pedestrians near (x, y), for collision checks.
-  near(x, y, r) { return this.list.filter((p) => Math.abs(p.x - x) < r && Math.abs(p.y - y) < r); }
+  near(x, y, r) {
+    return this.list.filter((p) => Math.abs(p.x - x) < r && Math.abs(p.y - y) < r);
+  }
 }
 
 // Where a driver on a path (polyline with cumulative lengths) must yield to a pedestrian: the arc
@@ -508,8 +706,8 @@ export function crosswalkConflict(pts, cum, sFrom, sTo, crowd, laneHalf = 1.8) {
     // how far the pedestrian still is from the path's crossing point, along the crosswalk
     const len = dist(c.from, c.to);
     const along = ((ped.x - c.from[0]) * (c.to[0] - c.from[0]) + (ped.y - c.from[1]) * (c.to[1] - c.from[1])) / len;
-    const toPath = hit.u * len - along;   // > 0: still approaching the path
-    if (toPath < -laneHalf && !pxoPedestrian(crowd, ped)) continue;       // already past the car's lane
+    const toPath = hit.u * len - along; // > 0: still approaching the path
+    if (toPath < -laneHalf && !pxoPedestrian(crowd, ped)) continue; // already past the car's lane
     if (toPath > laneHalf + YIELD_AHEAD_M + len) continue;
     best = { s: hit.s, ped, toPath };
   }
@@ -534,7 +732,12 @@ export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
     // (a police officer directing traffic there: they walk with the axis waved, sim/traffic-officer.js)
     const officer = crowd.world?.officers?.list.length ? officerWalk(crowd.world, info.inter.id, group) : null;
     if (officer === false) continue;
-    if (officer === null && pedPhase(info.inter, group, t) !== "walk" && pedPhase(info.inter, group, t + within) !== "walk") continue;
+    if (
+      officer === null &&
+      pedPhase(info.inter, group, t) !== "walk" &&
+      pedPhase(info.inter, group, t + within) !== "walk"
+    )
+      continue;
     if (segmentCrossing(pts, cum, sFrom, sTo, c.from, c.to)) return ped;
   }
   return null;
@@ -543,16 +746,25 @@ export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
 // First intersection of the path (between sFrom and sTo) with segment a-b: { s, u } where u is the
 // fraction along a-b.
 function segmentCrossing(pts, cum, sFrom, sTo, a, b) {
-  let i = 0, lo = 0, hi = cum.length - 1;
-  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (cum[mid] <= sFrom) lo = mid; else hi = mid - 1; }
+  let i = 0,
+    lo = 0,
+    hi = cum.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (cum[mid] <= sFrom) lo = mid;
+    else hi = mid - 1;
+  }
   i = lo;
   for (; i < pts.length - 1 && cum[i] <= sTo; i++) {
-    const p = pts[i], q = pts[i + 1];
-    const r = [q[0] - p[0], q[1] - p[1]], s = [b[0] - a[0], b[1] - a[1]];
+    const p = pts[i],
+      q = pts[i + 1];
+    const r = [q[0] - p[0], q[1] - p[1]],
+      s = [b[0] - a[0], b[1] - a[1]];
     const den = r[0] * s[1] - r[1] * s[0];
     if (Math.abs(den) < 1e-9) continue;
     const w = [a[0] - p[0], a[1] - p[1]];
-    const t = (w[0] * s[1] - w[1] * s[0]) / den, u = (w[0] * r[1] - w[1] * r[0]) / den;
+    const t = (w[0] * s[1] - w[1] * s[0]) / den,
+      u = (w[0] * r[1] - w[1] * r[0]) / den;
     if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
       const at = cum[i] + t * (cum[i + 1] - cum[i]);
       if (at >= sFrom && at <= sTo) return { s: at, u };
@@ -562,17 +774,20 @@ function segmentCrossing(pts, cum, sFrom, sTo, a, b) {
 }
 
 function offsetPoint(e, s, lat) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
 }
 
-function dist(a, b) { return Math.hypot(b[0] - a[0], b[1] - a[1]); }
+function dist(a, b) {
+  return Math.hypot(b[0] - a[0], b[1] - a[1]);
+}
 
 // Signal group whose approaches run along heading h (either direction).
 function groupOf(inter, h) {
   let best = null;
   for (const a of inter.approaches) {
-    const d = Math.abs(Math.sin(a.heading_deg * Math.PI / 180 - h));
+    const d = Math.abs(Math.sin((a.heading_deg * Math.PI) / 180 - h));
     if (!best || d < best.d) best = { d, group: a.group };
   }
   return best ? best.group : null;

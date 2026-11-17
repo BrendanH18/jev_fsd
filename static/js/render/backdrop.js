@@ -7,14 +7,24 @@
 import * as THREE from "three";
 
 const RADIUS = 5200;
-const ARC = [-78, 72];       // degrees from north, clockwise (west is negative)
+const ARC = [-78, 72]; // degrees from north, clockwise (west is negative)
 const SEGMENTS = 360;
 
 // Ridge height (m, at RADIUS) at an azimuth: a few named-peak bumps plus rougher noise.
 function ridge(az) {
-  const peaks = [[-62, 180, 14], [-40, 260, 10], [-18, 330, 9], [-4, 290, 7], [8, 360, 8], [24, 300, 10], [44, 250, 12], [62, 190, 14]];
+  const peaks = [
+    [-62, 180, 14],
+    [-40, 260, 10],
+    [-18, 330, 9],
+    [-4, 290, 7],
+    [8, 360, 8],
+    [24, 300, 10],
+    [44, 250, 12],
+    [62, 190, 14],
+  ];
   let h = 90 + 40 * Math.sin(az * 0.21) + 25 * Math.sin(az * 0.53 + 1.3);
-  for (const [c, height, width] of peaks) h = Math.max(h, height * Math.exp(-(((az - c) / width) ** 2)) + 60 * Math.exp(-(((az - c) / (width * 2.2)) ** 2)));
+  for (const [c, height, width] of peaks)
+    h = Math.max(h, height * Math.exp(-(((az - c) / width) ** 2)) + 60 * Math.exp(-(((az - c) / (width * 2.2)) ** 2)));
   h += 18 * Math.sin(az * 1.7 + 0.4) + 9 * Math.sin(az * 3.9 + 2.1) + 4 * Math.sin(az * 9.1);
   // taper off at the ends of the range
   const t = Math.min(1, (az - ARC[0]) / 12, (ARC[1] - az) / 12);
@@ -22,15 +32,21 @@ function ridge(az) {
 }
 
 export function buildBackdrop(center) {
-  const pos = [], uv = [], idx = [];
+  const pos = [],
+    uv = [],
+    idx = [];
   for (let i = 0; i <= SEGMENTS; i++) {
     const az = ARC[0] + (ARC[1] - ARC[0]) * (i / SEGMENTS);
-    const a = az * Math.PI / 180;
-    const x = center.x + Math.sin(a) * RADIUS, z = center.z - Math.cos(a) * RADIUS;
+    const a = (az * Math.PI) / 180;
+    const x = center.x + Math.sin(a) * RADIUS,
+      z = center.z - Math.cos(a) * RADIUS;
     const h = ridge(az);
     pos.push(x, -30, z, x, h, z);
     uv.push(i / SEGMENTS, 0, i / SEGMENTS, 1);
-    if (i < SEGMENTS) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+    if (i < SEGMENTS) {
+      const k = i * 2;
+      idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
+    }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
@@ -76,7 +92,7 @@ export function buildBackdrop(center) {
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
-  mesh.renderOrder = -90;   // just after the sky, before anything nearer
+  mesh.renderOrder = -90; // just after the sky, before anything nearer
   return mesh;
 }
 

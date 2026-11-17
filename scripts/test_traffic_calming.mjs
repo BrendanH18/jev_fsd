@@ -14,7 +14,9 @@ const { StopMemory } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { rng } = await import("../static/js/common.js");
-const { DEVICES, HIT_OVER_MPS, calmingAhead, calmingNotice, liftAt, pathCalmLimit, riseAt, slowsFor } = await import("../static/js/sim/traffic-calming.js");
+const { DEVICES, HIT_OVER_MPS, calmingAhead, calmingNotice, liftAt, pathCalmLimit, riseAt, slowsFor } = await import(
+  "../static/js/sim/traffic-calming.js"
+);
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
 const { DriveMetrics, failures } = await import("../static/js/bench/metrics.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
@@ -27,12 +29,28 @@ const { Route } = await import("../static/js/map/route.js");
 const { routeFromLanes } = await import("../static/js/demo/routing.js");
 
 let checks = 0;
-async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
+async function test(name, fn) {
+  await fn();
+  checks++;
+  console.log(`✓ ${name}`);
+}
 const root = new URL("../data/maps/", import.meta.url);
 const load = (key) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
-  for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) {
-    const url = [2, 1].map(v => new URL(`${key}.${name}.v${v}.json`, root)).find(u => fs.existsSync(u));
+  for (const name of [
+    "transit",
+    "crossings",
+    "zones",
+    "rail",
+    "calming",
+    "scrambles",
+    "buslanes",
+    "restrictions",
+    "contraflow",
+    "driveways",
+    "parks",
+  ]) {
+    const url = [2, 1].map((v) => new URL(`${key}.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
     if (url) pack[name] = JSON.parse(fs.readFileSync(url));
   }
   pack.utc_offset = -4;
@@ -43,8 +61,10 @@ const step = (ctx) => stepWorld(ctx, 1 / 60, ctx.world.t * 1000);
 const idle = { enabled: false, step() {} };
 // Gloucester Street, Centretown: one-way, 50 km/h, a speed hump about 85 m along each block (Bank to
 // Kent, then Kent to Lyon).
-const BLOCK = "e491", NEXT = "e492";
-const lane = OTTAWA.lane(BLOCK, 0), next = OTTAWA.lane(NEXT, 0);
+const BLOCK = "e491",
+  NEXT = "e492";
+const lane = OTTAWA.lane(BLOCK, 0),
+  next = OTTAWA.lane(NEXT, 0);
 const hump = OTTAWA.calmingSpans.get(BLOCK)[0];
 
 function street({ calming = true, seed = 3 } = {}) {
@@ -57,9 +77,19 @@ function street({ calming = true, seed = 3 } = {}) {
 }
 
 function npc(world, fleet, id, s, spec = CAR, v = 13.9) {
-  const p = pointAt(lane.pts, lane.cum, s), car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, spec);
-  Object.assign(car, { id, kind: spec.kind === "bike" ? "bike" : spec === BUS ? "bus" : "car", color: 0x777777, v0: spec.kind === "bike" ? 5 : 13.9,
-    driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.8, lcRate: 0 }, stopMem: new StopMemory(), path: new NpcPath(OTTAWA, rng(9), { bike: spec.kind === "bike" }), frozen: 0, waiting: 0 });
+  const p = pointAt(lane.pts, lane.cum, s),
+    car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, spec);
+  Object.assign(car, {
+    id,
+    kind: spec.kind === "bike" ? "bike" : spec === BUS ? "bus" : "car",
+    color: 0x777777,
+    v0: spec.kind === "bike" ? 5 : 13.9,
+    driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.8, lcRate: 0 },
+    stopMem: new StopMemory(),
+    path: new NpcPath(OTTAWA, rng(9), { bike: spec.kind === "bike" }),
+    frozen: 0,
+    waiting: 0,
+  });
   car.path.start(BLOCK, 0, s, [[NEXT, 0]]);
   fleet.vehicles.push(car);
   return car;
@@ -67,12 +97,17 @@ function npc(world, fleet, id, s, spec = CAR, v = 13.9) {
 
 // The speed vehicle `n` (or the car) crosses edge BLOCK's hump at with its front axle.
 function crossingSpeed(ctx, n, max_s = 30) {
-  const a = OTTAWA.edges.get(BLOCK), [hx, hy] = [hump.device.x, hump.device.y];
+  const a = OTTAWA.edges.get(BLOCK),
+    [hx, hy] = [hump.device.x, hump.device.y];
   let before = null;
   for (let i = 0; i < 60 * max_s; i++) {
     step(ctx);
-    if (ctx.autopilot.firing) { /* lockstep below */ }
-    const c = Math.cos(n.psi), s = Math.sin(n.psi), ahead = (hx - n.x) * c + (hy - n.y) * s - n.spec.wheelbase;
+    if (ctx.autopilot.firing) {
+      /* lockstep below */
+    }
+    const c = Math.cos(n.psi),
+      s = Math.sin(n.psi),
+      ahead = (hx - n.x) * c + (hy - n.y) * s - n.spec.wheelbase;
     if (before !== null && before > 0 && ahead <= 0) return n.v;
     before = ahead;
   }
@@ -94,7 +129,9 @@ await test("Ottawa's devices lie on its own edges, and a route over Gloucester S
 });
 
 await test("each kind has its shape: a hump peaks at its centre, a table is flat on top, nothing past either end", () => {
-  const h = { kind: "hump" }, t = { kind: "table" }, b = { kind: "bump" };
+  const h = { kind: "hump" },
+    t = { kind: "table" },
+    b = { kind: "bump" };
   assert.equal(riseAt(h, 0), DEVICES.hump.height);
   assert.ok(riseAt(h, 1) < DEVICES.hump.height && riseAt(h, 1) > 0);
   assert.equal(riseAt(h, DEVICES.hump.length / 2), 0);
@@ -147,8 +184,10 @@ await test("closed-loop Rules crosses both humps at about 30 km/h; with calming 
   for (const calming of [true, false]) {
     const { world, fleet } = street({ calming });
     const autopilot = new Autopilot(world, {});
-    autopilot.setBrain("rules"); autopilot.setEnabled(true);
-    const ctx = { world, fleet, autopilot }, speeds = [];
+    autopilot.setBrain("rules");
+    autopilot.setEnabled(true);
+    const ctx = { world, fleet, autopilot },
+      speeds = [];
     const marks = world.route.calmingMarks.map((m) => m.at);
     let last = 0;
     while (world.t < 40 && world.route && speeds.length < 2) {
@@ -172,7 +211,7 @@ await test("closed-loop Rules crosses both humps at about 30 km/h; with calming 
 await test("traffic slows for a hump, a cyclist rides over it, and with calming off nobody slows", () => {
   for (const calming of [true, false]) {
     const { world, fleet } = street({ calming });
-    world.placeOnLane(OTTAWA.lane("e490", 0), 10);   // (the car out of the way, on the block before)
+    world.placeOnLane(OTTAWA.lane("e490", 0), 10); // (the car out of the way, on the block before)
     const car = npc(world, fleet, "calm_car", 10);
     const v = crossingSpeed({ world, fleet, autopilot: idle }, car);
     assert.ok(v !== null);
@@ -189,7 +228,8 @@ await test("traffic slows for a hump, a cyclist rides over it, and with calming 
 await test("taking a hump at 50 km/h is a hard hit: counted once, in the metrics and the coaching, and fails the drive", () => {
   for (const calming of [true, false]) {
     const { world, fleet } = street({ calming });
-    const score = new DriveScore(world, { title: "test" }), metrics = new DriveMetrics(world.route.length);
+    const score = new DriveScore(world, { title: "test" }),
+      metrics = new DriveMetrics(world.route.length);
     let s = hump.s - 30;
     world.placeOnLane(lane, s);
     for (let i = 0; i < 60 * 4; i++) {
@@ -197,9 +237,11 @@ await test("taking a hump at 50 km/h is a hard hit: counted once, in the metrics
       const p = pointAt(lane.pts, lane.cum, s);
       Object.assign(world.ego, { x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, s), v: 13.9 });
       const road = step({ world, fleet, autopilot: idle });
-      score.record(world, road, 1 / 60); metrics.record(world, null, road, 1 / 60);
+      score.record(world, road, 1 / 60);
+      metrics.record(world, null, road, 1 / 60);
     }
-    const sum = metrics.summary(world, { totals: { decisions: 0, calls: 0, tokens: 0, cost: 0 } }, true), report = score.snapshot();
+    const sum = metrics.summary(world, { totals: { decisions: 0, calls: 0, tokens: 0, cost: 0 } }, true),
+      report = score.snapshot();
     if (calming) {
       assert.equal(world.violations.hump_hits, 1);
       assert.equal(sum.hump_hits, 1);
@@ -237,7 +279,8 @@ await test("models are told about the hump in the state, the situation and the p
   const { world } = street();
   world.placeOnLane(lane, hump.s - 30);
   world.ego.v = 13.9;
-  const snap = buildSnapshot(world, null), state = toJevState(snap, [], {});
+  const snap = buildSnapshot(world, null),
+    state = toJevState(snap, [], {});
   assert.equal(state.traffic_calming.kind, "speed hump");
   assert.equal(state.traffic_calming.speed, Math.round(DEVICES.hump.mps * 10) / 10);
   assert.ok(situationClauses(snap).some((c) => /speed hump lies across the street/.test(c)));

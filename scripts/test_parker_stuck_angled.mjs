@@ -20,26 +20,63 @@ const { setupChallenge } = await import("../static/js/lab/evaluation.js");
 
 const root = new URL("../data/maps/", import.meta.url);
 const pack = JSON.parse(fs.readFileSync(new URL("623b012bc8b5.v6.pack.json", root)));
-for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks", "bridges"]) {
-  const url = [2, 1].map(v => new URL(`623b012bc8b5.${name}.v${v}.json`, root)).find(u => fs.existsSync(u));
+for (const name of [
+  "transit",
+  "crossings",
+  "zones",
+  "rail",
+  "calming",
+  "scrambles",
+  "buslanes",
+  "restrictions",
+  "contraflow",
+  "driveways",
+  "parks",
+  "bridges",
+]) {
+  const url = [2, 1].map((v) => new URL(`623b012bc8b5.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
   if (url) pack[name] = JSON.parse(fs.readFileSync(url));
 }
 const KITS = new MapData(pack);
 const DT = 1 / 60;
-const ctx = setupChallenge(KITS, CHALLENGES.find(c => c.id === "room-to-park"), { brain: "rules" });
+const ctx = setupChallenge(
+  KITS,
+  CHALLENGES.find((c) => c.id === "room-to-park"),
+  { brain: "rules" },
+);
 ctx.autopilot.setEnabled(false);
-const w = ctx.world, n = w.npcs.find(v => v.id === "challenge_parker");
-const step = () => { const p = w.route.project(w.ego.x, w.ego.y); applyLaw(w.ego, { kind: "hard_brake" }, w.route, p.s, DT, w); stepWorld(ctx, DT, w.t * 1000); };
+const w = ctx.world,
+  n = w.npcs.find((v) => v.id === "challenge_parker");
+const step = () => {
+  const p = w.route.project(w.ego.x, w.ego.y);
+  applyLaw(w.ego, { kind: "hard_brake" }, w.route, p.s, DT, w);
+  stepWorld(ctx, DT, w.t * 1000);
+};
 // (into its reverse, until it is well off parallel)
-for (let k = 0; k < 60 * 60 && !(n.parker?.law && Math.abs(frameOf(n, n.parker.plan).phi) > 15 * Math.PI / 180); k++) step();
+for (let k = 0; k < 60 * 60 && !(n.parker?.law && Math.abs(frameOf(n, n.parker.plan).phi) > (15 * Math.PI) / 180); k++)
+  step();
 assert.ok(n.parker?.law, "reversing in");
-const angle = Math.abs(frameOf(n, n.parker.plan).phi) * 180 / Math.PI;
+const angle = (Math.abs(frameOf(n, n.parker.plan).phi) * 180) / Math.PI;
 // Boxed in where it stands, angled: a car standing just off its front bumper and one just off its rear,
 // so no leg the manoeuvre has is open.
-const box = n.obb(), c = Math.cos(n.psi), s = Math.sin(n.psi), off = box.halfLength + CAR.length / 2 + 0.2;
-const blockers = [1, -1].map((dir, i) => Object.assign(new Vehicle(box.center[0] + dir * off * c - (CAR.length / 2 - CAR.rearOverhang) * c, box.center[1] + dir * off * s - (CAR.length / 2 - CAR.rearOverhang) * s, n.psi, 0), { id: `box_${i}`, stay: true }));
+const box = n.obb(),
+  c = Math.cos(n.psi),
+  s = Math.sin(n.psi),
+  off = box.halfLength + CAR.length / 2 + 0.2;
+const blockers = [1, -1].map((dir, i) =>
+  Object.assign(
+    new Vehicle(
+      box.center[0] + dir * off * c - (CAR.length / 2 - CAR.rearOverhang) * c,
+      box.center[1] + dir * off * s - (CAR.length / 2 - CAR.rearOverhang) * s,
+      n.psi,
+      0,
+    ),
+    { id: `box_${i}`, stay: true },
+  ),
+);
 for (const b of blockers) w.parked.add(b);
-let stuckAt = null, releasedAt = null;
+let stuckAt = null,
+  releasedAt = null;
 for (let k = 0; k < 60 * 60 && releasedAt === null; k++) {
   step();
   if (stuckAt === null && n.parker?.law?.phase === "stuck") stuckAt = w.t;
@@ -52,11 +89,16 @@ assert.ok(waited > P.GIVE_UP_S + 1, `tried again for a while first (${waited.toF
 assert.ok(waited < P.STUCK_MAX_S + 2 * P.RETRY_S, `then gave up (${waited.toFixed(1)} s)`);
 assert.equal(n.parkerTried, true);
 assert.equal(w.parkers.gaveUp, 1);
-assert.equal(w.parked.slots.some(sl => sl.reserved?.owner === n), false, "its slots let go");
+assert.equal(
+  w.parked.slots.some((sl) => sl.reserved?.owner === n),
+  false,
+  "its slots let go",
+);
 assert.equal(w.npcs.includes(n), true, "traffic again");
 // (with the way ahead clear again, it drives on)
 for (const b of blockers) w.parked.remove(b);
-const x0 = n.x, y0 = n.y;
+const x0 = n.x,
+  y0 = n.y;
 for (let k = 0; k < 15 * 60; k++) step();
 assert.ok(Math.hypot(n.x - x0, n.y - y0) > 10, "drives on");
 assert.equal(w.violations.collisions, 0);

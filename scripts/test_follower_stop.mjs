@@ -19,22 +19,67 @@ const LINE = 130;
 function rig({ sign }) {
   // a two-way street, one lane each way, the car's lane centre 1.75 m right of the centreline; with
   // `sign`, a stop sign at LINE (no junction beyond it)
-  const street = { id: "street", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300, cls: "residential", lanes: 1,
-    lane_offsets: [1.75], lane_width: 3.5, asphalt: [-5.6, 5.6], parking: [0, 0], limit: 11.1,
-    ...(sign ? { control: { type: "stop", id: "stop_1", s_line: LINE, all_way: false } } : {}) };
-  const map = new MapData({ extent: [-10, -20, 310, 20], nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }],
-    edges: [street], lanes: [{ edge: "street", idx: 0, pts: [[0, -1.75], [300, -1.75]] }], intersections: [],
-    stops: sign ? [{ id: "stop_1", edge: "street", s_line: LINE, all_way: false }] : [], buildings: [] });
+  const street = {
+    id: "street",
+    from: "a",
+    to: "b",
+    pts: [
+      [0, 0],
+      [300, 0],
+    ],
+    length: 300,
+    cls: "residential",
+    lanes: 1,
+    lane_offsets: [1.75],
+    lane_width: 3.5,
+    asphalt: [-5.6, 5.6],
+    parking: [0, 0],
+    limit: 11.1,
+    ...(sign ? { control: { type: "stop", id: "stop_1", s_line: LINE, all_way: false } } : {}),
+  };
+  const map = new MapData({
+    extent: [-10, -20, 310, 20],
+    nodes: [
+      { id: "a", x: 0, y: 0 },
+      { id: "b", x: 300, y: 0 },
+    ],
+    edges: [street],
+    lanes: [
+      {
+        edge: "street",
+        idx: 0,
+        pts: [
+          [0, -1.75],
+          [300, -1.75],
+        ],
+      },
+    ],
+    intersections: [],
+    stops: sign ? [{ id: "stop_1", edge: "street", s_line: LINE, all_way: false }] : [],
+    buildings: [],
+  });
   const world = new World(map, { parked: 0, pedestrians: 0 });
   // the car at 6.5 m/s, its front bumper 20 m short of the line
   const front = world.ego.spec.length - world.ego.spec.rearOverhang;
   Object.assign(world.ego, { x: LINE - 20 - front, y: -1.75, psi: 0, v: 6.5 });
-  world.route = new Route({ id: "straight", polyline: [[0, -1.75], [300, -1.75]], edges: ["street"], turns: [] }, map);
+  world.route = new Route(
+    {
+      id: "straight",
+      polyline: [
+        [0, -1.75],
+        [300, -1.75],
+      ],
+      edges: ["street"],
+      turns: [],
+    },
+    map,
+  );
   // a car closing from behind in its lane, 5 m back at 8.5 m/s (tailgaters off: nothing leaves it out of
   // the forward sims as a tailgater)
   const f = new Vehicle(0, -1.75, 0, 8.5);
   f.x = world.ego.x - world.ego.spec.rearOverhang - 5 - (f.spec.length - f.spec.rearOverhang);
-  f.id = "car_behind"; f.kind = "car";
+  f.id = "car_behind";
+  f.kind = "car";
   world.npcs.push(f);
   const snap = buildSnapshot(world);
   const candidates = sampleCandidates(snap, world);

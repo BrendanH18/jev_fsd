@@ -22,11 +22,11 @@ from .project import Projection
 
 SIGNAL_SNAP_M = 30.0
 CLUSTER_M = 25.0
-STOP_LINE_SETBACK_M = 4.0      # minimum; wider crossing roads push the line back further
-CURB_CLEARANCE_M = 3.4         # stop line to the crossing road's curb at a stop sign: room for the crosswalk
-CROSSWALK_CLEARANCE_M = 4.0    # room for a painted crosswalk in front of a signal's stop line
+STOP_LINE_SETBACK_M = 4.0  # minimum; wider crossing roads push the line back further
+CURB_CLEARANCE_M = 3.4  # stop line to the crossing road's curb at a stop sign: room for the crosswalk
+CROSSWALK_CLEARANCE_M = 4.0  # room for a painted crosswalk in front of a signal's stop line
 STOP_AHEAD_M = 30.0
-YIELD_CLEARANCE_M = 0.8        # yield line to the roundabout's outer edge
+YIELD_CLEARANCE_M = 0.8  # yield line to the roundabout's outer edge
 MIN_APPROACHES = 3
 CYCLE = {"green": 20.0, "yellow": 3.0, "all_red": 1.0}
 CYCLE_S = 2 * (CYCLE["green"] + CYCLE["yellow"] + CYCLE["all_red"])
@@ -89,7 +89,7 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
 
     for i, a in enumerate(vids):
         va = graph.vertices[a]
-        for b in vids[i + 1:]:
+        for b in vids[i + 1 :]:
             vb = graph.vertices[b]
             if math.hypot(va["x"] - vb["x"], va["y"] - vb["y"]) <= CLUSTER_M:
                 parent[find(a)] = find(b)
@@ -108,8 +108,13 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
                 e = graph.edges[eid]
                 if e["from"] in member_set:
                     continue  # internal link of a dual carriageway
-                approaches.append({"edge": eid, "heading_deg": round(math.degrees(graph.edge_heading_in(eid)), 1),
-                                   "s_line": round(_stop_line_s(graph, e, CROSSWALK_CLEARANCE_M), 2)})
+                approaches.append(
+                    {
+                        "edge": eid,
+                        "heading_deg": round(math.degrees(graph.edge_heading_in(eid)), 1),
+                        "s_line": round(_stop_line_s(graph, e, CROSSWALK_CLEARANCE_M), 2),
+                    }
+                )
         if len(approaches) < 2:
             continue
         iid = "sig%d" % k
@@ -117,13 +122,23 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
         for a in approaches:
             diff = abs(g.wrap_angle(math.radians(a["heading_deg"]) - base))
             a["group"] = "A" if (diff <= math.pi / 4 or diff >= 3 * math.pi / 4) else "B"
-        inter = {"id": iid, "x": g.r2(cx), "y": g.r2(cy), "approaches": approaches,
-                 "cycle_s": CYCLE_S, "offset_s": round(rng.uniform(0, CYCLE_S), 1),
-                 "vertices": sorted(members)}
+        inter = {
+            "id": iid,
+            "x": g.r2(cx),
+            "y": g.r2(cy),
+            "approaches": approaches,
+            "cycle_s": CYCLE_S,
+            "offset_s": round(rng.uniform(0, CYCLE_S), 1),
+            "vertices": sorted(members),
+        }
         intersections.append(inter)
         for a in approaches:
-            graph.edges[a["edge"]]["control"] = {"type": "signal", "id": iid, "s_line": a["s_line"],
-                                                 "group": a["group"]}
+            graph.edges[a["edge"]]["control"] = {
+                "type": "signal",
+                "id": iid,
+                "s_line": a["s_line"],
+                "group": a["group"],
+            }
 
     stops = []
     stop_k = 0
@@ -160,8 +175,17 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
                 continue
             sid = "stop%d" % stop_k
             stop_k += 1
-            stops.append({"id": sid, "edge": eid, "s_line": round(s_line, 2), "all_way": all_way,
-                          "x": g.r2(x), "y": g.r2(y), "junction": e["to"]})
+            stops.append(
+                {
+                    "id": sid,
+                    "edge": eid,
+                    "s_line": round(s_line, 2),
+                    "all_way": all_way,
+                    "x": g.r2(x),
+                    "y": g.r2(y),
+                    "junction": e["to"],
+                }
+            )
             e["control"] = {"type": "stop", "id": sid, "s_line": round(s_line, 2), "all_way": all_way}
 
     # roundabout entries: yield to traffic already in the ring, at a line just outside its asphalt
@@ -179,10 +203,19 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
                 setback = max(1.0, rb["outer_r"] + YIELD_CLEARANCE_M - to_center)
                 s_line = max(1.0, e["length"] - setback)
                 yid = "yield%d" % len(yields)
-                yields.append({"id": yid, "edge": eid, "s_line": round(s_line, 2), "roundabout": rb["id"],
-                               "junction": v})
+                yields.append(
+                    {"id": yid, "edge": eid, "s_line": round(s_line, 2), "roundabout": rb["id"], "junction": v}
+                )
                 e["control"] = {"type": "yield", "id": yid, "s_line": round(s_line, 2), "roundabout": rb["id"]}
 
-    return {"intersections": intersections, "stops": stops, "yields": yields,
-            "stats": {"signal_nodes_dropped": dropped_signals, "intersections": len(intersections),
-                      "stops": len(stops), "yields": len(yields)}}
+    return {
+        "intersections": intersections,
+        "stops": stops,
+        "yields": yields,
+        "stats": {
+            "signal_nodes_dropped": dropped_signals,
+            "intersections": len(intersections),
+            "stops": len(stops),
+            "yields": len(yields),
+        },
+    }

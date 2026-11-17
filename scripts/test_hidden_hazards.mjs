@@ -27,7 +27,11 @@ const { setupScenario } = await import("../static/js/bench/runner.js");
 const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 
 let checks = 0;
-async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
+async function test(name, fn) {
+  await fn();
+  checks++;
+  console.log(`✓ ${name}`);
+}
 const root = new URL("../data/maps/", import.meta.url);
 const load = (key) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
@@ -44,21 +48,107 @@ const FRONT = CAR.length - CAR.rearOverhang;
 // A straight quiet two-way street, 300 m long, one lane each way and a parking lane on each side; the
 // car drives east along y = -1.75, the right kerb's parked cars stand at y = -4.65.
 function street(cls = "residential") {
-  const s = { lanes: 1, lane_width: 3.5, width: 11.8, lane_offsets: [1.75], asphalt: [-5.9, 5.9], parking: [2.4, 2.4], cls, limit: 13.9, oneway: false, name: "Test Street" };
-  return new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -40, 320, 40],
-    edges: [{ id: "in", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300, ...s }, { id: "out", from: "b", to: "a", pts: [[300, 0], [0, 0]], length: 300, ...s }],
-    lanes: [{ edge: "in", idx: 0, pts: [[0, -1.75], [300, -1.75]] }, { edge: "out", idx: 0, pts: [[300, 1.75], [0, 1.75]] }],
-    nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }], intersections: [], stops: [], buildings: [] });
+  const s = {
+    lanes: 1,
+    lane_width: 3.5,
+    width: 11.8,
+    lane_offsets: [1.75],
+    asphalt: [-5.9, 5.9],
+    parking: [2.4, 2.4],
+    cls,
+    limit: 13.9,
+    oneway: false,
+    name: "Test Street",
+  };
+  return new MapData({
+    bbox: [0, 0, 1, 1],
+    extent: [-20, -40, 320, 40],
+    edges: [
+      {
+        id: "in",
+        from: "a",
+        to: "b",
+        pts: [
+          [0, 0],
+          [300, 0],
+        ],
+        length: 300,
+        ...s,
+      },
+      {
+        id: "out",
+        from: "b",
+        to: "a",
+        pts: [
+          [300, 0],
+          [0, 0],
+        ],
+        length: 300,
+        ...s,
+      },
+    ],
+    lanes: [
+      {
+        edge: "in",
+        idx: 0,
+        pts: [
+          [0, -1.75],
+          [300, -1.75],
+        ],
+      },
+      {
+        edge: "out",
+        idx: 0,
+        pts: [
+          [300, 1.75],
+          [0, 1.75],
+        ],
+      },
+    ],
+    nodes: [
+      { id: "a", x: 0, y: 0 },
+      { id: "b", x: 300, y: 0 },
+    ],
+    intersections: [],
+    stops: [],
+    buildings: [],
+  });
 }
 // Cars parked along the right kerb with rears at `rears`, a person between the two either side of `at`
 // (0.6 m in from their traffic side), and the car at `x` doing `v`, on a route along the street.
-function scene({ hazards = true, cls = "residential", rears = [60, 66.1, 72.2, 78.3, 84.4, 90.5, 96.6], at = 83.6, x = 20, v = 0, weather = "dry" } = {}) {
+function scene({
+  hazards = true,
+  cls = "residential",
+  rears = [60, 66.1, 72.2, 78.3, 84.4, 90.5, 96.6],
+  at = 83.6,
+  x = 20,
+  v = 0,
+  weather = "dry",
+} = {}) {
   setWeather(weather);
   const map = street(cls);
   const world = new World(map, { parked: 0, pedestrians: 0, hazards });
-  rears.forEach((rear, i) => { const c = new Vehicle(rear + CAR.rearOverhang, -4.65, 0, 0); Object.assign(c, { id: `p${i}`, edge: "in", curb: "right" }); world.parked.add(c); });
+  rears.forEach((rear, i) => {
+    const c = new Vehicle(rear + CAR.rearOverhang, -4.65, 0, 0);
+    Object.assign(c, { id: `p${i}`, edge: "in", curb: "right" });
+    world.parked.add(c);
+  });
   const outer = -4.65 + CAR.width / 2;
-  const ped = new Pedestrian({ id: "hidden", x: at, y: outer - 0.6, psi: Math.PI / 2, v: 0, speed: 1.5, path: [], crossing: null, waiting: 0, phase: 0, look: 1, at: null, held: true });
+  const ped = new Pedestrian({
+    id: "hidden",
+    x: at,
+    y: outer - 0.6,
+    psi: Math.PI / 2,
+    v: 0,
+    speed: 1.5,
+    path: [],
+    crossing: null,
+    waiting: 0,
+    phase: 0,
+    look: 1,
+    at: null,
+    held: true,
+  });
   world.crowd.list.push(ped);
   Object.assign(world.ego, { x, y: -1.75, psi: 0, v });
   const pts = [];
@@ -73,8 +163,9 @@ await test("the blind-spot speed stops the car within the step-out distance, bra
   const speeds = {};
   for (const w of ["dry", "rain", "snow"]) {
     setWeather(w);
-    const v = H.blindSpeed(), a = H.BLIND_BRAKE * comfort().hardDecel;
-    assert.ok(Math.abs(v * H.BLIND_REACT_S + v * v / (2 * a) - (H.STEP_OUT_M - H.BLIND_MARGIN_M)) < 1e-9, w);
+    const v = H.blindSpeed(),
+      a = H.BLIND_BRAKE * comfort().hardDecel;
+    assert.ok(Math.abs(v * H.BLIND_REACT_S + (v * v) / (2 * a) - (H.STEP_OUT_M - H.BLIND_MARGIN_M)) < 1e-9, w);
     speeds[w] = Math.round(v * 3.6);
   }
   setWeather("dry");
@@ -88,7 +179,8 @@ await test("the blind-spot speed stops the car within the step-out distance, bra
 });
 
 await test("with hidden hazards on, parked cars hide someone standing between them until they step out; off, they do not", () => {
-  const on = scene(), off = scene({ hazards: false });
+  const on = scene(),
+    off = scene({ hazards: false });
   assert.equal(on.world.sees(on.world.ego, on.ped), false);
   assert.equal(off.world.sees(off.world.ego, off.ped), true);
   // stepping out past the cars' traffic side, they are seen
@@ -112,7 +204,7 @@ await test("a blind spot: parked cars beside the car's way on a quiet street, wi
   assert.equal(bs.edge, "in");
   assert.ok(Math.abs(bs.from_m - (60 - 10 - FRONT)) < 0.01, `${bs.from_m}`);
   assert.ok(Math.abs(bs.gap_m - 1) < 1e-6, `${bs.gap_m}`);
-  assert.equal(bs.cars, 3);   // (those within BLIND_LOOK_M of its front)
+  assert.equal(bs.cars, 3); // (those within BLIND_LOOK_M of its front)
   assert.equal(bs.limit_mps, H.blindSpeed());
   // beyond the look-ahead, or once past the last of them, nothing
   assert.equal(H.blindSpot(scene({ x: -60 }).world), null);
@@ -121,7 +213,11 @@ await test("a blind spot: parked cars beside the car's way on a quiet street, wi
   assert.equal(H.blindSpot(scene({ hazards: false }).world), null);
   // cars parked on the far side of a two-way street are too far from the car's side to count
   const far = scene({ rears: [] });
-  for (const [i, rear] of [60, 66.1, 72.2].entries()) { const c = new Vehicle(rear + 4.5 - CAR.rearOverhang, 4.65, Math.PI, 0); Object.assign(c, { id: `f${i}`, edge: "out", curb: "right" }); far.world.parked.add(c); }
+  for (const [i, rear] of [60, 66.1, 72.2].entries()) {
+    const c = new Vehicle(rear + 4.5 - CAR.rearOverhang, 4.65, Math.PI, 0);
+    Object.assign(c, { id: `f${i}`, edge: "out", curb: "right" });
+    far.world.parked.add(c);
+  }
   assert.equal(H.blindSpot(far.world), null);
 });
 
@@ -160,16 +256,23 @@ await test("coaching counts passing parked cars too fast to stop for someone ste
   const { world } = scene({ x: 30, v: 13.5, rears: [60, 66.1, 72.2, 78.3, 84.4, 90.5, 96.6, 102.7, 108.8] });
   const score = new DriveScore(world, { title: "t" });
   for (let k = 0; k < 6 / DT; k++) {
-    world.ego.x += world.ego.v * DT; world.t += DT;
-    const road = world.roadInfo(); world._road = road;
+    world.ego.x += world.ego.v * DT;
+    world.t += DT;
+    const road = world.roadInfo();
+    world._road = road;
     score.record(world, road, DT);
   }
   const r = score.finish();
   assert.ok(r.blind_spot_speeding_s > 2, `${r.blind_spot_speeding_s}`);
   assert.equal(r.incidents.filter((i) => i.type === "blind_spot_speeding").length, 1);
   assert.ok(r.tips.some((t) => t.includes("step out from between them")));
-  const off = scene({ hazards: false, x: 30, v: 13.5 }), s2 = new DriveScore(off.world, { title: "t" });
-  for (let k = 0; k < 120; k++) { off.world.ego.x += off.world.ego.v * DT; const road = off.world.roadInfo(); s2.record(off.world, road, DT); }
+  const off = scene({ hazards: false, x: 30, v: 13.5 }),
+    s2 = new DriveScore(off.world, { title: "t" });
+  for (let k = 0; k < 120; k++) {
+    off.world.ego.x += off.world.ego.v * DT;
+    const road = off.world.roadInfo();
+    s2.record(off.world, road, DT);
+  }
   assert.equal("blind_spot_speeding_s" in s2.finish(), false);
 });
 
@@ -180,7 +283,11 @@ await test("the HUD says so: parked cars hiding the sidewalk ahead, then someone
   assert.equal(n.key, "blind:in:right");
   assert.equal(H.hazardNotice(scene({ hazards: false, x: 30 }).world), null);
   // once the challenge's child steps out and the car can see them
-  const ctx = setupChallenge(KITS, CHALLENGES.find((c) => c.id === "step-out"), { brain: "rules" });
+  const ctx = setupChallenge(
+    KITS,
+    CHALLENGES.find((c) => c.id === "step-out"),
+    { brain: "rules" },
+  );
   let said = null;
   for (let k = 0; k < 40 / DT && ctx.autopilot.enabled && !said; k++) {
     stepWorld(ctx, DT, ctx.world.t * 1000);
@@ -192,7 +299,8 @@ await test("the HUD says so: parked cars hiding the sidewalk ahead, then someone
 
 await test("free drive: someone waits hidden between parked cars ahead, steps out when the car is 15 m away, and Rules stops short of them", async () => {
   // Stephens Street, Kitsilano, lined with the usual parked cars; the first step-out is due at once
-  const challenge = CHALLENGES.find((c) => c.id === "step-out"), sc = challengeScenario(KITS, challenge);
+  const challenge = CHALLENGES.find((c) => c.id === "step-out"),
+    sc = challengeScenario(KITS, challenge);
   let done = null;
   for (let seed = 1; seed <= 12 && !done; seed++) {
     setWeather("dry");
@@ -200,23 +308,43 @@ await test("free drive: someone waits hidden between parked cars ahead, steps ou
     world.placeOnLane(KITS.lane(sc.start.edge, sc.start.lane), sc.start.s);
     const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed });
     // (no parked car pulls out ahead: with anyone else on the street ahead, nobody steps out)
-    world.parked.nextDoor = 1e9; fleet.nextPark = 1e9; fleet.nextPull = 1e9;
-    const autopilot = new Autopilot(world, {}); autopilot.setBrain("rules");
-    world.route = new Route(sc.route, KITS, world.ego.spec); world.destination = sc.goal;
+    world.parked.nextDoor = 1e9;
+    fleet.nextPark = 1e9;
+    fleet.nextPull = 1e9;
+    const autopilot = new Autopilot(world, {});
+    autopilot.setBrain("rules");
+    world.route = new Route(sc.route, KITS, world.ego.spec);
+    world.destination = sc.goal;
     autopilot.setEnabled(true);
     world.stepOuts.wait = 0;
-    let placed = null, hiddenAtPlace = null, out = null, seenAt = null, minGap = Infinity;
+    let placed = null,
+      hiddenAtPlace = null,
+      out = null,
+      seenAt = null,
+      minGap = Infinity;
     for (let k = 0; k < 40 / DT && autopilot.enabled; k++) {
       stepWorld({ world, fleet, autopilot }, DT, world.t * 1000);
       const p = world.stepOuts.people[0] || (placed && { ped: placed, state: "out" });
       if (!p) continue;
-      if (!placed) { placed = p.ped; hiddenAtPlace = !world.sees(world.ego, p.ped); }
+      if (!placed) {
+        placed = p.ped;
+        hiddenAtPlace = !world.sees(world.ego, p.ped);
+      }
       const l = world.ego.toLocal(placed.x, placed.y);
       if (p.state === "out" && !out) out = { toLine: l.ahead - FRONT, v: world.ego.v };
       if (out && seenAt === null && world.sees(world.ego, placed)) seenAt = l.ahead - FRONT;
       if (out && Math.abs(l.right) < 1.5 && l.ahead > 0) minGap = Math.min(minGap, l.ahead - FRONT);
     }
-    if (out) done = { seed, hiddenAtPlace, out, seenAt, minGap, collisions: world.violations.collisions, joined: world.crowd.list.includes(placed) && !placed.held };
+    if (out)
+      done = {
+        seed,
+        hiddenAtPlace,
+        out,
+        seenAt,
+        minGap,
+        collisions: world.violations.collisions,
+        joined: world.crowd.list.includes(placed) && !placed.held,
+      };
   }
   assert.ok(done, "a step-out happened");
   assert.equal(done.hiddenAtPlace, true);
@@ -226,7 +354,9 @@ await test("free drive: someone waits hidden between parked cars ahead, steps ou
   assert.ok(done.minGap > 1, `${done.minGap}`);
   assert.equal(done.collisions, 0);
   assert.equal(done.joined, true);
-  process.stdout.write(`  (seed ${done.seed}: out at ${done.out.toLine.toFixed(1)} m, ${(done.out.v * 3.6).toFixed(0)} km/h, seen at ${done.seenAt.toFixed(1)} m, stopped ${done.minGap.toFixed(1)} m short)\n`);
+  process.stdout.write(
+    `  (seed ${done.seed}: out at ${done.out.toLine.toFixed(1)} m, ${(done.out.v * 3.6).toFixed(0)} km/h, seen at ${done.seenAt.toFixed(1)} m, stopped ${done.minGap.toFixed(1)} m short)\n`,
+  );
 });
 
 await test("step-outs never happen with hazards off, and a world without them draws nothing from its random streams", () => {
@@ -249,9 +379,11 @@ await test("the challenge, closed loop: Rules and the cautious agent keep to the
     process.stdout.write(`  (${brain}: arrived at ${r.time_s} s)\n`);
   }
   const run = (hidden) => {
-    const ctx = setupChallenge(KITS, { ...challenge, hidden }, { brain: "rules" }), { world } = ctx;
+    const ctx = setupChallenge(KITS, { ...challenge, hidden }, { brain: "rules" }),
+      { world } = ctx;
     const child = world.crowd.list.find((p) => p.id === "challenge_child");
-    let out = null, seenAt = null;
+    let out = null,
+      seenAt = null;
     for (let k = 0; k < 60 / DT && ctx.autopilot.enabled; k++) {
       stepWorld(ctx, DT, world.t * 1000);
       const l = world.ego.toLocal(child.x, child.y);
@@ -260,7 +392,8 @@ await test("the challenge, closed loop: Rules and the cautious agent keep to the
     }
     return { out, seenAt, collisions: world.violations.collisions };
   };
-  const on = run(true), off = run(false);
+  const on = run(true),
+    off = run(false);
   assert.ok(on.out.v <= H.blindSpeed() + 0.3, `${on.out.v}`);
   assert.ok(on.seenAt > 12 && on.seenAt <= H.STEP_OUT_M + 0.3, `${on.seenAt}`);
   assert.equal(on.collisions, 0);
@@ -273,9 +406,21 @@ await test("the challenge, closed loop: Rules and the cautious agent keep to the
   // lights" (parked cars hiding a car backing out: scripts/test_driveway_reversers.mjs) and "Chasing the
   // ball" (parked cars hiding the child after it: scripts/test_ball_chase.mjs): the other challenges and
   // the benchmark
-  assert.deepEqual(CHALLENGES.filter((c) => c.hidden).map((c) => c.id), ["step-out", "blind-left", "reverse-lights", "chasing-the-ball"]);
+  assert.deepEqual(
+    CHALLENGES.filter((c) => c.hidden).map((c) => c.id),
+    ["step-out", "blind-left", "reverse-lights", "chasing-the-ball"],
+  );
   const lane = [...KITS.lanes.values()][0];
-  const bench = setupScenario(KITS, { start: { edge: lane.edge, lane: lane.idx, s: 2 }, route: { id: "x", polyline: [lane.pts[0], lane.pts.at(-1)], edges: [lane.edge], turns: [] }, goal: lane.pts.at(-1), traffic_seed: 1 }, { npcs: 0 });
+  const bench = setupScenario(
+    KITS,
+    {
+      start: { edge: lane.edge, lane: lane.idx, s: 2 },
+      route: { id: "x", polyline: [lane.pts[0], lane.pts.at(-1)], edges: [lane.edge], turns: [] },
+      goal: lane.pts.at(-1),
+      traffic_seed: 1,
+    },
+    { npcs: 0 },
+  );
   assert.equal(bench.world.hazards, false);
   assert.equal(bench.world.stepOuts.count, 0);
 });
@@ -285,7 +430,21 @@ await test("a restored checkpoint ties the step-outs back to the live world, wit
   const world = new World(KITS, { seed: 2, pedestrians: 0, hazards: true, stepOuts: 1 });
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 2 });
   const autopilot = new Autopilot(world, {});
-  const ped = new Pedestrian({ id: "stepout_9", x: 1, y: 2, psi: 0, v: 0, speed: 1.5, path: [], crossing: null, waiting: 0, phase: 0, look: 1, at: null, held: true });
+  const ped = new Pedestrian({
+    id: "stepout_9",
+    x: 1,
+    y: 2,
+    psi: 0,
+    v: 0,
+    speed: 1.5,
+    path: [],
+    crossing: null,
+    waiting: 0,
+    phase: 0,
+    look: 1,
+    at: null,
+    held: true,
+  });
   world.crowd.list.push(ped);
   world.stepOuts.people.push({ ped, psi: 0, since: 0, state: "waiting" });
   const recorder = new DriveRecorder();

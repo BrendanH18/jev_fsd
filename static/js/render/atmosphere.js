@@ -6,9 +6,9 @@ import { sunAngles, nightLevel } from "../sim/speed-zones.js";
 import { solarAngles } from "../sim/sun-glare.js";
 
 export const lighting = {
-  night: { value: 0 },      // 0 in daylight, 1 once it is dark enough that street lights are on
-  wet: { value: 0 },        // 0 dry, 1 soaked: puddles, shine
-  time: { value: 0 },       // seconds, for anything animated in a shader (wind in the trees)
+  night: { value: 0 }, // 0 in daylight, 1 once it is dark enough that street lights are on
+  wet: { value: 0 }, // 0 dry, 1 soaked: puddles, shine
+  time: { value: 0 }, // seconds, for anything animated in a shader (wind in the trees)
   sunDir: { value: new THREE.Vector3(0, 1, 0) },
 };
 
@@ -28,12 +28,18 @@ export function updateNightMaterials() {
 // Sun direction in Three.js coordinates (x east, y up, z south) and its elevation (rad). (A location
 // with a `day` of the year, from a sun glare challenge's clock, has the sun of that date: sim/sun-glare.js)
 export function sunPosition(hour, location = null) {
-  const { elevation: el, H, latitude, declination: DECLINATION } = Number.isFinite(location?.day) ? solarAngles(hour, location) : sunAngles(hour, location);
+  const {
+    elevation: el,
+    H,
+    latitude,
+    declination: DECLINATION,
+  } = Number.isFinite(location?.day) ? solarAngles(hour, location) : sunAngles(hour, location);
   // azimuth from north, clockwise
   const cosAz = (Math.sin(DECLINATION) - Math.sin(el) * Math.sin(latitude)) / (Math.cos(el) * Math.cos(latitude));
   let az = Math.acos(Math.max(-1, Math.min(1, cosAz)));
   if (H > 0) az = 2 * Math.PI - az;
-  const east = Math.sin(az) * Math.cos(el), north = Math.cos(az) * Math.cos(el);
+  const east = Math.sin(az) * Math.cos(el),
+    north = Math.cos(az) * Math.cos(el);
   return { dir: new THREE.Vector3(east, Math.sin(el), -north).normalize(), elevation: el, azimuth: az };
 }
 
@@ -52,18 +58,34 @@ const KEYS = [
 // `deck` is how much of the visible sky the drawn cloud layer covers (fog hides it entirely).
 const WEATHER = {
   dry: { cloud: 0, deck: 0.38, fog: 0.0009, overcast: null, wet: 0 },
-  rain: { cloud: 1, deck: 0.96, fog: 0.0065, overcast: { zenith: 0x5f6a76, horizon: 0x98a2ab, ground: 0x5d655c }, wet: 1 },
+  rain: {
+    cloud: 1,
+    deck: 0.96,
+    fog: 0.0065,
+    overcast: { zenith: 0x5f6a76, horizon: 0x98a2ab, ground: 0x5d655c },
+    wet: 1,
+  },
   fog: { cloud: 1, deck: 0, fog: 0.022, overcast: { zenith: 0xaab2b9, horizon: 0xc4c9cd, ground: 0x9aa09a }, wet: 0.4 },
-  snow: { cloud: 0.9, deck: 0.9, fog: 0.007, overcast: { zenith: 0x8f9cab, horizon: 0xd3dae1, ground: 0xc9cfd6 }, wet: 0 },
+  snow: {
+    cloud: 0.9,
+    deck: 0.9,
+    fog: 0.007,
+    overcast: { zenith: 0x8f9cab, horizon: 0xd3dae1, ground: 0xc9cfd6 },
+    wet: 0,
+  },
 };
 
-const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const smooth = (a, b, x) => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 const col = (hex) => new THREE.Color(hex);
 
 function keyed(elDeg) {
   let i = 0;
   while (i < KEYS.length - 2 && elDeg > KEYS[i + 1].el) i++;
-  const a = KEYS[i], b = KEYS[i + 1];
+  const a = KEYS[i],
+    b = KEYS[i + 1];
   const t = Math.max(0, Math.min(1, (elDeg - a.el) / (b.el - a.el)));
   const out = {};
   for (const k of ["zenith", "horizon", "ground", "glow", "sun"]) out[k] = col(a[k]).lerp(col(b[k]), t);
@@ -74,10 +96,10 @@ function keyed(elDeg) {
 export function atmosphereFor(hour, weather = "dry", location = null) {
   const W = WEATHER[weather] || WEATHER.dry;
   const sun = sunPosition(hour, location);
-  const elDeg = sun.elevation * 180 / Math.PI;
+  const elDeg = (sun.elevation * 180) / Math.PI;
   const sky = keyed(elDeg);
-  const day = smooth(-6, 12, elDeg);                // 0 at night, 1 in full daylight
-  const night = nightLevel(sun.elevation);         // street lights on
+  const day = smooth(-6, 12, elDeg); // 0 at night, 1 in full daylight
+  const night = nightLevel(sun.elevation); // street lights on
   const sunUp = smooth(-1, 6, elDeg);
   if (W.overcast) {
     // an overcast sky is as bright as the daylight behind it; at night it reflects the city's
@@ -86,7 +108,9 @@ export function atmosphereFor(hour, weather = "dry", location = null) {
     const lum = 0.08 + 0.92 * day;
     const cityGlow = col(0x3a2a22).multiplyScalar(night * 0.9);
     for (const key of ["zenith", "horizon", "ground"]) {
-      const grey = col(W.overcast[key]).multiplyScalar(lum).add(key === "zenith" ? cityGlow.clone().multiplyScalar(0.5) : cityGlow);
+      const grey = col(W.overcast[key])
+        .multiplyScalar(lum)
+        .add(key === "zenith" ? cityGlow.clone().multiplyScalar(0.5) : cityGlow);
       sky[key].lerp(grey, k);
     }
     sky.glow.multiplyScalar(1 - k);
@@ -97,16 +121,23 @@ export function atmosphereFor(hour, weather = "dry", location = null) {
   // moonlight: a cool, faint key light from high in the south-east when the sun is down
   const moonUp = 1 - sunUp;
   const moonDir = new THREE.Vector3(0.35, 0.72, 0.6).normalize();
-  const key = sunUp > 0.02 ? { dir: sun.dir, color: sky.sun.clone(), intensity: sunIntensity }
-    : { dir: moonDir, color: col(0x9db4ff), intensity: 0.35 * moonUp * (1 - 0.85 * cloud) };
+  const key =
+    sunUp > 0.02
+      ? { dir: sun.dir, color: sky.sun.clone(), intensity: sunIntensity }
+      : { dir: moonDir, color: col(0x9db4ff), intensity: 0.35 * moonUp * (1 - 0.85 * cloud) };
   // Fair-weather clouds are bright on top and blue-grey underneath; storm decks are a darker grey.
   // At dusk the lit side takes the sun's colour, and at night the deck reflects the city's glow.
   const cloudLum = 0.05 + 0.95 * day;
   const clouds = {
     cover: W.deck,
-    lit: col(0xffffff).lerp(sky.sun, 0.55 * (1 - smooth(4, 22, elDeg)) * sunUp).multiplyScalar(cloudLum * (1 - 0.35 * cloud))
+    lit: col(0xffffff)
+      .lerp(sky.sun, 0.55 * (1 - smooth(4, 22, elDeg)) * sunUp)
+      .multiplyScalar(cloudLum * (1 - 0.35 * cloud))
       .add(col(0x3a2a22).multiplyScalar(night * 0.6)),
-    shade: sky.zenith.clone().lerp(col(0x9aa3ad), 0.55).multiplyScalar(cloudLum * (0.82 - 0.25 * cloud))
+    shade: sky.zenith
+      .clone()
+      .lerp(col(0x9aa3ad), 0.55)
+      .multiplyScalar(cloudLum * (0.82 - 0.25 * cloud))
       .add(col(0x22191a).multiplyScalar(night * 0.6)),
   };
   // A gentle cinematic grade per light: warmer and richer at the ends of the day, cooler and a
@@ -115,16 +146,37 @@ export function atmosphereFor(hour, weather = "dry", location = null) {
   const grade = {
     contrast: 1.06 + 0.04 * golden - 0.04 * cloud * day,
     saturation: 1.08 + 0.08 * golden - 0.12 * cloud - 0.1 * night,
-    tint: col(0xffffff).lerp(col(0xffe2c4), 0.45 * golden).lerp(col(0xd8e4ff), 0.35 * night),
+    tint: col(0xffffff)
+      .lerp(col(0xffe2c4), 0.45 * golden)
+      .lerp(col(0xd8e4ff), 0.35 * night),
     vignette: 0.22 + 0.08 * night,
   };
   return {
-    hour, weather, sun, elevationDeg: elDeg, day, night, cloud, clouds, grade,
-    sky, fogDensity: W.fog * (weather === "dry" ? 1 + night * 0.4 : 1), fogColor: sky.horizon.clone(),
+    hour,
+    weather,
+    sun,
+    elevationDeg: elDeg,
+    day,
+    night,
+    cloud,
+    clouds,
+    grade,
+    sky,
+    fogDensity: W.fog * (weather === "dry" ? 1 + night * 0.4 : 1),
+    fogColor: sky.horizon.clone(),
     key,
     sunGlow: sunUp * (1 - cloud),
     stars: (1 - smooth(-10, -3, elDeg)) * (1 - cloud),
-    hemi: { sky: sky.zenith.clone().lerp(col(0xcfe0f2), 0.6 * day).lerp(col(0x4a5a80), 0.5 * night), ground: col(0x6c7358).multiplyScalar(0.2 + 0.8 * day).lerp(col(0x3a3028), 0.6 * night), intensity: 0.12 + 0.43 * day + 0.45 * cloud * day + 0.35 * night },
+    hemi: {
+      sky: sky.zenith
+        .clone()
+        .lerp(col(0xcfe0f2), 0.6 * day)
+        .lerp(col(0x4a5a80), 0.5 * night),
+      ground: col(0x6c7358)
+        .multiplyScalar(0.2 + 0.8 * day)
+        .lerp(col(0x3a3028), 0.6 * night),
+      intensity: 0.12 + 0.43 * day + 0.45 * cloud * day + 0.35 * night,
+    },
     env: 0.2 + 0.35 * day + 0.25 * cloud * day,
     exposure: 1.0 + 0.3 * night - 0.05 * cloud * day,
     wet: W.wet,

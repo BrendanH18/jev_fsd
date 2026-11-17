@@ -6,7 +6,7 @@ import { sceneryHash } from "./scenery-hash.js";
 import { buildingShapes, boxPolygon } from "./building-scenery.js";
 export { sceneryHash } from "./scenery-hash.js";
 
-const ZONE_SIGN_IN_M = 4;   // a zone sign stands at least this far past the corner of a junction
+const ZONE_SIGN_IN_M = 4; // a zone sign stands at least this far past the corner of a junction
 const cache = new WeakMap();
 const BOULEVARD = {
   residential: 1.8,
@@ -14,22 +14,9 @@ const BOULEVARD = {
   tertiary: 1.2,
   unclassified: 1.2,
 };
-const ARTERIAL = new Set([
-  "primary",
-  "secondary",
-  "tertiary",
-  "primary_link",
-  "secondary_link",
-  "tertiary_link",
-]);
-const LIT = new Set([
-  ...ARTERIAL,
-  "residential",
-  "unclassified",
-  "living_street",
-]);
-export const surfaceHalf = (e) =>
-  Math.max(Math.abs(e.asphalt[0]), Math.abs(e.asphalt[1])) + GUTTER;
+const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
+const LIT = new Set([...ARTERIAL, "residential", "unclassified", "living_street"]);
+export const surfaceHalf = (e) => Math.max(Math.abs(e.asphalt[0]), Math.abs(e.asphalt[1])) + GUTTER;
 export function analyzeStreets(map) {
   const streets = [],
     seen = new Map(),
@@ -54,8 +41,7 @@ export function analyzeStreets(map) {
       legs.get(id).push({ st, out });
     }
   }
-  for (const [id, list] of legs)
-    nodeR.set(id, Math.max(...list.map((l) => surfaceHalf(l.st.edge))));
+  for (const [id, list] of legs) nodeR.set(id, Math.max(...list.map((l) => surfaceHalf(l.st.edge))));
   return { streets, legs, nodeR };
 }
 export function trimAt(nodeR, legs, id) {
@@ -64,16 +50,9 @@ export function trimAt(nodeR, legs, id) {
 }
 export function crossingHalf(map, e) {
   let w = 0;
-  for (const id of [
-    ...(map.inn?.get(e.to) || []),
-    ...(map.out?.get(e.to) || []),
-  ]) {
+  for (const id of [...(map.inn?.get(e.to) || []), ...(map.out?.get(e.to) || [])]) {
     const o = map.edges.get(id);
-    if (
-      (o.from === e.from && o.to === e.to) ||
-      (o.from === e.to && o.to === e.from)
-    )
-      continue;
+    if ((o.from === e.from && o.to === e.to) || (o.from === e.to && o.to === e.from)) continue;
     w = Math.max(w, surfaceHalf(o));
   }
   return w;
@@ -92,8 +71,7 @@ function trafficClearance(map) {
     const edges = new Set();
     for (const lane of map.lanesNear(x, y, 15)) {
       const w = lane.edgeRef.lane_width || 3.5;
-      if (projectPoint(lane.pts, lane.cum, [x, y]).distance < w / 2 + r + LANE_CLEARANCE_M)
-        return false;
+      if (projectPoint(lane.pts, lane.cum, [x, y]).distance < w / 2 + r + LANE_CLEARANCE_M) return false;
       edges.add(lane.edgeRef);
     }
     for (const e of edges) {
@@ -113,16 +91,8 @@ function buildingClearance(map) {
   for (const { pts } of buildingShapes(map)) {
     const xs = pts.map((p) => p[0]),
       ys = pts.map((p) => p[1]);
-    for (
-      let x = Math.floor(Math.min(...xs) / cell);
-      x <= Math.floor(Math.max(...xs) / cell);
-      x++
-    )
-      for (
-        let y = Math.floor(Math.min(...ys) / cell);
-        y <= Math.floor(Math.max(...ys) / cell);
-        y++
-      ) {
+    for (let x = Math.floor(Math.min(...xs) / cell); x <= Math.floor(Math.max(...xs) / cell); x++)
+      for (let y = Math.floor(Math.min(...ys) / cell); y <= Math.floor(Math.max(...ys) / cell); y++) {
         const key = `${x},${y}`;
         if (!grid.has(key)) grid.set(key, []);
         grid.get(key).push(pts);
@@ -142,19 +112,12 @@ function buildingClearance(map) {
           for (let a = 0, b = pts.length - 1; a < pts.length; b = a++) {
             const [xi, yi] = pts[a],
               [xj, yj] = pts[b];
-            if (
-              yi > y !== yj > y &&
-              x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
-            )
-              inside = !inside;
+            if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
             const dx = xj - xi,
               dy = yj - yi,
               l2 = dx * dx + dy * dy,
-              t = l2
-                ? Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / l2))
-                : 0;
-            if (Math.hypot(x - xi - dx * t, y - yi - dy * t) < margin)
-              return true;
+              t = l2 ? Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / l2)) : 0;
+            if (Math.hypot(x - xi - dx * t, y - yi - dy * t) < margin) return true;
           }
           if (inside) return true;
         }
@@ -190,8 +153,7 @@ export function sceneryFor(map) {
     for (const box of building.boxes) {
       // Roofs and printed doors are above/outside the sedan's impact envelope. Decks,
       // steps, supporting posts and hedges occupy the vehicle's ground-level footprint.
-      if (!["porch", "porch_step", "porch_post", "hedge"].includes(box.part))
-        continue;
+      if (!["porch", "porch_step", "porch_post", "hedge"].includes(box.part)) continue;
       result.polygons.push({
         id: box.id,
         kind: box.part,
@@ -204,9 +166,7 @@ export function sceneryFor(map) {
     hash01 = sceneryHash;
   const spots = result.trees;
   const clear = (x, y, margin) =>
-    !nearBuilding(x, y, margin) &&
-    typeof map.roadDistance === "function" &&
-    map.roadDistance(x, y).distance > 1;
+    !nearBuilding(x, y, margin) && typeof map.roadDistance === "function" && map.roadDistance(x, y).distance > 1;
   // A post `lat` right of `e` at `s`, moved outward in 0.5 m steps (at most 3 m) until it stands
   // clear of every carriageway; null when no such spot exists.
   const clearOfTraffic = trafficClearance(map);
@@ -222,18 +182,10 @@ export function sceneryFor(map) {
       blvd = BOULEVARD[e.cls];
     if (!blvd) continue;
     const L = e.cum.at(-1),
-      trim = (id) =>
-        (roads.legs.get(id) || []).length >= 3 ? roads.nodeR.get(id) + 7 : 2;
+      trim = (id) => ((roads.legs.get(id) || []).length >= 3 ? roads.nodeR.get(id) + 7 : 2);
     for (const sign of [1, -1]) {
-      const lat =
-        sign > 0
-          ? e.asphalt[1] + GUTTER + CURB + blvd / 2
-          : e.asphalt[0] - GUTTER - CURB - blvd / 2;
-      for (
-        let s = trim(e.from) + 3 + hash01(e.id, sign) * 6;
-        s < L - trim(e.to);
-        s += 10 + hash01(e.id + s, 7) * 5
-      ) {
+      const lat = sign > 0 ? e.asphalt[1] + GUTTER + CURB + blvd / 2 : e.asphalt[0] - GUTTER - CURB - blvd / 2;
+      for (let s = trim(e.from) + 3 + hash01(e.id, sign) * 6; s < L - trim(e.to); s += 10 + hash01(e.id + s, 7) * 5) {
         const key = `${e.id}:${sign}:${Math.round(s)}`;
         if (hash01(key, 1) < 0.14) continue;
         const { x, y } = roadside(e, s, lat);
@@ -256,18 +208,14 @@ export function sceneryFor(map) {
       kind: "leaf",
       size: Math.min(0.85, 0.35 + rb.island_r * 0.12),
     });
-  const [x0, y0, x1, y1] =
-    typeof map.roadDistance === "function"
-      ? map.extent || [0, 0, 0, 0]
-      : [0, 0, 0, 0];
+  const [x0, y0, x1, y1] = typeof map.roadDistance === "function" ? map.extent || [0, 0, 0, 0] : [0, 0, 0, 0];
   for (let x = x0; x < x1; x += 13)
     for (let y = y0; y < y1; y += 13) {
       const key = `${x},${y}`;
       if (hash01(key, 9) > 0.4) continue;
       const px = x + hash01(key, 10) * 13,
         py = y + hash01(key, 11) * 13;
-      if (nearBuilding(px, py, 2.5) || map.roadDistance(px, py).distance < 7)
-        continue;
+      if (nearBuilding(px, py, 2.5) || map.roadDistance(px, py).distance < 7) continue;
       spots.push({
         x: px,
         y: py,
@@ -292,11 +240,7 @@ export function sceneryFor(map) {
         phase = !tall && st.twin && e === st.twin ? spacing / 2 : 0;
       const from = trimAt(roads.nodeR, roads.legs, e.from) + 4,
         to = e.cum.at(-1) - trimAt(roads.nodeR, roads.legs, e.to) - 6;
-      for (
-        let s = from + 6 + phase + hash01(e.id, 3) * 4;
-        s < to;
-        s += spacing
-      ) {
+      for (let s = from + 6 + phase + hash01(e.id, 3) * 4; s < to; s += spacing) {
         const p = post(e, s, e.asphalt[1] + GUTTER + CURB + 0.45, 0.22),
           reach = tall ? 2.3 : 1.5;
         if (!p) continue;
@@ -400,7 +344,8 @@ export function sceneryFor(map) {
   for (const [edgeId, spans] of map.zoneSpans || []) {
     const e = map.edges.get(edgeId);
     if (!e) continue;
-    const scale = e.cum.at(-1) / Math.max(1e-6, e.length), runs = [];
+    const scale = e.cum.at(-1) / Math.max(1e-6, e.length),
+      runs = [];
     for (const kind of ["school", "playground"]) {
       for (const span of spans.filter((x) => x.zone.kind === kind)) {
         const last = runs.findLast((r) => r.kind === kind);
@@ -410,16 +355,24 @@ export function sceneryFor(map) {
     }
     for (const run of runs) {
       // (a second kind's sign starting at the same place stands a little further on)
-      const twin = runs.some((r) => r !== run && r.kind === "school" && run.kind !== "school" && Math.abs(r.from - run.from) < 6);
+      const twin = runs.some(
+        (r) => r !== run && r.kind === "school" && run.kind !== "school" && Math.abs(r.from - run.from) < 6,
+      );
       // (clear of the junction at either end, past its corner)
-      const first = (trimAt(roads.nodeR, roads.legs, e.from) + ZONE_SIGN_IN_M) / scale, last = e.length - (trimAt(roads.nodeR, roads.legs, e.to) + ZONE_SIGN_IN_M) / scale;
+      const first = (trimAt(roads.nodeR, roads.legs, e.from) + ZONE_SIGN_IN_M) / scale,
+        last = e.length - (trimAt(roads.nodeR, roads.legs, e.to) + ZONE_SIGN_IN_M) / scale;
       const marks = [{ s: Math.max(run.from, first) + (twin ? 6 : 0), end: false }];
       if (run.to < last) marks.push({ s: run.to, end: true });
       if (marks[0].s > Math.min(run.to, last)) marks.shift();
       for (const { s, end } of marks) {
         const p = post(e, s * scale, e.asphalt[1] + GUTTER + CURB + 0.7, 0.035);
         if (!p) continue;
-        const item = { ...p, id: `zone_post:${edgeId}:${run.kind}:${end ? "end" : "start"}:${Math.round(s)}`, kind: run.kind, end };
+        const item = {
+          ...p,
+          id: `zone_post:${edgeId}:${run.kind}:${end ? "end" : "start"}:${Math.round(s)}`,
+          kind: run.kind,
+          end,
+        };
         result.zoneSigns.push(item);
         result.circles.push({ ...item, kind: "zone_post", radius: 0.035 });
       }

@@ -23,9 +23,26 @@ const { setupChallenge } = await import("../static/js/lab/evaluation.js");
 const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 
 let checks = 0;
-function test(name, fn) { fn(); checks++; console.log(`✓ ${name}`); }
+function test(name, fn) {
+  fn();
+  checks++;
+  console.log(`✓ ${name}`);
+}
 const root = new URL("../data/maps/", import.meta.url);
-const KEYS = ["623b012bc8b5", "7165f1c807a8", "d7454a9751b7", "4a96d42cb3f2", "bb9df59633e0", "a53c5bcf6438", "d25b07def0d2", "19bb885c9cae", "8e99888cb743", "ca5573a8d934", "3e794edbefcb", "49db0d437c8c"];
+const KEYS = [
+  "623b012bc8b5",
+  "7165f1c807a8",
+  "d7454a9751b7",
+  "4a96d42cb3f2",
+  "bb9df59633e0",
+  "a53c5bcf6438",
+  "d25b07def0d2",
+  "19bb885c9cae",
+  "8e99888cb743",
+  "ca5573a8d934",
+  "3e794edbefcb",
+  "49db0d437c8c",
+];
 const load = (key) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
   const crossings = new URL(`${key}.crossings.v1.json`, root);
@@ -44,7 +61,8 @@ test("every bundled map has its crosswalk file, and the crowd finds each crosswa
     const world = new World(map, { parked: 0, pedestrians: 0 });
     assert.equal(world.crowd.marked.length, map.crosswalks.length, `${key}: every crosswalk on a street`);
     for (const cw of world.crowd.marked) {
-      const e = cw.st.edge, width = e.asphalt[1] - e.asphalt[0];
+      const e = cw.st.edge,
+        width = e.asphalt[1] - e.asphalt[0];
       const span = Math.hypot(cw.ends[1][0] - cw.ends[-1][0], cw.ends[1][1] - cw.ends[-1][1]);
       assert.ok(span > width && span < width + 12, `${cw.id} reaches from sidewalk to sidewalk (${span.toFixed(1)} m)`);
     }
@@ -54,8 +72,11 @@ test("every bundled map has its crosswalk file, and the crowd finds each crosswa
 });
 
 test("a vehicle in traffic hides a person behind it; a parked car or a cyclist does not", () => {
-  const observer = { x: 0, y: 0, psi: 0 }, ped = { x: 20, y: 0 };
-  const car = new Vehicle(8, 0, 0, 0), aside = new Vehicle(8, 4, 0, 0), bike = new Vehicle(8, 0, 0, 0, BIKE);
+  const observer = { x: 0, y: 0, psi: 0 },
+    ped = { x: 20, y: 0 };
+  const car = new Vehicle(8, 0, 0, 0),
+    aside = new Vehicle(8, 4, 0, 0),
+    bike = new Vehicle(8, 0, 0, 0, BIKE);
   bike.kind = "bike";
   assert.ok(hiddenByTraffic(observer, ped, [car]));
   assert.ok(!hiddenByTraffic(observer, ped, [aside]));
@@ -78,7 +99,8 @@ function broadway() {
 // Put the car `back` metres short of the crosswalk (its front) at `v`, along the edge the crosswalk
 // was mapped on, in lane `idx`.
 function placeBefore(world, cw, back, v, idx = 0) {
-  const c = KITS.crosswalks.find((x) => x.id === cw.id), lane = KITS.lane(c.edge, idx);
+  const c = KITS.crosswalks.find((x) => x.id === cw.id),
+    lane = KITS.lane(c.edge, idx);
   const front = world.ego.spec.length - world.ego.spec.rearOverhang;
   world.placeOnLane(lane, c.s - back - front);
   world.ego.v = v;
@@ -100,7 +122,19 @@ test("someone at a marked crosswalk steps off only when what is coming can still
 
 test("walking past a marked crosswalk, people may cross there, sidewalk to sidewalk", () => {
   const { world, cw } = broadway();
-  const ped = new Pedestrian({ id: "p", x: 0, y: 0, psi: 0, v: 0, speed: 1.3, path: [], crossing: null, waiting: 0, phase: 0, look: 1 });
+  const ped = new Pedestrian({
+    id: "p",
+    x: 0,
+    y: 0,
+    psi: 0,
+    v: 0,
+    speed: 1.3,
+    path: [],
+    crossing: null,
+    waiting: 0,
+    phase: 0,
+    look: 1,
+  });
   world.crowd.marking = () => 0;
   world.crowd.walkAlong(ped, cw.st, 1, cw.s - 40, 1);
   const wp = ped.path.find((w) => w.cross);
@@ -164,13 +198,18 @@ test("the car is told not to pass, offered a stop short of the crosswalk, and pa
   const snap = buildSnapshot(world);
   const hold = snap.crosswalk_stop;
   assert.ok(hold && hold.id === "challenge_stopped" && hold.crosswalk === cw.id && hold.stopped, "sensed");
-  assert.ok(Math.abs(hold.bumper_to_crosswalk_m - 60) < 0.5 && Math.abs(hold.bumper_to_crosswalk_m - hold.bumper_to_stop_m - HOLD_M) < 1e-6, "stops 3.5 m short");
+  assert.ok(
+    Math.abs(hold.bumper_to_crosswalk_m - 60) < 0.5 &&
+      Math.abs(hold.bumper_to_crosswalk_m - hold.bumper_to_stop_m - HOLD_M) < 1e-6,
+    "stops 3.5 m short",
+  );
   const candidates = sampleCandidates(snap, world);
   simulateAll(candidates, snap, world);
   const stop = candidates.find((c) => c.id === "stop_at_crosswalk");
   assert.ok(stop && stop.eligible, "stop_at_crosswalk on offer");
   // close up, driving on at speed would pass it
-  const near = threat({ back: 9, v: 6 }), s2 = buildSnapshot(near.world);
+  const near = threat({ back: 9, v: 6 }),
+    s2 = buildSnapshot(near.world);
   const c2 = sampleCandidates(s2, near.world);
   simulateAll(c2, s2, near.world);
   const keep = c2.find((c) => c.id === "keep_lane_target");
@@ -208,7 +247,13 @@ test("once it has stood still at the crosswalk for 2 s it may go on, looking", (
   assert.ok(buildSnapshot(world).crosswalk_stop, "still held after 1.5 s");
   for (let k = 0; k < 60; k++) step(ctx, {});
   assert.equal(buildSnapshot(world).crosswalk_stop, null, "released after 2.5 s");
-  assert.ok(world.sees(world.ego, world.crowd.list.find((p) => p.id === "challenge_pedestrian")), "and from beside the car it sees the person in front of it");
+  assert.ok(
+    world.sees(
+      world.ego,
+      world.crowd.list.find((p) => p.id === "challenge_pedestrian"),
+    ),
+    "and from beside the car it sees the person in front of it",
+  );
 });
 
 test("a stop it creeps on from before 2 s is up does not count as looking", () => {
@@ -238,7 +283,8 @@ test("Rules stops beside the stopped car, looks, then goes on, without failing t
   autopilot.setBrain("rules");
   autopilot.setEnabled(true);
   const ctx = { world, fleet, autopilot };
-  let stoppedNear = false, passed = false;
+  let stoppedNear = false,
+    passed = false;
   for (let k = 0; k < 60 * 40 && !passed; k++) {
     step(ctx);
     const d = frontTo(cw, world.ego);

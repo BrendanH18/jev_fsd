@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build a self-contained Rules-only browser demo for GitHub Pages. No secrets or SDK needed."""
+
 from __future__ import annotations
 import argparse
 import json
@@ -37,9 +38,15 @@ def build(output: Path) -> None:
         shutil.copytree(ROOT / "static" / directory, output / directory, dirs_exist_ok=True)
     for page in ("index.html", "bench.html", "arena.html", "results.html"):
         text = (ROOT / "static" / page).read_text()
-        text = text.replace("<head>", '<head>\n  <meta name="jev-demo" content="rules-only">\n  <meta name="description" content="A driving test for AI models, on real Canadian streets, that you can also take yourself. Free, open source, in your browser.">')
-        text = text.replace("</head>", '<meta property="og:title" content="Jev Drive Lab: a driving test for AI, on real Canadian streets">\n<meta property="og:description" content="Twelve real Canadian neighbourhoods, 60 challenges and 2 road tests. Take the wheel, or hand it to an AI and see every decision it makes.">\n<meta property="og:image" content="https://brendanh18.github.io/jev_fsd/assets/social.jpg">\n<meta name="twitter:card" content="summary_large_image">\n</head>')
-        text = re.sub(r'(["\'])/(css|js|vendor)/', r'\1./\2/', text)
+        text = text.replace(
+            "<head>",
+            '<head>\n  <meta name="jev-demo" content="rules-only">\n  <meta name="description" content="A driving test for AI models, on real Canadian streets, that you can also take yourself. Free, open source, in your browser.">',
+        )
+        text = text.replace(
+            "</head>",
+            '<meta property="og:title" content="Jev Drive Lab: a driving test for AI, on real Canadian streets">\n<meta property="og:description" content="Twelve real Canadian neighbourhoods, 60 challenges and 2 road tests. Take the wheel, or hand it to an AI and see every decision it makes.">\n<meta property="og:image" content="https://brendanh18.github.io/jev_fsd/assets/social.jpg">\n<meta name="twitter:card" content="summary_large_image">\n</head>',
+        )
+        text = re.sub(r'(["\'])/(css|js|vendor)/', r"\1./\2/", text)
         text = text.replace('href="/"', 'href="./"')
         text = re.sub(r'href="/(arena|bench|results)"', r'href="./\1.html"', text)
         text = text.replace('href="/favicon.svg"', 'href="./favicon.svg"')
@@ -99,7 +106,9 @@ def build(output: Path) -> None:
     (output / "assets").mkdir(exist_ok=True)
     shutil.copyfile(ROOT / "docs" / "readme" / "social.jpg", output / "assets" / "social.jpg")
     shutil.copyfile(ROOT / "LICENSE", output / "LICENSE")
-    (output / "ATTRIBUTION.txt").write_text("Map data © OpenStreetMap contributors, ODbL 1.0. https://www.openstreetmap.org/copyright\nThree.js: MIT, see vendor/three/LICENSE. Jev FSD: MIT.\n")
+    (output / "ATTRIBUTION.txt").write_text(
+        "Map data © OpenStreetMap contributors, ODbL 1.0. https://www.openstreetmap.org/copyright\nThree.js: MIT, see vendor/three/LICENSE. Jev FSD: MIT.\n"
+    )
     print(f"Built {len(maps)} bundled neighbourhoods in {output}")
 
 

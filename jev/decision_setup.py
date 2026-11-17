@@ -24,8 +24,20 @@ from typing import List
 from .client import PRICE_PER_INPUT_TOKEN_USD, JevClient
 from .config import DEFAULT_BASE_URL, KEY_ENV, Settings
 from .decision import DecisionConfig, DecisionRegistry
-from .llm_setup import (MODELS_TIMEOUT_S, Pillar, SetupError, _lock, base_url_for, fetch_json, parse_models, probe_url,
-                        remove_endpoint, save_endpoint, text, write_key)
+from .llm_setup import (
+    MODELS_TIMEOUT_S,
+    Pillar,
+    SetupError,
+    _lock,
+    base_url_for,
+    fetch_json,
+    parse_models,
+    probe_url,
+    remove_endpoint,
+    save_endpoint,
+    text,
+    write_key,
+)
 from .endpoints import public_url
 
 OPENROUTER_CATALOG = "https://openrouter.ai/api/v1/models?output_modalities=decisions"
@@ -39,27 +51,66 @@ TYPESAFE_MODELS = (
 )
 
 PROVIDERS = (
-    {"id": "typesafe", "label": "TypeSafe", "base_url": DEFAULT_BASE_URL, "path": "/v1/systemone", "check_path": "/v1/models",
-     "key_env": KEY_ENV, "key_url": "https://console.typesafe.ai", "timeout_s": 3,
-     "hint": "Jev, direct from TypeSafe. Saving the key turns on the built-in Jev driver; another Jev version becomes a driver of its own."},
-    {"id": "openrouter", "label": "OpenRouter", "base_url": "https://openrouter.ai", "path": "/api/alpha/decisions",
-     "check_path": "/api/v1/key", "key_env": "OPENROUTER_API_KEY", "key_url": "https://openrouter.ai/keys", "timeout_s": 5,
-     "hint": "Jev, Perplexity Decider, Liquid d1, Microsoft Decision 1 and other decision models with one key. Prices fill in automatically."},
-    {"id": "llamacpp", "label": "llama.cpp", "base_url": "http://localhost:8080", "path": "/v1/systemone", "check_path": "/v1/models",
-     "timeout_s": 20, "rpm": 0,
-     "hint": "Free, on this computer: llama-server 0.6.0 or later with an open decision model such as Kev 4B (GGUF)."},
-    {"id": "custom", "label": "Other", "base_url": None,
-     "hint": "Any server that answers POST {URL}/v1/systemone with TypeSafe's request and answer format."},
+    {
+        "id": "typesafe",
+        "label": "TypeSafe",
+        "base_url": DEFAULT_BASE_URL,
+        "path": "/v1/systemone",
+        "check_path": "/v1/models",
+        "key_env": KEY_ENV,
+        "key_url": "https://console.typesafe.ai",
+        "timeout_s": 3,
+        "hint": "Jev, direct from TypeSafe. Saving the key turns on the built-in Jev driver; another Jev version becomes a driver of its own.",
+    },
+    {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "base_url": "https://openrouter.ai",
+        "path": "/api/alpha/decisions",
+        "check_path": "/api/v1/key",
+        "key_env": "OPENROUTER_API_KEY",
+        "key_url": "https://openrouter.ai/keys",
+        "timeout_s": 5,
+        "hint": "Jev, Perplexity Decider, Liquid d1, Microsoft Decision 1 and other decision models with one key. Prices fill in automatically.",
+    },
+    {
+        "id": "llamacpp",
+        "label": "llama.cpp",
+        "base_url": "http://localhost:8080",
+        "path": "/v1/systemone",
+        "check_path": "/v1/models",
+        "timeout_s": 20,
+        "rpm": 0,
+        "hint": "Free, on this computer: llama-server 0.6.0 or later with an open decision model such as Kev 4B (GGUF).",
+    },
+    {
+        "id": "custom",
+        "label": "Other",
+        "base_url": None,
+        "hint": "Any server that answers POST {URL}/v1/systemone with TypeSafe's request and answer format.",
+    },
 )
 
-DECISION = Pillar(prefix="decision:", providers=PROVIDERS, path=lambda s: s.decision_endpoints_path, validate=DecisionConfig,
-                  key_prefix="JEV_FSD_DECISION_KEY_", preset_fields=("path", "check_path", "timeout_s", "rpm"))
+DECISION = Pillar(
+    prefix="decision:",
+    providers=PROVIDERS,
+    path=lambda s: s.decision_endpoints_path,
+    validate=DecisionConfig,
+    key_prefix="JEV_FSD_DECISION_KEY_",
+    preset_fields=("path", "check_path", "timeout_s", "rpm"),
+)
 
 
 def jev_public(client: JevClient) -> dict:
     """The built-in Jev driver as the setup dialog sees it. Never the key."""
-    return {"id": "jev", "configured": client.configured, "key_source": client.key_source, "model": client.model,
-            "endpoint": public_url(client.base_url), "price_per_mtok_input": JEV_PRICE_PER_MTOK}
+    return {
+        "id": "jev",
+        "configured": client.configured,
+        "key_source": client.key_source,
+        "model": client.model,
+        "endpoint": public_url(client.base_url),
+        "price_per_mtok_input": JEV_PRICE_PER_MTOK,
+    }
 
 
 def public(settings: Settings, registry: DecisionRegistry, client: JevClient) -> dict:
@@ -84,19 +135,32 @@ def list_models(settings: Settings, body: dict) -> dict:
         models = parse_models(fetch_json(OPENROUTER_CATALOG, None, p["label"], MODELS_TIMEOUT_S))
         return {"provider": p["id"], "endpoint": public_url(p["base_url"]) + p["path"], "models": models}
     if p["id"] == "typesafe":
-        documented = [dict(m, price_per_mtok_input=JEV_PRICE_PER_MTOK, price_per_mtok_output=0) for m in TYPESAFE_MODELS]
+        documented = [
+            dict(m, price_per_mtok_input=JEV_PRICE_PER_MTOK, price_per_mtok_output=0) for m in TYPESAFE_MODELS
+        ]
         note = None
         if key:
-            try:   # a wrong key is worth saying now; an unreachable list is not worth blocking on
+            try:  # a wrong key is worth saying now; an unreachable list is not worth blocking on
                 listed = _typesafe_models(fetch_json(p["base_url"] + "/v1/models", key, p["label"], MODELS_TIMEOUT_S))
             except SetupError as err:
                 if "rejected the key" in str(err):
                     raise
-                listed, note = [], "TypeSafe's model list could not be loaded (%s); showing the documented models." % err
+                listed, note = (
+                    [],
+                    "TypeSafe's model list could not be loaded (%s); showing the documented models." % err,
+                )
             known = {m["id"] for m in documented}
-            documented += [dict(m, price_per_mtok_input=JEV_PRICE_PER_MTOK, price_per_mtok_output=0)
-                           for m in listed if m["id"] not in known]
-        return {"provider": p["id"], "endpoint": public_url(p["base_url"]) + p["path"], "models": documented, "note": note}
+            documented += [
+                dict(m, price_per_mtok_input=JEV_PRICE_PER_MTOK, price_per_mtok_output=0)
+                for m in listed
+                if m["id"] not in known
+            ]
+        return {
+            "provider": p["id"],
+            "endpoint": public_url(p["base_url"]) + p["path"],
+            "models": documented,
+            "note": note,
+        }
     base_url = probe_url(base_url_for(p, body), keyed=bool(key))
     models = parse_models(fetch_json(base_url + "/v1/models", key, p["label"], MODELS_TIMEOUT_S))
     return {"provider": p["id"], "endpoint": public_url(base_url) + "/v1/systemone", "models": models}
@@ -111,7 +175,7 @@ def save(settings: Settings, registry: DecisionRegistry, client: JevClient, body
             raise SetupError("Paste your TypeSafe API key.")
         with _lock:
             notes: List[str] = write_key(settings, KEY_ENV, key) if key else []
-            registry.reload()   # re-reads .env, which the built-in Jev driver shares
+            registry.reload()  # re-reads .env, which the built-in Jev driver shares
         result = {"saved": "jev", "id": "jev", "notes": notes}
     else:
         result = save_endpoint(DECISION, settings, registry, body)

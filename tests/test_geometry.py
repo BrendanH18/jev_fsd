@@ -40,7 +40,7 @@ class GeometryTests(unittest.TestCase):
         pts = [(0, 0), (10, 0)]
         south = g.project_point(pts, (5, -1))
         north = g.project_point(pts, (5, 1))
-        self.assertAlmostEqual(south["lateral"], 1.0)   # right of travel
+        self.assertAlmostEqual(south["lateral"], 1.0)  # right of travel
         self.assertAlmostEqual(north["lateral"], -1.0)
         self.assertAlmostEqual(south["s"], 5.0)
         beyond = g.project_point(pts, (14, 0))

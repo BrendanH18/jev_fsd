@@ -14,10 +14,17 @@ const { ParkedCars } = await import("../static/js/sim/parking.js");
 const LIMIT_M = 0.3;
 // How far a parked car's real body (its OBB) reaches past the parking lane into the travel lanes.
 function reach(map, car) {
-  const e = map.edges.get(car.edge), o = car.obb(), right = car.curb === "right";
+  const e = map.edges.get(car.edge),
+    o = car.obb(),
+    right = car.curb === "right";
   const inner = right ? e.asphalt[1] - e.parking[1] : e.asphalt[0] + e.parking[0];
   let worst = -Infinity;
-  for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+  for (const [a, b] of [
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ]) {
     const x = o.center[0] + Math.cos(o.heading) * a * o.halfLength + Math.sin(o.heading) * b * o.halfWidth;
     const y = o.center[1] + Math.sin(o.heading) * a * o.halfLength - Math.cos(o.heading) * b * o.halfWidth;
     const q = projectPoint(e.pts, e.cum, [x, y]);
@@ -26,8 +33,14 @@ function reach(map, car) {
   return worst;
 }
 
-let over = 0, cars = 0, emptied = 0, worst = -Infinity;
-for (const file of fs.readdirSync("data/maps").filter((f) => f.endsWith(".v6.pack.json")).sort()) {
+let over = 0,
+  cars = 0,
+  emptied = 0,
+  worst = -Infinity;
+for (const file of fs
+  .readdirSync("data/maps")
+  .filter((f) => f.endsWith(".v6.pack.json"))
+  .sort()) {
   const map = new MapData(JSON.parse(fs.readFileSync(`data/maps/${file}`)));
   for (const seed of [1, 7]) {
     const parked = new ParkedCars(map, { seed, density: 1 });
@@ -49,8 +62,14 @@ for (const file of fs.readdirSync("data/maps").filter((f) => f.endsWith(".v6.pac
     emptied += empty;
   }
 }
-assert.equal(over, 0, `no parked car reaches more than ${LIMIT_M} m into a travel lane (${over} of ${cars} did; worst ${worst.toFixed(3)} m)`);
+assert.equal(
+  over,
+  0,
+  `no parked car reaches more than ${LIMIT_M} m into a travel lane (${over} of ${cars} did; worst ${worst.toFixed(3)} m)`,
+);
 assert.ok(emptied > 0, "some bays that pass the bay check are left empty for their car's footprint");
 
-console.log(`Parked cars keep their jittered bodies within ${LIMIT_M} m of the travel lane (${cars} cars, worst ${worst.toFixed(3)} m; ${emptied} bays left empty)`);
+console.log(
+  `Parked cars keep their jittered bodies within ${LIMIT_M} m of the travel lane (${cars} cars, worst ${worst.toFixed(3)} m; ${emptied} bays left empty)`,
+);
 process.exit(0);

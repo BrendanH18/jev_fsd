@@ -42,9 +42,25 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .config import Settings
-from .endpoints import (MAX_SCRUB_DEPTH, MAX_TRACE_DEPTH, Endpoint, EndpointError, EndpointRegistry,  # noqa: F401
-                        check_common, deeper_than, error_body, load_entries, number, post_json, price, public_url,
-                        reported_cost, scrub, tokens, unique)
+from .endpoints import (
+    MAX_SCRUB_DEPTH,
+    MAX_TRACE_DEPTH,
+    Endpoint,
+    EndpointError,
+    EndpointRegistry,  # noqa: F401
+    check_common,
+    deeper_than,
+    error_body,
+    load_entries,
+    number,
+    post_json,
+    price,
+    public_url,
+    reported_cost,
+    scrub,
+    tokens,
+    unique,
+)
 
 ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 MOTIONS = ("drive", "stop", "reverse")
@@ -76,24 +92,30 @@ class EndpointConfig:
         common = check_common(raw, where, problems, "https://api.openai.com/v1", "OPENAI_API_KEY")
         if common is None:
             return
-        name, where, base_url, model, key_env = (common[k] for k in ("name", "where", "base_url", "model", "api_key_env"))
+        name, where, base_url, model, key_env = (
+            common[k] for k in ("name", "where", "base_url", "model", "api_key_env")
+        )
         response_format = str(raw.get("response_format") or "json_schema")
         if response_format not in RESPONSE_FORMATS:
             problems.append("%s: response_format must be one of %s" % (where, ", ".join(RESPONSE_FORMATS)))
             return
         extra = raw.get("extra_body") or {}
         if not isinstance(extra, dict) or RESERVED_BODY_KEYS & set(extra):
-            problems.append("%s: extra_body must be an object without %s" % (where, ", ".join(sorted(RESERVED_BODY_KEYS))))
+            problems.append(
+                "%s: extra_body must be an object without %s" % (where, ", ".join(sorted(RESERVED_BODY_KEYS)))
+            )
             return
         try:
-            timeout_s = float(number(raw.get("timeout_s", 10)))   # float(None) raises: timeout_s cannot be null
+            timeout_s = float(number(raw.get("timeout_s", 10)))  # float(None) raises: timeout_s cannot be null
             max_tokens = number(raw.get("max_tokens", 400), integer=True)
             temperature = number(raw.get("temperature", 0))
             rpm = number(raw.get("rpm"), integer=True)
             rpm = None if rpm is None else max(0, rpm)
         except (TypeError, ValueError, OverflowError):
-            problems.append("%s: timeout_s, max_tokens, temperature and rpm must be finite numbers "
-                            "(max_tokens, temperature and rpm may be null)" % where)
+            problems.append(
+                "%s: timeout_s, max_tokens, temperature and rpm must be finite numbers "
+                "(max_tokens, temperature and rpm may be null)" % where
+            )
             return
         self.name = name
         self.label = str(raw.get("label") or name)[:60]
@@ -146,8 +168,9 @@ class LlmResult:
     a usable choice or message sets `malformed` and leaves `content` empty. `response` is None for a
     completion nested too deeply to parse at all: its tokens are unknown and count as 0."""
 
-    def __init__(self, endpoint: "LlmEndpoint", request: dict, response: Optional[dict], latency_ms: float,
-                 format_used: str):
+    def __init__(
+        self, endpoint: "LlmEndpoint", request: dict, response: Optional[dict], latency_ms: float, format_used: str
+    ):
         self.request = request
         unparsed = response is None
         response = {} if response is None else response
@@ -161,7 +184,9 @@ class LlmResult:
         if reported is not None:
             self.cost_usd, self.cost_source = reported, "provider"
         elif config.priced:
-            self.cost_usd = (self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)) / 1_000_000
+            self.cost_usd = (
+                self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)
+            ) / 1_000_000
             self.cost_source = "price"
         else:
             self.cost_usd, self.cost_source = 0.0, None
@@ -169,8 +194,10 @@ class LlmResult:
         if unparsed:
             self.response = {"note": "completion nested too deeply to parse; not shown"}
         elif deeper_than(response, MAX_TRACE_DEPTH):
-            self.response = {"note": "completion nested deeper than %d levels; not shown" % MAX_TRACE_DEPTH,
-                             "usage": {"prompt_tokens": self.input_tokens, "completion_tokens": self.output_tokens}}
+            self.response = {
+                "note": "completion nested deeper than %d levels; not shown" % MAX_TRACE_DEPTH,
+                "usage": {"prompt_tokens": self.input_tokens, "completion_tokens": self.output_tokens},
+            }
         else:
             self.response = response
         self.latency_ms = latency_ms
@@ -183,17 +210,23 @@ class LlmResult:
             if unparsed:
                 raise ValueError("nested too deeply to parse")
             self.content, self.refusal = _message_text(response)
-        except Exception as err:   # ValueError for a missing choice or message; RecursionError for absurd nesting
+        except Exception as err:  # ValueError for a missing choice or message; RecursionError for absurd nesting
             self.content, self.refusal = "", ""
             self.malformed = str(err) if isinstance(err, ValueError) else type(err).__name__
 
     def meta(self) -> dict:
         config = self.endpoint.config
         return {
-            "model": self.model, "endpoint": config.name, "latency_ms": round(self.latency_ms, 1),
-            "input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
-            "cost_usd": self.cost_usd, "cost_known": self.cost_source is not None, "response_format": self.format_used,
-            "backend": "openai-compatible (stdlib)", "live_call": True,
+            "model": self.model,
+            "endpoint": config.name,
+            "latency_ms": round(self.latency_ms, 1),
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cost_usd": self.cost_usd,
+            "cost_known": self.cost_source is not None,
+            "response_format": self.format_used,
+            "backend": "openai-compatible (stdlib)",
+            "live_call": True,
         }
 
 
@@ -277,15 +310,21 @@ def parse_answer(content: str, expect: dict) -> Tuple[Optional[dict], Optional[s
         value = fields.get("motion")
         motion = _match(value, expect["motion"])
         if motion is None:
-            return None, ("no motion in the reply" if value is None else
-                          "motion %s is not one of %s" % (_quote(value, 40), "/".join(expect["motion"])))
+            return None, (
+                "no motion in the reply"
+                if value is None
+                else "motion %s is not one of %s" % (_quote(value, 40), "/".join(expect["motion"]))
+            )
         answer["motion"] = motion
     if expect.get("candidate"):
         value = next((fields[k] for k in _CANDIDATE_KEYS if k in fields), None)
         candidate = _match(value, expect["candidate"])
         if candidate is None:
-            return None, ("no candidate in the reply" if value is None else
-                          "candidate %s is not an eligible manoeuvre" % _quote(value, 60))
+            return None, (
+                "no candidate in the reply"
+                if value is None
+                else "candidate %s is not an eligible manoeuvre" % _quote(value, 60)
+            )
         answer["candidate"] = candidate
     if expect.get("headlights"):
         # Optional actuation: omitted/invalid beam choices fall back to Rules in the browser.
@@ -310,8 +349,19 @@ def response_format_for(kind: str, expect: dict) -> Optional[dict]:
     for field in ("motion", "candidate", "route", "headlights"):
         if expect.get(field):
             properties[field] = {"type": "string", "enum": list(expect[field])}
-    return {"type": "json_schema", "json_schema": {"name": "driving_decision", "strict": True, "schema": {
-        "type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}}}
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "driving_decision",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties),
+                "additionalProperties": False,
+            },
+        },
+    }
 
 
 def _error_text(body: Any) -> str:
@@ -362,7 +412,9 @@ class LlmEndpoint(Endpoint):
             payload.update(self.config.extra_body)
             attempt_started = time.monotonic()
             try:
-                response, latency_ms = post_json(self.config.base_url + "/chat/completions", payload, self.api_key, deadline)
+                response, latency_ms = post_json(
+                    self.config.base_url + "/chat/completions", payload, self.api_key, deadline
+                )
                 break
             except urllib.error.HTTPError as err:
                 body = error_body(err)
@@ -376,9 +428,13 @@ class LlmEndpoint(Endpoint):
                     now = time.monotonic()
                     if deadline - now > 1.5 * (now - attempt_started):
                         continue
-                    raise self.fail("the endpoint rejected response_format %s (HTTP %d: %s); later calls use plain "
-                                    "mode, but too little of timeout_s was left to retry this one"
-                                    % (rejected, err.code, _error_text(body)), 502, body)
+                    raise self.fail(
+                        "the endpoint rejected response_format %s (HTTP %d: %s); later calls use plain "
+                        "mode, but too little of timeout_s was left to retry this one"
+                        % (rejected, err.code, _error_text(body)),
+                        502,
+                        body,
+                    )
                 if err.code in (400, 422) and downgraded_from:
                     # The plain retry was refused too, so the request itself is wrong (a bad model name,
                     # say), not its response_format: keep the format this endpoint had.
@@ -387,7 +443,9 @@ class LlmEndpoint(Endpoint):
                 if 300 <= err.code < 400:
                     raise self.fail(str(err.reason), 502)
                 if err.code in (401, 403):
-                    raise self.fail("the endpoint rejected the API key (%d): %s" % (err.code, _error_text(body)), err.code, body)
+                    raise self.fail(
+                        "the endpoint rejected the API key (%d): %s" % (err.code, _error_text(body)), err.code, body
+                    )
                 if err.code == 429:
                     raise self.fail("rate limited by the endpoint (429): %s" % _error_text(body), 429, body)
                 raise self.fail("HTTP %d: %s" % (err.code, _error_text(body)), 502, body)
@@ -406,8 +464,9 @@ class LlmEndpoint(Endpoint):
         with self._lock:
             if result.malformed:
                 self.errors += 1
-                self.last_error = scrub("LLM endpoint %r: malformed completion (%s)" % (self.config.name, result.malformed),
-                                        self.api_key)
+                self.last_error = scrub(
+                    "LLM endpoint %r: malformed completion (%s)" % (self.config.name, result.malformed), self.api_key
+                )
         return result
 
 
@@ -435,7 +494,11 @@ def validate_request(body: dict) -> dict:
     total = 0
     clean = []
     for m in messages:
-        if not isinstance(m, dict) or m.get("role") not in ("system", "user", "assistant") or not isinstance(m.get("content"), str):
+        if (
+            not isinstance(m, dict)
+            or m.get("role") not in ("system", "user", "assistant")
+            or not isinstance(m.get("content"), str)
+        ):
             raise InvalidLlmRequest("each message needs a role (system, user or assistant) and string content")
         total += len(m["content"])
         clean.append({"role": m["role"], "content": m["content"]})
@@ -449,8 +512,11 @@ def validate_request(body: dict) -> dict:
         values = expect_in.get(field)
         if values is None:
             continue
-        if (not isinstance(values, list) or not 1 <= len(values) <= MAX_CHOICES
-                or not all(isinstance(v, str) and ID_RE.match(v) for v in values)):
+        if (
+            not isinstance(values, list)
+            or not 1 <= len(values) <= MAX_CHOICES
+            or not all(isinstance(v, str) and ID_RE.match(v) for v in values)
+        ):
             raise InvalidLlmRequest("expect.%s must be a list of 1-%d short ids" % (field, MAX_CHOICES))
         if field == "motion" and not set(values) <= set(MOTIONS):
             raise InvalidLlmRequest("expect.motion may only contain %s" % ", ".join(MOTIONS))
@@ -476,14 +542,27 @@ def llm_decide(registry: LlmRegistry, body: dict) -> dict:
             answer, invalid = None, "the model refused: %s" % result.refusal[:160]
         else:
             answer, invalid = parse_answer(result.content, req["expect"])
-    except Exception as err:   # e.g. RecursionError from an absurdly nested reply
+    except Exception as err:  # e.g. RecursionError from an absurdly nested reply
         answer, invalid = None, "could not read the reply (%s)" % type(err).__name__
     meta = dict(result.meta(), source="llm:" + endpoint.config.name)
     if invalid:
         meta["invalid"] = invalid
-    request = dict(result.request, url=public_url(endpoint.config.base_url) + "/chat/completions",
-                   api_key_env=endpoint.config.api_key_env)
+    request = dict(
+        result.request,
+        url=public_url(endpoint.config.base_url) + "/chat/completions",
+        api_key_env=endpoint.config.api_key_env,
+    )
     trace = {"request": request, "response": result.response, "meta": meta}
     # Scrub everything: the answer, reason and invalid excerpt all quote the model's reply.
-    return scrub({"tick": req["tick"], "epoch": req["epoch"], "answer": answer, "invalid": invalid,
-                  "content": result.content, "meta": meta, "trace": trace}, endpoint.api_key)
+    return scrub(
+        {
+            "tick": req["tick"],
+            "epoch": req["epoch"],
+            "answer": answer,
+            "invalid": invalid,
+            "content": result.content,
+            "meta": meta,
+            "trace": trace,
+        },
+        endpoint.api_key,
+    )

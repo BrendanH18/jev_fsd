@@ -15,30 +15,47 @@ const { auditBusLanes } = await import("../static/js/sim/bus-lanes.js");
 const { laneChangeLength } = await import("../static/js/sim/controller.js");
 const { cloneState } = await import("../static/js/lab/recorder.js");
 
-const key = "7165f1c807a8";   // Mount Pleasant: Main Street (e452) bends right off e123 into a curb lane reserved all day
+const key = "7165f1c807a8"; // Mount Pleasant: Main Street (e452) bends right off e123 into a curb lane reserved all day
 const pack = JSON.parse(fs.readFileSync(`data/maps/${key}.v6.pack.json`));
 pack.buslanes = JSON.parse(fs.readFileSync(`data/maps/${key}.buslanes.v1.json`));
 const map = new MapData(pack);
 // (on to e148, straight on: no right-turn approach on e452)
-const chain = [["e123", 2], ["e452", 2], ["e148", 2]];
+const chain = [
+  ["e123", 2],
+  ["e452", 2],
+  ["e148", 2],
+];
 
 function world() {
   const w = new World(map, { seed: 1, parked: 0, pedestrians: 0, busLanes: true });
   w.setClock({ hour: 15.5, weekday: 0 });
-  w.route = new Route(routeFromLanes(map, chain.map(([id, k]) => map.lane(id, k)), 2, 30), map, w.ego.spec);
+  w.route = new Route(
+    routeFromLanes(
+      map,
+      chain.map(([id, k]) => map.lane(id, k)),
+      2,
+      30,
+    ),
+    map,
+    w.ego.spec,
+  );
   return w;
 }
 // One audited second `s` metres into the curb lane, `left` metres left of its centre, at `v`;
 // returns the metres counted in that second.
 function tick(w, s, left, v) {
   w.placeOnLane(map.lane("e452", 2), s);
-  w.ego.x -= Math.sin(w.ego.psi) * left; w.ego.y += Math.cos(w.ego.psi) * left;
+  w.ego.x -= Math.sin(w.ego.psi) * left;
+  w.ego.y += Math.cos(w.ego.psi) * left;
   w.ego.v = v;
   const before = w.violations.bus_lane_driving || 0;
   auditBusLanes(w, 1);
   return (w.violations.bus_lane_driving || 0) - before;
 }
-assert.ok(laneChangeLength(3) < 22 && laneChangeLength(10) > 22 && laneChangeLength(14) > 30, "the lengths this check relies on");
+assert.ok(
+  laneChangeLength(3) < 22 && laneChangeLength(10) > 22 && laneChangeLength(14) > 30,
+  "the lengths this check relies on",
+);
 
 // Starting out of the lane at 10 m/s, then slowing to 3 m/s while still in it, 22 m in: the allowance is
 // the 35 m it had when it started, not the 18 m of 3 m/s.
@@ -59,7 +76,19 @@ assert.equal(tick(saved, 22, 1.2, 3), 0, "a restored checkpoint keeps the latche
 assert.equal(tick(saved, 40, 1.2, 3), 3, "and beyond it still counts");
 
 // Another route (a new drive) starts afresh.
-const again = slowing; again.route = new Route(routeFromLanes(map, chain.map(([id, k]) => map.lane(id, k)), 2, 30), map, again.ego.spec);
+const again = slowing;
+again.route = new Route(
+  routeFromLanes(
+    map,
+    chain.map(([id, k]) => map.lane(id, k)),
+    2,
+    30,
+  ),
+  map,
+  again.ego.spec,
+);
 assert.equal(tick(again, 22, 1.2, 3), 3, "a new route's turn-in latches afresh");
-console.log("The allowance for leaving a reserved curb lane after a right turn is latched when the car starts out of it");
+console.log(
+  "The allowance for leaving a reserved curb lane after a right turn is latched when the car starts out of it",
+);
 process.exit(0);

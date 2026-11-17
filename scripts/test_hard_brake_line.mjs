@@ -15,18 +15,64 @@ const { sampleCandidates, simulateAll } = await import("../static/js/brain/candi
 
 function rig(lateral, { truck = false } = {}) {
   // a two-way street, one lane each way: the car's lane centre 1.75 m right of the centreline
-  const street = { id: "street", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300, cls: "residential", lanes: 1,
-    lane_offsets: [1.75], lane_width: 3.5, asphalt: [-5.6, 5.6], parking: [0, 0], limit: 13.9 };
-  const map = new MapData({ extent: [-10, -20, 310, 20], nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }],
-    edges: [street], lanes: [{ edge: "street", idx: 0, pts: [[0, -1.75], [300, -1.75]] }], intersections: [], stops: [], buildings: [] });
+  const street = {
+    id: "street",
+    from: "a",
+    to: "b",
+    pts: [
+      [0, 0],
+      [300, 0],
+    ],
+    length: 300,
+    cls: "residential",
+    lanes: 1,
+    lane_offsets: [1.75],
+    lane_width: 3.5,
+    asphalt: [-5.6, 5.6],
+    parking: [0, 0],
+    limit: 13.9,
+  };
+  const map = new MapData({
+    extent: [-10, -20, 310, 20],
+    nodes: [
+      { id: "a", x: 0, y: 0 },
+      { id: "b", x: 300, y: 0 },
+    ],
+    edges: [street],
+    lanes: [
+      {
+        edge: "street",
+        idx: 0,
+        pts: [
+          [0, -1.75],
+          [300, -1.75],
+        ],
+      },
+    ],
+    intersections: [],
+    stops: [],
+    buildings: [],
+  });
   const world = new World(map, { parked: 0, pedestrians: 0 });
   Object.assign(world.ego, { x: 100, y: -1.75 - lateral, psi: 0, v: 7 });
-  world.route = new Route({ id: "straight", polyline: [[0, -1.75], [300, -1.75]], edges: ["street"], turns: [] }, map);
+  world.route = new Route(
+    {
+      id: "straight",
+      polyline: [
+        [0, -1.75],
+        [300, -1.75],
+      ],
+      edges: ["street"],
+      turns: [],
+    },
+    map,
+  );
   if (truck) {
     // a fire truck backing slowly the car's way, its body across the centreline into the car's lane,
     // alongside the car's nose
     const t = new Vehicle(100 + 6 + (FIRE_TRUCK?.length ?? 9) / 2, 0.45, Math.PI, -1.2, FIRE_TRUCK);
-    t.id = "fire_truck_1"; t.kind = "fire_truck";
+    t.id = "fire_truck_1";
+    t.kind = "fire_truck";
     world.npcs.push(t);
   }
   const snap = buildSnapshot(world);

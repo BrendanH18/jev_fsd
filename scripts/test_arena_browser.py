@@ -3,6 +3,7 @@
 python3 scripts/test_arena_browser.py --url http://127.0.0.1:8322/arena
 Requires Playwright and its Chromium browser (or --chromium /path/to/chromium).
 """
+
 import argparse
 import json
 import tempfile
@@ -20,7 +21,9 @@ def check(url, chromium=None, output=None):
         page.goto(url)
         expect(page.locator("#arena-status")).to_contain_text("Ready")
         # every challenge, once for each of the two drivers the arena starts with
-        n = 2 * page.evaluate("""() => import(new URL("./challenges.js", document.querySelector('script[type="module"][src*="arena"]').src)).then((m) => m.CHALLENGES.length)""")
+        n = 2 * page.evaluate(
+            """() => import(new URL("./challenges.js", document.querySelector('script[type="module"][src*="arena"]').src)).then((m) => m.CHALLENGES.length)"""
+        )
         page.locator("#arena-run").click()
         expect(page.locator("#arena-import")).to_be_disabled()
         expect(page.locator("#arena-status")).to_contain_text("Complete", timeout=180000)
@@ -103,7 +106,10 @@ def check(url, chromium=None, output=None):
         page.close()
         # history saved in localStorage before IndexedDB moves into IndexedDB, and the old key goes
         moved = browser.new_context()
-        moved.add_init_script("if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('jev-fsd-evaluations-v2', JSON.stringify([%s])); }" % json.dumps(legacy))
+        moved.add_init_script(
+            "if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('jev-fsd-evaluations-v2', JSON.stringify([%s])); }"
+            % json.dumps(legacy)
+        )
         page = moved.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(url)
@@ -116,7 +122,9 @@ def check(url, chromium=None, output=None):
         expect(page.locator("#arena-results tr")).to_have_count(n)
         moved.close()
         blocked = browser.new_context()
-        blocked.add_init_script("for (const name of ['localStorage', 'indexedDB']) Object.defineProperty(window, name, { get() { throw new Error('Storage blocked'); } });")
+        blocked.add_init_script(
+            "for (const name of ['localStorage', 'indexedDB']) Object.defineProperty(window, name, { get() { throw new Error('Storage blocked'); } });"
+        )
         page = blocked.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(url)
@@ -127,7 +135,9 @@ def check(url, chromium=None, output=None):
         expect(page.locator("#arena-export")).to_be_enabled()
         assert not errors, errors
         browser.close()
-    print("Arena browser checks passed: evaluation, history, comparisons, details, export/import, legacy data, the move of localStorage history into IndexedDB, stop, narrow layout and blocked storage.")
+    print(
+        "Arena browser checks passed: evaluation, history, comparisons, details, export/import, legacy data, the move of localStorage history into IndexedDB, stop, narrow layout and blocked storage."
+    )
 
 
 if __name__ == "__main__":

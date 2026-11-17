@@ -12,8 +12,7 @@ from jev.osm import fetch
 from jev.osm.pack import pack_from_osm, pack_path
 from jev.osm.parse import OsmData, parse_xml
 from jev.osm.project import Projection
-from jev.osm.zones import (MIN_SPAN_M, SCHOOL_REACH_M, build_zones, kind_of, load_zones, zones_from_osm,
-                           zones_path)
+from jev.osm.zones import MIN_SPAN_M, SCHOOL_REACH_M, build_zones, kind_of, load_zones, zones_from_osm, zones_path
 
 LAT0, LON0 = 49.0, -123.0
 
@@ -80,7 +79,7 @@ class ZoneTests(unittest.TestCase):
             start, end = e["pts"][0][0], e["pts"][-1][0]
             lo = (start + span["from"]) if eastbound else (start - span["to"])
             hi = (start + span["to"]) if eastbound else (start - span["from"])
-            reach = (SCHOOL_REACH_M ** 2 - 15 ** 2) ** 0.5
+            reach = (SCHOOL_REACH_M**2 - 15**2) ** 0.5
             self.assertAlmostEqual(lo, -100 - reach, delta=2.5)
             self.assertAlmostEqual(hi, reach, delta=2.5)
             self.assertLess(span["to"], e["length"])
@@ -93,10 +92,12 @@ class ZoneTests(unittest.TestCase):
         self.assertTrue(all(s["to"] - s["from"] > 120 for s in spans))
 
     def test_far_away_or_glancing_places_make_no_zone(self):
-        osm, bbox = street([
-            (52, SCHOOL, box(-100, 60, 0, 90)),                           # 60 m off the street
-            (53, {"leisure": "playground"}, box(200, 20 + 14, 205, 40)),  # a corner only: shorter than MIN_SPAN_M
-        ])
+        osm, bbox = street(
+            [
+                (52, SCHOOL, box(-100, 60, 0, 90)),  # 60 m off the street
+                (53, {"leisure": "playground"}, box(200, 20 + 14, 205, 40)),  # a corner only: shorter than MIN_SPAN_M
+            ]
+        )
         out = zones_from_osm(osm, pack_from_osm(osm, bbox))
         self.assertEqual([z["id"] for z in out["zones"] if z["kind"] == "school"], [])
         for z in out["zones"]:
@@ -119,34 +120,53 @@ class ZoneTests(unittest.TestCase):
         self.assertIsNone(kind_of({"leisure": "park"}))
 
     def test_a_school_mapped_as_a_point_with_grades(self):
-        osm, bbox = street([(60, {"amenity": "school", "grades": "K-7", "name": "Point School"}, [(0, 25)]),
-                            (61, {"amenity": "school", "name": "Dance Studio"}, [(150, 20)])])
+        osm, bbox = street(
+            [
+                (60, {"amenity": "school", "grades": "K-7", "name": "Point School"}, [(0, 25)]),
+                (61, {"amenity": "school", "name": "Dance Studio"}, [(150, 20)]),
+            ]
+        )
         out = zones_from_osm(osm, pack_from_osm(osm, bbox))
         self.assertEqual([z["id"] for z in out["zones"]], ["sn60"])
 
     def test_multipolygon_grounds_are_read(self):
         osm, bbox = street([(70, {}, box(-100, 15, 0, 80))])
-        osm.add_relation(71, [("way", 70, "outer")], {"type": "multipolygon", "amenity": "school", "name": "Big School"})
+        osm.add_relation(
+            71, [("way", 70, "outer")], {"type": "multipolygon", "amenity": "school", "name": "Big School"}
+        )
         out = zones_from_osm(osm, pack_from_osm(osm, bbox))
         self.assertEqual([(z["id"], z["name"]) for z in out["zones"]], [("sr71", "Big School")])
-        xml = ('<?xml version="1.0"?><osm><relation id="71"><member type="way" ref="70" role="outer"/>'
-               '<tag k="type" v="multipolygon"/><tag k="amenity" v="school"/></relation>'
-               '<relation id="72"><tag k="type" v="multipolygon"/><tag k="landuse" v="retail"/></relation></osm>')
-        self.assertEqual([r["id"] for r in parse_xml(xml).relations], [71], "only schools, playgrounds, and parks and water (jev/osm/parks.py) are kept")
+        xml = (
+            '<?xml version="1.0"?><osm><relation id="71"><member type="way" ref="70" role="outer"/>'
+            '<tag k="type" v="multipolygon"/><tag k="amenity" v="school"/></relation>'
+            '<relation id="72"><tag k="type" v="multipolygon"/><tag k="landuse" v="retail"/></relation></osm>'
+        )
+        self.assertEqual(
+            [r["id"] for r in parse_xml(xml).relations],
+            [71],
+            "only schools, playgrounds, and parks and water (jev/osm/parks.py) are kept",
+        )
 
     def test_grounds_split_across_several_outer_ways_are_one_ring(self):
         # a square round the middle of the street, its outline in two ways (reversed, as mapped)
         osm, bbox = street([(80, {}, [(-60, -40), (60, -40), (60, 40)]), (81, {}, [(-60, -40), (-60, 40), (60, 40)])])
         n80, n81 = osm.ways[-2]["nodes"], osm.ways[-1]["nodes"]
-        osm.ways[-1]["nodes"] = [n80[0]] + n81[1:-1] + [n80[-1]]   # (sharing the corner nodes)
-        osm.add_relation(82, [("way", 80, "outer"), ("way", 81, "outer")], {"type": "multipolygon", "amenity": "school"})
+        osm.ways[-1]["nodes"] = [n80[0]] + n81[1:-1] + [n80[-1]]  # (sharing the corner nodes)
+        osm.add_relation(
+            82, [("way", 80, "outer"), ("way", 81, "outer")], {"type": "multipolygon", "amenity": "school"}
+        )
         out = zones_from_osm(osm, pack_from_osm(osm, bbox))
         spans = out["zones"][0]["spans"]
         self.assertTrue(spans and all(s["to"] - s["from"] > 120 for s in spans), spans)
 
     def test_the_overpass_query_asks_for_schools_and_playgrounds(self):
         q = fetch.overpass_query((-123.1, 49.2, -123.0, 49.3))
-        for part in ('way["amenity"="school"]', 'way["leisure"="playground"]', 'node["amenity"="school"]', 'rel["amenity"="school"]'):
+        for part in (
+            'way["amenity"="school"]',
+            'way["leisure"="playground"]',
+            'node["amenity"="school"]',
+            'rel["amenity"="school"]',
+        ):
             self.assertIn(part, q)
 
     def test_built_beside_the_pack_from_the_cached_download_only(self):
@@ -158,9 +178,19 @@ class ZoneTests(unittest.TestCase):
             self.assertFalse(zones_path(maps, bbox).exists())
             lines = ['<?xml version="1.0"?><osm>']
             for nid, (lat, lon, tags) in osm.nodes.items():
-                lines.append('<node id="%d" lat="%.8f" lon="%.8f">%s</node>' % (nid, lat, lon, "".join('<tag k="%s" v="%s"/>' % kv for kv in tags.items())))
+                lines.append(
+                    '<node id="%d" lat="%.8f" lon="%.8f">%s</node>'
+                    % (nid, lat, lon, "".join('<tag k="%s" v="%s"/>' % kv for kv in tags.items()))
+                )
             for w in osm.ways:
-                lines.append('<way id="%d">%s%s</way>' % (w["id"], "".join('<nd ref="%d"/>' % n for n in w["nodes"]), "".join('<tag k="%s" v="%s"/>' % kv for kv in w["tags"].items())))
+                lines.append(
+                    '<way id="%d">%s%s</way>'
+                    % (
+                        w["id"],
+                        "".join('<nd ref="%d"/>' % n for n in w["nodes"]),
+                        "".join('<tag k="%s" v="%s"/>' % kv for kv in w["tags"].items()),
+                    )
+                )
             lines.append("</osm>")
             fetch.cache_path(maps, bbox).write_text("".join(lines))
             built = build_zones(bbox, maps, pack)
@@ -185,10 +215,13 @@ class ZoneTests(unittest.TestCase):
         self.assertGreater(total, 100)
         kits = load_zones(PRESET_BBOXES["kitsilano"], MAPS_DIR)
         tennyson = [z for z in kits["zones"] if z["name"] == "Lord Tennyson Elementary School"]
-        self.assertTrue(tennyson and any(s["edge"] == "e131" for s in tennyson[0]["spans"]), "West 11th Avenue's, for the challenge")
+        self.assertTrue(
+            tennyson and any(s["edge"] == "e131" for s in tennyson[0]["spans"]), "West 11th Avenue's, for the challenge"
+        )
 
     def test_demo_bundles_zones_and_the_clock_with_each_map(self):
         from scripts import build_demo
+
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "site"
             with contextlib.redirect_stdout(io.StringIO()):

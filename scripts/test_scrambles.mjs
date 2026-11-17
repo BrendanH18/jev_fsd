@@ -22,12 +22,31 @@ const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 
 let checks = 0;
-async function test(name, fn) { await fn(); checks++; console.log(`✓ ${name}`); }
+async function test(name, fn) {
+  await fn();
+  checks++;
+  console.log(`✓ ${name}`);
+}
 const root = new URL("../data/maps/", import.meta.url);
-const load = (key, layers = ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks"]) => {
+const load = (
+  key,
+  layers = [
+    "transit",
+    "crossings",
+    "zones",
+    "rail",
+    "calming",
+    "scrambles",
+    "buslanes",
+    "restrictions",
+    "contraflow",
+    "driveways",
+    "parks",
+  ],
+) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
   for (const name of layers) {
-    const url = [2, 1].map(v => new URL(`${key}.${name}.v${v}.json`, root)).find(u => fs.existsSync(u));
+    const url = [2, 1].map((v) => new URL(`${key}.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
     if (url) pack[name] = JSON.parse(fs.readFileSync(url));
   }
   pack.utc_offset = -7;
@@ -39,15 +58,19 @@ const step = (ctx) => stepWorld(ctx, 1 / 60, ctx.world.t * 1000);
 const idle = { enabled: false, step() {} };
 // Government Street at Wharf Street and Humboldt Street, by the Empress: Wharf (group A) is the car's
 // approach, turning right onto Government Street southbound.
-const SIG = "sig32", WHARF = "e28", GOVT_S = "e145";
+const SIG = "sig32",
+  WHARF = "e28",
+  GOVT_S = "e145";
 const inter = VIC.intersections.get(SIG);
 const CH = CHALLENGES.find((c) => c.id === "scramble");
 
 await test("a scramble's plan adds the all-walk to the end of the cycle; the plan of every other signal is as before", () => {
   assert.deepEqual([...VIC.scrambles], [SIG]);
-  const sp = inter.scramblePlan, p = inter.plan;
+  const sp = inter.scramblePlan,
+    p = inter.plan;
   assert.ok(sp.scramble && !p.scramble);
-  assert.deepEqual(sp.A, p.A); assert.deepEqual(sp.B, p.B);
+  assert.deepEqual(sp.A, p.A);
+  assert.deepEqual(sp.B, p.B);
   assert.equal(sp.scramble.start, p.cycle);
   assert.equal(sp.scramble.walk, S.SCRAMBLE_WALK_S);
   assert.ok(sp.scramble.flash >= S.WALK_S);
@@ -72,10 +95,13 @@ await test("with scrambles off every signal, scramble or not, shows exactly what
 await test("on, every approach is red through the all-walk, and nobody walks alongside a green", () => {
   new World(VIC, { seed: 1, parked: 0, pedestrians: 0, scrambles: true });
   assert.equal(S.isScramble(inter), true);
-  const sc = inter.scramblePlan.scramble, c = inter.scramblePlan.cycle;
+  const sc = inter.scramblePlan.scramble,
+    c = inter.scramblePlan.cycle;
   let walks = 0;
   for (let t = 0; t < 2 * c; t += 0.25) {
-    const u = ((t + inter.offset_s) % c + c) % c, d = u - sc.start, all = d >= 0 && d < sc.walk + sc.flash + sc.allRed;
+    const u = (((t + inter.offset_s) % c) + c) % c,
+      d = u - sc.start,
+      all = d >= 0 && d < sc.walk + sc.flash + sc.allRed;
     const st = S.scrambleState(inter, t);
     for (const a of inter.approaches) if (all) assert.equal(S.approachPhase(inter, a.edge, t), "red", `t=${t}`);
     for (const g of ["A", "B"]) {
@@ -95,14 +121,16 @@ async function atTheLine(scrambles) {
   const ctx = setupChallenge(VIC, { ...CH, scrambles });
   ctx.autopilot.setEnabled(false);
   const { world } = ctx;
-  const lane = VIC.lane(WHARF, VIC.edges.get(WHARF).lanes - 1), line = VIC.edges.get(WHARF).control.s_line - (CAR.length - CAR.rearOverhang) - 0.5;
-  world.placeOnLane(lane, line * lane.length / VIC.edges.get(WHARF).length);
+  const lane = VIC.lane(WHARF, VIC.edges.get(WHARF).lanes - 1),
+    line = VIC.edges.get(WHARF).control.s_line - (CAR.length - CAR.rearOverhang) - 0.5;
+  world.placeOnLane(lane, (line * lane.length) / VIC.edges.get(WHARF).length);
   while (world.t < 16) step({ ...ctx, autopilot: idle });
   return ctx;
 }
 
 await test("the driven car is offered no right turn on red at a scramble, and is told so; off, it is", async () => {
-  const on = await atTheLine(true), snap = buildSnapshot(on.world, null);
+  const on = await atTheLine(true),
+    snap = buildSnapshot(on.world, null);
   const i = snap.intersection;
   assert.equal(i.signal, "red");
   assert.equal(i.turn, "right");
@@ -114,7 +142,8 @@ await test("the driven car is offered no right turn on red at a scramble, and is
   assert.match(SYSTEM_PROMPT, /intersection\.scramble/);
   const notice = S.scrambleNotice(on.world);
   assert.equal(notice?.text, "SCRAMBLE CROSSING · NO RIGHT TURN ON RED");
-  const off = await atTheLine(false), snap0 = buildSnapshot(off.world, null);
+  const off = await atTheLine(false),
+    snap0 = buildSnapshot(off.world, null);
   assert.ok(snap0.intersection.right_on_red, "offered with scrambles off");
   assert.equal("scramble" in snap0.intersection, false);
   assert.equal(S.scrambleNotice(off.world), null);
@@ -132,13 +161,16 @@ await test("during the all-walk the car is told every light is red and people cr
 
 await test("turning right on red at a scramble is a red light, flagged, and coached; off, it is legal after a stop", async () => {
   for (const scrambles of [true, false]) {
-    const ctx = await atTheLine(scrambles), { world } = ctx, score = new DriveScore(world, { title: "t" });
+    const ctx = await atTheLine(scrambles),
+      { world } = ctx,
+      score = new DriveScore(world, { title: "t" });
     // (a full stop at the line, then round the corner by hand on red)
     const lane = VIC.lane(WHARF, VIC.edges.get(WHARF).lanes - 1);
     let s = world.route.project(world.ego.x, world.ego.y).s;
     for (let k = 0; k < 60 * 4 && S.approachPhase(inter, WHARF, world.t) === "red"; k++) {
       s += 4 / 60;
-      const p = world.route.pointAt(s), h = world.route.headingAt(s);
+      const p = world.route.pointAt(s),
+        h = world.route.headingAt(s);
       Object.assign(world.ego, { x: p[0], y: p[1], psi: h, v: 4 });
       score.record(world, step({ ...ctx, autopilot: idle }), 1 / 60);
     }
@@ -154,15 +186,28 @@ await test("traffic waits for the green at a scramble instead of turning right o
   for (const scrambles of [true, false]) {
     const world = new World(VIC, { seed: 2, parked: 0, pedestrians: 0, scrambles });
     const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 3 });
-    world.placeOnLane(VIC.lane("e185", 0), 40);   // (the car out of the way)
-    const lane = VIC.lane(WHARF, VIC.edges.get(WHARF).lanes - 1), sStart = 5, p = pointAt(lane.pts, lane.cum, sStart);
+    world.placeOnLane(VIC.lane("e185", 0), 40); // (the car out of the way)
+    const lane = VIC.lane(WHARF, VIC.edges.get(WHARF).lanes - 1),
+      sStart = 5,
+      p = pointAt(lane.pts, lane.cum, sStart);
     const car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, sStart), 0, CAR);
-    Object.assign(car, { id: "rtor", kind: "car", color: 0x777777, v0: 11, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.8, lcRate: 0 },
-      stopMem: new S.StopMemory(), path: new NpcPath(VIC, rng(4)), frozen: 0, waiting: 0 });
+    Object.assign(car, {
+      id: "rtor",
+      kind: "car",
+      color: 0x777777,
+      v0: 11,
+      driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.8, lcRate: 0 },
+      stopMem: new S.StopMemory(),
+      path: new NpcPath(VIC, rng(4)),
+      frozen: 0,
+      waiting: 0,
+    });
     car.path.start(WHARF, lane.idx, sStart, [[GOVT_S, 0]]);
     fleet.vehicles.push(car);
     // (from 14 s, on red, until the car's approach turns green again)
-    while (world.t < 14) { world.t += 1 / 60; }
+    while (world.t < 14) {
+      world.t += 1 / 60;
+    }
     let turnedOnRed = false;
     for (let k = 0; k < 60 * 60; k++) {
       step({ world, fleet, autopilot: idle });
@@ -176,12 +221,25 @@ await test("at a scramble some people at a corner cross diagonally, on the all-w
   for (const scrambles of [true, false]) {
     const world = new World(VIC, { seed: 7, parked: 0, pedestrians: 0, scrambles });
     const node = [...VIC.junctionNodes(inter)].find((n) => world.crowd.legsAt.get(n)?.inter === inter);
-    const info = world.crowd.legsAt.get(node), leg = info.list[0];
+    const info = world.crowd.legsAt.get(node),
+      leg = info.list[0];
     let diagonal = 0;
     for (let k = 0; k < 60; k++) {
       const [x, y] = leg.ends[1];
-      const ped = new Pedestrian({ id: `p${k}`, x, y, psi: 0, v: 0, speed: 1.3, path: [], crossing: null, waiting: 0, phase: 0, look: k,
-        at: { node, st: leg.st, side: 1, s: leg.s, dir: leg.out ? -1 : 1 } });
+      const ped = new Pedestrian({
+        id: `p${k}`,
+        x,
+        y,
+        psi: 0,
+        v: 0,
+        speed: 1.3,
+        path: [],
+        crossing: null,
+        waiting: 0,
+        phase: 0,
+        look: k,
+        at: { node, st: leg.st, side: 1, s: leg.s, dir: leg.out ? -1 : 1 },
+      });
       world.crowd.plan(ped);
       const cross = ped.path.find((w) => w.cross)?.cross;
       if (cross?.diagonal) {

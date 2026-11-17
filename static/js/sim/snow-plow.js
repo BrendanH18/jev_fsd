@@ -27,13 +27,13 @@
 import { DAYLIGHT_RANGE_M } from "./visibility.js";
 
 export const PLOW_NAME = "snow plow";
-export const PLOW_MPS = 18 / 3.6;          // clearing speed, blade down
-export const STAY_BACK_M = 30;             // limit 80 km/h or less
-export const STAY_BACK_FAST_M = 100;       // above 80 km/h
+export const PLOW_MPS = 18 / 3.6; // clearing speed, blade down
+export const STAY_BACK_M = 30; // limit 80 km/h or less
+export const STAY_BACK_FAST_M = 100; // above 80 km/h
 const FAST_LIMIT_MPS = 80 / 3.6;
-export const SAME_LANE_M = 1.7;            // a plow whose centre line is within this of the car's is in its lane
-export const NEXT_LANE_M = 8.8;            // and within this, in a lane beside it (up to two lanes over)
-export const PLOW_LOOK_M = 60;             // the car looks out for one this far ahead
+export const SAME_LANE_M = 1.7; // a plow whose centre line is within this of the car's is in its lane
+export const NEXT_LANE_M = 8.8; // and within this, in a lane beside it (up to two lanes over)
+export const PLOW_LOOK_M = 60; // the car looks out for one this far ahead
 export const PASS_SIGHT_M = DAYLIGHT_RANGE_M;
 const SAME_WAY = Math.PI / 4;
 // Free drive: how many work at once, where they are put down, and when they come and go.
@@ -57,16 +57,35 @@ export const turningLeft = (plow) => plow.signal === "left";
 // further across), clear_m (v's rear past the plow's front; positive once v is wholly ahead of it) }.
 export function plowRelation(v, plow) {
   if (Math.abs(wrap(plow.psi - v.psi)) > SAME_WAY) return null;
-  const vs = v.spec, ps = plow.spec;
-  const c = v.toLocal(...plow.center), ahead = c.ahead - (vs.length / 2 - vs.rearOverhang);
-  const lane = Math.abs(c.right) < SAME_LANE_M ? "same" : c.right < 0 && c.right > -NEXT_LANE_M ? "left" : c.right > 0 && c.right < NEXT_LANE_M ? "right" : null;
-  return { gap_m: ahead - vs.length / 2 - ps.length / 2, ahead_m: ahead, right_m: c.right, lane, clear_m: -ahead - vs.length / 2 - ps.length / 2 };
+  const vs = v.spec,
+    ps = plow.spec;
+  const c = v.toLocal(...plow.center),
+    ahead = c.ahead - (vs.length / 2 - vs.rearOverhang);
+  const lane =
+    Math.abs(c.right) < SAME_LANE_M
+      ? "same"
+      : c.right < 0 && c.right > -NEXT_LANE_M
+        ? "left"
+        : c.right > 0 && c.right < NEXT_LANE_M
+          ? "right"
+          : null;
+  return {
+    gap_m: ahead - vs.length / 2 - ps.length / 2,
+    ahead_m: ahead,
+    right_m: c.right,
+    lane,
+    clear_m: -ahead - vs.length / 2 - ps.length / 2,
+  };
 }
 
 // The lanes a plow may be put down on in a free drive: on the main streets, long enough.
 const laneCache = new WeakMap();
 export function plowLanes(map) {
-  if (!laneCache.has(map)) laneCache.set(map, map.laneList.filter((l) => l.length > 40 && !l.edgeRef.ring && PLOW_CLASSES.has(l.edgeRef.cls)));
+  if (!laneCache.has(map))
+    laneCache.set(
+      map,
+      map.laneList.filter((l) => l.length > 40 && !l.edgeRef.ring && PLOW_CLASSES.has(l.edgeRef.cls)),
+    );
   return laneCache.get(map);
 }
 
@@ -77,14 +96,20 @@ export function plowLanes(map) {
 // lane to its left and not turning left, or short of it in the lane to its right in poor sight),
 // passing (the car is beside or ahead of it, on its left) }, or null.
 export function egoPlow(world, limit = 11.2) {
-  const ego = world.ego, keep = stayBack(limit), look = Math.max(PLOW_LOOK_M, keep), sight = world.visibility.range >= PASS_SIGHT_M;
+  const ego = world.ego,
+    keep = stayBack(limit),
+    look = Math.max(PLOW_LOOK_M, keep),
+    sight = world.visibility.range >= PASS_SIGHT_M;
   let best = null;
   for (const n of world.npcs || []) {
     if (!isPlow(n) || Math.abs(n.x - ego.x) > look + 20 || Math.abs(n.y - ego.y) > look + 20) continue;
     const rel = plowRelation(ego, n);
     if (!rel?.lane || rel.gap_m > look || rel.clear_m > keep || !world.sees(ego, n)) continue;
     if (best && Math.abs(rel.ahead_m) >= Math.abs(best.rel.ahead_m)) continue;
-    const holds = rel.lane === "same" || (rel.lane === "left" && !turningLeft(n)) || (rel.lane === "right" && !sight && rel.gap_m >= 0);
+    const holds =
+      rel.lane === "same" ||
+      (rel.lane === "left" && !turningLeft(n)) ||
+      (rel.lane === "right" && !sight && rel.gap_m >= 0);
     best = { plow: n, rel, keep, holds, passing: rel.lane === "right" && rel.gap_m < 0 };
   }
   return best;
@@ -96,9 +121,16 @@ export function plowNotice(world) {
   const view = egoPlow(world, world._road?.limit ?? 11.2);
   if (!view) return null;
   const { plow, rel, keep, holds, passing } = view;
-  if (passing) return { key: `${plow.id}:passing`, wait: false, text: `PASSING THE SNOW PLOW · BACK IN ONLY ${keep} M AHEAD OF IT` };
+  if (passing)
+    return {
+      key: `${plow.id}:passing`,
+      wait: false,
+      text: `PASSING THE SNOW PLOW · BACK IN ONLY ${keep} M AHEAD OF IT`,
+    };
   if (!holds || rel.gap_m < -1) return null;
-  if (rel.lane === "left") return { key: `${plow.id}:right`, wait: true, text: `SNOW PLOW · NEVER PASS ON THE RIGHT · STAY ${keep} M BACK` };
-  if (rel.lane === "right") return { key: `${plow.id}:sight`, wait: true, text: `SNOW PLOW · CAN'T SEE TO PASS · STAY ${keep} M BACK` };
+  if (rel.lane === "left")
+    return { key: `${plow.id}:right`, wait: true, text: `SNOW PLOW · NEVER PASS ON THE RIGHT · STAY ${keep} M BACK` };
+  if (rel.lane === "right")
+    return { key: `${plow.id}:sight`, wait: true, text: `SNOW PLOW · CAN'T SEE TO PASS · STAY ${keep} M BACK` };
   return { key: `${plow.id}:behind`, wait: rel.gap_m < keep, text: `SNOW PLOW AHEAD · STAY ${keep} M BACK` };
 }

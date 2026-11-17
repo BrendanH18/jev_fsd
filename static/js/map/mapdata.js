@@ -7,7 +7,7 @@ import { zoneAt, zoneSpans } from "../sim/speed-zones.js";
 import { calmingSpans } from "../sim/traffic-calming.js";
 
 const CELL = 50;
-const JUNCTION_LINK_M = 20;   // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
+const JUNCTION_LINK_M = 20; // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
 // As where jev/osm/controls.py puts a stop sign's line: just short of the widest crossing road's
 // curb, leaving room for a crosswalk, and at least 4 m before the junction.
 const STOP_LINE_SETBACK_M = 4.0;
@@ -22,29 +22,52 @@ const CLASS_RANK = { primary: 3, primary_link: 3, secondary: 3, secondary_link: 
 export const roadRank = (e) => CLASS_RANK[e.cls] || 1;
 // A right turn on a red light, after a full stop, is legal across Canada except on the island of
 // Montréal. A coarse outline of the island (lon, lat), good to a few hundred metres at the shore.
-const MONTREAL_ISLAND = [[-73.985, 45.43], [-73.95, 45.40], [-73.86, 45.42], [-73.74, 45.43], [-73.68, 45.43], [-73.62, 45.42],
-  [-73.56, 45.45], [-73.555, 45.50], [-73.535, 45.53], [-73.525, 45.56], [-73.50, 45.60], [-73.48, 45.65], [-73.47, 45.70],
-  [-73.53, 45.69], [-73.65, 45.59], [-73.76, 45.52], [-73.88, 45.50], [-73.97, 45.47]];
+const MONTREAL_ISLAND = [
+  [-73.985, 45.43],
+  [-73.95, 45.4],
+  [-73.86, 45.42],
+  [-73.74, 45.43],
+  [-73.68, 45.43],
+  [-73.62, 45.42],
+  [-73.56, 45.45],
+  [-73.555, 45.5],
+  [-73.535, 45.53],
+  [-73.525, 45.56],
+  [-73.5, 45.6],
+  [-73.48, 45.65],
+  [-73.47, 45.7],
+  [-73.53, 45.69],
+  [-73.65, 45.59],
+  [-73.76, 45.52],
+  [-73.88, 45.5],
+  [-73.97, 45.47],
+];
 
 // Whether a map whose bounding box is [W, S, E, N] permits right turns on red (judged at its centre).
 export function rightOnRedAllowed(bbox) {
   if (!Array.isArray(bbox) || bbox.length !== 4) return true;
-  const x = (bbox[0] + bbox[2]) / 2, y = (bbox[1] + bbox[3]) / 2;
+  const x = (bbox[0] + bbox[2]) / 2,
+    y = (bbox[1] + bbox[3]) / 2;
   let inside = false;
   for (let i = 0, j = MONTREAL_ISLAND.length - 1; i < MONTREAL_ISLAND.length; j = i++) {
-    const [ax, ay] = MONTREAL_ISLAND[i], [bx, by] = MONTREAL_ISLAND[j];
-    if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+    const [ax, ay] = MONTREAL_ISLAND[i],
+      [bx, by] = MONTREAL_ISLAND[j];
+    if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;
   }
   return !inside;
 }
 
-export function dist(a, b) { return Math.hypot(b[0] - a[0], b[1] - a[1]); }
+export function dist(a, b) {
+  return Math.hypot(b[0] - a[0], b[1] - a[1]);
+}
 export function wrapAngle(a) {
   while (a <= -Math.PI) a += 2 * Math.PI;
   while (a > Math.PI) a -= 2 * Math.PI;
   return a;
 }
-export function headingOf(a, b) { return Math.atan2(b[1] - a[1], b[0] - a[0]); }
+export function headingOf(a, b) {
+  return Math.atan2(b[1] - a[1], b[0] - a[0]);
+}
 
 export function cumulative(pts) {
   const out = [0];
@@ -53,10 +76,12 @@ export function cumulative(pts) {
 }
 
 function segIndex(cum, s) {
-  let lo = 0, hi = cum.length - 2;
+  let lo = 0,
+    hi = cum.length - 2;
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1;
-    if (cum[mid] <= s) lo = mid; else hi = mid - 1;
+    if (cum[mid] <= s) lo = mid;
+    else hi = mid - 1;
   }
   return lo;
 }
@@ -81,13 +106,17 @@ export function projectPoint(pts, cum, p, hint = null) {
   const lo = hint === null ? 0 : Math.max(0, hint - 5);
   const hi = hint === null ? pts.length - 1 : Math.min(pts.length - 1, hint + 25);
   for (let pass = 0; pass < 2; pass++) {
-    const a0 = pass === 0 ? lo : 0, a1 = pass === 0 ? hi : pts.length - 1;
+    const a0 = pass === 0 ? lo : 0,
+      a1 = pass === 0 ? hi : pts.length - 1;
     for (let i = a0; i < a1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const a = pts[i],
+        b = pts[i + 1];
+      const dx = b[0] - a[0],
+        dy = b[1] - a[1];
       const seg2 = dx * dx + dy * dy;
       const t = seg2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / seg2));
-      const qx = a[0] + dx * t, qy = a[1] + dy * t;
+      const qx = a[0] + dx * t,
+        qy = a[1] + dy * t;
       const d = Math.hypot(p[0] - qx, p[1] - qy);
       if (best === null || d < best.distance) {
         const segLen = Math.sqrt(seg2);
@@ -109,36 +138,57 @@ export function projectPoint(pts, cum, p, hint = null) {
 // Near-straight joins whose ends do not meet: spread the shift over a few meters.
 export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
   if (!before.length) return after.slice();
-  if (after.length < 2 || before.length < 2 || cumulative(after).at(-1) < 3) return before.concat(after.slice(dist(before[before.length - 1], after[0]) < 0.05 ? 1 : 0));
-  const cb = cumulative(before), ca = cumulative(after);
-  const Lb = cb[cb.length - 1], La = ca[ca.length - 1];
-  const e = before[before.length - 1], s0 = after[0];
-  const unit = (a, b) => { const d = dist(a, b); return d < 1e-6 ? null : [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; };
-  const din = unit(pointAt(before, cb, Math.max(0, Lb - 3)), e), dout = unit(s0, pointAt(after, ca, Math.min(La, 3)));
+  if (after.length < 2 || before.length < 2 || cumulative(after).at(-1) < 3)
+    return before.concat(after.slice(dist(before[before.length - 1], after[0]) < 0.05 ? 1 : 0));
+  const cb = cumulative(before),
+    ca = cumulative(after);
+  const Lb = cb[cb.length - 1],
+    La = ca[ca.length - 1];
+  const e = before[before.length - 1],
+    s0 = after[0];
+  const unit = (a, b) => {
+    const d = dist(a, b);
+    return d < 1e-6 ? null : [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
+  };
+  const din = unit(pointAt(before, cb, Math.max(0, Lb - 3)), e),
+    dout = unit(s0, pointAt(after, ca, Math.min(La, 3)));
   const angle = din && dout ? Math.abs(wrapAngle(Math.atan2(dout[1], dout[0]) - Math.atan2(din[1], din[0]))) : 0;
-  if (angle >= 20 * Math.PI / 180) {
+  if (angle >= (20 * Math.PI) / 180) {
     const denom = din[0] * dout[1] - din[1] * dout[0];
     const w = [s0[0] - e[0], s0[1] - e[1]];
-    const t = (w[0] * dout[1] - w[1] * dout[0]) / denom, u = (w[0] * din[1] - w[1] * din[0]) / denom;
+    const t = (w[0] * dout[1] - w[1] * dout[0]) / denom,
+      u = (w[0] * din[1] - w[1] * din[0]) / denom;
     if (Math.abs(denom) >= 0.15 && Math.abs(t) <= 15 && Math.abs(u) <= 15) {
       const corner = [e[0] + din[0] * t, e[1] + din[1] * t];
-      const sb = Lb + t, sa = u;
+      const sb = Lb + t,
+        sa = u;
       const r = Math.min(radius, Math.max(0.5, sb / 2), Math.max(0.5, (La - sa) / 2));
-      const keep = Math.max(0, sb - r), skip = Math.max(0, sa + r);
+      const keep = Math.max(0, sb - r),
+        skip = Math.max(0, sa + r);
       const head = before.filter((_, i) => cb[i] < keep - 0.05);
       head.push(keep <= Lb ? pointAt(before, cb, keep) : [e[0] + din[0] * (keep - Lb), e[1] + din[1] * (keep - Lb)]);
       const p0 = head[head.length - 1];
       const p2 = skip <= La ? pointAt(after, ca, skip) : [corner[0] + dout[0] * r, corner[1] + dout[1] * r];
       for (let k = 1; k <= 8; k++) {
-        const q = k / 8, m = 1 - q;
-        head.push([m * m * p0[0] + 2 * m * q * corner[0] + q * q * p2[0], m * m * p0[1] + 2 * m * q * corner[1] + q * q * p2[1]]);
+        const q = k / 8,
+          m = 1 - q;
+        head.push([
+          m * m * p0[0] + 2 * m * q * corner[0] + q * q * p2[0],
+          m * m * p0[1] + 2 * m * q * corner[1] + q * q * p2[1],
+        ]);
       }
       return head.concat(after.filter((_, i) => ca[i] > skip + 0.05));
     }
   }
   if (dist(e, s0) <= 0.05) return before.concat(after.slice(1));
-  const keep = Math.max(0, Lb - Math.min(blend, Lb / 2)), skip = Math.min(blend, La / 2);
-  return before.filter((_, i) => cb[i] < keep - 0.05).concat([pointAt(before, cb, keep), pointAt(after, ca, skip)], after.filter((_, i) => ca[i] > skip + 0.05));
+  const keep = Math.max(0, Lb - Math.min(blend, Lb / 2)),
+    skip = Math.min(blend, La / 2);
+  return before
+    .filter((_, i) => cb[i] < keep - 0.05)
+    .concat(
+      [pointAt(before, cb, keep), pointAt(after, ca, skip)],
+      after.filter((_, i) => ca[i] > skip + 0.05),
+    );
 }
 
 export class MapData {
@@ -175,8 +225,13 @@ export class MapData {
     for (const inter of this.intersections.values()) inter.plan = timingPlan(inter, this);
     // and, at scramble crossings (jev/osm/scrambles.py), with an all-walk phase as well, for worlds that
     // run them (sim/signals.js setScrambles)
-    this.scrambles = new Set((pack.scrambles?.scrambles || []).map((x) => x.signal).filter((id) => this.intersections.has(id)));
-    for (const id of this.scrambles) { const inter = this.intersections.get(id); inter.scramblePlan = timingPlan(inter, this, { scramble: true }); }
+    this.scrambles = new Set(
+      (pack.scrambles?.scrambles || []).map((x) => x.signal).filter((id) => this.intersections.has(id)),
+    );
+    for (const id of this.scrambles) {
+      const inter = this.intersections.get(id);
+      inter.scramblePlan = timingPlan(inter, this, { scramble: true });
+    }
     this.stops = new Map(pack.stops.map((s) => [s.id, s]));
     this.yields = new Map((pack.yields || []).map((y) => [y.id, y]));
     this.roundabouts = new Map((pack.roundabouts || []).map((r) => [r.id, r]));
@@ -191,7 +246,11 @@ export class MapData {
     this.buslanes = pack.buslanes?.lanes || [];
     // one-way streets cyclists may ride both ways (jev/osm/contraflow.py; sim/contraflow.js), by edge:
     // { edge, kind: "lane" | "track" | "shared", side }
-    this.contraflow = new Map((pack.contraflow?.edges || []).filter((c) => this.edges.has(c.edge) && this.edges.get(c.edge).oneway).map((c) => [c.edge, c]));
+    this.contraflow = new Map(
+      (pack.contraflow?.edges || [])
+        .filter((c) => this.edges.has(c.edge) && this.edges.get(c.edge).oneway)
+        .map((c) => [c.edge, c]),
+    );
     // driveways cars back out of (jev/osm/driveways.py; sim/driveway-reversers.js): { id, edge, s, side,
     // x, y, heading, length }
     this.driveways = (pack.driveways?.driveways || []).filter((d) => this.edges.has(d.edge));
@@ -212,13 +271,19 @@ export class MapData {
     this.calmingSpans = calmingSpans(this.calming, this.edges);
     this.calmingGrid = new Map();
     for (const device of this.calming) {
-      const a = device.at.find((x) => this.edges.has(x.edge)), e = this.edges.get(a.edge);
-      const item = { device, h: headingAt(e.pts, e.cum, a.s * e.cum[e.cum.length - 1] / Math.max(1e-6, e.length)), w: Math.max(-e.asphalt[0], e.asphalt[1]) + 0.3 };
-      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-        const key = `${Math.floor(device.x / 20) + i},${Math.floor(device.y / 20) + j}`;
-        if (!this.calmingGrid.has(key)) this.calmingGrid.set(key, []);
-        this.calmingGrid.get(key).push(item);
-      }
+      const a = device.at.find((x) => this.edges.has(x.edge)),
+        e = this.edges.get(a.edge);
+      const item = {
+        device,
+        h: headingAt(e.pts, e.cum, (a.s * e.cum[e.cum.length - 1]) / Math.max(1e-6, e.length)),
+        w: Math.max(-e.asphalt[0], e.asphalt[1]) + 0.3,
+      };
+      for (let i = -1; i <= 1; i++)
+        for (let j = -1; j <= 1; j++) {
+          const key = `${Math.floor(device.x / 20) + i},${Math.floor(device.y / 20) + j}`;
+          if (!this.calmingGrid.has(key)) this.calmingGrid.set(key, []);
+          this.calmingGrid.get(key).push(item);
+        }
     }
     // the city's offset from UTC in hours (daylight time), when the server knows it
     this.utcOffset = Number.isFinite(pack.utc_offset) ? pack.utc_offset : null;
@@ -232,48 +297,75 @@ export class MapData {
     this.nodes = new Map(pack.nodes.map((n) => [n.id, n]));
   }
 
-  lane(edgeId, idx) { return this.lanes.get(`${edgeId}:${idx}`); }
+  lane(edgeId, idx) {
+    return this.lanes.get(`${edgeId}:${idx}`);
+  }
   // The school or playground zone in effect `s` metres along a lane (as the lane measures it), at a
   // clock (sim/speed-zones.js), or null.
   zoneOnLane(lane, s, clock) {
     if (!clock || !lane || !this.zoneSpans.has(lane.edge)) return null;
     const e = lane.edgeRef;
-    return zoneAt(this.zoneSpans, lane.edge, s * e.length / Math.max(1e-6, lane.length), clock);
+    return zoneAt(this.zoneSpans, lane.edge, (s * e.length) / Math.max(1e-6, lane.length), clock);
   }
-  successors(edgeId) { return this.out.get(this.edges.get(edgeId).to) || []; }
-  headingIn(edgeId) { const p = this.edges.get(edgeId).pts; return headingOf(p[p.length - 2], p[p.length - 1]); }
-  headingOut(edgeId) { const p = this.edges.get(edgeId).pts; return headingOf(p[0], p[1]); }
-  turnAngle(a, b) { return wrapAngle(this.headingOut(b) - this.headingIn(a)); }
+  successors(edgeId) {
+    return this.out.get(this.edges.get(edgeId).to) || [];
+  }
+  headingIn(edgeId) {
+    const p = this.edges.get(edgeId).pts;
+    return headingOf(p[p.length - 2], p[p.length - 1]);
+  }
+  headingOut(edgeId) {
+    const p = this.edges.get(edgeId).pts;
+    return headingOf(p[0], p[1]);
+  }
+  turnAngle(a, b) {
+    return wrapAngle(this.headingOut(b) - this.headingIn(a));
+  }
   // A signal's junction: its vertices, and where its approaches start (a junction drawn as two
   // nodes may list only one).
-  junctionNodes(inter) { return new Set([...(inter?.vertices || []), ...(inter?.approaches || []).map((a) => this.edges.get(a.edge)?.from)]); }
+  junctionNodes(inter) {
+    return new Set([...(inter?.vertices || []), ...(inter?.approaches || []).map((a) => this.edges.get(a.edge)?.from)]);
+  }
   // The turn from edge ids[k] at the junction it leads into, carried on across short links that go
   // straight inside that junction (`nodes`), never on to the next junction: { turn, at }, where
   // ids[at] is the edge it turns onto.
   turnThrough(ids, k, nodes) {
-    let j = k + 1, turn = j < ids.length ? this.classifyTurn(this.turnAngle(ids[k], ids[j])) : "straight";
-    while (turn === "straight" && j + 1 < ids.length && this.edges.get(ids[j]).length < JUNCTION_LINK_M && nodes.has(this.edges.get(ids[j]).to)) {
+    let j = k + 1,
+      turn = j < ids.length ? this.classifyTurn(this.turnAngle(ids[k], ids[j])) : "straight";
+    while (
+      turn === "straight" &&
+      j + 1 < ids.length &&
+      this.edges.get(ids[j]).length < JUNCTION_LINK_M &&
+      nodes.has(this.edges.get(ids[j]).to)
+    ) {
       j++;
       turn = this.classifyTurn(this.turnAngle(ids[k], ids[j]));
     }
     return { turn, at: j };
   }
   classifyTurn(angle) {
-    const deg = Math.abs(angle) * 180 / Math.PI;
+    const deg = (Math.abs(angle) * 180) / Math.PI;
     if (deg < 25) return "straight";
     if (deg > 150) return "uturn";
     return angle > 0 ? "left" : "right";
   }
 
   lanesNear(x, y, radius = 60) {
-    const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL), r = Math.ceil(radius / CELL);
+    const cx = Math.floor(x / CELL),
+      cy = Math.floor(y / CELL),
+      r = Math.ceil(radius / CELL);
     const seen = new Set();
     const out = [];
-    for (let i = cx - r; i <= cx + r; i++) for (let j = cy - r; j <= cy + r; j++) {
-      const cell = this.grid.get(`${i},${j}`);
-      if (!cell) continue;
-      for (const lane of cell) if (!seen.has(lane)) { seen.add(lane); out.push(lane); }
-    }
+    for (let i = cx - r; i <= cx + r; i++)
+      for (let j = cy - r; j <= cy + r; j++) {
+        const cell = this.grid.get(`${i},${j}`);
+        if (!cell) continue;
+        for (const lane of cell)
+          if (!seen.has(lane)) {
+            seen.add(lane);
+            out.push(lane);
+          }
+      }
     return out;
   }
 
@@ -305,10 +397,18 @@ export class MapData {
     else if (lateralFromCenter > hi) d = lateralFromCenter - hi;
     // beyond the ends of the edge polyline
     const overshoot = Math.max(0, near.distance - Math.abs(near.lateral));
-    return { distance: Math.max(d, overshoot > 0.5 ? overshoot : 0), edge, lateral: lateralFromCenter, lane: near.lane, s: near.s };
+    return {
+      distance: Math.max(d, overshoot > 0.5 ? overshoot : 0),
+      edge,
+      lateral: lateralFromCenter,
+      lane: near.lane,
+      s: near.s,
+    };
   }
 
-  controlOf(edgeId) { return this.edges.get(edgeId).control || null; }
+  controlOf(edgeId) {
+    return this.edges.get(edgeId).control || null;
+  }
 
   // Half the asphalt width of the widest other road meeting this edge's end (as in
   // jev/osm/controls.py).
@@ -372,24 +472,43 @@ export class MapData {
     }
     if (this._junctionSkip.has(node)) return null;
     const inn = (this.inn.get(node) || []).map((id) => this.edges.get(id));
-    const neighbours = new Set([...inn.map((o) => o.from), ...(this.out.get(node) || []).map((id) => this.edges.get(id).to)]);
+    const neighbours = new Set([
+      ...inn.map((o) => o.from),
+      ...(this.out.get(node) || []).map((id) => this.edges.get(id).to),
+    ]);
     if (neighbours.size < 3 || inn.some((o) => o.ring)) return null;
     const setback = Math.max(STOP_LINE_SETBACK_M, this.crossingHalfWidth(edgeId) + CURB_CLEARANCE_M);
     if (e.length < setback + 2) return null;
     // (streets with a stop sign give way whatever their class; one of the same class without a sign
     // crossing this one makes them give way to each other from the right)
-    const rank = roadRank(e), others = inn.filter((o) => o !== e), free = others.filter((o) => !o.control);
-    const crossing = (o) => { const d = Math.abs(wrapAngle(this.headingIn(o.id) - this.headingIn(edgeId))); return d >= Math.PI / 6 && d <= Math.PI * 5 / 6; };
-    const rule = free.some((o) => roadRank(o) > rank) ? "minor"
-      : free.some((o) => roadRank(o) === rank && crossing(o)) || (free.length === others.length && !free.some((o) => roadRank(o) < rank)) ? "equal" : "major";
-    return { type: "uncontrolled", id: `junction:${node}`, s_line: Math.round((e.length - setback) * 100) / 100, rule, junction: node };
+    const rank = roadRank(e),
+      others = inn.filter((o) => o !== e),
+      free = others.filter((o) => !o.control);
+    const crossing = (o) => {
+      const d = Math.abs(wrapAngle(this.headingIn(o.id) - this.headingIn(edgeId)));
+      return d >= Math.PI / 6 && d <= (Math.PI * 5) / 6;
+    };
+    const rule = free.some((o) => roadRank(o) > rank)
+      ? "minor"
+      : free.some((o) => roadRank(o) === rank && crossing(o)) ||
+          (free.length === others.length && !free.some((o) => roadRank(o) < rank))
+        ? "equal"
+        : "major";
+    return {
+      type: "uncontrolled",
+      id: `junction:${node}`,
+      s_line: Math.round((e.length - setback) * 100) / 100,
+      rule,
+      junction: node,
+    };
   }
 }
 
 function cellsOf(pts) {
   const cells = new Set();
   for (let i = 0; i < pts.length - 1; i++) {
-    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+    const [x0, y0] = pts[i],
+      [x1, y1] = pts[i + 1];
     const n = Math.max(1, Math.ceil(dist(pts[i], pts[i + 1]) / (CELL / 2)));
     for (let k = 0; k <= n; k++) {
       const t = k / n;

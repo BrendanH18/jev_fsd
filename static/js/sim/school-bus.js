@@ -39,9 +39,9 @@ export const STOP_EVERY_M = [150, 400];
 export const KIDS = [1, 3];
 export const KID_CROSS_P = 0.5;
 export const KID_EVERY_S = 1.2;
-export const RED_MAX_S = 45;          // (a child who cannot cross by then crosses on a gap instead)
-export const CLEAR_BEHIND_M = 15;     // a stop's rear is this far clear of the junction behind it
-export const CLEAR_AHEAD_M = 20;      // and its front this far clear of the junction ahead
+export const RED_MAX_S = 45; // (a child who cannot cross by then crosses on a gap instead)
+export const CLEAR_BEHIND_M = 15; // a stop's rear is this far clear of the junction behind it
+export const CLEAR_AHEAD_M = 20; // and its front this far clear of the junction ahead
 export const CLEAR_CROSSWALK_M = 15;
 const LOOK_M = 90;
 const SAME_WAY = Math.PI / 6;
@@ -55,7 +55,8 @@ const frontOf = (v) => (v.spec || CAR).length - (v.spec || CAR).rearOverhang;
 // The end of the bus nearest a driver going `relation` to it: its rear seen from behind, its front
 // seen coming toward it.
 function nearEnd(bus, relation) {
-  const bs = bus.spec || SCHOOL_BUS, d = relation === "behind" ? -bs.rearOverhang : bs.length - bs.rearOverhang;
+  const bs = bus.spec || SCHOOL_BUS,
+    d = relation === "behind" ? -bs.rearOverhang : bs.length - bs.rearOverhang;
   return [bus.x + Math.cos(bus.psi) * d, bus.y + Math.sin(bus.psi) * d];
 }
 
@@ -71,10 +72,15 @@ export function schoolBusHold(pts, cum, front, bus, look = LOOK_M) {
   for (let i = 0; i < pts.length - 1 && cum[i] <= front + look; i++) {
     const len = cum[i + 1] - cum[i];
     if (cum[i + 1] < from || len <= 0) continue;
-    const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], rel = Math.abs(wrap(bus.psi - Math.atan2(dy, dx)));
+    const a = pts[i],
+      b = pts[i + 1],
+      dx = b[0] - a[0],
+      dy = b[1] - a[1],
+      rel = Math.abs(wrap(bus.psi - Math.atan2(dy, dx)));
     const relation = rel < SAME_WAY ? "behind" : rel > Math.PI - SAME_WAY ? "oncoming" : null;
     if (!relation) continue;
-    const p = ends[relation], t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (len * len);
+    const p = ends[relation],
+      t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (len * len);
     if (t < 0 || t > 1 || Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / len > SIDE_M) continue;
     const gap = cum[i] + t * len - front;
     if (gap <= 0 || gap > look) return null;
@@ -90,7 +96,8 @@ export function schoolBusRelation(o, bus) {
   const rel = Math.abs(wrap(bus.psi - o.psi));
   const relation = rel < SAME_WAY ? "behind" : rel > Math.PI - SAME_WAY ? "oncoming" : null;
   if (!relation || o === bus) return null;
-  const [x, y] = nearEnd(bus, relation), l = o.toLocal(x, y);
+  const [x, y] = nearEnd(bus, relation),
+    l = o.toLocal(x, y);
   return { relation, ahead_m: l.ahead - frontOf(o), right_m: l.right };
 }
 
@@ -103,7 +110,8 @@ export function stopRange(map, e, crosswalks = map.crosswalks || []) {
   if (!e || e.ring || e.lanes !== 1 || e.limit > SCHOOL_STOP_LIMIT_MPS || e.oneway) return null;
   if (![...(map.out.get(e.to) || [])].some((id) => map.edges.get(id)?.to === e.from)) return null;
   const L = e.cum ? e.cum[e.cum.length - 1] : e.length;
-  let lo = SCHOOL_BUS.length + CLEAR_BEHIND_M, hi = L - CLEAR_AHEAD_M;
+  let lo = SCHOOL_BUS.length + CLEAR_BEHIND_M,
+    hi = L - CLEAR_AHEAD_M;
   if (e.control) hi = Math.min(hi, e.control.s_line - CLEAR_AHEAD_M);
   if (hi <= lo) return null;
   const blocked = [];
@@ -118,9 +126,13 @@ export function stopRange(map, e, crosswalks = map.crosswalks || []) {
 export function firstStop(range, from) {
   if (!range) return null;
   let at = Math.max(range.lo, from);
-  for (let moved = true; moved;) {
+  for (let moved = true; moved; ) {
     moved = false;
-    for (const [a, b] of range.blocked) if (at >= a && at < b) { at = b; moved = true; }
+    for (const [a, b] of range.blocked)
+      if (at >= a && at < b) {
+        at = b;
+        moved = true;
+      }
   }
   return at <= range.hi ? at : null;
 }

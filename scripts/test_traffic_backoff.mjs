@@ -22,7 +22,10 @@ for (const weather of ["dry", "rain", "snow"]) {
     assert.equal(touched, false, `${weather}: reversed clear of the ego`);
     assert.equal(!!n.backoff, false, `${weather}: finished backing off`);
     assert.equal(n.v, 0, `${weather}: stopped`);
-    assert.ok(blocked ? n.x > -3 : n.x < -6, `${weather}: ${blocked ? "kept room behind" : "reversed when clear"}, x=${n.x}`);
+    assert.ok(
+      blocked ? n.x > -3 : n.x < -6,
+      `${weather}: ${blocked ? "kept room behind" : "reversed when clear"}, x=${n.x}`,
+    );
   }
 }
 console.log("Traffic back-off sees the driven car and still reverses on a clear road");
