@@ -20,12 +20,17 @@ function backOff(ego) {
   const n = new Vehicle(0, 0, 0, 0);
   n.backoff = { left: 6, t: 0 };
   const fleet = { world: { ego, obstaclesNear: () => [n] } };
-  let touched = false, gap = Infinity;
+  let touched = false,
+    gap = Infinity;
   for (let k = 0; k < 8 * 60 && n.backoff; k++) {
     NpcFleet.prototype.backOff.call(fleet, n, 1 / 60);
     touched ||= obbOverlap(n.obb(), ego.obb());
   }
-  for (let m = 0; m < 3; m += 0.02) if (obbOverlap(n.obb(), ego.obb(), m)) { gap = m; break; }
+  for (let m = 0; m < 3; m += 0.02)
+    if (obbOverlap(n.obb(), ego.obb(), m)) {
+      gap = m;
+      break;
+    }
   return { touched, done: !n.backoff, x: n.x, gap };
 }
 const angled = backOff(new Vehicle(-5.9, 2.6, -0.25, 0));
@@ -36,5 +41,7 @@ assert.ok(angled.gap > 1, `kept room behind (${angled.gap.toFixed(2)} m)`);
 const beside = backOff(new Vehicle(-5.9, 5.5, -0.25, 0));
 assert.equal(beside.touched, false);
 assert.ok(beside.x < -5, `reversed past a car standing well to the side (x=${beside.x.toFixed(2)})`);
-console.log(`Backing off stops ${angled.gap.toFixed(2)} m short of a car standing behind at an angle, and passes one well to the side`);
+console.log(
+  `Backing off stops ${angled.gap.toFixed(2)} m short of a car standing behind at an angle, and passes one well to the side`,
+);
 process.exit(0);

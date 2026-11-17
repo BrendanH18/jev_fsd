@@ -8,30 +8,79 @@
 import { browserRoute } from "../../demo/routing.js";
 import { pointAt, headingAt, cumulative } from "../../map/mapdata.js";
 
-export const challenge = { id: "road-closed", title: "Road closed", map: "halifax", weather: "dry", time: "afternoon", seed: 60042, icon: "⛔", difficulty: "Navigation", hazard: "road-closure", roadClosures: true, street: "Spring Garden Road",
-  description: "A street festival has closed Spring Garden Road in downtown Halifax between Queen Street and Birmingham Street. Your route still runs down that block, and you won't know until you see the barricades past Queen Street.", lesson: "When you see ROAD CLOSED barricades, never drive past them, however empty the street looks. Slow down early, turn off at the junction before them, and follow the detour. If you see them too late to turn, stop short of the junction and find another way." };
+export const challenge = {
+  id: "road-closed",
+  title: "Road closed",
+  map: "halifax",
+  weather: "dry",
+  time: "afternoon",
+  seed: 60042,
+  icon: "⛔",
+  difficulty: "Navigation",
+  hazard: "road-closure",
+  roadClosures: true,
+  street: "Spring Garden Road",
+  description:
+    "A street festival has closed Spring Garden Road in downtown Halifax between Queen Street and Birmingham Street. Your route still runs down that block, and you won't know until you see the barricades past Queen Street.",
+  lesson:
+    "When you see ROAD CLOSED barricades, never drive past them, however empty the street looks. Slow down early, turn off at the junction before them, and follow the detour. If you see them too late to turn, stop short of the junction and find another way.",
+};
 
-const START = "e489", APPROACH = "e491", CLOSED = "e277", EXIT = "e172", CROSS = "e494";
+const START = "e489",
+  APPROACH = "e491",
+  CLOSED = "e277",
+  EXIT = "e172",
+  CROSS = "e494";
 // The car starts START_S along Spring Garden Road, at rest, a block and a half short of the closed block
 // (beyond sight of its barricades); the destination is GOAL_S along Birmingham Street.
-export const START_S = 20, GOAL_S = 60;
+export const START_S = 20,
+  GOAL_S = 60;
 
 export function roadClosureScenario(map, challenge) {
-  const start = map.edges.get(START), approach = map.edges.get(APPROACH), closed = map.edges.get(CLOSED), exit = map.edges.get(EXIT), cross = map.edges.get(CROSS);
-  if (start?.name !== challenge.street || approach?.name !== challenge.street || closed?.name !== challenge.street || closed.oneway || exit?.name !== "Birmingham Street"
-    || cross?.name !== "Queen Street" || start.to !== approach.from || approach.to !== closed.from || cross.from !== closed.from || approach.control?.type !== "signal")
-    throw new Error("The road closure lesson needs Halifax's Spring Garden Road, two-way, closed between Queen Street and Birmingham Street.");
-  const lane = map.lane(START, start.lanes - 1), p = pointAt(lane.pts, lane.cum, START_S), psi = headingAt(lane.pts, lane.cum, START_S);
-  const out = map.lane(EXIT, exit.lanes - 1), q = pointAt(out.pts, out.cum, GOAL_S);
+  const start = map.edges.get(START),
+    approach = map.edges.get(APPROACH),
+    closed = map.edges.get(CLOSED),
+    exit = map.edges.get(EXIT),
+    cross = map.edges.get(CROSS);
+  if (
+    start?.name !== challenge.street ||
+    approach?.name !== challenge.street ||
+    closed?.name !== challenge.street ||
+    closed.oneway ||
+    exit?.name !== "Birmingham Street" ||
+    cross?.name !== "Queen Street" ||
+    start.to !== approach.from ||
+    approach.to !== closed.from ||
+    cross.from !== closed.from ||
+    approach.control?.type !== "signal"
+  )
+    throw new Error(
+      "The road closure lesson needs Halifax's Spring Garden Road, two-way, closed between Queen Street and Birmingham Street.",
+    );
+  const lane = map.lane(START, start.lanes - 1),
+    p = pointAt(lane.pts, lane.cum, START_S),
+    psi = headingAt(lane.pts, lane.cum, START_S);
+  const out = map.lane(EXIT, exit.lanes - 1),
+    q = pointAt(out.pts, out.cum, GOAL_S);
   // (the way the car would go with the street open: down the closed block and onto Birmingham Street)
   const route = browserRoute(map, { x: p[0], y: p[1], heading: psi }, { x: q[0], y: q[1] });
   if (route?.edges[0] !== START || route.edges[2] !== CLOSED || route.edges.at(-1) !== EXIT)
     throw new Error("The road closure lesson's route must run down the closed block of Spring Garden Road.");
-  return { id: challenge.id, start: { edge: START, lane: lane.idx, s: START_S, x: p[0], y: p[1], psi },
-    route, goal: route.polyline.at(-1), traffic_seed: challenge.seed,
+  return {
+    id: challenge.id,
+    start: { edge: START, lane: lane.idx, s: START_S, x: p[0], y: p[1], psi },
+    route,
+    goal: route.polyline.at(-1),
+    traffic_seed: challenge.seed,
     roadClosure: { edge: CLOSED, street: closed.name, from: cross.name, to: exit.name },
-    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: route.edges.filter(id => map.edges.get(id).control?.type === "signal").length,
-      stops: route.edges.filter(id => map.edges.get(id).control?.type === "stop").length, lefts: route.turns.filter(t => t.dir === "left").length, rights: route.turns.filter(t => t.dir === "right").length } };
+    tags: {
+      length_m: Math.round(cumulative(route.polyline).at(-1)),
+      signals: route.edges.filter((id) => map.edges.get(id).control?.type === "signal").length,
+      stops: route.edges.filter((id) => map.edges.get(id).control?.type === "stop").length,
+      lefts: route.turns.filter((t) => t.dir === "left").length,
+      rights: route.turns.filter((t) => t.dir === "right").length,
+    },
+  };
 }
 
 // The block closes before the car sets off; the car knows nothing of it until it sees a barricade.

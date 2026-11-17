@@ -12,7 +12,18 @@ const { NpcFleet } = await import("../static/js/sim/npc.js");
 const { Vehicle, SCHOOL_BUS } = await import("../static/js/sim/vehicle.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
-const { AMBER_M, BEHIND_M, ONCOMING_M, SIDE_M, firstStop, isSchoolBus, redsOn, schoolBusHold, schoolBusRelation, stopRange } = await import("../static/js/sim/school-bus.js");
+const {
+  AMBER_M,
+  BEHIND_M,
+  ONCOMING_M,
+  SIDE_M,
+  firstStop,
+  isSchoolBus,
+  redsOn,
+  schoolBusHold,
+  schoolBusRelation,
+  stopRange,
+} = await import("../static/js/sim/school-bus.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, buildQuestions, situationClauses } = await import("../static/js/brain/state.js");
@@ -24,11 +35,18 @@ const { Route } = await import("../static/js/map/route.js");
 const { routeFromLanes } = await import("../static/js/demo/routing.js");
 
 let checks = 0;
-function test(name, fn) { fn(); checks++; console.log(`✓ ${name}`); }
+function test(name, fn) {
+  fn();
+  checks++;
+  console.log(`✓ ${name}`);
+}
 const root = new URL("../data/maps/", import.meta.url);
 const load = (key) => {
   const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
-  for (const [name, file] of [["transit", "transit"], ["crossings", "crossings"]]) {
+  for (const [name, file] of [
+    ["transit", "transit"],
+    ["crossings", "crossings"],
+  ]) {
     const url = new URL(`${key}.${file}.v1.json`, root);
     if (fs.existsSync(url)) pack[name] = JSON.parse(fs.readFileSync(url));
   }
@@ -37,7 +55,10 @@ const load = (key) => {
 const KITS = load("623b012bc8b5");
 const step = (ctx, input = null) => stepWorld({ ...ctx, input }, 1 / 60, ctx.world.t * 1000);
 const idle = { enabled: false, step() {} };
-const front = (v) => { const spec = v.spec || v; return spec.length - spec.rearOverhang; };
+const front = (v) => {
+  const spec = v.spec || v;
+  return spec.length - spec.rearOverhang;
+};
 const twin = (map, e) => [...map.edges.values()].find((o) => o.from === e.to && o.to === e.from);
 
 test("a school bus stops only mid-block on a two-way street with one lane each way, 50 km/h or less", () => {
@@ -48,14 +69,24 @@ test("a school bus stops only mid-block on a two-way street with one lane each w
     streets++;
     assert.ok(e.lanes === 1 && !e.ring && e.limit <= 50 / 3.6 + 0.05 && twin(KITS, e), `${e.id} qualifies`);
     const L = e.cum.at(-1);
-    assert.ok(range.lo >= SCHOOL_BUS.length + 15 - 1e-9 && range.hi <= L - 20 + 1e-9, `${e.id}: clear of both junctions`);
+    assert.ok(
+      range.lo >= SCHOOL_BUS.length + 15 - 1e-9 && range.hi <= L - 20 + 1e-9,
+      `${e.id}: clear of both junctions`,
+    );
     if (e.control) assert.ok(range.hi <= e.control.s_line - 20 + 1e-9);
   }
   assert.ok(streets > 50, `${streets} streets in Kitsilano`);
   const multi = [...KITS.edges.values()].find((e) => e.lanes > 1);
   assert.equal(stopRange(KITS, multi), null, "not on a street with two lanes going one way");
   // (and clear of a marked crosswalk)
-  const range = { lo: 20, hi: 100, blocked: [[30, 60], [55, 70]] };
+  const range = {
+    lo: 20,
+    hi: 100,
+    blocked: [
+      [30, 60],
+      [55, 70],
+    ],
+  };
   assert.equal(firstStop(range, 0), 20);
   assert.equal(firstStop(range, 35), 70);
   assert.equal(firstStop(range, 95), 95);
@@ -63,26 +94,53 @@ test("a school bus stops only mid-block on a two-way street with one lane each w
 });
 
 // A straight path along +x and a school bus somewhere about it.
-const PATH = { pts: [[0, 0], [300, 0]] };
+const PATH = {
+  pts: [
+    [0, 0],
+    [300, 0],
+  ],
+};
 PATH.cum = cumulative(PATH.pts);
-const busAt = (x, y, psi) => Object.assign(new Vehicle(x, y, psi, 0, SCHOOL_BUS), { kind: "school_bus", id: "sb", school: { lights: "red", stops: 1 } });
+const busAt = (x, y, psi) =>
+  Object.assign(new Vehicle(x, y, psi, 0, SCHOOL_BUS), {
+    kind: "school_bus",
+    id: "sb",
+    school: { lights: "red", stops: 1 },
+  });
 
 test("who stops, and where: behind it, 5 m behind its rear; coming toward it, 10 m short of its front", () => {
-  const ahead = busAt(100, 0, 0), h = schoolBusHold(PATH.pts, PATH.cum, 20, ahead);
+  const ahead = busAt(100, 0, 0),
+    h = schoolBusHold(PATH.pts, PATH.cum, 20, ahead);
   assert.equal(h.relation, "behind");
-  assert.ok(Math.abs(h.gap_m - (100 - SCHOOL_BUS.rearOverhang - 20)) < 1e-6 && Math.abs(h.gap_m - h.stop_m - BEHIND_M) < 1e-9);
+  assert.ok(
+    Math.abs(h.gap_m - (100 - SCHOOL_BUS.rearOverhang - 20)) < 1e-6 && Math.abs(h.gap_m - h.stop_m - BEHIND_M) < 1e-9,
+  );
   // in the next lane over, or coming the other way in the far lane
   assert.equal(schoolBusHold(PATH.pts, PATH.cum, 20, busAt(100, 3.5, 0)).relation, "behind");
   const toward = schoolBusHold(PATH.pts, PATH.cum, 20, busAt(100, 3.4, Math.PI));
   assert.equal(toward.relation, "oncoming");
-  assert.ok(Math.abs(toward.gap_m - (100 - front(SCHOOL_BUS) - 20)) < 1e-6 && Math.abs(toward.gap_m - toward.stop_m - ONCOMING_M) < 1e-9);
-  assert.equal(schoolBusHold(PATH.pts, PATH.cum, 20, busAt(100, 20, Math.PI / 2)), null, "not one on a street crossing the path");
-  assert.equal(schoolBusHold(PATH.pts, PATH.cum, 20, busAt(100, SIDE_M + 3, Math.PI)), null, "nor one off the path's street");
+  assert.ok(
+    Math.abs(toward.gap_m - (100 - front(SCHOOL_BUS) - 20)) < 1e-6 &&
+      Math.abs(toward.gap_m - toward.stop_m - ONCOMING_M) < 1e-9,
+  );
+  assert.equal(
+    schoolBusHold(PATH.pts, PATH.cum, 20, busAt(100, 20, Math.PI / 2)),
+    null,
+    "not one on a street crossing the path",
+  );
+  assert.equal(
+    schoolBusHold(PATH.pts, PATH.cum, 20, busAt(100, SIDE_M + 3, Math.PI)),
+    null,
+    "nor one off the path's street",
+  );
   assert.equal(schoolBusHold(PATH.pts, PATH.cum, 99, ahead), null, "nor once level with it");
   // (the audit and the HUD, straight on as the car heads)
-  const car = new Vehicle(10, 0, 0, 10), r = schoolBusRelation(car, busAt(100, -3.4, Math.PI));
+  const car = new Vehicle(10, 0, 0, 10),
+    r = schoolBusRelation(car, busAt(100, -3.4, Math.PI));
   assert.equal(r.relation, "oncoming");
-  assert.ok(Math.abs(r.ahead_m - (100 - front(SCHOOL_BUS) - 10 - front(car))) < 1e-6 && Math.abs(r.right_m - 3.4) < 1e-6);
+  assert.ok(
+    Math.abs(r.ahead_m - (100 - front(SCHOOL_BUS) - 10 - front(car))) < 1e-6 && Math.abs(r.right_m - 3.4) < 1e-6,
+  );
 });
 
 // A free drive with school buses, the car standing still in the middle of Kitsilano.
@@ -90,21 +148,34 @@ function soak(seconds, { schoolBuses = 3, seed = 4, count = 25 } = {}) {
   setWeather("dry");
   const world = new World(KITS, { seed, pedestrians: 20 });
   const fleet = new NpcFleet(world, { count, bikes: 6, seed, schoolBuses });
-  const log = { stops: new Map(), ambers: new Set(), kids: new Map(), crossed: new Set(), passes: [], waiting: 0, cleared: new Set() };
+  const log = {
+    stops: new Map(),
+    ambers: new Set(),
+    kids: new Map(),
+    crossed: new Set(),
+    passes: [],
+    waiting: 0,
+    cleared: new Set(),
+  };
   const ctx = { world, fleet, autopilot: idle };
   const owed = new Map();
   for (let k = 0; k < 60 * seconds; k++) {
     step(ctx);
     for (const bus of fleet.schoolBuses) {
-      const sb = bus.school, key = `${bus.id}:${sb.stops}`;
+      const sb = bus.school,
+        key = `${bus.id}:${sb.stops}`;
       if (sb.lights === "amber") log.ambers.add(`${bus.id}:${sb.stops + 1}`);
       if (redsOn(bus) && !log.stops.has(key)) log.stops.set(key, { bus, edge: sb.stop.edge, at: sb.stop.s });
       // (a stop's reds off again, the bus still out on the road)
-      if (!redsOn(bus)) { if (log.stops.has(key)) log.cleared.add(key); continue; }
+      if (!redsOn(bus)) {
+        if (log.stops.has(key)) log.cleared.add(key);
+        continue;
+      }
       // traffic that owes the stop never draws level with the bus while the reds flash
       for (const n of fleet.vehicles) {
         if (n === bus || n.kind === "ambulance" || n.kind === "fire_truck" || !n.schoolOwed?.[key]) continue;
-        const r = schoolBusRelation(n, bus), was = owed.get(`${key}:${n.id}`);
+        const r = schoolBusRelation(n, bus),
+          was = owed.get(`${key}:${n.id}`);
         if (r && Math.abs(r.right_m) < SIDE_M) {
           if (was !== undefined && was > 0 && r.ahead_m <= 0 && n.v > 1) log.passes.push(`${n.id} past ${key}`);
           owed.set(`${key}:${n.id}`, r.ahead_m);
@@ -152,7 +223,10 @@ test("traffic stops for a school bus with its reds flashing, and it moves off on
   const { fleet, log } = free;
   assert.deepEqual(log.passes, []);
   assert.ok(log.cleared.size >= 1, "reds off again");
-  assert.ok(fleet.schoolBuses.every((b) => b.school.phase !== "red" || b.school.t < 45 + 1e-6), "never held for good");
+  assert.ok(
+    fleet.schoolBuses.every((b) => b.school.phase !== "red" || b.school.t < 45 + 1e-6),
+    "never held for good",
+  );
 });
 
 // A school bus standing on West 2nd Avenue with its reds on, nobody else about.
@@ -160,10 +234,24 @@ function standing({ t = 0, red = 20 } = {}) {
   setWeather("dry");
   const world = new World(KITS, { seed: 1, parked: 0, pedestrians: 0 });
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 1 });
-  const e = [...KITS.edges.values()].find((x) => x.name === "West 2nd Avenue" && stopRange(KITS, x) && x.cum.at(-1) > 150);
-  const lane = KITS.lane(e.id, 0), range = stopRange(KITS, e), scale = lane.length / e.cum.at(-1);
+  const e = [...KITS.edges.values()].find(
+    (x) => x.name === "West 2nd Avenue" && stopRange(KITS, x) && x.cum.at(-1) > 150,
+  );
+  const lane = KITS.lane(e.id, 0),
+    range = stopRange(KITS, e),
+    scale = lane.length / e.cum.at(-1);
   const bus = fleet.addSchoolBus(lane, range.lo * scale - front(SCHOOL_BUS), 0);
-  Object.assign(bus.school, { phase: "red", lights: "red", arm: true, doors: true, t, red, stops: 1, stop: { edge: e.id, s: range.lo }, every: Infinity });
+  Object.assign(bus.school, {
+    phase: "red",
+    lights: "red",
+    arm: true,
+    doors: true,
+    t,
+    red,
+    stops: 1,
+    stop: { edge: e.id, s: range.lo },
+    every: Infinity,
+  });
   // (the car standing nearby, behind it: school buses far from it leave)
   world.placeOnLane(lane, 1);
   world.resetContactHistory();
@@ -173,7 +261,10 @@ function standing({ t = 0, red = 20 } = {}) {
 test("the reds never go off with a child in the street", () => {
   const { world, bus, e, ctx } = standing({ t: 100, red: 10 });
   const kid = world.crowd.alight(bus, e, true, () => 0.5);
-  kid.x = kid.path[0].p[0]; kid.y = kid.path[0].p[1]; kid.path.shift(); kid.crossing = kid.path[0].cross;
+  kid.x = kid.path[0].p[0];
+  kid.y = kid.path[0].p[1];
+  kid.path.shift();
+  kid.crossing = kid.path[0].cross;
   for (let k = 0; k < 60 * 3; k++) {
     step(ctx);
     if (kid.crossing) assert.ok(redsOn(bus), "reds on while the child is in the street, long past 45 s");
@@ -184,8 +275,9 @@ test("the reds never go off with a child in the street", () => {
 
 test("a school bus coming the other way stops for one with its reds on too", () => {
   const { fleet, bus, e, range, ctx } = standing();
-  const back = KITS.lane(twin(KITS, e).id, 0), L = e.cum.at(-1);
-  const other = fleet.addSchoolBus(back, (L - range.lo - 60) * back.length / L - front(SCHOOL_BUS), 8);
+  const back = KITS.lane(twin(KITS, e).id, 0),
+    L = e.cum.at(-1);
+  const other = fleet.addSchoolBus(back, ((L - range.lo - 60) * back.length) / L - front(SCHOOL_BUS), 8);
   assert.equal(schoolBusRelation(other, bus).relation, "oncoming");
   let minGap = Infinity;
   for (let k = 0; k < 60 * 12; k++) {
@@ -201,13 +293,24 @@ test("a school bus never takes a parking bay, nor leaves when a parked car pulls
   // (the parking bays laid out, all but empty)
   const world = new World(KITS, { seed: 1, parked: 1e-9, pedestrians: 0 });
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 1 });
-  const slot = world.parked.slots.find((x) => x.curb === "right" && KITS.edges.get(x.edge).lanes === 1 && projectOnLane(KITS.lane(x.edge, 0), [x.x, x.y]) > 40);
-  const lane = KITS.lane(slot.edge, 0), bus = fleet.addSchoolBus(lane, projectOnLane(lane, [slot.x, slot.y]) - 35, 5);
+  const slot = world.parked.slots.find(
+    (x) =>
+      x.curb === "right" && KITS.edges.get(x.edge).lanes === 1 && projectOnLane(KITS.lane(x.edge, 0), [x.x, x.y]) > 40,
+  );
+  const lane = KITS.lane(slot.edge, 0),
+    bus = fleet.addSchoolBus(lane, projectOnLane(lane, [slot.x, slot.y]) - 35, 5);
   assert.ok(!fleet.maybePark() && !bus.parking, "not parking");
   // (a parked car pulling out takes the place of the farthest car once there are too many)
   // (with the car far off, and a car to spare)
-  world.ego.x = bus.x + 600; world.ego.y = bus.y;
-  const car = Object.assign(new Vehicle(slot.x, slot.y, slot.psi, 0), { id: "parked_test", curb: slot.curb, edge: slot.edge, slot, color: 0 });
+  world.ego.x = bus.x + 600;
+  world.ego.y = bus.y;
+  const car = Object.assign(new Vehicle(slot.x, slot.y, slot.psi, 0), {
+    id: "parked_test",
+    curb: slot.curb,
+    edge: slot.edge,
+    slot,
+    color: 0,
+  });
   world.parked.add(car);
   fleet.target = 0;
   assert.ok(fleet.startPullOut(car), "the parked car pulls out");
@@ -217,7 +320,8 @@ test("a school bus never takes a parking bay, nor leaves when a parked car pulls
 test("without school buses, traffic runs exactly as before", () => {
   setWeather("dry");
   const run = (opts) => {
-    const world = new World(KITS, { seed: 2, pedestrians: 20 }), fleet = new NpcFleet(world, { count: 20, seed: 2, ...opts });
+    const world = new World(KITS, { seed: 2, pedestrians: 20 }),
+      fleet = new NpcFleet(world, { count: 20, seed: 2, ...opts });
     for (let k = 0; k < 60 * 30; k++) step({ world, fleet, autopilot: idle });
     return fleet.vehicles.map((v) => `${v.id}:${v.x.toFixed(6)},${v.y.toFixed(6)}`).join(" ");
   };
@@ -246,8 +350,13 @@ function reds({ back = 60, v = 11, still = false } = {}) {
 function projectOnLane(lane, pt) {
   let best = null;
   for (let i = 0; i < lane.pts.length - 1; i++) {
-    const a = lane.pts[i], b = lane.pts[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1;
-    const t = Math.max(0, Math.min(1, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / l2)), d = Math.hypot(pt[0] - a[0] - dx * t, pt[1] - a[1] - dy * t);
+    const a = lane.pts[i],
+      b = lane.pts[i + 1],
+      dx = b[0] - a[0],
+      dy = b[1] - a[1],
+      l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / l2)),
+      d = Math.hypot(pt[0] - a[0] - dx * t, pt[1] - a[1] - dy * t);
     if (!best || d < best.d) best = { d, s: lane.cum[i] + t * Math.sqrt(l2) };
   }
   return best.s;
@@ -257,8 +366,15 @@ test("challenge: a school bus coming the other way on West 2nd Avenue, its reds 
   const { world, bus, child, scenario } = reds();
   assert.equal(world.map.edges.get(scenario.start.edge).name, "West 2nd Avenue");
   assert.ok(bus && redsOn(bus) && bus.school.arm && bus.doors, "standing with its reds on");
-  assert.equal(world.map.edges.get(scenario.schoolBus.edge).from, world.map.edges.get(scenario.start.edge).to, "on the same street, coming the other way");
-  assert.ok(child && child.child && child.path.some((w) => w.cross?.school === bus.id), "a child by its door, to cross in front of it");
+  assert.equal(
+    world.map.edges.get(scenario.schoolBus.edge).from,
+    world.map.edges.get(scenario.start.edge).to,
+    "on the same street, coming the other way",
+  );
+  assert.ok(
+    child && child.child && child.path.some((w) => w.cross?.school === bus.id),
+    "a child by its door, to cross in front of it",
+  );
   assert.equal(schoolBusRelation(world.ego, bus).relation, "oncoming");
 });
 
@@ -267,15 +383,23 @@ test("the car is told to stop, offered a stop short of the bus, and driving on i
   const snap = buildSnapshot(world);
   const sb = snap.school_bus;
   assert.ok(sb && sb.lights === "red" && sb.relation === "oncoming", "sensed");
-  assert.ok(Math.abs(sb.bumper_to_stop_m - 40) < 1 && Math.abs(sb.gap_m - sb.bumper_to_stop_m - ONCOMING_M) < 1e-6, "stops 10 m short of its front");
+  assert.ok(
+    Math.abs(sb.bumper_to_stop_m - 40) < 1 && Math.abs(sb.gap_m - sb.bumper_to_stop_m - ONCOMING_M) < 1e-6,
+    "stops 10 m short of its front",
+  );
   const candidates = sampleCandidates(snap, world);
   simulateAll(candidates, snap, world);
   assert.ok(candidates.find((c) => c.id === "stop_for_school_bus")?.eligible, "stop_for_school_bus on offer");
-  const near = reds({ back: 9, v: 6 }), s2 = buildSnapshot(near.world), c2 = sampleCandidates(s2, near.world);
+  const near = reds({ back: 9, v: 6 }),
+    s2 = buildSnapshot(near.world),
+    c2 = sampleCandidates(s2, near.world);
   simulateAll(c2, s2, near.world);
   const keep = c2.find((c) => c.id === "keep_lane_target");
   assert.ok(keep && keep.reject === "passes_stopped_school_bus", `driving on is rejected (${keep?.reject})`);
-  assert.ok(s2.target.v < 7 && s2.target.reasons.includes("school bus stopped, red lights flashing"), "and the target speed slows the car for it");
+  assert.ok(
+    s2.target.v < 7 && s2.target.reasons.includes("school bus stopped, red lights flashing"),
+    "and the target speed slows the car for it",
+  );
 });
 
 test("decision models and LLMs are told about the school bus", () => {
@@ -284,8 +408,14 @@ test("decision models and LLMs are told about the school bus", () => {
   const candidates = sampleCandidates(snap, world);
   const { eligible } = simulateAll(candidates, snap, world);
   const state = toJevState(snap, candidates, {});
-  assert.ok(state.school_bus?.stop === true && state.school_bus.coming_toward_car === true && state.school_bus.lights === "red");
-  assert.ok(situationClauses(snap).some((c) => c.includes("red lights flashing") && c.includes("both ways") && c.includes("stop_for_school_bus")));
+  assert.ok(
+    state.school_bus?.stop === true && state.school_bus.coming_toward_car === true && state.school_bus.lights === "red",
+  );
+  assert.ok(
+    situationClauses(snap).some(
+      (c) => c.includes("red lights flashing") && c.includes("both ways") && c.includes("stop_for_school_bus"),
+    ),
+  );
   const { questions } = buildQuestions(snap, eligible);
   assert.ok(questions.motion.criteria.stop.includes("school_bus.wait_in_m"));
   assert.ok(questions.vector.criteria.stop_for_school_bus.includes("short of the school bus"));
@@ -301,7 +431,10 @@ test("with its ambers on, the car slows down, ready to stop, but is not held", (
   Object.assign(bus.school, { lights: "amber", phase: "approach" });
   const snap = buildSnapshot(world);
   assert.equal(snap.school_bus?.lights, "amber");
-  assert.ok(snap.target.v < 9 && snap.target.reasons.includes("school bus about to stop"), `target ${snap.target.v.toFixed(1)} m/s`);
+  assert.ok(
+    snap.target.v < 9 && snap.target.reasons.includes("school bus about to stop"),
+    `target ${snap.target.v.toFixed(1)} m/s`,
+  );
   const candidates = sampleCandidates(snap, world);
   simulateAll(candidates, snap, world);
   assert.ok(!candidates.some((c) => c.id === "stop_for_school_bus" || c.reject === "passes_stopped_school_bus"));
@@ -331,9 +464,15 @@ test("the audit: passing it at speed fails to yield, once", () => {
 });
 
 test("Rules stops short of the bus coming the other way, waits for the child and the reds, then goes on", () => {
-  const ctx = setupChallenge(KITS, challenge), { world, fleet } = ctx;
+  const ctx = setupChallenge(KITS, challenge),
+    { world, fleet } = ctx;
   const bus = fleet.vehicles.find(isSchoolBus);
-  let stoppedAt = null, minGap = Infinity, wentOnWithReds = false, crossedInFront = false, passed = false, moving = false;
+  let stoppedAt = null,
+    minGap = Infinity,
+    wentOnWithReds = false,
+    crossedInFront = false,
+    passed = false,
+    moving = false;
   for (let k = 0; k < 60 * 70 && !passed && ctx.autopilot.enabled; k++) {
     step(ctx);
     const r = schoolBusRelation(world.ego, bus);
@@ -347,7 +486,10 @@ test("Rules stops short of the bus coming the other way, waits for the child and
     if (child?.crossing) crossedInFront = true;
     if (!r || r.ahead_m < -SCHOOL_BUS.length) passed = true;
   }
-  assert.ok(stoppedAt !== null && stoppedAt > ONCOMING_M - 2 && stoppedAt < ONCOMING_M + 2, `stopped ${stoppedAt?.toFixed(1)} m short of its front`);
+  assert.ok(
+    stoppedAt !== null && stoppedAt > ONCOMING_M - 2 && stoppedAt < ONCOMING_M + 2,
+    `stopped ${stoppedAt?.toFixed(1)} m short of its front`,
+  );
   assert.ok(minGap > ONCOMING_M - 2, "and never closer while its reds flashed");
   assert.ok(!wentOnWithReds, "it waited for the reds to go off");
   assert.ok(crossedInFront, "the child crossed in front of the bus");
@@ -360,11 +502,25 @@ test("Rules stops behind a school bus that stops in its lane, and follows it onc
   setWeather("dry");
   const world = new World(KITS, { seed: 1, parked: 0, pedestrians: 0 });
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 1 });
-  const e = [...KITS.edges.values()].find((x) => x.name === "West 2nd Avenue" && stopRange(KITS, x) && x.cum.at(-1) > 150);
-  const lane = KITS.lane(e.id, 0), range = stopRange(KITS, e), scale = lane.length / e.cum.at(-1);
+  const e = [...KITS.edges.values()].find(
+    (x) => x.name === "West 2nd Avenue" && stopRange(KITS, x) && x.cum.at(-1) > 150,
+  );
+  const lane = KITS.lane(e.id, 0),
+    range = stopRange(KITS, e),
+    scale = lane.length / e.cum.at(-1);
   const busS = range.hi * scale - front(SCHOOL_BUS);
   const bus = fleet.addSchoolBus(lane, busS, 0);
-  Object.assign(bus.school, { phase: "red", lights: "red", arm: true, doors: true, t: 0, red: 20, stops: 1, stop: { edge: e.id, s: range.hi }, every: Infinity });
+  Object.assign(bus.school, {
+    phase: "red",
+    lights: "red",
+    arm: true,
+    doors: true,
+    t: 0,
+    red: 20,
+    stops: 1,
+    stop: { edge: e.id, s: range.hi },
+    every: Infinity,
+  });
   const startS = busS - SCHOOL_BUS.rearOverhang - 70;
   assert.ok(startS > 1, "room behind it");
   world.placeOnLane(lane, startS);
@@ -376,11 +532,15 @@ test("Rules stops behind a school bus that stops in its lane, and follows it onc
   autopilot.setBrain("rules");
   autopilot.setEnabled(true);
   const ctx = { world, fleet, autopilot };
-  let minGap = Infinity, stopped = false;
+  let minGap = Infinity,
+    stopped = false;
   for (let k = 0; k < 60 * 35; k++) {
     step(ctx);
     const r = schoolBusRelation(world.ego, bus);
-    if (r && redsOn(bus)) { minGap = Math.min(minGap, r.ahead_m); if (Math.abs(world.ego.v) < 0.1 && minGap < 20) stopped = true; }
+    if (r && redsOn(bus)) {
+      minGap = Math.min(minGap, r.ahead_m);
+      if (Math.abs(world.ego.v) < 0.1 && minGap < 20) stopped = true;
+    }
   }
   assert.ok(stopped && minGap > BEHIND_M - 1.5, `stopped behind it (${minGap.toFixed(1)} m)`);
   assert.ok(!redsOn(bus) && bus.v > 1, "it moved off");
@@ -394,9 +554,18 @@ test("a checkpoint and restore brings back the children that had gone home", () 
   recorder.record({ world: ctx.world, fleet: ctx.fleet, autopilot: ctx.autopilot, drive: {}, clock: {} }, true);
   const before = ctx.world.crowd.list.map((p) => p.id);
   ctx.world.crowd.list.length = 0;
-  const target = { world: ctx.world, fleet: ctx.fleet, autopilot: ctx.autopilot, clock: { setHour() {}, update() {} }, setDrive() {} };
+  const target = {
+    world: ctx.world,
+    fleet: ctx.fleet,
+    autopilot: ctx.autopilot,
+    clock: { setHour() {}, update() {} },
+    setDrive() {},
+  };
   recorder.restore(0, target);
-  assert.deepEqual(target.world.crowd.list.map((p) => p.id), before);
+  assert.deepEqual(
+    target.world.crowd.list.map((p) => p.id),
+    before,
+  );
 });
 
 console.log(`${checks} school bus checks passed`);

@@ -1,5 +1,32 @@
-const round = value => Math.round(value * 1000) / 1000;
-const AUDITS = { amber_lights_run: "Ignored a safe amber stop or sped up to beat the light", collisions: "Collision", red_lights_run: "Red light", stop_signs_run: "Missed stop", failed_to_yield: "Failed to yield", plow_right_passes: "Passed a snow plow on the right", merge_cut_ins: "Merged out of turn at a lane closure", close_passes: "Passed a cyclist closer than the minimum passing distance", hump_hits: "Took a speed hump too fast", crew_close_passes: "Passed a garbage crew worker too close", guard_violations: "Drove past a school crossing guard's STOP sign", pxo_early_goes: "Left a pedestrian crossover before the far curb", illegal_turns: "Made a prohibited turn", contraflow_conflicts: "Cut off or squeezed a cyclist riding against the one-way", fresh_green_conflicts: "Entered on green ahead of a car running the red", reversing_conflicts: "Squeezed past or failed to stop for a car backing out of a driveway", pothole_hits: "Hit a pothole too fast", ball_warnings_ignored: "Drove on past where a ball rolled out, too fast to stop for a child after it", wildlife_conflicts: "Drove into or too close to geese crossing the road", brake_checks: "Braked hard with a tailgater close behind, with nothing ahead calling for it", ice_overspeed: "Crossed black ice too fast, or braked or steered hard on it", snowbank_conflicts: "Entered a stretch narrowed by snowbanks while it was an oncoming car's turn", pedestrians_splashed: "Splashed a pedestrian from a puddle at the kerb", parking_conflicts: "Blocked or went round a car parallel parking ahead", closure_entries: "Drove past a ROAD CLOSED barricade onto a closed block", officer_violations: "Went on when a police officer directing traffic signalled stop" };
+const round = (value) => Math.round(value * 1000) / 1000;
+const AUDITS = {
+  amber_lights_run: "Ignored a safe amber stop or sped up to beat the light",
+  collisions: "Collision",
+  red_lights_run: "Red light",
+  stop_signs_run: "Missed stop",
+  failed_to_yield: "Failed to yield",
+  plow_right_passes: "Passed a snow plow on the right",
+  merge_cut_ins: "Merged out of turn at a lane closure",
+  close_passes: "Passed a cyclist closer than the minimum passing distance",
+  hump_hits: "Took a speed hump too fast",
+  crew_close_passes: "Passed a garbage crew worker too close",
+  guard_violations: "Drove past a school crossing guard's STOP sign",
+  pxo_early_goes: "Left a pedestrian crossover before the far curb",
+  illegal_turns: "Made a prohibited turn",
+  contraflow_conflicts: "Cut off or squeezed a cyclist riding against the one-way",
+  fresh_green_conflicts: "Entered on green ahead of a car running the red",
+  reversing_conflicts: "Squeezed past or failed to stop for a car backing out of a driveway",
+  pothole_hits: "Hit a pothole too fast",
+  ball_warnings_ignored: "Drove on past where a ball rolled out, too fast to stop for a child after it",
+  wildlife_conflicts: "Drove into or too close to geese crossing the road",
+  brake_checks: "Braked hard with a tailgater close behind, with nothing ahead calling for it",
+  ice_overspeed: "Crossed black ice too fast, or braked or steered hard on it",
+  snowbank_conflicts: "Entered a stretch narrowed by snowbanks while it was an oncoming car's turn",
+  pedestrians_splashed: "Splashed a pedestrian from a puddle at the kerb",
+  parking_conflicts: "Blocked or went round a car parallel parking ahead",
+  closure_entries: "Drove past a ROAD CLOSED barricade onto a closed block",
+  officer_violations: "Went on when a police officer directing traffic signalled stop",
+};
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and
 // source, and its fallback error and hazard flags when it has any. A run of such records with the same
@@ -7,29 +34,45 @@ export const MAX_TRACE_DECISIONS = 600;
 // many it stands for (`repeats`) and when the last was made (`until_s`). Most of a drive is the same
 // choice made again every few hundred milliseconds, so this keeps a run of every challenge small enough
 // for saved history (lab/history.js).
-const same = (a, b) => a.chosen_id === b.chosen_id && a.motion === b.motion && a.headlights === b.headlights && a.source === b.source
-  && (a.error || null) === (b.error || null) && (a.flags || []).join("\n") === (b.flags || []).join("\n");
+const same = (a, b) =>
+  a.chosen_id === b.chosen_id &&
+  a.motion === b.motion &&
+  a.headlights === b.headlights &&
+  a.source === b.source &&
+  (a.error || null) === (b.error || null) &&
+  (a.flags || []).join("\n") === (b.flags || []).join("\n");
 export function compactDecision(d) {
   const out = { id: d.id, at_s: d.at_s, chosen_id: d.chosen_id, motion: d.motion, source: d.source };
   if (d.headlights) out.headlights = d.headlights;
   if (d.error) out.error = d.error;
   if (d.flags?.length) out.flags = d.flags;
-  if (d.repeats > 1) { out.repeats = d.repeats; out.until_s = d.until_s; }
+  if (d.repeats > 1) {
+    out.repeats = d.repeats;
+    out.until_s = d.until_s;
+  }
   return out;
 }
 export class EvaluationTrace {
   constructor() {
-    this.decisions = []; this.events = []; this.latest = null; this.truncated = false; this.nextId = 1;
-    this.audit = {}; this.hardBrakes = 0; this.offRoadRecorded = false;
+    this.decisions = [];
+    this.events = [];
+    this.latest = null;
+    this.truncated = false;
+    this.nextId = 1;
+    this.audit = {};
+    this.hardBrakes = 0;
+    this.offRoadRecorded = false;
   }
   // The latest decision, once a newer one replaces it: compact unless an event links to it, and folded
   // into the record before it when it repeats it.
   settle() {
     const d = this.latest;
     if (!d || d.context_recorded) return;
-    const i = this.decisions.indexOf(d), before = this.decisions[i - 1];
+    const i = this.decisions.indexOf(d),
+      before = this.decisions[i - 1];
     if (before && !before.context_recorded && same(before, d)) {
-      before.repeats = (before.repeats || 1) + 1; before.until_s = d.at_s;
+      before.repeats = (before.repeats || 1) + 1;
+      before.until_s = d.at_s;
       this.decisions.splice(i, 1);
     } else this.decisions[i] = compactDecision(d);
   }
@@ -38,20 +81,48 @@ export class EvaluationTrace {
     this.settle();
     const observation = { ...(decision.state || {}) };
     // Candidate predictions are already represented below; duplicating them makes a default suite exceed localStorage.
-    delete observation.candidates; delete observation.rejected;
-    const d = { id: this.nextId++, at_s: round(at), chosen_id: decision.chosenId, motion: decision.motion, ...(decision.headlights ? { headlights: decision.headlights } : {}),
-      source: decision.meta?.source || "unknown", error: decision.meta?.error || decision.meta?.fallback || null, context_recorded: false,
-      flags: [...(decision.flags || [])], state: JSON.parse(JSON.stringify(observation)),
-      candidates: (decision.candidates || []).map(c => ({ id: c.id, eligible: c.eligible, reject: c.reject || null,
-        target_mps: Number.isFinite(c.law?.vTarget) ? c.law.vTarget : null })) };
-    if (this.decisions.length < MAX_TRACE_DECISIONS) { this.decisions.push(d); this.latest = d; }
-    else { this.latest = null; this.truncated = true; }
+    delete observation.candidates;
+    delete observation.rejected;
+    const d = {
+      id: this.nextId++,
+      at_s: round(at),
+      chosen_id: decision.chosenId,
+      motion: decision.motion,
+      ...(decision.headlights ? { headlights: decision.headlights } : {}),
+      source: decision.meta?.source || "unknown",
+      error: decision.meta?.error || decision.meta?.fallback || null,
+      context_recorded: false,
+      flags: [...(decision.flags || [])],
+      state: JSON.parse(JSON.stringify(observation)),
+      candidates: (decision.candidates || []).map((c) => ({
+        id: c.id,
+        eligible: c.eligible,
+        reject: c.reject || null,
+        target_mps: Number.isFinite(c.law?.vTarget) ? c.law.vTarget : null,
+      })),
+    };
+    if (this.decisions.length < MAX_TRACE_DECISIONS) {
+      this.decisions.push(d);
+      this.latest = d;
+    } else {
+      this.latest = null;
+      this.truncated = true;
+    }
   }
   event(type, message, at, extra = {}) {
-    if (this.events.length >= 1000) { this.truncated = true; return; }
+    if (this.events.length >= 1000) {
+      this.truncated = true;
+      return;
+    }
     if (this.latest) this.latest.context_recorded = true;
-    this.events.push({ ...extra, type, message: String(message).slice(0, 240), at_s: round(at), decision_id: this.latest?.id ?? null,
-      decision_age_s: this.latest ? round(Math.max(0, at - this.latest.at_s)) : null });
+    this.events.push({
+      ...extra,
+      type,
+      message: String(message).slice(0, 240),
+      at_s: round(at),
+      decision_id: this.latest?.id ?? null,
+      decision_age_s: this.latest ? round(Math.max(0, at - this.latest.at_s)) : null,
+    });
   }
   measurements(world, score) {
     // Read counters directly: the coaching report's 100-incident limit must not hide later failures.
@@ -61,27 +132,34 @@ export class EvaluationTrace {
       this.audit[key] = world.violations[key] || 0;
     }
     if (!this.glareRecorded && world.highBeamsSeen && world.violations.glare_seconds > 0.8) {
-      this.event("glare", "Failed to dip high beams", world.t); this.glareRecorded = true;
+      this.event("glare", "Failed to dip high beams", world.t);
+      this.glareRecorded = true;
     }
     if (!this.sunGlareRecorded && world.sunGlareSeen && world.violations.glare_speeding_seconds > 1) {
-      this.event("sun_glare", "Drove too fast to stop within sight in sun glare", world.t); this.sunGlareRecorded = true;
+      this.event("sun_glare", "Drove too fast to stop within sight in sun glare", world.t);
+      this.sunGlareRecorded = true;
     }
     if (score.followingEnabled && score.closeFollowing >= 1 && !this.followingRecorded) {
-      this.event("following_gap", "Following gap remained short after time to react", world.t); this.followingRecorded = true;
+      this.event("following_gap", "Following gap remained short after time to react", world.t);
+      this.followingRecorded = true;
     }
-    if (score.hardBrakes > this.hardBrakes) this.event("hard_brake", "Hard braking", world.t, { count: score.hardBrakes - this.hardBrakes });
+    if (score.hardBrakes > this.hardBrakes)
+      this.event("hard_brake", "Hard braking", world.t, { count: score.hardBrakes - this.hardBrakes });
     this.hardBrakes = score.hardBrakes;
     if (!this.offRoadRecorded && world.violations.off_road_s >= 1) {
-      this.event("off_road", "One second off-road: evaluation failed", world.t); this.offRoadRecorded = true;
+      this.event("off_road", "One second off-road: evaluation failed", world.t);
+      this.offRoadRecorded = true;
     }
   }
   export() {
     // (the latest decision too, unless an event links to it, leaving the trace as it is)
-    const decisions = [...this.decisions], last = this.latest;
+    const decisions = [...this.decisions],
+      last = this.latest;
     if (last && !last.context_recorded) {
       const before = decisions.at(-2);
       decisions.pop();
-      if (before && !before.context_recorded && same(before, last)) decisions[decisions.length - 1] = { ...before, repeats: (before.repeats || 1) + 1, until_s: last.at_s };
+      if (before && !before.context_recorded && same(before, last))
+        decisions[decisions.length - 1] = { ...before, repeats: (before.repeats || 1) + 1, until_s: last.at_s };
       else decisions.push(compactDecision(last));
     }
     return { decisions_trace: decisions, events: this.events, trace_truncated: this.truncated };

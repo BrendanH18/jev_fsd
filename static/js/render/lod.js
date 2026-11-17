@@ -15,7 +15,9 @@ export function chunkLOD(near, far, distance = 100) {
   lod.addLevel(far, distance + sphere.radius, 0.1);
   // The sun's shadow patch follows the car. Distant scenery contributes its silhouette to the
   // main/reflection views, but only nearby detail casts shadows into that patch.
-  far.traverse((object) => { if (object.isMesh) object.castShadow = false; });
+  far.traverse((object) => {
+    if (object.isMesh) object.castShadow = false;
+  });
   lod.updateMatrixWorld(true);
   // These chunks never move. Instance-buffer edits (such as a parked car pulling out) still
   // upload normally, but neither level needs its object transforms rebuilt each render pass.

@@ -41,22 +41,64 @@ export const TOUCH_BUTTONS = Object.freeze([
 export class TouchControls {
   constructor({ root = document.body, actions = {} } = {}) {
     this.actions = actions;
-    this.steerPointer = null; this.steerStart = 0; this.steer = 0;
+    this.steerPointer = null;
+    this.steerStart = 0;
+    this.steer = 0;
     this.pedals = { throttle: new Set(), brake: new Set() };
     this.knob = h("span", { class: "touch-steer-knob", "aria-hidden": "true" }, "◀ ▶");
-    this.wheel = h("div", { class: "touch-steer", role: "slider", "aria-label": "Steering: slide left or right",
-      "aria-valuemin": "-100", "aria-valuemax": "100", "aria-valuenow": "0" },
-      h("span", { class: "touch-steer-track", "aria-hidden": "true" }), this.knob,
-      h("span", { class: "touch-caption" }, "steer"));
+    this.wheel = h(
+      "div",
+      {
+        class: "touch-steer",
+        role: "slider",
+        "aria-label": "Steering: slide left or right",
+        "aria-valuemin": "-100",
+        "aria-valuemax": "100",
+        "aria-valuenow": "0",
+      },
+      h("span", { class: "touch-steer-track", "aria-hidden": "true" }),
+      this.knob,
+      h("span", { class: "touch-caption" }, "steer"),
+    );
     this.pedalEls = {
-      brake: h("div", { class: "touch-pedal touch-brake", role: "button", "aria-label": "Brake (reverses when stopped)", "aria-pressed": "false" }, "Brake"),
-      throttle: h("div", { class: "touch-pedal touch-throttle", role: "button", "aria-label": "Accelerator", "aria-pressed": "false" }, "Go"),
+      brake: h(
+        "div",
+        {
+          class: "touch-pedal touch-brake",
+          role: "button",
+          "aria-label": "Brake (reverses when stopped)",
+          "aria-pressed": "false",
+        },
+        "Brake",
+      ),
+      throttle: h(
+        "div",
+        { class: "touch-pedal touch-throttle", role: "button", "aria-label": "Accelerator", "aria-pressed": "false" },
+        "Go",
+      ),
     };
-    this.buttons = TOUCH_BUTTONS.map(b => h("button", { type: "button", class: "touch-button", "data-action": b.action, title: b.title, "aria-label": b.title,
-      onclick: () => this.actions[b.action]?.() }, b.label));
-    this.el = h("div", { id: "touch-controls", class: "touch-controls", role: "group", "aria-label": "Touch driving controls" },
-      this.wheel, h("div", { class: "touch-buttons" }, this.buttons), h("div", { class: "touch-pedals" }, this.pedalEls.brake, this.pedalEls.throttle));
-    this.el.addEventListener("contextmenu", ev => ev.preventDefault());
+    this.buttons = TOUCH_BUTTONS.map((b) =>
+      h(
+        "button",
+        {
+          type: "button",
+          class: "touch-button",
+          "data-action": b.action,
+          title: b.title,
+          "aria-label": b.title,
+          onclick: () => this.actions[b.action]?.(),
+        },
+        b.label,
+      ),
+    );
+    this.el = h(
+      "div",
+      { id: "touch-controls", class: "touch-controls", role: "group", "aria-label": "Touch driving controls" },
+      this.wheel,
+      h("div", { class: "touch-buttons" }, this.buttons),
+      h("div", { class: "touch-pedals" }, this.pedalEls.brake, this.pedalEls.throttle),
+    );
+    this.el.addEventListener("contextmenu", (ev) => ev.preventDefault());
     this.bindSteering();
     for (const [name, el] of Object.entries(this.pedalEls)) this.bindPedal(name, el);
     root.append(this.el);
@@ -64,18 +106,24 @@ export class TouchControls {
   }
 
   bindSteering() {
-    const end = ev => {
+    const end = (ev) => {
       if (ev.pointerId !== this.steerPointer) return;
-      this.steerPointer = null; this.setSteer(0);
+      this.steerPointer = null;
+      this.setSteer(0);
     };
-    this.wheel.addEventListener("pointerdown", ev => {
+    this.wheel.addEventListener("pointerdown", (ev) => {
       if (this.steerPointer != null) return;
       ev.preventDefault();
-      this.steerPointer = ev.pointerId; this.steerStart = ev.clientX;
-      try { this.wheel.setPointerCapture(ev.pointerId); } catch { /* synthetic pointers have no capture */ }
+      this.steerPointer = ev.pointerId;
+      this.steerStart = ev.clientX;
+      try {
+        this.wheel.setPointerCapture(ev.pointerId);
+      } catch {
+        /* synthetic pointers have no capture */
+      }
       this.wheel.classList.add("active");
     });
-    this.wheel.addEventListener("pointermove", ev => {
+    this.wheel.addEventListener("pointermove", (ev) => {
       if (ev.pointerId === this.steerPointer) this.setSteer(steerFromDrag(ev.clientX - this.steerStart));
     });
     for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) this.wheel.addEventListener(type, end);
@@ -83,11 +131,17 @@ export class TouchControls {
 
   bindPedal(name, el) {
     const held = this.pedals[name];
-    const release = ev => { if (held.delete(ev.pointerId)) this.showPedal(name); };
-    el.addEventListener("pointerdown", ev => {
+    const release = (ev) => {
+      if (held.delete(ev.pointerId)) this.showPedal(name);
+    };
+    el.addEventListener("pointerdown", (ev) => {
       ev.preventDefault();
       held.add(ev.pointerId);
-      try { el.setPointerCapture(ev.pointerId); } catch { /* synthetic pointers have no capture */ }
+      try {
+        el.setPointerCapture(ev.pointerId);
+      } catch {
+        /* synthetic pointers have no capture */
+      }
       this.showPedal(name);
     });
     for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(type, release);
@@ -106,13 +160,17 @@ export class TouchControls {
   }
   // Let go of everything (the page lost focus, or a dialog opened over the controls).
   release() {
-    this.steerPointer = null; this.setSteer(0);
-    for (const name of Object.keys(this.pedals)) { this.pedals[name].clear(); this.showPedal(name); }
+    this.steerPointer = null;
+    this.setSteer(0);
+    for (const name of Object.keys(this.pedals)) {
+      this.pedals[name].clear();
+      this.showPedal(name);
+    }
   }
   setAutopilot(on) {
     if (this.autopilotOn === !!on) return;
     this.autopilotOn = !!on;
-    const button = this.buttons.find(b => b.dataset.action === "autopilot");
+    const button = this.buttons.find((b) => b.dataset.action === "autopilot");
     button.setAttribute("aria-pressed", String(!!on));
     button.textContent = on ? "Auto on" : "Auto";
     this.el.classList.toggle("autopilot", !!on);
@@ -120,6 +178,11 @@ export class TouchControls {
   // The controls' driving state, the same shape as a gamepad's (ui/gamepad.js readPad).
   get state() {
     if (this.el.hidden) return { ...IDLE };
-    return { steer: this.steer, throttle: this.pedals.throttle.size ? 1 : 0, brake: this.pedals.brake.size ? 1 : 0, hardBrake: false };
+    return {
+      steer: this.steer,
+      throttle: this.pedals.throttle.size ? 1 : 0,
+      brake: this.pedals.brake.size ? 1 : 0,
+      hardBrake: false,
+    };
   }
 }

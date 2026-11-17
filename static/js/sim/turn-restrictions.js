@@ -1,14 +1,21 @@
 // Local calendar: Monday=0 by default, explicitly supplied by callers; no wall-clock time.
 export function restrictionActive(r, clock) {
-  if (r.suppressed_conditions?.some(condition => restrictionActive({ condition }, clock))) return false;
+  if (r.suppressed_conditions?.some((condition) => restrictionActive({ condition }, clock))) return false;
   const c = r.condition;
   if (!c) return true;
-  const t = (clock?.hour ?? 15.5) * 60, day = clock?.weekday ?? 0;
-  return c.start <= c.end ? c.days.includes(day) && t >= c.start && t < c.end
+  const t = (clock?.hour ?? 15.5) * 60,
+    day = clock?.weekday ?? 0;
+  return c.start <= c.end
+    ? c.days.includes(day) && t >= c.start && t < c.end
     : (c.days.includes(day) && t >= c.start) || (c.days.includes((day + 6) % 7) && t < c.end);
 }
 export function turnBanned(map, from, to, clock) {
-  return (map.restrictions || []).some(r => r.from === from && restrictionActive(r, clock) && (r.kind.startsWith('only_') ? !r.to.includes(to) : r.to.includes(to)));
+  return (map.restrictions || []).some(
+    (r) =>
+      r.from === from &&
+      restrictionActive(r, clock) &&
+      (r.kind.startsWith("only_") ? !r.to.includes(to) : r.to.includes(to)),
+  );
 }
 export function turnRestrictionAhead(world, s) {
   if (!world.restrictions || !world.route) return null;
@@ -16,13 +23,20 @@ export function turnRestrictionAhead(world, s) {
   const route = world.route;
   let first = null;
   for (let i = 0; i < route.edges.length - 1; i++) {
-    const records = (world.map.restrictions || []).filter(r => r.from === route.edges[i]);
+    const records = (world.map.restrictions || []).filter((r) => r.from === route.edges[i]);
     if (!records.length) continue;
     const edge = world.map.edges.get(route.edges[i]);
     const at = route.laneEdgeStarts()[i + 1];
     const distance = at - s;
     if (distance < -3 || distance > 100) continue;
-    const hit = { from: edge.id, to: route.edges[i+1], distance_m: distance, kinds: records.map(r => r.kind), in_effect: records.some(r => restrictionActive(r, world.clock)), banned: turnBanned(world.map, edge.id, route.edges[i+1], world.clock) };
+    const hit = {
+      from: edge.id,
+      to: route.edges[i + 1],
+      distance_m: distance,
+      kinds: records.map((r) => r.kind),
+      in_effect: records.some((r) => restrictionActive(r, world.clock)),
+      banned: turnBanned(world.map, edge.id, route.edges[i + 1], world.clock),
+    };
     if (hit.banned) return hit;
     first ||= hit;
   }
@@ -34,20 +48,31 @@ export function auditRestrictions(world) {
   const edge = near?.lane.edgeRef;
   if (!edge) return;
   const prior = world.restrictionEdge;
-  if ((world.map.restrictions || []).some(r => r.from === edge.id && restrictionActive(r, world.clock))) world.restrictionsSeen = true;
+  if ((world.map.restrictions || []).some((r) => r.from === edge.id && restrictionActive(r, world.clock)))
+    world.restrictionsSeen = true;
   // Inside a junction, a turning car can be nearest the start of a different exit. Keep the
   // approach until it is aligned with, and a little way along, the actual outgoing lane.
   // Short links still confirm by their midpoint. This uses the driven path, not navigation.
   // Mid-turn it can equally be nearest the end of another approach into the same junction (Calgary's
   // slip lane e561 beside Royal Avenue's e564): that is still the junction, not a new approach.
   const margin = Math.min(8, near.lane.length / 2);
-  if (prior && prior !== edge.id && (near.s < margin
-    || (world.map.edges.get(prior)?.to === edge.to && near.lane.length - near.s < margin)
-    || Math.cos(world.ego.psi - near.heading) < 0.5)) return;
-  if (prior && prior !== edge.id && world.map.edges.get(prior)?.to === edge.from && turnBanned(world.map, prior, edge.id, world.clock)) {
+  if (
+    prior &&
+    prior !== edge.id &&
+    (near.s < margin ||
+      (world.map.edges.get(prior)?.to === edge.to && near.lane.length - near.s < margin) ||
+      Math.cos(world.ego.psi - near.heading) < 0.5)
+  )
+    return;
+  if (
+    prior &&
+    prior !== edge.id &&
+    world.map.edges.get(prior)?.to === edge.from &&
+    turnBanned(world.map, prior, edge.id, world.clock)
+  ) {
     world.restrictionsSeen = true;
     world.violations.illegal_turns = (world.violations.illegal_turns || 0) + 1;
-    world.events.push({ type: 'illegal_turn', from: prior, to: edge.id });
+    world.events.push({ type: "illegal_turn", from: prior, to: edge.id });
   }
   world.restrictionEdge = edge.id;
 }

@@ -8,9 +8,15 @@ export async function api(path, body, { signal } = {}) {
     const { demoApi } = await import("./demo/api.js");
     return demoApi(path, body, { signal });
   }
-  const opts = body === undefined
-    ? { headers: { "X-Jev-Token": TOKEN }, signal }
-    : { method: "POST", headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN }, body: JSON.stringify(body), signal };
+  const opts =
+    body === undefined
+      ? { headers: { "X-Jev-Token": TOKEN }, signal }
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
+          body: JSON.stringify(body),
+          signal,
+        };
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({ error: "Invalid response from server" }));
   if (!res.ok) {
@@ -44,8 +50,7 @@ export function h(tag, attrs = {}, ...children) {
         if (property.startsWith("--")) node.style.setProperty(property, value);
         else node.style[property] = value;
       }
-    }
-    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+    } else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v === true ? "" : v);
   }
   for (const child of children.flat(Infinity)) {
@@ -63,22 +68,33 @@ export function percentile(values, p) {
 }
 
 export async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Seeded RNG (mulberry32) so traffic is reproducible.
 export function rng(seed) {
   let a = seed >>> 0;
   const random = () => {
-    a = (a + 0x6D2B79F5) >>> 0;
+    a = (a + 0x6d2b79f5) >>> 0;
     let t = a;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   random.getState = () => a >>> 0;
-  random.setState = value => { a = value >>> 0; };
-  random.clone = () => { const next = rng(0); next.setState(a); return next; };
+  random.setState = (value) => {
+    a = value >>> 0;
+  };
+  random.clone = () => {
+    const next = rng(0);
+    next.setState(a);
+    return next;
+  };
   return random;
 }
 

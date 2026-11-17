@@ -59,7 +59,7 @@ How to choose \`candidate\`:
 ${promptLines("driveways")}- Snowbanks (\`snowbank\`): where they push the parked cars out and leave room for one car at a time (\`snowbank.narrowing\`), drivers take turns, whoever is already in the stretch or got to their end first going first. Choose \`wait_for_oncoming_narrowing\` when \`snowbank.narrowing.wait\` is true, and keep the car stopped there until the oncoming car is through; never enter while it is their turn. A high snowbank at a corner (\`snowbank.corner_hidden\`) hides people waiting to cross: creep up, ready to stop.
 ${promptLines("snowbanks")}- In the rain, watch for puddles by the kerb with people beside them (\`puddle\`). Never splash a pedestrian. When \`puddle.room_in_lane\` is true and \`ease_to_m\` is given, choose \`ease_round_puddle\`: it moves over inside the lane so that the wheels miss it, without slowing. When \`room_in_lane\` is false, prefer a candidate whose \`end_speed\` is at or below \`car.target_speed\`, which slows to \`puddle.go_through_at\` by the time the wheels reach it. Never cross a lane line to avoid a puddle. A puddle with nobody near is just water.
 - A car ahead signalling right and slowing to stop beside a gap in the parked cars is about to parallel park (\`parking_ahead\`). Stop well back, short of the room it reverses into, and wait until it is in: choose \`wait_for_parker\` while \`parking_ahead.wait\` is true, and keep the car stopped there. Never creep up behind it, and never go round it while it signals or reverses. If the car is already inside that room (\`parking_ahead.in_its_room\`), hold still.
-- A police officer directing traffic at a junction (\`traffic_officer\`) overrides the signal, whatever it shows, even when its lights are out. When \`traffic_officer.direction\` is \"stop\", choose \`wait_for_officer\`: stop at the line and stay stopped there, even on a green, until the officer waves the car on. When it is \"go\", go on (\`go_on_officer_wave\`), even on a red, still yielding to pedestrians and traffic already in the junction and, turning left, to oncoming traffic.
+- A police officer directing traffic at a junction (\`traffic_officer\`) overrides the signal, whatever it shows, even when its lights are out. When \`traffic_officer.direction\` is "stop", choose \`wait_for_officer\`: stop at the line and stay stopped there, even on a green, until the officer waves the car on. When it is "go", go on (\`go_on_officer_wave\`), even on a red, still yielding to pedestrians and traffic already in the junction and, turning left, to oncoming traffic.
 - A car tailgating close behind (\`tailgater\`) cannot stop if the car brakes suddenly. Never brake-check it: brake no harder than \`tailgater.brake_no_harder_than_mps2\` unless something ahead calls for more, start braking early and gently, and never speed up to please it. Keep twice the usual gap ahead. When \`tailgater.move_right_to_let_it_pass\` is true, choose \`let_tailgater_pass\`; otherwise prefer \`ease_off_for_tailgater\` where it is offered.
 - Near freezing (\`ice_caution\`), black ice forms first on bridges, overpasses and shaded stretches, and it is nearly invisible. Keep to \`ice_caution.bridge.keep_to\` across a bridge. Once \`black_ice\` is reported, choose \`slow_for_ice\` (or another candidate whose \`end_speed\` is at or below \`car.target_speed\`): slow on the dry road, before the ice, to \`black_ice.cross_at\`, then cross it steadily. On the ice (\`black_ice.under_car\`), never brake, accelerate or steer sharply: ease off and hold steady until the car is off it, and leave extra room to anything ahead.
 - Choose \`stop_for_crossing_guard\` when \`situation\` says a school crossing guard holds up the STOP sign at a crosswalk ahead, or the guard or a child is still in the road there: stop short of the crosswalk, and keep the car stopped until \`crossing_guard.stop\` is gone, when the guard and every child are off the road, even once the car's own lane is clear. With children waiting at the curb, slow down, ready to stop.
@@ -106,12 +106,15 @@ export function buildLlmPrompt(snap, request) {
   // `units` lives in the system message; candidates and route options are listed separately below.
   const { driving_style, units, candidates = [], rejected, route_options, ...observed } = state;
   const input = { driving_style, situation: snap ? situationClauses(snap) : [], observed };
-  if (expect.candidate) input.candidates = candidates.filter(c => expect.candidate.includes(c.id));
+  if (expect.candidate) input.candidates = candidates.filter((c) => expect.candidate.includes(c.id));
   if (expect.motion) input.motion_options = questions.motion.criteria;
   if (expect.route) input.route_options = questions.route.criteria;
   input.answer = expect;
   return {
-    messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }],
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: JSON.stringify(input) },
+    ],
     expect,
   };
 }

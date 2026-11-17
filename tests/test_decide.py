@@ -5,7 +5,8 @@ from helpers import FakeClient
 from jev.decide import InvalidRequest, jev_decide, validate_request
 
 GOOD = {
-    "tick": 5, "epoch": 1,
+    "tick": 5,
+    "epoch": 1,
     "state": {"car": {"speed": 8.0}, "candidates": [{"id": "keep_lane_hold"}, {"id": "hard_brake"}]},
     "questions": {
         "motion": {"type": "choice", "instructions": "Drive or stop?", "criteria": {"drive": "go", "stop": "halt"}},
@@ -16,8 +17,18 @@ GOOD = {
 
 class ValidateTests(unittest.TestCase):
     def test_optional_headlight_actuation_question(self):
-        req = validate_request(dict(GOOD, questions={"headlights": {
-            "type": "choice", "instructions": "Choose the beam", "criteria": {"high": "clear dark street", "low": "dip"}}}))
+        req = validate_request(
+            dict(
+                GOOD,
+                questions={
+                    "headlights": {
+                        "type": "choice",
+                        "instructions": "Choose the beam",
+                        "criteria": {"high": "clear dark street", "low": "dip"},
+                    }
+                },
+            )
+        )
         self.assertIn("headlights", req["questions"])
 
     def test_good_request(self):
@@ -39,10 +50,13 @@ class ValidateTests(unittest.TestCase):
             dict(GOOD, questions={"free_text": GOOD["questions"]["motion"]}),
             dict(GOOD, questions={"motion": {"type": "noul", "instructions": "?"}}),
             dict(GOOD, questions={"motion": {"type": "choice", "instructions": "?", "criteria": {}}}),
-            dict(GOOD, questions={"motion": {"type": "choice", "instructions": "?",
-                                              "criteria": {str(i): None for i in range(40)}}}),
-            dict(GOOD, questions={"motion": {"type": "choice", "instructions": "x" * 6001,
-                                              "criteria": {"a": None}}}),
+            dict(
+                GOOD,
+                questions={
+                    "motion": {"type": "choice", "instructions": "?", "criteria": {str(i): None for i in range(40)}}
+                },
+            ),
+            dict(GOOD, questions={"motion": {"type": "choice", "instructions": "x" * 6001, "criteria": {"a": None}}}),
             dict(GOOD, tick="5"),
         ]
         for body in bad:

@@ -14,7 +14,7 @@ import { chunkLOD } from "./lod.js";
 
 const CHUNK = 180;
 const LEAF = [0x4d7a2e, 0x5a8a34, 0x668f3a, 0x42692c, 0x6f9440, 0x547f31, 0x5b7a2f];
-const PLUM = 0x7a3c4c;      // purple-leaf plums line many Vancouver side streets
+const PLUM = 0x7a3c4c; // purple-leaf plums line many Vancouver side streets
 const NEEDLE = [0x33502f, 0x2d4a36, 0x3b5a3c];
 const VARIANTS = 3;
 
@@ -25,19 +25,23 @@ function crownGeometry(seed, count = 150, cardScale = 1) {
   const cards = [];
   for (let i = 0; i < count; i++) {
     // points biased toward the surface of a slightly flattened, lumpy ellipsoid
-    const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2;
+    const u = rnd() * 2 - 1,
+      th = rnd() * Math.PI * 2;
     const r = Math.sqrt(1 - u * u);
     const dir = new THREE.Vector3(r * Math.cos(th), u * 0.85, r * Math.sin(th));
     const lump = 0.8 + 0.25 * Math.sin(th * 3 + seed) * Math.cos(u * 4 + seed);
-    const depth = 0.55 + 0.45 * Math.pow(rnd(), 0.5);
+    const depth = 0.55 + 0.45 * rnd() ** 0.5;
     // larger cards sit a little deeper, so the crown's silhouette keeps its size
-    const c = dir.clone().multiplyScalar(lump * depth / Math.sqrt(cardScale));
+    const c = dir.clone().multiplyScalar((lump * depth) / Math.sqrt(cardScale));
     const size = (0.55 + rnd() * 0.35) * cardScale;
     const g = new THREE.PlaneGeometry(size, size);
-    g.rotateX(rnd() * Math.PI); g.rotateY(rnd() * Math.PI * 2); g.rotateZ(rnd() * Math.PI);
+    g.rotateX(rnd() * Math.PI);
+    g.rotateY(rnd() * Math.PI * 2);
+    g.rotateZ(rnd() * Math.PI);
     g.translate(c.x, c.y, c.z);
     // crown-space normals: out from the center, a little toward the card's own position
-    const pos = g.attributes.position, nrm = g.attributes.normal;
+    const pos = g.attributes.position,
+      nrm = g.attributes.normal;
     for (let k = 0; k < pos.count; k++) {
       const n = new THREE.Vector3(pos.getX(k), pos.getY(k) * 1.2, pos.getZ(k)).normalize();
       nrm.setXYZ(k, n.x, n.y, n.z);
@@ -50,7 +54,8 @@ function crownGeometry(seed, count = 150, cardScale = 1) {
 // The crown's dark interior, so gaps between cards read as shade rather than sky.
 function coreGeometry(seed, detail = 2) {
   let g = new THREE.IcosahedronGeometry(1, detail);
-  g.deleteAttribute("normal"); g.deleteAttribute("uv");
+  g.deleteAttribute("normal");
+  g.deleteAttribute("uv");
   g = mergeVertices(g);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
@@ -76,18 +81,24 @@ function leafyCore(material, leafMap) {
     shader.fragmentShader = shader.fragmentShader
       // The leaf card texture clamps at its edges; tile it here, with gradients taken from the
       // continuous coordinate so the wrap does not pick a blurry mip level along a seam.
-      .replace("#include <common>", `#include <common>
+      .replace(
+        "#include <common>",
+        `#include <common>
         uniform sampler2D coreLeaves;
         varying vec3 vCorePos;
         varying vec3 vCoreNormal;
-        vec4 coreLeafSample(vec2 uv) { return textureGrad(coreLeaves, fract(uv), dFdx(uv), dFdy(uv)); }`)
-      .replace("#include <map_fragment>", `#include <map_fragment>
+        vec4 coreLeafSample(vec2 uv) { return textureGrad(coreLeaves, fract(uv), dFdx(uv), dFdy(uv)); }`,
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
         vec3 coreW = pow(abs(normalize(vCoreNormal)), vec3(4.0));
         coreW /= coreW.x + coreW.y + coreW.z;
         vec4 leaves = coreLeafSample(vCorePos.yz * 2.2) * coreW.x
           + coreLeafSample(vCorePos.xz * 2.2 + 0.31) * coreW.y
           + coreLeafSample(vCorePos.xy * 2.2 + 0.67) * coreW.z;
-        diffuseColor.rgb *= mix(vec3(0.35), leaves.rgb * 1.8, leaves.a);`);
+        diffuseColor.rgb *= mix(vec3(0.35), leaves.rgb * 1.8, leaves.a);`,
+      );
   };
   const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey.bind(material) : () => "";
   material.customProgramCacheKey = () => `leafy-core-${prevKey()}`;
@@ -107,13 +118,19 @@ function crownShading(material) {
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvCrownDepth = length(position);");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vCrownDepth;")
-      .replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
+      .replace(
+        "#include <normal_fragment_begin>",
+        `#include <normal_fragment_begin>
         #ifdef DOUBLE_SIDED
           normal *= faceDirection;
           nonPerturbedNormal = normal;
-        #endif`)
-      .replace("#include <aomap_fragment>", `#include <aomap_fragment>
-        reflectedLight.indirectDiffuse *= mix(0.45, 1.0, smoothstep(0.35, 1.0, vCrownDepth));`);
+        #endif`,
+      )
+      .replace(
+        "#include <aomap_fragment>",
+        `#include <aomap_fragment>
+        reflectedLight.indirectDiffuse *= mix(0.45, 1.0, smoothstep(0.35, 1.0, vCrownDepth));`,
+      );
   };
   const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey.bind(material) : () => "";
   material.customProgramCacheKey = () => `crown-shading-${prevKey()}`;
@@ -133,7 +150,10 @@ function trunkGeometry(seed) {
     g.translate(0, 0.92, 0);
     parts.push(g);
   }
-  return mergeGeometries(parts.map((p) => p.index ? p.toNonIndexed() : p), false);
+  return mergeGeometries(
+    parts.map((p) => (p.index ? p.toNonIndexed() : p)),
+    false,
+  );
 }
 
 // Conifer: tiers of ragged, drooping cones, each a little narrower than the one below.
@@ -143,7 +163,8 @@ function coniferGeometry(seed, detailed = true) {
   const n = 5;
   for (let t = 0; t < n; t++) {
     const f = t / n;
-    const r = 1 - f * 0.78, h = 0.34;
+    const r = 1 - f * 0.78,
+      h = 0.34;
     const g = new THREE.ConeGeometry(r, h, detailed ? 14 : 7, detailed ? 2 : 1, true);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -159,9 +180,13 @@ function coniferGeometry(seed, detailed = true) {
     tiers.push(g);
   }
   tiers.push(new THREE.ConeGeometry(0.16, 0.22, 8).translate(0, 1.06, 0));
-  const out = mergeGeometries(tiers.map((g) => g.toNonIndexed()), false);
+  const out = mergeGeometries(
+    tiers.map((g) => g.toNonIndexed()),
+    false,
+  );
   // soften: normals lean outward and up, like the crown's
-  const pos = out.attributes.position, nrm = out.attributes.normal;
+  const pos = out.attributes.position,
+    nrm = out.attributes.normal;
   for (let i = 0; i < pos.count; i++) {
     const n = new THREE.Vector3(nrm.getX(i), nrm.getY(i), nrm.getZ(i));
     const radial = new THREE.Vector3(pos.getX(i), 0.35, pos.getZ(i)).normalize();
@@ -179,7 +204,9 @@ function withWind(material, amount) {
     shader.uniforms.uTime = lighting.time;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nuniform float uTime;")
-      .replace("#include <begin_vertex>", `#include <begin_vertex>
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
         #ifdef USE_INSTANCING
           vec3 treePos = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
         #else
@@ -189,7 +216,8 @@ function withWind(material, amount) {
         float reach = clamp(length(position.xz) * 0.8 + position.y * 0.4, 0.0, 1.5);
         float gust = 0.6 + 0.4 * sin(uTime * 0.45 + ph * 0.3);
         transformed.x += ${amount.toFixed(3)} * reach * gust * (sin(uTime * 1.7 + ph + position.y * 2.0) + 0.4 * sin(uTime * 4.1 + ph * 2.3 + position.x * 5.0));
-        transformed.z += ${amount.toFixed(3)} * reach * gust * 0.7 * cos(uTime * 1.3 + ph * 1.4 + position.z * 3.0);`);
+        transformed.z += ${amount.toFixed(3)} * reach * gust * 0.7 * cos(uTime * 1.3 + ph * 1.4 + position.z * 3.0);`,
+      );
   };
   const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey.bind(material) : () => "";
   material.customProgramCacheKey = () => `wind-${amount}-${prevKey()}`;
@@ -199,42 +227,83 @@ function withWind(material, amount) {
 export function buildTrees(map, roads, footprints) {
   const spots = sceneryFor(map).trees;
 
-  const crowns = [], cores = [], trunks = [], conifers = [];
+  const crowns = [],
+    cores = [],
+    trunks = [],
+    conifers = [];
   for (let v = 0; v < VARIANTS; v++) {
-    crowns.push(crownGeometry(v + 1)); cores.push(coreGeometry(v + 1)); trunks.push(trunkGeometry(v + 1)); conifers.push(coniferGeometry(v + 1));
+    crowns.push(crownGeometry(v + 1));
+    cores.push(coreGeometry(v + 1));
+    trunks.push(trunkGeometry(v + 1));
+    conifers.push(coniferGeometry(v + 1));
   }
-  const distantCrown = crownGeometry(1, 40, 1.6), distantCore = coreGeometry(1, 1);
+  const distantCrown = crownGeometry(1, 40, 1.6),
+    distantCore = coreGeometry(1, 1);
   const distantTrunk = new THREE.CylinderGeometry(0.1, 0.17, 1, 5).translate(0, 0.5, 0);
   const distantConifer = coniferGeometry(1, false);
   const leafMap = leafTexture();
   // Alpha to coverage turns the cutout edge into a partial-coverage edge wherever the target is
   // multisampled (Low draws to the antialiased canvas, High to a multisampled scene target). The
   // view switches it off on single-sample targets (see SceneView.applyCoverage).
-  const leafMat = withWind(crownShading(snowable(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: LEAF_CUTOFF, alphaToCoverage: true,
-    side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), "leaf")), 0.05);
+  const leafMat = withWind(
+    crownShading(
+      snowable(
+        new THREE.MeshStandardMaterial({
+          map: leafMap,
+          alphaTest: LEAF_CUTOFF,
+          alphaToCoverage: true,
+          side: THREE.DoubleSide,
+          roughness: 0.78,
+          metalness: 0,
+        }),
+        "leaf",
+      ),
+    ),
+    0.05,
+  );
   leafMat.userData.coverageEdges = true;
   // Shadows sway with the leaves. A still shadow caster under moving leaves shadowed each card by
   // its own offset copy, so dark blotches swam across the crowns in any wind.
-  const leafDepth = withWind(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: LEAF_CUTOFF, side: THREE.DoubleSide }), 0.05);
+  const leafDepth = withWind(
+    new THREE.MeshDepthMaterial({
+      depthPacking: THREE.RGBADepthPacking,
+      map: leafMap,
+      alphaTest: LEAF_CUTOFF,
+      side: THREE.DoubleSide,
+    }),
+    0.05,
+  );
   const coreMat = leafyCore(snowable(new THREE.MeshStandardMaterial({ roughness: 0.95 }), "leaf"), leafMap);
-  const needleMat = withWind(snowable(new THREE.MeshStandardMaterial({ map: needleTexture(), side: THREE.DoubleSide, roughness: 0.85 }), "leaf"), 0.02);
-  const needleDepth = withWind(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide }), 0.02);
+  const needleMat = withWind(
+    snowable(new THREE.MeshStandardMaterial({ map: needleTexture(), side: THREE.DoubleSide, roughness: 0.85 }), "leaf"),
+    0.02,
+  );
+  const needleDepth = withWind(
+    new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide }),
+    0.02,
+  );
   const barkMat = new THREE.MeshStandardMaterial({ map: barkTexture(), color: 0x8a7462, roughness: 0.95 });
 
   const chunks = new Map();
   const bucket = (x, y) => {
     const k = `${Math.floor(x / CHUNK)},${Math.floor(y / CHUNK)}`;
-    if (!chunks.has(k)) chunks.set(k, { trunk: [[], [], []], crown: [[], [], []], core: [[], [], []], conifer: [[], [], []] });
+    if (!chunks.has(k))
+      chunks.set(k, { trunk: [[], [], []], crown: [[], [], []], core: [[], [], []], conifer: [[], [], []] });
     return chunks.get(k);
   };
-  const q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
-  const inst = (x, y, z, sx, sy, sz, rot, col = null) => ({ m: new THREE.Matrix4().compose(toThree(x, y, z), q.clone().setFromAxisAngle(Y, rot), new THREE.Vector3(sx, sy, sz)), col });
+  const q = new THREE.Quaternion(),
+    Y = new THREE.Vector3(0, 1, 0);
+  const inst = (x, y, z, sx, sy, sz, rot, col = null) => ({
+    m: new THREE.Matrix4().compose(toThree(x, y, z), q.clone().setFromAxisAngle(Y, rot), new THREE.Vector3(sx, sy, sz)),
+    col,
+  });
   for (const t of spots) {
     const b = bucket(t.x, t.y);
     const rot = hash01(t.key, 20) * Math.PI * 2;
     const v = Math.floor(hash01(t.key, 26) * VARIANTS);
     if (t.kind === "conifer") {
-      const hgt = (8 + hash01(t.key, 21) * 6) * t.size, r = hgt * 0.26;
+      const hgt = (8 + hash01(t.key, 21) * 6) * t.size,
+        r = hgt * 0.26;
       const c = new THREE.Color(NEEDLE[Math.floor(hash01(t.key, 22) * NEEDLE.length)]);
       b.trunk[v].push(inst(t.x, t.y, 0, 1.2, hgt * 0.3, 1.2, rot));
       b.conifer[v].push(inst(t.x, t.y, 0, r, hgt, r, rot, c));
@@ -254,7 +323,10 @@ export function buildTrees(map, roads, footprints) {
   const emit = (level, geo, mat, list, depthMat = null) => {
     if (!list.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-    list.forEach((it, i) => { mesh.setMatrixAt(i, it.m); if (it.col) mesh.setColorAt(i, it.col); });
+    list.forEach((it, i) => {
+      mesh.setMatrixAt(i, it.m);
+      if (it.col) mesh.setColorAt(i, it.col);
+    });
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     if (depthMat) mesh.customDepthMaterial = depthMat;
@@ -262,7 +334,8 @@ export function buildTrees(map, roads, footprints) {
     level.add(mesh);
   };
   for (const c of chunks.values()) {
-    const near = new THREE.Group(), far = new THREE.Group();
+    const near = new THREE.Group(),
+      far = new THREE.Group();
     for (let v = 0; v < VARIANTS; v++) {
       emit(near, trunks[v], barkMat, c.trunk[v]);
       emit(near, cores[v], coreMat, c.core[v]);

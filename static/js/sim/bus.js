@@ -29,10 +29,10 @@ export const BUS_TAPER_M = 30;
 export const BUS_SLOWING_M = 25;
 const SIGN_TO_FRONT_M = 1;
 const CURB_GAP_M = 0.3;
-const ZONE_BEFORE_M = 10;   // the bus zone starts this far behind a stopped bus's rear
+const ZONE_BEFORE_M = 10; // the bus zone starts this far behind a stopped bus's rear
 const ZONE_AFTER_M = 3;
 const LOOK_BEHIND_M = 90;
-const FAST_GAP_S = 6;       // on a road over 60 km/h, the gap the bus waits for
+const FAST_GAP_S = 6; // on a road over 60 km/h, the gap the bus waits for
 
 export const isBus = (v) => !!v && v.kind === "bus";
 
@@ -68,13 +68,15 @@ const zoneCache = new WeakMap();
 export function busZones(map) {
   if (zoneCache.has(map)) return zoneCache.get(map);
   const zones = new Map();
-  for (const route of map.transit?.routes || []) for (const run of route.runs) for (const stop of run.stops) {
-    if (route.mode === "tram") continue;   // (a streetcar stops in its lane, sim/streetcar.js)
-    const front = busStopFront(map, stop.edge, stop.s);
-    if (front === null) continue;
-    if (!zones.has(stop.edge)) zones.set(stop.edge, []);
-    zones.get(stop.edge).push([front - BUS.length - ZONE_BEFORE_M, front + ZONE_AFTER_M]);
-  }
+  for (const route of map.transit?.routes || [])
+    for (const run of route.runs)
+      for (const stop of run.stops) {
+        if (route.mode === "tram") continue; // (a streetcar stops in its lane, sim/streetcar.js)
+        const front = busStopFront(map, stop.edge, stop.s);
+        if (front === null) continue;
+        if (!zones.has(stop.edge)) zones.set(stop.edge, []);
+        zones.get(stop.edge).push([front - BUS.length - ZONE_BEFORE_M, front + ZONE_AFTER_M]);
+      }
   zoneCache.set(map, zones);
   return zones;
 }
@@ -93,12 +95,19 @@ export function curbShift(edge, laneIdx, width = BUS.width) {
 export function busRelation(o, bus) {
   const t = bus.transit;
   if (!t || o === bus || Math.abs(wrap(o.psi - bus.psi)) > Math.PI / 6) return null;
-  const os = o.spec || CAR, bs = bus.spec, l = bus.toLocal(o.x, o.y);
+  const os = o.spec || CAR,
+    bs = bus.spec,
+    l = bus.toLocal(o.x, o.y);
   if (l.ahead < -LOOK_BEHIND_M || l.ahead > bs.length + 5) return null;
-  const front = l.ahead + Math.cos(o.psi - bus.psi) * (os.length - os.rearOverhang), rear = front - os.length;
+  const front = l.ahead + Math.cos(o.psi - bus.psi) * (os.length - os.rearOverhang),
+    rear = front - os.length;
   const across = l.right + t.shift;
-  return { behind_m: -bs.rearOverhang - front, beside: front > -bs.rearOverhang && rear < bs.length - bs.rearOverhang,
-    across_m: across, inLane: Math.abs(across) < (t.laneWidth || 3.5) / 2 + 0.3 };
+  return {
+    behind_m: -bs.rearOverhang - front,
+    beside: front > -bs.rearOverhang && rear < bs.length - bs.rearOverhang,
+    across_m: across,
+    inLane: Math.abs(across) < (t.laneWidth || 3.5) / 2 + 0.3,
+  };
 }
 
 // Whether a bus is signalling to pull out from a stop (or pulling out), with traffic behind it bound
@@ -130,7 +139,10 @@ export function busMayPullOut(bus, others, yielding = () => false) {
     if (!r || !r.inLane) continue;
     if (r.beside) return false;
     if (r.behind_m < 0 || o.v < 0.3) continue;
-    if (t.limit > BUS_YIELD_LIMIT_MPS) { if (r.behind_m < 10 + o.v * FAST_GAP_S) return false; continue; }
+    if (t.limit > BUS_YIELD_LIMIT_MPS) {
+      if (r.behind_m < 10 + o.v * FAST_GAP_S) return false;
+      continue;
+    }
     if (!canStopFor(o.v, r.behind_m - BUS_YIELD_GAP_M)) return false;
     // (close behind, it must be seen to slow down)
     if (r.behind_m < BUS_SLOWING_M && o.v > 2 && !(o.a < -0.3) && !yielding(o)) return false;
@@ -147,5 +159,5 @@ function wrap(a) {
 // Prefer a mapped reserved lane while it operates; outside its hours use the
 // normal curb lane. Stops still use the existing curb approach and gap checks.
 export function busTravelLane(map, edge, clock) {
-  return (map.buslanes || []).find(l => l.edge === edge.id && busLaneActive(l, clock))?.lane ?? edge.lanes - 1;
+  return (map.buslanes || []).find((l) => l.edge === edge.id && busLaneActive(l, clock))?.lane ?? edge.lanes - 1;
 }

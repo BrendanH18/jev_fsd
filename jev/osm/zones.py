@@ -27,7 +27,7 @@ import json
 import math
 import re
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 from .. import geometry as g
 from . import fetch
@@ -37,10 +37,10 @@ from .project import Projection
 ZONES_VERSION = "1"
 SCHOOL_REACH_M = 22.0
 PLAYGROUND_REACH_M = 35.0
-NODE_R_M = 15.0       # a school or playground mapped as a point is taken as a circle this wide
+NODE_R_M = 15.0  # a school or playground mapped as a point is taken as a circle this wide
 MIN_SPAN_M = 15.0
 JOIN_M = 12.0
-STEP_M = 2.0          # each street is checked this often along its centreline
+STEP_M = 2.0  # each street is checked this often along its centreline
 
 Bbox = Tuple[float, float, float, float]
 Point = Tuple[float, float]
@@ -55,8 +55,9 @@ def load_zones(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_zones(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_zones(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached zones for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = zones_path(maps_dir, bbox)
@@ -97,24 +98,47 @@ def places(osm: OsmData, proj: Projection) -> List[dict]:
     for nid, (lat, lon, tags) in osm.nodes.items():
         kind = kind_of(tags, point=True)
         if kind:
-            out.append({"id": "%sn%d" % (kind[0], nid), "kind": kind, "name": tags.get("name", ""),
-                        "rings": [], "points": [proj.to_xy(lat, lon)]})
+            out.append(
+                {
+                    "id": "%sn%d" % (kind[0], nid),
+                    "kind": kind,
+                    "name": tags.get("name", ""),
+                    "rings": [],
+                    "points": [proj.to_xy(lat, lon)],
+                }
+            )
     ways = {w["id"]: w for w in osm.ways}
     for w in osm.ways:
         kind = kind_of(w["tags"])
         ring = outline(w["nodes"])
         if kind and len(ring) >= 2:
-            out.append({"id": "%sw%d" % (kind[0], w["id"]), "kind": kind, "name": w["tags"].get("name", ""),
-                        "rings": [ring], "points": []})
+            out.append(
+                {
+                    "id": "%sw%d" % (kind[0], w["id"]),
+                    "kind": kind,
+                    "name": w["tags"].get("name", ""),
+                    "rings": [ring],
+                    "points": [],
+                }
+            )
     for r in osm.relations:
         kind = kind_of(r["tags"])
         if not kind:
             continue
-        parts = [ways[ref]["nodes"] for t, ref, role in r["members"] if t == "way" and role in ("outer", "") and ref in ways]
+        parts = [
+            ways[ref]["nodes"] for t, ref, role in r["members"] if t == "way" and role in ("outer", "") and ref in ways
+        ]
         rings = [ring for ring in (outline(nodes) for nodes in _join(parts)) if len(ring) >= 2]
         if rings:
-            out.append({"id": "%sr%d" % (kind[0], r["id"]), "kind": kind, "name": r["tags"].get("name", ""),
-                        "rings": rings, "points": []})
+            out.append(
+                {
+                    "id": "%sr%d" % (kind[0], r["id"]),
+                    "kind": kind,
+                    "name": r["tags"].get("name", ""),
+                    "rings": rings,
+                    "points": [],
+                }
+            )
     return sorted(out, key=lambda p: p["id"])
 
 
@@ -182,8 +206,12 @@ def _runs(near: List[float]) -> List[Tuple[float, float]]:
 def _box(place: dict, reach: float) -> Tuple[float, float, float, float]:
     pts = [q for ring in place["rings"] for q in ring] + list(place["points"])
     pad = reach + (NODE_R_M if place["points"] else 0.0)
-    return (min(x for x, _ in pts) - pad, min(y for _, y in pts) - pad,
-            max(x for x, _ in pts) + pad, max(y for _, y in pts) + pad)
+    return (
+        min(x for x, _ in pts) - pad,
+        min(y for _, y in pts) - pad,
+        max(x for x, _ in pts) + pad,
+        max(y for _, y in pts) + pad,
+    )
 
 
 def _join(parts: List[List[int]]) -> List[List[int]]:

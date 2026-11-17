@@ -82,19 +82,28 @@ const BOX_IN_M = 1.5;
 // line or forces it to brake harder at the end (`officerStopLaw`).
 export const OFFICER_STOP_DECEL = 2.0;
 export const OFFICER_STOP_REACTION_S = 0.4;
-export const officerStopLaw = (spec, decel = OFFICER_STOP_DECEL) => ({ stopDecel: Math.min(OFFICER_STOP_DECEL, decel), stopReaction: OFFICER_STOP_REACTION_S + (spec.accelLag || 0) });
+export const officerStopLaw = (spec, decel = OFFICER_STOP_DECEL) => ({
+  stopDecel: Math.min(OFFICER_STOP_DECEL, decel),
+  stopReaction: OFFICER_STOP_REACTION_S + (spec.accelLag || 0),
+});
 // The ego's id among those waved on (as for lane closures and snowbanks).
 export const EGO_ID = "ego";
 
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-const idOf = (world, v) => v === world.ego ? EGO_ID : v?.id ?? null;
-const other = (group) => group === "A" ? "B" : "A";
+const idOf = (world, v) => (v === world.ego ? EGO_ID : (v?.id ?? null));
+const other = (group) => (group === "A" ? "B" : "A");
 
 // The World's state: whether officers come, their random stream, when the next may be looked for, and
 // the officers standing now.
 export function createOfficers({ enabled = false, seed = 1 } = {}) {
-  return { enabled: !!enabled, random: enabled ? rng(seed * 2654435761 + 57042) : null, list: [], made: 0,
-    next: enabled ? OFFICER_FIRST_S : Infinity, checkAt: 0 };
+  return {
+    enabled: !!enabled,
+    random: enabled ? rng(seed * 2654435761 + 57042) : null,
+    list: [],
+    made: 0,
+    next: enabled ? OFFICER_FIRST_S : Infinity,
+    checkAt: 0,
+  };
 }
 
 // The officer governing junction `interId`, or null.
@@ -144,7 +153,8 @@ export function officerSite(map, inter) {
 export function approachOf(world, inter, v) {
   const map = world.map;
   if (v === world.ego && world.route) {
-    const route = world.route, p = route.project(v.x, v.y, route.hint);
+    const route = world.route,
+      p = route.project(v.x, v.y, route.hint);
     if (p && p.distance < 6) {
       const front = p.s + v.spec.length - v.spec.rearOverhang;
       for (const c of route.controls) {
@@ -176,14 +186,19 @@ function movers(world, o) {
 // Whether vehicle `v` is in the box of junction `o`: its front, middle or rear within `o.boxR` of the
 // centre.
 function inBox(o, v) {
-  const s = v.spec || CAR, c = Math.cos(v.psi), n = Math.sin(v.psi), f = s.length - s.rearOverhang, mid = s.length / 2 - s.rearOverhang;
+  const s = v.spec || CAR,
+    c = Math.cos(v.psi),
+    n = Math.sin(v.psi),
+    f = s.length - s.rearOverhang,
+    mid = s.length / 2 - s.rearOverhang;
   for (const d of [f, mid, -s.rearOverhang]) if (Math.hypot(v.x + c * d - o.x, v.y + n * d - o.y) < o.boxR) return true;
   return false;
 }
 
 // People on foot crossing at junction `o` now, or (`group`) at the kerb about to cross alongside it.
 function onFoot(world, o, group = null) {
-  const crowd = world.crowd, legsAt = crowd?.legsAt;
+  const crowd = world.crowd,
+    legsAt = crowd?.legsAt;
   if (!legsAt) return false;
   for (const ped of crowd.list) {
     if (Math.abs(ped.x - o.x) > 40 || Math.abs(ped.y - o.y) > 40) continue;
@@ -215,7 +230,12 @@ function caught(world, o, inter, group) {
   const out = [];
   for (const v of movers(world, o)) {
     const a = approachOf(world, inter, v);
-    if (a && a.group === group && (a.toLine < 0 || (v.v > 0.5 && a.toLine < amberStoppingDistance(v) + COMMIT_MARGIN_M))) out.push(v);
+    if (
+      a &&
+      a.group === group &&
+      (a.toLine < 0 || (v.v > 0.5 && a.toLine < amberStoppingDistance(v) + COMMIT_MARGIN_M))
+    )
+      out.push(v);
   }
   return out;
 }
@@ -225,8 +245,10 @@ function caught(world, o, inter, group) {
 function faceFor(world, o, inter, held) {
   const map = world.map;
   const ego = approachOf(world, inter, world.ego);
-  const a = ego && ego.group === held && ego.toLine > -1 && ego.toLine < NOTICE_M ? inter.approaches.find((x) => x.edge === ego.edge)
-    : inter.approaches.find((x) => x.group === held);
+  const a =
+    ego && ego.group === held && ego.toLine > -1 && ego.toLine < NOTICE_M
+      ? inter.approaches.find((x) => x.edge === ego.edge)
+      : inter.approaches.find((x) => x.group === held);
   const e = a ? map.edges.get(a.edge) : null;
   return e ? wrap(headingAt(e.pts, e.cum, e.length) + Math.PI) : o.face;
 }
@@ -246,12 +268,15 @@ function boxRadius(map, inter) {
 // The cruiser, lights on, at a corner of junction `inter`: in the first free parking bay on the right of a
 // street leading away from it (parked like any car), else up on the kerb beside one (render-only).
 function parkCruiser(world, o, inter) {
-  const map = world.map, nodes = new Set([...(inter.vertices || []), ...inter.approaches.map((a) => map.edges.get(a.edge)?.to)]), exits = [];
-  for (const node of nodes) for (const id of map.out.get(node) || []) {
-    const e = map.edges.get(id);
-    if (e && !nodes.has(e.to) && !e.ring && e.length >= 20) exits.push(e);
-  }
-  exits.sort((a, b) => String(a.id) < String(b.id) ? -1 : 1);
+  const map = world.map,
+    nodes = new Set([...(inter.vertices || []), ...inter.approaches.map((a) => map.edges.get(a.edge)?.to)]),
+    exits = [];
+  for (const node of nodes)
+    for (const id of map.out.get(node) || []) {
+      const e = map.edges.get(id);
+      if (e && !nodes.has(e.to) && !e.ring && e.length >= 20) exits.push(e);
+    }
+  exits.sort((a, b) => (String(a.id) < String(b.id) ? -1 : 1));
   let best = null;
   for (const slot of world.parked.slots || []) {
     if (slot.curb !== "right" || slot.reserved || slot.occupant?.door) continue;
@@ -266,24 +291,53 @@ function parkCruiser(world, o, inter) {
     const { slot } = best;
     if (slot.occupant) world.parked.remove(slot.occupant);
     const car = new Vehicle(slot.x, slot.y, slot.psi, 0, POLICE_CAR);
-    Object.assign(car, { id, kind: "police", roadside: true, flashing: true, stay: true, officer: o.id, edge: slot.edge, curb: "right", color: 0xf4f4f0, slot: null });
+    Object.assign(car, {
+      id,
+      kind: "police",
+      roadside: true,
+      flashing: true,
+      stay: true,
+      officer: o.id,
+      edge: slot.edge,
+      curb: "right",
+      color: 0xf4f4f0,
+      slot: null,
+    });
     reserveSlot(map, slot, car);
     world.parked.add(car);
     return { id, parked: true, slot, vehicle: car };
   }
   // (up on the kerb: the first spot along a street leading away, past the corner, clear of every street's
   // asphalt, its whole body)
-  const lat = (e) => e.asphalt[1] + GUTTER + CURB + POLICE_CAR.width / 2 + 0.15, back = POLICE_CAR.length / 2 - POLICE_CAR.rearOverhang;
-  for (const e of exits) for (const s of [14, 20, 26, 32]) {
-    if (s > e.length - 3) break;
-    const h = headingAt(e.pts, e.cum, s), p = pointAt(e.pts, e.cum, s), l = lat(e);
-    const x = p[0] + Math.sin(h) * l, y = p[1] - Math.cos(h) * l;
-    const half = POLICE_CAR.length / 2;
-    if ([-half, 0, half].some((d) => map.roadDistance(x + Math.cos(h) * d, y + Math.sin(h) * d).distance < POLICE_CAR.width / 2 + 0.3)) continue;
-    const car = new Vehicle(x - Math.cos(h) * back, y - Math.sin(h) * back, h, 0, POLICE_CAR);
-    Object.assign(car, { id, kind: "police", roadside: true, flashing: true, stay: true, officer: o.id, color: 0xf4f4f0 });
-    return { id, parked: false, slot: null, vehicle: car };
-  }
+  const lat = (e) => e.asphalt[1] + GUTTER + CURB + POLICE_CAR.width / 2 + 0.15,
+    back = POLICE_CAR.length / 2 - POLICE_CAR.rearOverhang;
+  for (const e of exits)
+    for (const s of [14, 20, 26, 32]) {
+      if (s > e.length - 3) break;
+      const h = headingAt(e.pts, e.cum, s),
+        p = pointAt(e.pts, e.cum, s),
+        l = lat(e);
+      const x = p[0] + Math.sin(h) * l,
+        y = p[1] - Math.cos(h) * l;
+      const half = POLICE_CAR.length / 2;
+      if (
+        [-half, 0, half].some(
+          (d) => map.roadDistance(x + Math.cos(h) * d, y + Math.sin(h) * d).distance < POLICE_CAR.width / 2 + 0.3,
+        )
+      )
+        continue;
+      const car = new Vehicle(x - Math.cos(h) * back, y - Math.sin(h) * back, h, 0, POLICE_CAR);
+      Object.assign(car, {
+        id,
+        kind: "police",
+        roadside: true,
+        flashing: true,
+        stay: true,
+        officer: o.id,
+        color: 0xf4f4f0,
+      });
+      return { id, parked: false, slot: null, vehicle: car };
+    }
   return null;
 }
 
@@ -291,12 +345,28 @@ function parkCruiser(world, o, inter) {
 // now, or "A"), `phase` "clear" to start holding everyone (the default) or the group waved now, `left` how
 // long they stay (for good, by default: a challenge's). Returns the officer, or null.
 export function placeOfficer(world, interId, { wave = null, phase = "clear", left = Infinity, holdUntil = 0 } = {}) {
-  const state = world.officers, map = world.map, inter = map.intersections.get(interId);
+  const state = world.officers,
+    map = world.map,
+    inter = map.intersections.get(interId);
   if (!state?.enabled || !inter || officerAt(world, interId)) return null;
   const first = wave || (inter.approaches.some((a) => a.group === "A") ? "A" : "B");
-  const o = { id: `officer_${++state.made}`, inter: interId, x: inter.x, y: inter.y, since: world.t, left,
-    phase: phase === "clear" ? "clear" : phase, next: phase === "clear" ? first : other(phase), phaseSince: world.t, turn: 1,
-    committed: {}, holdUntil, boxR: boxRadius(map, inter), face: 0, cruiser: null };
+  const o = {
+    id: `officer_${++state.made}`,
+    inter: interId,
+    x: inter.x,
+    y: inter.y,
+    since: world.t,
+    left,
+    phase: phase === "clear" ? "clear" : phase,
+    next: phase === "clear" ? first : other(phase),
+    phaseSince: world.t,
+    turn: 1,
+    committed: {},
+    holdUntil,
+    boxR: boxRadius(map, inter),
+    face: 0,
+    cruiser: null,
+  };
   o.face = faceFor(world, o, inter, o.phase === "clear" ? other(first) : other(o.phase));
   state.list.push(o);
   o.cruiser = parkCruiser(world, o, inter);
@@ -305,7 +375,8 @@ export function placeOfficer(world, interId, { wave = null, phase = "clear", lef
 
 // The officer leaves: their cruiser too.
 export function removeOfficer(world, o) {
-  const state = world.officers, cruiser = o.cruiser;
+  const state = world.officers,
+    cruiser = o.cruiser;
   if (cruiser?.parked) {
     world.parked.remove(cruiser.vehicle);
     if (cruiser.slot?.reserved?.owner === cruiser.vehicle) cruiser.slot.reserved = null;
@@ -321,11 +392,18 @@ function quiet(world, inter) {
 // Each step, before traffic moves: every officer's phase, and in a free drive, now and then a new one,
 // and old ones leaving.
 export function stepOfficers(world, dt) {
-  const state = world.officers, map = world.map, ego = world.ego;
+  const state = world.officers,
+    map = world.map,
+    ego = world.ego;
   for (const o of [...state.list]) {
     const inter = map.intersections.get(o.inter);
     o.left -= dt;
-    if (o.left <= 0 && Math.hypot(o.x - ego.x, o.y - ego.y) > LEAVE_M && !world.visibility.canSee(ego, o.x, o.y) && quiet(world, inter)) {
+    if (
+      o.left <= 0 &&
+      Math.hypot(o.x - ego.x, o.y - ego.y) > LEAVE_M &&
+      !world.visibility.canSee(ego, o.x, o.y) &&
+      quiet(world, inter)
+    ) {
       removeOfficer(world, o);
       state.next = Math.max(state.next, world.t + OFFICER_COOLDOWN_S);
       continue;
@@ -334,7 +412,8 @@ export function stepOfficers(world, dt) {
   }
   if (world.t < state.next || world.t < state.checkAt || state.list.length || !world.route) return;
   state.checkAt = world.t + OFFICER_CHECK_S;
-  const route = world.route, p = route.project(ego.x, ego.y, route.hint);
+  const route = world.route,
+    p = route.project(ego.x, ego.y, route.hint);
   if (!p || p.distance > 6) return;
   const front = p.s + ego.spec.length - ego.spec.rearOverhang;
   for (const c of route.controls) {
@@ -344,7 +423,8 @@ export function stepOfficers(world, dt) {
     if (ahead > SPAWN_M[1]) break;
     const inter = map.intersections.get(c.control.id);
     if (!officerSite(map, inter) || world.visibility.canSee(ego, inter.x, inter.y) || !quiet(world, inter)) continue;
-    if (state.random() < OFFICER_CHANCE) placeOfficer(world, inter.id, { left: STAY_S[0] + state.random() * (STAY_S[1] - STAY_S[0]) });
+    if (state.random() < OFFICER_CHANCE)
+      placeOfficer(world, inter.id, { left: STAY_S[0] + state.random() * (STAY_S[1] - STAY_S[0]) });
     return;
   }
 }
@@ -353,17 +433,23 @@ export function stepOfficers(world, dt) {
 function stepPhase(world, o, inter) {
   const t = world.t;
   if (o.phase !== "clear") {
-    const held = other(o.phase), since = t - o.phaseSince;
+    const held = other(o.phase),
+      since = t - o.phaseSince;
     if (t >= o.holdUntil && since >= GO_MIN_S && waiting(world, o, inter, held)) {
       const caughtNow = caught(world, o, inter, o.phase);
       if (!caughtNow.length || since >= GO_MAX_S) {
         o.turn++;
         o.committed = {};
         for (const v of caughtNow) o.committed[idOf(world, v)] = o.turn;
-        o.next = held; o.phase = "clear"; o.phaseSince = t;
+        o.next = held;
+        o.phase = "clear";
+        o.phaseSince = t;
       }
     }
-    if (o.phase !== "clear") { o.face = faceFor(world, o, inter, held); return; }
+    if (o.phase !== "clear") {
+      o.face = faceFor(world, o, inter, held);
+      return;
+    }
   }
   // holding everyone: until the box is empty and whoever was waved on as the officer turned is through
   const since = t - o.phaseSince;
@@ -382,7 +468,10 @@ function stepPhase(world, o, inter) {
   // (a contraflow cyclist, not in world.npcs, still in the box holds it too: sim/contraflow.js)
   for (const r of world.contraflow?.riders || []) if (inBox(o, r)) return;
   if (late && since < CLEAR_MAX_S) return;
-  o.phase = o.next; o.phaseSince = t; o.committed = {}; o.turn++;
+  o.phase = o.next;
+  o.phaseSince = t;
+  o.committed = {};
+  o.turn++;
   o.face = faceFor(world, o, inter, other(o.phase));
 }
 
@@ -398,26 +487,41 @@ export function officerSensing(world, c, frontS) {
   if (toLine > NOTICE_M || !world.visibility.canSee(world.ego, o.x, o.y)) return null;
   const direction = officerDirection(world, world.ego, c.edge);
   const r1 = (x) => Math.round(x * 10) / 10;
-  return { id: o.id, direction, axis: o.phase === "clear" ? null : o.phase, approach_group: c.control.group, phase: o.phase === "clear" ? "all_stop" : "wave",
-    bumper_to_line_m: r1(toLine), s_line_route: c.sRoute };
+  return {
+    id: o.id,
+    direction,
+    axis: o.phase === "clear" ? null : o.phase,
+    approach_group: c.control.group,
+    phase: o.phase === "clear" ? "all_stop" : "wave",
+    bumper_to_line_m: r1(toLine),
+    s_line_route: c.sRoute,
+  };
 }
 
 // The officer's sensing `s` with what the light shows the car (`signal`; "dark" in a power cut), and whether
 // the officer's direction goes against it.
 export function officerLight(s, signal) {
-  return Object.assign(s, { signal, against_light: (s.direction === "go" && signal !== "green") || (s.direction === "stop" && signal === "green") });
+  return Object.assign(s, {
+    signal,
+    against_light: (s.direction === "go" && signal !== "green") || (s.direction === "stop" && signal === "green"),
+  });
 }
 
 // The HUD line for an officer at the junction ahead: said once each time the direction changes.
 export function officerNotice(world, snap) {
   const s = snap?.traffic_officer ?? (world.officers?.list.length ? egoOfficer(world) : null);
   if (!s) return null;
-  return { key: `${s.id}:${s.direction}`, text: `OFFICER DIRECTING TRAFFIC · ${s.direction === "go" ? "GO" : "STOP"}`, wait: s.direction === "stop" };
+  return {
+    key: `${s.id}:${s.direction}`,
+    text: `OFFICER DIRECTING TRAFFIC · ${s.direction === "go" ? "GO" : "STOP"}`,
+    wait: s.direction === "stop",
+  };
 }
 
 // (the officer ahead of the driven car, without sensing: for the HUD while driving by hand)
 function egoOfficer(world) {
-  const route = world.route, ego = world.ego;
+  const route = world.route,
+    ego = world.ego;
   if (!route) return null;
   const p = route.project(ego.x, ego.y, route.hint);
   if (!p || p.distance > 6) return null;

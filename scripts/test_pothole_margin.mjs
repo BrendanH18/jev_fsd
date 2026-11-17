@@ -21,18 +21,70 @@ assert.equal(PH.crossesPothole(h, -3, edge, 3, edge, PH.SIM_PAD_M), true, "with 
 assert.equal(PH.crossesPothole(h, -3, edge + PH.SIM_PAD_M + 0.01, 3, edge + PH.SIM_PAD_M + 0.01, PH.SIM_PAD_M), false);
 
 // A hard brake while easing round one keeps the ease.
-const street = { id: "street", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300, cls: "residential", lanes: 1,
-  lane_offsets: [1.75], lane_width: 3.5, asphalt: [-5.6, 5.6], parking: [0, 0], limit: 13.9 };
-const map = new MapData({ extent: [-10, -20, 310, 20], nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }],
-  edges: [street], lanes: [{ edge: "street", idx: 0, pts: [[0, -1.75], [300, -1.75]] }], intersections: [], stops: [], buildings: [] });
+const street = {
+  id: "street",
+  from: "a",
+  to: "b",
+  pts: [
+    [0, 0],
+    [300, 0],
+  ],
+  length: 300,
+  cls: "residential",
+  lanes: 1,
+  lane_offsets: [1.75],
+  lane_width: 3.5,
+  asphalt: [-5.6, 5.6],
+  parking: [0, 0],
+  limit: 13.9,
+};
+const map = new MapData({
+  extent: [-10, -20, 310, 20],
+  nodes: [
+    { id: "a", x: 0, y: 0 },
+    { id: "b", x: 300, y: 0 },
+  ],
+  edges: [street],
+  lanes: [
+    {
+      edge: "street",
+      idx: 0,
+      pts: [
+        [0, -1.75],
+        [300, -1.75],
+      ],
+    },
+  ],
+  intersections: [],
+  stops: [],
+  buildings: [],
+});
 const world = new World(map, { parked: 0, pedestrians: 0, potholes: true });
-world.potholes.setList([PH.potholeOnLane(map, "street", 0, 120, { id: "p1", offset: -0.83, a: 0.43, b: 0.47, depth: 0.066 })]);
-world.route = new Route({ id: "straight", polyline: [[0, -1.75], [300, -1.75]], edges: ["street"], turns: [] }, map);
+world.potholes.setList([
+  PH.potholeOnLane(map, "street", 0, 120, { id: "p1", offset: -0.83, a: 0.43, b: 0.47, depth: 0.066 }),
+]);
+world.route = new Route(
+  {
+    id: "straight",
+    polyline: [
+      [0, -1.75],
+      [300, -1.75],
+    ],
+    edges: ["street"],
+    turns: [],
+  },
+  map,
+);
 const brakeAt = (x, lateral) => {
   Object.assign(world.ego, { x, y: -1.75 - lateral, psi: 0, v: 7 });
   world.route.hint = 0;
-  const snap = buildSnapshot(world), list = sampleCandidates(snap, world);
-  return { snap, ease: list.find((c) => c.id === "ease_round_pothole"), brake: list.find((c) => c.id === "hard_brake") };
+  const snap = buildSnapshot(world),
+    list = sampleCandidates(snap, world);
+  return {
+    snap,
+    ease: list.find((c) => c.id === "ease_round_pothole"),
+    brake: list.find((c) => c.id === "hard_brake"),
+  };
 };
 const far = brakeAt(60, 0);
 assert.ok(far.ease, "the car can ease round it");

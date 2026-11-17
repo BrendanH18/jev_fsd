@@ -5,7 +5,9 @@
 import * as THREE from "three";
 
 let maxAnisotropy = 8;
-export function setMaxAnisotropy(n) { maxAnisotropy = Math.max(1, n); }
+export function setMaxAnisotropy(n) {
+  maxAnisotropy = Math.max(1, n);
+}
 
 function hash(x, y, seed) {
   let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(seed + 1, 1442695041);
@@ -15,21 +17,31 @@ function hash(x, y, seed) {
 
 // Tileable value noise; x, y in cells, wraps every `period` cells.
 function valueNoise(x, y, period, seed) {
-  const xi = Math.floor(x), yi = Math.floor(y);
-  const xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const xi = Math.floor(x),
+    yi = Math.floor(y);
+  const xf = x - xi,
+    yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf),
+    v = yf * yf * (3 - 2 * yf);
   const w = (a) => ((a % period) + period) % period;
-  const a = hash(w(xi), w(yi), seed), b = hash(w(xi + 1), w(yi), seed);
-  const c = hash(w(xi), w(yi + 1), seed), d = hash(w(xi + 1), w(yi + 1), seed);
+  const a = hash(w(xi), w(yi), seed),
+    b = hash(w(xi + 1), w(yi), seed);
+  const c = hash(w(xi), w(yi + 1), seed),
+    d = hash(w(xi + 1), w(yi + 1), seed);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
 // Fractal noise in [0, 1] at pixel (px, py) of an N-pixel tile, `period` cells across at the base octave.
 function fbm(px, py, N, period, octaves, seed) {
-  let sum = 0, amp = 0.5, norm = 0, f = 1;
+  let sum = 0,
+    amp = 0.5,
+    norm = 0,
+    f = 1;
   for (let o = 0; o < octaves; o++) {
     sum += amp * valueNoise((px / N) * period * f, (py / N) * period * f, period * f, seed + o * 31);
-    norm += amp; amp *= 0.5; f *= 2;
+    norm += amp;
+    amp *= 0.5;
+    f *= 2;
   }
   return sum / norm;
 }
@@ -55,138 +67,212 @@ function paint(size, fn) {
   const c = canvas(size);
   const ctx = c.getContext("2d");
   const img = ctx.createImageData(size, size);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const [r, g, b] = fn(x, y);
-    const i = (y * size + x) * 4;
-    img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b; img.data[i + 3] = 255;
-  }
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const [r, g, b] = fn(x, y);
+      const i = (y * size + x) * 4;
+      img.data[i] = r;
+      img.data[i + 1] = g;
+      img.data[i + 2] = b;
+      img.data[i + 3] = 255;
+    }
   ctx.putImageData(img, 0, 0);
   return c;
 }
 
 const clamp255 = (v) => Math.max(0, Math.min(255, v));
 const cache = new Map();
-const once = (key, make) => { if (!cache.has(key)) cache.set(key, make()); return cache.get(key); };
+const once = (key, make) => {
+  if (!cache.has(key)) cache.set(key, make());
+  return cache.get(key);
+};
 
-export const asphaltTexture = () => once("asphalt", () => toTexture(paint(512, (x, y) => {
-  const n = fbm(x, y, 512, 8, 4, 1);
-  const grain = hash(x, y, 9);
-  let v = 86 + (n - 0.5) * 24 + (grain - 0.5) * 18;
-  if (grain > 0.985) v += 40;           // light aggregate
-  else if (grain < 0.01) v -= 18;       // dark pits
-  return [clamp255(v), clamp255(v + 1), clamp255(v + 4)];
-})));
+export const asphaltTexture = () =>
+  once("asphalt", () =>
+    toTexture(
+      paint(512, (x, y) => {
+        const n = fbm(x, y, 512, 8, 4, 1);
+        const grain = hash(x, y, 9);
+        let v = 86 + (n - 0.5) * 24 + (grain - 0.5) * 18;
+        if (grain > 0.985)
+          v += 40; // light aggregate
+        else if (grain < 0.01) v -= 18; // dark pits
+        return [clamp255(v), clamp255(v + 1), clamp255(v + 4)];
+      }),
+    ),
+  );
 
-export const grassTexture = () => once("grass", () => toTexture(paint(512, (x, y) => {
-  const patch = fbm(x, y, 512, 6, 4, 3);
-  const blade = hash(x, y, 5);
-  const dry = fbm(x, y, 512, 3, 2, 7);
-  const t = patch * 0.8 + blade * 0.35;
-  let r = 62 + t * 34, g = 96 + t * 40, b = 40 + t * 16;
-  if (dry > 0.62) { const k = (dry - 0.62) * 2.2; r += 40 * k; g += 16 * k; }
-  return [clamp255(r), clamp255(g), clamp255(b)];
-})));
+export const grassTexture = () =>
+  once("grass", () =>
+    toTexture(
+      paint(512, (x, y) => {
+        const patch = fbm(x, y, 512, 6, 4, 3);
+        const blade = hash(x, y, 5);
+        const dry = fbm(x, y, 512, 3, 2, 7);
+        const t = patch * 0.8 + blade * 0.35;
+        let r = 62 + t * 34,
+          g = 96 + t * 40,
+          b = 40 + t * 16;
+        if (dry > 0.62) {
+          const k = (dry - 0.62) * 2.2;
+          r += 40 * k;
+          g += 16 * k;
+        }
+        return [clamp255(r), clamp255(g), clamp255(b)];
+      }),
+    ),
+  );
 
 // Low-frequency variation, sampled at a large scale on grass and asphalt.
-export const macroTexture = () => once("macro", () => toTexture(paint(256, (x, y) => {
-  const v = fbm(x, y, 256, 4, 5, 13) * 255;
-  return [v, v, v];
-}), { srgb: false }));
+export const macroTexture = () =>
+  once("macro", () =>
+    toTexture(
+      paint(256, (x, y) => {
+        const v = fbm(x, y, 256, 4, 5, 13) * 255;
+        return [v, v, v];
+      }),
+      { srgb: false },
+    ),
+  );
 
 // Sidewalk concrete; u runs along the sidewalk, one tile per 1.5 m slab, with the joint at u = 0.
-export const concreteTexture = () => once("concrete", () => {
-  const c = paint(256, (x, y) => {
-    const n = fbm(x, y, 256, 6, 4, 21);
-    const g = hash(x, y, 4);
-    const v = 176 + (n - 0.5) * 26 + (g - 0.5) * 12;
-    return [clamp255(v), clamp255(v - 1), clamp255(v - 4)];
+export const concreteTexture = () =>
+  once("concrete", () => {
+    const c = paint(256, (x, y) => {
+      const n = fbm(x, y, 256, 6, 4, 21);
+      const g = hash(x, y, 4);
+      const v = 176 + (n - 0.5) * 26 + (g - 0.5) * 12;
+      return [clamp255(v), clamp255(v - 1), clamp255(v - 4)];
+    });
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "rgba(60,60,60,0.55)";
+    ctx.fillRect(0, 0, 3, 256);
+    return toTexture(c);
   });
-  const ctx = c.getContext("2d");
-  ctx.fillStyle = "rgba(60,60,60,0.55)";
-  ctx.fillRect(0, 0, 3, 256);
-  return toTexture(c);
-});
 
-export const curbTexture = () => once("curb", () => toTexture(paint(128, (x, y) => {
-  const v = 196 + (fbm(x, y, 128, 4, 3, 17) - 0.5) * 24;
-  return [v, v, v - 3];
-})));
+export const curbTexture = () =>
+  once("curb", () =>
+    toTexture(
+      paint(128, (x, y) => {
+        const v = 196 + (fbm(x, y, 128, 4, 3, 17) - 0.5) * 24;
+        return [v, v, v - 3];
+      }),
+    ),
+  );
 
 // Asphalt shingles: rows every 1/16 of the tile with staggered tab gaps and per-tab shade.
-export const shingleTexture = () => once("shingle", () => {
-  const rows = 16, tabs = 8, size = 512;
-  const rowH = size / rows, tabW = size / tabs;
-  return toTexture(paint(size, (x, y) => {
-    const row = Math.floor(y / rowH);
-    const off = (row % 2) * tabW / 2;
-    const tab = Math.floor(((x + off) % size) / tabW);
-    const inRow = (y % rowH) / rowH;
-    const gap = ((x + off) % tabW) < 2;
-    let v = 200 + (hash(tab, row, 3) - 0.5) * 50 + (hash(x, y, 8) - 0.5) * 30;
-    v *= 0.72 + 0.28 * inRow;            // shadow under the row above
-    if (gap || inRow < 0.08) v *= 0.45;
-    return [clamp255(v), clamp255(v), clamp255(v)];
-  }));
-});
+export const shingleTexture = () =>
+  once("shingle", () => {
+    const rows = 16,
+      tabs = 8,
+      size = 512;
+    const rowH = size / rows,
+      tabW = size / tabs;
+    return toTexture(
+      paint(size, (x, y) => {
+        const row = Math.floor(y / rowH);
+        const off = ((row % 2) * tabW) / 2;
+        const tab = Math.floor(((x + off) % size) / tabW);
+        const inRow = (y % rowH) / rowH;
+        const gap = (x + off) % tabW < 2;
+        let v = 200 + (hash(tab, row, 3) - 0.5) * 50 + (hash(x, y, 8) - 0.5) * 30;
+        v *= 0.72 + 0.28 * inRow; // shadow under the row above
+        if (gap || inRow < 0.08) v *= 0.45;
+        return [clamp255(v), clamp255(v), clamp255(v)];
+      }),
+    );
+  });
 
-export const flatRoofTexture = () => once("flatroof", () => toTexture(paint(256, (x, y) => {
-  const n = fbm(x, y, 256, 5, 4, 29);
-  const g = hash(x, y, 2);
-  const v = 150 + (n - 0.5) * 40 + (g - 0.5) * 30;
-  return [clamp255(v), clamp255(v), clamp255(v + 2)];
-})));
+export const flatRoofTexture = () =>
+  once("flatroof", () =>
+    toTexture(
+      paint(256, (x, y) => {
+        const n = fbm(x, y, 256, 5, 4, 29);
+        const g = hash(x, y, 2);
+        const v = 150 + (n - 0.5) * 40 + (g - 0.5) * 30;
+        return [clamp255(v), clamp255(v), clamp255(v + 2)];
+      }),
+    ),
+  );
 
 // Facades: one tile is 12 m x 12 m (4 bays x 4 floors of 3 m). Returns { map, mask } where the
 // mask's red channel is 1 where the building's tint applies (wall) and its green channel is 1 on
 // window glass (which can light up at night).
 export function facadeTextures(kind) {
   return once("facade:" + kind, () => {
-    const size = 512, m = size / 12;           // pixels per meter
-    const map = canvas(size), mask = canvas(size);
-    const c = map.getContext("2d"), k = mask.getContext("2d");
-    const Y = (h) => size - h * m;             // canvas y of a height (v = 0 is the ground)
-    k.fillStyle = "#f00"; k.fillRect(0, 0, size, size);
+    const size = 512,
+      m = size / 12; // pixels per meter
+    const map = canvas(size),
+      mask = canvas(size);
+    const c = map.getContext("2d"),
+      k = mask.getContext("2d");
+    const Y = (h) => size - h * m; // canvas y of a height (v = 0 is the ground)
+    k.fillStyle = "#f00";
+    k.fillRect(0, 0, size, size);
     if (kind === "house") {
-      c.fillStyle = "#f4f2ee"; c.fillRect(0, 0, size, size);
+      c.fillStyle = "#f4f2ee";
+      c.fillRect(0, 0, size, size);
       // lap siding: a shadow line every 0.2 m
       for (let h = 0; h < 12; h += 0.2) {
-        c.fillStyle = "rgba(0,0,0,0.10)"; c.fillRect(0, Y(h) - 2, size, 2);
-        c.fillStyle = "rgba(255,255,255,0.10)"; c.fillRect(0, Y(h), size, 1);
+        c.fillStyle = "rgba(0,0,0,0.10)";
+        c.fillRect(0, Y(h) - 2, size, 2);
+        c.fillStyle = "rgba(255,255,255,0.10)";
+        c.fillRect(0, Y(h), size, 1);
       }
     } else {
-      c.fillStyle = "#efece6"; c.fillRect(0, 0, size, size);
+      c.fillStyle = "#efece6";
+      c.fillRect(0, 0, size, size);
       const img = c.getImageData(0, 0, size, size);
       for (let i = 0; i < img.data.length; i += 4) {
         const d = (hash(i >> 2, 0, 55) - 0.5) * 14;
-        img.data[i] += d; img.data[i + 1] += d; img.data[i + 2] += d;
+        img.data[i] += d;
+        img.data[i + 1] += d;
+        img.data[i + 2] += d;
       }
       c.putImageData(img, 0, 0);
-      for (let f = 1; f < 4; f++) { c.fillStyle = "rgba(0,0,0,0.12)"; c.fillRect(0, Y(f * 3) - 3, size, 3); }
+      for (let f = 1; f < 4; f++) {
+        c.fillStyle = "rgba(0,0,0,0.12)";
+        c.fillRect(0, Y(f * 3) - 3, size, 3);
+      }
     }
     for (let floor = 0; floor < 4; floor++) {
       for (let bay = 0; bay < 4; bay++) {
         const r = hash(bay, floor, kind === "house" ? 41 : 43);
-        if (kind === "house" && r < 0.18) continue;          // blank wall
+        if (kind === "house" && r < 0.18) continue; // blank wall
         const store = kind === "block" && floor === 0;
         const w = store ? 2.6 : kind === "house" ? (r > 0.8 ? 1.9 : 1.1) : 1.8;
         const hgt = store ? 2.4 : kind === "house" ? 1.35 : 1.6;
         const sill = store ? 0.25 : 0.95;
-        const x0 = (bay * 3 + (3 - w) / 2) * m, y0 = Y(floor * 3 + sill + hgt);
-        const pw = w * m, ph = hgt * m;
+        const x0 = (bay * 3 + (3 - w) / 2) * m,
+          y0 = Y(floor * 3 + sill + hgt);
+        const pw = w * m,
+          ph = hgt * m;
         const trim = 0.09 * m;
         c.fillStyle = kind === "house" ? "#fbfbf8" : "#6b6e72";
         c.fillRect(x0 - trim, y0 - trim, pw + 2 * trim, ph + 2 * trim);
-        if (kind === "house") { c.fillStyle = "#e9e7e1"; c.fillRect(x0 - trim * 1.6, y0 + ph + trim, pw + trim * 3.2, trim * 1.4); }
+        if (kind === "house") {
+          c.fillStyle = "#e9e7e1";
+          c.fillRect(x0 - trim * 1.6, y0 + ph + trim, pw + trim * 3.2, trim * 1.4);
+        }
         const g = c.createLinearGradient(0, y0, 0, y0 + ph);
         const lit = hash(bay, floor, 77);
         g.addColorStop(0, lit > 0.5 ? "#8fa4b8" : "#7890a6");
         g.addColorStop(0.45, "#3b4a58");
         g.addColorStop(1, "#1f2a33");
-        c.fillStyle = g; c.fillRect(x0, y0, pw, ph);
-        if (lit > 0.7 && !store) { c.fillStyle = "rgba(226,214,188,0.55)"; c.fillRect(x0 + pw * 0.06, y0 + ph * 0.1, pw * 0.26, ph * 0.85); }
+        c.fillStyle = g;
+        c.fillRect(x0, y0, pw, ph);
+        if (lit > 0.7 && !store) {
+          c.fillStyle = "rgba(226,214,188,0.55)";
+          c.fillRect(x0 + pw * 0.06, y0 + ph * 0.1, pw * 0.26, ph * 0.85);
+        }
         // sky reflection streak
         c.fillStyle = "rgba(255,255,255,0.10)";
-        c.beginPath(); c.moveTo(x0 + pw * 0.55, y0); c.lineTo(x0 + pw * 0.8, y0); c.lineTo(x0 + pw * 0.4, y0 + ph); c.lineTo(x0 + pw * 0.15, y0 + ph); c.fill();
+        c.beginPath();
+        c.moveTo(x0 + pw * 0.55, y0);
+        c.lineTo(x0 + pw * 0.8, y0);
+        c.lineTo(x0 + pw * 0.4, y0 + ph);
+        c.lineTo(x0 + pw * 0.15, y0 + ph);
+        c.fill();
         // mullions
         c.fillStyle = kind === "house" ? "#fbfbf8" : "#50545a";
         c.fillRect(x0 + pw / 2 - 1.5, y0, 3, ph);
@@ -198,52 +284,71 @@ export function facadeTextures(kind) {
       }
     }
     // a darker foundation band at the bottom of each tile
-    c.fillStyle = "rgba(40,36,32,0.35)"; c.fillRect(0, Y(0.35), size, 0.35 * m);
-    k.fillStyle = "#000"; k.fillRect(0, Y(0.35), size, 0.35 * m);
+    c.fillStyle = "rgba(40,36,32,0.35)";
+    c.fillRect(0, Y(0.35), size, 0.35 * m);
+    k.fillStyle = "#000";
+    k.fillRect(0, Y(0.35), size, 0.35 * m);
     return { map: toTexture(map), mask: toTexture(mask, { srgb: false }) };
   });
 }
 
 // A cluster of leaves on a transparent card: pale, so the per-tree tint sets the hue, with lighter
 // tops, darker undersides, and a midrib on each leaf.
-export const leafTexture = () => once("leaf", () => {
-  const size = 256, c = canvas(size), ctx = c.getContext("2d");
-  let seed = 11;
-  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  for (let i = 0; i < 70; i++) {
-    const a = rnd() * Math.PI * 2, d = Math.pow(rnd(), 0.6) * size * 0.4;
-    const x = size / 2 + Math.cos(a) * d, y = size / 2 + Math.sin(a) * d;
-    const len = size * (0.07 + rnd() * 0.05), w = len * (0.42 + rnd() * 0.15);
-    const rot = rnd() * Math.PI * 2;
-    const shade = 150 + rnd() * 105;
-    ctx.save();
-    ctx.translate(x, y); ctx.rotate(rot);
-    ctx.beginPath();
-    ctx.moveTo(-len, 0);
-    ctx.quadraticCurveTo(0, -w * 1.2, len, 0);
-    ctx.quadraticCurveTo(0, w * 1.2, -len, 0);
-    ctx.fillStyle = `rgb(${shade * 0.86 | 0},${shade | 0},${shade * 0.72 | 0})`;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(40,50,30,${0.25 + rnd() * 0.2})`;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(-len * 0.9, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
-    ctx.restore();
-  }
-  // a few twigs holding the cluster together, short enough not to read as straight scratches
-  // across the crown where cards overlap
-  ctx.strokeStyle = "rgba(70,55,40,0.9)"; ctx.lineWidth = 2.5;
-  for (let i = 0; i < 4; i++) {
-    const a = rnd() * Math.PI * 2;
-    ctx.beginPath(); ctx.moveTo(size / 2, size / 2); ctx.lineTo(size / 2 + Math.cos(a) * size * 0.16, size / 2 + Math.sin(a) * size * 0.16); ctx.stroke();
-  }
-  return cutoutTexture(ctx.getImageData(0, 0, size, size), LEAF_CUTOFF);
-});
+export const leafTexture = () =>
+  once("leaf", () => {
+    const size = 256,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    let seed = 11;
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let i = 0; i < 70; i++) {
+      const a = rnd() * Math.PI * 2,
+        d = rnd() ** 0.6 * size * 0.4;
+      const x = size / 2 + Math.cos(a) * d,
+        y = size / 2 + Math.sin(a) * d;
+      const len = size * (0.07 + rnd() * 0.05),
+        w = len * (0.42 + rnd() * 0.15);
+      const rot = rnd() * Math.PI * 2;
+      const shade = 150 + rnd() * 105;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.beginPath();
+      ctx.moveTo(-len, 0);
+      ctx.quadraticCurveTo(0, -w * 1.2, len, 0);
+      ctx.quadraticCurveTo(0, w * 1.2, -len, 0);
+      ctx.fillStyle = `rgb(${(shade * 0.86) | 0},${shade | 0},${(shade * 0.72) | 0})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(40,50,30,${0.25 + rnd() * 0.2})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-len * 0.9, 0);
+      ctx.lineTo(len * 0.9, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // a few twigs holding the cluster together, short enough not to read as straight scratches
+    // across the crown where cards overlap
+    ctx.strokeStyle = "rgba(70,55,40,0.9)";
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < 4; i++) {
+      const a = rnd() * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(size / 2, size / 2);
+      ctx.lineTo(size / 2 + Math.cos(a) * size * 0.16, size / 2 + Math.sin(a) * size * 0.16);
+      ctx.stroke();
+    }
+    return cutoutTexture(ctx.getImageData(0, 0, size, size), LEAF_CUTOFF);
+  });
 
 // Three's shadow pass tests alpha-to-coverage materials at 0.5, so the leaves use the same cutoff.
 export const LEAF_CUTOFF = 0.5;
 
-const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 
 // Mip levels for an alpha-tested texture, built by hand because the GPU's own chain fails it in two
 // ways. Transparent canvas texels are black, so filtering darkens every leaf edge and whole distant
@@ -253,29 +358,42 @@ const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4)
 // share of texels passes the cutoff as at full size (alpha-coverage-preserving mipmaps).
 export function cutoutTexture(image, cutoff) {
   const pyramid = [];
-  let w = image.width, h = image.height;
-  let rgb = new Float32Array(w * h * 3), alpha = new Float32Array(w * h);
+  let w = image.width,
+    h = image.height;
+  let rgb = new Float32Array(w * h * 3),
+    alpha = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) {
     const a = image.data[i * 4 + 3] / 255;
     alpha[i] = a;
-    for (let k = 0; k < 3; k++) rgb[i * 3 + k] = toLinear(image.data[i * 4 + k] / 255) * a;   // premultiplied
+    for (let k = 0; k < 3; k++) rgb[i * 3 + k] = toLinear(image.data[i * 4 + k] / 255) * a; // premultiplied
   }
   pyramid.push({ w, h, rgb, alpha });
   while (w > 1 || h > 1) {
-    const nw = Math.max(1, w >> 1), nh = Math.max(1, h >> 1);
-    const nrgb = new Float32Array(nw * nh * 3), nalpha = new Float32Array(nw * nh);
-    for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
-      const o = y * nw + x;
-      for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
-        const i = Math.min(h - 1, y * 2 + dy) * w + Math.min(w - 1, x * 2 + dx);
-        nalpha[o] += alpha[i] / 4;
-        for (let k = 0; k < 3; k++) nrgb[o * 3 + k] += rgb[i * 3 + k] / 4;
+    const nw = Math.max(1, w >> 1),
+      nh = Math.max(1, h >> 1);
+    const nrgb = new Float32Array(nw * nh * 3),
+      nalpha = new Float32Array(nw * nh);
+    for (let y = 0; y < nh; y++)
+      for (let x = 0; x < nw; x++) {
+        const o = y * nw + x;
+        for (let dy = 0; dy < 2; dy++)
+          for (let dx = 0; dx < 2; dx++) {
+            const i = Math.min(h - 1, y * 2 + dy) * w + Math.min(w - 1, x * 2 + dx);
+            nalpha[o] += alpha[i] / 4;
+            for (let k = 0; k < 3; k++) nrgb[o * 3 + k] += rgb[i * 3 + k] / 4;
+          }
       }
-    }
-    w = nw; h = nh; rgb = nrgb; alpha = nalpha;
+    w = nw;
+    h = nh;
+    rgb = nrgb;
+    alpha = nalpha;
     pyramid.push({ w, h, rgb, alpha });
   }
-  const coverage = (a, s) => { let n = 0; for (const v of a) if (v * s >= cutoff) n++; return n / a.length; };
+  const coverage = (a, s) => {
+    let n = 0;
+    for (const v of a) if (v * s >= cutoff) n++;
+    return n / a.length;
+  };
   const target = coverage(pyramid[0].alpha, 1);
   // straight (unpremultiplied) colour, falling back to the coarser level where a texel is empty
   let coarser = null;
@@ -283,17 +401,24 @@ export function cutoutTexture(image, cutoff) {
   for (let l = pyramid.length - 1; l >= 0; l--) {
     const { w: lw, h: lh, rgb: lrgb, alpha: la } = pyramid[l];
     const color = new Float32Array(lw * lh * 3);
-    for (let y = 0; y < lh; y++) for (let x = 0; x < lw; x++) {
-      const i = y * lw + x;
-      const c = coarser ? (Math.min(coarser.h - 1, y >> 1) * coarser.w + Math.min(coarser.w - 1, x >> 1)) * 3 : -1;
-      for (let k = 0; k < 3; k++) color[i * 3 + k] = la[i] > 1e-3 ? lrgb[i * 3 + k] / la[i] : c >= 0 ? coarser.color[c + k] : 0;
-    }
+    for (let y = 0; y < lh; y++)
+      for (let x = 0; x < lw; x++) {
+        const i = y * lw + x;
+        const c = coarser ? (Math.min(coarser.h - 1, y >> 1) * coarser.w + Math.min(coarser.w - 1, x >> 1)) * 3 : -1;
+        for (let k = 0; k < 3; k++)
+          color[i * 3 + k] = la[i] > 1e-3 ? lrgb[i * 3 + k] / la[i] : c >= 0 ? coarser.color[c + k] : 0;
+      }
     coarser = { w: lw, h: lh, color };
-    let lo = 1, hi = 1;
+    let lo = 1,
+      hi = 1;
     if (l > 0 && target > 0) {
       hi = 16;
-      for (let it = 0; it < 18; it++) { const mid = (lo + hi) / 2; if (coverage(la, mid) < target) lo = mid; else hi = mid; }
-      if (target - coverage(la, lo) < coverage(la, hi) - target) hi = lo;   // the nearer of the two
+      for (let it = 0; it < 18; it++) {
+        const mid = (lo + hi) / 2;
+        if (coverage(la, mid) < target) lo = mid;
+        else hi = mid;
+      }
+      if (target - coverage(la, lo) < coverage(la, hi) - target) hi = lo; // the nearer of the two
     }
     const data = new Uint8Array(lw * lh * 4);
     for (let i = 0; i < lw * lh; i++) {
@@ -314,198 +439,343 @@ export function cutoutTexture(image, cutoff) {
 }
 
 // Needles: fine streaks of light and dark along the cone's slope.
-export const needleTexture = () => once("needle", () => toTexture(paint(256, (x, y) => {
-  const streak = fbm(x * 4, y * 0.35, 256, 8, 3, 61);
-  const grain = hash(x, y, 62);
-  const v = 150 + (streak - 0.5) * 120 + (grain - 0.5) * 50;
-  return [clamp255(v * 0.9), clamp255(v), clamp255(v * 0.85)];
-})));
+export const needleTexture = () =>
+  once("needle", () =>
+    toTexture(
+      paint(256, (x, y) => {
+        const streak = fbm(x * 4, y * 0.35, 256, 8, 3, 61);
+        const grain = hash(x, y, 62);
+        const v = 150 + (streak - 0.5) * 120 + (grain - 0.5) * 50;
+        return [clamp255(v * 0.9), clamp255(v), clamp255(v * 0.85)];
+      }),
+    ),
+  );
 
 // Bark: furrows running up the trunk.
-export const barkTexture = () => once("bark", () => toTexture(paint(256, (x, y) => {
-  const furrow = fbm(x * 3, y * 0.4, 256, 6, 4, 71);
-  const v = 110 + (furrow - 0.5) * 140 + (hash(x, y, 72) - 0.5) * 25;
-  return [clamp255(v), clamp255(v * 0.92), clamp255(v * 0.84)];
-})));
+export const barkTexture = () =>
+  once("bark", () =>
+    toTexture(
+      paint(256, (x, y) => {
+        const furrow = fbm(x * 3, y * 0.4, 256, 6, 4, 71);
+        const v = 110 + (furrow - 0.5) * 140 + (hash(x, y, 72) - 0.5) * 25;
+        return [clamp255(v), clamp255(v * 0.92), clamp255(v * 0.84)];
+      }),
+    ),
+  );
 
 // Pedestrian signal faces: a walking figure and a raised hand, lit on black.
-export const walkSignalTexture = () => once("walksig", () => {
-  const size = 64, c = canvas(size), ctx = c.getContext("2d");
-  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
-  ctx.strokeStyle = ctx.fillStyle = "#fff"; ctx.lineWidth = 5; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.arc(34, 12, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(32, 20); ctx.lineTo(29, 38); ctx.lineTo(38, 54);     // body and front leg
-  ctx.moveTo(29, 38); ctx.lineTo(22, 54);                          // back leg
-  ctx.moveTo(31, 24); ctx.lineTo(40, 34); ctx.moveTo(31, 24); ctx.lineTo(23, 32);   // arms
-  ctx.stroke();
-  return toTexture(c, { repeat: false });
-});
+export const walkSignalTexture = () =>
+  once("walksig", () => {
+    const size = 64,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = ctx.fillStyle = "#fff";
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(34, 12, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(32, 20);
+    ctx.lineTo(29, 38);
+    ctx.lineTo(38, 54); // body and front leg
+    ctx.moveTo(29, 38);
+    ctx.lineTo(22, 54); // back leg
+    ctx.moveTo(31, 24);
+    ctx.lineTo(40, 34);
+    ctx.moveTo(31, 24);
+    ctx.lineTo(23, 32); // arms
+    ctx.stroke();
+    return toTexture(c, { repeat: false });
+  });
 
-export const handSignalTexture = () => once("handsig", () => {
-  const size = 64, c = canvas(size), ctx = c.getContext("2d");
-  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = "#fff";
-  ctx.beginPath(); ctx.roundRect(20, 28, 26, 26, 6); ctx.fill();         // palm
-  for (const [x, h] of [[21, 20], [28, 24], [35, 23], [42, 18]]) { ctx.beginPath(); ctx.roundRect(x - 3, 30 - h, 6, h + 4, 3); ctx.fill(); }
-  ctx.beginPath(); ctx.roundRect(12, 36, 12, 6, 3); ctx.fill();           // thumb
-  return toTexture(c, { repeat: false });
-});
+export const handSignalTexture = () =>
+  once("handsig", () => {
+    const size = 64,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.roundRect(20, 28, 26, 26, 6);
+    ctx.fill(); // palm
+    for (const [x, h] of [
+      [21, 20],
+      [28, 24],
+      [35, 23],
+      [42, 18],
+    ]) {
+      ctx.beginPath();
+      ctx.roundRect(x - 3, 30 - h, 6, h + 4, 3);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.roundRect(12, 36, 12, 6, 3);
+    ctx.fill(); // thumb
+    return toTexture(c, { repeat: false });
+  });
 
 // A left-turn arrow lens, lit on black (tinted green or yellow by its lamp's colour).
-export const leftArrowTexture = () => once("leftarrow", () => {
-  const size = 64, c = canvas(size), ctx = c.getContext("2d");
-  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.moveTo(10, 32); ctx.lineTo(30, 14); ctx.lineTo(30, 25); ctx.lineTo(52, 25);
-  ctx.lineTo(52, 39); ctx.lineTo(30, 39); ctx.lineTo(30, 50); ctx.closePath(); ctx.fill();
-  return toTexture(c, { repeat: false });
-});
+export const leftArrowTexture = () =>
+  once("leftarrow", () => {
+    const size = 64,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.moveTo(10, 32);
+    ctx.lineTo(30, 14);
+    ctx.lineTo(30, 25);
+    ctx.lineTo(52, 25);
+    ctx.lineTo(52, 39);
+    ctx.lineTo(30, 39);
+    ctx.lineTo(30, 50);
+    ctx.closePath();
+    ctx.fill();
+    return toTexture(c, { repeat: false });
+  });
 
 // A crosswalk sign (TAC RA-4): a black walking figure over crosswalk bars on a white square, on the
 // fluorescent yellow-green board BC puts behind them.
-export const crosswalkSignTexture = () => once("crosswalk", () => {
-  const size = 128, c = canvas(size), ctx = c.getContext("2d");
-  ctx.fillStyle = "#c8e62a"; ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = "#ffffff"; ctx.fillRect(14, 14, size - 28, size - 28);
-  ctx.strokeStyle = "#111"; ctx.lineWidth = 3; ctx.strokeRect(17, 17, size - 34, size - 34);
-  ctx.fillStyle = ctx.strokeStyle = "#111"; ctx.lineWidth = 7; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.arc(68, 32, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(65, 43); ctx.lineTo(60, 66); ctx.lineTo(72, 86);     // body and front leg
-  ctx.moveTo(60, 66); ctx.lineTo(48, 84);                          // back leg
-  ctx.moveTo(64, 48); ctx.lineTo(76, 60); ctx.moveTo(64, 48); ctx.lineTo(51, 58);   // arms
-  ctx.stroke();
-  for (let x = 28; x < 100; x += 16) ctx.fillRect(x, 94, 9, 14);    // the crosswalk
-  return toTexture(c, { repeat: false });
-});
+export const crosswalkSignTexture = () =>
+  once("crosswalk", () => {
+    const size = 128,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    ctx.fillStyle = "#c8e62a";
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(14, 14, size - 28, size - 28);
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(17, 17, size - 34, size - 34);
+    ctx.fillStyle = ctx.strokeStyle = "#111";
+    ctx.lineWidth = 7;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(68, 32, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(65, 43);
+    ctx.lineTo(60, 66);
+    ctx.lineTo(72, 86); // body and front leg
+    ctx.moveTo(60, 66);
+    ctx.lineTo(48, 84); // back leg
+    ctx.moveTo(64, 48);
+    ctx.lineTo(76, 60);
+    ctx.moveTo(64, 48);
+    ctx.lineTo(51, 58); // arms
+    ctx.stroke();
+    for (let x = 28; x < 100; x += 16) ctx.fillRect(x, 94, 9, 14); // the crosswalk
+    return toTexture(c, { repeat: false });
+  });
 
 // School and playground zone signs as BC posts them, in fluorescent yellow-green: a school pentagon
 // with two children walking, or a playground diamond with a child running after a ball, and under it
 // a white tab with the limit and when it holds; or, where the zone ends, an "END ZONE" tab. Square,
 // to go on a square face; outside the sign's shape the canvas is transparent.
-export const zoneSignTexture = (kind, end = false) => once(`zone:${kind}:${end}`, () => {
-  const size = 256, c = canvas(size), ctx = c.getContext("2d");
-  ctx.clearRect(0, 0, size, size);
-  const tab = (y, h, lines) => {
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(40, y, 176, h);
-    ctx.strokeStyle = "#111"; ctx.lineWidth = 5; ctx.strokeRect(43, y + 3, 170, h - 6);
-    ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    lines.forEach(([text, px], i) => { ctx.font = `bold ${px}px Helvetica, Arial, sans-serif`; ctx.fillText(text, 128, y + h * (i + 0.5) / lines.length + 2); });
-  };
-  if (end) {
-    ctx.fillStyle = "#d4ec2c"; ctx.fillRect(30, 48, 196, 160);
-    tab(64, 128, [["END", 46], [kind === "school" ? "SCHOOL" : "PLAYGROUND", kind === "school" ? 34 : 27], ["ZONE", 34]]);
-    return toTexture(c, { repeat: false });
-  }
-  ctx.fillStyle = "#d4ec2c";
-  ctx.beginPath();
-  if (kind === "school") { ctx.moveTo(128, 6); ctx.lineTo(214, 62); ctx.lineTo(214, 150); ctx.lineTo(42, 150); ctx.lineTo(42, 62); }
-  else { ctx.moveTo(128, 4); ctx.lineTo(206, 80); ctx.lineTo(128, 156); ctx.lineTo(50, 80); }
-  ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = "#111"; ctx.lineWidth = 5; ctx.stroke();
-  ctx.fillStyle = ctx.strokeStyle = "#111"; ctx.lineWidth = 8; ctx.lineCap = "round";
-  const child = (x, y, k) => {
-    ctx.beginPath(); ctx.arc(x, y, 8 * k, 0, Math.PI * 2); ctx.fill();
+export const zoneSignTexture = (kind, end = false) =>
+  once(`zone:${kind}:${end}`, () => {
+    const size = 256,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    ctx.clearRect(0, 0, size, size);
+    const tab = (y, h, lines) => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(40, y, 176, h);
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 5;
+      ctx.strokeRect(43, y + 3, 170, h - 6);
+      ctx.fillStyle = "#111";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      lines.forEach(([text, px], i) => {
+        ctx.font = `bold ${px}px Helvetica, Arial, sans-serif`;
+        ctx.fillText(text, 128, y + (h * (i + 0.5)) / lines.length + 2);
+      });
+    };
+    if (end) {
+      ctx.fillStyle = "#d4ec2c";
+      ctx.fillRect(30, 48, 196, 160);
+      tab(64, 128, [
+        ["END", 46],
+        [kind === "school" ? "SCHOOL" : "PLAYGROUND", kind === "school" ? 34 : 27],
+        ["ZONE", 34],
+      ]);
+      return toTexture(c, { repeat: false });
+    }
+    ctx.fillStyle = "#d4ec2c";
     ctx.beginPath();
-    ctx.moveTo(x - 1 * k, y + 12 * k); ctx.lineTo(x - 5 * k, y + 38 * k); ctx.lineTo(x + 8 * k, y + 60 * k);   // body and front leg
-    ctx.moveTo(x - 5 * k, y + 38 * k); ctx.lineTo(x - 18 * k, y + 58 * k);                                // back leg
-    ctx.moveTo(x - 2 * k, y + 18 * k); ctx.lineTo(x + 12 * k, y + 30 * k); ctx.moveTo(x - 2 * k, y + 18 * k); ctx.lineTo(x - 16 * k, y + 28 * k);   // arms
-    ctx.stroke();
-  };
-  if (kind === "school") { child(104, 58, 1); child(152, 72, 0.8); }
-  else { child(116, 44, 1); ctx.beginPath(); ctx.arc(156, 110, 10, 0, Math.PI * 2); ctx.fill(); }
-  tab(160, 92, [["30 km/h", 38], [kind === "school" ? "8AM-5PM SCHOOL DAYS" : "DAWN TO DUSK", kind === "school" ? 16 : 20]]);
-  return toTexture(c, { repeat: false });
-});
-
-export const stopSignTexture = () => once("stop", () => {
-  const size = 256, c = canvas(size), ctx = c.getContext("2d");
-  const oct = (r) => {
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = Math.PI / 8 + (i * Math.PI) / 4;
-      const x = size / 2 + Math.cos(a) * r, y = size / 2 - Math.sin(a) * r;
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    if (kind === "school") {
+      ctx.moveTo(128, 6);
+      ctx.lineTo(214, 62);
+      ctx.lineTo(214, 150);
+      ctx.lineTo(42, 150);
+      ctx.lineTo(42, 62);
+    } else {
+      ctx.moveTo(128, 4);
+      ctx.lineTo(206, 80);
+      ctx.lineTo(128, 156);
+      ctx.lineTo(50, 80);
     }
     ctx.closePath();
-  };
-  ctx.fillStyle = "#ffffff"; oct(size / 2); ctx.fill();
-  ctx.fillStyle = "#c8161d"; oct(size / 2 - 12); ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 78px Helvetica, Arial, sans-serif";
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("STOP", size / 2, size / 2 + 4);
-  return toTexture(c, { repeat: false });
-});
+    ctx.fill();
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle = "#111";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    const child = (x, y, k) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 8 * k, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x - 1 * k, y + 12 * k);
+      ctx.lineTo(x - 5 * k, y + 38 * k);
+      ctx.lineTo(x + 8 * k, y + 60 * k); // body and front leg
+      ctx.moveTo(x - 5 * k, y + 38 * k);
+      ctx.lineTo(x - 18 * k, y + 58 * k); // back leg
+      ctx.moveTo(x - 2 * k, y + 18 * k);
+      ctx.lineTo(x + 12 * k, y + 30 * k);
+      ctx.moveTo(x - 2 * k, y + 18 * k);
+      ctx.lineTo(x - 16 * k, y + 28 * k); // arms
+      ctx.stroke();
+    };
+    if (kind === "school") {
+      child(104, 58, 1);
+      child(152, 72, 0.8);
+    } else {
+      child(116, 44, 1);
+      ctx.beginPath();
+      ctx.arc(156, 110, 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    tab(160, 92, [
+      ["30 km/h", 38],
+      [kind === "school" ? "8AM-5PM SCHOOL DAYS" : "DAWN TO DUSK", kind === "school" ? 16 : 20],
+    ]);
+    return toTexture(c, { repeat: false });
+  });
 
-export const glowTexture = () => once("glow", () => {
-  const size = 128, c = canvas(size), ctx = c.getContext("2d");
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.18, "rgba(255,255,255,0.75)");
-  g.addColorStop(0.45, "rgba(255,255,255,0.16)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
-  return toTexture(c, { repeat: false });
-});
+export const stopSignTexture = () =>
+  once("stop", () => {
+    const size = 256,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    const oct = (r) => {
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = Math.PI / 8 + (i * Math.PI) / 4;
+        const x = size / 2 + Math.cos(a) * r,
+          y = size / 2 - Math.sin(a) * r;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+    };
+    ctx.fillStyle = "#ffffff";
+    oct(size / 2);
+    ctx.fill();
+    ctx.fillStyle = "#c8161d";
+    oct(size / 2 - 12);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 78px Helvetica, Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("STOP", size / 2, size / 2 + 4);
+    return toTexture(c, { repeat: false });
+  });
+
+export const glowTexture = () =>
+  once("glow", () => {
+    const size = 128,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(0.18, "rgba(255,255,255,0.75)");
+    g.addColorStop(0.45, "rgba(255,255,255,0.16)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    return toTexture(c, { repeat: false });
+  });
 
 // A snowflake: a solid disc with a soft rim.
-export const flakeTexture = () => once("flake", () => {
-  const size = 32, c = canvas(size), ctx = c.getContext("2d");
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.45, "rgba(255,255,255,0.95)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
-  return toTexture(c, { repeat: false });
-});
+export const flakeTexture = () =>
+  once("flake", () => {
+    const size = 32,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(0.45, "rgba(255,255,255,0.95)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    return toTexture(c, { repeat: false });
+  });
 
 // Soft dark ellipse for contact shadows under cars.
-export const blobTexture = () => once("blob", () => {
-  const size = 128, c = canvas(size), ctx = c.getContext("2d");
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, "rgba(0,0,0,0.75)");
-  g.addColorStop(0.55, "rgba(0,0,0,0.45)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
-  return toTexture(c, { repeat: false, srgb: false });
-});
+export const blobTexture = () =>
+  once("blob", () => {
+    const size = 128,
+      c = canvas(size),
+      ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, "rgba(0,0,0,0.75)");
+    g.addColorStop(0.55, "rgba(0,0,0,0.45)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    return toTexture(c, { repeat: false, srgb: false });
+  });
 
 // Headlight throw on the road, seen from above: u runs away from the car, v across it. Brightest a
 // few meters ahead, widening and fading with distance.
-export const poolTexture = () => once("pool", () => {
-  const c = paint(128, (x, y) => {
-    const u = x / 127, v = y / 127;
-    const spread = 0.1 + 0.28 * u;
-    const across = Math.exp(-((v - 0.5) ** 2) / (2 * spread * spread));
-    const along = Math.min(1, u / 0.08) * Math.pow(1 - u, 1.6);
-    const k = across * along * 255;
-    return [k, k, k];
+export const poolTexture = () =>
+  once("pool", () => {
+    const c = paint(128, (x, y) => {
+      const u = x / 127,
+        v = y / 127;
+      const spread = 0.1 + 0.28 * u;
+      const across = Math.exp(-((v - 0.5) ** 2) / (2 * spread * spread));
+      const along = Math.min(1, u / 0.08) * (1 - u) ** 1.6;
+      const k = across * along * 255;
+      return [k, k, k];
+    });
+    return toTexture(c, { repeat: false, srgb: false });
   });
-  return toTexture(c, { repeat: false, srgb: false });
-});
 
 // A soft round pool of light for a street lamp.
-export const lampPoolTexture = () => once("lamppool", () => {
-  const c = paint(128, (x, y) => {
-    const d = Math.hypot(x - 63.5, y - 63.5) / 63.5;
-    const k = Math.max(0, 1 - d) ** 2.2 * 255;
-    return [k, k, k];
+export const lampPoolTexture = () =>
+  once("lamppool", () => {
+    const c = paint(128, (x, y) => {
+      const d = Math.hypot(x - 63.5, y - 63.5) / 63.5;
+      const k = Math.max(0, 1 - d) ** 2.2 * 255;
+      return [k, k, k];
+    });
+    return toTexture(c, { repeat: false, srgb: false });
   });
-  return toTexture(c, { repeat: false, srgb: false });
-});
 
 // Vertical fade for the destination beam: opaque at the bottom, clear at the top.
-export const beamTexture = () => once("beam", () => {
-  const c = canvas(64), ctx = c.getContext("2d");
-  const g = ctx.createLinearGradient(0, 64, 0, 0);
-  g.addColorStop(0, "rgba(255,255,255,0.9)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
-  return toTexture(c, { repeat: false });
-});
+export const beamTexture = () =>
+  once("beam", () => {
+    const c = canvas(64),
+      ctx = c.getContext("2d");
+    const g = ctx.createLinearGradient(0, 64, 0, 0);
+    g.addColorStop(0, "rgba(255,255,255,0.9)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    return toTexture(c, { repeat: false });
+  });
 
 // Blend the material's map with a large-scale macro texture to hide tiling. `macroScale` is how many
 // map tiles one macro tile spans (inverse); `strength` is the brightness swing.
@@ -515,9 +785,12 @@ export function withMacroVariation(material, macroScale, strength = 0.35) {
     shader.uniforms.macroMap = { value: macro };
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <map_pars_fragment>", "#include <map_pars_fragment>\nuniform sampler2D macroMap;")
-      .replace("#include <map_fragment>", `#include <map_fragment>
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
         float macroV = texture2D( macroMap, vMapUv * ${macroScale.toFixed(5)} ).r * 0.6 + texture2D( macroMap, vMapUv * ${(macroScale * 3.7).toFixed(5)} + 0.31 ).r * 0.4;
-        diffuseColor.rgb *= 1.0 + (macroV - 0.5) * ${(strength * 2).toFixed(3)};`);
+        diffuseColor.rgb *= 1.0 + (macroV - 0.5) * ${(strength * 2).toFixed(3)};`,
+      );
   };
   material.customProgramCacheKey = () => "macro" + macroScale + ":" + strength;
   return material;

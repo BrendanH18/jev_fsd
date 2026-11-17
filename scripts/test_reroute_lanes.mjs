@@ -16,30 +16,58 @@ const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 
-const key = "19bb885c9cae";   // Winnipeg
+const key = "19bb885c9cae"; // Winnipeg
 const map = new MapData(JSON.parse(fs.readFileSync(`data/maps/${key}.v6.pack.json`)));
 setWeather("dry");
-const pose = (lane, s) => { const p = pointAt(lane.pts, lane.cum, s); return { x: p[0], y: p[1], heading: headingAt(lane.pts, lane.cum, s) }; };
-const at = (id, k, f) => { const l = map.lane(id, k); return pose(l, l.length * f); };
+const pose = (lane, s) => {
+  const p = pointAt(lane.pts, lane.cum, s);
+  return { x: p[0], y: p[1], heading: headingAt(lane.pts, lane.cum, s) };
+};
+const at = (id, k, f) => {
+  const l = map.lane(id, k);
+  return pose(l, l.length * f);
+};
 
 function rig() {
   const world = new World(map, { seed: 1, parked: 0, pedestrians: 0 });
   const curb = map.lane("e10", 2);
-  world.placeOnLane(curb, 20); world.ego.v = 10;
+  world.placeOnLane(curb, 20);
+  world.ego.v = 10;
   // the route the car was on: onto the freeway from a side street, and on along it in the curb lane
-  const from = at("e437", 0, 0.3), goal = at("e407", 2, 0.7);
+  const from = at("e437", 0, 0.3),
+    goal = at("e407", 2, 0.7);
   world.route = new Route(browserRoute(map, from, goal), map, world.ego.spec);
   world.destination = [at("e411", 0, 0.5).x, at("e411", 0, 0.5).y];
-  const autopilot = new Autopilot(world, {}); autopilot.setBrain("rules"); autopilot.enabled = true;
-  const old = world.route, p = old.project(world.ego.x, world.ego.y), lane = buildSnapshot(world).lane;
+  const autopilot = new Autopilot(world, {});
+  autopilot.setBrain("rules");
+  autopilot.enabled = true;
+  const old = world.route,
+    p = old.project(world.ego.x, world.ego.y),
+    lane = buildSnapshot(world).lane;
   assert.equal(lane.index, 2, "in the curb lane on the old route");
   // (the law the car was executing, as candidates name it: by the old route's chain)
-  autopilot.executing = { candidate: { id: "keep_lane_target" }, law: { kind: "lane", offset: lane.center, center: lane.center, lane: lane.delta, laneIdx: lane.index, chain: lane.chain, vTarget: 10, s0: p.s }, s0: p.s };
+  autopilot.executing = {
+    candidate: { id: "keep_lane_target" },
+    law: {
+      kind: "lane",
+      offset: lane.center,
+      center: lane.center,
+      lane: lane.delta,
+      laneIdx: lane.index,
+      chain: lane.chain,
+      vTarget: 10,
+      s0: p.s,
+    },
+    s0: p.s,
+  };
   autopilot.lastStart = world.t * 1000;
   // A closure the car has seen sends the re-plan round it: without a server, through the browser's router.
   const real = world.roadClosures;
   world.roadClosures = { known: new Set(["seen"]), avoid: () => ["e513"] };
-  const replan = async () => { await autopilot.reroute(); world.roadClosures = real; };
+  const replan = async () => {
+    await autopilot.reroute();
+    world.roadClosures = real;
+  };
   return { world, autopilot, old, law: autopilot.executing.law, replan };
 }
 
@@ -49,7 +77,11 @@ function rig() {
   await replan();
   assert.ok(world.route !== old, "re-planned");
   assert.equal(world.route.edges.slice(0, 3).join(","), "e10,e407,e411", "onto Main Street, left from the freeway");
-  assert.equal(world.route.laneAt(world.route.project(world.ego.x, world.ego.y, 0).s).idx, 0, "whose lane, ahead of the left turn, is the leftmost");
+  assert.equal(
+    world.route.laneAt(world.route.project(world.ego.x, world.ego.y, 0).s).idx,
+    0,
+    "whose lane, ahead of the left turn, is the leftmost",
+  );
   assert.equal(autopilot.executing, null, "the old route's lane manoeuvre is dropped");
   assert.equal(autopilot.lastStart, -Infinity, "and the car decides again at once");
   const snap = buildSnapshot(world, autopilot.executing);

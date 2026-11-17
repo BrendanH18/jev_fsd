@@ -48,7 +48,13 @@ from jev.drives import suggested_drives
 
 VERSION = "0.2.0"
 STATIC = PROJECT_ROOT / "static"
-PAGES = {"/": "index.html", "/tests": "tests/run.html", "/bench": "bench.html", "/arena": "arena.html", "/results": "results.html"}
+PAGES = {
+    "/": "index.html",
+    "/tests": "tests/run.html",
+    "/bench": "bench.html",
+    "/arena": "arena.html",
+    "/results": "results.html",
+}
 # Every committed result (ROADMAP 2.7), built by scripts/build_results.py; /results shows it.
 RESULTS_FILE = PROJECT_ROOT / "data" / "results.json"
 MAX_BODY_BYTES = 1024 * 1024
@@ -58,10 +64,10 @@ RECORDING_FORMAT = "jev-model-recording/1"
 
 settings = Settings()
 client = JevClient(settings)
-llm_registry = llm.LlmRegistry(settings, client.guard)   # shares Jev's budget and rate limit
+llm_registry = llm.LlmRegistry(settings, client.guard)  # shares Jev's budget and rate limit
 decision_registry = decision.DecisionRegistry(settings, client.guard)
 SESSION_TOKEN = security.new_token()
-_maps: dict = {}   # bbox key -> {"pack", "router", "error"}
+_maps: dict = {}  # bbox key -> {"pack", "router", "error"}
 
 
 class BadRequest(Exception):
@@ -157,8 +163,14 @@ def api_status(_body, query):
         "npcs": settings.npcs,
         "llm": llm_setup.public(settings, llm_registry),
         "decision": decision_setup.public(settings, decision_registry, client),
-        "map": {**map_identity(entry["bbox"]), "bbox": list(entry["bbox"]), "name": pack.get("name"), "synthetic": bool(pack.get("synthetic")),
-                "error": entry["error"], "stats": pack.get("stats", {})},
+        "map": {
+            **map_identity(entry["bbox"]),
+            "bbox": list(entry["bbox"]),
+            "name": pack.get("name"),
+            "synthetic": bool(pack.get("synthetic")),
+            "error": entry["error"],
+            "stats": pack.get("stats", {}),
+        },
     }
 
 
@@ -187,8 +199,11 @@ def api_route(body, _query):
     entry = load_map(str(body.get("bbox") or ""))
     start, goal = body.get("from") or {}, body.get("to") or {}
     try:
-        start = {"x": float(start["x"]), "y": float(start["y"]),
-                 "heading": float(start["heading"]) if start.get("heading") is not None else None}
+        start = {
+            "x": float(start["x"]),
+            "y": float(start["y"]),
+            "heading": float(start["heading"]) if start.get("heading") is not None else None,
+        }
         goal = {"x": float(goal["x"]), "y": float(goal["y"])}
     except (KeyError, TypeError, ValueError):
         raise BadRequest("from {x, y, heading?} and to {x, y} are required")
@@ -198,7 +213,15 @@ def api_route(body, _query):
     if not isinstance(avoid, list) or len(avoid) > 200 or not all(isinstance(a, str) and len(a) <= 64 for a in avoid):
         raise BadRequest("avoid must be a list of edge ids")
     started = time.perf_counter()
-    routes = entry["router"].routes(start, goal, k=k, restrictions=bool(body.get("restrictions")), hour=float(body.get("hour", 15.5)), weekday=int(body.get("weekday", 0)), avoid=avoid)
+    routes = entry["router"].routes(
+        start,
+        goal,
+        k=k,
+        restrictions=bool(body.get("restrictions")),
+        hour=float(body.get("hour", 15.5)),
+        weekday=int(body.get("weekday", 0)),
+        avoid=avoid,
+    )
     return {"routes": routes, "compute_ms": round((time.perf_counter() - started) * 1000, 1)}
 
 
@@ -238,8 +261,11 @@ def _saved(result):
     with llm_setup._lock:
         llm_registry.reload()
         decision_registry.reload()
-        return {**result, "llm": llm_setup.public(settings, llm_registry),
-                "decision": decision_setup.public(settings, decision_registry, client)}
+        return {
+            **result,
+            "llm": llm_setup.public(settings, llm_registry),
+            "decision": decision_setup.public(settings, decision_registry, client),
+        }
 
 
 def api_llm_models(body, _query):
@@ -300,8 +326,13 @@ def api_snapshot_save(body, _query):
     path = SNAPSHOTS_DIR / ("%s.json" % safe)
     if path.exists():
         path = SNAPSHOTS_DIR / ("%s-%s.json" % (safe, secrets.token_hex(2)))
-    payload = {"name": safe, "state": req["state"], "questions": req["questions"], "expect": body.get("expect") or {},
-               "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    payload = {
+        "name": safe,
+        "state": req["state"],
+        "questions": req["questions"],
+        "expect": body.get("expect") or {},
+        "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
     path.write_text(json.dumps(payload, indent=2))
     return {"saved": str(path.relative_to(PROJECT_ROOT))}
 
@@ -323,8 +354,13 @@ def api_bench_save(body, _query):
     path = RUNS_DIR / ("%s-%s.json" % (stamp, brain))
     if path.exists():
         path = RUNS_DIR / ("%s-%s-%s.json" % (stamp, brain, secrets.token_hex(2)))
-    payload = {"name": path.stem, "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "config": config,
-               "summary": body["summary"], "results": body["results"]}
+    payload = {
+        "name": path.stem,
+        "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "config": config,
+        "summary": body["summary"],
+        "results": body["results"],
+    }
     path.write_text(json.dumps(payload, indent=1))
     return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
 
@@ -345,7 +381,14 @@ def api_bench_runs(_body, query):
             data = json.loads(path.read_text())
         except ValueError:
             continue
-        runs.append({"name": path.stem, "saved_at": data.get("saved_at"), "config": data.get("config"), "summary": data.get("summary")})
+        runs.append(
+            {
+                "name": path.stem,
+                "saved_at": data.get("saved_at"),
+                "config": data.get("config"),
+                "summary": data.get("summary"),
+            }
+        )
     return {"runs": runs}
 
 
@@ -361,9 +404,13 @@ def api_recording_save(body, _query):
     results, scenarios = body.get("results", {}), body.get("scenarios", {})
     if not all(isinstance(v, dict) for v in (header, drives, results, scenarios)):
         raise BadRequest("a recording needs header, drives, results and scenarios objects")
-    if not all(isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()):
+    if not all(
+        isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()
+    ):
         raise BadRequest("each drive maps request keys to lists of outcomes")
-    driver = "".join(ch if ch.isalnum() else "-" for ch in str(header.get("driver") or "model"))[:40].strip("-") or "model"
+    driver = (
+        "".join(ch if ch.isalnum() else "-" for ch in str(header.get("driver") or "model"))[:40].strip("-") or "model"
+    )
     RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = RECORDINGS_DIR / ("%s-%s.json" % (stamp, driver))
@@ -376,14 +423,24 @@ def api_recording_save(body, _query):
 def _recording_text(header, results, scenarios, drives):
     """The layout ModelRecording.serialize() writes: a line for the header, each result, each scenario
     and each request."""
+
     def dumps(value):
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
     def lines(obj, indent, each):
         return ",\n".join("%s%s: %s" % (indent, json.dumps(k, ensure_ascii=False), each(v)) for k, v in obj.items())
+
     text = lines(drives, "  ", lambda answers: "{\n%s\n  }" % lines(answers, "   ", dumps))
-    return ('{\n "format": %s,\n "header": %s,\n "results": {\n%s\n },\n "scenarios": {\n%s\n },\n "drives": {\n%s\n }\n}\n'
-            % (json.dumps(RECORDING_FORMAT), dumps(header), lines(results, "  ", dumps), lines(scenarios, "  ", dumps), text))
+    return (
+        '{\n "format": %s,\n "header": %s,\n "results": {\n%s\n },\n "scenarios": {\n%s\n },\n "drives": {\n%s\n }\n}\n'
+        % (
+            json.dumps(RECORDING_FORMAT),
+            dumps(header),
+            lines(results, "  ", dumps),
+            lines(scenarios, "  ", dumps),
+            text,
+        )
+    )
 
 
 def api_recordings(_body, query):
@@ -402,7 +459,9 @@ def api_recordings(_body, query):
         except ValueError:
             continue
         if isinstance(data, dict) and data.get("format") == RECORDING_FORMAT:
-            recordings.append({"name": path.stem, "header": data.get("header"), "drives": sorted(data.get("drives") or {})})
+            recordings.append(
+                {"name": path.stem, "header": data.get("header"), "drives": sorted(data.get("drives") or {})}
+            )
     return {"recordings": recordings}
 
 
@@ -438,10 +497,12 @@ ROUTES = {
     ("GET", "/api/results"): api_results,
 }
 
-CSP = ("default-src 'self'; script-src 'self' 'nonce-%s'; "
-       "connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; "
-       "style-src 'self' 'unsafe-inline'; font-src 'self'; "
-       "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+CSP = (
+    "default-src 'self'; script-src 'self' 'nonce-%s'; "
+    "connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; "
+    "style-src 'self' 'unsafe-inline'; font-src 'self'; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -455,7 +516,9 @@ class Handler(BaseHTTPRequestHandler):
     port = 8322
 
     def log_message(self, fmt, *args):
-        if os.environ.get("JEV_FSD_QUIET") or any(p in str(args[0]) for p in ("/api/decide", "/api/llm/decide", "/api/decision/decide")):
+        if os.environ.get("JEV_FSD_QUIET") or any(
+            p in str(args[0]) for p in ("/api/decide", "/api/llm/decide", "/api/decision/decide")
+        ):
             return
         log(fmt % args)
 
@@ -537,12 +600,22 @@ def main():
     except OSError as err:
         print("Could not listen on 127.0.0.1:%d (%s). Set PORT=<other port> and try again." % (port, err))
         return 1
-    key_note = ("API key from %s" % client.key_source) if client.configured else "no API key: Connect a model in the app, or add TYPESAFE_API_KEY to .env"
+    key_note = (
+        ("API key from %s" % client.key_source)
+        if client.configured
+        else "no API key: Connect a model in the app, or add TYPESAFE_API_KEY to .env"
+    )
     print("\n  Jev FSD %s  ->  http://127.0.0.1:%d" % (VERSION, port))
     print("  model %s via %s . %s" % (client.model, client.backend, key_note))
-    print("  spend guard $%.2f per run (JEV_FSD_BUDGET_USD) . map bbox %s" % (client.guard.budget_usd, ",".join(str(v) for v in settings.bbox)))
+    print(
+        "  spend guard $%.2f per run (JEV_FSD_BUDGET_USD) . map bbox %s"
+        % (client.guard.budget_usd, ",".join(str(v) for v in settings.bbox))
+    )
     for e in llm_registry.public()["endpoints"]:
-        print("  llm:%s  %s at %s . key %s%s" % (e["name"], e["model"], e["endpoint"], e["key"], "" if e["priced"] else " . no price set"))
+        print(
+            "  llm:%s  %s at %s . key %s%s"
+            % (e["name"], e["model"], e["endpoint"], e["key"], "" if e["priced"] else " . no price set")
+        )
     for problem in llm_registry.problems:
         print("  llm config: %s" % problem)
     for e in decision_registry.public()["endpoints"]:
@@ -550,9 +623,16 @@ def main():
     for problem in decision_registry.problems:
         print("  decision config: %s" % problem)
     entry = load_map()
-    print("  map: %d edges, %d signals, %d stops, %d buildings%s\n" % (
-        len(entry["pack"]["edges"]), len(entry["pack"]["intersections"]), len(entry["pack"]["stops"]),
-        len(entry["pack"]["buildings"]), " (SYNTHETIC fallback: %s)" % entry["error"] if entry["error"] else ""))
+    print(
+        "  map: %d edges, %d signals, %d stops, %d buildings%s\n"
+        % (
+            len(entry["pack"]["edges"]),
+            len(entry["pack"]["intersections"]),
+            len(entry["pack"]["stops"]),
+            len(entry["pack"]["buildings"]),
+            " (SYNTHETIC fallback: %s)" % entry["error"] if entry["error"] else "",
+        )
+    )
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -16,14 +16,59 @@ const { NpcFleet } = await import("../static/js/sim/npc.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
 
 function pass({ parker, phase = "reverse", hold = 0.2, parkedAt = Infinity, creep = null }) {
-  const street = { id: "street", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300,
-    cls: "residential", lanes: 1, lane_offsets: [1.75], lane_width: 3.5, asphalt: [-5.6, 5.6], parking: [2.1, 2.1], limit: 13.9 };
-  const map = new MapData({ extent: [-10, -20, 310, 20], nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }],
-    edges: [street], lanes: [{ edge: "street", idx: 0, pts: [[0, -1.75], [300, -1.75]] }], intersections: [], stops: [], buildings: [] });
+  const street = {
+    id: "street",
+    from: "a",
+    to: "b",
+    pts: [
+      [0, 0],
+      [300, 0],
+    ],
+    length: 300,
+    cls: "residential",
+    lanes: 1,
+    lane_offsets: [1.75],
+    lane_width: 3.5,
+    asphalt: [-5.6, 5.6],
+    parking: [2.1, 2.1],
+    limit: 13.9,
+  };
+  const map = new MapData({
+    extent: [-10, -20, 310, 20],
+    nodes: [
+      { id: "a", x: 0, y: 0 },
+      { id: "b", x: 300, y: 0 },
+    ],
+    edges: [street],
+    lanes: [
+      {
+        edge: "street",
+        idx: 0,
+        pts: [
+          [0, -1.75],
+          [300, -1.75],
+        ],
+      },
+    ],
+    intersections: [],
+    stops: [],
+    buildings: [],
+  });
   const world = new World(map, { parked: 0, pedestrians: 0, parkers: true });
   // (`creep`: at the call, the car is still `from` metres short of where it stops, at `v` m/s)
   Object.assign(world.ego, { x: 100 - (creep?.from ?? 0), y: -1.75, psi: 0, v: creep?.v ?? 0 });
-  world.route = new Route({ id: "straight", polyline: [[0, -1.75], [300, -1.75]], edges: ["street"], turns: [] }, world.map);
+  world.route = new Route(
+    {
+      id: "straight",
+      polyline: [
+        [0, -1.75],
+        [300, -1.75],
+      ],
+      edges: ["street"],
+      turns: [],
+    },
+    world.map,
+  );
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
   const FRONT = world.ego.spec.length - world.ego.spec.rearOverhang;
   if (parker) {
@@ -41,11 +86,15 @@ function pass({ parker, phase = "reverse", hold = 0.2, parkedAt = Infinity, cree
     world.t = k * 0.25;
     // (the parker finishes and leaves the street for its space)
     if (creep && world.t >= creep.from / creep.v) Object.assign(world.ego, { x: 100, v: 0 });
-    if (parker && world.t >= parkedAt && world.parkers.active.length) { world.parkers.active.length = 0; world.npcs.length = 0; world.npcs.push(ev); }
+    if (parker && world.t >= parkedAt && world.parkers.active.length) {
+      world.parkers.active.length = 0;
+      world.npcs.length = 0;
+      world.npcs.push(ev);
+    }
     Object.assign(ev, { x: 40 + k * 3, y: k > 12 ? 1.75 : -1.75, psi: 0, v: 12, blockedBy: null, blockedFor: 0 });
     world.auditEmergency(world.roadInfo());
   }
-  return { failed: world.violations.failed_to_yield, queued: parker ? world.parkerQueue(FRONT)?.id ?? null : null };
+  return { failed: world.violations.failed_to_yield, queued: parker ? (world.parkerQueue(FRONT)?.id ?? null) : null };
 }
 
 const held = pass({ parker: true });
@@ -59,11 +108,31 @@ assert.equal(pass({ parker: true, hold: 6 }).failed, 1, "a hold line 6 m ahead l
 // The parker gets into its space half a second before the vehicle draws level: released from the queue,
 // the car has as long to pull over as it had from the call (Edmonton's city smoke s1-1).
 assert.equal(pass({ parker: true, parkedAt: 2.75 }).failed, 0, "released just before the vehicle passes: no failure");
-assert.equal(pass({ parker: true, parkedAt: -1 }).failed, 1, "released long before it passes: staying in the lane fails");
-assert.equal(pass({ parker: false }).failed, 1, "with no parker ahead, staying in the lane as it passes is a failure to yield");
+assert.equal(
+  pass({ parker: true, parkedAt: -1 }).failed,
+  1,
+  "released long before it passes: staying in the lane fails",
+);
+assert.equal(
+  pass({ parker: false }).failed,
+  1,
+  "with no parker ahead, staying in the lane as it passes is a failure to yield",
+);
 // The call comes as the car creeps the last 1.5 m up to the hold line at 1.8 m/s.
-assert.equal(pass({ parker: true, creep: { from: 1.5, v: 1.8 } }).failed, 0, "creeping up to the hold line at the call, then holding it: yielding");
-assert.equal(pass({ parker: true, phase: "approach", creep: { from: 1.5, v: 1.8 } }).failed, 1, "but not behind a parker still on its way to the space");
-assert.equal(pass({ parker: true, creep: { from: 8, v: 2.5 } }).failed, 1, "nor from 8 m back: it had room to pull over first");
+assert.equal(
+  pass({ parker: true, creep: { from: 1.5, v: 1.8 } }).failed,
+  0,
+  "creeping up to the hold line at the call, then holding it: yielding",
+);
+assert.equal(
+  pass({ parker: true, phase: "approach", creep: { from: 1.5, v: 1.8 } }).failed,
+  1,
+  "but not behind a parker still on its way to the space",
+);
+assert.equal(
+  pass({ parker: true, creep: { from: 8, v: 2.5 } }).failed,
+  1,
+  "nor from 8 m back: it had room to pull over first",
+);
 console.log("A car held behind a reversing parker yields to an emergency vehicle going round");
 process.exit(0);

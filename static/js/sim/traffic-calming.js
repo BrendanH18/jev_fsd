@@ -42,9 +42,10 @@ export const CALM_EARLY_M = 8;
 
 export const deviceOf = (d) => DEVICES[d?.kind] || DEVICES.hump;
 export const raisedCrosswalk = (d) => d?.kind === "table" && !!d.crossing;
-export const nameOf = (d) => raisedCrosswalk(d) ? "raised crosswalk" : deviceOf(d).name;
+export const nameOf = (d) => (raisedCrosswalk(d) ? "raised crosswalk" : deviceOf(d).name);
 // Whether a vehicle (by its spec) slows for device `d`: not a cyclist, nor a wide one at a cushion.
-export const slowsFor = (spec, d) => spec?.kind !== "bike" && !(deviceOf(d).straddle && (spec?.width || 0) >= STRADDLE_WIDTH_M);
+export const slowsFor = (spec, d) =>
+  spec?.kind !== "bike" && !(deviceOf(d).straddle && (spec?.width || 0) >= STRADDLE_WIDTH_M);
 
 // Each edge's devices, { s, half, device } in metres along its centreline, in order.
 export function calmingSpans(devices, edges) {
@@ -75,10 +76,12 @@ export function pathCalmLimit(map, path, front, spec, rear, weatherSpeed = 1) {
     if (pe.sStart > front + CALM_LOOK_M) break;
     const spans = map.calmingSpans?.get(pe.id);
     if (!spans) continue;
-    const e = map.edges.get(pe.id), k = (pe.sEnd - pe.sStart) / Math.max(1e-6, e.length);
+    const e = map.edges.get(pe.id),
+      k = (pe.sEnd - pe.sStart) / Math.max(1e-6, e.length);
     for (const span of spans) {
       if (!slowsFor(spec, span.device)) continue;
-      const near = pe.sStart + (span.s - span.half) * k, far = pe.sStart + (span.s + span.half) * k;
+      const near = pe.sStart + (span.s - span.half) * k,
+        far = pe.sStart + (span.s + span.half) * k;
       if (far < path.s - rear || near > front + CALM_LOOK_M) continue;
       const mps = deviceOf(span.device).mps * DRIVER_OVER * Math.min(1, weatherSpeed);
       v = Math.min(v, front >= near - CALM_EARLY_NPC_M ? mps : approachSpeed(mps, near - CALM_EARLY_NPC_M - front));
@@ -95,12 +98,21 @@ export function calmingAhead(route, s, FRONT, REAR, weatherSpeed = 1) {
   const marks = route?.calmingMarks;
   if (!marks?.length) return null;
   for (const m of marks) {
-    const near = m.at - m.half, far = m.at + m.half;
+    const near = m.at - m.half,
+      far = m.at + m.half;
     if (far < s - REAR) continue;
     if (near > s + FRONT + CALM_LOOK_M) return null;
     const d = m.device;
-    return { id: d.id, kind: d.kind, name: nameOf(d), speed_mps: deviceOf(d).mps * Math.min(1, weatherSpeed), starts_in_m: near - (s + FRONT),
-      ends_in_m: far - (s - REAR), over: near <= s + FRONT && far >= s - REAR, crossing: raisedCrosswalk(d) };
+    return {
+      id: d.id,
+      kind: d.kind,
+      name: nameOf(d),
+      speed_mps: deviceOf(d).mps * Math.min(1, weatherSpeed),
+      starts_in_m: near - (s + FRONT),
+      ends_in_m: far - (s - REAR),
+      over: near <= s + FRONT && far >= s - REAR,
+      crossing: raisedCrosswalk(d),
+    };
   }
   return null;
 }
@@ -108,13 +120,15 @@ export function calmingAhead(route, s, FRONT, REAR, weatherSpeed = 1) {
 // The rise of device `d` `u` metres from its centre along the street (metres; 0 off it): a cosine
 // hump, or for a table a ramp up to a flat top.
 export function riseAt(d, u) {
-  const k = deviceOf(d), half = k.length / 2, a = Math.abs(u);
+  const k = deviceOf(d),
+    half = k.length / 2,
+    a = Math.abs(u);
   if (a >= half) return 0;
   if (k.flat) {
     const ramp = (k.length - k.flat) / 2;
-    return a <= k.flat / 2 ? k.height : k.height * (half - a) / ramp;
+    return a <= k.flat / 2 ? k.height : (k.height * (half - a)) / ramp;
   }
-  return k.height * 0.5 * (1 + Math.cos(Math.PI * a / half));
+  return k.height * 0.5 * (1 + Math.cos((Math.PI * a) / half));
 }
 
 // How high above the road point (x, y) is, on the devices of `map` (render only: cars ride over them).
@@ -123,7 +137,10 @@ export function liftAt(map, x, y) {
   if (!near) return 0;
   let best = 0;
   for (const { device, h, w } of near) {
-    const dx = x - device.x, dy = y - device.y, along = dx * Math.cos(h) + dy * Math.sin(h), across = Math.abs(dx * Math.sin(h) - dy * Math.cos(h));
+    const dx = x - device.x,
+      dy = y - device.y,
+      along = dx * Math.cos(h) + dy * Math.sin(h),
+      across = Math.abs(dx * Math.sin(h) - dy * Math.cos(h));
     if (across > w) continue;
     best = Math.max(best, riseAt(device, along));
   }
@@ -136,11 +153,18 @@ export function liftAt(map, x, y) {
 const NOTICE_M = 50;
 export function calmingNotice(world) {
   if (!world.calming || !world.route) return null;
-  const ego = world.ego, p = world.route.project(ego.x, ego.y, world.route.hint);
+  const ego = world.ego,
+    p = world.route.project(ego.x, ego.y, world.route.hint);
   if (!p || p.distance > 4) return null;
   const c = calmingAhead(world.route, p.s, ego.spec.length - ego.spec.rearOverhang, ego.spec.rearOverhang);
   if (!c || c.starts_in_m > NOTICE_M) return null;
-  const kmh = Math.round(c.speed_mps * 3.6), slow = ego.v > c.speed_mps + 0.5;
-  return { key: `${c.id}:${c.over ? "over" : slow ? "slow" : "ok"}`, slow,
-    text: c.over ? `${c.name.toUpperCase()} · ${kmh} KM/H` : `${c.name.toUpperCase()} AHEAD · ${slow ? "SLOW TO" : "TAKE IT AT"} ${kmh} KM/H` };
+  const kmh = Math.round(c.speed_mps * 3.6),
+    slow = ego.v > c.speed_mps + 0.5;
+  return {
+    key: `${c.id}:${c.over ? "over" : slow ? "slow" : "ok"}`,
+    slow,
+    text: c.over
+      ? `${c.name.toUpperCase()} · ${kmh} KM/H`
+      : `${c.name.toUpperCase()} AHEAD · ${slow ? "SLOW TO" : "TAKE IT AT"} ${kmh} KM/H`,
+  };
 }

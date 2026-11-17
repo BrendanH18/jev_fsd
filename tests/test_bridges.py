@@ -17,8 +17,19 @@ PROJ = Projection(ORIGIN["lat"], ORIGIN["lon"])
 
 def street(eid="e0", frm="n1", to="n2", pts=((0, 0), (200, 0)), **extra):
     length = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
-    return {"id": eid, "from": frm, "to": to, "pts": [list(p) for p in pts], "length": length, "lanes": 1, "lane_width": 3.5,
-            "oneway": False, "name": "Test Street", "asphalt": [-3.5, 3.5], **extra}
+    return {
+        "id": eid,
+        "from": frm,
+        "to": to,
+        "pts": [list(p) for p in pts],
+        "length": length,
+        "lanes": 1,
+        "lane_width": 3.5,
+        "oneway": False,
+        "name": "Test Street",
+        "asphalt": [-3.5, 3.5],
+        **extra,
+    }
 
 
 def osm_with(*ways):
@@ -67,7 +78,11 @@ class SpanTests(unittest.TestCase):
 
     def test_a_street_under_the_bridge_is_not_on_it(self):
         # (an overpass crossing the street at right angles, and a footbridge along it)
-        out = self.build([street()], ([(100, -80), (100, 80)], BRIDGE), ([(20, 0), (180, 0)], {"highway": "footway", "bridge": "yes"}))
+        out = self.build(
+            [street()],
+            ([(100, -80), (100, 80)], BRIDGE),
+            ([(20, 0), (180, 0)], {"highway": "footway", "bridge": "yes"}),
+        )
         self.assertEqual(out["spans"], [])
 
     def test_too_short_and_rings_are_left_out(self):

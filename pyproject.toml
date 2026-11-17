@@ -19,3 +19,19 @@ Demo = "https://brendanh18.github.io/jev_fsd/"
 # project venv and starts the server. No build backend is needed.
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = ["ruff>=0.14"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# E741 (names like `l`): 7 existing findings; enable later.
+ignore = ["E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# Puts the repository on sys.path before importing jev.
+"scripts/build_demo.py" = ["E402"]

@@ -46,20 +46,20 @@ export const RETURN_M = 16;
 export const PASS_MPS = 20 / 3.6;
 export const PASS_ACCEL = 1.5;
 export const MARGIN_S = 2;
-export const PASS_DECEL = 1.5;      // slowing to PASS_MPS by the wait point, at no more than this
-export const DECIDE_M = 30;         // traffic decides whether to go round once its front is this near the van
-export const VAN_LOOK_M = 80;       // and looks out for one this far ahead
-const LANE_SIDE_M = 0.15;           // the van stands this far right of its lane's centre, beside the parked cars
-const END_M = 12;                   // the way round, and room for a queue behind it, keep this far from the junction lines
+export const PASS_DECEL = 1.5; // slowing to PASS_MPS by the wait point, at no more than this
+export const DECIDE_M = 30; // traffic decides whether to go round once its front is this near the van
+export const VAN_LOOK_M = 80; // and looks out for one this far ahead
+const LANE_SIDE_M = 0.15; // the van stands this far right of its lane's centre, beside the parked cars
+const END_M = 12; // the way round, and room for a queue behind it, keep this far from the junction lines
 const QUEUE_M = 15;
 const STRAIGHT_RAD = 0.1;
-const FAR_M = 50;                   // someone this near the junction ahead (or as near as it comes in the time the way round takes) may turn into the oncoming lane
+const FAR_M = 50; // someone this near the junction ahead (or as near as it comes in the time the way round takes) may turn into the oncoming lane
 const STANDING_MPS = 0.5;
-const SIGHT_SLACK_M = 10;          // (the car's eyes are behind its front: see as far as it ever does, less this)
-const ON_STREET_M = 1;              // on the street: within this of its asphalt
-const END_REACH_M = 6;              // or up to this far past its far end
+const SIGHT_SLACK_M = 10; // (the car's eyes are behind its front: see as far as it ever does, less this)
+const ON_STREET_M = 1; // on the street: within this of its asphalt
+const END_REACH_M = 6; // or up to this far past its far end
 const SAME_WAY = Math.PI / 4;
-const HELD_M = 4;                   // parked cars along the way round, and this far beyond it, stay put while it stands there
+const HELD_M = 4; // parked cars along the way round, and this far beyond it, stay put while it stands there
 // Free drive: how many stand at once, where they turn up, for how long, and how far away the car
 // must be before one leaves without being seen.
 export const VAN_COUNT = 1;
@@ -75,7 +75,9 @@ export const isVan = (o) => !!o && o.doubleParked === true;
 
 // The edge of the same street going the other way from `e`, with one lane, or undefined.
 export function oppositeOf(map, e) {
-  return (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((x) => x.to === e.from && x.lanes === 1 && !x.oneway && Math.abs(x.length - e.length) < 1);
+  return (map.out.get(e.to) || [])
+    .map((id) => map.edges.get(id))
+    .find((x) => x.to === e.from && x.lanes === 1 && !x.oneway && Math.abs(x.length - e.length) < 1);
 }
 
 // The streets a van can stop on: a two-way street with one lane each way (`edge` the way it faces,
@@ -84,7 +86,8 @@ const siteCache = new WeakMap();
 export function vanSites(map) {
   if (siteCache.has(map)) return siteCache.get(map);
   const routed = new Set();
-  for (const route of map.transit?.routes || []) for (const run of route.runs || []) for (const id of run.edges || []) routed.add(id);
+  for (const route of map.transit?.routes || [])
+    for (const run of route.runs || []) for (const id of run.edges || []) routed.add(id);
   for (const c of railIndex(map).crossings) for (const on of c.edges) routed.add(on.edge);
   const crossed = new Set((map.crosswalks || []).map((c) => c.edge));
   const sites = [];
@@ -92,12 +95,16 @@ export function vanSites(map) {
     if (e.oneway || e.lanes !== 1 || e.ring || routed.has(e.id) || crossed.has(e.id)) continue;
     const o = oppositeOf(map, e);
     if (!o || routed.has(o.id) || crossed.has(o.id)) continue;
-    const L = e.length, start = L - (o.control?.s_line ?? L), end = e.control?.s_line ?? L;
-    const lo = start + END_M + QUEUE_M + LEAD_M, hi = end - END_M - RETURN_M - DELIVERY_VAN.length;
+    const L = e.length,
+      start = L - (o.control?.s_line ?? L),
+      end = e.control?.s_line ?? L;
+    const lo = start + END_M + QUEUE_M + LEAD_M,
+      hi = end - END_M - RETURN_M - DELIVERY_VAN.length;
     if (hi < lo) continue;
     const h0 = headingAt(e.pts, e.cum, lo - LEAD_M);
     let straight = true;
-    for (let s = lo - LEAD_M; s <= hi + DELIVERY_VAN.length + RETURN_M && straight; s += 4) straight = Math.abs(wrap(headingAt(e.pts, e.cum, s) - h0)) < STRAIGHT_RAD;
+    for (let s = lo - LEAD_M; s <= hi + DELIVERY_VAN.length + RETURN_M && straight; s += 4)
+      straight = Math.abs(wrap(headingAt(e.pts, e.cum, s) - h0)) < STRAIGHT_RAD;
     if (straight) sites.push({ edge: e.id, opposite: o.id, lo, hi });
   }
   sites.sort((a, b) => String(a.edge).localeCompare(String(b.edge)));
@@ -107,7 +114,8 @@ export function vanSites(map) {
 
 // A point `lat` metres right of edge `e`'s centre line, `s` along it.
 function at(e, s, lat) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
 }
 
@@ -117,7 +125,14 @@ function at(e, s, lat) {
 // at its end.)
 export function onStreet(e, n) {
   const p = projectPoint(e.pts, e.cum, [n.x, n.y], null);
-  if (!p || p.s < 0.5 || p.distance > Math.abs(p.lateral) + END_REACH_M || p.lateral < e.asphalt[0] - ON_STREET_M || p.lateral > e.asphalt[1] + ON_STREET_M) return null;
+  if (
+    !p ||
+    p.s < 0.5 ||
+    p.distance > Math.abs(p.lateral) + END_REACH_M ||
+    p.lateral < e.asphalt[0] - ON_STREET_M ||
+    p.lateral > e.asphalt[1] + ON_STREET_M
+  )
+    return null;
   const d = wrap(n.psi - p.heading);
   return { s: p.s, lateral: p.lateral, same: Math.abs(d) < SAME_WAY, opposite: Math.abs(d) > Math.PI - SAME_WAY };
 }
@@ -127,8 +142,11 @@ export function onStreet(e, n) {
 // away, no faster than that, after its reaction time if it is standing still, up to its own speed.
 export function passTime(d, v, driver = null) {
   if (d <= 0) return 0;
-  const a = Math.min(PASS_ACCEL, driver?.accel ?? PASS_ACCEL), vm = Math.min(PASS_MPS, driver?.vmax ?? PASS_MPS), wait = v < 0.3 ? driver?.react ?? 0 : 0;
-  const v0 = Math.min(Math.max(0, v), vm), da = (vm * vm - v0 * v0) / (2 * a);
+  const a = Math.min(PASS_ACCEL, driver?.accel ?? PASS_ACCEL),
+    vm = Math.min(PASS_MPS, driver?.vmax ?? PASS_MPS),
+    wait = v < 0.3 ? (driver?.react ?? 0) : 0;
+  const v0 = Math.min(Math.max(0, v), vm),
+    da = (vm * vm - v0 * v0) / (2 * a);
   if (d <= da) return wait + (Math.sqrt(v0 * v0 + 2 * a * d) - v0) / a;
   return wait + (vm - v0) / a + (d - da) / vm;
 }
@@ -139,11 +157,14 @@ export function passTime(d, v, driver = null) {
 // one coming up to the junction whose indicator (or none, going straight on) points into the
 // oncoming lane.
 export function arrival(map, d, n, by = 0) {
-  const e = map.edges.get(d.edge), ns = n.spec || CAR, fr = ns.length - ns.rearOverhang;
+  const e = map.edges.get(d.edge),
+    ns = n.spec || CAR,
+    fr = ns.length - ns.rearOverhang;
   const on = onStreet(e, n);
   if (on) {
     if (!on.opposite) return null;
-    const front = on.s - fr, rear = on.s + ns.rearOverhang;
+    const front = on.s - fr,
+      rear = on.s + ns.rearOverhang;
     if (rear < d.detour.from) return null;
     if (front <= d.detour.to) return 0;
     if (n.v < STANDING_MPS) return null;
@@ -151,10 +172,13 @@ export function arrival(map, d, n, by = 0) {
   }
   const node = map.nodes.get(e.to);
   if (!node || n.v < 1) return null;
-  const dx = node.x - n.x, dy = node.y - n.y, dist = Math.hypot(dx, dy);
-  if (dist > Math.max(FAR_M, n.v * by) || (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) < 0.3 * dist) return null;
-  const o = map.edges.get(d.opposite), turn = wrap(headingAt(o.pts, o.cum, 0) - n.psi);
-  if (Math.abs(turn) > Math.PI * 3 / 4) return null;
+  const dx = node.x - n.x,
+    dy = node.y - n.y,
+    dist = Math.hypot(dx, dy);
+  if (dist > Math.max(FAR_M, n.v * by) || dx * Math.cos(n.psi) + dy * Math.sin(n.psi) < 0.3 * dist) return null;
+  const o = map.edges.get(d.opposite),
+    turn = wrap(headingAt(o.pts, o.cum, 0) - n.psi);
+  if (Math.abs(turn) > (Math.PI * 3) / 4) return null;
   const way = Math.abs(turn) < Math.PI / 4 ? null : turn > 0 ? "left" : "right";
   if ((n.signal || null) !== way) return null;
   return (dist + (e.length - d.detour.to)) / n.v;
@@ -171,7 +195,10 @@ export function arrival(map, d, n, by = 0) {
 // crew is out in the street beside the way round (`crew`): for the driven car (with `sight`), one it
 // can see.
 export function wayRound(world, d, frontS, v, others, sight = null, driver = null) {
-  const map = world.map, e = map.edges.get(d.edge), need = passTime(d.detour.to - frontS, v, driver), by = need + MARGIN_S;
+  const map = world.map,
+    e = map.edges.get(d.edge),
+    need = passTime(d.detour.to - frontS, v, driver),
+    by = need + MARGIN_S;
   const crew = d.truck ? crewInRoad(world, d, sight ? world.ego : null) : null;
   let first = null;
   for (const n of others) {
@@ -181,14 +208,23 @@ export function wayRound(world, d, frontS, v, others, sight = null, driver = nul
     if (eta !== null && eta < by && (!first || eta < first.eta_s)) first = { vehicle: n, eta_s: eta };
   }
   // (as far along the oncoming lane as anyone at the street's limit would come in that time)
-  const seen = !sight || sight(Math.min(e.length - 1, d.detour.to + (e.limit || 11.2) * by, frontS + DAYLIGHT_RANGE_M - SIGHT_SLACK_M));
-  return { clear: !first && seen && !crew, need_s: need, oncoming: first, sees_far_enough: seen, ...(d.truck ? { crew } : {}) };
+  const seen =
+    !sight ||
+    sight(Math.min(e.length - 1, d.detour.to + (e.limit || 11.2) * by, frontS + DAYLIGHT_RANGE_M - SIGHT_SLACK_M));
+  return {
+    clear: !first && seen && !crew,
+    need_s: need,
+    oncoming: first,
+    sees_far_enough: seen,
+    ...(d.truck ? { crew } : {}),
+  };
 }
 
 // Someone waiting behind van `d` ahead of a driver whose front is `frontS` along its street: in the
 // van's lane, going its way, between the driver and the van, and not going round it. Or null.
 export function queuedAhead(world, d, frontS, driver, others) {
-  const e = world.map.edges.get(d.edge), lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
+  const e = world.map.edges.get(d.edge),
+    lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
   for (const n of others) {
     if (n === driver || isVan(n) || n.parked || n.kind === "pedestrian" || n.kind === "door") continue;
     if (Math.abs(n.x - d.x) > 60 || Math.abs(n.y - d.y) > 60) continue;
@@ -220,18 +256,25 @@ export class DoubleParked {
       if (this.world.visibility.canSee(ego, d.x, d.y)) d.leaving = true;
       else if (Math.hypot(d.x - ego.x, d.y - ego.y) > LEAVE_M) this.retire(d);
     }
-    if (this.count && this.vans.length < this.count && (this.next -= dt) <= 0) { this.next = RETRY_S; this.spawn(); }
+    if (this.count && this.vans.length < this.count && (this.next -= dt) <= 0) {
+      this.next = RETRY_S;
+      this.spawn();
+    }
   }
 
   // Whether anyone is beside van `d` or going round it, either way: it cannot leave yet.
   busy(d) {
-    const world = this.world, e = world.map.edges.get(d.edge), lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
+    const world = this.world,
+      e = world.map.edges.get(d.edge),
+      lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
     for (const n of [world.ego, ...(world.npcs || [])]) {
       // (a garbage truck's own record: not the truck itself, sim/collection-truck.js)
       if (n === d.van || n.rail || Math.abs(n.x - d.x) > 50 || Math.abs(n.y - d.y) > 50) continue;
       const on = onStreet(e, n);
       if (!on) continue;
-      const ns = n.spec || CAR, lo = on.s - (on.opposite ? ns.length - ns.rearOverhang : ns.rearOverhang), hi = on.s + (on.opposite ? ns.rearOverhang : ns.length - ns.rearOverhang);
+      const ns = n.spec || CAR,
+        lo = on.s - (on.opposite ? ns.length - ns.rearOverhang : ns.rearOverhang),
+        hi = on.s + (on.opposite ? ns.rearOverhang : ns.length - ns.rearOverhang);
       if (hi > d.rear - 1 && lo < d.front + 2) return true;
       if (on.same && on.lateral < lane - 1 && hi > d.detour.from && lo < d.detour.to) return true;
     }
@@ -241,7 +284,10 @@ export class DoubleParked {
   // A free-drive van on a street SPAWN_M from the car and out of its sight, with nobody along the way
   // round, and no work zone or roadside stop on the street; by day, and out of fog.
   spawn() {
-    const world = this.world, map = world.map, ego = world.ego, sites = vanSites(map);
+    const world = this.world,
+      map = world.map,
+      ego = world.ego,
+      sites = vanSites(map);
     if (!sites.length || world.visibility.night > 0.5 || weather.visibility < DAYLIGHT_RANGE_M) return null;
     for (let attempt = 0; attempt < 20; attempt++) {
       const site = sites[Math.floor(this.random() * sites.length)];
@@ -249,13 +295,24 @@ export class DoubleParked {
       if ((world.workZones?.zones || []).some((z) => z.closed === site.edge || z.closed === site.opposite)) continue;
       if ((world.laneClosures?.zones || []).some((z) => z.edge === site.edge || z.edge === site.opposite)) continue;
       // (nor where snowbanks have pushed the parked cars out: sim/snowbanks.js)
-      if (world.snowbanks?.narrowings.length && (world.snowbanks.on(site.edge) || world.snowbanks.on(site.opposite))) continue;
-      const rear = site.lo + this.random() * (site.hi - site.lo), e = map.edges.get(site.edge);
-      const mid = at(e, rear + DELIVERY_VAN.length / 2, 0), dist = Math.hypot(mid[0] - ego.x, mid[1] - ego.y);
+      if (world.snowbanks?.narrowings.length && (world.snowbanks.on(site.edge) || world.snowbanks.on(site.opposite)))
+        continue;
+      const rear = site.lo + this.random() * (site.hi - site.lo),
+        e = map.edges.get(site.edge);
+      const mid = at(e, rear + DELIVERY_VAN.length / 2, 0),
+        dist = Math.hypot(mid[0] - ego.x, mid[1] - ego.y);
       if (dist < SPAWN_M[0] || dist > SPAWN_M[1] || world.visibility.canSee(ego, mid[0], mid[1])) continue;
-      if ((world.roadside?.vehicles || []).some((v) => Math.hypot(v.x - mid[0], v.y - mid[1]) < ROADSIDE_CLEAR_M)) continue;
-      const from = rear - LEAD_M - 6, to = rear + DELIVERY_VAN.length + RETURN_M + 6;
-      if ([ego, ...(world.npcs || [])].some((n) => { const on = onStreet(e, n); return on && on.s > from && on.s < to; })) continue;
+      if ((world.roadside?.vehicles || []).some((v) => Math.hypot(v.x - mid[0], v.y - mid[1]) < ROADSIDE_CLEAR_M))
+        continue;
+      const from = rear - LEAD_M - 6,
+        to = rear + DELIVERY_VAN.length + RETURN_M + 6;
+      if (
+        [ego, ...(world.npcs || [])].some((n) => {
+          const on = onStreet(e, n);
+          return on && on.s > from && on.s < to;
+        })
+      )
+        continue;
       return this.place({ edge: site.edge, rear, stay: STAY_S[0] + this.random() * (STAY_S[1] - STAY_S[0]) });
     }
     return null;
@@ -265,26 +322,65 @@ export class DoubleParked {
   // seconds. Returns its record: { id, van, edge, opposite, rear, front, x, y, heading, detour, wait,
   // left, held (a challenge keeps it there), leaving }.
   place({ edge, rear, stay = Infinity, color = null }) {
-    const world = this.world, map = world.map, e = map.edges.get(edge), o = oppositeOf(map, e), spec = DELIVERY_VAN, n = ++this.made;
-    const laneC = e.lane_offsets?.[0] ?? e.lane_width / 2, oLane = o ? (o.lane_offsets?.[0] ?? o.lane_width / 2) : laneC;
-    const s = rear + spec.rearOverhang, h = headingAt(e.pts, e.cum, s), [x, y] = at(e, s, laneC + LANE_SIDE_M);
+    const world = this.world,
+      map = world.map,
+      e = map.edges.get(edge),
+      o = oppositeOf(map, e),
+      spec = DELIVERY_VAN,
+      n = ++this.made;
+    const laneC = e.lane_offsets?.[0] ?? e.lane_width / 2,
+      oLane = o ? (o.lane_offsets?.[0] ?? o.lane_width / 2) : laneC;
+    const s = rear + spec.rearOverhang,
+      h = headingAt(e.pts, e.cum, s),
+      [x, y] = at(e, s, laneC + LANE_SIDE_M);
     const van = new Vehicle(x, y, h, 0, spec);
     const id = `van_${n}`;
-    Object.assign(van, { id, kind: "delivery_van", doubleParked: true, hazards: true, stay: true, edge, color: color ?? COLORS[(n - 1) % COLORS.length] });
+    Object.assign(van, {
+      id,
+      kind: "delivery_van",
+      doubleParked: true,
+      hazards: true,
+      stay: true,
+      edge,
+      color: color ?? COLORS[(n - 1) % COLORS.length],
+    });
     world.parked.add(van);
-    const front = rear + spec.length, [cx, cy] = at(e, rear + spec.length / 2, laneC);
+    const front = rear + spec.length,
+      [cx, cy] = at(e, rear + spec.length / 2, laneC);
     const d = {
-      id, van, edge, opposite: o?.id ?? null, rear, front, x: cx, y: cy, heading: h,
+      id,
+      van,
+      edge,
+      opposite: o?.id ?? null,
+      rear,
+      front,
+      x: cx,
+      y: cy,
+      heading: h,
       // (from the van's lane's centre to the oncoming one's, in the van's edge's frame)
-      detour: { id, from: rear - LEAD_M, full: rear - 1, back: front + 2, to: front + RETURN_M, shift: -(laneC + oLane) },
-      wait: rear - WAIT_M, left: stay, held: false, leaving: false, stayed: [],
+      detour: {
+        id,
+        from: rear - LEAD_M,
+        full: rear - 1,
+        back: front + 2,
+        to: front + RETURN_M,
+        shift: -(laneC + oLane),
+      },
+      wait: rear - WAIT_M,
+      left: stay,
+      held: false,
+      leaving: false,
+      stayed: [],
     };
     // (the cars parked along the way round, at either curb, stay put while it is there: no door swings
     // open into it, and nobody pulls out into it)
     for (const c of world.parked.list) {
       if (c === van || c.stay || (c.edge !== e.id && c.edge !== o?.id)) continue;
       const p = projectPoint(e.pts, e.cum, [c.x, c.y], null);
-      if (p && p.s > d.detour.from - HELD_M && p.s < d.detour.to + HELD_M) { c.stay = true; d.stayed.push(c); }
+      if (p && p.s > d.detour.from - HELD_M && p.s < d.detour.to + HELD_M) {
+        c.stay = true;
+        d.stayed.push(c);
+      }
     }
     this.vans.push(d);
     return d;
@@ -295,18 +391,49 @@ export class DoubleParked {
   // traffic, and stays so): drivers wait `wait` metres behind its rear, clear of its crew. `held`, so
   // that it leaves when the truck does (release).
   placeTruck(truck, { edge, rear, wait, name }) {
-    const world = this.world, map = world.map, e = map.edges.get(edge), o = oppositeOf(map, e), spec = truck.spec;
-    const laneC = e.lane_offsets?.[0] ?? e.lane_width / 2, oLane = o ? (o.lane_offsets?.[0] ?? o.lane_width / 2) : laneC;
-    const front = rear + spec.length, [cx, cy] = at(e, rear + spec.length / 2, laneC), id = `stop_${truck.id}_${++this.made}`;
+    const world = this.world,
+      map = world.map,
+      e = map.edges.get(edge),
+      o = oppositeOf(map, e),
+      spec = truck.spec;
+    const laneC = e.lane_offsets?.[0] ?? e.lane_width / 2,
+      oLane = o ? (o.lane_offsets?.[0] ?? o.lane_width / 2) : laneC;
+    const front = rear + spec.length,
+      [cx, cy] = at(e, rear + spec.length / 2, laneC),
+      id = `stop_${truck.id}_${++this.made}`;
     const d = {
-      id, van: truck, edge, opposite: o?.id ?? null, rear, front, x: cx, y: cy, heading: headingAt(e.pts, e.cum, rear + spec.length / 2),
-      detour: { id, from: rear - LEAD_M, full: rear - 1, back: front + 2, to: front + RETURN_M, shift: -(laneC + oLane) },
-      wait: rear - wait, left: Infinity, held: true, leaving: false, stayed: [], truck: true, name,
+      id,
+      van: truck,
+      edge,
+      opposite: o?.id ?? null,
+      rear,
+      front,
+      x: cx,
+      y: cy,
+      heading: headingAt(e.pts, e.cum, rear + spec.length / 2),
+      detour: {
+        id,
+        from: rear - LEAD_M,
+        full: rear - 1,
+        back: front + 2,
+        to: front + RETURN_M,
+        shift: -(laneC + oLane),
+      },
+      wait: rear - wait,
+      left: Infinity,
+      held: true,
+      leaving: false,
+      stayed: [],
+      truck: true,
+      name,
     };
     for (const c of world.parked.list) {
       if (c.stay || (c.edge !== e.id && c.edge !== o?.id)) continue;
       const p = projectPoint(e.pts, e.cum, [c.x, c.y], null);
-      if (p && p.s > d.detour.from - HELD_M && p.s < d.detour.to + HELD_M) { c.stay = true; d.stayed.push(c); }
+      if (p && p.s > d.detour.from - HELD_M && p.s < d.detour.to + HELD_M) {
+        c.stay = true;
+        d.stayed.push(c);
+      }
     }
     this.vans.push(d);
     return d;
@@ -336,8 +463,11 @@ export class DoubleParked {
     const map = this.world.map;
     return this.vans.some((d) => {
       if (Math.abs(x - d.x) > 60 || Math.abs(y - d.y) > 60) return false;
-      const e = map.edges.get(d.edge), p = projectPoint(e.pts, e.cum, [x, y], null);
-      return p && p.s > d.wait - 8 && p.s < d.detour.to + 4 && p.lateral > e.asphalt[0] - 1 && p.lateral < e.asphalt[1] + 1;
+      const e = map.edges.get(d.edge),
+        p = projectPoint(e.pts, e.cum, [x, y], null);
+      return (
+        p && p.s > d.wait - 8 && p.s < d.detour.to + 4 && p.lateral > e.asphalt[0] - 1 && p.lateral < e.asphalt[1] + 1
+      );
     });
   }
 
@@ -348,18 +478,32 @@ export class DoubleParked {
   // what the car can see, as far as it can see), queued (someone waiting ahead of it), seen }.
   // Sensing-free, for the HUD and the audit.
   egoView() {
-    const world = this.world, ego = world.ego, map = world.map, FRONT = ego.spec.length - ego.spec.rearOverhang;
+    const world = this.world,
+      ego = world.ego,
+      map = world.map,
+      FRONT = ego.spec.length - ego.spec.rearOverhang;
     for (const d of this.vans) {
       if (Math.abs(ego.x - d.x) > VAN_LOOK_M + 30 || Math.abs(ego.y - d.y) > VAN_LOOK_M + 30) continue;
-      const e = map.edges.get(d.edge), on = onStreet(e, ego);
+      const e = map.edges.get(d.edge),
+        on = onStreet(e, ego);
       if (!on || !on.same) continue;
       const front = on.s + FRONT;
       if (front < d.rear - VAN_LOOK_M || front > d.detour.to) continue;
       const seen = world.sees(ego, d.van);
       const lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
-      const others = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M + 10).filter((n) => n !== ego && !n.parked && n.kind !== "pedestrian");
+      const others = world
+        .visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M + 10)
+        .filter((n) => n !== ego && !n.parked && n.kind !== "pedestrian");
       const way = wayRound(world, d, front, ego.v, others, this.sightFor(d));
-      return { van: d, front, going: on.lateral < lane - 1 && front > d.detour.from, lateral: on.lateral, way, queued: queuedAhead(world, d, front, ego, others), seen };
+      return {
+        van: d,
+        front,
+        going: on.lateral < lane - 1 && front > d.detour.from,
+        lateral: on.lateral,
+        way,
+        queued: queuedAhead(world, d, front, ego, others),
+        seen,
+      };
     }
     return null;
   }
@@ -368,20 +512,31 @@ export class DoubleParked {
   // round (between where it starts and a few metres past where it ends) and its centre more than
   // half a metre left of its lane's. Or null. Sensing-free, for the coaching score.
   passing() {
-    const world = this.world, ego = world.ego, FRONT = ego.spec.length - ego.spec.rearOverhang;
+    const world = this.world,
+      ego = world.ego,
+      FRONT = ego.spec.length - ego.spec.rearOverhang;
     for (const d of this.vans) {
       if (Math.abs(ego.x - d.x) > 60 || Math.abs(ego.y - d.y) > 60) continue;
-      const e = world.map.edges.get(d.edge), on = onStreet(e, ego), lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
-      if (on?.same && on.lateral < lane - 0.5 && on.s + FRONT > d.detour.from && on.s + FRONT < d.detour.to + 4) return d;
+      const e = world.map.edges.get(d.edge),
+        on = onStreet(e, ego),
+        lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
+      if (on?.same && on.lateral < lane - 0.5 && on.s + FRONT > d.detour.from && on.s + FRONT < d.detour.to + 4)
+        return d;
     }
     return null;
   }
 
   // What the driven car can see along the oncoming lane by van `d`: sight(s), as for wayRound.
   sightFor(d) {
-    const world = this.world, map = world.map, e = map.edges.get(d.edge), o = d.opposite ? map.edges.get(d.opposite) : null;
+    const world = this.world,
+      map = world.map,
+      e = map.edges.get(d.edge),
+      o = d.opposite ? map.edges.get(d.opposite) : null;
     const lat = -(o ? (o.lane_offsets?.[0] ?? o.lane_width / 2) : e.lane_width / 2);
-    return (s) => { const [x, y] = at(e, s, lat); return world.visibility.canSee(world.ego, x, y); };
+    return (s) => {
+      const [x, y] = at(e, s, lat);
+      return world.visibility.canSee(world.ego, x, y);
+    };
   }
 }
 
@@ -392,12 +547,24 @@ const NOTICE_M = 60;
 export function vanNotice(world) {
   const view = world.doubleParked?.egoView();
   if (!view || !view.seen || view.front < view.van.rear - NOTICE_M) return null;
-  const { van, way, queued, going } = view, name = van.truck ? "GARBAGE TRUCK" : "DOUBLE-PARKED VAN";
-  if (going) return { key: `${van.id}:going`, wait: false, text: `${name} · GOING ROUND · ${van.truck ? "SLOWLY, " : ""}BACK INTO YOUR LANE PAST IT` };
+  const { van, way, queued, going } = view,
+    name = van.truck ? "GARBAGE TRUCK" : "DOUBLE-PARKED VAN";
+  if (going)
+    return {
+      key: `${van.id}:going`,
+      wait: false,
+      text: `${name} · GOING ROUND · ${van.truck ? "SLOWLY, " : ""}BACK INTO YOUR LANE PAST IT`,
+    };
   if (view.front > van.front) return null;
   if (queued) return { key: `${van.id}:queued`, wait: true, text: `${name} · WAIT YOUR TURN BEHIND IT` };
   if (way.crew) return { key: `${van.id}:wait:crew`, wait: true, text: `${name} · CREW IN THE ROAD · WAIT BEHIND IT` };
-  if (!way.clear) return { key: `${van.id}:wait:${way.sees_far_enough ? "traffic" : "sight"}`, wait: true,
-    text: way.sees_far_enough ? `${name} · ONCOMING TRAFFIC · WAIT BEHIND IT` : `${name} · CAN'T SEE PAST · WAIT BEHIND IT` };
+  if (!way.clear)
+    return {
+      key: `${van.id}:wait:${way.sees_far_enough ? "traffic" : "sight"}`,
+      wait: true,
+      text: way.sees_far_enough
+        ? `${name} · ONCOMING TRAFFIC · WAIT BEHIND IT`
+        : `${name} · CAN'T SEE PAST · WAIT BEHIND IT`,
+    };
   return { key: `${van.id}:clear`, wait: false, text: `${name} · WAY CLEAR · GO ROUND IT` };
 }

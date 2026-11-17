@@ -3,7 +3,7 @@
 import { $, h, pct, ms, usd, num, copyText, api } from "../common.js";
 import { decidedBy, decidedByText } from "../bench/metrics.js";
 
-const llmRequest = d => (Array.isArray(d?.trace?.request?.messages) ? d.trace.request : null);
+const llmRequest = (d) => (Array.isArray(d?.trace?.request?.messages) ? d.trace.request : null);
 
 export class Panel {
   constructor(autopilot, hud) {
@@ -29,9 +29,14 @@ export class Panel {
     $("#save-snapshot").addEventListener("click", () => this.saveSnapshot());
     $("#edit-style").addEventListener("click", () => {
       const next = prompt("driving_style (sent with every request):", this.autopilot.style);
-      if (next !== null && next.trim()) { this.autopilot.style = next.trim(); this.hud.badge("driving style updated", "", 900); }
+      if (next !== null && next.trim()) {
+        this.autopilot.style = next.trim();
+        this.hud.badge("driving style updated", "", 900);
+      }
     });
-    $("#show-candidates").addEventListener("change", (ev) => { this.onShowCandidates?.(ev.target.checked); });
+    $("#show-candidates").addEventListener("change", (ev) => {
+      this.onShowCandidates?.(ev.target.checked);
+    });
     this.lastRender = 0;
   }
 
@@ -42,19 +47,31 @@ export class Panel {
       button.classList.toggle("on", open);
       button.setAttribute("aria-expanded", String(open));
     }
-    if (open) { this.dirty = true; this.render(); }
+    if (open) {
+      this.dirty = true;
+      this.render();
+    }
   }
 
-  set(decision) { this.last = decision; this.dirty = true; }
+  set(decision) {
+    this.last = decision;
+    this.dirty = true;
+  }
 
   render(now = performance.now()) {
     if (this.el.hidden || !this.dirty || now - this.lastRender < 120) return;
     this.lastRender = now;
     this.dirty = false;
     const d = this.last;
-    if (!d) { this.body.replaceChildren(h("pre", {}, "No decision yet. Set a destination and press J.")); return; }
+    if (!d) {
+      this.body.replaceChildren(h("pre", {}, "No decision yet. Set a destination and press J."));
+      return;
+    }
     if (this.tab === "state") this.body.replaceChildren(h("pre", {}, JSON.stringify(d.state, null, 1)));
-    else if (this.tab === "questions") this.body.replaceChildren(...(llmRequest(d) ? this.renderPrompt(llmRequest(d)) : [h("pre", {}, JSON.stringify(d.questions, null, 1))]));
+    else if (this.tab === "questions")
+      this.body.replaceChildren(
+        ...(llmRequest(d) ? this.renderPrompt(llmRequest(d)) : [h("pre", {}, JSON.stringify(d.questions, null, 1))]),
+      );
     else if (this.tab === "answers") this.body.replaceChildren(...this.renderAnswers(d));
     else this.body.replaceChildren(...this.renderMeta(d));
   }
@@ -68,16 +85,28 @@ export class Panel {
       out.push(h("div", { class: "label", style: { margin: "8px 0 4px" } }, title));
       const probs = Object.entries(a.probabilities || {}).sort((x, y) => y[1] - x[1]);
       for (const [key, p] of probs) {
-        out.push(h("div", { class: `bar ${key === a.choice ? "chosen" : ""}` },
-          h("span", { class: "name", title: key }, key),
-          h("div", { class: "track" }, h("div", { class: "fill", style: { width: `${Math.max(1, p * 100)}%` } })),
-          h("span", {}, pct(p))));
+        out.push(
+          h(
+            "div",
+            { class: `bar ${key === a.choice ? "chosen" : ""}` },
+            h("span", { class: "name", title: key }, key),
+            h("div", { class: "track" }, h("div", { class: "fill", style: { width: `${Math.max(1, p * 100)}%` } })),
+            h("span", {}, pct(p)),
+          ),
+        );
       }
-      if (a.confidence !== undefined && a.confidence !== null && !a.local) out.push(h("div", { class: "muted" }, `confidence ${pct(a.confidence)}`));
+      if (a.confidence !== undefined && a.confidence !== null && !a.local)
+        out.push(h("div", { class: "muted" }, `confidence ${pct(a.confidence)}`));
     }
     const reply = llmRequest(d) && d.trace.response?.choices?.[0]?.message?.content;
     if (typeof reply === "string") {
-      out.push(h("div", { class: "label", style: { margin: "10px 0 4px" } }, d.meta?.error ? "model reply (not used)" : "model reply"));
+      out.push(
+        h(
+          "div",
+          { class: "label", style: { margin: "10px 0 4px" } },
+          d.meta?.error ? "model reply (not used)" : "model reply",
+        ),
+      );
       out.push(h("pre", {}, reply || "(empty)"));
     }
     out.push(h("div", { class: "label", style: { margin: "10px 0 4px" } }, "executing"));
@@ -90,7 +119,11 @@ export class Panel {
     const out = [h("div", { class: "muted" }, `${request.model} · POST ${request.url}`)];
     for (const m of request.messages || []) {
       let text = m.content;
-      try { text = JSON.stringify(JSON.parse(m.content), null, 1); } catch { /* plain text */ }
+      try {
+        text = JSON.stringify(JSON.parse(m.content), null, 1);
+      } catch {
+        /* plain text */
+      }
       out.push(h("div", { class: "label", style: { margin: "8px 0 4px" } }, m.role), h("pre", {}, text));
     }
     return out;
@@ -99,17 +132,25 @@ export class Panel {
   renderMeta(d) {
     const m = d.meta || {};
     const rows = [
-      ["source", m.source], ["model", m.model], ["latency", m.latency_ms !== undefined ? ms(m.latency_ms) : "–"],
-      ["round trip", m.round_trip_ms !== undefined ? ms(m.round_trip_ms) : "–"], ["input tokens", num(m.input_tokens)],
+      ["source", m.source],
+      ["model", m.model],
+      ["latency", m.latency_ms !== undefined ? ms(m.latency_ms) : "–"],
+      ["round trip", m.round_trip_ms !== undefined ? ms(m.round_trip_ms) : "–"],
+      ["input tokens", num(m.input_tokens)],
       ...(m.output_tokens !== undefined ? [["output tokens", num(m.output_tokens)]] : []),
-      ["cost", m.cost_known === false ? "unknown (no price set for this endpoint)" : usd(m.cost_usd)], ["questions", Object.keys(d.questions || {}).join(", ") || "none (local)"],
+      ["cost", m.cost_known === false ? "unknown (no price set for this endpoint)" : usd(m.cost_usd)],
+      ["questions", Object.keys(d.questions || {}).join(", ") || "none (local)"],
       ...(m.endpoint ? [["endpoint", `${m.endpoint}${m.response_format ? ` · ${m.response_format}` : ""}`]] : []),
       ...(m.reason ? [["model's reason", m.reason]] : []),
-      ["hazard flags", (d.flags || []).join(", ") || "none"], ["candidates", `${d.candidates.filter((c) => c.eligible).length} eligible / ${d.candidates.length}`],
+      ["hazard flags", (d.flags || []).join(", ") || "none"],
+      ["candidates", `${d.candidates.filter((c) => c.eligible).length} eligible / ${d.candidates.length}`],
       ["fallback", m.fallback || m.error || "–"],
     ];
     const t = this.autopilot.totals;
-    rows.push(["totals", `${t.decisions} decisions · ${t.calls} live calls · ${num(t.tokens)} tokens · ${usd(t.cost)}`]);
+    rows.push([
+      "totals",
+      `${t.decisions} decisions · ${t.calls} live calls · ${num(t.tokens)} tokens · ${usd(t.cost)}`,
+    ]);
     // (who made them, for every driver but Rules: bench/metrics.js)
     const decided = decidedByText(decidedBy(this.autopilot));
     if (decided) rows.push(["decided by", decided]);
@@ -137,7 +178,10 @@ export class Panel {
 
   async saveSnapshot() {
     const d = this.last;
-    if (!d || !Object.keys(d.questions || {}).length) { this.hud.badge("nothing to save (local decision)", "", 1200); return; }
+    if (!d || !Object.keys(d.questions || {}).length) {
+      this.hud.badge("nothing to save (local decision)", "", 1200);
+      return;
+    }
     const name = prompt("Snapshot name (data/snapshots/<name>.json):", `snap-${Date.now() % 100000}`);
     if (!name) return;
     try {

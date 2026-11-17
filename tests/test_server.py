@@ -21,9 +21,7 @@ class StaticServerTests(unittest.TestCase):
         for page in server.PAGES.values():
             file = self.static / page
             file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_text(
-                '<html><head><script type="importmap">{}</script></head><body>Home</body></html>'
-            )
+            file.write_text('<html><head><script type="importmap">{}</script></head><body>Home</body></html>')
         private = self.root / "static-private"
         private.mkdir()
         (private / "secret.txt").write_text("private fixture")
@@ -141,8 +139,12 @@ class RecordingStoreTests(unittest.TestCase):
         self.enterContext(patch.object(server, "PROJECT_ROOT", Path(tmp)))
 
     def recording(self, driver="llm:stub"):
-        return {"format": server.RECORDING_FORMAT, "header": {"driver": driver, "model": "stub-1"},
-                "drives": {"s1-1": {"0123456789abcdef": [{"timeout": True}]}}, "results": {"s1-1": {"pass": True}}}
+        return {
+            "format": server.RECORDING_FORMAT,
+            "header": {"driver": driver, "model": "stub-1"},
+            "drives": {"s1-1": {"0123456789abcdef": [{"timeout": True}]}},
+            "results": {"s1-1": {"pass": True}},
+        }
 
     def test_save_list_and_load(self):
         saved = server.api_recording_save(self.recording(), {})

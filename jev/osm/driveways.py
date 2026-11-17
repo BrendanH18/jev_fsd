@@ -35,11 +35,11 @@ from .parse import OsmData, parse_xml
 from .project import Projection
 
 DRIVEWAYS_VERSION = "1"
-NEAR_M = 2.0          # an end node this far outside a street's asphalt still meets it
-END_M = 8.0           # (a driveway this close to an edge's end belongs to the junction)
+NEAR_M = 2.0  # an end node this far outside a street's asphalt still meets it
+END_M = 8.0  # (a driveway this close to an edge's end belongs to the junction)
 MIN_ANGLE_DEG = 35.0
 MERGE_M = 3.0
-LOOK_M = 6.0          # the driveway's heading: from where it meets the street to this far along it
+LOOK_M = 6.0  # the driveway's heading: from where it meets the street to this far along it
 
 Bbox = Tuple[float, float, float, float]
 
@@ -53,8 +53,9 @@ def load_driveways(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_driveways(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                    log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_driveways(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached driveways for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = driveways_path(maps_dir, bbox)
@@ -150,7 +151,14 @@ def driveways_from_osm(osm: OsmData, pack: dict) -> dict:
             side = "right" if side_lat > 0 else "left"
             # (on a two-way street, the edge whose right side it is on)
             if side == "left" and not e.get("oneway"):
-                twin = next((o for o in edges if o["from"] == e["to"] and o["to"] == e["from"] and abs(o["length"] - e["length"]) < 1.0), None)
+                twin = next(
+                    (
+                        o
+                        for o in edges
+                        if o["from"] == e["to"] and o["to"] == e["from"] and abs(o["length"] - e["length"]) < 1.0
+                    ),
+                    None,
+                )
                 if twin is not None:
                     e, s, side = twin, twin["length"] - s, "right"
                     if s < END_M or s > e["length"] - END_M:
@@ -158,8 +166,22 @@ def driveways_from_osm(osm: OsmData, pack: dict) -> dict:
             if any(d["edge"] == e["id"] and d["side"] == side and abs(d["s"] - s) < MERGE_M for d in kept):
                 continue
             length = sum(math.dist(a, b) for a, b in zip(line, line[1:]))
-            kept.append({"id": "d%d%s" % (w["id"], "" if end == 0 else "b"), "way": w["id"], "edge": e["id"],
-                         "s": g.r1(s), "side": side, "x": g.r2(q[0]), "y": g.r2(q[1]),
-                         "heading": round(heading, 3), "length": g.r1(length), "name": by_id[e["id"]].get("name", "")})
-    return {"driveways_version": DRIVEWAYS_VERSION, "name": pack.get("name", ""),
-            "driveways": sorted(kept, key=lambda d: (d["edge"], d["s"]))}
+            kept.append(
+                {
+                    "id": "d%d%s" % (w["id"], "" if end == 0 else "b"),
+                    "way": w["id"],
+                    "edge": e["id"],
+                    "s": g.r1(s),
+                    "side": side,
+                    "x": g.r2(q[0]),
+                    "y": g.r2(q[1]),
+                    "heading": round(heading, 3),
+                    "length": g.r1(length),
+                    "name": by_id[e["id"]].get("name", ""),
+                }
+            )
+    return {
+        "driveways_version": DRIVEWAYS_VERSION,
+        "name": pack.get("name", ""),
+        "driveways": sorted(kept, key=lambda d: (d["edge"], d["s"])),
+    }

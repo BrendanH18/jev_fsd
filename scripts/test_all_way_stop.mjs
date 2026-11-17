@@ -27,37 +27,88 @@ const fs = await import("node:fs");
 // Two-way streets crossing at the origin, one lane each way 3.2 m wide, a stop sign on every arm
 // (`allWay`: false makes it a two-way stop on the east-west street only) with its line 8 m before
 // the centre. The car comes from the west (travel +x, its lane at y = -1.6). Arms: w, e, n, s.
-const ARM = 150, LINE = ARM - 8, HALF = 1.6;
+const ARM = 150,
+  LINE = ARM - 8,
+  HALF = 1.6;
 const ARMS = { w: 180, e: 0, n: 90, s: -90 };
-const right = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy); return [dy / d, -dx / d]; };
+const right = (a, b) => {
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1],
+    d = Math.hypot(dx, dy);
+  return [dy / d, -dx / d];
+};
 function junction({ allWay = true } = {}) {
-  const ends = { c: [0, 0] }, edges = [], lanes = [], stops = [];
-  for (const [arm, deg] of Object.entries(ARMS)) ends[arm] = [ARM * Math.cos(deg * Math.PI / 180), ARM * Math.sin(deg * Math.PI / 180)].map((v) => Math.round(v * 1e6) / 1e6);
-  for (const [arm] of Object.entries(ARMS)) for (const [id, from, to, inbound] of [[`${arm}_in`, arm, "c", true], [`${arm}_out`, "c", arm, false]]) {
-    const pts = [ends[from], ends[to]], [rx, ry] = right(...pts);
-    const signed = inbound && (allWay || arm === "w" || arm === "e");
-    if (signed) stops.push({ id: `stop_${arm}`, edge: id, s_line: LINE, all_way: allWay, junction: "c" });
-    edges.push({ id, from, to, pts, length: ARM, lanes: 1, lane_width: 3.2, lane_offsets: [HALF], asphalt: [-3.2, 3.2], parking: [0, 0],
-      cls: "residential", limit: 11.1, oneway: false, name: arm === "w" || arm === "e" ? "West Street" : "North Street",
-      ...(signed ? { control: { type: "stop", id: `stop_${arm}`, s_line: LINE, all_way: allWay } } : {}) });
-    lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
-  }
-  const map = new MapData({ bbox: [0, 0, 1, 1], extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20], edges, lanes,
-    nodes: Object.entries(ends).map(([id, [x, y]]) => ({ id, x, y })), intersections: [], stops, buildings: [] });
+  const ends = { c: [0, 0] },
+    edges = [],
+    lanes = [],
+    stops = [];
+  for (const [arm, deg] of Object.entries(ARMS))
+    ends[arm] = [ARM * Math.cos((deg * Math.PI) / 180), ARM * Math.sin((deg * Math.PI) / 180)].map(
+      (v) => Math.round(v * 1e6) / 1e6,
+    );
+  for (const [arm] of Object.entries(ARMS))
+    for (const [id, from, to, inbound] of [
+      [`${arm}_in`, arm, "c", true],
+      [`${arm}_out`, "c", arm, false],
+    ]) {
+      const pts = [ends[from], ends[to]],
+        [rx, ry] = right(...pts);
+      const signed = inbound && (allWay || arm === "w" || arm === "e");
+      if (signed) stops.push({ id: `stop_${arm}`, edge: id, s_line: LINE, all_way: allWay, junction: "c" });
+      edges.push({
+        id,
+        from,
+        to,
+        pts,
+        length: ARM,
+        lanes: 1,
+        lane_width: 3.2,
+        lane_offsets: [HALF],
+        asphalt: [-3.2, 3.2],
+        parking: [0, 0],
+        cls: "residential",
+        limit: 11.1,
+        oneway: false,
+        name: arm === "w" || arm === "e" ? "West Street" : "North Street",
+        ...(signed ? { control: { type: "stop", id: `stop_${arm}`, s_line: LINE, all_way: allWay } } : {}),
+      });
+      lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
+    }
+  const map = new MapData({
+    bbox: [0, 0, 1, 1],
+    extent: [-ARM - 20, -ARM - 20, ARM + 20, ARM + 20],
+    edges,
+    lanes,
+    nodes: Object.entries(ends).map(([id, [x, y]]) => ({ id, x, y })),
+    intersections: [],
+    stops,
+    buildings: [],
+  });
   // routes from the west arm: straight on, left (north) or right (south)
-  const routeData = (exit) => ({ id: `to_${exit}`, polyline: resample(joinLanes(map.lane("w_in", 0).pts, map.lane(exit, 0).pts)), edges: ["w_in", exit],
-    turns: exit === "e_out" ? [] : [{ at_m: ARM, dir: exit === "n_out" ? "left" : "right" }], start_s: 0, goal_s: 120 });
+  const routeData = (exit) => ({
+    id: `to_${exit}`,
+    polyline: resample(joinLanes(map.lane("w_in", 0).pts, map.lane(exit, 0).pts)),
+    edges: ["w_in", exit],
+    turns: exit === "e_out" ? [] : [{ at_m: ARM, dir: exit === "n_out" ? "left" : "right" }],
+    start_s: 0,
+    goal_s: 120,
+  });
   return { map, routeData };
 }
 function resample(pts) {
-  const cum = cumulative(pts), out = [];
+  const cum = cumulative(pts),
+    out = [];
   for (let s = 0; s < cum.at(-1); s += 1) out.push(pointAt(pts, cum, s));
   out.push(pts.at(-1));
   return out;
 }
 const { map, routeData } = junction();
-const STRAIGHT = routeData("e_out"), LEFT = routeData("n_out");
-const FRONT = (() => { const c = new Vehicle(0, 0, 0, 0); return c.spec.length - c.spec.rearOverhang; })();
+const STRAIGHT = routeData("e_out"),
+  LEFT = routeData("n_out");
+const FRONT = (() => {
+  const c = new Vehicle(0, 0, 0, 0);
+  return c.spec.length - c.spec.rearOverhang;
+})();
 // where the car's front bumper is `toLine` metres short of its line
 const egoX = (toLine) => -8 - toLine - FRONT;
 
@@ -75,10 +126,19 @@ function setup({ x = egoX(20), v = 6, route = STRAIGHT, on = map } = {}) {
 // A traffic car on `arm`'s inbound lane, `toLine` metres (front bumper) short of its line, planning
 // to leave by `exit` ("e_out", ...). With a fleet, it drives itself.
 function npc(world, id, arm, toLine, { v = 0, exit = null, fleet = null, react = 0.5 } = {}) {
-  const lane = world.map.lane(`${arm}_in`, 0), s = LINE - toLine - FRONT, p = pointAt(lane.pts, lane.cum, s);
+  const lane = world.map.lane(`${arm}_in`, 0),
+    s = LINE - toLine - FRONT,
+    p = pointAt(lane.pts, lane.cum, s);
   const n = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v);
   const out = exit || { w: "e_out", e: "w_out", n: "s_out", s: "n_out" }[arm];
-  Object.assign(n, { id, v0: 11, driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react, lcRate: 0 }, stopMem: new StopMemory(), frozen: 0, waiting: 0 });
+  Object.assign(n, {
+    id,
+    v0: 11,
+    driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react, lcRate: 0 },
+    stopMem: new StopMemory(),
+    frozen: 0,
+    waiting: 0,
+  });
   n.path = new NpcPath(world.map, fleet?.random || rng(1));
   n.path.start(`${arm}_in`, 0, s, [[out, 0]]);
   (fleet ? fleet.vehicles : world.npcs).push(n);
@@ -86,7 +146,8 @@ function npc(world, id, arm, toLine, { v = 0, exit = null, fleet = null, react =
 }
 // Put a vehicle in the queue as having stopped at its line at time `t`.
 function arrive(world, n, edge, t, turn = "straight") {
-  const control = world.map.edges.get(edge).control, was = world.t;
+  const control = world.map.edges.get(edge).control,
+    was = world.t;
   world.t = t;
   world.allWay.note(n, control, edge, turn, 1, 0, world);
   world.t = was;
@@ -100,7 +161,12 @@ function decide(world) {
 function stopAtLine(world) {
   Object.assign(world.ego, { x: egoX(0.8), v: 0 });
   world.resetContactHistory();
-  for (let i = 0; i < 30; i++) { world.tick++; world.t += 1 / 30; world.audit(1 / 30, world.roadInfo()); refresh(world); }
+  for (let i = 0; i < 30; i++) {
+    world.tick++;
+    world.t += 1 / 30;
+    world.audit(1 / 30, world.roadInfo());
+    refresh(world);
+  }
   world._road = world.roadInfo();
 }
 // keep test vehicles that stand still in the queue as the ticks pass
@@ -140,12 +206,19 @@ function refresh(world) {
 {
   // stopped together (within TIE_S): the one on the right goes first
   const world = new World(map, { parked: 0, pedestrians: 0 });
-  const q = world.allWay, a = { id: "west" }, b = { id: "south" };
-  arrive(world, a, "w_in", 10); arrive(world, b, "s_in", 10 + TIE_S * 0.8);
-  assert.ok(!q.status(a, world).go && q.status(b, world).go, "the car from the south is on the right of the car from the west");
+  const q = world.allWay,
+    a = { id: "west" },
+    b = { id: "south" };
+  arrive(world, a, "w_in", 10);
+  arrive(world, b, "s_in", 10 + TIE_S * 0.8);
+  assert.ok(
+    !q.status(a, world).go && q.status(b, world).go,
+    "the car from the south is on the right of the car from the west",
+  );
   // but one that stopped later than that waits whatever side it is on
   const world2 = new World(map, { parked: 0, pedestrians: 0 });
-  arrive(world2, a, "w_in", 10); arrive(world2, b, "s_in", 10 + TIE_S * 1.2);
+  arrive(world2, a, "w_in", 10);
+  arrive(world2, b, "s_in", 10 + TIE_S * 1.2);
   assert.ok(world2.allWay.status(a, world2).go && !world2.allWay.status(b, world2).go);
   console.log("✓ two that stop together go right before left; a later one waits wherever it is");
 }
@@ -153,8 +226,11 @@ function refresh(world) {
 {
   // opposite sides: straight on (or right) together; a left turn waits on a tie; opposing lefts together
   const pair = (ta, turnA, tb, turnB) => {
-    const world = new World(map, { parked: 0, pedestrians: 0 }), a = { id: "west" }, b = { id: "east" };
-    arrive(world, a, "w_in", ta, turnA); arrive(world, b, "e_in", tb, turnB);
+    const world = new World(map, { parked: 0, pedestrians: 0 }),
+      a = { id: "west" },
+      b = { id: "east" };
+    arrive(world, a, "w_in", ta, turnA);
+    arrive(world, b, "e_in", tb, turnB);
     return [world.allWay.status(a, world).go, world.allWay.status(b, world).go];
   };
   assert.deepEqual(pair(10, "straight", 12, "straight"), [true, true], "straight on from opposite sides together");
@@ -167,11 +243,24 @@ function refresh(world) {
 
 {
   // four at once, each with one on its right: the first to stop goes, then the rest in turn
-  const world = new World(map, { parked: 0, pedestrians: 0 }), q = world.allWay;
-  const cars = ["w", "s", "e", "n"].map((arm, i) => { const n = { id: arm }; arrive(world, n, `${arm}_in`, 10 + i * 0.1); return n; });
-  assert.deepEqual(cars.map((n) => q.status(n, world).go), [true, false, false, false], "the first to stop goes");
+  const world = new World(map, { parked: 0, pedestrians: 0 }),
+    q = world.allWay;
+  const cars = ["w", "s", "e", "n"].map((arm, i) => {
+    const n = { id: arm };
+    arrive(world, n, `${arm}_in`, 10 + i * 0.1);
+    return n;
+  });
+  assert.deepEqual(
+    cars.map((n) => q.status(n, world).go),
+    [true, false, false, false],
+    "the first to stop goes",
+  );
   q.forget(cars[0]);
-  assert.deepEqual(cars.slice(1).map((n) => q.status(n, world).go), [false, false, true], "then the one it held up, and so on round");
+  assert.deepEqual(
+    cars.slice(1).map((n) => q.status(n, world).go),
+    [false, false, true],
+    "then the one it held up, and so on round",
+  );
   console.log("✓ four vehicles stopping together do not deadlock: the first to stop goes, then the rest");
 }
 
@@ -192,11 +281,16 @@ function refresh(world) {
   assert.ok(eligible.every((c) => !c.sim.crosses_stop_line));
   assert.equal(new RulesBrain().decideSync(snap, eligible).motion, "stop");
   // once it has gone, it is the car's turn
-  world.allWay.forget(other); world.npcs = [];
-  world.tick++; world.audit(1 / 30, world.roadInfo());
+  world.allWay.forget(other);
+  world.npcs = [];
+  world.tick++;
+  world.audit(1 / 30, world.roadInfo());
   const after = decide(world);
   assert.equal(after.snap.intersection.priority.go, true);
-  assert.ok(after.eligible.some((c) => c.sim.progress_m > 2), "drives on");
+  assert.ok(
+    after.eligible.some((c) => c.sim.progress_m > 2),
+    "drives on",
+  );
   assert.equal(new RulesBrain().decideSync(after.snap, after.eligible).motion, "drive");
   console.log("✓ stopped at an all-way stop after a car on its right, the car waits for it, then goes");
 }
@@ -209,7 +303,12 @@ function refresh(world) {
   stopAtLine(world);
   const { snap, candidates, eligible } = decide(world);
   const state = toJevState(snap, candidates, {}, "test");
-  assert.deepEqual(state.intersection.priority, { stopped_at_line: true, your_turn: false, wait_for: "first", goes_first: ["first", "second"] });
+  assert.deepEqual(state.intersection.priority, {
+    stopped_at_line: true,
+    your_turn: false,
+    wait_for: "first",
+    goes_first: ["first", "second"],
+  });
   const clause = situationClauses(snap).find((c) => c.includes("all-way stop"));
   assert.ok(clause && clause.includes("`first` goes first") && clause.includes("Hold still"), clause);
   const { questions } = buildQuestions(snap, eligible);
@@ -220,15 +319,24 @@ function refresh(world) {
   const coming = setup({ x: egoX(20), v: 6 });
   arrive(coming, npc(coming, "waiting", "n", 0.8), "n_in", -2);
   const early = decide(coming);
-  assert.deepEqual(toJevState(early.snap, early.candidates, {}, "test").intersection.priority, { stopped_at_line: false, waiting_at_junction: ["waiting"] });
-  assert.ok(situationClauses(early.snap).some((c) => c.startsWith("An all-way stop is") && c.includes("`waiting` stopped at its line before the car")));
+  assert.deepEqual(toJevState(early.snap, early.candidates, {}, "test").intersection.priority, {
+    stopped_at_line: false,
+    waiting_at_junction: ["waiting"],
+  });
+  assert.ok(
+    situationClauses(early.snap).some(
+      (c) => c.startsWith("An all-way stop is") && c.includes("`waiting` stopped at its line before the car"),
+    ),
+  );
   // a two-way stop has no queue, and the motion criteria read as before
   const two = junction({ allWay: false });
   const plain = decide(setup({ x: egoX(20), on: two.map, route: two.routeData("e_out") }));
   assert.equal(plain.snap.intersection.priority, null);
   assert.equal(toJevState(plain.snap, plain.candidates, {}, "test").intersection.priority, undefined);
   assert.ok(!buildQuestions(plain.snap, plain.eligible).questions.motion.criteria.stop.includes("all-way"));
-  console.log("✓ models get the car's place in the queue, a situation line and a motion criterion while it waits its turn");
+  console.log(
+    "✓ models get the car's place in the queue, a situation line and a motion criterion while it waits its turn",
+  );
 }
 
 {
@@ -252,8 +360,12 @@ function refresh(world) {
   const world = setup({ x: egoX(0.8), v: 0 });
   stopAtLine(world);
   const t0 = world.allWay.status(world.ego, world).arrived;
-  const right = npc(world, "visible_right", "s", 0.8), across = npc(world, "hidden_across", "e", 0.8), left = npc(world, "hidden_left", "n", 0.8);
-  arrive(world, right, "s_in", t0 + 0.1); arrive(world, across, "e_in", t0 + 0.2); arrive(world, left, "n_in", t0 + 0.3);
+  const right = npc(world, "visible_right", "s", 0.8),
+    across = npc(world, "hidden_across", "e", 0.8),
+    left = npc(world, "hidden_left", "n", 0.8);
+  arrive(world, right, "s_in", t0 + 0.1);
+  arrive(world, across, "e_in", t0 + 0.2);
+  arrive(world, left, "n_in", t0 + 0.3);
   assert.equal(world.allWay.status(world.ego, world).go, true, "in the full order the car goes");
   const hidden = new Set([across, left]);
   world.visibility.sees = (observer, o) => !hidden.has(o);
@@ -271,24 +383,43 @@ function refresh(world) {
     arrive(world, other, "s_in", first ? -5 : world.t + 0.5 + TIE_S * 2);
     stopAtLine(world);
     for (let k = 0; k < 45; k++) {
-      world.ego.v = 4; world.ego.x += 4 / 30; world.tick++; world.t += 1 / 30;
+      world.ego.v = 4;
+      world.ego.x += 4 / 30;
+      world.tick++;
+      world.t += 1 / 30;
       refresh(world);
       world.audit(1 / 30, world.roadInfo());
-      if (world.events.some((e) => e.type === "failed_to_yield")) return world.events.filter((e) => e.type === "failed_to_yield");
+      if (world.events.some((e) => e.type === "failed_to_yield"))
+        return world.events.filter((e) => e.type === "failed_to_yield");
     }
     return [];
   };
-  assert.deepEqual(run(true).map((e) => [e.to, e.with]), [["all-way stop", "other"]]);
+  assert.deepEqual(
+    run(true).map((e) => [e.to, e.with]),
+    [["all-way stop", "other"]],
+  );
   assert.deepEqual(run(false), []);
   // a car that overshot the line and made its stop past it, then went out of turn, counts too
   const over = setup({ x: egoX(-0.8), v: 0 });
   arrive(over, npc(over, "first", "s", 0.8), "s_in", -5);
-  for (let i = 0; i < 30; i++) { over.tick++; over.t += 1 / 30; refresh(over); over.audit(1 / 30, over.roadInfo()); }
-  assert.ok(over.egoStop.completed && over.allWay.status(over.ego, over).go === false, "stopped past the line, not its turn");
+  for (let i = 0; i < 30; i++) {
+    over.tick++;
+    over.t += 1 / 30;
+    refresh(over);
+    over.audit(1 / 30, over.roadInfo());
+  }
+  assert.ok(
+    over.egoStop.completed && over.allWay.status(over.ego, over).go === false,
+    "stopped past the line, not its turn",
+  );
   const counted = [];
   for (let k = 0; k < 45; k++) {
-    over.ego.v = 4; over.ego.x += 4 / 30; over.tick++; over.t += 1 / 30;
-    refresh(over); over.audit(1 / 30, over.roadInfo());
+    over.ego.v = 4;
+    over.ego.x += 4 / 30;
+    over.tick++;
+    over.t += 1 / 30;
+    refresh(over);
+    over.audit(1 / 30, over.roadInfo());
     counted.push(...over.events.filter((e) => e.type === "failed_to_yield").map((e) => [e.to, e.with]));
   }
   assert.deepEqual(counted, [["all-way stop", "first"]]);
@@ -299,9 +430,13 @@ function refresh(world) {
   const crept = [];
   for (let k = 0; k < 150; k++) {
     // 0.4 m/s for 3 s, then stop and go, twice
-    const v = k < 90 ? 0.4 : [1, 0, 1, 0, 2][Math.floor((k - 90) / 12)] ?? 2;
-    creep.ego.v = v; creep.ego.x += v / 30; creep.tick++; creep.t += 1 / 30;
-    refresh(creep); creep.audit(1 / 30, creep.roadInfo());
+    const v = k < 90 ? 0.4 : ([1, 0, 1, 0, 2][Math.floor((k - 90) / 12)] ?? 2);
+    creep.ego.v = v;
+    creep.ego.x += v / 30;
+    creep.tick++;
+    creep.t += 1 / 30;
+    refresh(creep);
+    creep.audit(1 / 30, creep.roadInfo());
     crept.push(...creep.events.filter((e) => e.type === "failed_to_yield").map((e) => [e.to, e.with, k < 90]));
   }
   assert.deepEqual(crept, [["all-way stop", "first", true]]);
@@ -312,9 +447,13 @@ function refresh(world) {
   const again = [];
   for (let k = 0; k < 90; k++) {
     if (k === 45) ended.route = null;
-    const v = k < 45 ? 0.8 : k < 60 ? 0 : 2;   // over the line, stop past it, route ends, go
-    ended.ego.v = v; ended.ego.x += v / 30; ended.tick++; ended.t += 1 / 30;
-    refresh(ended); ended.audit(1 / 30, ended.roadInfo());
+    const v = k < 45 ? 0.8 : k < 60 ? 0 : 2; // over the line, stop past it, route ends, go
+    ended.ego.v = v;
+    ended.ego.x += v / 30;
+    ended.tick++;
+    ended.t += 1 / 30;
+    refresh(ended);
+    ended.audit(1 / 30, ended.roadInfo());
     again.push(...ended.events.filter((e) => e.type === "failed_to_yield").map((e) => e.with));
   }
   assert.deepEqual(again, ["first"]);
@@ -324,25 +463,40 @@ function refresh(world) {
   stopAtLine(ended);
   const replaced = [];
   for (let k = 0; k < 45; k++) {
-    ended.ego.v = 2; ended.ego.x += 2 / 30; ended.tick++; ended.t += 1 / 30;
-    refresh(ended); ended.audit(1 / 30, ended.roadInfo());
+    ended.ego.v = 2;
+    ended.ego.x += 2 / 30;
+    ended.tick++;
+    ended.t += 1 / 30;
+    refresh(ended);
+    ended.audit(1 / 30, ended.roadInfo());
     replaced.push(...ended.events.filter((e) => e.type === "failed_to_yield").map((e) => e.with));
   }
   assert.deepEqual(replaced, ["first"]);
-  console.log("✓ going out of turn at an all-way stop counts as a failure to yield once, also after a stop made past the line; on the car's turn it does not");
+  console.log(
+    "✓ going out of turn at an all-way stop counts as a failure to yield once, also after a stop made past the line; on the car's turn it does not",
+  );
 }
 
 {
   // Without a route the driver's indicator supplies the turn. A left turn that stopped first
   // holds an opposing straight-going car; on a tie the left turn waits instead.
-  for (const [signal, delay, egoGoes, otherGoes] of [["left", 2, true, false], ["left", 0.5, false, true], [null, 2, true, true], ["right", 2, true, true]]) {
+  for (const [signal, delay, egoGoes, otherGoes] of [
+    ["left", 2, true, false],
+    ["left", 0.5, false, true],
+    [null, 2, true, true],
+    ["right", 2, true, true],
+  ]) {
     const world = setup({ x: egoX(0.8), v: 0 });
     world.route = null;
     world.ego.signal = signal;
     stopAtLine(world);
     const other = npc(world, "opposite", "e", 0.8);
     arrive(world, other, "e_in", world.allWay.status(world.ego, world).arrived + delay);
-    assert.deepEqual([world.allWay.status(world.ego, world).go, world.allWay.status(other, world).go], [egoGoes, otherGoes], `manual ${signal}, arrival gap ${delay}`);
+    assert.deepEqual(
+      [world.allWay.status(world.ego, world).go, world.allWay.status(other, world).go],
+      [egoGoes, otherGoes],
+      `manual ${signal}, arrival gap ${delay}`,
+    );
     // Changing the indicator at the line updates the queue too.
     world.ego.signal = signal === "left" ? null : "left";
     world.audit(1 / 30, world.roadInfo());
@@ -353,7 +507,11 @@ function refresh(world) {
   stopAtLine(routed);
   const other = npc(routed, "opposite", "e", 0.8);
   arrive(routed, other, "e_in", routed.allWay.status(routed.ego, routed).arrived + 2);
-  assert.equal(routed.allWay.status(other, routed).go, false, "the route's left turn takes precedence over an indicator");
+  assert.equal(
+    routed.allWay.status(other, routed).go,
+    false,
+    "the route's left turn takes precedence over an indicator",
+  );
   console.log("✓ manual left turns use the indicator for all-way priority, while routed turns use the route");
 }
 
@@ -412,14 +570,19 @@ function withFleet(world) {
 // crossing approaches inside it together
 function junctionLog(world) {
   const log = { order: [], overlaps: 0 };
-  return Object.assign(log, { watch(w) {
-    const inside = [w.ego, ...w.npcs].filter((n) => Math.hypot(n.front[0], n.front[1]) < 5);
-    for (const n of inside) if (!log.order.includes(n.id ?? "ego")) log.order.push(n.id ?? "ego");
-    for (const a of inside) for (const b of inside) {
-      const d = Math.abs(Math.abs(((a.psi - b.psi) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) - Math.PI / 2);
-      if (a !== b && d < Math.PI / 4 && Math.abs(a.v) > 0.3 && Math.abs(b.v) > 0.3) log.overlaps++;
-    }
-  } });
+  return Object.assign(log, {
+    watch(w) {
+      const inside = [w.ego, ...w.npcs].filter((n) => Math.hypot(n.front[0], n.front[1]) < 5);
+      for (const n of inside) if (!log.order.includes(n.id ?? "ego")) log.order.push(n.id ?? "ego");
+      for (const a of inside)
+        for (const b of inside) {
+          const d = Math.abs(
+            Math.abs(((((a.psi - b.psi) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) - Math.PI / 2,
+          );
+          if (a !== b && d < Math.PI / 4 && Math.abs(a.v) > 0.3 && Math.abs(b.v) > 0.3) log.overlaps++;
+        }
+    },
+  });
 }
 
 {
@@ -429,18 +592,36 @@ function junctionLog(world) {
   npc(world, "from_right", "s", 22, { v: 6, fleet, react: 5 });
   const log = junctionLog(world);
   let waited = 0;
-  drive(world, fleet, { watch: (w, ap) => { log.watch(w); if (w.ego.v < 0.1 && ap.snap?.intersection?.priority?.arrived && !ap.snap.intersection.priority.go) waited += 1 / 30; } });
+  drive(world, fleet, {
+    watch: (w, ap) => {
+      log.watch(w);
+      if (w.ego.v < 0.1 && ap.snap?.intersection?.priority?.arrived && !ap.snap.intersection.priority.go)
+        waited += 1 / 30;
+    },
+  });
   assert.deepEqual(log.order, ["from_right", "ego"]);
   assert.equal(log.overlaps, 0, "never in the junction together");
   assert.ok(waited > 0.3, `waited its turn for ${waited.toFixed(1)} s`);
-  assert.deepEqual([world.violations.collisions, world.violations.failed_to_yield, world.violations.stop_signs_run, world.violations.deadlock_overrides], [0, 0, 0, 0]);
+  assert.deepEqual(
+    [
+      world.violations.collisions,
+      world.violations.failed_to_yield,
+      world.violations.stop_signs_run,
+      world.violations.deadlock_overrides,
+    ],
+    [0, 0, 0, 0],
+  );
   assert.ok(world.route === null, "arrived");
   console.log(`✓ Rules waits ${waited.toFixed(1)} s for a car that stopped first on its right, then goes and arrives`);
 }
 
 {
   // the car stops first: traffic arriving after it, on its right, left and ahead, waits for it
-  for (const [arm, exit] of [["s", "n_out"], ["n", "s_out"], ["e", "s_out"]]) {
+  for (const [arm, exit] of [
+    ["s", "n_out"],
+    ["n", "s_out"],
+    ["e", "s_out"],
+  ]) {
     const world = setup({ x: egoX(12), v: 5, route: LEFT });
     const fleet = withFleet(world);
     npc(world, `from_${arm}`, arm, 40, { v: 7, exit, fleet });
@@ -465,14 +646,18 @@ function junctionLog(world) {
   drive(world, fleet, { seconds: 60, watch: log.watch });
   assert.equal(log.order.length, 4, log.order.join(" "));
   assert.equal(log.overlaps, 0);
-  assert.deepEqual([world.violations.collisions, world.violations.failed_to_yield, world.violations.deadlock_overrides], [0, 0, 0]);
+  assert.deepEqual(
+    [world.violations.collisions, world.violations.failed_to_yield, world.violations.deadlock_overrides],
+    [0, 0, 0],
+  );
   assert.ok(world.route === null, "arrived");
   console.log(`✓ four vehicles arriving together all get through in turn (${log.order.join(", ")})`);
 }
 
 {
   // a left turn at a two-way stop: an oncoming car pulling away from its own stop is waited for
-  const two = junction({ allWay: false }), route = two.routeData("n_out");
+  const two = junction({ allWay: false }),
+    route = two.routeData("n_out");
   const world = setup({ x: egoX(0.8), v: 0, on: two.map, route });
   stopAtLine(world);
   const p = pointAt(two.map.lane("e_in", 0).pts, two.map.lane("e_in", 0).cum, LINE - 3);
@@ -494,7 +679,9 @@ function junctionLog(world) {
   stopAtLine(ahead);
   ahead.npcs = world.npcs;
   assert.equal(decide(ahead).snap.intersection.oncoming, null);
-  console.log("✓ turning left at a stop sign, the car waits for an oncoming car pulling away, once its own stop is made");
+  console.log(
+    "✓ turning left at a stop sign, the car waits for an oncoming car pulling away, once its own stop is made",
+  );
 }
 
 function auditDrive(world, path, seconds = 3) {
@@ -504,7 +691,8 @@ function auditDrive(world, path, seconds = 3) {
     s += 6 / 30;
     const [x, y] = path.pointAt(s);
     Object.assign(world.ego, { x, y, psi: path.headingAt(s), v: 6 });
-    world.tick++; world.t += 1 / 30;
+    world.tick++;
+    world.t += 1 / 30;
     world.audit(1 / 30, world.roadInfo());
     events.push(...world.events.filter((e) => e.type === "failed_to_yield"));
   }
@@ -516,42 +704,67 @@ function auditDrive(world, path, seconds = 3) {
   // intersects the straight/right departure inside the junction, where the wider oncoming cone
   // would otherwise misclassify it. A stale left-turn context must not survive the new crossing.
   const two = junction({ allWay: false });
-  for (const exit of ["e_out", "s_out"]) for (const manual of [false, true]) {
-    const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData(exit) });
-    stopAtLine(world);
-    const path = world.route;
-    if (manual) world.route = null;
-    world.ego.signal = "left"; // an indicator does not determine the audited manoeuvre
-    world.lastSignal = { centre: [0, 0], nodes: new Set(["c"]), approaches: new Set(["w_in"]), facing: Math.PI, exit: Math.PI / 2, counted: false };
-    // Freeze a moving through-road vehicle just south of the point the ego's front will cross.
-    // The vehicle stays ahead of its approach; only the ego is swept through the conflict.
-    const targetS = path.controls[0].sJunction - (exit === "e_out" ? 0 : 3);
-    const [fx, fy] = path.pointAt(targetS);
-    const other = new Vehicle(fx, fy - 7, Math.PI / 2, 8);
-    other.id = "through_road";
-    world.npcs = [other];
-    const events = auditDrive(world, path);
-    assert.deepEqual(events.map((e) => [e.to, e.with]), [], `${manual ? "manual" : "routed"} ${exit} is not a left-turn oncoming violation`);
-    assert.equal(world.lastSignal?.exit ?? null, null, "the old left-turn audit context was cleared");
-  }
-  console.log("✓ straight and right stop departures do not mislabel through traffic, including manual drives with a misleading indicator");
+  for (const exit of ["e_out", "s_out"])
+    for (const manual of [false, true]) {
+      const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData(exit) });
+      stopAtLine(world);
+      const path = world.route;
+      if (manual) world.route = null;
+      world.ego.signal = "left"; // an indicator does not determine the audited manoeuvre
+      world.lastSignal = {
+        centre: [0, 0],
+        nodes: new Set(["c"]),
+        approaches: new Set(["w_in"]),
+        facing: Math.PI,
+        exit: Math.PI / 2,
+        counted: false,
+      };
+      // Freeze a moving through-road vehicle just south of the point the ego's front will cross.
+      // The vehicle stays ahead of its approach; only the ego is swept through the conflict.
+      const targetS = path.controls[0].sJunction - (exit === "e_out" ? 0 : 3);
+      const [fx, fy] = path.pointAt(targetS);
+      const other = new Vehicle(fx, fy - 7, Math.PI / 2, 8);
+      other.id = "through_road";
+      world.npcs = [other];
+      const events = auditDrive(world, path);
+      assert.deepEqual(
+        events.map((e) => [e.to, e.with]),
+        [],
+        `${manual ? "manual" : "routed"} ${exit} is not a left-turn oncoming violation`,
+      );
+      assert.equal(world.lastSignal?.exit ?? null, null, "the old left-turn audit context was cleared");
+    }
+  console.log(
+    "✓ straight and right stop departures do not mislabel through traffic, including manual drives with a misleading indicator",
+  );
 }
 
 {
   const two = junction({ allWay: false });
-  for (const [exit, turn] of [["n_out", "left"], ["w_out", "uturn"]]) for (const manual of [false, true]) for (const signal of [null, "right"]) {
-    const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData(exit) });
-    stopAtLine(world);
-    const path = world.route;
-    assert.equal(path.controls[0].turn, turn);
-    if (manual) world.route = null;
-    world.ego.signal = signal;
-    const other = new Vehicle(14, HALF, Math.PI, 8);
-    other.id = "oncoming";
-    world.npcs = [other];
-    assert.deepEqual(auditDrive(world, path).map((e) => [e.to, e.with]), [["oncoming traffic", "oncoming"]], `${manual ? "manual" : "routed"} ${turn} with signal ${signal}`);
-  }
-  console.log("✓ routed and manual left turns and U-turns at stop signs are audited with no indicator or a misleading right indicator");
+  for (const [exit, turn] of [
+    ["n_out", "left"],
+    ["w_out", "uturn"],
+  ])
+    for (const manual of [false, true])
+      for (const signal of [null, "right"]) {
+        const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData(exit) });
+        stopAtLine(world);
+        const path = world.route;
+        assert.equal(path.controls[0].turn, turn);
+        if (manual) world.route = null;
+        world.ego.signal = signal;
+        const other = new Vehicle(14, HALF, Math.PI, 8);
+        other.id = "oncoming";
+        world.npcs = [other];
+        assert.deepEqual(
+          auditDrive(world, path).map((e) => [e.to, e.with]),
+          [["oncoming traffic", "oncoming"]],
+          `${manual ? "manual" : "routed"} ${turn} with signal ${signal}`,
+        );
+      }
+  console.log(
+    "✓ routed and manual left turns and U-turns at stop signs are audited with no indicator or a misleading right indicator",
+  );
 }
 
 {
@@ -559,21 +772,33 @@ function auditDrive(world, path, seconds = 3) {
   const two = junction({ allWay: false });
   const world = setup({ x: egoX(0.8), v: 0, on: two.map, route: two.routeData("n_out") });
   stopAtLine(world);
-  const path = world.route, lane = two.map.lane("e_in", 0), s0 = LINE + 8 - 22, p = pointAt(lane.pts, lane.cum, s0);
+  const path = world.route,
+    lane = two.map.lane("e_in", 0),
+    s0 = LINE + 8 - 22,
+    p = pointAt(lane.pts, lane.cum, s0);
   const other = new Vehicle(p[0], p[1], Math.PI, 8);
-  other.id = "oncoming"; other.path = new NpcPath(two.map, rng(1)); other.path.start("e_in", 0, s0, [["w_out", 0]]);
+  other.id = "oncoming";
+  other.path = new NpcPath(two.map, rng(1));
+  other.path.start("e_in", 0, s0, [["w_out", 0]]);
   world.npcs = [other];
-  let events = [], s = path.project(world.ego.x, world.ego.y).s;
+  let events = [],
+    s = path.project(world.ego.x, world.ego.y).s;
   for (let k = 0; k < 90; k++) {
     s += 6 / 30;
     const [x, y] = path.pointAt(s);
     Object.assign(world.ego, { x, y, psi: path.headingAt(s), v: 6 });
-    other.path.s += other.v / 30; const [ox, oy] = other.path.pointAt(other.path.s); Object.assign(other, { x: ox, y: oy, psi: other.path.headingAt(other.path.s) });
-    world.tick++; world.t += 1 / 30;
+    other.path.s += other.v / 30;
+    const [ox, oy] = other.path.pointAt(other.path.s);
+    Object.assign(other, { x: ox, y: oy, psi: other.path.headingAt(other.path.s) });
+    world.tick++;
+    world.t += 1 / 30;
     world.audit(1 / 30, world.roadInfo());
     events = events.concat(world.events.filter((e) => e.type === "failed_to_yield"));
   }
-  assert.deepEqual(events.map((e) => [e.to, e.with]), [["oncoming traffic", "oncoming"]]);
+  assert.deepEqual(
+    events.map((e) => [e.to, e.with]),
+    [["oncoming traffic", "oncoming"]],
+  );
   console.log("✓ turning left at a stop sign in front of an oncoming car counts as a failure to yield");
 }
 
@@ -581,33 +806,48 @@ function auditDrive(world, path, seconds = 3) {
   // Real maps: traffic alone, many cars, at The Annex's all-way stops (Toronto has the most). Two
   // cars from crossing approaches (read from their paths) are never both moving in a junction box,
   // and the queues drain.
-  const real = new MapData(JSON.parse(fs.readFileSync(new URL("../data/maps/4a96d42cb3f2.v6.pack.json", import.meta.url))));
+  const real = new MapData(
+    JSON.parse(fs.readFileSync(new URL("../data/maps/4a96d42cb3f2.v6.pack.json", import.meta.url))),
+  );
   const world = new World(real, { parked: 0, pedestrians: 0 });
-  world.ego.x = 1e5; world.ego.y = 1e5;   // out of the way
+  world.ego.x = 1e5;
+  world.ego.y = 1e5; // out of the way
   const fleet = new NpcFleet(world, { count: 120, bikes: 0, seed: 11 });
   fleet.nextPull = fleet.nextPark = 1e9;
   const junctions = new Map();
   for (const st of real.stops.values()) if (st.all_way) junctions.set(st.junction, real.nodes.get(st.junction));
-  let together = 0, entries = 0, longest = 0;
+  let together = 0,
+    entries = 0,
+    longest = 0;
   const seen = new Set();
   const dt = 1 / 20;
   for (let k = 0; k < 180 / dt; k++) {
-    fleet.step(dt); world.t += dt; world.tick++;
+    fleet.step(dt);
+    world.t += dt;
+    world.tick++;
     for (const node of junctions.values()) {
       const inside = fleet.vehicles.filter((n) => Math.hypot(n.x - node.x, n.y - node.y) < 6 && n.v > 0.5);
-      for (const n of inside) if (!seen.has(`${n.id}@${node.id}`)) { seen.add(`${n.id}@${node.id}`); entries++; }
+      for (const n of inside)
+        if (!seen.has(`${n.id}@${node.id}`)) {
+          seen.add(`${n.id}@${node.id}`);
+          entries++;
+        }
       const from = (n) => n.path.edges.find((e) => e.to === node.id && e.sEnd > n.path.s - 25);
-      for (const a of inside) for (const b of inside) if (a.id < b.id && from(a) && from(b)) {
-        const rel = Math.abs(wrapAngle(real.headingIn(from(a).id) - real.headingIn(from(b).id)));
-        if (rel > Math.PI / 4 && rel < Math.PI * 3 / 4) together++;
-      }
+      for (const a of inside)
+        for (const b of inside)
+          if (a.id < b.id && from(a) && from(b)) {
+            const rel = Math.abs(wrapAngle(real.headingIn(from(a).id) - real.headingIn(from(b).id)));
+            if (rel > Math.PI / 4 && rel < (Math.PI * 3) / 4) together++;
+          }
     }
     for (const e of world.allWay.entries.values()) longest = Math.max(longest, world.t - e.arrived);
   }
   assert.ok(entries > 100, `${entries} entries into all-way junctions`);
   assert.equal(together, 0, `${together} ticks with crossing cars moving in a junction together`);
   assert.ok(longest < 30, `the longest wait in a queue was ${longest.toFixed(1)} s`);
-  console.log(`✓ in 3 minutes of Toronto traffic, ${entries} entries into all-way stops, never two crossing cars moving inside together (longest wait ${longest.toFixed(1)} s)`);
+  console.log(
+    `✓ in 3 minutes of Toronto traffic, ${entries} entries into all-way stops, never two crossing cars moving inside together (longest wait ${longest.toFixed(1)} s)`,
+  );
 }
 
 console.log("All all-way stop checks passed.");

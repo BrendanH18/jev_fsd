@@ -37,7 +37,7 @@ CALMING_VERSION = "1"
 KINDS = ("hump", "table", "cushion", "bump")
 SNAP_M = 4.0
 MERGE_M = 6.0
-END_M = 3.0           # (a device this close to an edge's end belongs to the junction, not the street)
+END_M = 3.0  # (a device this close to an edge's end belongs to the junction, not the street)
 
 Bbox = Tuple[float, float, float, float]
 
@@ -51,8 +51,9 @@ def load_calming(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_calming(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                  log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_calming(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached devices for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = calming_path(maps_dir, bbox)
@@ -98,17 +99,28 @@ def calming_from_osm(osm: OsmData, pack: dict) -> dict:
         e, s, q = snap
         if s < END_M or s > e["length"] - END_M:
             continue
-        twins = [o for o in edges if o["from"] == e["to"] and o["to"] == e["from"] and abs(o["length"] - e["length"]) < 1.0]
+        twins = [
+            o for o in edges if o["from"] == e["to"] and o["to"] == e["from"] and abs(o["length"] - e["length"]) < 1.0
+        ]
         street = {e["id"]} | {o["id"] for o in twins}
         if any(d["street"] & street and math.hypot(d["x"] - q[0], d["y"] - q[1]) < MERGE_M for d in kept):
             continue
         at = [{"edge": e["id"], "s": g.r1(s)}] + [{"edge": o["id"], "s": g.r1(o["length"] - s)} for o in twins]
-        device = {"id": "c%d" % nid, "kind": kind, "x": g.r2(q[0]), "y": g.r2(q[1]),
-                  "at": sorted(at, key=lambda a: a["edge"]), "street": street}
+        device = {
+            "id": "c%d" % nid,
+            "kind": kind,
+            "x": g.r2(q[0]),
+            "y": g.r2(q[1]),
+            "at": sorted(at, key=lambda a: a["edge"]),
+            "street": street,
+        }
         if kind == "table" and (tags.get("highway") == "crossing" or "crossing" in tags):
             device["crossing"] = True
         kept.append(device)
     for d in kept:
         d.pop("street")
-    return {"calming_version": CALMING_VERSION, "name": pack.get("name", ""),
-            "devices": sorted(kept, key=lambda d: d["id"])}
+    return {
+        "calming_version": CALMING_VERSION,
+        "name": pack.get("name", ""),
+        "devices": sorted(kept, key=lambda d: d["id"]),
+    }

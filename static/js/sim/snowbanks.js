@@ -51,7 +51,7 @@ export const HIDE_H = 1.3;
 // Corner piles run this far back along the kerb, and stop CUT_M short of the corner's crosswalk middle.
 export const CORNER_M = [7, 10];
 const CUT_M = 2.0;
-const CROSS_BEYOND_CURB_M = 1.6;   // (as sim/pedestrians.js: where a corner's crosswalk is)
+const CROSS_BEYOND_CURB_M = 1.6; // (as sim/pedestrians.js: where a corner's crosswalk is)
 const SLICE_M = 2;
 const QUIET = new Set(["residential", "unclassified", "living_street"]);
 const BANKED = new Set(["residential", "unclassified", "living_street", "tertiary", "secondary", "primary", "trunk"]);
@@ -65,7 +65,8 @@ export const NARROW_P = 0.7;
 export const NARROW_LEN_M = [40, 100];
 const MIN_NARROW_M = 30;
 const NARROW_END_M = 20;
-const CORNER_CLEAR_M = 5.0, LINE_CLEAR_M = 6.0;   // (as sim/parking.js: where cars park)
+const CORNER_CLEAR_M = 5.0,
+  LINE_CLEAR_M = 6.0; // (as sim/parking.js: where cars park)
 // Taking turns: arriving within ZONE_M of its end, a driver takes its turn in order of arrival; waiting,
 // it stops its front WAIT_M short of the stretch; moving off within LATCH_M of it, its turn come, it has
 // gone. One standing still further back than QUEUED_M is queued behind something else, not waiting its
@@ -79,7 +80,8 @@ const QUEUED_M = 12;
 export const NARROW_MPS = 20 / 3.6;
 export const SQUEEZE_MPS = 1.5;
 const SQUEEZE_M = 25;
-const EASE_IN_M = 10, EASE_OUT_M = 8;
+const EASE_IN_M = 10,
+  EASE_OUT_M = 8;
 export const LOOK_M = 80;
 export const SEEN_M = 40;
 // Corner sight: creep up to a corner whose waiting spot is hidden.
@@ -88,10 +90,24 @@ export const CREEP_AT_M = 3;
 const CORNER_LOOK_M = 50;
 const CELL = 25;
 // Tall enough to be seen over a bank.
-const TALL = new Set(["bus", "school_bus", "streetcar", "train", "delivery_van", "snow_plow", "collection_truck", "fire_truck", "ambulance", "tow_truck"]);
+const TALL = new Set([
+  "bus",
+  "school_bus",
+  "streetcar",
+  "train",
+  "delivery_van",
+  "snow_plow",
+  "collection_truck",
+  "fire_truck",
+  "ambulance",
+  "tow_truck",
+]);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-const ease = (u) => { const t = clamp(u, 0, 1); return t * t * (3 - 2 * t); };
+const ease = (u) => {
+  const t = clamp(u, 0, 1);
+  return t * t * (3 - 2 * t);
+};
 
 const lengthOf = (e) => e.cum[e.cum.length - 1];
 // The hardest a vehicle can brake on the grip under its wheels: the road's, or a black-ice patch's
@@ -99,8 +115,14 @@ const lengthOf = (e) => e.cum[e.cum.length - 1];
 function hardDecelUnder(v) {
   let mu = ROAD.mu;
   if (ROAD.gripAt && v?.spec) {
-    const c = Math.cos(v.psi), s = Math.sin(v.psi), wb = v.spec.wheelbase || 2.7;
-    mu = Math.min(mu, ROAD.gripAt(v.x, v.y, v.spec) ?? Infinity, ROAD.gripAt(v.x + c * wb, v.y + s * wb, v.spec) ?? Infinity);
+    const c = Math.cos(v.psi),
+      s = Math.sin(v.psi),
+      wb = v.spec.wheelbase || 2.7;
+    mu = Math.min(
+      mu,
+      ROAD.gripAt(v.x, v.y, v.spec) ?? Infinity,
+      ROAD.gripAt(v.x + c * wb, v.y + s * wb, v.spec) ?? Infinity,
+    );
   }
   return Math.min(4, mu * G * 0.8);
 }
@@ -111,7 +133,8 @@ const HOLD_M = 0.2;
 const BRAKE_RAMP_S = 0.15;
 export const waitPoint = (en, front) => (en - front >= WAIT_M ? en - WAIT_M : en - HOLD_M);
 function offsetPoint(e, s, lat) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
 }
 // The streets meeting at `node`, and the half width of the widest of them.
@@ -140,24 +163,39 @@ const siteCache = new WeakMap();
 export function narrowingSites(map) {
   if (siteCache.has(map)) return siteCache.get(map);
   const routed = new Set();
-  for (const route of map.transit?.routes || []) for (const run of route.runs || []) for (const id of run.edges || []) routed.add(id);
+  for (const route of map.transit?.routes || [])
+    for (const run of route.runs || []) for (const id of run.edges || []) routed.add(id);
   for (const c of railIndex(map).crossings) for (const on of c.edges) routed.add(on.edge);
   const crossed = new Set((map.crosswalks || []).map((c) => c.edge));
   const span = (e) => {
-    const L = lengthOf(e), a = nodeInfo(map, e.from), b = nodeInfo(map, e.to);
+    const L = lengthOf(e),
+      a = nodeInfo(map, e.from),
+      b = nodeInfo(map, e.to);
     let to = L - (b.junction ? b.half : 0) - CORNER_CLEAR_M;
-    if (e.control) to = Math.min(to, e.control.s_line * L / Math.max(1e-6, e.length) - LINE_CLEAR_M);
+    if (e.control) to = Math.min(to, (e.control.s_line * L) / Math.max(1e-6, e.length) - LINE_CLEAR_M);
     return [(a.junction ? a.half : 0) + CORNER_CLEAR_M, to];
   };
   const sites = [];
   for (const e of map.edges.values()) {
-    if (e.oneway || e.lanes !== 1 || e.ring || !QUIET.has(e.cls) || !(e.parking?.[1] > 0) || routed.has(e.id) || crossed.has(e.id)) continue;
+    if (
+      e.oneway ||
+      e.lanes !== 1 ||
+      e.ring ||
+      !QUIET.has(e.cls) ||
+      !(e.parking?.[1] > 0) ||
+      routed.has(e.id) ||
+      crossed.has(e.id)
+    )
+      continue;
     const o = oppositeOf(map, e);
     if (!o || !(o.parking?.[1] > 0) || routed.has(o.id) || crossed.has(o.id) || String(o.id) < String(e.id)) continue;
-    const L = lengthOf(e), [e0, e1] = span(e), [o0, o1] = span(o);
+    const L = lengthOf(e),
+      [e0, e1] = span(e),
+      [o0, o1] = span(o);
     // (clear of the junctions at either end, so that a driver waiting its turn is out of the junction and
     // one turning in is straight before moving over)
-    const lo = Math.max(e0, L - o1, NARROW_END_M), hi = Math.min(e1, L - o0, L - NARROW_END_M);
+    const lo = Math.max(e0, L - o1, NARROW_END_M),
+      hi = Math.min(e1, L - o0, L - NARROW_END_M);
     if (hi - lo >= MIN_NARROW_M) sites.push({ edge: e.id, opposite: o.id, lo, hi, name: e.name });
   }
   sites.sort((x, y) => String(x.edge).localeCompare(String(y.edge)));
@@ -170,7 +208,15 @@ export function narrowingSites(map) {
 const entryOf = (nw, dir) => (dir > 0 ? nw.a : nw.L - nw.b);
 const exitOf = (nw, dir) => (dir > 0 ? nw.b : nw.L - nw.a);
 const keyOf = (v, nw) => `${v.id ?? EGO_ID}|${nw.id}`;
-const narrowable = (v) => !!v && !v.parked && v.kind !== "bike" && v.kind !== "pedestrian" && v.kind !== "door" && !v.rail && !v.transit?.tram && !v.goose;
+const narrowable = (v) =>
+  !!v &&
+  !v.parked &&
+  v.kind !== "bike" &&
+  v.kind !== "pedestrian" &&
+  v.kind !== "door" &&
+  !v.rail &&
+  !v.transit?.tram &&
+  !v.goose;
 
 export class Snowbanks {
   constructor(world, { enabled = false, seed = 1 } = {}) {
@@ -180,10 +226,10 @@ export class Snowbanks {
     this.piles = [];
     // (static once built: the banks, the corner piles that hide and their grid; shared by checkpoints)
     this.geo = { runs: [], piles: [], grid: new Map(), byEdge: new Map() };
-    this.since = new Map();    // "<vehicle>|<narrowing>" -> when it came within ZONE_M of its end
-    this.go = new Map();       // "<vehicle>|<narrowing>" -> its turn come, it has gone
-    this.lists = new Map();    // narrowing id -> everyone coming to or in it (worked out once a tick)
-    this.stall = new Map();    // "<vehicle>|<narrowing>" -> how long it has stood short of its end, free to go
+    this.since = new Map(); // "<vehicle>|<narrowing>" -> when it came within ZONE_M of its end
+    this.go = new Map(); // "<vehicle>|<narrowing>" -> its turn come, it has gone
+    this.lists = new Map(); // narrowing id -> everyone coming to or in it (worked out once a tick)
+    this.stall = new Map(); // "<vehicle>|<narrowing>" -> how long it has stood short of its end, free to go
     this.tick = -1;
     this.routeEnds = new WeakMap();
     // (their own stream, drawn from only while the option is on, and only once it has snowed)
@@ -194,48 +240,72 @@ export class Snowbanks {
   // The narrowings the stream picks (NARROW_P of the sites, a NARROW_LEN_M stretch of each), and the
   // banks along every kerb; the cars parked in a narrowing pushed out.
   build({ narrowings = null } = {}) {
-    const map = this.world.map, r = this.random;
+    const map = this.world.map,
+      r = this.random;
     const list = [];
     if (narrowings) list.push(...narrowings);
-    else for (const site of narrowingSites(map)) {
-      if (r() >= NARROW_P) continue;
-      const len = Math.min(site.hi - site.lo, NARROW_LEN_M[0] + r() * (NARROW_LEN_M[1] - NARROW_LEN_M[0]));
-      const a = site.lo + r() * (site.hi - site.lo - len);
-      list.push({ edge: site.edge, a, b: a + len });
-    }
+    else
+      for (const site of narrowingSites(map)) {
+        if (r() >= NARROW_P) continue;
+        const len = Math.min(site.hi - site.lo, NARROW_LEN_M[0] + r() * (NARROW_LEN_M[1] - NARROW_LEN_M[0]));
+        const a = site.lo + r() * (site.hi - site.lo - len);
+        list.push({ edge: site.edge, a, b: a + len });
+      }
     this.narrowings = list.map((x) => this.narrowing(x));
     this.geo = { runs: [], piles: [], grid: new Map(), byEdge: new Map() };
-    for (const nw of this.narrowings) { this.geo.byEdge.set(nw.edge, { nw, dir: 1 }); this.geo.byEdge.set(nw.opposite, { nw, dir: -1 }); }
+    for (const nw of this.narrowings) {
+      this.geo.byEdge.set(nw.edge, { nw, dir: 1 });
+      this.geo.byEdge.set(nw.opposite, { nw, dir: -1 });
+    }
     for (const e of map.edges.values()) this.bankEdge(e);
     this.piles = this.geo.piles;
     for (const nw of this.narrowings) this.pushParked(nw);
   }
 
   narrowing({ edge, a, b }) {
-    const map = this.world.map, e = map.edges.get(edge), o = oppositeOf(map, e), L = lengthOf(e);
+    const map = this.world.map,
+      e = map.edges.get(edge),
+      o = oppositeOf(map, e),
+      L = lengthOf(e);
     const mid = pointAt(e.pts, e.cum, (a + b) / 2);
-    return { id: `narrow_${edge}`, edge: e.id, opposite: o.id, a, b, L, name: e.name, x: mid[0], y: mid[1], reach: (b - a) / 2 + 10 };
+    return {
+      id: `narrow_${edge}`,
+      edge: e.id,
+      opposite: o.id,
+      a,
+      b,
+      L,
+      name: e.name,
+      x: mid[0],
+      y: mid[1],
+      reach: (b - a) / 2 + 10,
+    };
   }
 
   // The banks along edge `e`'s kerbs: its right one (a two-way street's left kerb is its twin's right),
   // and on a one-way street its left one too.
   bankEdge(e) {
     if (e.ring || !BANKED.has(String(e.cls).replace("_link", "")) || !e.asphalt) return;
-    const map = this.world.map, r = this.random, L = lengthOf(e);
+    const map = this.world.map,
+      r = this.random,
+      L = lengthOf(e);
     if (L < 4) return;
-    const quiet = QUIET.has(e.cls), [blvd] = streetOf(e);
+    const quiet = QUIET.has(e.cls),
+      [blvd] = streetOf(e);
     const ends = [nodeInfo(map, e.from), nodeInfo(map, e.to)];
     const cut = ends.map((x) => (x.junction ? x.half + CROSS_BEYOND_CURB_M + CUT_M : 0));
     const at = this.geo.byEdge.get(e.id);
     for (const side of e.oneway ? [1, -1] : [1]) {
       const kerb = side > 0 ? e.asphalt[1] + GUTTER : e.asphalt[0] - GUTTER;
       const outer = kerb + side * (CURB + Math.max(0.6, blvd * 0.8));
-      const lo = cut[0], hi = L - cut[1];
+      const lo = cut[0],
+        hi = L - cut[1];
       if (hi - lo < 2) continue;
       // (corner piles at junction ends, the bank between them, split where a narrowing starts and ends)
       const pieces = [];
       const cornerLen = () => CORNER_M[0] + r() * (CORNER_M[1] - CORNER_M[0]);
-      const c0 = ends[0].junction ? Math.min(hi, lo + cornerLen()) : lo, c1 = ends[1].junction ? Math.max(c0, hi - cornerLen()) : hi;
+      const c0 = ends[0].junction ? Math.min(hi, lo + cornerLen()) : lo,
+        c1 = ends[1].junction ? Math.max(c0, hi - cornerLen()) : hi;
       if (c0 > lo) pieces.push({ s0: lo, s1: c0, corner: -1 });
       const cuts = [c0, c1];
       if (at && side > 0) {
@@ -243,21 +313,36 @@ export class Snowbanks {
         for (const s of [na, nb]) if (s > c0 && s < c1) cuts.push(s);
       }
       cuts.sort((x, y) => x - y);
-      for (let i = 0; i + 1 < cuts.length; i++) if (cuts[i + 1] - cuts[i] > 0.5) pieces.push({ s0: cuts[i], s1: cuts[i + 1], corner: 0 });
+      for (let i = 0; i + 1 < cuts.length; i++)
+        if (cuts[i + 1] - cuts[i] > 0.5) pieces.push({ s0: cuts[i], s1: cuts[i + 1], corner: 0 });
       if (c1 < hi) pieces.push({ s0: c1, s1: hi, corner: 1 });
       for (const pc of pieces) {
         const mid = (pc.s0 + pc.s1) / 2;
         const pushed = !pc.corner && at && side > 0 && mid > entryOf(at.nw, at.dir) && mid < exitOf(at.nw, at.dir);
         const inner = kerb - side * (BANK_IN_M + (pushed ? PUSH_M : 0));
         const [h0, h1] = pc.corner ? CORNER_H[quiet ? "quiet" : "main"] : BANK_H[quiet ? "quiet" : "main"];
-        const base = h0 + r() * (h1 - h0), n = Math.max(2, Math.ceil((pc.s1 - pc.s0) / LUMP_M) + 1);
+        const base = h0 + r() * (h1 - h0),
+          n = Math.max(2, Math.ceil((pc.s1 - pc.s0) / LUMP_M) + 1);
         const h = [];
         for (let k = 0; k < n; k++) {
           // (a corner pile rises toward the corner; lumps either way)
-          const u = k / (n - 1), rise = pc.corner ? 0.55 + 0.45 * (pc.corner > 0 ? u : 1 - u) : 1;
+          const u = k / (n - 1),
+            rise = pc.corner ? 0.55 + 0.45 * (pc.corner > 0 ? u : 1 - u) : 1;
           h.push(Math.max(0.15, base * rise + (r() - 0.5) * 0.25));
         }
-        const run = { edge: e.id, side, s0: pc.s0, s1: pc.s1, inner, outer, h, corner: !!pc.corner, pushed: !!pushed, quiet, dirt: r() };
+        const run = {
+          edge: e.id,
+          side,
+          s0: pc.s0,
+          s1: pc.s1,
+          inner,
+          outer,
+          h,
+          corner: !!pc.corner,
+          pushed: !!pushed,
+          quiet,
+          dirt: r(),
+        };
         this.geo.runs.push(run);
         if (pc.corner && quiet && base >= HIDE_H) this.addPile(e, run);
       }
@@ -268,26 +353,46 @@ export class Snowbanks {
   addPile(e, run) {
     const slices = [];
     for (let s = run.s0; s < run.s1 - 0.1; s += SLICE_M) {
-      const s1 = Math.min(run.s1, s + SLICE_M), m = (s + s1) / 2, h = headingAt(e.pts, e.cum, m);
+      const s1 = Math.min(run.s1, s + SLICE_M),
+        m = (s + s1) / 2,
+        h = headingAt(e.pts, e.cum, m);
       const c = offsetPoint(e, m, (run.inner + run.outer) / 2);
-      slices.push({ center: c, heading: h, halfLength: (s1 - s) / 2 + 0.05, halfWidth: Math.abs(run.outer - run.inner) / 2 });
+      slices.push({
+        center: c,
+        heading: h,
+        halfLength: (s1 - s) / 2 + 0.05,
+        halfWidth: Math.abs(run.outer - run.inner) / 2,
+      });
     }
-    const xs = slices.map((b) => b.center[0]), ys = slices.map((b) => b.center[1]);
-    const pile = { id: `pile_${this.geo.piles.length + 1}`, edge: e.id, side: run.side, end: run.s1 >= lengthOf(e) / 2 ? "end" : "start", node: run.s1 >= lengthOf(e) / 2 ? e.to : e.from, run, slices,
-      box: [Math.min(...xs) - 6, Math.min(...ys) - 6, Math.max(...xs) + 6, Math.max(...ys) + 6] };
+    const xs = slices.map((b) => b.center[0]),
+      ys = slices.map((b) => b.center[1]);
+    const pile = {
+      id: `pile_${this.geo.piles.length + 1}`,
+      edge: e.id,
+      side: run.side,
+      end: run.s1 >= lengthOf(e) / 2 ? "end" : "start",
+      node: run.s1 >= lengthOf(e) / 2 ? e.to : e.from,
+      run,
+      slices,
+      box: [Math.min(...xs) - 6, Math.min(...ys) - 6, Math.max(...xs) + 6, Math.max(...ys) + 6],
+    };
     this.geo.piles.push(pile);
-    for (let cx = Math.floor(pile.box[0] / CELL); cx <= Math.floor(pile.box[2] / CELL); cx++) for (let cy = Math.floor(pile.box[1] / CELL); cy <= Math.floor(pile.box[3] / CELL); cy++) {
-      const key = `${cx},${cy}`;
-      if (!this.geo.grid.has(key)) this.geo.grid.set(key, []);
-      this.geo.grid.get(key).push(pile);
-    }
+    for (let cx = Math.floor(pile.box[0] / CELL); cx <= Math.floor(pile.box[2] / CELL); cx++)
+      for (let cy = Math.floor(pile.box[1] / CELL); cy <= Math.floor(pile.box[3] / CELL); cy++) {
+        const key = `${cx},${cy}`;
+        if (!this.geo.grid.has(key)) this.geo.grid.set(key, []);
+        this.geo.grid.get(key).push(pile);
+      }
   }
 
   // The cars parked at the right kerb of either edge of narrowing `nw`, and the spaces there, pushed out.
   pushParked(nw) {
-    const world = this.world, map = world.map;
+    const world = this.world,
+      map = world.map;
     for (const dir of [1, -1]) {
-      const e = map.edges.get(dir > 0 ? nw.edge : nw.opposite), lo = entryOf(nw, dir) - 0.5, hi = exitOf(nw, dir) + 0.5;
+      const e = map.edges.get(dir > 0 ? nw.edge : nw.opposite),
+        lo = entryOf(nw, dir) - 0.5,
+        hi = exitOf(nw, dir) + 0.5;
       const along = (x, y) => projectPoint(e.pts, e.cum, [x, y], null);
       for (const c of [...world.parked.list]) {
         if (c.edge !== e.id || c.curb === "left" || c.roadside || c.doubleParked || c.workzone || c.closure) continue;
@@ -299,7 +404,8 @@ export class Snowbanks {
         if (slot.edge !== e.id || slot.curb !== "right") continue;
         const p = along(slot.x, slot.y);
         if (!p || p.s < lo || p.s > hi) continue;
-        slot.x -= Math.sin(p.heading) * PUSH_M; slot.y += Math.cos(p.heading) * PUSH_M;
+        slot.x -= Math.sin(p.heading) * PUSH_M;
+        slot.y += Math.cos(p.heading) * PUSH_M;
       }
     }
   }
@@ -307,16 +413,20 @@ export class Snowbanks {
   // Whether the line from `from` to `to` passes through a corner pile that hides.
   blocksView(from, to) {
     if (!this.geo.piles.length) return false;
-    const x0 = Math.min(from[0], to[0]), x1 = Math.max(from[0], to[0]), y0 = Math.min(from[1], to[1]), y1 = Math.max(from[1], to[1]);
+    const x0 = Math.min(from[0], to[0]),
+      x1 = Math.max(from[0], to[0]),
+      y0 = Math.min(from[1], to[1]),
+      y1 = Math.max(from[1], to[1]);
     const seen = new Set();
-    for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) {
-      for (const pile of this.geo.grid.get(`${cx},${cy}`) || []) {
-        if (seen.has(pile)) continue;
-        seen.add(pile);
-        if (pile.box[2] < x0 || pile.box[0] > x1 || pile.box[3] < y0 || pile.box[1] > y1) continue;
-        if (pile.slices.some((b) => segmentHitsBox(from, to, b))) return true;
+    for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++)
+      for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) {
+        for (const pile of this.geo.grid.get(`${cx},${cy}`) || []) {
+          if (seen.has(pile)) continue;
+          seen.add(pile);
+          if (pile.box[2] < x0 || pile.box[0] > x1 || pile.box[3] < y0 || pile.box[1] > y1) continue;
+          if (pile.slices.some((b) => segmentHitsBox(from, to, b))) return true;
+        }
       }
-    }
     return false;
   }
 
@@ -330,7 +440,10 @@ export class Snowbanks {
     // Until a pull-out has a gap and starts moving it is still parked at the kerb, outside the
     // shared corridor. Its longitudinal position alone does not give it the narrowing.
     if (v.pull && !v.pull.moving) return null;
-    const world = this.world, map = world.map, spec = v.spec || CAR, fr = spec.length - spec.rearOverhang;
+    const world = this.world,
+      map = world.map,
+      spec = v.spec || CAR,
+      fr = spec.length - spec.rearOverhang;
     if (Math.abs(v.x - nw.x) > nw.reach + LOOK_M || Math.abs(v.y - nw.y) > nw.reach + LOOK_M) return null;
     const make = (dir, gap, en = null, ex = null) => {
       const toExit = gap + (exitOf(nw, dir) - entryOf(nw, dir));
@@ -338,7 +451,8 @@ export class Snowbanks {
       return { v, id: v.id ?? EGO_ID, dir, gap, inside: gap < 0, speed: Math.max(0, v.v), en, ex };
     };
     if (v === world.ego) {
-      const route = world.route, ends = route ? this.alongRoute(route, nw) : null;
+      const route = world.route,
+        ends = route ? this.alongRoute(route, nw) : null;
       if (ends) {
         const p = route.project(v.x, v.y, route.hint ?? 0);
         if (p && p.distance < 6) return make(ends.dir, ends.en - (p.s + fr), ends.en, ends.ex);
@@ -346,15 +460,18 @@ export class Snowbanks {
     } else if (v.path?.edges?.length && Number.isFinite(v.path.s)) {
       for (const pe of v.path.edges) {
         if (pe.id !== nw.edge && pe.id !== nw.opposite) continue;
-        const dir = pe.id === nw.edge ? 1 : -1, { en, ex } = pathEnds(map, v.path, pe, nw, dir), front = v.path.s + fr;
+        const dir = pe.id === nw.edge ? 1 : -1,
+          { en, ex } = pathEnds(map, v.path, pe, nw, dir),
+          front = v.path.s + fr;
         if (front - spec.length > ex) continue;
         return make(dir, en - front, en, ex);
       }
     }
     // (off its route or path: by where it is on the street)
-    const e = map.edges.get(nw.edge), on = onStreet(e, v);
+    const e = map.edges.get(nw.edge),
+      on = onStreet(e, v);
     if (!on || (!on.same && !on.opposite)) return null;
-    return on.same ? make(1, nw.a - (on.s + fr)) : make(-1, (on.s - fr) - nw.b);
+    return on.same ? make(1, nw.a - (on.s + fr)) : make(-1, on.s - fr - nw.b);
   }
 
   // Where route `route` comes into and leaves narrowing `nw` (route arc lengths, on its lane), or null.
@@ -365,7 +482,10 @@ export class Snowbanks {
     let out = null;
     const i = route.edges.findIndex((id) => id === nw.edge || id === nw.opposite);
     if (i >= 0) {
-      const map = this.world.map, dir = route.edges[i] === nw.edge ? 1 : -1, e = map.edges.get(route.edges[i]), lat = e.lane_offsets?.[0] ?? e.lane_width / 2;
+      const map = this.world.map,
+        dir = route.edges[i] === nw.edge ? 1 : -1,
+        e = map.edges.get(route.edges[i]),
+        lat = e.lane_offsets?.[0] ?? e.lane_width / 2;
       const at = (s) => {
         // A drive can start or finish inside the stretch. Its truncated polyline cannot project
         // the missing end: keep that end beyond the route boundary in the same street's frame.
@@ -380,10 +500,12 @@ export class Snowbanks {
           if (end && end.s < entryOf(nw, dir)) return null;
           if (end && s > end.s) return route.length + s - end.s;
         }
-        const q = offsetPoint(e, s, lat), p = projectPoint(route.pts, route.cum, q, null);
+        const q = offsetPoint(e, s, lat),
+          p = projectPoint(route.pts, route.cum, q, null);
         return p && p.distance < 3 ? p.s : null;
       };
-      const en = at(entryOf(nw, dir)), ex = at(exitOf(nw, dir));
+      const en = at(entryOf(nw, dir)),
+        ex = at(exitOf(nw, dir));
       if (en !== null && ex !== null && ex > en) out = { dir, en, ex, edge: e.id };
     }
     memo.set(nw.id, out);
@@ -398,10 +520,18 @@ export class Snowbanks {
 
   // Who is coming to or in each narrowing: the driven car, near one; traffic, along its path.
   refresh() {
-    const world = this.world, ego = world.ego, lists = this.lists = new Map();
+    const world = this.world,
+      ego = world.ego,
+      lists = (this.lists = new Map());
     this.tick = world.tick;
-    const add = (nw, c) => { if (!c) return; if (!lists.has(nw.id)) lists.set(nw.id, []); lists.get(nw.id).push(c); };
-    for (const nw of this.narrowings) if (Math.abs(ego.x - nw.x) < nw.reach + LOOK_M && Math.abs(ego.y - nw.y) < nw.reach + LOOK_M) add(nw, this.claimFor(nw, ego));
+    const add = (nw, c) => {
+      if (!c) return;
+      if (!lists.has(nw.id)) lists.set(nw.id, []);
+      lists.get(nw.id).push(c);
+    };
+    for (const nw of this.narrowings)
+      if (Math.abs(ego.x - nw.x) < nw.reach + LOOK_M && Math.abs(ego.y - nw.y) < nw.reach + LOOK_M)
+        add(nw, this.claimFor(nw, ego));
     for (const n of world.npcs) {
       if (!narrowable(n) || !n.path?.edges?.length) continue;
       let met = null;
@@ -414,7 +544,9 @@ export class Snowbanks {
     }
   }
 
-  sinceOf(nw, c) { return this.since.get(keyOf(c.v, nw)) ?? (c.gap <= ZONE_M ? this.world.t : Infinity); }
+  sinceOf(nw, c) {
+    return this.since.get(keyOf(c.v, nw)) ?? (c.gap <= ZONE_M ? this.world.t : Infinity);
+  }
 
   // It has the way, whatever else: in, gone (its turn come), or too close to stop short of it. As others
   // see it: comfortably, with COMMIT_M to spare. As it sees itself (`self`): only when it truly could not
@@ -423,16 +555,19 @@ export class Snowbanks {
   committed(nw, c, self = false) {
     if (c.inside || (!self && this.go.get(keyOf(c.v, nw)))) return true;
     if (c.speed <= 0.3) return false;
-    if (!self) return c.gap < c.speed * c.speed / (2 * comfort().decel) + COMMIT_M;
+    if (!self) return c.gap < (c.speed * c.speed) / (2 * comfort().decel) + COMMIT_M;
     // (after the brakes' response, and the ramp to full braking, then braking hard)
-    return c.gap < c.speed * ((c.v.spec?.accelLag || 0) + BRAKE_RAMP_S) + c.speed * c.speed / (2 * hardDecelUnder(c.v));
+    return (
+      c.gap < c.speed * ((c.v.spec?.accelLag || 0) + BRAKE_RAMP_S) + (c.speed * c.speed) / (2 * hardDecelUnder(c.v))
+    );
   }
 
   // Whether `o` (coming the other way) goes before `c`: it came within ZONE_M of its end first (and is
   // not standing queued behind something further back); on a tie, by id.
   precedes(nw, o, c) {
     if (o.gap > ZONE_M || (o.speed < 0.3 && o.gap > QUEUED_M) || this.stalled(nw, o)) return false;
-    const so = this.sinceOf(nw, o), sc = this.sinceOf(nw, c);
+    const so = this.sinceOf(nw, o),
+      sc = this.sinceOf(nw, c);
     if (so < sc - 1e-6) return true;
     if (so > sc + 1e-6) return false;
     return String(o.id) < String(c.id);
@@ -443,7 +578,8 @@ export class Snowbanks {
   // something else) loses its turn, so that those waiting at the other end are not held up for ever.
   step(dt = 0) {
     if (!this.narrowings.length) return;
-    const t = this.world.t, live = new Set();
+    const t = this.world.t,
+      live = new Set();
     // (the claims once a step: they depend only on where everyone is, not on what this loop records)
     this.refresh();
     for (const nw of this.narrowings) {
@@ -459,19 +595,26 @@ export class Snowbanks {
         if ((this.stall.get(key) || 0) > STALL_S) this.go.delete(key);
       }
     }
-    for (const map of [this.since, this.go, this.stall]) for (const key of [...map.keys()]) if (!live.has(key)) map.delete(key);
+    for (const map of [this.since, this.go, this.stall])
+      for (const key of [...map.keys()]) if (!live.has(key)) map.delete(key);
   }
 
-  stalled(nw, c) { return (this.stall.get(keyOf(c.v, nw)) || 0) > STALL_S; }
+  stalled(nw, c) {
+    return (this.stall.get(keyOf(c.v, nw)) || 0) > STALL_S;
+  }
 
   // The narrowings edge `id` runs through, with the way along it.
-  on(id) { return this.geo.byEdge.get(id) || null; }
+  on(id) {
+    return this.geo.byEdge.get(id) || null;
+  }
 
   // Joining the shared corridor from a parking space is an entry, even halfway along the block.
   canPullOut(v) {
-    const pe = v.path?.currentEdge(), on = pe && this.on(pe.id);
+    const pe = v.path?.currentEdge(),
+      on = pe && this.on(pe.id);
     if (!on) return true;
-    const e = this.world.map.edges.get(pe.id), p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
+    const e = this.world.map.edges.get(pe.id),
+      p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
     if (!p || p.s < entryOf(on.nw, on.dir) || p.s > exitOf(on.nw, on.dir)) return true;
     const c = { v, id: v.id, dir: on.dir, gap: 0, inside: false, speed: 0 };
     return narrowingTurn(this, on.nw, c).mayEnter;
@@ -482,10 +625,14 @@ export class Snowbanks {
   place(v, lane) {
     const on = this.on(lane.edge);
     if (!on) return;
-    const e = this.world.map.edges.get(lane.edge), p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
+    const e = this.world.map.edges.get(lane.edge),
+      p = projectPoint(e.pts, e.cum, [v.x, v.y], null);
     if (!p) return;
-    const shift = keepRel(this.world.map, on.nw, on.dir, v.spec || CAR) * moveAt(p.s, entryOf(on.nw, on.dir), exitOf(on.nw, on.dir));
-    v.x += Math.sin(v.psi) * shift; v.y -= Math.cos(v.psi) * shift;
+    const shift =
+      keepRel(this.world.map, on.nw, on.dir, v.spec || CAR) *
+      moveAt(p.s, entryOf(on.nw, on.dir), exitOf(on.nw, on.dir));
+    v.x += Math.sin(v.psi) * shift;
+    v.y -= Math.cos(v.psi) * shift;
   }
 }
 
@@ -494,15 +641,23 @@ export class Snowbanks {
 // first), reason ("inside", "committed", "turn") }. `seen(vehicle)`: only those (the driven car: what it
 // can see); traffic sees what is there.
 export function narrowingTurn(sb, nw, c, seen = null) {
-  let first = null, reason = null;
+  let first = null,
+    reason = null;
   for (const o of sb.claims(nw)) {
     if (o.dir === c.dir || o.v === c.v || (seen && !seen(o.v)) || !sb.committed(nw, o)) continue;
-    if (!first || (o.inside && !first.inside) || (o.inside === first.inside && o.gap < first.gap)) { first = o; reason = o.inside ? "inside" : "committed"; }
+    if (!first || (o.inside && !first.inside) || (o.inside === first.inside && o.gap < first.gap)) {
+      first = o;
+      reason = o.inside ? "inside" : "committed";
+    }
   }
-  if (!first) for (const o of sb.claims(nw)) {
-    if (o.dir === c.dir || o.v === c.v || (seen && !seen(o.v)) || !sb.precedes(nw, o, c)) continue;
-    if (!first || o.gap < first.gap) { first = o; reason = "turn"; }
-  }
+  if (!first)
+    for (const o of sb.claims(nw)) {
+      if (o.dir === c.dir || o.v === c.v || (seen && !seen(o.v)) || !sb.precedes(nw, o, c)) continue;
+      if (!first || o.gap < first.gap) {
+        first = o;
+        reason = "turn";
+      }
+    }
   // A latched turn keeps two waiting approaches from swapping priority. It cannot outrank a
   // vehicle that has since appeared inside (pulling out from the kerb, for example), while this
   // driver is still outside and can stop. Only physical inability to stop allows it to continue.
@@ -545,12 +700,15 @@ function squeezing(sb, nw, c) {
 function pathEnds(map, path, pe, nw, dir) {
   const memo = pe.snowbank;
   if (memo?.id === nw.id) return { en: pe.sStart + memo.en, ex: pe.sStart + memo.ex };
-  const e = map.edges.get(pe.id), lat = e.lane_offsets?.[pe.lane ?? 0] ?? e.lane_width / 2, k = (pe.sEnd - pe.sStart) / Math.max(1e-6, nw.L);
+  const e = map.edges.get(pe.id),
+    lat = e.lane_offsets?.[pe.lane ?? 0] ?? e.lane_width / 2,
+    k = (pe.sEnd - pe.sStart) / Math.max(1e-6, nw.L);
   const at = (s) => {
     const p = path.pts?.length > 1 ? projectPoint(path.pts, path.cum, offsetPoint(e, s, lat), null) : null;
     return p && p.distance < 3 && p.s > pe.sStart - 1 && p.s < pe.sEnd + 1 ? p.s : pe.sStart + s * k;
   };
-  const en = at(entryOf(nw, dir)), ex = at(exitOf(nw, dir));
+  const en = at(entryOf(nw, dir)),
+    ex = at(exitOf(nw, dir));
   pe.snowbank = { id: nw.id, en: en - pe.sStart, ex: ex - pe.sStart };
   return { en, ex };
 }
@@ -558,13 +716,21 @@ function pathEnds(map, path, pe, nw, dir) {
 // How far over toward the middle a driver keeps in a narrowing, relative to its lane's centre (metres
 // right: below 0), for vehicle `spec`, going `dir`.
 function keepRel(map, nw, dir, spec) {
-  const e = map.edges.get(dir > 0 ? nw.edge : nw.opposite), lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
+  const e = map.edges.get(dir > 0 ? nw.edge : nw.opposite),
+    lane = e.lane_offsets?.[0] ?? e.lane_width / 2;
   return Math.min(0, keepAt(e, spec) - lane);
 }
 
 // How far into the move over toward the middle a driver is at arc length `s` of its way, for a narrowing
 // it comes into at `en` and leaves at `ex` (0 to 1).
-const moveAt = (s, en, ex) => (s < en - EASE_IN_M || s > ex + EASE_OUT_M ? 0 : s < en - NARROW_FULL_M ? ease((s - en + EASE_IN_M) / (EASE_IN_M - NARROW_FULL_M)) : s > ex + NARROW_FULL_M ? ease((ex + EASE_OUT_M - s) / (EASE_OUT_M - NARROW_FULL_M)) : 1);
+const moveAt = (s, en, ex) =>
+  s < en - EASE_IN_M || s > ex + EASE_OUT_M
+    ? 0
+    : s < en - NARROW_FULL_M
+      ? ease((s - en + EASE_IN_M) / (EASE_IN_M - NARROW_FULL_M))
+      : s > ex + NARROW_FULL_M
+        ? ease((ex + EASE_OUT_M - s) / (EASE_OUT_M - NARROW_FULL_M))
+        : 1;
 
 // Traffic (sim/npc.js): for driver `n`, whose front is `front` along its path, the first narrowing ahead
 // on it: { hold (its front's arc length where it waits, or null), limit, keep (how far over from its
@@ -577,10 +743,13 @@ export function snowbankYield(world, n, front) {
   for (const pe of n.path.edges) {
     const on = sb.on(pe.id);
     if (!on) continue;
-    const nw = on.nw, dir = on.dir, { en, ex } = pathEnds(map, n.path, pe, nw, dir);
+    const nw = on.nw,
+      dir = on.dir,
+      { en, ex } = pathEnds(map, n.path, pe, nw, dir);
     if (front - (n.spec || CAR).length > ex) continue;
     if (en - front > LOOK_M) return null;
-    const keep = keepRel(map, nw, dir, n.spec || CAR), at = (s) => moveAt(s, en, ex);
+    const keep = keepRel(map, nw, dir, n.spec || CAR),
+      at = (s) => moveAt(s, en, ex);
     if (n.kind === "bike") return { hold: null, limit: Infinity, keep, at };
     const c = sb.claims(nw).find((x) => x.v === n) || sb.claimFor(nw, n);
     if (!c) return { hold: null, limit: Infinity, keep, at };
@@ -593,8 +762,9 @@ export function snowbankYield(world, n, front) {
     if (prev && !roomToWait && Math.abs(map.turnAngle(prev.id, pe.id)) > Math.PI / 6) {
       // The last car can be clear of the banks but still at the junction's stop
       // line. Keep its way out open until it has left the approach too.
-      const edge = map.edges.get(pe.id), entry = entryOf(nw, dir);
-      const exiting = [world.ego, ...world.npcs].some(o => {
+      const edge = map.edges.get(pe.id),
+        entry = entryOf(nw, dir);
+      const exiting = [world.ego, ...world.npcs].some((o) => {
         if (o === n || !narrowable(o) || (o.pull && !o.pull.moving)) return false;
         const p = onStreet(edge, o);
         return p?.opposite && p.s < entry;
@@ -604,8 +774,13 @@ export function snowbankYield(world, n, front) {
     }
     // Leave the exit lane open while waiting outside the banks. Moving toward
     // the middle before our turn can strand a long oncoming vehicle in the corridor.
-    return { hold, limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)), keep,
-      at: hold !== null && front <= en - NARROW_FULL_M ? () => 0 : at, turn };
+    return {
+      hold,
+      limit: narrowSpeed(en - front, !!squeezing(sb, nw, c)),
+      keep,
+      at: hold !== null && front <= en - NARROW_FULL_M ? () => 0 : at,
+      turn,
+    };
   }
   return null;
 }
@@ -615,11 +790,28 @@ export function snowbankYield(world, n, front) {
 // through one.
 export function bankHidden(world, observer, o) {
   const sb = world.snowbanks;
-  if (!sb?.piles.length || !o || o.parked || o.kind === "door" || o.rail || o.transit || o.school || TALL.has(o.kind) || TALL.has(o.spec?.kind)) return false;
+  if (
+    !sb?.piles.length ||
+    !o ||
+    o.parked ||
+    o.kind === "door" ||
+    o.rail ||
+    o.transit ||
+    o.school ||
+    TALL.has(o.kind) ||
+    TALL.has(o.spec?.kind)
+  )
+    return false;
   if (typeof o.obb !== "function") return false;
-  const box = o.obb(), dx = Math.cos(box.heading) * box.halfLength, dy = Math.sin(box.heading) * box.halfLength;
+  const box = o.obb(),
+    dx = Math.cos(box.heading) * box.halfLength,
+    dy = Math.sin(box.heading) * box.halfLength;
   if (Math.hypot(box.center[0] - observer.x, box.center[1] - observer.y) < 3) return false;
-  return [[0, 0], [dx, dy], [-dx, -dy]].every(([x, y]) => sb.blocksView([observer.x, observer.y], [box.center[0] + x, box.center[1] + y]));
+  return [
+    [0, 0],
+    [dx, dy],
+    [-dx, -dy],
+  ].every(([x, y]) => sb.blocksView([observer.x, observer.y], [box.center[0] + x, box.center[1] + y]));
 }
 
 // The driven car's sensing (brain/sensors.js `snowbank`): { narrowing, corner } or null.
@@ -639,7 +831,9 @@ export function snowbankAhead(world, p, frontS) {
 }
 
 function egoNarrowing(world, frontS) {
-  const sb = world.snowbanks, ego = world.ego, route = world.route;
+  const sb = world.snowbanks,
+    ego = world.ego,
+    route = world.route;
   let best = null;
   for (const nw of sb.narrowings) {
     if (!route || !sb.alongRoute(route, nw)) continue;
@@ -647,33 +841,67 @@ function egoNarrowing(world, frontS) {
     if (c && c.en !== null && (!best || c.gap < best.c.gap)) best = { nw, c };
   }
   if (!best) return null;
-  const { nw, c } = best, turn = narrowingTurn(sb, nw, c, (v) => world.sees(ego, v));
-  const wait = !turn.mayEnter, stop = wait ? waitPoint(c.en, frontS) : null, squeeze = squeezing(sb, nw, c);
-  const o = turn.oncoming, r1 = (x) => Math.round(x * 10) / 10;
-  const e = world.map.edges.get(c.dir > 0 ? nw.edge : nw.opposite), shift = keepRel(world.map, nw, c.dir, ego.spec);
+  const { nw, c } = best,
+    turn = narrowingTurn(sb, nw, c, (v) => world.sees(ego, v));
+  const wait = !turn.mayEnter,
+    stop = wait ? waitPoint(c.en, frontS) : null,
+    squeeze = squeezing(sb, nw, c);
+  const o = turn.oncoming,
+    r1 = (x) => Math.round(x * 10) / 10;
+  const e = world.map.edges.get(c.dir > 0 ? nw.edge : nw.opposite),
+    shift = keepRel(world.map, nw, c.dir, ego.spec);
   // (whether it can see to the far end, where anyone coming would come in: when it cannot, in snow or
   // fog, say, it comes up to its end no faster than it could stop there from, and edges in)
   const far = offsetPoint(e, exitOf(nw, c.dir), -(e.lane_offsets?.[0] ?? e.lane_width / 2));
   const through = c.inside || world.visibility.canSee(ego, far[0], far[1]);
   const limit = Math.min(narrowSpeed(c.gap, !!squeeze), through ? Infinity : edgeSpeed(c.gap - WAIT_M - EDGE_LEAD_M));
-  return { id: nw.id, street: nw.name || "", length_m: Math.round(nw.b - nw.a), gap_m: r1(c.gap), inside: c.inside,
-    priority: wait ? "oncoming" : "car", reason: turn.reason, committed: turn.committed, sees_through: through,
+  return {
+    id: nw.id,
+    street: nw.name || "",
+    length_m: Math.round(nw.b - nw.a),
+    gap_m: r1(c.gap),
+    inside: c.inside,
+    priority: wait ? "oncoming" : "car",
+    reason: turn.reason,
+    committed: turn.committed,
+    sees_through: through,
     oncoming: o ? { id: o.id, inside: o.inside, gap_m: r1(Math.max(0, o.gap)), speed: r1(o.speed) } : null,
-    wait, stop_s_route: stop, bumper_to_stop_m: wait ? stop - frontS : null, entry_s_route: c.en,
-    limit_mps: limit, squeeze: !!squeeze && squeeze.v !== ego,
-    detour: shift < 0 && !(wait && frontS <= c.en - NARROW_FULL_M) ? { id: `sb:${nw.id}`, from: c.en - EASE_IN_M, full: c.en - NARROW_FULL_M, back: c.ex + NARROW_FULL_M, to: c.ex + EASE_OUT_M, shift: Math.round(shift * 100) / 100 } : null };
+    wait,
+    stop_s_route: stop,
+    bumper_to_stop_m: wait ? stop - frontS : null,
+    entry_s_route: c.en,
+    limit_mps: limit,
+    squeeze: !!squeeze && squeeze.v !== ego,
+    detour:
+      shift < 0 && !(wait && frontS <= c.en - NARROW_FULL_M)
+        ? {
+            id: `sb:${nw.id}`,
+            from: c.en - EASE_IN_M,
+            full: c.en - NARROW_FULL_M,
+            back: c.ex + NARROW_FULL_M,
+            to: c.ex + EASE_OUT_M,
+            shift: Math.round(shift * 100) / 100,
+          }
+        : null,
+  };
 }
 
 // The corner the car comes to next on its route: at the end of the street it is on (a junction), with a
 // pile at either kerb there hiding where people wait to cross the car's street.
 function egoCorner(world, p, frontS) {
-  const sb = world.snowbanks, ego = world.ego, route = world.route, map = world.map;
+  const sb = world.snowbanks,
+    ego = world.ego,
+    route = world.route,
+    map = world.map;
   if (!route) return null;
-  const i = route.edgeIndexAt(p.s), e = map.edges.get(route.edges[i]);
+  const i = route.edgeIndexAt(p.s),
+    e = map.edges.get(route.edges[i]);
   if (!e || !QUIET.has(e.cls)) return null;
   const info = nodeInfo(map, e.to);
   if (!info.junction) return null;
-  const L = lengthOf(e), legS = L - Math.min(L / 2, info.half + CROSS_BEYOND_CURB_M), lane = e.lane_offsets?.[e.lanes - 1] ?? e.lane_width / 2;
+  const L = lengthOf(e),
+    legS = L - Math.min(L / 2, info.half + CROSS_BEYOND_CURB_M),
+    lane = e.lane_offsets?.[e.lanes - 1] ?? e.lane_width / 2;
   const q = projectPoint(route.pts, route.cum, offsetPoint(e, legS, lane), p.index);
   if (!q || q.distance > 4) return null;
   const gap = q.s - frontS - 1.5;
@@ -681,13 +909,21 @@ function egoCorner(world, p, frontS) {
   const twin = !e.oneway ? oppositeOf(map, e) : null;
   const sides = [];
   for (const pile of sb.piles) {
-    const right = pile.edge === e.id && pile.end === "end" && pile.side > 0, left = (twin && pile.edge === twin.id && pile.end === "start") || (pile.edge === e.id && pile.end === "end" && pile.side < 0);
+    const right = pile.edge === e.id && pile.end === "end" && pile.side > 0,
+      left =
+        (twin && pile.edge === twin.id && pile.end === "start") ||
+        (pile.edge === e.id && pile.end === "end" && pile.side < 0);
     if (!right && !left) continue;
     const spot = offsetPoint(e, legS, sidewalkOffset(e, right ? 1 : -1));
     if (sb.blocksView([ego.x, ego.y], spot)) sides.push(right ? "right" : "left");
   }
   if (!sides.length) return null;
-  return { node: e.to, side: sides.length > 1 ? "both" : sides[0], gap_m: Math.round(Math.max(0, gap) * 10) / 10, limit_mps: cornerSpeed(gap) };
+  return {
+    node: e.to,
+    side: sides.length > 1 ? "both" : sides[0],
+    gap_m: Math.round(Math.max(0, gap) * 10) / 10,
+    limit_mps: cornerSpeed(gap),
+  };
 }
 
 // Coming up to a corner it cannot see round: slowing gently to CREEP_MPS by CREEP_AT_M short of the
@@ -702,10 +938,17 @@ export function cornerSpeed(gap) {
 export function auditSnowbanks(world) {
   const sb = world.snowbanks;
   if (!sb?.narrowings.length) return;
-  const ego = world.ego, calls = world.snowbankCalls ||= new Map();
+  const ego = world.ego,
+    calls = (world.snowbankCalls ||= new Map());
   for (const nw of sb.narrowings) {
-    const c = Math.abs(ego.x - nw.x) < nw.reach + LOOK_M && Math.abs(ego.y - nw.y) < nw.reach + LOOK_M ? sb.claimFor(nw, ego) : null;
-    if (!c) { calls.delete(nw.id); continue; }
+    const c =
+      Math.abs(ego.x - nw.x) < nw.reach + LOOK_M && Math.abs(ego.y - nw.y) < nw.reach + LOOK_M
+        ? sb.claimFor(nw, ego)
+        : null;
+    if (!c) {
+      calls.delete(nw.id);
+      continue;
+    }
     if (c.gap < SEEN_M) world.snowbanksSeen = true;
     const call = calls.get(nw.id);
     if (call && !call.inside && c.inside && ego.v > 0.3) {
@@ -713,7 +956,14 @@ export function auditSnowbanks(world) {
       const o = turn.oncoming;
       if (o) {
         world.violations.snowbank_conflicts = (world.violations.snowbank_conflicts || 0) + 1;
-        world.events.push({ type: "snowbank_conflict", with: o.id, narrowing: nw.id, reason: turn.reason === "turn" ? "out_of_turn" : turn.reason === "inside" ? "oncoming_inside" : "forced_to_stop", street: nw.name || "" });
+        world.events.push({
+          type: "snowbank_conflict",
+          with: o.id,
+          narrowing: nw.id,
+          reason:
+            turn.reason === "turn" ? "out_of_turn" : turn.reason === "inside" ? "oncoming_inside" : "forced_to_stop",
+          street: nw.name || "",
+        });
       }
     }
     calls.set(nw.id, { inside: c.inside });
@@ -730,10 +980,24 @@ export function snowbankNotice(world, snap = null) {
   }
   const n = sbk?.narrowing;
   if (n && n.gap_m < SEEN_M && !n.inside) {
-    if (n.wait) return { key: `${n.id}:wait:${n.oncoming?.id ?? ""}`, wait: true, text: n.reason === "turn" ? "SNOWBANKS · ONE CAR AT A TIME · THEIR TURN FIRST" : "SNOWBANKS · ONE CAR AT A TIME · WAIT FOR THE ONCOMING CAR" };
+    if (n.wait)
+      return {
+        key: `${n.id}:wait:${n.oncoming?.id ?? ""}`,
+        wait: true,
+        text:
+          n.reason === "turn"
+            ? "SNOWBANKS · ONE CAR AT A TIME · THEIR TURN FIRST"
+            : "SNOWBANKS · ONE CAR AT A TIME · WAIT FOR THE ONCOMING CAR",
+      };
     return { key: `${n.id}:go`, wait: false, text: "SNOWBANKS · ONE CAR AT A TIME · YOUR TURN, KEEP TO THE MIDDLE" };
   }
-  if (n?.squeeze) return { key: `${n.id}:squeeze`, wait: true, text: "SNOWBANKS · ONCOMING CAR IN THE NARROW STRETCH · SQUEEZE PAST SLOWLY" };
-  if (sbk?.corner) return { key: `corner:${sbk.corner.node}`, wait: false, text: "SNOWBANK HIDES THE CORNER · CREEP UP AND LOOK" };
+  if (n?.squeeze)
+    return {
+      key: `${n.id}:squeeze`,
+      wait: true,
+      text: "SNOWBANKS · ONCOMING CAR IN THE NARROW STRETCH · SQUEEZE PAST SLOWLY",
+    };
+  if (sbk?.corner)
+    return { key: `corner:${sbk.corner.node}`, wait: false, text: "SNOWBANK HIDES THE CORNER · CREEP UP AND LOOK" };
   return null;
 }

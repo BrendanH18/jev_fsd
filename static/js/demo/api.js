@@ -1,7 +1,8 @@
 import { MapData } from "../map/mapdata.js";
 import { browserRoute, browserDrives } from "./routing.js";
 
-const root = new URL("../../demo-data/", import.meta.url), cache = new Map();
+const root = new URL("../../demo-data/", import.meta.url),
+  cache = new Map();
 let catalogPromise;
 // Cancel a caller's wait without cancelling a cached fetch used by other callers.
 function waitForShared(promise, signal) {
@@ -10,12 +11,23 @@ function waitForShared(promise, signal) {
     const abort = () => reject(new DOMException("Request aborted", "AbortError"));
     if (signal.aborted) abort();
     else signal.addEventListener("abort", abort, { once: true });
-    promise.then(value => { signal.removeEventListener("abort", abort); resolve(value); },
-      error => { signal.removeEventListener("abort", abort); reject(error); });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
   });
 }
 function loadCatalog(signal) {
-  catalogPromise ||= json("catalog.json").catch(err => { catalogPromise = null; throw err; });
+  catalogPromise ||= json("catalog.json").catch((err) => {
+    catalogPromise = null;
+    throw err;
+  });
   return waitForShared(catalogPromise, signal);
 }
 async function json(name, signal) {
@@ -26,10 +38,20 @@ async function json(name, signal) {
 async function selection(query, body, signal) {
   const maps = await loadCatalog(signal);
   const key = query.get("map") || query.get("bbox") || body?.bbox || "kitsilano";
-  const item = maps.find(m => m.id === key || m.bbox.join(",") === String(key));
-  if (!item) throw new Error("The public demo supports the bundled neighbourhoods only. Use the local app for custom maps.");
-  if (!cache.has(item.id)) cache.set(item.id, json(`${item.id}.json`).then(pack => ({ pack, map: new MapData(pack) })).catch(err => { cache.delete(item.id); throw err; }));
-  return { item, ...await waitForShared(cache.get(item.id), signal) };
+  const item = maps.find((m) => m.id === key || m.bbox.join(",") === String(key));
+  if (!item)
+    throw new Error("The public demo supports the bundled neighbourhoods only. Use the local app for custom maps.");
+  if (!cache.has(item.id))
+    cache.set(
+      item.id,
+      json(`${item.id}.json`)
+        .then((pack) => ({ pack, map: new MapData(pack) }))
+        .catch((err) => {
+          cache.delete(item.id);
+          throw err;
+        }),
+    );
+  return { item, ...(await waitForShared(cache.get(item.id), signal)) };
 }
 export async function demoApi(path, body, { signal } = {}) {
   if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
@@ -38,21 +60,36 @@ export async function demoApi(path, body, { signal } = {}) {
   if (url.pathname === "/api/results") return json("results.json", signal);
   if (url.pathname === "/api/bench/runs") {
     let runs = [];
-    try { runs = JSON.parse(localStorage.getItem("jev-demo-runs") || "[]"); } catch { runs = []; }
+    try {
+      runs = JSON.parse(localStorage.getItem("jev-demo-runs") || "[]");
+    } catch {
+      runs = [];
+    }
     // ?name= reads one saved run, results and all, as the local server does (the comparison's scores)
     const name = url.searchParams.get("name");
-    return name ? runs.find(r => r.name === name) || {} : { runs };
+    return name ? runs.find((r) => r.name === name) || {} : { runs };
   }
   if (url.pathname === "/api/bench/save") {
-    const name = `demo-${Date.now()}`, { runs } = await demoApi("/api/bench/runs");
+    const name = `demo-${Date.now()}`,
+      { runs } = await demoApi("/api/bench/runs");
     localStorage.setItem("jev-demo-runs", JSON.stringify([{ name, ...body }, ...runs].slice(0, 10)));
     return { saved: name };
   }
   const { item, pack, map } = await selection(url.searchParams, body, signal);
-  if (url.pathname === "/api/status") return { version: "0.3.0-demo", configured: false, demo: true, npcs: 16,
-    map: { ...item, label: `${item.name}, ${item.city}`, synthetic: false, name: pack.name }, spend: { usd: 0 } };
+  if (url.pathname === "/api/status")
+    return {
+      version: "0.3.0-demo",
+      configured: false,
+      demo: true,
+      npcs: 16,
+      map: { ...item, label: `${item.name}, ${item.city}`, synthetic: false, name: pack.name },
+      spend: { usd: 0 },
+    };
   if (url.pathname === "/api/map") return pack;
-  if (url.pathname === "/api/route") { const route = browserRoute(map, body.from, body.to, body); return { routes: route ? [route] : [] }; }
+  if (url.pathname === "/api/route") {
+    const route = browserRoute(map, body.from, body.to, body);
+    return { routes: route ? [route] : [] };
+  }
   if (url.pathname === "/api/drives") return { drives: browserDrives(map, body.from) };
   throw new Error("This action needs the local app. The public demo uses the free Rules driver.");
 }

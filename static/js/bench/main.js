@@ -13,28 +13,74 @@ import { buildHeldoutSuite, heldoutPlan } from "./heldout.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
-import { ModelRecording, recordingHeader, loadRecording, saveRecording, sameResult, mapFingerprint, checkMap, driverKind } from "../brain/recording.js";
+import {
+  ModelRecording,
+  recordingHeader,
+  loadRecording,
+  saveRecording,
+  sameResult,
+  mapFingerprint,
+  checkMap,
+  driverKind,
+} from "../brain/recording.js";
 
 // [key, header, format, better: "low" | "high" | null]
 // (score, progress, comfort, margin and time lost are computed for display, never saved: bench/scores.js)
 const COLUMNS = [
-  ["score", "score", 1, "high"], ["comfort", "comfort", 1, "high"], ["margin", "margin", 1, "high"], ["time_lost_s_per_km", "lost s/km", 1, "low"],
-  ["time_s", "time s", 1, "low"], ["avg_kmh", "km/h", 1, "high"],
-  ["collisions", "coll", 0, "low"], ["at_fault", "at fault", 0, "low"], ["red_lights", "red", 0, "low"], ["stop_signs", "stop", 0, "low"], ["failed_to_yield", "yield", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
-  ["min_gap_m", "min gap m", 1, "high"], ["min_ttc_s", "min TTC s", 1, "high"], ["max_decel", "max decel", 1, "high"],
-  ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "rms jerk", 2, "low"], ["max_lat_accel", "max lat m/s²", 1, "low"],
-  ["lane_rms_m", "lane rms m", 2, "low"], ["speeding_s", "speeding s", 1, "low"], ["safety_brakes", "safety", 0, "low"],
-  ["decisions", "decisions", 0, null], ["model_share", "model", "pct", "high"], ["local_share", "local", "pct", null], ["fallbacks", "fallbacks", 0, "low"], ["latency_p50_ms", "p50 ms", 0, "low"], ["cost_usd", "cost", "usd", null],
+  ["score", "score", 1, "high"],
+  ["comfort", "comfort", 1, "high"],
+  ["margin", "margin", 1, "high"],
+  ["time_lost_s_per_km", "lost s/km", 1, "low"],
+  ["time_s", "time s", 1, "low"],
+  ["avg_kmh", "km/h", 1, "high"],
+  ["collisions", "coll", 0, "low"],
+  ["at_fault", "at fault", 0, "low"],
+  ["red_lights", "red", 0, "low"],
+  ["stop_signs", "stop", 0, "low"],
+  ["failed_to_yield", "yield", 0, "low"],
+  ["off_road_s", "off-road s", 1, "low"],
+  ["min_gap_m", "min gap m", 1, "high"],
+  ["min_ttc_s", "min TTC s", 1, "high"],
+  ["max_decel", "max decel", 1, "high"],
+  ["hard_brakes", "hard brakes", 0, "low"],
+  ["rms_jerk", "rms jerk", 2, "low"],
+  ["max_lat_accel", "max lat m/s²", 1, "low"],
+  ["lane_rms_m", "lane rms m", 2, "low"],
+  ["speeding_s", "speeding s", 1, "low"],
+  ["safety_brakes", "safety", 0, "low"],
+  ["decisions", "decisions", 0, null],
+  ["model_share", "model", "pct", "high"],
+  ["local_share", "local", "pct", null],
+  ["fallbacks", "fallbacks", 0, "low"],
+  ["latency_p50_ms", "p50 ms", 0, "low"],
+  ["cost_usd", "cost", "usd", null],
 ];
 const CARDS = [
-  ["pass_rate", "pass rate", "pct", "high"], ["score", "mean score", 1, "high"], ["progress", "mean progress", "pct", "high"], ["comfort", "mean comfort", 1, "high"],
-  ["margin", "mean margin kept", 1, "high"], ["time_lost_s_per_km", "time lost s/km", 1, "low"], ["violations_per_km", "violations / km", 2, "low"], ["collisions", "collisions", 0, "low"], ["at_fault", "at-fault collisions", 0, "low"],
-  ["red_lights", "red lights run", 0, "low"], ["stop_signs", "stop signs rolled", 0, "low"], ["failed_to_yield", "failures to yield", 0, "low"], ["off_road_s", "off-road s", 1, "low"],
-  ["min_ttc_s", "worst TTC s", 1, "high"], ["hard_brakes", "hard brakes", 0, "low"], ["rms_jerk", "mean rms jerk", 2, "low"],
-  ["lane_rms_m", "mean lane rms m", 2, "low"], ["avg_kmh", "mean km/h", 1, "high"], ["km", "km driven", 2, null],
-  ["safety_brakes", "safety brakes", 0, "low"], ["cost_usd", "cost", "usd", null],
+  ["pass_rate", "pass rate", "pct", "high"],
+  ["score", "mean score", 1, "high"],
+  ["progress", "mean progress", "pct", "high"],
+  ["comfort", "mean comfort", 1, "high"],
+  ["margin", "mean margin kept", 1, "high"],
+  ["time_lost_s_per_km", "time lost s/km", 1, "low"],
+  ["violations_per_km", "violations / km", 2, "low"],
+  ["collisions", "collisions", 0, "low"],
+  ["at_fault", "at-fault collisions", 0, "low"],
+  ["red_lights", "red lights run", 0, "low"],
+  ["stop_signs", "stop signs rolled", 0, "low"],
+  ["failed_to_yield", "failures to yield", 0, "low"],
+  ["off_road_s", "off-road s", 1, "low"],
+  ["min_ttc_s", "worst TTC s", 1, "high"],
+  ["hard_brakes", "hard brakes", 0, "low"],
+  ["rms_jerk", "mean rms jerk", 2, "low"],
+  ["lane_rms_m", "mean lane rms m", 2, "low"],
+  ["avg_kmh", "mean km/h", 1, "high"],
+  ["km", "km driven", 2, null],
+  ["safety_brakes", "safety brakes", 0, "low"],
+  ["cost_usd", "cost", "usd", null],
   // (who made the decisions: only drivers other than Rules report it, bench/metrics.js)
-  ["model_share", "decided by the model", "pct", "high"], ["local_share", "answered locally", "pct", null], ["fallback_share", "fell back to Rules", "pct", "low"],
+  ["model_share", "decided by the model", "pct", "high"],
+  ["local_share", "answered locally", "pct", null],
+  ["fallback_share", "fell back to Rules", "pct", "low"],
 ];
 
 const fmt = (v, f) => {
@@ -44,33 +90,62 @@ const fmt = (v, f) => {
   return Number(v).toFixed(f);
 };
 
-let map = null, status = null, stopRequested = false, running = false, lastRun = null;
+let map = null,
+  status = null,
+  stopRequested = false,
+  running = false,
+  lastRun = null;
 // The suite's scores beside its saved summary (bench/scores.js), and the compared runs' scores by name.
 const SCORE_KEYS = ["score", "progress", "comfort", "margin", "time_lost_s_per_km"];
-const pickScores = (results) => { const s = driverScores(results); return Object.fromEntries(SCORE_KEYS.map((k) => [k, s[k]])); };
+const pickScores = (results) => {
+  const s = driverScores(results);
+  return Object.fromEntries(SCORE_KEYS.map((k) => [k, s[k]]));
+};
 const compareScores = new Map();
 
 async function boot() {
-  const params = new URLSearchParams(location.search), selection = params.get("bbox") || params.get("map");
+  const params = new URLSearchParams(location.search),
+    selection = params.get("bbox") || params.get("map");
   const query = selection ? `?bbox=${encodeURIComponent(selection)}` : "";
   status = await api(`/api/status${query}`);
   map = new MapData(await api(`/api/map${query}`));
-  const decisions = registerDecisionAgents(status.decision, { demo: !!status.demo }), endpoints = registerLlmAgents(status.llm);
+  const decisions = registerDecisionAgents(status.decision, { demo: !!status.demo }),
+    endpoints = registerLlmAgents(status.llm);
   const count = (n, what) => (n ? ` · ${n} ${what}${n > 1 ? "s" : ""}` : "");
-  $("#map-note").textContent = `${status.map.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${agentAvailable("jev") ? "Jev available" : "no TypeSafe key: no Jev"}${count(decisions.length, "decision model")}${count(endpoints.length, "LLM endpoint")}`;
+  $("#map-note").textContent =
+    `${status.map.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${agentAvailable("jev") ? "Jev available" : "no TypeSafe key: no Jev"}${count(decisions.length, "decision model")}${count(endpoints.length, "LLM endpoint")}`;
   $("#npcs").value = status.npcs;
   $("#brain").querySelector('option[value="jev"]').disabled = !agentAvailable("jev");
   endpointOptions();
-  if (decisions.length) checkDecisionEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
-  if (endpoints.length) checkLlmEndpoints().then(endpointOptions).catch(() => { /* keep "configured" */ });
+  if (decisions.length)
+    checkDecisionEndpoints()
+      .then(endpointOptions)
+      .catch(() => {
+        /* keep "configured" */
+      });
+  if (endpoints.length)
+    checkLlmEndpoints()
+      .then(endpointOptions)
+      .catch(() => {
+        /* keep "configured" */
+      });
   $("#run").addEventListener("click", () => {
-    if (running) { stopRequested = true; return; }
-    runFromForm().catch(err => {
-      running = false; $("#run").textContent = "Run";
+    if (running) {
+      stopRequested = true;
+      return;
+    }
+    runFromForm().catch((err) => {
+      running = false;
+      $("#run").textContent = "Run";
       $("#status").textContent = `Failed to run: ${err.message}`;
     });
   });
-  $("#compare").addEventListener("change", () => { loadCompareScores().catch(() => { /* scores stay blank */ }); if (lastRun) render(lastRun); });
+  $("#compare").addEventListener("change", () => {
+    loadCompareScores().catch(() => {
+      /* scores stay blank */
+    });
+    if (lastRun) render(lastRun);
+  });
   await loadRuns();
 }
 
@@ -78,12 +153,15 @@ async function boot() {
 // list, labelled with their status. Decision models sit with Jev, LLMs at the end.
 function endpointOptions() {
   const select = $("#brain");
-  for (const d of agentDefinitions().filter(a => a.decision || a.llm)) {
+  for (const d of agentDefinitions().filter((a) => a.decision || a.llm)) {
     let option = select.querySelector(`option[value="${d.id}"]`);
     if (!option) {
       option = h("option", { value: d.id });
-      const anchor = [...select.querySelectorAll('option[value^="decision:"]')].at(-1) || select.querySelector('option[value="jev"]');
-      if (d.decision) anchor.after(option); else select.appendChild(option);
+      const anchor =
+        [...select.querySelectorAll('option[value^="decision:"]')].at(-1) ||
+        select.querySelector('option[value="jev"]');
+      if (d.decision) anchor.after(option);
+      else select.appendChild(option);
     }
     option.textContent = `${agentOptionLabel(d)} (${(d.decision || d.llm).model})`;
     option.disabled = d.available === false;
@@ -94,81 +172,199 @@ async function loadRuns() {
   const { runs } = await api("/api/bench/runs");
   const sel = $("#compare");
   const keep = sel.value;
-  sel.replaceChildren(h("option", { value: "" }, "none"), ...runs.map((r) => h("option", { value: r.name },
-    `${r.name} · ${r.config?.brain} · ${r.config?.heldout ? `held-out ${r.config.count} routes` : `${r.config?.count} × seed ${r.config?.seed}`}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`)));
+  sel.replaceChildren(
+    h("option", { value: "" }, "none"),
+    ...runs.map((r) =>
+      h(
+        "option",
+        { value: r.name },
+        `${r.name} · ${r.config?.brain} · ${r.config?.heldout ? `held-out ${r.config.count} routes` : `${r.config?.count} × seed ${r.config?.seed}`}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`,
+      ),
+    ),
+  );
   if (keep) sel.value = keep;
   sel._runs = runs;
 }
 
 function runFromForm() {
   return run({
-    brain: $("#brain").value, count: +$("#count").value, npcs: +$("#npcs").value,
-    seed: +$("#seed").value, mode: $("#mode").value, weather: $("#weather").value, features: $("#features").value, park: $("#park").checked,
-    hour: $("#hour").value === "" ? undefined : +$("#hour").value, without: $("#without").value, heldout: $("#heldout").checked,
+    brain: $("#brain").value,
+    count: +$("#count").value,
+    npcs: +$("#npcs").value,
+    seed: +$("#seed").value,
+    mode: $("#mode").value,
+    weather: $("#weather").value,
+    features: $("#features").value,
+    park: $("#park").checked,
+    hour: $("#hour").value === "" ? undefined : +$("#hour").value,
+    without: $("#without").value,
+    heldout: $("#heldout").checked,
   });
 }
 
 // heldout: the map's held-out routes (bench/heldout.js) instead of count and seed; never debug against
 // them (docs/rules-baseline.md).
-export async function run({ brain = "rules", count = 12, npcs = 40, seed = 1, mode = "lockstep", weather = "dry", features = "bare", park = false, hour = undefined, without = [], cover = undefined, heldout = false, save = true, record = false, replay = null } = {}) {
+export async function run({
+  brain = "rules",
+  count = 12,
+  npcs = 40,
+  seed = 1,
+  mode = "lockstep",
+  weather = "dry",
+  features = "bare",
+  park = false,
+  hour = undefined,
+  without = [],
+  cover = undefined,
+  heldout = false,
+  save = true,
+  record = false,
+  replay = null,
+} = {}) {
   // A replay takes its driver and suite from the recording (a saved name, its JSON, or a ModelRecording).
   const replaying = replay ? await loadRecording(replay) : null;
   if (replaying) {
     const b = replaying.header.bench || {};
-    if (b.bbox && b.bbox.join(",") !== map.routingBbox.join(",")) throw new Error(`The recording was made on ${b.map || b.bbox.join(",")}; open /bench?map=${b.map || b.bbox.join(",")} to replay it.`);
+    if (b.bbox && b.bbox.join(",") !== map.routingBbox.join(","))
+      throw new Error(
+        `The recording was made on ${b.map || b.bbox.join(",")}; open /bench?map=${b.map || b.bbox.join(",")} to replay it.`,
+      );
     checkMap(replaying, map);
     ({ count, npcs, seed, weather } = b);
     ({ features = "bare", park = false, hour, without = [], cover, heldout = false } = b);
     brain = replaying.header.driver;
   }
-  if ((record || replaying) && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
-  if (record && !replaying && !driverKind(brain)) throw new Error(`Only model drivers (jev, decision:<name>, llm:<name>) can be recorded, not "${brain}".`);
+  if ((record || replaying) && mode !== "lockstep")
+    throw new Error("Model recordings record and replay only on the lockstep clock.");
+  if (record && !replaying && !driverKind(brain))
+    throw new Error(`Only model drivers (jev, decision:<name>, llm:<name>) can be recorded, not "${brain}".`);
   const options = benchmarkConfig({ features, park, hour, without, cover });
   const plan = heldout ? heldoutPlan(status.map.id) : null;
-  if (plan) { count = plan.seeds.length * plan.count; seed = plan.seeds[0]; }
-  running = true; stopRequested = false;
+  if (plan) {
+    count = plan.seeds.length * plan.count;
+    seed = plan.seeds[0];
+  }
+  running = true;
+  stopRequested = false;
   $("#run").textContent = "Stop";
-  const definition = agentDefinitions().find(a => a.id === brain), endpoint = definition?.decision || definition?.llm;
-  const config = { brain, ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}), count, npcs, seed, mode, weather, ...options, ...(plan ? { heldout: true, seeds: plan.seeds } : {}), map: status.map.name, map_label: status.map.label, bbox: map.routingBbox, pack: map.pack.pack_version, started_at: new Date().toISOString() };
-  const setStatus = (t) => { $("#status").textContent = t; };
-  const recording = replaying || (record ? new ModelRecording({ header: recordingHeader({ driver: brain, brain: { endpoint }, model: brain === "jev" ? status.decision?.jev?.model : null,
-    map: status.map.name, map_sha: mapFingerprint(map), seed, preset: features, weather, bench: config }) }) : null);
+  const definition = agentDefinitions().find((a) => a.id === brain),
+    endpoint = definition?.decision || definition?.llm;
+  const config = {
+    brain,
+    ...(endpoint ? { model: endpoint.model, endpoint: endpoint.endpoint } : {}),
+    count,
+    npcs,
+    seed,
+    mode,
+    weather,
+    ...options,
+    ...(plan ? { heldout: true, seeds: plan.seeds } : {}),
+    map: status.map.name,
+    map_label: status.map.label,
+    bbox: map.routingBbox,
+    pack: map.pack.pack_version,
+    started_at: new Date().toISOString(),
+  };
+  const setStatus = (t) => {
+    $("#status").textContent = t;
+  };
+  const recording =
+    replaying ||
+    (record
+      ? new ModelRecording({
+          header: recordingHeader({
+            driver: brain,
+            brain: { endpoint },
+            model: brain === "jev" ? status.decision?.jev?.model : null,
+            map: status.map.name,
+            map_sha: mapFingerprint(map),
+            seed,
+            preset: features,
+            weather,
+            bench: config,
+          }),
+        })
+      : null);
   setStatus("building the scenario suite…");
-  const suite = replaying?.suite() || (plan ? await buildHeldoutSuite(map, status.map.id, suiteOptions(features, options))
-    : await buildSuite(map, { count, seed, ...suiteOptions(features, options) }));
+  const suite =
+    replaying?.suite() ||
+    (plan
+      ? await buildHeldoutSuite(map, status.map.id, suiteOptions(features, options))
+      : await buildSuite(map, { count, seed, ...suiteOptions(features, options) }));
   const state = { config, suite, results: [], summary: null };
   lastRun = state;
   render(state);
   for (let i = 0; i < suite.length && !stopRequested; i++) {
     state.current = i;
-    setStatus(`running ${i + 1} / ${suite.length}: ${suite[i].tags.length_m} m, ${suite[i].tags.signals} signals, ${suite[i].tags.stops} stops`);
+    setStatus(
+      `running ${i + 1} / ${suite.length}: ${suite[i].tags.length_m} m, ${suite[i].tags.signals} signals, ${suite[i].tags.stops} stops`,
+    );
     render(state);
     await yieldNow();
     const tape = recording ? recording.tape(suite[i].id, replaying ? "replay" : "record") : null;
-    const r = await runScenario(map, suite[i], { brain, npcs, mode, weather, ...options, shouldStop: () => stopRequested, tape });
+    const r = await runScenario(map, suite[i], {
+      brain,
+      npcs,
+      mode,
+      weather,
+      ...options,
+      shouldStop: () => stopRequested,
+      tape,
+    });
     if (record && !replaying) recording.keepResult(suite[i].id, r, suite[i]);
-    if (replaying) r.model_recording.same_result = replaying.results[suite[i].id] ? sameResult(r, replaying.results[suite[i].id]) : null;
+    if (replaying)
+      r.model_recording.same_result = replaying.results[suite[i].id]
+        ? sameResult(r, replaying.results[suite[i].id])
+        : null;
     state.results.push(r);
     state.summary = aggregate(state.results);
     render(state);
   }
   state.current = null;
   state.summary = aggregate(state.results);
-  let saved = null, savedRecording = null, recordingError = null;
+  let saved = null,
+    savedRecording = null,
+    recordingError = null;
   if (record && !replaying && save && state.results.length) {
-    try { savedRecording = await saveRecording(recording); } catch (err) { recordingError = err.message; setStatus(`could not save the recording: ${err.message}`); }
+    try {
+      savedRecording = await saveRecording(recording);
+    } catch (err) {
+      recordingError = err.message;
+      setStatus(`could not save the recording: ${err.message}`);
+    }
   }
   if (save && state.results.length) {
     try {
-      saved = await api("/api/bench/save", { config: { ...config, completed: state.results.length }, summary: state.summary, results: state.results });
-      setStatus(`saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `; could not save the recording: ${recordingError}` : ""}`);
+      saved = await api("/api/bench/save", {
+        config: { ...config, completed: state.results.length },
+        summary: state.summary,
+        results: state.results,
+      });
+      setStatus(
+        `saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `; could not save the recording: ${recordingError}` : ""}`,
+      );
       await loadRuns();
-    } catch (err) { setStatus(`could not save: ${err.message}`); }
+    } catch (err) {
+      setStatus(`could not save: ${err.message}`);
+    }
   } else setStatus(stopRequested ? "stopped" : "done");
   render(state);
   running = false;
   $("#run").textContent = "Run";
-  return { config, summary: state.summary, results: state.results, saved, ...(recording ? { recording: savedRecording || (recordingError ? { error: recordingError, data: recording.toJSON() } : null), replayed: replaying ? state.results.every(r => r.model_recording.exact && r.model_recording.same_result === true) : null } : {}) };
+  return {
+    config,
+    summary: state.summary,
+    results: state.results,
+    saved,
+    ...(recording
+      ? {
+          recording: savedRecording || (recordingError ? { error: recordingError, data: recording.toJSON() } : null),
+          replayed: replaying
+            ? state.results.every((r) => r.model_recording.exact && r.model_recording.same_result === true)
+            : null,
+        }
+      : {}),
+  };
 }
 
 function compareSummary() {
@@ -189,7 +385,7 @@ async function loadCompareScores() {
 function delta(cur, prev, better, f) {
   if (!better || prev === null || prev === undefined || cur === null || cur === undefined) return null;
   const d = cur - prev;
-  const cls = Math.abs(d) < 1e-9 ? "same" : (d < 0) === (better === "low") ? "better" : "worse";
+  const cls = Math.abs(d) < 1e-9 ? "same" : d < 0 === (better === "low") ? "better" : "worse";
   const text = f === "pct" ? `${d >= 0 ? "+" : ""}${Math.round(d * 100)} pts` : `${d >= 0 ? "+" : ""}${fmt(d, f)}`;
   return h("span", { class: `delta ${cls}` }, text);
 }
@@ -197,47 +393,121 @@ function delta(cur, prev, better, f) {
 function render(state) {
   const prev = compareSummary();
   const s = state.summary && { ...state.summary, ...pickScores(state.results) };
-  $("#summary").replaceChildren(...(s ? CARDS.filter(([k]) => s[k] !== undefined).map(([k, label, f, better]) => h("div", { class: "card" },
-    h("span", { class: "label" }, label),
-    h("span", { class: "value" }, fmt(s[k], f)),
-    prev ? delta(s[k], prev[k], better, f) : null)) : []));
+  $("#summary").replaceChildren(
+    ...(s
+      ? CARDS.filter(([k]) => s[k] !== undefined).map(([k, label, f, better]) =>
+          h(
+            "div",
+            { class: "card" },
+            h("span", { class: "label" }, label),
+            h("span", { class: "value" }, fmt(s[k], f)),
+            prev ? delta(s[k], prev[k], better, f) : null,
+          ),
+        )
+      : []),
+  );
 
-  const head = h("tr", {}, h("th", { class: "left" }, "#"), h("th", { class: "left" }, "route"), h("th", { class: "left" }, "result"),
-    ...COLUMNS.map(([, label]) => h("th", {}, label)), h("th", {}, ""));
+  const head = h(
+    "tr",
+    {},
+    h("th", { class: "left" }, "#"),
+    h("th", { class: "left" }, "route"),
+    h("th", { class: "left" }, "result"),
+    ...COLUMNS.map(([, label]) => h("th", {}, label)),
+    h("th", {}, ""),
+  );
   $("#results thead").replaceChildren(head);
   const rows = state.suite.map((sc, i) => {
     const r = state.results[i];
     const t = sc.tags;
     const route = `${t.length_m} m · ${t.signals}sig ${t.stops}stop ${t.lefts}L ${t.rights}R`;
     if (!r) {
-      return h("tr", { class: state.current === i ? "running" : "" }, h("td", {}, i + 1), h("td", { class: "left" }, route),
-        h("td", { class: "left muted" }, state.current === i ? "running…" : "queued"), ...COLUMNS.map(() => h("td", {}, "")), h("td", {}, ""));
+      return h(
+        "tr",
+        { class: state.current === i ? "running" : "" },
+        h("td", {}, i + 1),
+        h("td", { class: "left" }, route),
+        h("td", { class: "left muted" }, state.current === i ? "running…" : "queued"),
+        ...COLUMNS.map(() => h("td", {}, "")),
+        h("td", {}, ""),
+      );
     }
     const scored = { ...r, ...driveScores(r) };
     const cells = COLUMNS.map(([k, , f]) => {
       const v = scored[k];
-      const warn = (k === "min_ttc_s" && v !== null && v < 2) || (k === "hard_brakes" && v > 0) || (k === "speeding_s" && v > 3) || (k === "safety_brakes" && v > 0);
+      const warn =
+        (k === "min_ttc_s" && v !== null && v < 2) ||
+        (k === "hard_brakes" && v > 0) ||
+        (k === "speeding_s" && v > 3) ||
+        (k === "safety_brakes" && v > 0);
       const bad = ["collisions", "at_fault", "red_lights", "stop_signs"].includes(k) && v > 0;
       return h("td", { class: bad ? "failed" : warn ? "warn" : "" }, fmt(v, f));
     });
-    return h("tr", { class: r.pass ? "" : "fail" },
-      h("td", {}, i + 1), h("td", { class: "left" }, route),
+    return h(
+      "tr",
+      { class: r.pass ? "" : "fail" },
+      h("td", {}, i + 1),
+      h("td", { class: "left" }, route),
       h("td", { class: `left ${r.pass ? "pass" : "failed"}` }, r.pass ? "PASS" : r.failures.join(", ")),
       ...cells,
-      h("td", {}, h("button", { class: "toggle watch", title: "Replay this scenario in the 3D sim", onclick: () => watch(sc, state.config) }, "watch")));
+      h(
+        "td",
+        {},
+        h(
+          "button",
+          {
+            class: "toggle watch",
+            title: "Replay this scenario in the 3D sim",
+            onclick: () => watch(sc, state.config),
+          },
+          "watch",
+        ),
+      ),
+    );
   });
   $("#results tbody").replaceChildren(...rows);
-  const foot = s ? h("tr", {}, h("td", {}, ""), h("td", { class: "left" }, `${s.km} km`), h("td", { class: "left" }, `${Math.round(s.pass_rate * 100)}% pass`),
-    ...COLUMNS.map(([k, , f]) => h("td", {}, s[k] !== undefined ? fmt(s[k], f) : "")), h("td", {}, "")) : null;
+  const foot = s
+    ? h(
+        "tr",
+        {},
+        h("td", {}, ""),
+        h("td", { class: "left" }, `${s.km} km`),
+        h("td", { class: "left" }, `${Math.round(s.pass_rate * 100)}% pass`),
+        ...COLUMNS.map(([k, , f]) => h("td", {}, s[k] !== undefined ? fmt(s[k], f) : "")),
+        h("td", {}, ""),
+      )
+    : null;
   const table = $("#results");
   table.querySelector("tfoot")?.remove();
   if (foot) table.append(h("tfoot", {}, foot));
 }
 
 function watch(sc, config) {
-  try { localStorage.setItem("jev-fsd-replay", JSON.stringify({ scenario: sc, brain: config.brain, npcs: config.npcs, weather: config.weather, ...benchmarkConfig(config), bbox: config.bbox || map.routingBbox })); } catch { /* storage off */ }
+  try {
+    localStorage.setItem(
+      "jev-fsd-replay",
+      JSON.stringify({
+        scenario: sc,
+        brain: config.brain,
+        npcs: config.npcs,
+        weather: config.weather,
+        ...benchmarkConfig(config),
+        bbox: config.bbox || map.routingBbox,
+      }),
+    );
+  } catch {
+    /* storage off */
+  }
   window.open(appUrl("", { replay: 1, bbox: (config.bbox || map.routingBbox).join(",") }), "_blank", "noopener");
 }
 
-window.__bench = { run, get last() { return lastRun; } };
-boot().catch((err) => { $("#status").textContent = `Failed to start: ${err.message}`; console.error(err); });
+window.__bench = {
+  run,
+  get last() {
+    return lastRun;
+  },
+};
+boot().catch((err) => {
+  $("#status").textContent = `Failed to start: ${err.message}`;
+  console.error(err);
+});

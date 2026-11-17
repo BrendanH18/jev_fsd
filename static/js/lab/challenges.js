@@ -67,22 +67,72 @@ import * as roadClosed from "./challenges/road-closed.js";
 import * as followTheOfficer from "./challenges/follow-the-officer.js";
 
 const MODULES = [
-  doorZone, fogJunction, rainCrossing, snowStop, curbMerge, blindCrossing,
-  unprotectedLeft, rightOnRed, fourWayStop, blindCorner, rightHook, lightsAndSirens,
-  busPullingOut, multipleThreat, schoolBus, schoolZone, moveOver, streetcar,
-  levelCrossing, junctionBox, leftArrow, flagger, afterMidnight, lightsOut,
-  doubleParked, parallelPark, stepOut, blindLeft, snowPlow, zipper,
-  cyclistPass, speedHumps, scramble, collection, crossingGuard, pxoFarCurb,
-  busLanes, noLeftTurn, contraflow, dipYourLights, leftOnRed, roundaboutGap,
-  waitForGreen, amberStop, amberClear, brakesAhead, makeRoom, freshGreen,
-  intoTheSun, reverseLights, potholeSeason, chasingTheBall, gooseCrossing, onYourBumper,
-  bridgesFreezeFirst, oneCarAtATime, dontSplash, roomToPark, roadClosed, followTheOfficer,
+  doorZone,
+  fogJunction,
+  rainCrossing,
+  snowStop,
+  curbMerge,
+  blindCrossing,
+  unprotectedLeft,
+  rightOnRed,
+  fourWayStop,
+  blindCorner,
+  rightHook,
+  lightsAndSirens,
+  busPullingOut,
+  multipleThreat,
+  schoolBus,
+  schoolZone,
+  moveOver,
+  streetcar,
+  levelCrossing,
+  junctionBox,
+  leftArrow,
+  flagger,
+  afterMidnight,
+  lightsOut,
+  doubleParked,
+  parallelPark,
+  stepOut,
+  blindLeft,
+  snowPlow,
+  zipper,
+  cyclistPass,
+  speedHumps,
+  scramble,
+  collection,
+  crossingGuard,
+  pxoFarCurb,
+  busLanes,
+  noLeftTurn,
+  contraflow,
+  dipYourLights,
+  leftOnRed,
+  roundaboutGap,
+  waitForGreen,
+  amberStop,
+  amberClear,
+  brakesAhead,
+  makeRoom,
+  freshGreen,
+  intoTheSun,
+  reverseLights,
+  potholeSeason,
+  chasingTheBall,
+  gooseCrossing,
+  onYourBumper,
+  bridgesFreezeFirst,
+  oneCarAtATime,
+  dontSplash,
+  roomToPark,
+  roadClosed,
+  followTheOfficer,
 ];
 
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = MODULES.map((m) => m.challenge);
 // (road tests, lab/road-tests.js, open and play the same way)
-export const challengeById = id => CHALLENGES.find(c => c.id === id) || ROAD_TESTS.find(t => t.id === id) || null;
+export const challengeById = (id) => CHALLENGES.find((c) => c.id === id) || ROAD_TESTS.find((t) => t.id === id) || null;
 
 // The module that sets up a challenge (or its `world.challenge` state): its own, by id, unless its
 // hazard has been changed, as a test does to drive one without it; then the first with that hazard;
@@ -111,10 +161,20 @@ export function stepChallenge(world, fleet) {
   const state = world.challenge;
   if (!state) return;
   const step = moduleFor(state)?.step;
-  if (step) step(world, fleet); else stepAuthored(world, fleet);
+  if (step) step(world, fleet);
+  else stepAuthored(world, fleet);
 }
 
 export function challengeConfig(challenge) {
-  return { version: challenge.version || 1, challenge: challenge.id, map: challenge.map, seed: challenge.seed,
-    weather: challenge.weather, time: challenge.time, traffic: 0, car: "compact", clock: 0 };
+  return {
+    version: challenge.version || 1,
+    challenge: challenge.id,
+    map: challenge.map,
+    seed: challenge.seed,
+    weather: challenge.weather,
+    time: challenge.time,
+    traffic: 0,
+    car: "compact",
+    clock: 0,
+  };
 }

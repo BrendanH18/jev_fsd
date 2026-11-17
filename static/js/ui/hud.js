@@ -5,23 +5,65 @@ import { $, h, ms, usd, num, pct, percentile } from "../common.js";
 import { SPEED_GRACE_MPS } from "../sim/drive-score.js";
 import { pillarOf } from "../brain/registry.js";
 
-const TURN_ARROWS = { left: "↰", right: "↱", "slight left": "↖", "slight right": "↗", sharp_left: "↰", sharp_right: "↱", uturn: "↶", roundabout: "↻", none: "↑" };
+const TURN_ARROWS = {
+  left: "↰",
+  right: "↱",
+  "slight left": "↖",
+  "slight right": "↗",
+  sharp_left: "↰",
+  sharp_right: "↱",
+  uturn: "↶",
+  roundabout: "↻",
+  none: "↑",
+};
 const MOTIONS = { drive: "Driving", stop: "Holding still" };
 
 export class Hud {
   constructor(root = document) {
     const find = (selector) => $(selector, root);
     this.el = {
-      cluster: find(".cluster"), speedDisplay: find(".speed"), mode: find("#drive-mode"), speedWarning: find("#speed-warning"),
-      root: find("#hud"), speed: find("#speed"), limit: find("#limit"), limitSign: find("#limit-sign"), limitLabel: find("#limit-sign small"), street: find("#street"),
-      nav: find("#nav"), navCard: find("#nav-card"), navArrow: find("#nav-arrow"), navDistance: find("#nav-distance"), navRemaining: find("#nav-remaining"),
-      brainButtons: [...root.querySelectorAll("[data-brain]")], menus: { decision: find("#decision-menu-toggle"), llm: find("#llm-menu-toggle") },
-      weather: find("#weather"), time: find("#time"), quality: find("#quality"), autopilot: find("#autopilot"),
-      settingsToggle: find("#settings-toggle"), settings: find("#settings"), keysToggle: find("#keys-toggle"), keysHelp: find("#keys-help"),
-      latency: find("#latency"), p50: find("#p50"), tokens: find("#tokens"), cost: find("#cost"), rate: find("#rate"), source: find("#source"),
-      motion: find("#decision-motion"), options: find("#decision-options"),
-      collisions: find("#collisions"), reds: find("#reds"), stops: find("#stops"), yields: find("#yields"), offroad: find("#offroad"),
-      safety: find("#safety"), fallbacks: find("#fallbacks"), badge: find("#badge"), mapNote: find("#map-note"),
+      cluster: find(".cluster"),
+      speedDisplay: find(".speed"),
+      mode: find("#drive-mode"),
+      speedWarning: find("#speed-warning"),
+      root: find("#hud"),
+      speed: find("#speed"),
+      limit: find("#limit"),
+      limitSign: find("#limit-sign"),
+      limitLabel: find("#limit-sign small"),
+      street: find("#street"),
+      nav: find("#nav"),
+      navCard: find("#nav-card"),
+      navArrow: find("#nav-arrow"),
+      navDistance: find("#nav-distance"),
+      navRemaining: find("#nav-remaining"),
+      brainButtons: [...root.querySelectorAll("[data-brain]")],
+      menus: { decision: find("#decision-menu-toggle"), llm: find("#llm-menu-toggle") },
+      weather: find("#weather"),
+      time: find("#time"),
+      quality: find("#quality"),
+      autopilot: find("#autopilot"),
+      settingsToggle: find("#settings-toggle"),
+      settings: find("#settings"),
+      keysToggle: find("#keys-toggle"),
+      keysHelp: find("#keys-help"),
+      latency: find("#latency"),
+      p50: find("#p50"),
+      tokens: find("#tokens"),
+      cost: find("#cost"),
+      rate: find("#rate"),
+      source: find("#source"),
+      motion: find("#decision-motion"),
+      options: find("#decision-options"),
+      collisions: find("#collisions"),
+      reds: find("#reds"),
+      stops: find("#stops"),
+      yields: find("#yields"),
+      offroad: find("#offroad"),
+      safety: find("#safety"),
+      fallbacks: find("#fallbacks"),
+      badge: find("#badge"),
+      mapNote: find("#map-note"),
     };
     this.brain = "rules";
     this.latencies = [];
@@ -39,7 +81,9 @@ export class Hud {
     find("#keys-close").addEventListener("click", () => this.toggleKeys(false));
   }
 
-  show() { this.el.root.hidden = false; }
+  show() {
+    this.el.root.hidden = false;
+  }
 
   toggleKeys(force) {
     const open = force === undefined ? this.el.keysHelp.hidden : force;
@@ -54,9 +98,16 @@ export class Hud {
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(ev.key)) return;
         ev.preventDefault();
         // Arrows skip hidden and unavailable drivers, so an unavailable Decision button does not trap focus on Rules.
-        const buttons = this.el.brainButtons.filter((button) => button === b || (!button.hidden && button.getAttribute("aria-disabled") !== "true")), i = buttons.indexOf(b);
-        const next = ev.key === "Home" ? buttons[0] : ev.key === "End" ? buttons.at(-1)
-          : buttons[(i + (["ArrowLeft", "ArrowUp"].includes(ev.key) ? -1 : 1) + buttons.length) % buttons.length];
+        const buttons = this.el.brainButtons.filter(
+            (button) => button === b || (!button.hidden && button.getAttribute("aria-disabled") !== "true"),
+          ),
+          i = buttons.indexOf(b);
+        const next =
+          ev.key === "Home"
+            ? buttons[0]
+            : ev.key === "End"
+              ? buttons.at(-1)
+              : buttons[(i + (["ArrowLeft", "ArrowUp"].includes(ev.key) ? -1 : 1) + buttons.length) % buttons.length];
         fn(next.dataset.brain);
         buttons.find((button) => button.getAttribute("aria-checked") === "true")?.focus();
       });
@@ -64,8 +115,8 @@ export class Hud {
   }
   setBrain(name) {
     this.brain = name;
-    const group = pillarOf(name);   // Jev and every decision:<name> drive under Decision; every llm:<name> under LLM
-    const shown = this.el.brainButtons.some(button => button.dataset.brain === group);
+    const group = pillarOf(name); // Jev and every decision:<name> drive under Decision; every llm:<name> under LLM
+    const shown = this.el.brainButtons.some((button) => button.dataset.brain === group);
     for (const b of this.el.brainButtons) {
       const selected = b.dataset.brain === group;
       b.setAttribute("aria-checked", String(selected));
@@ -79,24 +130,47 @@ export class Hud {
     const b = this.el.brainButtons.find((x) => x.dataset.brain === pillar);
     if (!b) return;
     const toggle = this.el.menus[pillar];
-    b.hidden = !offered; if (toggle) toggle.hidden = !menu;
+    b.hidden = !offered;
+    if (toggle) toggle.hidden = !menu;
     b.classList.toggle("unavailable", !!label && !available);
     const key = pillar === "decision" ? "1" : "3";
     if (pillar === "decision") b.setAttribute("aria-disabled", String(!available));
-    b.title = !menu && !available ? `${key} · decision models need the local app (uv run server.py)`
-      : label ? `${key} · ${label}${available ? "" : " (needs a key: click to add one)"} · choose another with ▾`
-      : `${key} · connect your own model`;
+    b.title =
+      !menu && !available
+        ? `${key} · decision models need the local app (uv run server.py)`
+        : label
+          ? `${key} · ${label}${available ? "" : " (needs a key: click to add one)"} · choose another with ▾`
+          : `${key} · connect your own model`;
   }
-  setLlm(options) { this.setPillar("llm", options); }
-  setDecision(options) { this.setPillar("decision", options); }
-  onWeatherChange(fn) { this.el.weather.addEventListener("change", () => fn(this.el.weather.value)); }
-  setWeather(name) { this.el.weather.value = name; }
-  onTimeChange(fn) { this.el.time.addEventListener("change", () => fn(this.el.time.value)); }
+  setLlm(options) {
+    this.setPillar("llm", options);
+  }
+  setDecision(options) {
+    this.setPillar("decision", options);
+  }
+  onWeatherChange(fn) {
+    this.el.weather.addEventListener("change", () => fn(this.el.weather.value));
+  }
+  setWeather(name) {
+    this.el.weather.value = name;
+  }
+  onTimeChange(fn) {
+    this.el.time.addEventListener("change", () => fn(this.el.time.value));
+  }
   // a time that is not one of the presets shows as the nearest one
-  setTime(name) { this.el.time.value = name; }
-  onQualityChange(fn) { this.el.quality.addEventListener("change", () => fn(this.el.quality.value)); }
-  setQuality(name) { this.el.quality.value = name; this.el.root.dataset.quality = name; }
-  onAutopilotClick(fn) { this.el.autopilot.addEventListener("click", fn); }
+  setTime(name) {
+    this.el.time.value = name;
+  }
+  onQualityChange(fn) {
+    this.el.quality.addEventListener("change", () => fn(this.el.quality.value));
+  }
+  setQuality(name) {
+    this.el.quality.value = name;
+    this.el.root.dataset.quality = name;
+  }
+  onAutopilotClick(fn) {
+    this.el.autopilot.addEventListener("click", fn);
+  }
   setAutopilot(on) {
     this.el.autopilot.setAttribute("aria-checked", String(on));
     this.el.autopilot.querySelector("span").textContent = on ? "Autopilot on" : "Autopilot";
@@ -122,7 +196,10 @@ export class Hud {
     if (this.el.speedWarning.hidden === speeding) this.el.speedWarning.hidden = !speeding;
     this.el.speedDisplay.classList.toggle("speeding", speeding);
     this.el.cluster.classList.toggle("speeding", speeding);
-    setText(this.el.mode, paused ? "PAUSED" : autopilot ? `${this.brain.replace(/^(?:llm|decision):/, "").toUpperCase()} PILOT` : "MANUAL");
+    setText(
+      this.el.mode,
+      paused ? "PAUSED" : autopilot ? `${this.brain.replace(/^(?:llm|decision):/, "").toUpperCase()} PILOT` : "MANUAL",
+    );
     setClass(this.el.mode, paused ? "paused" : autopilot ? "auto" : "");
     setText(this.el.speed, Math.round(Math.abs(ego.v) * 3.6));
     setText(this.el.limit, road?.limit ? Math.round(road.limit * 3.6) : "–");
@@ -130,7 +207,9 @@ export class Hud {
     // (in a school or playground zone in effect, the sign says which)
     setText(this.el.limitLabel, road?.zone ? (road.zone.kind === "school" ? "SCHOOL" : "PLAYGROUND") : "MAXIMUM");
     this.el.limitSign.classList.toggle("zone", !!road?.zone);
-    const title = road?.zone ? `${road.zone.kind === "school" ? "School" : "Playground"} zone${road.zone.name ? `: ${road.zone.name}` : ""}` : "Speed limit";
+    const title = road?.zone
+      ? `${road.zone.kind === "school" ? "School" : "Playground"} zone${road.zone.name ? `: ${road.zone.name}` : ""}`
+      : "Speed limit";
     if (this.el.limitSign.title !== title) this.el.limitSign.title = title;
     setText(this.el.street, road?.name || (road?.on_road === false ? "off road" : "unnamed road"));
     this.updateNav(nav, paused, hasRoute);
@@ -155,15 +234,22 @@ export class Hud {
 
   updateNav(nav, paused, hasRoute) {
     const { navCard, navArrow, navDistance, navRemaining, nav: detail } = this.el;
-    setText(navRemaining, nav && !nav.arrived && nav.next_turn && nav.next_turn !== "none" ? `${distance(nav.remaining_m)} total` : "");
+    setText(
+      navRemaining,
+      nav && !nav.arrived && nav.next_turn && nav.next_turn !== "none" ? `${distance(nav.remaining_m)} total` : "",
+    );
     if (nav && !nav.arrived) {
       const turning = nav.next_turn && nav.next_turn !== "none";
       setClass(navCard, "nav-card");
       setText(navArrow, TURN_ARROWS[nav.next_turn] || "↑");
       setText(navDistance, distance(turning ? nav.turn_in_m : nav.remaining_m));
-      const action = !turning ? "Continue to destination"
-        : nav.next_turn === "roundabout" ? `Roundabout${nav.exit ? `, exit ${nav.exit}` : ""}`
-        : nav.next_turn === "uturn" ? "Make a U-turn" : `Turn ${nav.next_turn}`;
+      const action = !turning
+        ? "Continue to destination"
+        : nav.next_turn === "roundabout"
+          ? `Roundabout${nav.exit ? `, exit ${nav.exit}` : ""}`
+          : nav.next_turn === "uturn"
+            ? "Make a U-turn"
+            : `Turn ${nav.next_turn}`;
       const onto = turning && nav.turn_street ? ` onto ${nav.turn_street}` : "";
       setText(detail, `${action}${onto}`);
     } else if (nav?.arrived) {
@@ -182,21 +268,39 @@ export class Hud {
   // The card only rebuilds when a new decision arrives or autopilot switches.
   updateDecision(decision, autopilot) {
     if (decision === this.shownDecision && autopilot === this.shownAutopilot) return;
-    this.shownDecision = decision; this.shownAutopilot = autopilot;
+    this.shownDecision = decision;
+    this.shownAutopilot = autopilot;
     const { motion, options, source, latency, tokens } = this.el;
     if (!autopilot || !decision) {
       motion.className = "decision-motion off";
       motion.textContent = autopilot ? "Thinking…" : "Autopilot off";
-      options.replaceChildren(h("p", { class: "muted" }, autopilot ? "Waiting for the first decision." : "Choose a drive or click the minimap; the pilot's options and their probabilities appear here."));
-      source.textContent = "–"; source.className = "source-tag"; source.title = "";
-      latency.textContent = "–"; tokens.textContent = "–";
+      options.replaceChildren(
+        h(
+          "p",
+          { class: "muted" },
+          autopilot
+            ? "Waiting for the first decision."
+            : "Choose a drive or click the minimap; the pilot's options and their probabilities appear here.",
+        ),
+      );
+      source.textContent = "–";
+      source.className = "source-tag";
+      source.title = "";
+      latency.textContent = "–";
+      tokens.textContent = "–";
       return;
     }
     const m = decision.meta || {};
     const chosen = decision.candidates.find((c) => c.id === decision.chosenId);
     motion.className = `decision-motion ${decision.motion === "stop" ? "stop" : ""}`;
-    motion.textContent = decision.motion === "stop" ? (decision.chosenId === "hard_brake" ? "Braking to stop" : "Holding still")
-      : chosen ? `Driving · ${describe(chosen)}` : MOTIONS[decision.motion] || decision.motion;
+    motion.textContent =
+      decision.motion === "stop"
+        ? decision.chosenId === "hard_brake"
+          ? "Braking to stop"
+          : "Holding still"
+        : chosen
+          ? `Driving · ${describe(chosen)}`
+          : MOTIONS[decision.motion] || decision.motion;
     source.textContent = m.fallback ? `${m.source} · fallback` : m.source || "–";
     source.className = `source-tag ${m.source === "rules_fallback" || m.fallback ? "fallback" : m.source === "jev" || m.live_call ? "live" : ""}`;
     source.title = m.error || m.fallback || "";
@@ -204,21 +308,43 @@ export class Hud {
     tokens.textContent = m.input_tokens ? num(m.input_tokens) : "–";
 
     const byId = new Map(decision.candidates.map((c) => [c.id, c]));
-    const probs = Object.entries(m.fallback ? {} : decision.answers?.vector?.probabilities || {}).sort((a, b) => b[1] - a[1]);
+    const probs = Object.entries(m.fallback ? {} : decision.answers?.vector?.probabilities || {}).sort(
+      (a, b) => b[1] - a[1],
+    );
     const eligible = decision.candidates.filter((c) => c.eligible).length;
     const top = probs.slice(0, 5);
     const selected = probs.find(([id]) => id === decision.chosenId);
     if (selected && !top.includes(selected)) top.splice(4, 1, selected);
     const rows = top.map(([id, p]) => {
       const text = byId.has(id) ? describe(byId.get(id)) : id;
-      return h("div", { class: `option ${id === decision.chosenId ? "chosen" : ""}`, title: `${text} (${id})` },
-        h("i", { style: { width: `${Math.max(2, p * 100)}%` } }), h("span", {}, text), h("b", {}, pct(p)));
+      return h(
+        "div",
+        { class: `option ${id === decision.chosenId ? "chosen" : ""}`, title: `${text} (${id})` },
+        h("i", { style: { width: `${Math.max(2, p * 100)}%` } }),
+        h("span", {}, text),
+        h("b", {}, pct(p)),
+      );
     });
-    if (!rows.length) rows.push(h("p", { class: "muted" },
-      m.source === "rules_fallback" || m.fallback ? `Rules fallback${chosen ? `: ${describe(chosen)}` : ": holding still"}. No model probabilities available.`
-        : eligible === 1 && chosen?.eligible ? `Only one safe option: ${describe(chosen)}.`
-        : "Resolved locally without model probabilities."));
-    options.replaceChildren(...rows, h("div", { class: "option-note" }, `${eligible} of ${decision.candidates.length} manoeuvres passed safety checks${decision.flags?.length ? ` · ${decision.flags.join(", ")}` : ""}`));
+    if (!rows.length)
+      rows.push(
+        h(
+          "p",
+          { class: "muted" },
+          m.source === "rules_fallback" || m.fallback
+            ? `Rules fallback${chosen ? `: ${describe(chosen)}` : ": holding still"}. No model probabilities available.`
+            : eligible === 1 && chosen?.eligible
+              ? `Only one safe option: ${describe(chosen)}.`
+              : "Resolved locally without model probabilities.",
+        ),
+      );
+    options.replaceChildren(
+      ...rows,
+      h(
+        "div",
+        { class: "option-note" },
+        `${eligible} of ${decision.candidates.length} manoeuvres passed safety checks${decision.flags?.length ? ` · ${decision.flags.join(", ")}` : ""}`,
+      ),
+    );
   }
 
   badge(text, kind = "", holdMs = 900) {
@@ -227,7 +353,9 @@ export class Hud {
     b.className = `badge ${kind}`;
     b.hidden = false;
     clearTimeout(this.badgeTimer);
-    this.badgeTimer = setTimeout(() => { b.hidden = true; }, holdMs);
+    this.badgeTimer = setTimeout(() => {
+      b.hidden = true;
+    }, holdMs);
   }
 
   flash() {
@@ -240,7 +368,14 @@ export class Hud {
 
 const distance = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.max(0, Math.round(m / 10) * 10)} m`);
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const SPEED_VERBS = { target: "Target", faster: "Speed up to", slow: "Slow to", hold: "Hold", limit: "Limit", cautious: "Cautious" };
+const SPEED_VERBS = {
+  target: "Target",
+  faster: "Speed up to",
+  slow: "Slow to",
+  hold: "Hold",
+  limit: "Limit",
+  cautious: "Cautious",
+};
 // Candidate labels are written for the model in m/s; describe them for people in km/h.
 function describe(c) {
   const law = c.law || {};
@@ -261,4 +396,6 @@ function setText(el, value) {
   const text = String(value);
   if (el.textContent !== text) el.textContent = text;
 }
-function setClass(el, value) { if (el.className !== value) el.className = value; }
+function setClass(el, value) {
+  if (el.className !== value) el.className = value;
+}

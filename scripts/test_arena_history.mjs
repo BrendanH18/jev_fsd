@@ -1,171 +1,405 @@
 import assert from "node:assert/strict";
-import { EVALUATION_SCHEMA, EVALUATION_HISTORY_KEY, validateEvaluation, readEvaluations, saveEvaluation,
-  compareResult, summarizeResults, openEvaluationHistory } from "../static/js/lab/history.js";
+import {
+  EVALUATION_SCHEMA,
+  EVALUATION_HISTORY_KEY,
+  validateEvaluation,
+  readEvaluations,
+  saveEvaluation,
+  compareResult,
+  summarizeResults,
+  openEvaluationHistory,
+} from "../static/js/lab/history.js";
 import { EvaluationTrace } from "../static/js/lab/trace.js";
 
-const result = { challenge: "door-zone", version: 1, map: "kitsilano", pack: 5, seed: 1042, weather: "dry", time: "afternoon", car: "compact",
-  brain: "rules", mode: "lockstep", engine_version: "drive-lab-2", limit_s: 180, arrived: true, stopped: false, pass: true, failures: [],
-  time_s: 30, collisions: 0, red_lights: 0, stop_signs: 0, failed_to_yield: 0, off_road_s: 0, hard_brakes: 1, latency_p50_ms: 0, cost_usd: 0,
-  report: { model_version: 1, status: "arrived", score: 95, qualified: true, incidents: [] } };
-const run = { schema: EVALUATION_SCHEMA, challenge_version: 2, created_at: "2026-10-03T12:00:00Z", status: "complete", results: [result] };
+const result = {
+  challenge: "door-zone",
+  version: 1,
+  map: "kitsilano",
+  pack: 5,
+  seed: 1042,
+  weather: "dry",
+  time: "afternoon",
+  car: "compact",
+  brain: "rules",
+  mode: "lockstep",
+  engine_version: "drive-lab-2",
+  limit_s: 180,
+  arrived: true,
+  stopped: false,
+  pass: true,
+  failures: [],
+  time_s: 30,
+  collisions: 0,
+  red_lights: 0,
+  stop_signs: 0,
+  failed_to_yield: 0,
+  off_road_s: 0,
+  hard_brakes: 1,
+  latency_p50_ms: 0,
+  cost_usd: 0,
+  report: { model_version: 1, status: "arrived", score: 95, qualified: true, incidents: [] },
+};
+const run = {
+  schema: EVALUATION_SCHEMA,
+  challenge_version: 2,
+  created_at: "2026-10-03T12:00:00Z",
+  status: "complete",
+  results: [result],
+};
 let checks = 0;
-function test(label, fn) { fn(); checks++; console.log(`✓ ${label}`); }
-const values = new Map(), storage = { getItem: k => values.get(k), setItem: (k, v) => values.set(k, v) };
+function test(label, fn) {
+  fn();
+  checks++;
+  console.log(`✓ ${label}`);
+}
+const values = new Map(),
+  storage = { getItem: (k) => values.get(k), setItem: (k, v) => values.set(k, v) };
 test("saved evaluations survive reload and retain original timestamps", () => {
-  saveEvaluation(run, storage); assert.deepEqual(readEvaluations(storage), [run]);
+  saveEvaluation(run, storage);
+  assert.deepEqual(readEvaluations(storage), [run]);
 });
 test("history is bounded and deleting one persisted run keeps the others", () => {
-  for (let i = 0; i < 15; i++) saveEvaluation({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, i)).toISOString() }, storage);
-  const history = readEvaluations(storage); assert.equal(history.length, 10);
+  for (let i = 0; i < 15; i++)
+    saveEvaluation({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, i)).toISOString() }, storage);
+  const history = readEvaluations(storage);
+  assert.equal(history.length, 10);
   storage.setItem(EVALUATION_HISTORY_KEY, JSON.stringify(history.slice(1)));
-  assert.equal(readEvaluations(storage).length, 9); assert.equal(readEvaluations(storage)[0].created_at, history[1].created_at);
+  assert.equal(readEvaluations(storage).length, 9);
+  assert.equal(readEvaluations(storage)[0].created_at, history[1].created_at);
 });
 test("corrupt or inaccessible storage does not break history reads", () => {
-  assert.deepEqual(readEvaluations({ getItem() { throw new Error("blocked"); } }), []);
+  assert.deepEqual(
+    readEvaluations({
+      getItem() {
+        throw new Error("blocked");
+      },
+    }),
+    [],
+  );
   assert.deepEqual(readEvaluations({ getItem: () => '{"broken":true}' }), []);
   assert.deepEqual(readEvaluations({ getItem: () => JSON.stringify([run, { schema: "other" }]) }), [run]);
 });
 test("storage write failures are reported without destroying prior history", () => {
-  assert.throws(() => saveEvaluation(run, { getItem: () => "[]", setItem() { throw new Error("quota"); } }), /quota/);
+  assert.throws(
+    () =>
+      saveEvaluation(run, {
+        getItem: () => "[]",
+        setItem() {
+          throw new Error("quota");
+        },
+      }),
+    /quota/,
+  );
 });
 test("a shared browser quota trims older evaluations before giving up", () => {
-  const quota = { getItem: () => JSON.stringify([run, run]), setItem(k, json) {
-    if (JSON.parse(json).length > 1) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
-  } };
+  const quota = {
+    getItem: () => JSON.stringify([run, run]),
+    setItem(k, json) {
+      if (JSON.parse(json).length > 1) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    },
+  };
   assert.equal(saveEvaluation(run, quota).length, 1);
 });
 test("trimming history keeps the chosen baseline, dropping other older evaluations first", () => {
   const at = (m) => ({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, m)).toISOString() });
-  const quota = { getItem: () => JSON.stringify([at(3), at(2), at(1)]), setItem(k, json) {
-    if (JSON.parse(json).length > 2) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
-  } };
-  assert.deepEqual(saveEvaluation(at(4), quota, at(1)).map((r) => r.created_at), [at(4).created_at, at(1).created_at]);
-  assert.deepEqual(saveEvaluation(at(4), quota).map((r) => r.created_at), [at(4).created_at, at(3).created_at]);
+  const quota = {
+    getItem: () => JSON.stringify([at(3), at(2), at(1)]),
+    setItem(k, json) {
+      if (JSON.parse(json).length > 2) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    },
+  };
+  assert.deepEqual(
+    saveEvaluation(at(4), quota, at(1)).map((r) => r.created_at),
+    [at(4).created_at, at(1).created_at],
+  );
+  assert.deepEqual(
+    saveEvaluation(at(4), quota).map((r) => r.created_at),
+    [at(4).created_at, at(3).created_at],
+  );
 });
 test("a full-size new evaluation is saved beside a full-size baseline", () => {
   // (a run of every challenge with two drivers: some 1.1 million characters, mostly decision traces)
-  const decisions = Array.from({ length: 600 }, (_, i) => ({ id: i + 1, at_s: i * 0.2, chosen_id: "keep_lane_target", motion: "drive", source: "rules",
-    error: null, context_recorded: false, flags: [], state: null, candidates: null }));
-  const big = (m) => ({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, m)).toISOString(), results: Array.from({ length: 13 }, () => ({ ...result, decisions_trace: decisions, events: [] })) });
-  const store = new Map(), roomy = { getItem: (k) => store.get(k), setItem: (k, v) => store.set(k, v) };
+  const decisions = Array.from({ length: 600 }, (_, i) => ({
+    id: i + 1,
+    at_s: i * 0.2,
+    chosen_id: "keep_lane_target",
+    motion: "drive",
+    source: "rules",
+    error: null,
+    context_recorded: false,
+    flags: [],
+    state: null,
+    candidates: null,
+  }));
+  const big = (m) => ({
+    ...run,
+    created_at: new Date(Date.UTC(2026, 9, 3, 12, m)).toISOString(),
+    results: Array.from({ length: 13 }, () => ({ ...result, decisions_trace: decisions, events: [] })),
+  });
+  const store = new Map(),
+    roomy = { getItem: (k) => store.get(k), setItem: (k, v) => store.set(k, v) };
   assert.ok(JSON.stringify(big(1)).length > 1.1e6, "full size");
   saveEvaluation(big(1), roomy);
-  assert.deepEqual(saveEvaluation(big(2), roomy, readEvaluations(roomy)[0]).map((r) => r.created_at), [big(2).created_at, big(1).created_at]);
+  assert.deepEqual(
+    saveEvaluation(big(2), roomy, readEvaluations(roomy)[0]).map((r) => r.created_at),
+    [big(2).created_at, big(1).created_at],
+  );
 });
 test("untrusted pass labels cannot bypass the audited pass criteria", () => {
   assert.equal(validateEvaluation({ ...run, results: [{ ...result, collisions: 1 }] }).results[0].pass, false);
-  assert.equal(validateEvaluation({ ...run, results: [{ ...result, stopped: true, report: { ...result.report, status: "stopped" } }] }).results[0].pass, false);
-  assert.throws(() => validateEvaluation({ ...run, results: [{ ...result, report: { ...result.report, status: "timeout" } }] }));
+  assert.equal(
+    validateEvaluation({
+      ...run,
+      results: [{ ...result, stopped: true, report: { ...result.report, status: "stopped" } }],
+    }).results[0].pass,
+    false,
+  );
+  assert.throws(() =>
+    validateEvaluation({ ...run, results: [{ ...result, report: { ...result.report, status: "timeout" } }] }),
+  );
 });
 test("malformed and unsupported imports are rejected before storage", () => {
-  for (const bad of [{ ...run, schema: "other" }, { ...run, results: [] }, { ...run, created_at: "oops" },
-    { ...run, results: [{ ...result, cost_usd: -1 }] }, { ...run, results: [{ ...result, mode: "fast" }] }]) assert.throws(() => validateEvaluation(bad));
+  for (const bad of [
+    { ...run, schema: "other" },
+    { ...run, results: [] },
+    { ...run, created_at: "oops" },
+    { ...run, results: [{ ...result, cost_usd: -1 }] },
+    { ...run, results: [{ ...result, mode: "fast" }] },
+  ])
+    assert.throws(() => validateEvaluation(bad));
 });
 test("comparison can use a different driver on identical conditions", () => {
   const match = compareResult({ ...result, brain: "my-agent" }, run, "rules");
-  assert.deepEqual(match.before, result); assert.deepEqual(match.reasons, []);
+  assert.deepEqual(match.before, result);
+  assert.deepEqual(match.reasons, []);
 });
 test("every experiment condition mismatch prevents a delta", () => {
-  for (const [key, value] of Object.entries({ version: 2, pack: 6, seed: 11, map: "victoria", weather: "rain", time: "night",
-    car: "pickup", mode: "realtime", engine_version: "other", limit_s: 60 })) {
+  for (const [key, value] of Object.entries({
+    version: 2,
+    pack: 6,
+    seed: 11,
+    map: "victoria",
+    weather: "rain",
+    time: "night",
+    car: "pickup",
+    mode: "realtime",
+    engine_version: "other",
+    limit_s: 60,
+  })) {
     const comparison = compareResult({ ...result, [key]: value }, run, "rules");
-    assert.equal(comparison.before, undefined, key); assert.ok(comparison.reasons.length, key);
+    assert.equal(comparison.before, undefined, key);
+    assert.ok(comparison.reasons.length, key);
   }
-  assert.deepEqual(compareResult({ ...result, report: { ...result.report, model_version: 2 } }, run, "rules").reasons, ["scoring version"]);
+  assert.deepEqual(compareResult({ ...result, report: { ...result.report, model_version: 2 } }, run, "rules").reasons, [
+    "scoring version",
+  ]);
 });
 test("missing challenges, duplicates and stopped attempts cannot generate misleading comparisons", () => {
-  assert.ok(compareResult({ ...result, challenge: "blind-crossing" }, run, "rules").reasons.includes("challenge absent from baseline"));
-  assert.ok(compareResult(result, { ...run, results: [result, result] }, "rules").reasons.includes("duplicate baseline results"));
+  assert.ok(
+    compareResult({ ...result, challenge: "blind-crossing" }, run, "rules").reasons.includes(
+      "challenge absent from baseline",
+    ),
+  );
+  assert.ok(
+    compareResult(result, { ...run, results: [result, result] }, "rules").reasons.includes(
+      "duplicate baseline results",
+    ),
+  );
   assert.ok(compareResult({ ...result, stopped: true }, run, "rules").reasons.includes("stopped attempt"));
 });
 test("legacy exports remain readable and flag unknown simulation conditions", () => {
-  const legacy = structuredClone(run); legacy.schema = "jev-agent-evaluation-v1"; legacy.challenge_version = 1;
-  delete legacy.results[0].engine_version; delete legacy.results[0].limit_s;
+  const legacy = structuredClone(run);
+  legacy.schema = "jev-agent-evaluation-v1";
+  legacy.challenge_version = 1;
+  delete legacy.results[0].engine_version;
+  delete legacy.results[0].limit_s;
   const imported = validateEvaluation(legacy);
   assert.equal(imported.results.length, 1);
   assert.deepEqual(compareResult(result, imported, "rules").reasons, ["time limit", "simulation version"]);
 });
 test("summary reports pass rate, safety and measured costs; missing latency stays unknown", () => {
-  const summary = summarizeResults([result, { ...result, pass: false, collisions: 2, cost_usd: .1, hard_brakes: 3, latency_p50_ms: null }]);
-  assert.deepEqual(summary, { count: 2, pass_rate: .5, incidents: 2, hard_brakes: 4, latency_p50_ms: 0, cost_usd: .1 });
+  const summary = summarizeResults([
+    result,
+    { ...result, pass: false, collisions: 2, cost_usd: 0.1, hard_brakes: 3, latency_p50_ms: null },
+  ]);
+  assert.deepEqual(summary, {
+    count: 2,
+    pass_rate: 0.5,
+    incidents: 2,
+    hard_brakes: 4,
+    latency_p50_ms: 0,
+    cost_usd: 0.1,
+  });
   assert.equal(summarizeResults([{ ...result, latency_p50_ms: null }]).latency_p50_ms, null);
 });
 test("incident context is an immutable copy of the preceding executed decision", () => {
-  const trace = new EvaluationTrace(), decision = { chosenId: "hold", motion: "stop", meta: { source: "rules" }, flags: ["pedestrian"], state: { car: { speed: 5 } }, candidates: [] };
-  trace.event("safety", "Emergency brake", .5); trace.decision(decision, 1); trace.event("collisions", "Collision", 1.2);
+  const trace = new EvaluationTrace(),
+    decision = {
+      chosenId: "hold",
+      motion: "stop",
+      meta: { source: "rules" },
+      flags: ["pedestrian"],
+      state: { car: { speed: 5 } },
+      candidates: [],
+    };
+  trace.event("safety", "Emergency brake", 0.5);
+  trace.decision(decision, 1);
+  trace.event("collisions", "Collision", 1.2);
   decision.state.car.speed = 99;
-  assert.equal(trace.decisions[0].state.car.speed, 5); assert.equal(trace.events[0].decision_id, null);
-  assert.equal(trace.events[1].decision_id, 1); assert.equal(trace.events[1].decision_age_s, .2);
+  assert.equal(trace.decisions[0].state.car.speed, 5);
+  assert.equal(trace.events[0].decision_id, null);
+  assert.equal(trace.events[1].decision_id, 1);
+  assert.equal(trace.events[1].decision_age_s, 0.2);
   validateEvaluation({ ...run, results: [{ ...result, ...trace.export() }] });
 });
 test("malformed trace data and links to future decisions are rejected", () => {
-  const trace = new EvaluationTrace(); trace.decision({ motion: "stop", chosenId: "hold", meta: { source: "rules" }, candidates: [] }, 2); trace.event("collisions", "Collision", 3);
+  const trace = new EvaluationTrace();
+  trace.decision({ motion: "stop", chosenId: "hold", meta: { source: "rules" }, candidates: [] }, 2);
+  trace.event("collisions", "Collision", 3);
   const r = { ...result, ...trace.export() };
   assert.throws(() => validateEvaluation({ ...run, results: [{ ...r, events: [{ ...r.events[0], at_s: 1 }] }] }));
-  assert.throws(() => validateEvaluation({ ...run, results: [{ ...r, decisions_trace: [{ ...r.decisions_trace[0], flags: "bad" }] }] }));
+  assert.throws(() =>
+    validateEvaluation({ ...run, results: [{ ...r, decisions_trace: [{ ...r.decisions_trace[0], flags: "bad" }] }] }),
+  );
 });
 test("event-linked snapshots are retained while unassociated choices remain compact", () => {
-  const trace = new EvaluationTrace(), decision = { chosenId: "hold", motion: "stop", meta: { source: "rules" }, candidates: [], state: { car: { speed: 5 } } };
-  trace.decision(decision, 1); trace.event("safety", "Emergency brake", 1.1);
-  trace.decision(decision, 2); trace.decision(decision, 3); trace.event("arrived", "Arrived", 3.1);
-  assert.equal(trace.decisions[0].state.car.speed, 5); assert.equal(trace.decisions[0].context_recorded, true);
-  assert.equal(trace.decisions[1].state, undefined); assert.equal(trace.decisions[1].candidates, undefined);
+  const trace = new EvaluationTrace(),
+    decision = {
+      chosenId: "hold",
+      motion: "stop",
+      meta: { source: "rules" },
+      candidates: [],
+      state: { car: { speed: 5 } },
+    };
+  trace.decision(decision, 1);
+  trace.event("safety", "Emergency brake", 1.1);
+  trace.decision(decision, 2);
+  trace.decision(decision, 3);
+  trace.event("arrived", "Arrived", 3.1);
+  assert.equal(trace.decisions[0].state.car.speed, 5);
+  assert.equal(trace.decisions[0].context_recorded, true);
+  assert.equal(trace.decisions[1].state, undefined);
+  assert.equal(trace.decisions[1].candidates, undefined);
   assert.equal(trace.decisions[1].context_recorded, undefined);
   assert.equal(trace.decisions[2].context_recorded, true);
   validateEvaluation({ ...run, results: [{ ...result, ...trace.export() }] });
 });
 test("a run of the same compact choice is folded into its first record, and events still link to theirs", () => {
-  const trace = new EvaluationTrace(), make = (id, flags = []) => ({ chosenId: id, motion: "drive", meta: { source: "rules" }, flags, candidates: [{ id, eligible: true, law: { vTarget: 8 } }], state: { car: { speed: 8 } } });
+  const trace = new EvaluationTrace(),
+    make = (id, flags = []) => ({
+      chosenId: id,
+      motion: "drive",
+      meta: { source: "rules" },
+      flags,
+      candidates: [{ id, eligible: true, law: { vTarget: 8 } }],
+      state: { car: { speed: 8 } },
+    });
   for (let k = 0; k < 5; k++) trace.decision(make("keep_lane_target", ["intersection"]), 1 + k * 0.25);
   trace.decision(make("keep_lane_target"), 2.5);
-  trace.decision(make("stop_at_line", ["intersection"]), 2.75); trace.event("hard_brake", "Hard braking", 2.8, { count: 1 });
-  trace.decision(make("stop_at_line", ["intersection"]), 3); trace.decision(make("stop_at_line", ["intersection"]), 3.25);
+  trace.decision(make("stop_at_line", ["intersection"]), 2.75);
+  trace.event("hard_brake", "Hard braking", 2.8, { count: 1 });
+  trace.decision(make("stop_at_line", ["intersection"]), 3);
+  trace.decision(make("stop_at_line", ["intersection"]), 3.25);
   const { decisions_trace: d } = trace.export();
-  assert.deepEqual(d.map((x) => [x.id, x.chosen_id, x.repeats ?? 1]), [[1, "keep_lane_target", 5], [6, "keep_lane_target", 1], [7, "stop_at_line", 1], [8, "stop_at_line", 2]]);
-  assert.deepEqual(d[0], { id: 1, at_s: 1, chosen_id: "keep_lane_target", motion: "drive", source: "rules", flags: ["intersection"], repeats: 5, until_s: 2 });
+  assert.deepEqual(
+    d.map((x) => [x.id, x.chosen_id, x.repeats ?? 1]),
+    [
+      [1, "keep_lane_target", 5],
+      [6, "keep_lane_target", 1],
+      [7, "stop_at_line", 1],
+      [8, "stop_at_line", 2],
+    ],
+  );
+  assert.deepEqual(d[0], {
+    id: 1,
+    at_s: 1,
+    chosen_id: "keep_lane_target",
+    motion: "drive",
+    source: "rules",
+    flags: ["intersection"],
+    repeats: 5,
+    until_s: 2,
+  });
   assert.deepEqual(d[1], { id: 6, at_s: 2.5, chosen_id: "keep_lane_target", motion: "drive", source: "rules" });
-  assert.equal(d[2].context_recorded, true); assert.equal(d[2].state.car.speed, 8); assert.equal(d[2].candidates[0].target_mps, 8);
+  assert.equal(d[2].context_recorded, true);
+  assert.equal(d[2].state.car.speed, 8);
+  assert.equal(d[2].candidates[0].target_mps, 8);
   assert.equal(trace.events[0].decision_id, 7);
   validateEvaluation({ ...run, results: [{ ...result, ...trace.export() }] });
   // (a record an event links to is never folded into the one before it, nor the next into it)
   assert.equal(d.filter((x) => x.context_recorded).length, 1);
 });
 test("v2 exports with full compact records still import; malformed v3 compact records do not", () => {
-  const trace = new EvaluationTrace(), decision = { chosenId: "hold", motion: "stop", meta: { source: "rules" }, candidates: [], state: {} };
-  trace.decision(decision, 1); trace.decision({ ...decision, chosenId: "go" }, 2); trace.event("arrived", "Arrived", 2.1);
+  const trace = new EvaluationTrace(),
+    decision = { chosenId: "hold", motion: "stop", meta: { source: "rules" }, candidates: [], state: {} };
+  trace.decision(decision, 1);
+  trace.decision({ ...decision, chosenId: "go" }, 2);
+  trace.event("arrived", "Arrived", 2.1);
   const v3 = { ...result, ...trace.export() };
-  const v2 = { ...v3, decisions_trace: v3.decisions_trace.map((d) => d.context_recorded ? d : { error: null, flags: [], context_recorded: false, state: null, candidates: null, ...d }) };
+  const v2 = {
+    ...v3,
+    decisions_trace: v3.decisions_trace.map((d) =>
+      d.context_recorded ? d : { error: null, flags: [], context_recorded: false, state: null, candidates: null, ...d },
+    ),
+  };
   assert.equal(validateEvaluation({ ...run, schema: "jev-agent-evaluation-v2", results: [v2] }).results.length, 1);
   assert.equal(validateEvaluation({ ...run, results: [v2] }).results.length, 1);
-  assert.throws(() => validateEvaluation({ ...run, schema: "jev-agent-evaluation-v2", results: [v3] }), /decision trace/);
+  assert.throws(
+    () => validateEvaluation({ ...run, schema: "jev-agent-evaluation-v2", results: [v3] }),
+    /decision trace/,
+  );
   const bad = (d0) => ({ ...run, results: [{ ...v3, decisions_trace: [d0, v3.decisions_trace[1]] }] });
   const c = v3.decisions_trace[0];
-  for (const d0 of [{ ...c, repeats: 1, until_s: 1 }, { ...c, repeats: 3 }, { ...c, repeats: 2, until_s: 0.5 }, { ...c, state: {} }, { ...c, flags: [] }, { ...c, error: "" },
-    { ...v3.decisions_trace[1], id: 1, repeats: 2, until_s: 2 }]) assert.throws(() => validateEvaluation(bad(d0)), /decision trace/);
+  for (const d0 of [
+    { ...c, repeats: 1, until_s: 1 },
+    { ...c, repeats: 3 },
+    { ...c, repeats: 2, until_s: 0.5 },
+    { ...c, state: {} },
+    { ...c, flags: [] },
+    { ...c, error: "" },
+    { ...v3.decisions_trace[1], id: 1, repeats: 2, until_s: 2 },
+  ])
+    assert.throws(() => validateEvaluation(bad(d0)), /decision trace/);
 });
 test("later audited failures remain visible after the coaching incident log is full", () => {
-  const trace = new EvaluationTrace(), world = { t: 1, violations: { collisions: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0 } };
+  const trace = new EvaluationTrace(),
+    world = {
+      t: 1,
+      violations: { collisions: 0, red_lights_run: 0, stop_signs_run: 0, failed_to_yield: 0, off_road_s: 0 },
+    };
   const score = { hardBrakes: 100, incidents: Array(100).fill({ type: "hard_brake" }) };
   trace.measurements(world, score);
-  world.t = 2; world.violations.collisions = 1; world.violations.off_road_s = 1;
-  trace.measurements(world, score); trace.measurements(world, score);
-  assert.equal(trace.events.filter(e => e.type === "collisions").length, 1);
-  assert.equal(trace.events.find(e => e.type === "hard_brake").count, 100);
-  assert.equal(trace.events.filter(e => e.type === "off_road").length, 1);
+  world.t = 2;
+  world.violations.collisions = 1;
+  world.violations.off_road_s = 1;
+  trace.measurements(world, score);
+  trace.measurements(world, score);
+  assert.equal(trace.events.filter((e) => e.type === "collisions").length, 1);
+  assert.equal(trace.events.find((e) => e.type === "hard_brake").count, 100);
+  assert.equal(trace.events.filter((e) => e.type === "off_road").length, 1);
 });
 test("trace limits explicitly label missing later context", () => {
   const trace = new EvaluationTrace();
   // (alternating choices, which do not fold together)
-  for (let i = 0; i < 602; i++) trace.decision({ motion: "stop", chosenId: i % 2 ? "hold" : "wait", meta: { source: "rules" }, candidates: [] }, i);
+  for (let i = 0; i < 602; i++)
+    trace.decision({ motion: "stop", chosenId: i % 2 ? "hold" : "wait", meta: { source: "rules" }, candidates: [] }, i);
   trace.event("timeout", "Time limit", 605);
-  assert.equal(trace.decisions.length, 600); assert.equal(trace.events[0].decision_id, null); assert.equal(trace.export().trace_truncated, true);
+  assert.equal(trace.decisions.length, 600);
+  assert.equal(trace.events[0].decision_id, null);
+  assert.equal(trace.export().trace_truncated, true);
 });
 // (the arena keeps history in IndexedDB, scripts/test_arena_storage.mjs; without it, as here in Node,
 // it is the localStorage history above)
 {
-  const store = new Map(), history = await openEvaluationHistory({ storage: { getItem: (k) => store.get(k), setItem: (k, v) => store.set(k, v) } });
-  assert.equal(history.kind, "localStorage"); await history.save(run);
-  assert.deepEqual(await history.list(), [run]); assert.deepEqual(readEvaluations({ getItem: (k) => store.get(k) }), [run]);
-  checks++; console.log("✓ without IndexedDB the arena's history is this localStorage history");
+  const store = new Map(),
+    history = await openEvaluationHistory({
+      storage: { getItem: (k) => store.get(k), setItem: (k, v) => store.set(k, v) },
+    });
+  assert.equal(history.kind, "localStorage");
+  await history.save(run);
+  assert.deepEqual(await history.list(), [run]);
+  assert.deepEqual(readEvaluations({ getItem: (k) => store.get(k) }), [run]);
+  checks++;
+  console.log("✓ without IndexedDB the arena's history is this localStorage history");
 }
 console.log(`${checks} arena history checks passed`);

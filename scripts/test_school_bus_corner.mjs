@@ -28,22 +28,36 @@ function drive(parkedAtCorner, parkedStraightOn = false) {
   // (where parked_1922 stood: its body's centre, heading south in 7 Street's west parking lane)
   let parked = null;
   if (parkedAtCorner) {
-    const psi = -93.2 * Math.PI / 180, back = CAR.length / 2 - CAR.rearOverhang;
-    parked = Object.assign(new Vehicle(-286.03 - Math.cos(psi) * back, 354.48 - Math.sin(psi) * back, psi, 0), { id: "parked_corner", edge: "e546", curb: "right" });
+    const psi = (-93.2 * Math.PI) / 180,
+      back = CAR.length / 2 - CAR.rearOverhang;
+    parked = Object.assign(new Vehicle(-286.03 - Math.cos(psi) * back, 354.48 - Math.sin(psi) * back, psi, 0), {
+      id: "parked_corner",
+      edge: "e546",
+      curb: "right",
+    });
     world.parked.add(parked);
   }
   // (and one standing in 11 Avenue's left lane just past the junction, so straight on is blocked too)
   let ahead = null;
   if (parkedStraightOn) {
-    ahead = Object.assign(new Vehicle(-292, 364.7, Math.PI + 0.045, 0), { id: "parked_ahead", edge: "e479", curb: "left" });
+    ahead = Object.assign(new Vehicle(-292, 364.7, Math.PI + 0.045, 0), {
+      id: "parked_ahead",
+      edge: "e479",
+      curb: "left",
+    });
     world.parked.add(ahead);
   }
   // in the left lane, planning the left turn, as the bus was once its lane change was done
   const bus = fleet.addSchoolBus(map.lane("e478", 0), 120, 6, [["e546", 0]]);
   bus.school.every = Infinity;
-  let touched = false, turned = false, gaveUp = false, right = false, stood = 0;
+  let touched = false,
+    turned = false,
+    gaveUp = false,
+    right = false,
+    stood = 0;
   for (let k = 0; k < 90 * 60; k++) {
-    fleet.step(1 / 60); world.t += 1 / 60;
+    fleet.step(1 / 60);
+    world.t += 1 / 60;
     if (parked) touched ||= obbOverlap(bus.obb(), parked.obb(), 0);
     if (ahead) touched ||= obbOverlap(bus.obb(), ahead.obb(), 0);
     if (bus.path.edges.some((e) => e.id === "e547")) right = true;

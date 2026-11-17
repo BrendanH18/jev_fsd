@@ -10,7 +10,20 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { GeoBuilder } from "./geo.js";
 import { LAYER, groundLayer, toThree } from "./scene.js";
-import { asphaltTexture, concreteTexture, crosswalkSignTexture, zoneSignTexture, curbTexture, glowTexture, grassTexture, stopSignTexture, withMacroVariation, walkSignalTexture, handSignalTexture, leftArrowTexture } from "./textures.js";
+import {
+  asphaltTexture,
+  concreteTexture,
+  crosswalkSignTexture,
+  zoneSignTexture,
+  curbTexture,
+  glowTexture,
+  grassTexture,
+  stopSignTexture,
+  withMacroVariation,
+  walkSignalTexture,
+  handSignalTexture,
+  leftArrowTexture,
+} from "./textures.js";
 import { snowable } from "./weather.js";
 import { buildStreetLights } from "./citylights.js";
 import { wetReflective } from "./reflection.js";
@@ -24,33 +37,47 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 export function buildRoads(map) {
   const group = new THREE.Group();
   const { streets, legs, nodeR } = analyzeStreets(map);
-  const asphalt = new GeoBuilder(), curb = new GeoBuilder(), walk = new GeoBuilder();
-  const white = new GeoBuilder(), yellow = new GeoBuilder();
+  const asphalt = new GeoBuilder(),
+    curb = new GeoBuilder(),
+    walk = new GeoBuilder();
+  const white = new GeoBuilder(),
+    yellow = new GeoBuilder();
 
   for (const st of streets) {
     const e = st.edge;
     const L = e.cum[e.cum.length - 1];
-    const lo = e.asphalt[0] - GUTTER, hi = e.asphalt[1] + GUTTER;
+    const lo = e.asphalt[0] - GUTTER,
+      hi = e.asphalt[1] + GUTTER;
     asphalt.ribbon(e.pts, lo, hi, 0, { scale: 7 });
     const [blvd, side] = streetOf(e);
     for (const sign of [1, -1]) {
       const edge = sign > 0 ? hi : lo;
-      const a = edge, b = edge + sign * CURB;
+      const a = edge,
+        b = edge + sign * CURB;
       curb.ribbon(e.pts, Math.min(a, b), Math.max(a, b), 0, { uv: "along", scale: 1.2 });
-      const w0 = b + sign * blvd, w1 = w0 + sign * side;
+      const w0 = b + sign * blvd,
+        w1 = w0 + sign * side;
       walk.ribbon(e.pts, Math.min(w0, w1), Math.max(w0, w1), 0, { uv: "along", scale: 1.5 });
     }
     // markings stay out of junctions and stop short of stop lines
-    let from = trimAt(nodeR, legs, e.from), to = L - trimAt(nodeR, legs, e.to);
+    let from = trimAt(nodeR, legs, e.from),
+      to = L - trimAt(nodeR, legs, e.to);
     if (e.control) to = Math.min(to, e.control.s_line - 0.6);
-    if (st.twin && st.twin.control) from = Math.max(from, st.twin.cum[st.twin.cum.length - 1] - st.twin.control.s_line + 0.6);
+    if (st.twin && st.twin.control)
+      from = Math.max(from, st.twin.cum[st.twin.cum.length - 1] - st.twin.control.s_line + 0.6);
     if (to - from > 2) {
       if (st.twin && ARTERIAL.has(e.cls)) {
         yellow.ribbon(e.pts, -0.2, -0.08, 0, { from, to });
         yellow.ribbon(e.pts, 0.08, 0.2, 0, { from, to });
       }
       laneDashes(white, e, from, to);
-      if (st.twin) laneDashes(white, st.twin, st.twin.cum[st.twin.cum.length - 1] - to, st.twin.cum[st.twin.cum.length - 1] - from);
+      if (st.twin)
+        laneDashes(
+          white,
+          st.twin,
+          st.twin.cum[st.twin.cum.length - 1] - to,
+          st.twin.cum[st.twin.cum.length - 1] - from,
+        );
     }
   }
 
@@ -60,19 +87,43 @@ export function buildRoads(map) {
   for (const st of streets) {
     const e = st.edge;
     const L = e.cum[e.cum.length - 1];
-    const from = trimAt(nodeR, legs, e.from) + 1.5, to = L - trimAt(nodeR, legs, e.to) - 1.5;
+    const from = trimAt(nodeR, legs, e.from) + 1.5,
+      to = L - trimAt(nodeR, legs, e.to) - 1.5;
     if (to - from < 3) continue;
-    const lo = e.asphalt[0] - GUTTER, hi = e.asphalt[1] + GUTTER;
-    for (const [lat, sign] of [[hi, 1], [lo, -1]]) {
+    const lo = e.asphalt[0] - GUTTER,
+      hi = e.asphalt[1] + GUTTER;
+    for (const [lat, sign] of [
+      [hi, 1],
+      [lo, -1],
+    ]) {
       let prev = null;
       for (let s0 = from; s0 <= to + 1e-6; s0 = Math.min(to, s0 + 2) + (s0 >= to ? 1 : 0)) {
-        const p = pointAt(e.pts, e.cum, s0), h = headingAt(e.pts, e.cum, s0);
-        const nx = Math.sin(h), ny = -Math.cos(h);
-        const a = [p[0] + nx * lat, p[1] + ny * lat], b = [p[0] + nx * (lat + sign * CURB), p[1] + ny * (lat + sign * CURB)];
+        const p = pointAt(e.pts, e.cum, s0),
+          h = headingAt(e.pts, e.cum, s0);
+        const nx = Math.sin(h),
+          ny = -Math.cos(h);
+        const a = [p[0] + nx * lat, p[1] + ny * lat],
+          b = [p[0] + nx * (lat + sign * CURB), p[1] + ny * (lat + sign * CURB)];
         if (prev) {
-          const face = [-nx * sign, -ny * sign, 0];   // faces the road
-          curbFace.quad([prev.a[0], prev.a[1], 0], [a[0], a[1], 0], [a[0], a[1], 0.15], [prev.a[0], prev.a[1], 0.15], null, null, face);
-          curbFace.quad([prev.a[0], prev.a[1], 0.15], [a[0], a[1], 0.15], [b[0], b[1], 0.15], [prev.b[0], prev.b[1], 0.15], null, null, [0, 0, 1]);
+          const face = [-nx * sign, -ny * sign, 0]; // faces the road
+          curbFace.quad(
+            [prev.a[0], prev.a[1], 0],
+            [a[0], a[1], 0],
+            [a[0], a[1], 0.15],
+            [prev.a[0], prev.a[1], 0.15],
+            null,
+            null,
+            face,
+          );
+          curbFace.quad(
+            [prev.a[0], prev.a[1], 0.15],
+            [a[0], a[1], 0.15],
+            [b[0], b[1], 0.15],
+            [prev.b[0], prev.b[1], 0.15],
+            null,
+            null,
+            [0, 0, 1],
+          );
         }
         prev = { a, b };
         if (s0 >= to) break;
@@ -81,7 +132,8 @@ export function buildRoads(map) {
   }
 
   // roundabouts: a disc of asphalt out to the ring's outer edge; the island is painted over it
-  const islandCurb = new GeoBuilder(), island = new GeoBuilder();
+  const islandCurb = new GeoBuilder(),
+    island = new GeoBuilder();
   for (const rb of (map.roundabouts || new Map()).values()) {
     asphalt.polygon(circle(rb.x, rb.y, rb.outer_r + GUTTER, 40), 0, { scale: 7 });
     islandCurb.polygon(circle(rb.x, rb.y, rb.island_r, 32), 0);
@@ -97,8 +149,12 @@ export function buildRoads(map) {
     const c = e.control;
     if (!c) continue;
     const L = e.cum[e.cum.length - 1];
-    const left = e.oneway ? e.asphalt[0] + 0.15 : 0.12, right = e.asphalt[1] + GUTTER - 0.1;
-    if (c.type === "yield") { sharkTeeth(white, e, c.s_line, left, right - (e.parking ? e.parking[1] : 0)); continue; }
+    const left = e.oneway ? e.asphalt[0] + 0.15 : 0.12,
+      right = e.asphalt[1] + GUTTER - 0.1;
+    if (c.type === "yield") {
+      sharkTeeth(white, e, c.s_line, left, right - (e.parking ? e.parking[1] : 0));
+      continue;
+    }
     stopBar(white, e, c.s_line, left, right, c.type === "signal" ? 0.6 : 0.5);
     if (c.type === "signal" && c.s_line + 4.2 < L) crosswalk(white, e, c.s_line + 1.0, c.s_line + 4.0);
   }
@@ -106,27 +162,75 @@ export function buildRoads(map) {
   // across it, 3 m apart
   for (const c of map.crosswalks || []) {
     const e = map.edges.get(c.edge);
-    if (c.markings === "lines") for (const s of [c.s - 1.5, c.s + 1.5]) stopBar(white, e, s, e.asphalt[0], e.asphalt[1], 0.3);
+    if (c.markings === "lines")
+      for (const s of [c.s - 1.5, c.s + 1.5]) stopBar(white, e, s, e.asphalt[0], e.asphalt[1], 0.3);
     else crosswalk(white, e, c.s - 1.5, c.s + 1.5);
   }
 
-  const asphaltMat = wetReflective(snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92, metalness: 0 }), 0.05, 0.22), "asphalt"), 1);
+  const asphaltMat = wetReflective(
+    snowable(
+      withMacroVariation(
+        new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92, metalness: 0 }),
+        0.05,
+        0.22,
+      ),
+      "asphalt",
+    ),
+    1,
+  );
   add(group, asphalt, asphaltMat, LAYER.asphalt);
-  add(group, curb, snowable(new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.85, color: 0xb4b4b0 }), "curb"), LAYER.curb);
+  add(
+    group,
+    curb,
+    snowable(new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.85, color: 0xb4b4b0 }), "curb"),
+    LAYER.curb,
+  );
   if (!curbFace.empty) {
-    const faces = new THREE.Mesh(curbFace.toGeometry(), snowable(new THREE.MeshStandardMaterial({ color: 0xbdbcb6, roughness: 0.85 }), "curb"));
+    const faces = new THREE.Mesh(
+      curbFace.toGeometry(),
+      snowable(new THREE.MeshStandardMaterial({ color: 0xbdbcb6, roughness: 0.85 }), "curb"),
+    );
     faces.receiveShadow = true;
     group.add(faces);
   }
-  add(group, walk, wetReflective(snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.9 }), 0.07, 0.15), "concrete"), 0.35), LAYER.sidewalk);
-  add(group, islandCurb, snowable(new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.85, color: 0xb4b4b0 }), "curb"), LAYER.islandCurb);
-  const grass = grassTexture().clone();   // the ground's copy is repeated across the whole map
+  add(
+    group,
+    walk,
+    wetReflective(
+      snowable(
+        withMacroVariation(new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.9 }), 0.07, 0.15),
+        "concrete",
+      ),
+      0.35,
+    ),
+    LAYER.sidewalk,
+  );
+  add(
+    group,
+    islandCurb,
+    snowable(new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.85, color: 0xb4b4b0 }), "curb"),
+    LAYER.islandCurb,
+  );
+  const grass = grassTexture().clone(); // the ground's copy is repeated across the whole map
   grass.repeat.set(1, 1);
   grass.needsUpdate = true;
-  const islandMat = snowable(withMacroVariation(new THREE.MeshStandardMaterial({ map: grass, roughness: 0.95 }), 0.06, 0.3), "grass");
+  const islandMat = snowable(
+    withMacroVariation(new THREE.MeshStandardMaterial({ map: grass, roughness: 0.95 }), 0.06, 0.3),
+    "grass",
+  );
   add(group, island, islandMat, LAYER.island);
-  add(group, white, wetReflective(snowable(new THREE.MeshStandardMaterial({ color: 0xe6e6df, roughness: 0.6 }), "paint"), 0.7), LAYER.marking);
-  add(group, yellow, wetReflective(snowable(new THREE.MeshStandardMaterial({ color: 0xe0b52c, roughness: 0.6 }), "paint"), 0.7), LAYER.marking);
+  add(
+    group,
+    white,
+    wetReflective(snowable(new THREE.MeshStandardMaterial({ color: 0xe6e6df, roughness: 0.6 }), "paint"), 0.7),
+    LAYER.marking,
+  );
+  add(
+    group,
+    yellow,
+    wetReflective(snowable(new THREE.MeshStandardMaterial({ color: 0xe0b52c, roughness: 0.6 }), "paint"), 0.7),
+    LAYER.marking,
+  );
 
   const signals = buildSignals(map, group);
   buildStopSigns(map, group);
@@ -137,33 +241,49 @@ export function buildRoads(map) {
   return { group, signals, streets, nodeR, legs, streetLights };
 }
 
-
-
 // The diagonal crosswalks of scramble crossings (sim/signals.js), painted only where the world runs
 // them: from each corner where people wait (the crowd's crosswalk ends, sim/pedestrians.js) straight
 // across the junction to the farthest one, as continental bars 3 m long across the way they walk.
 export function buildScrambleMarkings(map, crowd) {
-  const group = new THREE.Group(), white = new GeoBuilder(), done = new Set();
+  const group = new THREE.Group(),
+    white = new GeoBuilder(),
+    done = new Set();
   for (const id of map.scrambles || []) {
     const inter = map.intersections.get(id);
     for (const node of map.junctionNodes(inter)) {
       const info = crowd?.legsAt?.get(node);
       // (only this signal's own junction: junctionNodes also names where its approaches start)
       if (!info || info.list.length < 3 || info.inter !== inter) continue;
-      for (const here of info.list) for (const side of [1, -1]) {
-        const from = here.ends[side];
-        let far = null;
-        for (const l of info.list) if (l !== here) for (const sd of [1, -1]) { const d = Math.hypot(l.ends[sd][0] - from[0], l.ends[sd][1] - from[1]); if (!far || d > far.d) far = { to: l.ends[sd], d }; }
-        if (!far) continue;
-        const key = [from, far.to].map((p) => p.map((v) => v.toFixed(1)).join(",")).sort().join("|");
-        if (done.has(key)) continue;
-        done.add(key);
-        const h = Math.atan2(far.to[1] - from[1], far.to[0] - from[0]), across = h + Math.PI / 2;
-        for (let u = 1.2; u < far.d - 1.0; u += 1.2) white.rect(from[0] + Math.cos(h) * u, from[1] + Math.sin(h) * u, across, 3.0, 0.55);
-      }
+      for (const here of info.list)
+        for (const side of [1, -1]) {
+          const from = here.ends[side];
+          let far = null;
+          for (const l of info.list)
+            if (l !== here)
+              for (const sd of [1, -1]) {
+                const d = Math.hypot(l.ends[sd][0] - from[0], l.ends[sd][1] - from[1]);
+                if (!far || d > far.d) far = { to: l.ends[sd], d };
+              }
+          if (!far) continue;
+          const key = [from, far.to]
+            .map((p) => p.map((v) => v.toFixed(1)).join(","))
+            .sort()
+            .join("|");
+          if (done.has(key)) continue;
+          done.add(key);
+          const h = Math.atan2(far.to[1] - from[1], far.to[0] - from[0]),
+            across = h + Math.PI / 2;
+          for (let u = 1.2; u < far.d - 1.0; u += 1.2)
+            white.rect(from[0] + Math.cos(h) * u, from[1] + Math.sin(h) * u, across, 3.0, 0.55);
+        }
     }
   }
-  add(group, white, wetReflective(snowable(new THREE.MeshStandardMaterial({ color: 0xe6e6df, roughness: 0.6 }), "paint"), 0.7), LAYER.marking);
+  add(
+    group,
+    white,
+    wetReflective(snowable(new THREE.MeshStandardMaterial({ color: 0xe6e6df, roughness: 0.6 }), "paint"), 0.7),
+    LAYER.marking,
+  );
   return group;
 }
 
@@ -178,12 +298,14 @@ function add(group, builder, material, order) {
 function laneDashes(white, e, from, to) {
   for (let i = 1; i < e.lanes; i++) {
     const lat = (e.lane_offsets[i - 1] + e.lane_offsets[i]) / 2;
-    for (let s = from + 1; s + 3 <= to; s += 9) white.ribbon(e.pts, lat - 0.075, lat + 0.075, 0, { from: s, to: s + 3 });
+    for (let s = from + 1; s + 3 <= to; s += 9)
+      white.ribbon(e.pts, lat - 0.075, lat + 0.075, 0, { from: s, to: s + 3 });
   }
 }
 
 function stopBar(white, e, s, left, right, thickness) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
   const mid = (left + right) / 2;
   white.rect(p[0] + Math.sin(h) * mid, p[1] - Math.cos(h) * mid, h, thickness, right - left);
 }
@@ -191,17 +313,26 @@ function stopBar(white, e, s, left, right, thickness) {
 // A regular polygon approximating a circle, counter-clockwise.
 function circle(cx, cy, r, n) {
   const pts = [];
-  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+  }
   return pts;
 }
 
 // Yield line: a row of white triangles across the lane, each pointing at the approaching driver.
 function sharkTeeth(white, e, s, left, right) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-  const fx = Math.cos(h), fy = Math.sin(h), rx = Math.sin(h), ry = -Math.cos(h);
-  const base = 0.55, depth = 0.6;
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
+  const fx = Math.cos(h),
+    fy = Math.sin(h),
+    rx = Math.sin(h),
+    ry = -Math.cos(h);
+  const base = 0.55,
+    depth = 0.6;
   for (let lat = left + 0.15; lat + base <= right; lat += base + 0.25) {
-    const a = [p[0] + rx * lat, p[1] + ry * lat], b = [p[0] + rx * (lat + base), p[1] + ry * (lat + base)];
+    const a = [p[0] + rx * lat, p[1] + ry * lat],
+      b = [p[0] + rx * (lat + base), p[1] + ry * (lat + base)];
     const tip = [p[0] + rx * (lat + base / 2) - fx * depth, p[1] + ry * (lat + base / 2) - fy * depth];
     white.polygon([a, tip, b], 0);
   }
@@ -209,9 +340,12 @@ function sharkTeeth(white, e, s, left, right) {
 
 // Continental crosswalk: bars parallel to traffic across the whole roadway.
 function crosswalk(white, e, s0, s1) {
-  const s = (s0 + s1) / 2, len = s1 - s0;
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
-  const lo = e.asphalt[0], hi = e.asphalt[1];
+  const s = (s0 + s1) / 2,
+    len = s1 - s0;
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
+  const lo = e.asphalt[0],
+    hi = e.asphalt[1];
   for (let lat = lo + 0.5; lat <= hi - 0.3; lat += 1.2) {
     white.rect(p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, h, len, 0.55);
   }
@@ -219,7 +353,11 @@ function crosswalk(white, e, s0, s1) {
 
 // Place a geometry at sim (x, y, z) turned to heading h; local +x = heading, +z = right of it.
 function placed(geo, x, y, z, h, local = null) {
-  const m = new THREE.Matrix4().compose(toThree(x, y, z), new THREE.Quaternion().setFromAxisAngle(Y_AXIS, h), new THREE.Vector3(1, 1, 1));
+  const m = new THREE.Matrix4().compose(
+    toThree(x, y, z),
+    new THREE.Quaternion().setFromAxisAngle(Y_AXIS, h),
+    new THREE.Vector3(1, 1, 1),
+  );
   if (local) m.multiply(local);
   return geo.clone().applyMatrix4(m);
 }
@@ -240,67 +378,93 @@ function buildSignals(map, group) {
   const hanger = new THREE.BoxGeometry(0.06, 0.4, 0.06);
   const hood = new THREE.BoxGeometry(0.22, 0.03, 0.34);
   const lens = new THREE.CircleGeometry(0.135, 20).rotateY(-Math.PI / 2);
-  const poles = [], housings = [], plates = [];
+  const poles = [],
+    housings = [],
+    plates = [];
   // pedestrian heads: on each far-corner pole, facing back across the cross street, for people
   // walking alongside this approach's traffic
   const pedHousing = new THREE.BoxGeometry(0.22, 0.42, 0.36);
   const pedLens = new THREE.PlaneGeometry(0.3, 0.3).rotateY(-Math.PI / 2);
-  const pedGeos = new Map();    // "inter|group|walk" and "inter|group|hand" -> geometries
-  const lampGeos = new Map();   // "inter|head|color" -> geometries (head: the group, or "@edge")
-  const sprites = new Map();    // "inter|head|color" -> sprites
+  const pedGeos = new Map(); // "inter|group|walk" and "inter|group|hand" -> geometries
+  const lampGeos = new Map(); // "inter|head|color" -> geometries (head: the group, or "@edge")
+  const sprites = new Map(); // "inter|head|color" -> sprites
   const colors = { red: 0xff2a1a, yellow: 0xffb21a, green: 0x1aff8c, arrow_yellow: 0xffb21a, arrow_green: 0x1aff8c };
   const arrowHousing = new THREE.BoxGeometry(0.36, 0.72, 0.4);
   const arrowPlate = new THREE.BoxGeometry(0.03, 0.72, 0.78);
-  const glowMats = Object.fromEntries(Object.entries(colors).map(([k, c]) => [k, new THREE.SpriteMaterial({
-    map: glowTexture(), color: c, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
-  })]));
+  const glowMats = Object.fromEntries(
+    Object.entries(colors).map(([k, c]) => [
+      k,
+      new THREE.SpriteMaterial({
+        map: glowTexture(),
+        color: c,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.9,
+      }),
+    ]),
+  );
   for (const { inter, a, e, heading: h, poleLat, x: px, y: py } of sceneryFor(map).signals) {
-      const adv = inter.plan?.advance, head = adv ? `@${a.edge}` : a.group;
-      const arrows = adv?.style === "arrow" && adv.edge === a.edge;
-      for (const kind of ["walk", "hand"]) {
-        const k = `${inter.id}|${a.group}|${kind}`;
-        if (!pedGeos.has(k)) pedGeos.set(k, []);
-        pedGeos.get(k).push(placed(pedLens, px, py, 0, h, T(-0.3, 2.75, 0.3)));
+    const adv = inter.plan?.advance,
+      head = adv ? `@${a.edge}` : a.group;
+    const arrows = adv?.style === "arrow" && adv.edge === a.edge;
+    for (const kind of ["walk", "hand"]) {
+      const k = `${inter.id}|${a.group}|${kind}`;
+      if (!pedGeos.has(k)) pedGeos.set(k, []);
+      pedGeos.get(k).push(placed(pedLens, px, py, 0, h, T(-0.3, 2.75, 0.3)));
+    }
+    housings.push(placed(pedHousing, px, py, 0, h, T(-0.19, 2.75, 0.3)));
+    const lanes = e.lane_offsets.slice(0, 3);
+    const reach = poleLat - Math.min(...lanes) + 0.6;
+    poles.push(placed(pole, px, py, 0, h), placed(arm(reach), px, py, 0, h));
+    const heads = lanes.map((off) => poleLat - off);
+    heads.push(0.35); // a second head on the pole, at eye level
+    heads.forEach((dz, i) => {
+      const onPole = i === heads.length - 1;
+      const y = onPole ? 3.4 : 5.25,
+        z = onPole ? -0.35 : -dz;
+      const x = onPole ? -0.2 : 0;
+      housings.push(placed(housing, px, py, 0, h, T(x, y, z)));
+      plates.push(placed(backplate, px, py, 0, h, T(x + 0.2, y, z)));
+      if (!onPole) poles.push(placed(hanger, px, py, 0, h, T(x, 5.9, z)));
+      // (the left arrow: under the head over the left lane)
+      const withArrow = arrows && i === 0;
+      if (withArrow) {
+        housings.push(placed(arrowHousing, px, py, 0, h, T(x, y - 0.9, z)));
+        plates.push(placed(arrowPlate, px, py, 0, h, T(x + 0.2, y - 0.9, z)));
       }
-      housings.push(placed(pedHousing, px, py, 0, h, T(-0.19, 2.75, 0.3)));
-      const lanes = e.lane_offsets.slice(0, 3);
-      const reach = poleLat - Math.min(...lanes) + 0.6;
-      poles.push(placed(pole, px, py, 0, h), placed(arm(reach), px, py, 0, h));
-      const heads = lanes.map((off) => poleLat - off);
-      heads.push(0.35);  // a second head on the pole, at eye level
-      heads.forEach((dz, i) => {
-        const onPole = i === heads.length - 1;
-        const y = onPole ? 3.4 : 5.25, z = onPole ? -0.35 : -dz;
-        const x = onPole ? -0.2 : 0;
-        housings.push(placed(housing, px, py, 0, h, T(x, y, z)));
-        plates.push(placed(backplate, px, py, 0, h, T(x + 0.2, y, z)));
-        if (!onPole) poles.push(placed(hanger, px, py, 0, h, T(x, 5.9, z)));
-        // (the left arrow: under the head over the left lane)
-        const withArrow = arrows && i === 0;
-        if (withArrow) {
-          housings.push(placed(arrowHousing, px, py, 0, h, T(x, y - 0.9, z)));
-          plates.push(placed(arrowPlate, px, py, 0, h, T(x + 0.2, y - 0.9, z)));
-        }
-        (withArrow ? ["red", "yellow", "green", "arrow_yellow", "arrow_green"] : ["red", "yellow", "green"]).forEach((name, k) => {
+      (withArrow ? ["red", "yellow", "green", "arrow_yellow", "arrow_green"] : ["red", "yellow", "green"]).forEach(
+        (name, k) => {
           const ly = y + 0.34 - k * 0.34;
           housings.push(placed(hood, px, py, 0, h, T(x - 0.28, ly + 0.15, z)));
           const key = `${inter.id}|${head}|${name}`;
-          if (!lampGeos.has(key)) { lampGeos.set(key, []); sprites.set(key, []); }
+          if (!lampGeos.has(key)) {
+            lampGeos.set(key, []);
+            sprites.set(key, []);
+          }
           lampGeos.get(key).push(placed(lens, px, py, 0, h, T(x - 0.185, ly, z)));
           const sp = new THREE.Sprite(glowMats[name]);
-          const wp = new THREE.Vector3(x - 0.3, ly, z).applyMatrix4(new THREE.Matrix4().compose(toThree(px, py, 0), new THREE.Quaternion().setFromAxisAngle(Y_AXIS, h), new THREE.Vector3(1, 1, 1)));
+          const wp = new THREE.Vector3(x - 0.3, ly, z).applyMatrix4(
+            new THREE.Matrix4().compose(
+              toThree(px, py, 0),
+              new THREE.Quaternion().setFromAxisAngle(Y_AXIS, h),
+              new THREE.Vector3(1, 1, 1),
+            ),
+          );
           sp.position.copy(wp);
           sp.scale.setScalar(name.startsWith("arrow_") ? 0.7 : 1.1);
           sp.visible = false;
           group.add(sp);
           sprites.get(key).push(sp);
-        });
-      });
+        },
+      );
+    });
   }
   const addMerged = (geos, mat, shadow = true) => {
     if (!geos.length) return;
     const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
-    mesh.castShadow = shadow; mesh.receiveShadow = true;
+    mesh.castShadow = shadow;
+    mesh.receiveShadow = true;
     group.add(mesh);
   };
   addMerged(poles, metal());
@@ -308,16 +472,29 @@ function buildSignals(map, group) {
   addMerged(plates, new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.7 }));
   const lampMats = new Map();
   for (const [key, geos] of lampGeos) {
-    const name = key.split("|")[2], arrow = name.startsWith("arrow_");
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, emissive: colors[name], emissiveIntensity: 0.04, roughness: 0.3,
-      ...(arrow ? { emissiveMap: leftArrowTexture() } : {}) });
+    const name = key.split("|")[2],
+      arrow = name.startsWith("arrow_");
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a,
+      emissive: colors[name],
+      emissiveIntensity: 0.04,
+      roughness: 0.3,
+      ...(arrow ? { emissiveMap: leftArrowTexture() } : {}),
+    });
     lampMats.set(key, mat);
     addMerged(geos, mat, false);
   }
   const pedMats = new Map();
   for (const [key, geos] of pedGeos) {
     const walk = key.endsWith("|walk");
-    const mat = new THREE.MeshStandardMaterial({ color: 0x111111, map: walk ? walkSignalTexture() : handSignalTexture(), emissive: walk ? 0xf4f6ff : 0xff8a1e, emissiveMap: walk ? walkSignalTexture() : handSignalTexture(), emissiveIntensity: 0, roughness: 0.4 });
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x111111,
+      map: walk ? walkSignalTexture() : handSignalTexture(),
+      emissive: walk ? 0xf4f6ff : 0xff8a1e,
+      emissiveMap: walk ? walkSignalTexture() : handSignalTexture(),
+      emissiveIntensity: 0,
+      roughness: 0.4,
+    });
     pedMats.set(key, mat);
     addMerged(geos, mat, false);
   }
@@ -325,10 +502,11 @@ function buildSignals(map, group) {
   return {
     // the pedestrian heads: walk, flashing hand, or a steady hand, for each group's side
     setPed(intersectionId, pedByGroup, t) {
-      const blink = (t % 1) < 0.55;
+      const blink = t % 1 < 0.55;
       for (const g of ["A", "B"]) {
         const state = pedByGroup[g];
-        const walk = pedMats.get(`${intersectionId}|${g}|walk`), hand = pedMats.get(`${intersectionId}|${g}|hand`);
+        const walk = pedMats.get(`${intersectionId}|${g}|walk`),
+          hand = pedMats.get(`${intersectionId}|${g}|hand`);
         if (!walk || !hand) continue;
         walk.emissiveIntensity = state === "walk" ? 3 : 0;
         hand.emissiveIntensity = state === "dont" || (state === "flash" && blink) ? 3 : 0;
@@ -338,12 +516,30 @@ function buildSignals(map, group) {
     // approach ("@<edge>": sim/signals.js approachPhase), "dark" while its lights are out
     // (sim/outage.js); `t` blinks a flashing green
     set(intersectionId, phases, t = 0) {
-      const blink = (t % 1) < 0.5;
+      const blink = t % 1 < 0.5;
       for (const [head, state] of Object.entries(phases)) {
         if (head === "u") continue;
         const key = `${intersectionId}|${head}`;
-        const lit = state === "dark" ? [] : state === "flashing_amber" ? (blink ? ["yellow"] : []) : state === "flashing_red" ? (blink ? ["red"] : []) : state === "advance" ? (blink ? ["green"] : []) : state === "arrow" ? ["red", "arrow_green"]
-          : state === "arrow_yellow" ? ["red", "arrow_yellow"] : [state || "red"];
+        const lit =
+          state === "dark"
+            ? []
+            : state === "flashing_amber"
+              ? blink
+                ? ["yellow"]
+                : []
+              : state === "flashing_red"
+                ? blink
+                  ? ["red"]
+                  : []
+                : state === "advance"
+                  ? blink
+                    ? ["green"]
+                    : []
+                  : state === "arrow"
+                    ? ["red", "arrow_green"]
+                    : state === "arrow_yellow"
+                      ? ["red", "arrow_yellow"]
+                      : [state || "red"];
         const shown = lit.join(",");
         if (last.get(key) === shown) continue;
         last.set(key, shown);
@@ -363,7 +559,9 @@ function buildSignals(map, group) {
 
 function octagon(r, facing) {
   // in the local YZ plane facing -x (facing = -1) or +x (+1); u runs along +z seen from the front
-  const pos = [0, 0, 0], uv = [0.5, 0.5], idx = [];
+  const pos = [0, 0, 0],
+    uv = [0.5, 0.5],
+    idx = [];
   for (let i = 0; i < 8; i++) {
     const a = Math.PI / 8 + (i * Math.PI) / 4;
     pos.push(0, Math.sin(a) * r, -facing * Math.cos(a) * r);
@@ -382,16 +580,31 @@ function buildStopSigns(map, group) {
   const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.35, 8).translate(0, 1.175, 0);
   const face = octagon(0.38, -1).translate(-0.07, 2.25, 0);
   const back = octagon(0.38, 1).translate(-0.06, 2.25, 0);
-  const poles = [], faces = [], backs = [];
+  const poles = [],
+    faces = [],
+    backs = [];
   for (const { x, y, heading: h } of sceneryFor(map).stopSigns) {
     poles.push(placed(pole, x, y, 0, h));
     faces.push(placed(face, x, y, 0, h));
     backs.push(placed(back, x, y, 0, h));
   }
   if (!poles.length) return;
-  const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
+  const mk = (geos, mat) => {
+    const m = new THREE.Mesh(mergeGeometries(geos, false), mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+  };
   mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
-  mk(faces, new THREE.MeshStandardMaterial({ map: stopSignTexture(), roughness: 0.45, emissive: 0x220000, emissiveIntensity: 0.3 }));
+  mk(
+    faces,
+    new THREE.MeshStandardMaterial({
+      map: stopSignTexture(),
+      roughness: 0.45,
+      emissive: 0x220000,
+      emissiveIntensity: 0.3,
+    }),
+  );
   mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
 }
 
@@ -401,16 +614,31 @@ function buildCrosswalkSigns(map, group) {
   const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.5, 8).translate(0, 1.25, 0);
   const face = new THREE.PlaneGeometry(0.6, 0.6).rotateY(-Math.PI / 2).translate(-0.07, 2.25, 0);
   const back = new THREE.PlaneGeometry(0.6, 0.6).rotateY(Math.PI / 2).translate(-0.06, 2.25, 0);
-  const poles = [], faces = [], backs = [];
+  const poles = [],
+    faces = [],
+    backs = [];
   for (const { x, y, heading: h } of sceneryFor(map).crosswalkSigns) {
     poles.push(placed(pole, x, y, 0, h));
     faces.push(placed(face, x, y, 0, h));
     backs.push(placed(back, x, y, 0, h));
   }
   if (!poles.length) return;
-  const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
+  const mk = (geos, mat) => {
+    const m = new THREE.Mesh(mergeGeometries(geos, false), mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+  };
   mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
-  mk(faces, new THREE.MeshStandardMaterial({ map: crosswalkSignTexture(), roughness: 0.45, emissive: 0x111111, emissiveIntensity: 0.3 }));
+  mk(
+    faces,
+    new THREE.MeshStandardMaterial({
+      map: crosswalkSignTexture(),
+      roughness: 0.45,
+      emissive: 0x111111,
+      emissiveIntensity: 0.3,
+    }),
+  );
   mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
 }
 
@@ -420,7 +648,9 @@ function buildZoneSigns(map, group) {
   const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.6, 8).translate(0, 1.3, 0);
   const face = new THREE.PlaneGeometry(0.8, 0.8).rotateY(-Math.PI / 2).translate(-0.07, 2.3, 0);
   const back = new THREE.PlaneGeometry(0.62, 0.62).rotateY(Math.PI / 2).translate(-0.06, 2.3, 0);
-  const poles = [], backs = [], faces = new Map();
+  const poles = [],
+    backs = [],
+    faces = new Map();
   for (const { x, y, heading: h, kind, end } of sceneryFor(map).zoneSigns) {
     poles.push(placed(pole, x, y, 0, h));
     backs.push(placed(back, x, y, 0, h));
@@ -429,11 +659,26 @@ function buildZoneSigns(map, group) {
     faces.get(key).push(placed(face, x, y, 0, h));
   }
   if (!poles.length) return;
-  const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
+  const mk = (geos, mat) => {
+    const m = new THREE.Mesh(mergeGeometries(geos, false), mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+  };
   mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
   for (const [key, geos] of faces) {
     const [kind, end] = key.split(":");
-    mk(geos, new THREE.MeshStandardMaterial({ map: zoneSignTexture(kind, end === "true"), transparent: true, alphaTest: 0.5, roughness: 0.45, emissive: 0x111111, emissiveIntensity: 0.3 }));
+    mk(
+      geos,
+      new THREE.MeshStandardMaterial({
+        map: zoneSignTexture(kind, end === "true"),
+        transparent: true,
+        alphaTest: 0.5,
+        roughness: 0.45,
+        emissive: 0x111111,
+        emissiveIntensity: 0.3,
+      }),
+    );
   }
   mk(backs, new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 0.5, metalness: 0.6 }));
 }
@@ -450,15 +695,31 @@ function buildYieldSigns(map, group) {
     return g.translate(x, 2.2, 0);
   };
   const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.3, 8).translate(0, 1.15, 0);
-  const poles = [], reds = [], whites = [];
+  const poles = [],
+    reds = [],
+    whites = [];
   for (const { x, y, heading: h } of sceneryFor(map).yieldSigns) {
     poles.push(placed(pole, x, y, 0, h));
     reds.push(placed(tri(0.45, -0.06), x, y, 0, h));
     whites.push(placed(tri(0.3, -0.075), x, y, 0, h));
   }
   if (!poles.length) return;
-  const mk = (geos, mat) => { const m = new THREE.Mesh(mergeGeometries(geos, false), mat); m.castShadow = true; m.receiveShadow = true; group.add(m); };
+  const mk = (geos, mat) => {
+    const m = new THREE.Mesh(mergeGeometries(geos, false), mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+  };
   mk(poles, new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.8 }));
-  mk(reds, new THREE.MeshStandardMaterial({ color: 0xc8102e, roughness: 0.45, side: THREE.DoubleSide, emissive: 0x220000, emissiveIntensity: 0.3 }));
+  mk(
+    reds,
+    new THREE.MeshStandardMaterial({
+      color: 0xc8102e,
+      roughness: 0.45,
+      side: THREE.DoubleSide,
+      emissive: 0x220000,
+      emissiveIntensity: 0.3,
+    }),
+  );
   mk(whites, new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.45, side: THREE.DoubleSide }));
 }

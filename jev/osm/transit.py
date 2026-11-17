@@ -39,10 +39,10 @@ from .project import Projection
 TRANSIT_VERSION = "1"
 MIN_RUN_M = 150.0
 STOP_REACH_M = 25.0
-STOP_LEFT_M = 3.0     # (a stop on the road can be a little left of the street's centreline)
+STOP_LEFT_M = 3.0  # (a stop on the road can be a little left of the street's centreline)
 STOP_END_M = 15.0
-STOP_MERGE_M = 30.0   # a route's sign and its stop on the road, this close along the run, are one stop
-SIGN_BACK_M = 1.2     # a stop on the road has its sign this far beyond the edge of the asphalt
+STOP_MERGE_M = 30.0  # a route's sign and its stop on the road, this close along the run, are one stop
+SIGN_BACK_M = 1.2  # a stop on the road has its sign this far beyond the edge of the asphalt
 TRACK_STEP_M = 2.0
 TRACK_LANE_M = 1.0
 TRACK_HEADING_DEG = 20.0
@@ -60,8 +60,9 @@ def load_transit(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_transit(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                  log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_transit(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached transit for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = transit_path(maps_dir, bbox)
@@ -91,35 +92,67 @@ def transit_from_osm(osm: OsmData, pack: dict) -> dict:
         if tags.get("type") != "route":
             continue
         ref = tags.get("ref") or tags.get("name") or str(rel["id"])
-        members = [(ref_id, role) for kind, ref_id, role in rel["members"] if kind == "way" and role in ("", "forward", "backward")]
+        members = [
+            (ref_id, role)
+            for kind, ref_id, role in rel["members"]
+            if kind == "way" and role in ("", "forward", "backward")
+        ]
         signs = []
         for kind, ref_id, role in rel["members"]:
             # (older routes number their stops: "stop 1", "platform 1"; some say which way: "forward:stop")
             role = role.split(" ")[0].split(":")[-1]
             if kind == "node" and role in STOP_ROLES and ref_id in osm.nodes:
                 lat, lon, ntags = osm.nodes[ref_id]
-                signs.append({"osm": ref_id, "xy": proj.to_xy(lat, lon), "name": ntags.get("name") or "",
-                              "road": role.startswith("stop")})
+                signs.append(
+                    {
+                        "osm": ref_id,
+                        "xy": proj.to_xy(lat, lon),
+                        "name": ntags.get("name") or "",
+                        "road": role.startswith("stop"),
+                    }
+                )
         runs = []
         tram = tags.get("route") == "tram"
         for chain in _chains(members, ways):
-            found = _track_runs([proj.to_xy(*osm.nodes[n][:2]) for n in chain if n in osm.nodes], tracks) if tram else [(r, None) for r in _runs(chain, nodes, between)]
+            found = (
+                _track_runs([proj.to_xy(*osm.nodes[n][:2]) for n in chain if n in osm.nodes], tracks)
+                if tram
+                else [(r, None) for r in _runs(chain, nodes, between)]
+            )
             for run, lane in found:
                 key = (ref, tuple(e["id"] for e in run))
                 if key in seen:
                     continue
                 seen.add(key)
                 placed = _place_stops(run, signs, stops)
-                runs.append({"edges": [e["id"] for e in run], "length": g.r1(sum(e["length"] for e in run)), "stops": placed,
-                             **({"lane": lane} if lane is not None else {})})
+                runs.append(
+                    {
+                        "edges": [e["id"] for e in run],
+                        "length": g.r1(sum(e["length"] for e in run)),
+                        "stops": placed,
+                        **({"lane": lane} if lane is not None else {}),
+                    }
+                )
         if runs:
-            routes.append({"id": "r%d" % rel["id"], "ref": ref, "name": tags.get("name") or ref,
-                           "mode": tags.get("route"), **({"colour": tags["colour"]} if tags.get("colour") else {}), "runs": runs})
+            routes.append(
+                {
+                    "id": "r%d" % rel["id"],
+                    "ref": ref,
+                    "name": tags.get("name") or ref,
+                    "mode": tags.get("route"),
+                    **({"colour": tags["colour"]} if tags.get("colour") else {}),
+                    "runs": runs,
+                }
+            )
     # (a stop is kept once, where a run first placed it)
     for stop in stops.values():
         stop.pop("road", None)
-    return {"transit_version": TRANSIT_VERSION, "name": pack.get("name", ""), "routes": routes,
-            "stops": sorted(stops.values(), key=lambda s: s["id"])}
+    return {
+        "transit_version": TRANSIT_VERSION,
+        "name": pack.get("name", ""),
+        "routes": routes,
+        "stops": sorted(stops.values(), key=lambda s: s["id"]),
+    }
 
 
 def _chains(members: List[Tuple[int, str]], ways: Dict[int, dict]) -> List[List[int]]:
@@ -223,7 +256,10 @@ class _Tracks:
         for e in self.near(p):
             q = g.project_point([tuple(x) for x in e["pts"]], p, self.cum[e["id"]])
             # (beside the edge, not off either end of it)
-            if q["distance"] > max(abs(o) for o in e["lane_offsets"]) + e["lane_width"] or q["distance"] - abs(q["lateral"]) > 0.5:
+            if (
+                q["distance"] > max(abs(o) for o in e["lane_offsets"]) + e["lane_width"]
+                or q["distance"] - abs(q["lateral"]) > 0.5
+            ):
                 continue
             if abs(g.wrap_angle(q["heading"] - heading)) > math.radians(TRACK_HEADING_DEG):
                 continue

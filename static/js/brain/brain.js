@@ -23,19 +23,33 @@ import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
 const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
 const TIMEOUT_MS = 1500;
-const GOAL_LATERAL_M = 1.5;   // a blocked destination counts only this close to the route lane's centre
+const GOAL_LATERAL_M = 1.5; // a blocked destination counts only this close to the route lane's centre
 const TURN_ROUND_AWAY_M = 25;
-const SPEND_KEYS = ["model", "endpoint", "latency_ms", "input_tokens", "output_tokens", "cost_usd", "cost_known", "live_call"];
+const SPEND_KEYS = [
+  "model",
+  "endpoint",
+  "latency_ms",
+  "input_tokens",
+  "output_tokens",
+  "cost_usd",
+  "cost_known",
+  "live_call",
+];
 
 // A deadlock creep's law `law` (with its s0) where a police officer directing traffic at the junction ahead
 // holds the car, or no longer does (sim/traffic-officer.js): stopping at the line, braking gently and
 // allowing for the pedals' lag so as not to roll over it, while held; as it was once waved on.
 function creepForOfficer(law, snap, world) {
   const i = snap.intersection;
-  const hold = i?.officer?.direction === "stop" && !i.entered ? i.s_line_route - (world.ego.spec.length - world.ego.spec.rearOverhang) - 0.5 : null;
+  const hold =
+    i?.officer?.direction === "stop" && !i.entered
+      ? i.s_line_route - (world.ego.spec.length - world.ego.spec.rearOverhang) - 0.5
+      : null;
   if (law.kind !== "lane" || (law.officerStop ?? null) === hold) return law;
   const { officerStop, stopAtRoute, stopAt, stopDecel, stopReaction, ...rest } = law;
-  return hold === null ? rest : { ...rest, ...officerStopLaw(world.ego.spec), officerStop: hold, stopAtRoute: hold, stopAt: hold - law.s0 };
+  return hold === null
+    ? rest
+    : { ...rest, ...officerStopLaw(world.ego.spec), officerStop: hold, stopAtRoute: hold, stopAt: hold - law.s0 };
 }
 
 export class Autopilot {
@@ -45,7 +59,7 @@ export class Autopilot {
     this.brainName = "jev";
     this.enabled = false;
     this.epoch = 0;
-    this.executing = null;   // { candidate, law, s0, decidedAt, hazard }
+    this.executing = null; // { candidate, law, s0, decidedAt, hazard }
     this.inFlight = null;
     this.lastStart = -Infinity;
     this.lastDecision = null;
@@ -66,16 +80,26 @@ export class Autopilot {
     this.rerouting = false;
     this.pendingRoutes = null;
     this.goalBlockedBy = null;
-    this.turnaroundRoute = null;   // the route world.turnaround was planned on
-    this.pausedTurnaround = null;  // one set aside while autopilot is off
-    this.parker = new ParkPlanner();   // parking at the destination (sim/parallel-park.js)
+    this.turnaroundRoute = null; // the route world.turnaround was planned on
+    this.pausedTurnaround = null; // one set aside while autopilot is off
+    this.parker = new ParkPlanner(); // parking at the destination (sim/parallel-park.js)
   }
 
-  get brain() { return this.brains[this.brainName]; }
-  setBrain(name) { if (this.brains[name]) { this.brainName = name; this.bumpEpoch(); } }
+  get brain() {
+    return this.brains[this.brainName];
+  }
+  setBrain(name) {
+    if (this.brains[name]) {
+      this.brainName = name;
+      this.bumpEpoch();
+    }
+  }
   bumpEpoch() {
     this.epoch++;
-    if (this.inFlight) { this.inFlight.abort(); this.inFlight = null; }
+    if (this.inFlight) {
+      this.inFlight.abort();
+      this.inFlight = null;
+    }
     // A stale route response cannot finish the new epoch's rerouting lifecycle.
     this.rerouting = false;
     this.goalBlockedBy = null;
@@ -98,7 +122,8 @@ export class Autopilot {
       // (switched off twice, the one set aside is kept)
       if (this.world.turnaround) this.pausedTurnaround = this.world.turnaround;
       this.world.turnaround = null;
-    } else if (this.pausedTurnaround && this.world.route === this.turnaroundRoute) this.world.turnaround = this.pausedTurnaround;
+    } else if (this.pausedTurnaround && this.world.route === this.turnaroundRoute)
+      this.world.turnaround = this.pausedTurnaround;
     if (on) this.pausedTurnaround = null;
   }
 
@@ -106,7 +131,7 @@ export class Autopilot {
   step(dt, now) {
     const world = this.world;
     if (!this.enabled || !world.route) return;
-    const road = world._road = world.roadInfo();
+    const road = (world._road = world.roadInfo());
     // A turnaround hands back once the car faces the way out and the route's projection finds it
     // beyond the U-turn, in the lane there and facing along it (which runs right beside the lane it came in
     // on, so the projection looks only from the U-turn on); the next decision comes at once, so
@@ -116,10 +141,16 @@ export class Autopilot {
     // (a destination just beyond the U-turn: the drive ends there, once the car is in the lane)
     let arrivedOut = false;
     if (turn?.phase === "out" && world.route === this.turnaroundRoute) {
-      if (!turn.rehinted) { world.route.hint = turn.outLo; turn.rehinted = true; }
+      if (!turn.rehinted) {
+        world.route.hint = turn.outLo;
+        turn.rehinted = true;
+      }
       const p = linedUp(world.ego, world.route, turn);
       if (p?.atEnd) arrivedOut = true;
-      else if (p) { turn.done = true; world.route.hint = p.index; }
+      else if (p) {
+        turn.done = true;
+        world.route.hint = p.index;
+      }
     }
     const at = turn ? world.route.pointAt(turn.sTurn) : null;
     const away = at && Math.hypot(at[0] - world.ego.x, at[1] - world.ego.y) > TURN_ROUND_AWAY_M;
@@ -130,12 +161,19 @@ export class Autopilot {
     // Parking at the destination, and pulling out of the space the car is parked in (sim/parallel-park.js).
     // Out of the space, the lane law takes over and the next decision comes at once.
     if (world.parking?.mode === "out" && world.parking.phase === "done") {
-      world.parking = null; world.park = null;
-      if (world.parkedIn) { world.parkedIn.at = [Infinity, Infinity]; leftSpace(world); }
+      world.parking = null;
+      world.park = null;
+      if (world.parkedIn) {
+        world.parkedIn.at = [Infinity, Infinity];
+        leftSpace(world);
+      }
       this.lastStart = -Infinity;
     }
-    const plan = world.parkAtGoal || world.parkedIn || world.parking ? this.parker.update(world, world.route.project(world.ego.x, world.ego.y).s, dt) : null;
-    const snap = this.snap = buildSnapshot(world, this.executing);
+    const plan =
+      world.parkAtGoal || world.parkedIn || world.parking
+        ? this.parker.update(world, world.route.project(world.ego.x, world.ego.y).s, dt)
+        : null;
+    const snap = (this.snap = buildSnapshot(world, this.executing));
     // A model's pending response must not let the last green-light law accelerate through amber.
     const amber = snap.amber_clear || snap.intersection?.amber;
     if (amber && !amber.stop && this.executing?.law.vTarget != null) {
@@ -143,13 +181,32 @@ export class Autopilot {
     }
     const nav = snap.nav;
     // (a U-turn signals left, the way it turns, and so does turning round)
-    world.ego.signal = snap.turnaround ? "left" : nav && nav.turn_in_m < 40 && (nav.next_turn === "left" || nav.next_turn === "right" || nav.next_turn === "uturn") ? (nav.next_turn === "uturn" ? "left" : nav.next_turn) : null;
+    world.ego.signal = snap.turnaround
+      ? "left"
+      : nav &&
+          nav.turn_in_m < 40 &&
+          (nav.next_turn === "left" || nav.next_turn === "right" || nav.next_turn === "uturn")
+        ? nav.next_turn === "uturn"
+          ? "left"
+          : nav.next_turn
+        : null;
     // A lane change signals toward the new lane until the car is across.
     const shift = snap.lane && snap.lane.shift && this.executing?.law;
-    if (shift) world.ego.signal = lateralAt(shift, snap.routeProj.s, world.route) > lateralAt({ ...shift, shift: null }, snap.routeProj.s, world.route) ? "left" : "right";
+    if (shift)
+      world.ego.signal =
+        lateralAt(shift, snap.routeProj.s, world.route) >
+        lateralAt({ ...shift, shift: null }, snap.routeProj.s, world.route)
+          ? "left"
+          : "right";
     // (parking signals right from 40 m short of where it stops to reverse in, and pulling out, left)
     const parkPending = !!plan && plan.mode === "in" && plan.status !== "none";
-    if (parkPending) world.ego.signal = plan.status === "parked" ? null : plan.status === "approach" && snap.parking?.stop_in_m > 40 ? world.ego.signal : "right";
+    if (parkPending)
+      world.ego.signal =
+        plan.status === "parked"
+          ? null
+          : plan.status === "approach" && snap.parking?.stop_in_m > 40
+            ? world.ego.signal
+            : "right";
     if (plan?.mode === "out") world.ego.signal = "left";
     this.deadlock.update(world, snap, dt);
     let blockedBy = atGoal(snap) && world.ego.v < 0.3 && !snap.nav.arrived && !parkPending ? this.goalBlockedBy : null;
@@ -163,12 +220,23 @@ export class Autopilot {
     // (not partway through turning round, standing between legs in the lane coming in; nor while there
     // is a space to park in: then it has arrived once parked, or stuck partway in)
     const law = world.parking;
-    const parkedNow = law?.mode === "in" && (law.phase === "parked" || law.phase === "stuck") && Math.abs(world.ego.v) < 0.05;
-    if (snap.nav && ((snap.nav.arrived && !world.turnaround && !parkPending) || arrivedOut || blockedBy || parkedNow) && world.ego.v < 0.3) {
+    const parkedNow =
+      law?.mode === "in" && (law.phase === "parked" || law.phase === "stuck") && Math.abs(world.ego.v) < 0.05;
+    if (
+      snap.nav &&
+      ((snap.nav.arrived && !world.turnaround && !parkPending) || arrivedOut || blockedBy || parkedNow) &&
+      world.ego.v < 0.3
+    ) {
       const ev = blockedBy ? { type: "arrived", blocked_by: blockedBy } : { type: "arrived" };
       if (world.parkAtGoal) {
         ev.parked = parkedNow && law.phase === "parked";
-        if (parkedNow) Object.assign(ev, { space: law.id, legs: law.legs + 1, ...parkedPose(world.ego, law, world), ...(law.phase === "stuck" ? { stuck: true } : {}) });
+        if (parkedNow)
+          Object.assign(ev, {
+            space: law.id,
+            legs: law.legs + 1,
+            ...parkedPose(world.ego, law, world),
+            ...(law.phase === "stuck" ? { stuck: true } : {}),
+          });
         if (ev.parked) world.ego.signal = null;
         this.parker.park(world, ev.parked);
       }
@@ -180,7 +248,8 @@ export class Autopilot {
     }
     // off route for a while: ask the server for fresh routes from here (turning round, the car
     // faces away from its route for a while on purpose)
-    if (!snap.onRoute && !snap.turnaround) this.offRouteFor += dt; else this.offRouteFor = 0;
+    if (!snap.onRoute && !snap.turnaround) this.offRouteFor += dt;
+    else this.offRouteFor = 0;
     const illegalRoute = snap.turn_restriction?.banned && world.t >= (this.restrictionReplanAt ?? -Infinity);
     if ((this.offRouteFor > 3 || illegalRoute) && !this.rerouting) {
       if (illegalRoute) this.restrictionReplanAt = world.t + 5;
@@ -189,7 +258,9 @@ export class Autopilot {
     // a road closed ahead on the route, seen at its barricades: a route round it (sim/road-closures.js)
     if (snap.road_closed?.on_route && !this.rerouting && world.t >= (this.closureReplanAt ?? -Infinity)) {
       this.closureReplanAt = world.t + 3;
-      this.closureRouting = this.reroute().finally(() => { this.closureRouting = null; });
+      this.closureRouting = this.reroute().finally(() => {
+        this.closureRouting = null;
+      });
     }
 
     const s = snap.routeProj ? snap.routeProj.s : 0;
@@ -211,9 +282,15 @@ export class Autopilot {
       // wheel where it is would carry the car on round a bend, or a lane's jog, toward what it is
       // braking for.
       const law = this.executing?.law;
-      const steer = law && (law.kind === "lane" || law.kind === "hard_brake") && snap.onRoute ? purePursuit(world.ego, world.route, s, lateralAt(law, s + lookahead(world.ego.v), world.route)) : world.ego.delta;
+      const steer =
+        law && (law.kind === "lane" || law.kind === "hard_brake") && snap.onRoute
+          ? purePursuit(world.ego, world.route, s, lateralAt(law, s + lookahead(world.ego.v), world.route))
+          : world.ego.delta;
       world.ego.step(dt, { steer, accel: -8 * brakeSign });
-      if (!this.safetyActive) { world.violations.safety_brakes++; this.onEvent({ type: "safety", brake }); }
+      if (!this.safetyActive) {
+        world.violations.safety_brakes++;
+        this.onEvent({ type: "safety", brake });
+      }
       this.safetyActive = true;
     } else {
       this.safetyActive = false;
@@ -228,12 +305,27 @@ export class Autopilot {
     if (world.stuckFor > 12 && !this.executing?.override && now - this.creepBlockedAt >= 1000) {
       // Creep along the route's lane, easing back to it from another lane. Never into static
       // scenery: a creep cannot push a post or a wall aside, so it would only add a collision.
-      const l = snap.lane, center = l ? l.route_center : 0;
+      const l = snap.lane,
+        center = l ? l.route_center : 0;
       const back = l && l.delta !== 0 ? { shift: { from: snap.routeProj.lateral, start: s, len: 18 } } : {};
-      const law = creepForOfficer({ kind: "lane", offset: center, center, lane: 0, ...(l ? { laneIdx: l.route_index, chain: l.chain } : {}), vTarget: 2, ...back, s0: s }, snap, world);
+      const law = creepForOfficer(
+        {
+          kind: "lane",
+          offset: center,
+          center,
+          lane: 0,
+          ...(l ? { laneIdx: l.route_index, chain: l.chain } : {}),
+          vTarget: 2,
+          ...back,
+          s0: s,
+        },
+        snap,
+        world,
+      );
       const creep = { id: "creep", law };
       simulateAll([creep], snap, world);
-      if (creep.sim.static_collision) this.creepBlockedAt = now;   // look again in a second
+      if (creep.sim.static_collision)
+        this.creepBlockedAt = now; // look again in a second
       else {
         this.creepCheckedAt = now;
         this.executing = { candidate: creep, law: { ...law, s0: s }, s0: s, override: true };
@@ -244,7 +336,8 @@ export class Autopilot {
     // (a creep stops at the line while a police officer directing traffic holds the car, every step)
     if (this.executing?.override) {
       const law = creepForOfficer(this.executing.law, snap, world);
-      if (law !== this.executing.law) this.executing = { ...this.executing, law, candidate: { ...this.executing.candidate, law } };
+      if (law !== this.executing.law)
+        this.executing = { ...this.executing, law, candidate: { ...this.executing.candidate, law } };
     }
     if (this.executing?.override && now - this.creepCheckedAt >= 1000) {
       // A creep runs until the next decision, which a slow model answer can delay past the 3 s it
@@ -280,12 +373,31 @@ export class Autopilot {
     const { questions, local } = buildQuestions(snap, eligible, { routeOptions });
     const request = { epoch, state, questions, local, candidates, eligible, flags, mustStop };
     if (!eligible.length) {
-      this.apply({ motion: "stop", candidateId: "hard_brake", meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" }, answers: { ...local } }, snap, candidates, request, "local");
+      this.apply(
+        {
+          motion: "stop",
+          candidateId: "hard_brake",
+          meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" },
+          answers: { ...local },
+        },
+        snap,
+        candidates,
+        request,
+        "local",
+      );
       return;
     }
     if ((!Object.keys(questions).length && this.brain?.questionDriven) || this.brainName === "rules") {
       const r = this.brains.rules.decideSync(snap, eligible);
-      if (this.brainName !== "rules") { r.meta.source = "local"; r.answers = { ...local }; } else r.answers = { ...local, motion: { type: "choice", choice: r.motion, probabilities: { [r.motion]: 1 }, confidence: 1 }, vector: { type: "choice", choice: r.candidateId, probabilities: { [r.candidateId]: 1 }, confidence: 1 } };
+      if (this.brainName !== "rules") {
+        r.meta.source = "local";
+        r.answers = { ...local };
+      } else
+        r.answers = {
+          ...local,
+          motion: { type: "choice", choice: r.motion, probabilities: { [r.motion]: 1 }, confidence: 1 },
+          vector: { type: "choice", choice: r.candidateId, probabilities: { [r.candidateId]: 1 }, confidence: 1 },
+        };
       // (Rules, like a question nothing needed asking, decides here with no call: local, so a later
       // driver's cumulative counts never credit Rules' decisions to its model)
       this.apply(r, snap, candidates, request, "local");
@@ -298,14 +410,25 @@ export class Autopilot {
     try {
       const result = await Promise.race([
         this.brain.decide(snap, eligible, request, controller.signal),
-        new Promise((_, reject) => controller.signal.addEventListener("abort", () => reject(new DOMException("Decision timed out", "AbortError")), { once: true })),
+        new Promise((_, reject) =>
+          controller.signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Decision timed out", "AbortError")),
+            { once: true },
+          ),
+        ),
       ]);
       clearTimeout(timer);
       if (epoch !== this.epoch) return;
-      if (!isDecisionAgent(this.brainName) && !validAgentChoice(result, eligible)) throw Object.assign(new Error("Agent returned a manoeuvre outside the eligible candidate set"), { meta: result?.meta, trace: result?.trace });
+      if (!isDecisionAgent(this.brainName) && !validAgentChoice(result, eligible))
+        throw Object.assign(new Error("Agent returned a manoeuvre outside the eligible candidate set"), {
+          meta: result?.meta,
+          trace: result?.trace,
+        });
       result.meta ||= {};
       result.meta.source ||= this.brainName;
-      for (const key of ["latency_ms", "input_tokens", "cost_usd"]) if (!Number.isFinite(result.meta[key]) || result.meta[key] < 0) result.meta[key] = 0;
+      for (const key of ["latency_ms", "input_tokens", "cost_usd"])
+        if (!Number.isFinite(result.meta[key]) || result.meta[key] < 0) result.meta[key] = 0;
       if (result.candidateId === null && eligible.length) {
         const r = this.brains.rules.decideSync(snap, eligible);
         result.candidateId = r.candidateId;
@@ -342,15 +465,21 @@ export class Autopilot {
     // (a model answer that left a route or headlight question it was asked to the default is partial:
     // the car keeps the first route option, and the beam the sensing allows)
     const beam = result.headlights ?? result.answers?.headlights?.choice;
-    const partial = by === "model" && ((request.questions?.route && !this.pendingRoutes?.some((r) => r.id === result.routeId))
-      || (request.questions?.headlights && beam !== "high" && beam !== "low"));
+    const partial =
+      by === "model" &&
+      ((request.questions?.route && !this.pendingRoutes?.some((r) => r.id === result.routeId)) ||
+        (request.questions?.headlights && beam !== "high" && beam !== "low"));
     if (world.highBeams) {
-      world.ego.highBeam = (beam === "high" || beam === "low" ? beam : (snap.headlights?.high_allowed ? "high" : "low")) === "high";
+      world.ego.highBeam =
+        (beam === "high" || beam === "low" ? beam : snap.headlights?.high_allowed ? "high" : "low") === "high";
     }
     let chosen = candidates.find((c) => c.id === result.candidateId) || null;
     if (result.motion === "stop") {
       const brakeCand = candidates.find((c) => c.id === "hard_brake");
-      chosen = world.ego.v > 0.5 ? brakeCand : { id: "hold", law: { ...(brakeCand?.law || { offset: 0 }), kind: "lane", vTarget: 0 }, sim: null };
+      chosen =
+        world.ego.v > 0.5
+          ? brakeCand
+          : { id: "hold", law: { ...(brakeCand?.law || { offset: 0 }), kind: "lane", vTarget: 0 }, sim: null };
     }
     if (chosen) {
       const s0 = snap.routeProj ? snap.routeProj.s : 0;
@@ -359,8 +488,14 @@ export class Autopilot {
       const going = chosen.law.kind === "turnaround" && world.turnaround?.id === chosen.law.id;
       const parking = chosen.law.kind === "park" && world.parking?.id === chosen.law.id;
       const law = going ? world.turnaround : parking ? world.parking : { ...chosen.law, s0 };
-      if (law.kind === "turnaround") { world.turnaround = law; this.turnaroundRoute = world.route; }
-      if (law.kind === "park") { world.parking = law; law.s0 = s0; }
+      if (law.kind === "turnaround") {
+        world.turnaround = law;
+        this.turnaroundRoute = world.route;
+      }
+      if (law.kind === "park") {
+        world.parking = law;
+        law.s0 = s0;
+      }
       if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - s0;
       this.executing = { candidate: chosen, law, s0, decidedAt: performance.now(), hazard: null };
     }
@@ -369,7 +504,11 @@ export class Autopilot {
       world.route = new Route(pick, world.map, world.ego.spec);
       this.pendingRoutes = null;
       this.bumpEpoch();
-    } else if (this.pendingRoutes && request.questions?.route && !["rules_fallback", "local"].includes(result.meta?.source)) {
+    } else if (
+      this.pendingRoutes &&
+      request.questions?.route &&
+      !["rules_fallback", "local"].includes(result.meta?.source)
+    ) {
       // The model answered without a usable route: keep the first option, which the car already
       // follows, rather than paying to ask the same route question on every later decision. A
       // fallback or a local decision (an emergency stop) never asked the model, so it asks again.
@@ -381,8 +520,17 @@ export class Autopilot {
     this.totals.tokens += result.meta.input_tokens || 0;
     this.totals.cost += result.meta.cost_usd || 0;
     this.lastDecision = {
-      state: request.state, questions: request.questions, answers: result.answers, meta: result.meta, trace: result.trace,
-      candidates, chosenId: chosen ? chosen.id : null, motion: result.motion, ...(world.highBeams ? { headlights: world.ego.highBeam ? "high" : "low" } : {}), flags: request.flags, at: performance.now(),
+      state: request.state,
+      questions: request.questions,
+      answers: result.answers,
+      meta: result.meta,
+      trace: result.trace,
+      candidates,
+      chosenId: chosen ? chosen.id : null,
+      motion: result.motion,
+      ...(world.highBeams ? { headlights: world.ego.highBeam ? "high" : "low" } : {}),
+      flags: request.flags,
+      at: performance.now(),
     };
     this.onDecision(this.lastDecision);
   }
@@ -395,9 +543,23 @@ export class Autopilot {
     try {
       // (round the blocks closed for an event that the car has seen: sim/road-closures.js)
       const avoid = world.roadClosures?.known.size ? world.roadClosures.avoid() : null;
-      const body = { bbox: world.map.routingBbox.join(","), from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi }, to: { x: world.destination[0], y: world.destination[1] }, k: 3, ...(world.restrictions ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 } : {}), ...(avoid?.length ? { avoid } : {}) };
+      const body = {
+        bbox: world.map.routingBbox.join(","),
+        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+        to: { x: world.destination[0], y: world.destination[1] },
+        k: 3,
+        ...(world.restrictions
+          ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 }
+          : {}),
+        ...(avoid?.length ? { avoid } : {}),
+      };
       // (without a server, in Node, the browser's router finds the way round: demo/routing.js)
-      const res = avoid?.length ? await api("/api/route", body).catch(() => { const r = browserRoute(world.map, body.from, body.to, body); return { routes: r ? [r] : [] }; }) : await api("/api/route", body);
+      const res = avoid?.length
+        ? await api("/api/route", body).catch(() => {
+            const r = browserRoute(world.map, body.from, body.to, body);
+            return { routes: r ? [r] : [] };
+          })
+        : await api("/api/route", body);
       if (epoch !== this.epoch) return;
       if (res.routes.length) {
         if (res.routes.length === 1 || this.brainName === "rules") {
@@ -405,7 +567,7 @@ export class Autopilot {
           this.rerouting = false;
           this.bumpEpoch();
         } else {
-          this.pendingRoutes = res.routes;         // the next decision asks the model which one
+          this.pendingRoutes = res.routes; // the next decision asks the model which one
           world.route = new Route(res.routes[0], world.map, world.ego.spec);
           // (an answer still on its way was asked on the old route: it must not install that route's lanes)
           this.bumpEpoch();
@@ -433,8 +595,13 @@ export class Autopilot {
 // from the destination, or which way it faces.
 function atGoal(snap) {
   const l = snap.lane;
-  return !!(snap.nav && snap.onRoute && snap.nav.remaining_m < DESTINATION_ZONE_M && (!l || l.delta === 0)
-    && Math.abs(l ? l.lateral : snap.routeProj.lateral) < GOAL_LATERAL_M);
+  return !!(
+    snap.nav &&
+    snap.onRoute &&
+    snap.nav.remaining_m < DESTINATION_ZONE_M &&
+    (!l || l.delta === 0) &&
+    Math.abs(l ? l.lateral : snap.routeProj.lateral) < GOAL_LATERAL_M
+  );
 }
 
 // Something parked across the last few metres to the destination: every manoeuvre along the
@@ -461,9 +628,13 @@ function stallContext(snap, decision, stuckFor) {
   const r1 = (x) => Math.round(x * 10) / 10;
   const rejected = {};
   for (const c of decision?.candidates || []) if (c.reject) rejected[c.reject] = (rejected[c.reject] || 0) + 1;
-  const i = snap.intersection, f = snap.following, nav = snap.nav;
+  const i = snap.intersection,
+    f = snap.following,
+    nav = snap.nav;
   return {
-    stuck_s: r1(stuckFor), holding: decision?.chosenId ?? null, rejected,
+    stuck_s: r1(stuckFor),
+    holding: decision?.chosenId ?? null,
+    rejected,
     ...(f ? { ahead: f.id, gap_m: r1(f.gap_m) } : {}),
     ...(i ? { control: i.id ? `${i.control} ${i.id}` : i.control, line_m: r1(i.bumper_to_line_m) } : {}),
     ...(snap.lane && snap.lane.delta ? { lanes_from_route: snap.lane.delta } : {}),

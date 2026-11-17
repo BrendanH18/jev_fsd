@@ -14,8 +14,12 @@ TRANSIT_ROUTES = ("bus", "trolleybus", "tram")
 
 def _green_or_water(tags: dict) -> bool:
     """A park, garden, recreation ground, lawn or body of water (jev/osm/parks.py)."""
-    return (tags.get("leisure") in ("park", "garden", "recreation_ground") or tags.get("natural") == "water"
-            or tags.get("waterway") == "riverbank" or tags.get("landuse") == "grass")
+    return (
+        tags.get("leisure") in ("park", "garden", "recreation_ground")
+        or tags.get("natural") == "water"
+        or tags.get("waterway") == "riverbank"
+        or tags.get("landuse") == "grass"
+    )
 
 
 class OsmData:
@@ -40,8 +44,11 @@ class OsmData:
 
 
 def parse_xml(source: Union[Path, str, bytes]) -> OsmData:
-    if isinstance(source, (bytes, str)) and not isinstance(source, Path) and (
-            isinstance(source, bytes) or source.lstrip().startswith("<")):
+    if (
+        isinstance(source, (bytes, str))
+        and not isinstance(source, Path)
+        and (isinstance(source, bytes) or source.lstrip().startswith("<"))
+    ):
         root = ET.fromstring(source)
     else:
         root = ET.parse(str(source)).getroot()
@@ -56,9 +63,16 @@ def parse_xml(source: Union[Path, str, bytes]) -> OsmData:
             data.add_way(int(el.get("id")), refs, tags)
         elif el.tag == "relation":
             tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
-            if tags.get("type") in ("restriction", "restriction:on_red") or (tags.get("type") == "route" and tags.get("route") in TRANSIT_ROUTES) or (
-                    tags.get("type") == "multipolygon" and (tags.get("amenity") == "school" or tags.get("leisure") == "playground"
-                                                            or _green_or_water(tags))):
+            if (
+                tags.get("type") in ("restriction", "restriction:on_red")
+                or (tags.get("type") == "route" and tags.get("route") in TRANSIT_ROUTES)
+                or (
+                    tags.get("type") == "multipolygon"
+                    and (
+                        tags.get("amenity") == "school" or tags.get("leisure") == "playground" or _green_or_water(tags)
+                    )
+                )
+            ):
                 members = [(m.get("type"), int(m.get("ref")), m.get("role") or "") for m in el.findall("member")]
                 data.add_relation(int(el.get("id")), members, tags)
     return data

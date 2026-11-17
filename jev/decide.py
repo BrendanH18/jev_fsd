@@ -54,5 +54,10 @@ def validate_request(body: dict) -> Dict[str, Any]:
 def jev_decide(client, body: dict) -> dict:
     req = validate_request(body)
     result = client.system_one(req["state"], req["questions"])
-    return {"tick": req["tick"], "epoch": req["epoch"], "answers": result.answers,
-            "meta": dict(result.meta(), source="jev"), "trace": result.trace()}
+    return {
+        "tick": req["tick"],
+        "epoch": req["epoch"],
+        "answers": result.answers,
+        "meta": dict(result.meta(), source="jev"),
+        "trace": result.trace(),
+    }

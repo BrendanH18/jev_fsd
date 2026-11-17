@@ -49,8 +49,9 @@ def load_scrambles(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_scrambles(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                    log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_scrambles(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached scramble crossings for a bbox, built from its raw OSM download if that is on disk
     (it is never downloaded here). None when there is neither."""
     path = scrambles_path(maps_dir, bbox)
@@ -111,12 +112,17 @@ def scrambles_from_osm(osm: OsmData, pack: dict) -> dict:
                     continue
                 h = math.atan2(b[1] - a[1], b[0] - a[0])
                 # (how far the crossing runs off the nearest approach's line, either way along it)
-                off = min(abs(math.degrees(math.atan2(math.sin(2 * (h - k)), math.cos(2 * (h - k))))) / 2 for k in headings)
+                off = min(
+                    abs(math.degrees(math.atan2(math.sin(2 * (h - k)), math.cos(2 * (h - k))))) / 2 for k in headings
+                )
                 if named:
                     found.setdefault(inter["id"], "tagged")
                 elif off >= DIAGONAL_DEG:
                     found.setdefault(inter["id"], "diagonal")
     by_id = {i["id"]: i for i in pack.get("intersections") or []}
     out = [{"signal": sid, "x": by_id[sid]["x"], "y": by_id[sid]["y"], "source": src} for sid, src in found.items()]
-    return {"scrambles_version": SCRAMBLES_VERSION, "name": pack.get("name", ""),
-            "scrambles": sorted(out, key=lambda s: s["signal"])}
+    return {
+        "scrambles_version": SCRAMBLES_VERSION,
+        "name": pack.get("name", ""),
+        "scrambles": sorted(out, key=lambda s: s["signal"]),
+    }

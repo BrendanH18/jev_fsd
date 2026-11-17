@@ -76,14 +76,16 @@ export function evOffset(edge, laneIdx, spec) {
 // EV_SQUEEZE_M, between the left edge of the asphalt and the right edge of the traffic lanes. Null
 // when there is none.
 export function threadGap(edge, laneIdx, spec, preferred, spans) {
-  const half = spec.width / 2 + EV_SQUEEZE_M, centre = edge.lane_offsets[laneIdx] ?? 0;
+  const half = spec.width / 2 + EV_SQUEEZE_M,
+    centre = edge.lane_offsets[laneIdx] ?? 0;
   // (as far left as the asphalt goes, and right only as far as the traffic lanes: the curb side is
   // where everyone else pulls over)
-  const lo = edge.asphalt[0] - centre + spec.width / 2 + 0.2, hi = edge.lane_offsets[edge.lanes - 1] + edge.lane_width / 2 - centre - spec.width / 2;
+  const lo = edge.asphalt[0] - centre + spec.width / 2 + 0.2,
+    hi = edge.lane_offsets[edge.lanes - 1] + edge.lane_width / 2 - centre - spec.width / 2;
   const fits = (c) => c >= lo - 1e-9 && c <= hi + 1e-9 && spans.every(([a, b]) => c + half <= a || c - half >= b);
   const options = [preferred, ...spans.flatMap(([a, b]) => [a - half, b + half])].filter(fits);
   if (!options.length) return null;
-  return options.reduce((best, c) => Math.abs(c - preferred) < Math.abs(best - preferred) ? c : best);
+  return options.reduce((best, c) => (Math.abs(c - preferred) < Math.abs(best - preferred) ? c : best));
 }
 
 // How far right of its lane's centre a vehicle of width `width` pulls over: into the street's
@@ -102,7 +104,8 @@ export function pullOverOffset(edge, laneIdx, width, parkingFree) {
 // such a space stops the car nose to its tail, angled at the kerb, where neither can move off.
 export function kerbCars(world, x, y, r) {
   const out = world.parked?.near(x, y, r) || [];
-  for (const n of world.npcs || []) if (n.pull && !n.pull.moving && (n.x - x) ** 2 + (n.y - y) ** 2 <= r * r) out.push(n);
+  for (const n of world.npcs || [])
+    if (n.pull && !n.pull.moving && (n.x - x) ** 2 + (n.y - y) ** 2 <= r * r) out.push(n);
   return out;
 }
 
@@ -114,14 +117,26 @@ export function kerbCars(world, x, y, r) {
 export const PARKED_CLEAR_M = 0.3;
 // (`ahead` metres more of kerb ahead of it count too: the stretch it is pulling over into)
 export function parkedRoom(world, x, y, h, spec = CAR, ahead = 0) {
-  const c = Math.cos(h), sn = Math.sin(h), reach = spec.length / 2 + 3;
+  const c = Math.cos(h),
+    sn = Math.sin(h),
+    reach = spec.length / 2 + 3;
   let room = Infinity;
   for (const car of kerbCars(world, x, y, reach + ahead + 6)) {
-    const o = car.obb(), oc = Math.cos(o.heading), os = Math.sin(o.heading);
-    for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-      const px = o.center[0] + oc * a * o.halfLength + os * b * o.halfWidth - x, py = o.center[1] + os * a * o.halfLength - oc * b * o.halfWidth - y;
-      const along = px * c + py * sn, right = px * sn - py * c;
-      if (along >= -reach && along <= reach + ahead && right > 0) room = Math.min(room, right - spec.width / 2 - PARKED_CLEAR_M - 0.05);
+    const o = car.obb(),
+      oc = Math.cos(o.heading),
+      os = Math.sin(o.heading);
+    for (const [a, b] of [
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ]) {
+      const px = o.center[0] + oc * a * o.halfLength + os * b * o.halfWidth - x,
+        py = o.center[1] + os * a * o.halfLength - oc * b * o.halfWidth - y;
+      const along = px * c + py * sn,
+        right = px * sn - py * c;
+      if (along >= -reach && along <= reach + ahead && right > 0)
+        room = Math.min(room, right - spec.width / 2 - PARKED_CLEAR_M - 0.05);
     }
   }
   return room;
@@ -136,8 +151,11 @@ export function emergencyCall(o, ev, points = null) {
   if (!isEmergency(ev) || o === ev || !ev.path?.pts) return null;
   const distance = Math.hypot(o.x - ev.x, o.y - ev.y);
   if (distance > CALL_M) return null;
-  const path = ev.path, s0 = path.s, s1 = Math.min(path.length, s0 + CALL_PATH_M);
-  const oSpec = o.spec || CAR, mid = oSpec.length / 2 - oSpec.rearOverhang;
+  const path = ev.path,
+    s0 = path.s,
+    s1 = Math.min(path.length, s0 + CALL_PATH_M);
+  const oSpec = o.spec || CAR,
+    mid = oSpec.length / 2 - oSpec.rearOverhang;
   const here = [o.x + Math.cos(o.psi) * mid, o.y + Math.sin(o.psi) * mid];
   const pts = points || AHEAD_POINTS_M.map((d) => [here[0] + Math.cos(o.psi) * d, here[1] + Math.sin(o.psi) * d]);
   // passed: its rear is beyond the middle of `o`, along its path (or `o` follows it)
@@ -155,10 +173,16 @@ export function emergencyCall(o, ev, points = null) {
   }
   if (!hit) return null;
   const rel = wrap(ev.psi - o.psi);
-  const behind = Math.abs(rel) < Math.PI / 4, oncoming = Math.abs(rel) > Math.PI * 3 / 4;
+  const behind = Math.abs(rel) < Math.PI / 4,
+    oncoming = Math.abs(rel) > (Math.PI * 3) / 4;
   const relation = behind ? "behind" : oncoming ? "ahead" : rel > 0 ? "right" : "left";
   const along = hit.s - s0;
-  return { relation, along_m: along, eta_s: Math.max(0, along - (ev.spec.length - ev.spec.rearOverhang)) / Math.max(2, ev.v), distance_m: distance };
+  return {
+    relation,
+    along_m: along,
+    eta_s: Math.max(0, along - (ev.spec.length - ev.spec.rearOverhang)) / Math.max(2, ev.v),
+    distance_m: distance,
+  };
 }
 
 // The emergency vehicle nearest to calling on `o` to give way (the soonest due), or null.
@@ -184,7 +208,12 @@ export function isJunction(map, nodeId) {
   const cache = junctionCache.get(map);
   if (!cache.has(nodeId)) {
     const ids = [...(map.inn.get(nodeId) || []), ...(map.out.get(nodeId) || [])];
-    const neighbours = new Set(ids.map((id) => { const e = map.edges.get(id); return e.from === nodeId ? e.to : e.from; }));
+    const neighbours = new Set(
+      ids.map((id) => {
+        const e = map.edges.get(id);
+        return e.from === nodeId ? e.to : e.from;
+      }),
+    );
     cache.set(nodeId, neighbours.size >= 3);
   }
   return cache.get(nodeId);
@@ -198,11 +227,13 @@ export function isJunction(map, nodeId) {
 export function planBehind(map, x, y, psi, back = 140) {
   const near = map.nearestLane(x, y, psi, 12);
   if (!near) return null;
-  let cur = near.lane.edgeRef, need = back - near.s;
+  let cur = near.lane.edgeRef,
+    need = back - near.s;
   const chain = [cur.id];
   while (need > 0) {
-    const preds = (map.inn.get(cur.from) || []).map((id) => map.edges.get(id))
-      .filter((p) => !p.ring && Math.abs(map.turnAngle(p.id, cur.id)) < 35 * Math.PI / 180 && !chain.includes(p.id));
+    const preds = (map.inn.get(cur.from) || [])
+      .map((id) => map.edges.get(id))
+      .filter((p) => !p.ring && Math.abs(map.turnAngle(p.id, cur.id)) < (35 * Math.PI) / 180 && !chain.includes(p.id));
     if (!preds.length) break;
     preds.sort((a, b) => Math.abs(map.turnAngle(a.id, cur.id)) - Math.abs(map.turnAngle(b.id, cur.id)));
     cur = preds[0];
@@ -218,12 +249,16 @@ export function planBehind(map, x, y, psi, back = 140) {
 export function planOncoming(map, x, y, psi, ahead = 140) {
   const near = map.nearestLane(x, y, psi, 12);
   if (!near) return null;
-  const reverse = (e) => (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((r) => r.to === e.from && !r.ring);
-  let cur = near.lane.edgeRef, along = cur.length - near.s;
+  const reverse = (e) =>
+    (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((r) => r.to === e.from && !r.ring);
+  let cur = near.lane.edgeRef,
+    along = cur.length - near.s;
   const forward = [cur];
   while (along < ahead) {
-    const next = map.successors(cur.id).map((id) => map.edges.get(id))
-      .filter((n) => !n.ring && Math.abs(map.turnAngle(cur.id, n.id)) < 35 * Math.PI / 180 && !forward.includes(n));
+    const next = map
+      .successors(cur.id)
+      .map((id) => map.edges.get(id))
+      .filter((n) => !n.ring && Math.abs(map.turnAngle(cur.id, n.id)) < (35 * Math.PI) / 180 && !forward.includes(n));
     if (!next.length) break;
     next.sort((a, b) => Math.abs(map.turnAngle(cur.id, a.id)) - Math.abs(map.turnAngle(cur.id, b.id)));
     cur = next[0];
@@ -234,10 +269,17 @@ export function planOncoming(map, x, y, psi, ahead = 140) {
   const back = forward.map(reverse);
   if (back.some((r) => !r)) return null;
   // on the last street ahead, `along - ahead` metres short of its end, measured from the other way
-  const last = forward.at(-1), into = Math.max(0, along - ahead);
+  const last = forward.at(-1),
+    into = Math.max(0, along - ahead);
   const sOnLast = last.length - into;
   const lanes = back.reverse();
-  return { edge: lanes[0].id, lane: 0, s: Math.max(2, Math.min(lanes[0].length - 2, lanes[0].length - sOnLast)), planned: lanes.slice(1).map((r) => [r.id, 0]), relation: "ahead" };
+  return {
+    edge: lanes[0].id,
+    lane: 0,
+    s: Math.max(2, Math.min(lanes[0].length - 2, lanes[0].length - sOnLast)),
+    planned: lanes.slice(1).map((r) => [r.id, 0]),
+    relation: "ahead",
+  };
 }
 
 export function planCrossing(map, x, y, psi, back = 110) {
@@ -250,25 +292,35 @@ export function planCrossing(map, x, y, psi, back = 110) {
     const c = map.edges.get(id);
     if (c.id === e.id || c.from === e.to || c.ring) continue;
     const angle = Math.abs(wrap(map.headingIn(c.id) - map.headingIn(e.id)));
-    if (angle < 50 * Math.PI / 180 || angle > 130 * Math.PI / 180) continue;
+    if (angle < (50 * Math.PI) / 180 || angle > (130 * Math.PI) / 180) continue;
     const across = map.successors(c.id).find((o) => map.classifyTurn(map.turnAngle(c.id, o)) === "straight");
     if (across) options.push({ c, across });
   }
   if (!options.length) return null;
   options.sort((a, b) => String(a.c.id).localeCompare(String(b.c.id)));
   const { c, across } = options[0];
-  let start = c, need = back - c.length;
+  let start = c,
+    need = back - c.length;
   const chain = [c.id];
   while (need > 0) {
-    const preds = (map.inn.get(start.from) || []).map((id) => map.edges.get(id))
-      .filter((p) => !p.ring && map.classifyTurn(map.turnAngle(p.id, start.id)) === "straight" && !chain.includes(p.id));
+    const preds = (map.inn.get(start.from) || [])
+      .map((id) => map.edges.get(id))
+      .filter(
+        (p) => !p.ring && map.classifyTurn(map.turnAngle(p.id, start.id)) === "straight" && !chain.includes(p.id),
+      );
     if (!preds.length) break;
     start = preds[0];
     chain.unshift(start.id);
     need -= start.length;
   }
   const s = need <= 0 ? -need : 2;
-  return { edge: chain[0], lane: 0, s, planned: [...chain.slice(1), across].map((id) => [id, 0]), relation: "crossing" };
+  return {
+    edge: chain[0],
+    lane: 0,
+    s,
+    planned: [...chain.slice(1), across].map((id) => [id, 0]),
+    relation: "crossing",
+  };
 }
 
 // The closest point to (x, y) on a path between arc lengths s0 and s1: its arc length, distance and
@@ -278,11 +330,21 @@ export function closestOnPath(path, x, y, s0, s1) {
   let best = null;
   for (let i = 0; i < pts.length - 1; i++) {
     if (cum[i + 1] < s0 || cum[i] > s1) continue;
-    const [ax, ay] = pts[i], dx = pts[i + 1][0] - ax, dy = pts[i + 1][1] - ay, len = Math.hypot(dx, dy);
+    const [ax, ay] = pts[i],
+      dx = pts[i + 1][0] - ax,
+      dy = pts[i + 1][1] - ay,
+      len = Math.hypot(dx, dy);
     if (len < 1e-9) continue;
-    const t = Math.max((s0 - cum[i]) / len, 0, Math.min(1, (s1 - cum[i]) / len, ((x - ax) * dx + (y - ay) * dy) / (len * len)));
-    const qx = ax + dx * t, qy = ay + dy * t, d = Math.hypot(x - qx, y - qy);
-    if (!best || d < best.distance) best = { s: cum[i] + t * len, distance: d, lateral: ((x - qx) * dy - (y - qy) * dx) / len };
+    const t = Math.max(
+      (s0 - cum[i]) / len,
+      0,
+      Math.min(1, (s1 - cum[i]) / len, ((x - ax) * dx + (y - ay) * dy) / (len * len)),
+    );
+    const qx = ax + dx * t,
+      qy = ay + dy * t,
+      d = Math.hypot(x - qx, y - qy);
+    if (!best || d < best.distance)
+      best = { s: cum[i] + t * len, distance: d, lateral: ((x - qx) * dy - (y - qy) * dx) / len };
   }
   return best;
 }

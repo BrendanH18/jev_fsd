@@ -40,12 +40,12 @@ class RailTests(unittest.TestCase):
     def test_a_track_across_the_avenue_is_a_level_crossing_of_both_its_ways(self):
         # a tram line from a buffer stop north of the avenue, across it at x = 100 at 60 deg, and on
         # south off the map, in two ways joined end to end; a stop on it
-        ids = with_track(self.osm, 1000, 60, [(100 + 40 / 3 ** 0.5, 40), (100, 0)], crossing=1)
-        with_track(self.osm, 1100, 61, [(100, 0), (100 - 400 / 3 ** 0.5, -400)])
+        ids = with_track(self.osm, 1000, 60, [(100 + 40 / 3**0.5, 40), (100, 0)], crossing=1)
+        with_track(self.osm, 1100, 61, [(100, 0), (100 - 400 / 3**0.5, -400)])
         self.osm.ways[-1]["nodes"][0] = ids[-1]
         self.cross_at(ids[-1])
         proj = Projection(LAT0, LON0)
-        lat, lon = proj.to_latlon(100 + 20 / 3 ** 0.5, 20)
+        lat, lon = proj.to_latlon(100 + 20 / 3**0.5, 20)
         self.osm.add_node(1300, lat, lon, {"railway": "tram_stop", "name": "Main Stop"})
         pack = pack_from_osm(self.osm, self.bbox)
         rail = rail_from_osm(self.osm, pack)
@@ -113,7 +113,18 @@ class RailTests(unittest.TestCase):
         pack = json.loads((MAPS_DIR / ("%s.v6.pack.json" % fetch.cache_key(PRESET_BBOXES["edmonton"]))).read_text())
         names = {e["id"]: e["name"] for e in pack["edges"]}
         streets = sorted({names[on["edge"]] for c in rail["crossings"] for on in c["edges"] if names[on["edge"]]})
-        self.assertEqual(streets, ["104 Street NW", "105 Street NW", "106 Street NW", "106A Street NW", "107 Street NW", "83 Avenue NW", "Gateway Boulevard NW"])
+        self.assertEqual(
+            streets,
+            [
+                "104 Street NW",
+                "105 Street NW",
+                "106 Street NW",
+                "106A Street NW",
+                "107 Street NW",
+                "83 Avenue NW",
+                "Gateway Boulevard NW",
+            ],
+        )
         # (none has lights, gates or a bell: crossbucks only)
         self.assertFalse(any(c["lights"] or c["gates"] or c["bell"] for c in rail["crossings"]))
 

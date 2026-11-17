@@ -11,10 +11,24 @@ const { freeStretches } = await import("../static/js/sim/parallel-park.js");
 const { parkerPlan } = await import("../static/js/sim/parkers.js");
 const { cloneState } = await import("../static/js/lab/recorder.js");
 
-const root = new URL("../data/maps/", import.meta.url), key = "623b012bc8b5";
+const root = new URL("../data/maps/", import.meta.url),
+  key = "623b012bc8b5";
 const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
-for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks", "bridges"]) {
-  const url = [2, 1].map(v => new URL(`${key}.${name}.v${v}.json`, root)).find(u => fs.existsSync(u));
+for (const name of [
+  "transit",
+  "crossings",
+  "zones",
+  "rail",
+  "calming",
+  "scrambles",
+  "buslanes",
+  "restrictions",
+  "contraflow",
+  "driveways",
+  "parks",
+  "bridges",
+]) {
+  const url = [2, 1].map((v) => new URL(`${key}.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
   if (url) pack[name] = JSON.parse(fs.readFileSync(url));
 }
 const map = new MapData(pack);
@@ -23,21 +37,32 @@ const map = new MapData(pack);
 // This is the world combination used by free drives, not a hand-written reservation fixture.
 const world = new World(map, { seed: 21, pedestrians: 0, parkers: true, driveways: true });
 const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 4 });
-const reserved = world.parked.slots.filter(s => s.reserved && s.curb === "right");
+const reserved = world.parked.slots.filter((s) => s.reserved && s.curb === "right");
 assert.equal(reserved.length > 0, true, "mapped driveways reserve parking bays");
 let planned = 0;
-for (const id of new Set(reserved.map(s => s.edge))) {
-  const edge = map.edges.get(id), lane = map.lane(id, edge.lanes - 1);
-  const p = pointAt(lane.pts, lane.cum, 2), n = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, 2), 5);
-  n.path = new NpcPath(map, fleet.random); n.path.start(id, lane.idx, 2);
+for (const id of new Set(reserved.map((s) => s.edge))) {
+  const edge = map.edges.get(id),
+    lane = map.lane(id, edge.lanes - 1);
+  const p = pointAt(lane.pts, lane.cum, 2),
+    n = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, 2), 5);
+  n.path = new NpcPath(map, fleet.random);
+  n.path.start(id, lane.idx, 2);
   const spaces = freeStretches(world, edge, CAR);
   const plan = parkerPlan(world, n);
   if (plan) planned++;
-  for (const slot of reserved.filter(s => s.edge === id)) {
+  for (const slot of reserved.filter((s) => s.edge === id)) {
     const r = slot.reserved;
     assert.equal(typeof r, "object");
-    assert.equal(!!r.owner && Number.isFinite(r.sFrom) && r.sFrom < r.sTo, true, "a reservation states its owner and kerb span");
-    assert.equal(spaces.every(s => s.b <= r.sFrom || s.a >= r.sTo), true, "a traffic car leaves driveway reservations clear");
+    assert.equal(
+      !!r.owner && Number.isFinite(r.sFrom) && r.sFrom < r.sTo,
+      true,
+      "a reservation states its owner and kerb span",
+    );
+    assert.equal(
+      spaces.every((s) => s.b <= r.sFrom || s.a >= r.sTo),
+      true,
+      "a traffic car leaves driveway reservations clear",
+    );
     assert.equal(plan?.plan.slots.includes(slot) || false, false, "a traffic car never plans a reserved bay");
   }
 }
@@ -45,9 +70,10 @@ assert.equal(planned > 0, true, "traffic can still find parking on blocks with d
 console.log(`✓ traffic parking plans around ${reserved.length} driveway reservations without throwing`);
 
 const { reserveSlot } = await import("../static/js/sim/parking.js");
-const slot = world.parked.slots.find(s => s.curb === "right" && !s.occupant && !s.reserved);
+const slot = world.parked.slots.find((s) => s.curb === "right" && !s.occupant && !s.reserved);
 assert.equal(!!slot, true);
-const edge = map.edges.get(slot.edge), owner = new Vehicle(slot.x, slot.y, slot.psi, 0);
+const edge = map.edges.get(slot.edge),
+  owner = new Vehicle(slot.x, slot.y, slot.psi, 0);
 const s = projectPoint(edge.pts, edge.cum, [slot.x, slot.y]).s;
 reserveSlot(map, slot, owner);
 assert.equal(slot.reserved.owner === owner, true);

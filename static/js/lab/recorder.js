@@ -6,15 +6,18 @@ export function cloneState(value, shared = new Set(), seen = new Map()) {
   if (seen.has(value)) return seen.get(value);
   if (typeof value === "function") {
     const copy = value.clone ? value.clone() : value;
-    seen.set(value, copy); return copy;
+    seen.set(value, copy);
+    return copy;
   }
   if (value instanceof Map) {
-    const copy = new Map(); seen.set(value, copy);
+    const copy = new Map();
+    seen.set(value, copy);
     for (const [key, entry] of value) copy.set(cloneState(key, shared, seen), cloneState(entry, shared, seen));
     return copy;
   }
   if (value instanceof Set) {
-    const copy = new Set(); seen.set(value, copy);
+    const copy = new Set();
+    seen.set(value, copy);
     for (const entry of value) copy.add(cloneState(entry, shared, seen));
     return copy;
   }
@@ -22,9 +25,15 @@ export function cloneState(value, shared = new Set(), seen = new Map()) {
   seen.set(value, copy);
   for (const key of Object.keys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor.get || descriptor.set) { Object.defineProperty(copy, key, descriptor); continue; }
+    if (descriptor.get || descriptor.set) {
+      Object.defineProperty(copy, key, descriptor);
+      continue;
+    }
     // Three.js instance handles belong to the renderer, not the simulation checkpoint.
-    if (key === "instances") { copy[key] = value[key]; continue; }
+    if (key === "instances") {
+      copy[key] = value[key];
+      continue;
+    }
     copy[key] = cloneState(value[key], shared, seen);
   }
   return copy;
@@ -32,34 +41,77 @@ export function cloneState(value, shared = new Set(), seen = new Map()) {
 
 export class DriveRecorder {
   constructor({ seconds = 120, interval = 0.5 } = {}) {
-    this.capacity = Math.ceil(seconds / interval) + 1; this.interval = interval;
-    this.frames = []; this.at = -Infinity; this.markers = []; this.branched = false;
+    this.capacity = Math.ceil(seconds / interval) + 1;
+    this.interval = interval;
+    this.frames = [];
+    this.at = -Infinity;
+    this.markers = [];
+    this.branched = false;
     this.spend = { cost: 0, tokens: 0, calls: 0 };
     this.recordingId = crypto.randomUUID();
   }
-  reset() { this.frames = []; this.markers = []; this.at = -Infinity; this.branched = false; this.baseShared = null; this.indexedMap = null; this.recordingId = crypto.randomUUID(); }
+  reset() {
+    this.frames = [];
+    this.markers = [];
+    this.at = -Infinity;
+    this.branched = false;
+    this.baseShared = null;
+    this.indexedMap = null;
+    this.recordingId = crypto.randomUUID();
+  }
   sharedFor({ world, fleet, autopilot }) {
-    const shared = this.baseShared ||= new Set([world.map, world.staticObstacles, world.visibility, world.crowd.streets,
-      world.crowd.legsAt, world.crowd.streetIndex, world.crowd.ringNodes, autopilot.brains, autopilot.onDecision, autopilot.onEvent]);
+    const shared = (this.baseShared ||= new Set([
+      world.map,
+      world.staticObstacles,
+      world.visibility,
+      world.crowd.streets,
+      world.crowd.legsAt,
+      world.crowd.streetIndex,
+      world.crowd.ringNodes,
+      autopilot.brains,
+      autopilot.onDecision,
+      autopilot.onEvent,
+    ]));
     if (!this.indexedMap) {
-      for (const collection of [world.map.lanes, world.map.edges, world.map.nodes]) for (const value of collection.values()) shared.add(value);
+      for (const collection of [world.map.lanes, world.map.edges, world.map.nodes])
+        for (const value of collection.values()) shared.add(value);
       this.indexedMap = world.map;
     }
     for (const street of world.crowd.streets) shared.add(street);
     shared.add(world.crowd.marked);
     for (const cw of world.crowd.marked) shared.add(cw);
-    for (const info of world.crowd.legsAt.values()) { shared.add(info); for (const leg of info.list) shared.add(leg); }
+    for (const info of world.crowd.legsAt.values()) {
+      shared.add(info);
+      for (const leg of info.list) shared.add(leg);
+    }
     // (spring potholes never move once placed: sim/potholes.js)
     if (world.potholes?.enabled) shared.add(world.potholes);
     // (nor does black ice: which patches lie on the road follows the conditions, each step: sim/black-ice.js)
     if (world.ice?.enabled) shared.add(world.ice);
     // (nor do snowbanks, nor the narrowings they make: sim/snowbanks.js)
-    if (world.snowbanks?.enabled) { shared.add(world.snowbanks.geo); shared.add(world.snowbanks.piles); for (const nw of world.snowbanks.narrowings) shared.add(nw); shared.add(world.snowbanks.routeEnds); }
+    if (world.snowbanks?.enabled) {
+      shared.add(world.snowbanks.geo);
+      shared.add(world.snowbanks.piles);
+      for (const nw of world.snowbanks.narrowings) shared.add(nw);
+      shared.add(world.snowbanks.routeEnds);
+    }
     // (nor do the puddles: whether they lie follows the weather, sim/puddles.js puddlesLie)
     if (world.puddles?.enabled) shared.add(world.puddles);
-    for (const route of [world.route, autopilot.snap?.route]) if (route) {
-      for (const key of ["pts", "cum", "edges", "turns", "controls", "edgeStarts", "limitMarks", "zoneMarks", "calmingMarks"]) shared.add(route[key]);
-    }
+    for (const route of [world.route, autopilot.snap?.route])
+      if (route) {
+        for (const key of [
+          "pts",
+          "cum",
+          "edges",
+          "turns",
+          "controls",
+          "edgeStarts",
+          "limitMarks",
+          "zoneMarks",
+          "calmingMarks",
+        ])
+          shared.add(route[key]);
+      }
     return shared;
   }
   record(context, force = false) {
@@ -67,56 +119,135 @@ export class DriveRecorder {
     if (!force && t - this.at < this.interval - 1e-9) return;
     const shared = this.sharedFor(context);
     // Pending API operations must never be resurrected by a checkpoint.
-    const pilot = { ...context.autopilot, inFlight: null, firing: null, rerouting: false, ...(context.autopilot.closureRouting !== undefined ? { closureRouting: null } : {}) };
-    const state = cloneState({ world: context.world, fleet: context.fleet, drive: context.drive, clock: context.clock, pilot }, shared);
+    const pilot = {
+      ...context.autopilot,
+      inFlight: null,
+      firing: null,
+      rerouting: false,
+      ...(context.autopilot.closureRouting !== undefined ? { closureRouting: null } : {}),
+    };
+    const state = cloneState(
+      { world: context.world, fleet: context.fleet, drive: context.drive, clock: context.clock, pilot },
+      shared,
+    );
     // The clone's fleet/crowd point at its world. The pilot uses a shallow shell to exclude promises.
     state.pilot.world = state.world;
-    const frame = { t, state, shared, night: context.world.visibility.night, events: context.world.events.map(e => ({ ...e })) };
-    this.frames.push(frame); this.at = t;
+    const frame = {
+      t,
+      state,
+      shared,
+      night: context.world.visibility.night,
+      events: context.world.events.map((e) => ({ ...e })),
+    };
+    this.frames.push(frame);
+    this.at = t;
     if (this.frames.length > this.capacity) this.frames.shift();
-    this.markers = this.markers.filter(m => m.t >= this.frames[0].t);
+    this.markers = this.markers.filter((m) => m.t >= this.frames[0].t);
   }
   mark(t, type) {
-    if (["collision", "red_light", "amber_light", "stop_sign", "failed_to_yield", "merged_out_of_turn", "close_pass", "hump_hit", "crew_close_pass", "passed_crossing_guard", "pxo_early_go", "illegal_turn", "contraflow_conflict", "fresh_green_conflict", "reversing_conflict", "pothole_hit", "ball_warning_ignored", "wildlife_conflict", "ice_overspeed", "snowbank_conflict", "pedestrian_splashed", "glare", "sun_glare", "safety", "brake_check", "parking_conflict", "closure_entry", "officer_violation"].includes(type)) this.markers.push({ t, type });
+    if (
+      [
+        "collision",
+        "red_light",
+        "amber_light",
+        "stop_sign",
+        "failed_to_yield",
+        "merged_out_of_turn",
+        "close_pass",
+        "hump_hit",
+        "crew_close_pass",
+        "passed_crossing_guard",
+        "pxo_early_go",
+        "illegal_turn",
+        "contraflow_conflict",
+        "fresh_green_conflict",
+        "reversing_conflict",
+        "pothole_hit",
+        "ball_warning_ignored",
+        "wildlife_conflict",
+        "ice_overspeed",
+        "snowbank_conflict",
+        "pedestrian_splashed",
+        "glare",
+        "sun_glare",
+        "safety",
+        "brake_check",
+        "parking_conflict",
+        "closure_entry",
+        "officer_violation",
+      ].includes(type)
+    )
+      this.markers.push({ t, type });
   }
   restore(index, target) {
     const frame = this.frames[Math.max(0, Math.min(this.frames.length - 1, Math.round(index)))];
     if (!frame) return null;
-    for (const key of Object.keys(this.spend)) this.spend[key] = Math.max(this.spend[key], target.autopilot.totals[key] || 0);
+    for (const key of Object.keys(this.spend))
+      this.spend[key] = Math.max(this.spend[key], target.autopilot.totals[key] || 0);
     target.autopilot.bumpEpoch();
     const state = cloneState(frame.state, frame.shared);
     const epoch = target.autopilot.epoch;
-    const callbacks = { onDecision: target.autopilot.onDecision, onEvent: target.autopilot.onEvent, brains: target.autopilot.brains };
+    const callbacks = {
+      onDecision: target.autopilot.onDecision,
+      onEvent: target.autopilot.onEvent,
+      brains: target.autopilot.brains,
+    };
     // Preserve root identities used by UI handlers and the render loop.
-    for (const [key, object] of [["world", target.world], ["fleet", target.fleet], ["pilot", target.autopilot]]) {
+    for (const [key, object] of [
+      ["world", target.world],
+      ["fleet", target.fleet],
+      ["pilot", target.autopilot],
+    ]) {
       for (const field of Object.keys(object)) if (!(field in state[key])) delete object[field];
       Object.assign(object, state[key]);
     }
     setNightFlash(target.world);
-    target.fleet.world = target.world; target.world.crowd.world = target.world; target.world.roadside.world = target.world; target.world.workZones.world = target.world; target.world.laneClosures.world = target.world; target.world.outages.world = target.world; target.world.doubleParked.world = target.world; target.world.stepOuts.world = target.world; target.world.crossingGuards.world = target.world;
+    target.fleet.world = target.world;
+    target.world.crowd.world = target.world;
+    target.world.roadside.world = target.world;
+    target.world.workZones.world = target.world;
+    target.world.laneClosures.world = target.world;
+    target.world.outages.world = target.world;
+    target.world.doubleParked.world = target.world;
+    target.world.stepOuts.world = target.world;
+    target.world.crossingGuards.world = target.world;
     if (target.world.contraflow) target.world.contraflow.world = target.world;
     if (target.world.driveways) target.world.driveways.world = target.world;
     if (target.world.balls) target.world.balls.world = target.world;
     if (target.world.geese) target.world.geese.world = target.world;
     if (target.world.snowbanks) target.world.snowbanks.world = target.world;
-    if (target.fleet.collection) { target.fleet.collection.world = target.world; target.fleet.collection.fleet = target.fleet; }
+    if (target.fleet.collection) {
+      target.fleet.collection.world = target.world;
+      target.fleet.collection.fleet = target.fleet;
+    }
     target.world.npcs = target.fleet.vehicles;
     for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;
-    Object.assign(target.autopilot, callbacks, { world: target.world, inFlight: null, firing: null, rerouting: false, epoch: epoch + 1 });
+    Object.assign(target.autopilot, callbacks, {
+      world: target.world,
+      inFlight: null,
+      firing: null,
+      rerouting: false,
+      epoch: epoch + 1,
+    });
     // (a route round a closed road still to come is asked for again: sim/road-closures.js)
     if (target.autopilot.closureRouting) target.autopilot.closureRouting = null;
     target.world.paused = true;
     target.world.visibility.setNight(frame.night);
-    target.setDrive(state.drive); Object.assign(target.clock, state.clock);
+    target.setDrive(state.drive);
+    Object.assign(target.clock, state.clock);
     // (black ice is shared between frames: lay the patches the restored weather and time call for,
     // now, so that a paused frame shows them: sim/black-ice.js)
     if (target.world.ice?.enabled) target.world.ice.refresh(target.world);
     return frame;
   }
   branch(index) {
-    this.frames.splice(index + 1); this.at = this.frames.at(-1)?.t ?? -Infinity;
-    this.markers = this.markers.filter(m => m.t <= this.at); this.branched = true;
+    this.frames.splice(index + 1);
+    this.at = this.frames.at(-1)?.t ?? -Infinity;
+    this.markers = this.markers.filter((m) => m.t <= this.at);
+    this.branched = true;
     this.recordingId = crypto.randomUUID();
   }
-  restoreSpend(pilot) { for (const key of Object.keys(this.spend)) pilot.totals[key] = Math.max(pilot.totals[key] || 0, this.spend[key]); }
+  restoreSpend(pilot) {
+    for (const key of Object.keys(this.spend)) pilot.totals[key] = Math.max(pilot.totals[key] || 0, this.spend[key]);
+  }
 }

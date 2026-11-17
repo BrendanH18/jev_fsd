@@ -17,13 +17,31 @@ from .parse import OsmData
 from .project import Projection
 
 DRIVABLE = {
-    "motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential",
-    "living_street", "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link",
+    "motorway",
+    "trunk",
+    "primary",
+    "secondary",
+    "tertiary",
+    "unclassified",
+    "residential",
+    "living_street",
+    "motorway_link",
+    "trunk_link",
+    "primary_link",
+    "secondary_link",
+    "tertiary_link",
 }
 # meters per second
 DEFAULT_LIMIT = {
-    "motorway": 29.0, "trunk": 25.0, "primary": 18.0, "secondary": 15.6, "tertiary": 13.4,
-    "unclassified": 11.2, "residential": 11.2, "living_street": 5.6, "service": 5.6,
+    "motorway": 29.0,
+    "trunk": 25.0,
+    "primary": 18.0,
+    "secondary": 15.6,
+    "tertiary": 13.4,
+    "unclassified": 11.2,
+    "residential": 11.2,
+    "living_street": 5.6,
+    "service": 5.6,
 }
 LANE_WIDTH = {"residential": 3.2, "living_street": 3.0, "service": 3.0}
 DEFAULT_LANE_WIDTH = 3.5
@@ -41,8 +59,8 @@ BIKE_CYCLEWAY = {"shared_lane", "lane", "shared", "share_busway"}
 RING_MIN_LANE_R = 5.0
 RING_MAX_ISLAND_R = 4.5
 RING_LANE_TO_ISLAND_M = 2.4
-RING_OUTER_M = 2.0              # asphalt beyond the lane centerline
-RING_LARGE_R = 9.0              # rings this big are drawn along their carriageway, not round an island
+RING_OUTER_M = 2.0  # asphalt beyond the lane centerline
+RING_LARGE_R = 9.0  # rings this big are drawn along their carriageway, not round an island
 
 
 def parse_maxspeed(value: Optional[str], cls: str) -> float:
@@ -98,6 +116,7 @@ def parking_sides(tags: dict, cls: str, oneway: bool) -> Tuple[float, float]:
     """(left, right) curbside parking lane widths in the way's direction. Tags win: parking:both,
     parking:left/right, and the older parking:lane:* scheme. Roundabouts and one-way streets default
     to none, as do arterials, where parking comes and goes with rush hours."""
+
     def side(name: str) -> Optional[bool]:
         for key in ("parking:%s" % name, "parking:both", "parking:lane:%s" % name, "parking:lane:both"):
             v = tags.get(key)
@@ -109,16 +128,23 @@ def parking_sides(tags: dict, cls: str, oneway: bool) -> Tuple[float, float]:
                 return orient == "parallel"
             return False
         return None
+
     default = cls in PARKING_DEFAULT and not oneway and tags.get("junction") != "roundabout"
     left, right = side("left"), side("right")
-    return (PARKING_LANE_M if (default if left is None else left) else 0.0,
-            PARKING_LANE_M if (default if right is None else right) else 0.0)
+    return (
+        PARKING_LANE_M if (default if left is None else left) else 0.0,
+        PARKING_LANE_M if (default if right is None else right) else 0.0,
+    )
 
 
 def is_bike_route(tags: dict) -> bool:
-    return (tags.get("cycleway") in BIKE_CYCLEWAY or tags.get("cycleway:both") in BIKE_CYCLEWAY
-            or tags.get("cycleway:right") in BIKE_CYCLEWAY or tags.get("bicycle") == "designated"
-            or tags.get("lcn") == "yes")
+    return (
+        tags.get("cycleway") in BIKE_CYCLEWAY
+        or tags.get("cycleway:both") in BIKE_CYCLEWAY
+        or tags.get("cycleway:right") in BIKE_CYCLEWAY
+        or tags.get("bicycle") == "designated"
+        or tags.get("lcn") == "yes"
+    )
 
 
 def is_drivable(tags: dict, include_service: bool = False) -> bool:
@@ -203,26 +229,54 @@ def build_graph(osm: OsmData, proj: Projection, include_service: bool = False) -
                 cut_points.append(i)
         cut_points.append(len(node_ids) - 1)
         for a, b in zip(cut_points, cut_points[1:]):
-            seg_nodes = node_ids[a:b + 1]
+            seg_nodes = node_ids[a : b + 1]
             pts = [proj.to_xy(osm.nodes[n][0], osm.nodes[n][1]) for n in seg_nodes]
             pts = g.dedupe_consecutive(pts, 0.05)
             if len(pts) < 2 or g.polyline_length(pts) < MIN_EDGE_M:
                 continue
             node_s = _node_positions(seg_nodes, [proj.to_xy(osm.nodes[n][0], osm.nodes[n][1]) for n in seg_nodes])
-            base = {"osm_way": w["id"], "cls": cls, "name": name, "limit": limit, "lane_width": lane_w,
-                    "width": width, "oneway": direction != "both", "bike": bike, "ring": ring}
+            base = {
+                "osm_way": w["id"],
+                "cls": cls,
+                "name": name,
+                "limit": limit,
+                "lane_width": lane_w,
+                "width": width,
+                "oneway": direction != "both",
+                "bike": bike,
+                "ring": ring,
+            }
             # parking is stored per directed edge as (left, right) of its own direction of travel
             fwd_park = (park_left, park_right) if direction != "backward" else (park_right, park_left)
             if fwd_lanes:
-                raw_edges.append(dict(base, src=seg_nodes[0], dst=seg_nodes[-1], pts=pts, lanes=fwd_lanes,
-                                      forward=True, node_s=node_s, parking=fwd_park,
-                                      offset_base=0.0 if direction != "both" else None))
+                raw_edges.append(
+                    dict(
+                        base,
+                        src=seg_nodes[0],
+                        dst=seg_nodes[-1],
+                        pts=pts,
+                        lanes=fwd_lanes,
+                        forward=True,
+                        node_s=node_s,
+                        parking=fwd_park,
+                        offset_base=0.0 if direction != "both" else None,
+                    )
+                )
             if bwd_lanes:
                 rev_len = g.polyline_length(pts)
-                raw_edges.append(dict(base, src=seg_nodes[-1], dst=seg_nodes[0], pts=list(reversed(pts)),
-                                      lanes=bwd_lanes, forward=False, parking=(park_right, park_left),
-                                      node_s={n: rev_len - s for n, s in node_s.items()},
-                                      offset_base=None))
+                raw_edges.append(
+                    dict(
+                        base,
+                        src=seg_nodes[-1],
+                        dst=seg_nodes[0],
+                        pts=list(reversed(pts)),
+                        lanes=bwd_lanes,
+                        forward=False,
+                        parking=(park_right, park_left),
+                        node_s={n: rev_len - s for n, s in node_s.items()},
+                        offset_base=None,
+                    )
+                )
     graph.stats["ways_drivable"] = len(ways)
     graph.stats["edges_raw"] = len(raw_edges)
 
@@ -237,11 +291,24 @@ def build_graph(osm: OsmData, proj: Projection, include_service: bool = False) -
         eid = "e%d" % i
         simplified = g.douglas_peucker(e["pts"], SIMPLIFY_EPS_M)
         edge = {
-            "id": eid, "from": "n%d" % e["src"], "to": "n%d" % e["dst"], "pts": simplified,
-            "lanes": e["lanes"], "lane_width": e["lane_width"], "width": e["width"], "limit": e["limit"],
-            "oneway": e["oneway"], "name": e["name"], "cls": e["cls"], "osm_way": e["osm_way"],
-            "forward": e["forward"], "length": g.polyline_length(simplified), "node_s": e["node_s"],
-            "parking": e["parking"], "bike": e["bike"], "ring": e["ring"],
+            "id": eid,
+            "from": "n%d" % e["src"],
+            "to": "n%d" % e["dst"],
+            "pts": simplified,
+            "lanes": e["lanes"],
+            "lane_width": e["lane_width"],
+            "width": e["width"],
+            "limit": e["limit"],
+            "oneway": e["oneway"],
+            "name": e["name"],
+            "cls": e["cls"],
+            "osm_way": e["osm_way"],
+            "forward": e["forward"],
+            "length": g.polyline_length(simplified),
+            "node_s": e["node_s"],
+            "parking": e["parking"],
+            "bike": e["bike"],
+            "ring": e["ring"],
         }
         graph.edges[eid] = edge
     _prune_to_largest_scc(graph)
@@ -468,7 +535,7 @@ def _roundabouts(graph: RoadGraph, osm: OsmData, proj: Projection) -> None:
             ccw = outward > 0
             e_r = sum(math.hypot(p[0] - cx, p[1] - cy) for p in e["pts"]) / len(e["pts"])
             d = outward * (lane_r - e_r)
-            e["lanes"] = 1   # one circulating lane, however many the ring is tagged with
+            e["lanes"] = 1  # one circulating lane, however many the ring is tagged with
             e["lane_offsets"] = [d]
             e["lane_pts"] = [g.offset_polyline(e["pts"], d)]
             inner, outer = -outward * (e_r - island), outward * (lane_r + RING_OUTER_M - e_r)
@@ -477,9 +544,19 @@ def _roundabouts(graph: RoadGraph, osm: OsmData, proj: Projection) -> None:
             vertices.update((e["from"], e["to"]))
         for eid in eids:
             graph.edges[eid]["ring_center"] = (cx, cy)
-        graph.roundabouts.append({"id": rid, "x": g.r2(cx), "y": g.r2(cy), "island_r": g.r2(island),
-                                  "lane_r": g.r2(lane_r), "outer_r": g.r2(lane_r + RING_OUTER_M), "ccw": ccw,
-                                  "edges": sorted(eids), "vertices": sorted(vertices)})
+        graph.roundabouts.append(
+            {
+                "id": rid,
+                "x": g.r2(cx),
+                "y": g.r2(cy),
+                "island_r": g.r2(island),
+                "lane_r": g.r2(lane_r),
+                "outer_r": g.r2(lane_r + RING_OUTER_M),
+                "ccw": ccw,
+                "edges": sorted(eids),
+                "vertices": sorted(vertices),
+            }
+        )
     for e in graph.edges.values():
         if e.get("ring") and not isinstance(e["ring"], str):
             e["ring"] = None  # a ring way too short to measure: treated as an ordinary one-way street

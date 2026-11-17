@@ -17,24 +17,99 @@ const { turnaroundStopS } = await import("../static/js/sim/turnaround.js");
 
 // test_turnaround.mjs's dead end: a two-way street from x = 0 to its dead end at x = 60, in along
 // y = -1.6 and back out along y = +1.6.
-const END = 60, LANE = 1.6, DRIFT = 15, GOAL_X = 15;
-const street = { lanes: 1, lane_width: 3.2, width: 6.4, lane_offsets: [LANE], asphalt: [-3.2, 3.2], parking: [0, 0], cls: "residential", limit: 11.2, oneway: false, name: "Dead End" };
-const map = new MapData({ bbox: [0, 0, 1, 1], extent: [-20, -40, END + 20, 40],
-  edges: [{ id: "in", from: "a", to: "b", pts: [[0, 0], [END, 0]], length: END, ...street }, { id: "out", from: "b", to: "a", pts: [[END, 0], [0, 0]], length: END, ...street }],
-  lanes: [{ edge: "in", idx: 0, pts: [[0, -LANE], [END, -LANE]] }, { edge: "out", idx: 0, pts: [[END, LANE], [0, LANE]] }],
-  nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: END, y: 0 }], intersections: [], stops: [], buildings: [] });
+const END = 60,
+  LANE = 1.6,
+  DRIFT = 15,
+  GOAL_X = 15;
+const street = {
+  lanes: 1,
+  lane_width: 3.2,
+  width: 6.4,
+  lane_offsets: [LANE],
+  asphalt: [-3.2, 3.2],
+  parking: [0, 0],
+  cls: "residential",
+  limit: 11.2,
+  oneway: false,
+  name: "Dead End",
+};
+const map = new MapData({
+  bbox: [0, 0, 1, 1],
+  extent: [-20, -40, END + 20, 40],
+  edges: [
+    {
+      id: "in",
+      from: "a",
+      to: "b",
+      pts: [
+        [0, 0],
+        [END, 0],
+      ],
+      length: END,
+      ...street,
+    },
+    {
+      id: "out",
+      from: "b",
+      to: "a",
+      pts: [
+        [END, 0],
+        [0, 0],
+      ],
+      length: END,
+      ...street,
+    },
+  ],
+  lanes: [
+    {
+      edge: "in",
+      idx: 0,
+      pts: [
+        [0, -LANE],
+        [END, -LANE],
+      ],
+    },
+    {
+      edge: "out",
+      idx: 0,
+      pts: [
+        [END, LANE],
+        [0, LANE],
+      ],
+    },
+  ],
+  nodes: [
+    { id: "a", x: 0, y: 0 },
+    { id: "b", x: END, y: 0 },
+  ],
+  intersections: [],
+  stops: [],
+  buildings: [],
+});
 const polyline = [];
 for (let x = 0; x <= END; x++) polyline.push([x, -LANE]);
 for (let x = END; x >= GOAL_X; x--) polyline.push([x, LANE]);
 // (the U-turn given DRIFT metres past where the polyline turns, as summed edge lengths put it after
 // rounded corners earlier on a long route; another turn stays as it was given)
-const data = { id: "r", polyline, edges: ["in", "out"], start_s: 0, goal_s: END - GOAL_X,
-  turns: [{ at_m: 20, dir: "right", street: "Dead End" }, { at_m: END + DRIFT, dir: "uturn", street: "Dead End" }] };
+const data = {
+  id: "r",
+  polyline,
+  edges: ["in", "out"],
+  start_s: 0,
+  goal_s: END - GOAL_X,
+  turns: [
+    { at_m: 20, dir: "right", street: "Dead End" },
+    { at_m: END + DRIFT, dir: "uturn", street: "Dead End" },
+  ],
+};
 
 {
   const route = new Route(data, map);
   const uturn = route.turns.find((t) => t.dir === "uturn");
-  assert.ok(Math.abs(uturn.at_m - END) < LANE + 0.1, `the U-turn is where the polyline turns round (${uturn.at_m.toFixed(1)} m)`);
+  assert.ok(
+    Math.abs(uturn.at_m - END) < LANE + 0.1,
+    `the U-turn is where the polyline turns round (${uturn.at_m.toFixed(1)} m)`,
+  );
   assert.equal(route.turns[0].at_m, 20, "other turns are as the router gave them");
   assert.equal(data.turns[1].at_m, END + DRIFT, "the route data is left as it was");
   assert.ok(turnaroundStopS(route, uturn) < END - 6, "the car stops to turn round well short of the dead end");

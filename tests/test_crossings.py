@@ -9,8 +9,7 @@ import helpers  # noqa: F401  (puts the project on the path)
 
 from jev.config import MAPS_DIR, PRESET_BBOXES
 from jev.osm import fetch
-from jev.osm.crossings import (JUNCTION_M, build_crossings, crossings_from_osm, crossings_path, load_crossings,
-                               markings)
+from jev.osm.crossings import JUNCTION_M, build_crossings, crossings_from_osm, crossings_path, load_crossings, markings
 from jev.osm.pack import pack_from_osm, pack_path
 from jev.osm.parse import OsmData
 from jev.osm.project import Projection
@@ -66,13 +65,15 @@ class CrossingTests(unittest.TestCase):
         self.assertAlmostEqual(c["s"], 150, delta=0.5)
 
     def test_unmarked_signalled_and_junction_crossings_are_left_out(self):
-        osm, bbox = avenue([
-            (41, -200, {"highway": "crossing", "crossing": "unmarked"}),
-            (42, -100, {"highway": "crossing", "crossing": "traffic_signals"}),
-            (43, 100, {"highway": "crossing", "crossing": "marked", "crossing:markings": "no"}),
-            (44, JUNCTION_M - 4, ZEBRA),
-            (45, 200, {"highway": "crossing", "crossing": "uncontrolled", "crossing:island": "yes"}),
-        ])
+        osm, bbox = avenue(
+            [
+                (41, -200, {"highway": "crossing", "crossing": "unmarked"}),
+                (42, -100, {"highway": "crossing", "crossing": "traffic_signals"}),
+                (43, 100, {"highway": "crossing", "crossing": "marked", "crossing:markings": "no"}),
+                (44, JUNCTION_M - 4, ZEBRA),
+                (45, 200, {"highway": "crossing", "crossing": "uncontrolled", "crossing:island": "yes"}),
+            ]
+        )
         out = crossings_from_osm(osm, pack_from_osm(osm, bbox))
         self.assertEqual([c["id"] for c in out["crossings"]], ["x45"])
         self.assertTrue(out["crossings"][0]["island"])
@@ -101,9 +102,19 @@ class CrossingTests(unittest.TestCase):
             self.assertFalse(crossings_path(maps, bbox).exists())
             lines = ['<?xml version="1.0"?><osm>']
             for nid, (lat, lon, tags) in osm.nodes.items():
-                lines.append('<node id="%d" lat="%.8f" lon="%.8f">%s</node>' % (nid, lat, lon, "".join('<tag k="%s" v="%s"/>' % kv for kv in tags.items())))
+                lines.append(
+                    '<node id="%d" lat="%.8f" lon="%.8f">%s</node>'
+                    % (nid, lat, lon, "".join('<tag k="%s" v="%s"/>' % kv for kv in tags.items()))
+                )
             for w in osm.ways:
-                lines.append('<way id="%d">%s%s</way>' % (w["id"], "".join('<nd ref="%d"/>' % n for n in w["nodes"]), "".join('<tag k="%s" v="%s"/>' % kv for kv in w["tags"].items())))
+                lines.append(
+                    '<way id="%d">%s%s</way>'
+                    % (
+                        w["id"],
+                        "".join('<nd ref="%d"/>' % n for n in w["nodes"]),
+                        "".join('<tag k="%s" v="%s"/>' % kv for kv in w["tags"].items()),
+                    )
+                )
             lines.append("</osm>")
             fetch.cache_path(maps, bbox).write_text("".join(lines))
             built = build_crossings(bbox, maps, pack)
@@ -130,6 +141,7 @@ class CrossingTests(unittest.TestCase):
 
     def test_demo_bundles_crossings_with_each_map(self):
         from scripts import build_demo
+
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "site"
             with contextlib.redirect_stdout(io.StringIO()):

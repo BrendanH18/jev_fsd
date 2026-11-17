@@ -11,230 +11,623 @@ const PRACTICE_LABELS = { untried: "Untried", attempted: "Attempted", completed:
 const ROAD_TEST_LABELS = { untried: "Untried", attempted: "Not yet passed", passed: "Passed" };
 
 export class DriveLab {
-  constructor({ city, demo, agentNote = "", onScenic, onPause, onSeek, onBranch, onLive, onAgent, onPerception, onConnectModel }) {
+  constructor({
+    city,
+    demo,
+    agentNote = "",
+    onScenic,
+    onPause,
+    onSeek,
+    onBranch,
+    onLive,
+    onAgent,
+    onPerception,
+    onConnectModel,
+  }) {
     Object.assign(this, { onSeek, onBranch, onLive, onAgent });
     this.dialog = h("dialog", { class: "lab-dialog", "aria-label": "Drive lab" });
     this.dialog.addEventListener("close", () => onPause(false));
     document.body.append(this.dialog);
-    this.city = city; this.demo = demo; this.onPause = onPause; this.onScenic = onScenic;
-    const actions = h("div", { class: "lab-actions" },
+    this.city = city;
+    this.demo = demo;
+    this.onPause = onPause;
+    this.onScenic = onScenic;
+    const actions = h(
+      "div",
+      { class: "lab-actions" },
       h("button", { class: "chip-button", onclick: () => this.home() }, "Drive lab"),
       h("button", { class: "chip-button", onclick: () => this.challenges() }, "Challenges"),
-      this.eyes = h("button", { class: "chip-button", "aria-pressed": "false", onclick: () => {
-        const enabled = this.eyes.getAttribute("aria-pressed") !== "true";
-        this.eyes.setAttribute("aria-pressed", String(enabled)); this.perception.hidden = !enabled; onPerception(enabled);
-      } }, "AI eyes"),
-      this.inspect = h("button", { class: "chip-button", "aria-pressed": "false", onclick: () => {
-        const enabled = !document.body.classList.contains("telemetry-expanded");
-        document.body.classList.toggle("telemetry-expanded", enabled); this.inspect.setAttribute("aria-pressed", String(enabled));
-      } }, "Telemetry"));
+      (this.eyes = h(
+        "button",
+        {
+          class: "chip-button",
+          "aria-pressed": "false",
+          onclick: () => {
+            const enabled = this.eyes.getAttribute("aria-pressed") !== "true";
+            this.eyes.setAttribute("aria-pressed", String(enabled));
+            this.perception.hidden = !enabled;
+            onPerception(enabled);
+          },
+        },
+        "AI eyes",
+      )),
+      (this.inspect = h(
+        "button",
+        {
+          class: "chip-button",
+          "aria-pressed": "false",
+          onclick: () => {
+            const enabled = !document.body.classList.contains("telemetry-expanded");
+            document.body.classList.toggle("telemetry-expanded", enabled);
+            this.inspect.setAttribute("aria-pressed", String(enabled));
+          },
+        },
+        "Telemetry",
+      )),
+    );
     $(".hud-top-left").append(actions);
-    this.perception = h("section", { class: "perception-panel panel", hidden: true, "aria-label": "Geometric perception" },
+    this.perception = h(
+      "section",
+      { class: "perception-panel panel", hidden: true, "aria-label": "Geometric perception" },
       h("span", { class: "label" }, "AI EYES / GEOMETRIC SENSING"),
-      this.sight = h("p", {}, "Observing the street…"),
+      (this.sight = h("p", {}, "Observing the street…")),
       h("p", { class: "perception-legend" }, "Green: visible · Red: hidden from driver · Yellow: selected path"),
       h("p", { class: "muted" }, "Hidden-object boxes use world truth for inspection; the driver cannot see them."),
-      this.rejections = h("div", { class: "candidate-rejections" }));
+      (this.rejections = h("div", { class: "candidate-rejections" })),
+    );
     $("#hud-right").append(this.perception);
-    this.replay = h("section", { class: "replay-deck panel", hidden: true, "aria-label": "Recorded drive replay" },
-      h("div", { class: "replay-heading" }, h("span", { class: "label" }, "DRIVE REPLAY"), this.replayStatus = h("span", { class: "muted" }, "Recording · last 120 seconds"),
-        h("button", { class: "chip-button", onclick: () => this.openReplay() }, "Rewind")),
-      this.controls = h("div", { class: "replay-controls", hidden: true },
-        this.slider = h("input", { type: "range", min: 0, max: 0, step: 1, value: 0, "aria-label": "Replay time", oninput: () => this.seek(Number(this.slider.value)) }),
-        h("div", { class: "replay-buttons" },
-          this.play = h("button", { class: "chip-button", onclick: () => this.togglePlayback() }, "Play replay"),
+    this.replay = h(
+      "section",
+      { class: "replay-deck panel", hidden: true, "aria-label": "Recorded drive replay" },
+      h(
+        "div",
+        { class: "replay-heading" },
+        h("span", { class: "label" }, "DRIVE REPLAY"),
+        (this.replayStatus = h("span", { class: "muted" }, "Recording · last 120 seconds")),
+        h("button", { class: "chip-button", onclick: () => this.openReplay() }, "Rewind"),
+      ),
+      (this.controls = h(
+        "div",
+        { class: "replay-controls", hidden: true },
+        (this.slider = h("input", {
+          type: "range",
+          min: 0,
+          max: 0,
+          step: 1,
+          value: 0,
+          "aria-label": "Replay time",
+          oninput: () => this.seek(Number(this.slider.value)),
+        })),
+        h(
+          "div",
+          { class: "replay-buttons" },
+          (this.play = h("button", { class: "chip-button", onclick: () => this.togglePlayback() }, "Play replay")),
           h("button", { class: "chip-button", onclick: () => this.previousIncident() }, "Before incident"),
           h("button", { class: "chip-button", onclick: () => this.branch("manual") }, "Take over here"),
-          this.branchAgent = h("select", { "aria-label": "Branch driver" }),
+          (this.branchAgent = h("select", { "aria-label": "Branch driver" })),
           h("button", { class: "chip-button", onclick: () => this.branch(this.branchAgent.value) }, "Try this driver"),
-          this.branchCandidate = h("select", { "aria-label": "Alternate manoeuvre" }),
-          h("button", { class: "chip-button", onclick: () => this.branch(`candidate:${this.branchCandidate.value}`) }, "Try manoeuvre"),
-          h("button", { class: "chip-button", onclick: () => this.live() }, "Return to drive"))));
+          (this.branchCandidate = h("select", { "aria-label": "Alternate manoeuvre" })),
+          h(
+            "button",
+            { class: "chip-button", onclick: () => this.branch(`candidate:${this.branchCandidate.value}`) },
+            "Try manoeuvre",
+          ),
+          h("button", { class: "chip-button", onclick: () => this.live() }, "Return to drive"),
+        ),
+      )),
+    );
     document.body.append(this.replay);
     const settings = $("#settings");
-    settings.append(h("h3", { class: "settings-section-heading" }, "Driving agents"),
-      h("label", { class: "wide" }, h("span", { class: "label" }, "Active agent"), this.agent = h("select", { "aria-label": "Active agent", onchange: () => onAgent(this.agent.value) })),
-      this.modelsStatus = h("p", { class: "muted wide", role: "status" }, agentNote),
+    settings.append(
+      h("h3", { class: "settings-section-heading" }, "Driving agents"),
+      h(
+        "label",
+        { class: "wide" },
+        h("span", { class: "label" }, "Active agent"),
+        (this.agent = h("select", { "aria-label": "Active agent", onchange: () => onAgent(this.agent.value) })),
+      ),
+      (this.modelsStatus = h("p", { class: "muted wide", role: "status" }, agentNote)),
       demo ? null : h("button", { class: "toggle wide", onclick: () => onConnectModel?.() }, "Connect a model"),
-      h("label", { class: "wide" }, h("span", { class: "label" }, "Local agent module"), this.module = h("input", { type: "text", placeholder: "/js/agents/my-agent.js", "aria-label": "Local agent module" })),
-      h("button", { class: "toggle wide", onclick: () => this.loadAgent() }, "Load agent"), this.agentStatus = h("p", { class: "muted wide", role: "status" }, "Trusted JavaScript modules run in this browser."));
-    this.lastTick = -Infinity; this.playing = false; this.reviewing = false;
-    this.replayElapsed = 0; this.replayAlpha = 0;
+      h(
+        "label",
+        { class: "wide" },
+        h("span", { class: "label" }, "Local agent module"),
+        (this.module = h("input", {
+          type: "text",
+          placeholder: "/js/agents/my-agent.js",
+          "aria-label": "Local agent module",
+        })),
+      ),
+      h("button", { class: "toggle wide", onclick: () => this.loadAgent() }, "Load agent"),
+      (this.agentStatus = h(
+        "p",
+        { class: "muted wide", role: "status" },
+        "Trusted JavaScript modules run in this browser.",
+      )),
+    );
+    this.lastTick = -Infinity;
+    this.playing = false;
+    this.reviewing = false;
+    this.replayElapsed = 0;
+    this.replayAlpha = 0;
     this.refreshAgents();
   }
   // Rebuild the driver pickers, e.g. after endpoints report whether they are reachable.
   refreshAgents(agentNote) {
     if (agentNote !== undefined) this.modelsStatus.textContent = agentNote;
     const agents = agentDefinitions();
-    const active = this.agent.value, branch = this.branchAgent.value;
-    this.agent.replaceChildren(...agents.map(a => h("option", { value: a.id, disabled: a.available === false }, agentOptionLabel(a))));
-    this.branchAgent.replaceChildren(...agents.filter(a => a.available !== false).map(a => h("option", { value: a.id }, agentOptionLabel(a))));
+    const active = this.agent.value,
+      branch = this.branchAgent.value;
+    this.agent.replaceChildren(
+      ...agents.map((a) => h("option", { value: a.id, disabled: a.available === false }, agentOptionLabel(a))),
+    );
+    this.branchAgent.replaceChildren(
+      ...agents.filter((a) => a.available !== false).map((a) => h("option", { value: a.id }, agentOptionLabel(a))),
+    );
     if (active) this.agent.value = active;
-    if (branch && agents.some(a => a.id === branch && a.available !== false)) this.branchAgent.value = branch;
+    if (branch && agents.some((a) => a.id === branch && a.available !== false)) this.branchAgent.value = branch;
   }
   open(content) {
-    this.dialog.replaceChildren(h("div", { class: "lab-dialog-top" }, h("span", { class: "brand" }, "JEV / DRIVE LAB"),
-      h("button", { class: "chip-button", "aria-label": "Close drive lab", onclick: () => this.dialog.close() }, "Back to street ↗")), content);
-    if (!this.dialog.open) { this.onPause(true); this.dialog.showModal(); }
+    this.dialog.replaceChildren(
+      h(
+        "div",
+        { class: "lab-dialog-top" },
+        h("span", { class: "brand" }, "JEV / DRIVE LAB"),
+        h(
+          "button",
+          { class: "chip-button", "aria-label": "Close drive lab", onclick: () => this.dialog.close() },
+          "Back to street ↗",
+        ),
+      ),
+      content,
+    );
+    if (!this.dialog.open) {
+      this.onPause(true);
+      this.dialog.showModal();
+    }
   }
   home() {
-    this.open(h("div", {},
-      h("div", { class: "lab-eyebrow" }, `${this.city.city || "Canada"} · REAL STREETS / OPEN SOURCE`),
-      h("h1", { class: "lab-hero-title" }, "Your city.", h("br"), h("span", {}, "A different driver.")),
-      h("p", { class: "lab-hero-copy" }, "Take the wheel, challenge an AI, or look inside its next decision. Every drive has something to teach you."),
-      h("div", { class: "welcome-options" },
-        this.welcomeCard("01", "Take a scenic drive", "Real neighbourhoods. Golden light. Find your rhythm.", "Start cruising →", () => this.scenic("manual")),
-        this.welcomeCard("02", "Can you beat the AI?", `${CHALLENGES.length} authored challenges. The same conditions for every driver.`, "Pick a challenge →", () => this.challenges()),
-        this.welcomeCard("03", "Watch the AI drive", "Follow its choices, then rewind and try your own.", "Watch Rules →", () => this.scenic("rules"))),
-      h("div", { class: "lab-footer" }, h("span", {}, "12 neighbourhoods · 11 Canadian cities · No key needed for Rules"),
-        h("span", { class: "lab-footer-links" }, this.resultsLink(),
-          h("a", { href: "https://github.com/BrendanH18/jev_fsd", target: "_blank", rel: "noopener" }, "Star on GitHub ↗"))),
-      h("p", { class: "lab-footnote" }, this.demo ? "Public browser demo · Rules and starter agents run locally in your browser. Keyboard driving on desktop." : "Local drive lab · WASD to drive · J for autopilot · P to pause. Research simulator.")));
+    this.open(
+      h(
+        "div",
+        {},
+        h("div", { class: "lab-eyebrow" }, `${this.city.city || "Canada"} · REAL STREETS / OPEN SOURCE`),
+        h("h1", { class: "lab-hero-title" }, "Your city.", h("br"), h("span", {}, "A different driver.")),
+        h(
+          "p",
+          { class: "lab-hero-copy" },
+          "Take the wheel, challenge an AI, or look inside its next decision. Every drive has something to teach you.",
+        ),
+        h(
+          "div",
+          { class: "welcome-options" },
+          this.welcomeCard(
+            "01",
+            "Take a scenic drive",
+            "Real neighbourhoods. Golden light. Find your rhythm.",
+            "Start cruising →",
+            () => this.scenic("manual"),
+          ),
+          this.welcomeCard(
+            "02",
+            "Can you beat the AI?",
+            `${CHALLENGES.length} authored challenges. The same conditions for every driver.`,
+            "Pick a challenge →",
+            () => this.challenges(),
+          ),
+          this.welcomeCard(
+            "03",
+            "Watch the AI drive",
+            "Follow its choices, then rewind and try your own.",
+            "Watch Rules →",
+            () => this.scenic("rules"),
+          ),
+        ),
+        h(
+          "div",
+          { class: "lab-footer" },
+          h("span", {}, "12 neighbourhoods · 11 Canadian cities · No key needed for Rules"),
+          h(
+            "span",
+            { class: "lab-footer-links" },
+            this.resultsLink(),
+            h(
+              "a",
+              { href: "https://github.com/BrendanH18/jev_fsd", target: "_blank", rel: "noopener" },
+              "Star on GitHub ↗",
+            ),
+          ),
+        ),
+        h(
+          "p",
+          { class: "lab-footnote" },
+          this.demo
+            ? "Public browser demo · Rules and starter agents run locally in your browser. Keyboard driving on desktop."
+            : "Local drive lab · WASD to drive · J for autopilot · P to pause. Research simulator.",
+        ),
+      ),
+    );
   }
   // The leaderboard of committed results (results.html, ui/results.js).
   resultsLink() {
-    return h("a", { href: appUrl(this.demo ? "results.html" : "results"), target: "_blank", rel: "noopener" }, "How the AI drivers did ↗");
+    return h(
+      "a",
+      { href: appUrl(this.demo ? "results.html" : "results"), target: "_blank", rel: "noopener" },
+      "How the AI drivers did ↗",
+    );
   }
   welcomeCard(number, title, copy, action, onclick) {
-    return h("button", { class: "welcome-card", onclick }, h("span", { class: "welcome-number" }, number), h("h2", {}, title), h("p", {}, copy), h("strong", {}, action));
+    return h(
+      "button",
+      { class: "welcome-card", onclick },
+      h("span", { class: "welcome-number" }, number),
+      h("h2", {}, title),
+      h("p", {}, copy),
+      h("strong", {}, action),
+    );
   }
   async scenic(driver) {
     this.dialog.close();
-    try { await this.onScenic(driver); } catch (error) { this.open(h("div", {}, h("h2", {}, "Could not find a scenic drive."), h("p", {}, error.message), h("button", { class: "toggle", onclick: () => this.scenic(driver) }, "Try again"))); }
+    try {
+      await this.onScenic(driver);
+    } catch (error) {
+      this.open(
+        h(
+          "div",
+          {},
+          h("h2", {}, "Could not find a scenic drive."),
+          h("p", {}, error.message),
+          h("button", { class: "toggle", onclick: () => this.scenic(driver) }, "Try again"),
+        ),
+      );
+    }
   }
   challenges() {
     const practice = this.practice?.available === false ? this.practice : readPractice();
-    const filters = this.challengeFilters ||= { query: "", city: "", skill: "", weather: "", progress: "" };
+    const filters = (this.challengeFilters ||= { query: "", city: "", skill: "", weather: "", progress: "" });
     const controls = {};
-    const unique = values => [...new Set(values)].sort((a, b) => a.localeCompare(b));
-    const picker = (key, label, options) => h("label", {}, h("span", {}, label), controls[key] = h("select", {
-      "aria-label": `Filter by ${label.toLowerCase()}`, onchange: () => { filters[key] = controls[key].value; render(); },
-    }, h("option", { value: "" }, { city: "All cities", skill: "All skills", weather: "Any weather", progress: "Any progress" }[key]),
-    options.map(([value, text]) => h("option", { value, selected: filters[key] === value }, text))));
+    const unique = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
+    const picker = (key, label, options) =>
+      h(
+        "label",
+        {},
+        h("span", {}, label),
+        (controls[key] = h(
+          "select",
+          {
+            "aria-label": `Filter by ${label.toLowerCase()}`,
+            onchange: () => {
+              filters[key] = controls[key].value;
+              render();
+            },
+          },
+          h(
+            "option",
+            { value: "" },
+            { city: "All cities", skill: "All skills", weather: "Any weather", progress: "Any progress" }[key],
+          ),
+          options.map(([value, text]) => h("option", { value, selected: filters[key] === value }, text)),
+        )),
+      );
     const grid = h("div", { class: "challenge-grid" });
     const count = h("p", { class: "challenge-results", role: "status", "aria-live": "polite", "aria-atomic": "true" });
     const next = h("a", { class: "chip-button challenge-next" });
     const reset = () => {
-      for (const key of Object.keys(filters)) { filters[key] = ""; controls[key].value = ""; }
-      render(); controls.query.focus();
+      for (const key of Object.keys(filters)) {
+        filters[key] = "";
+        controls[key].value = "";
+      }
+      render();
+      controls.query.focus();
     };
-    const empty = h("div", { class: "challenge-empty", hidden: true }, h("h2", {}, "No matching challenges"),
+    const empty = h(
+      "div",
+      { class: "challenge-empty", hidden: true },
+      h("h2", {}, "No matching challenges"),
       h("p", {}, "Try another search or clear your filters to see every drive."),
-      h("button", { class: "chip-button", onclick: reset }, "Clear filters"));
-    const challengeUrl = challenge => driveLink({ ...challengeConfig(challenge), drive: this.challengeDriver.value });
+      h("button", { class: "chip-button", onclick: reset }, "Clear filters"),
+    );
+    const challengeUrl = (challenge) => driveLink({ ...challengeConfig(challenge), drive: this.challengeDriver.value });
     // (road tests, lab/road-tests.js: a longer drive marked like an examiner's sheet)
-    const roadTests = readRoadTests(), roadGrid = h("div", { class: "challenge-grid road-test-grid" });
-    const renderRoadTests = () => roadGrid.replaceChildren(...ROAD_TESTS.map(t => {
-      const status = roadTestStatus(t, roadTests.records), best = roadTestRecord(t, roadTests.records)?.best;
-      return h("a", { class: "road-test-card", "data-road-test": t.id, href: challengeUrl(t) },
-        h("div", { class: "challenge-card-top" }, h("span", { class: "challenge-icon", "aria-hidden": "true" }, t.icon), h("span", { class: "label" }, t.style)),
-        h("h2", {}, t.title), h("span", { class: `practice-badge practice-${status === "passed" ? "completed" : status}` }, ROAD_TEST_LABELS[status]),
-        best ? h("span", { class: "road-test-best" }, `Best: ${best.pass ? "Pass" : "Fail"} · ${best.demerits} demerit${best.demerits === 1 ? "" : "s"}`) : null,
-        h("p", {}, t.description), h("div", { class: "challenge-card-meta" }, `${challengeCity(t)} · ${t.region} · ${t.weather} · ${t.time}`),
-        h("strong", {}, status === "untried" ? "Take the test →" : "Retake the test →"));
-    }));
+    const roadTests = readRoadTests(),
+      roadGrid = h("div", { class: "challenge-grid road-test-grid" });
+    const renderRoadTests = () =>
+      roadGrid.replaceChildren(
+        ...ROAD_TESTS.map((t) => {
+          const status = roadTestStatus(t, roadTests.records),
+            best = roadTestRecord(t, roadTests.records)?.best;
+          return h(
+            "a",
+            { class: "road-test-card", "data-road-test": t.id, href: challengeUrl(t) },
+            h(
+              "div",
+              { class: "challenge-card-top" },
+              h("span", { class: "challenge-icon", "aria-hidden": "true" }, t.icon),
+              h("span", { class: "label" }, t.style),
+            ),
+            h("h2", {}, t.title),
+            h(
+              "span",
+              { class: `practice-badge practice-${status === "passed" ? "completed" : status}` },
+              ROAD_TEST_LABELS[status],
+            ),
+            best
+              ? h(
+                  "span",
+                  { class: "road-test-best" },
+                  `Best: ${best.pass ? "Pass" : "Fail"} · ${best.demerits} demerit${best.demerits === 1 ? "" : "s"}`,
+                )
+              : null,
+            h("p", {}, t.description),
+            h("div", { class: "challenge-card-meta" }, `${challengeCity(t)} · ${t.region} · ${t.weather} · ${t.time}`),
+            h("strong", {}, status === "untried" ? "Take the test →" : "Retake the test →"),
+          );
+        }),
+      );
     const render = () => {
       renderRoadTests();
       const matches = filterChallenges(CHALLENGES, filters, practice.records);
-      const completed = CHALLENGES.filter(c => practiceStatus(c, practice.records) === "completed").length;
+      const completed = CHALLENGES.filter((c) => practiceStatus(c, practice.records) === "completed").length;
       count.textContent = `${matches.length} of ${CHALLENGES.length} challenges · ${completed} completed cleanly by you`;
       empty.hidden = matches.length > 0;
-      grid.replaceChildren(...matches.map(c => {
-        const status = practiceStatus(c, practice.records);
-        return h("a", { class: "challenge-card", "data-challenge": c.id, href: challengeUrl(c) },
-          h("div", { class: "challenge-card-top" }, h("span", { class: "challenge-icon", "aria-hidden": "true" }, c.icon), h("span", { class: "label" }, c.difficulty)),
-          h("h2", {}, c.title), h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
-          h("p", {}, c.description), h("div", { class: "challenge-card-meta" }, `${challengeCity(c)} · ${c.map.replaceAll("_", " ")} · ${c.weather} · ${c.time}`),
-          h("strong", {}, status === "attempted" ? "Retry challenge →" : status === "completed" ? "Practise again →" : "Try challenge →"));
-      }));
-      const recommendation = matches.find(c => practiceStatus(c, practice.records) === "attempted")
-        || matches.find(c => practiceStatus(c, practice.records) === "untried") || matches[0];
+      grid.replaceChildren(
+        ...matches.map((c) => {
+          const status = practiceStatus(c, practice.records);
+          return h(
+            "a",
+            { class: "challenge-card", "data-challenge": c.id, href: challengeUrl(c) },
+            h(
+              "div",
+              { class: "challenge-card-top" },
+              h("span", { class: "challenge-icon", "aria-hidden": "true" }, c.icon),
+              h("span", { class: "label" }, c.difficulty),
+            ),
+            h("h2", {}, c.title),
+            h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
+            h("p", {}, c.description),
+            h(
+              "div",
+              { class: "challenge-card-meta" },
+              `${challengeCity(c)} · ${c.map.replaceAll("_", " ")} · ${c.weather} · ${c.time}`,
+            ),
+            h(
+              "strong",
+              {},
+              status === "attempted"
+                ? "Retry challenge →"
+                : status === "completed"
+                  ? "Practise again →"
+                  : "Try challenge →",
+            ),
+          );
+        }),
+      );
+      const recommendation =
+        matches.find((c) => practiceStatus(c, practice.records) === "attempted") ||
+        matches.find((c) => practiceStatus(c, practice.records) === "untried") ||
+        matches[0];
       next.hidden = !recommendation;
       next.textContent = recommendation ? `Practise next: ${recommendation.title} →` : "Practise next";
-      if (recommendation) next.href = challengeUrl(recommendation); else next.removeAttribute("href");
+      if (recommendation) next.href = challengeUrl(recommendation);
+      else next.removeAttribute("href");
     };
-    this.open(h("div", {}, h("div", { class: "lab-eyebrow" }, "SAME STREET. SAME HAZARD. YOUR MOVE."),
-      h("h1", { class: "challenge-title" }, "Can you beat the AI?"),
-      h("p", { class: "lab-hero-copy" }, "Choose a short drive. Compare complete arrivals under the same conditions; a higher score alone does not mean a safer driver."),
-      h("label", { class: "challenge-driver" }, "Drive with ", this.challengeDriver = h("select", { "aria-label": "Challenge driver", onchange: render },
-        h("option", { value: "manual" }, "Me · manual"), ...agentDefinitions().filter(a => a.available !== false).map(a => h("option", { value: a.id }, agentOptionLabel(a))))),
-      h("section", { class: "road-test-library", "aria-labelledby": "road-tests-heading" },
-        h("h2", { id: "road-tests-heading", class: "road-test-heading" }, "Road tests"),
-        h("p", { class: "lab-footnote" }, `Longer licence-style drives on a fixed route, with an examiner's directions and sheet. Any dangerous action or violation fails; minor errors are demerits. Any driver can take one; only an unchanged manual attempt is recorded as yours${roadTests.available ? "" : ", and browser storage is unavailable"}.`),
-        roadGrid),
-      h("h2", { class: "road-test-heading" }, "Challenges"),
-      h("div", { class: "challenge-filters", role: "group", "aria-label": "Find a challenge" },
-        h("label", { class: "challenge-search" }, h("span", {}, "Search challenges"), controls.query = h("input", { type: "search", value: filters.query,
-          placeholder: "Title, city, street or lesson", "aria-label": "Search challenges", oninput: () => { filters.query = controls.query.value; render(); } })),
-        picker("city", "City", unique(CHALLENGES.map(challengeCity)).map(value => [value, value])),
-        picker("skill", "Skill", unique(CHALLENGES.map(c => c.difficulty)).map(value => [value, value])),
-        picker("weather", "Weather", unique(CHALLENGES.map(c => c.weather)).map(value => [value, value])),
-        picker("progress", "Progress", Object.entries(PRACTICE_LABELS))),
-      h("p", { class: "lab-footnote" }, practice.available
-        ? "Your manual practice is saved in this browser. A clean completion means arriving under the authored conditions with no challenge failures. AI, mixed-driver, modified and replay attempts stay separate."
-        : "Browser storage is unavailable. Practice progress cannot be saved on this device."),
-      h("div", { class: "challenge-library-actions" }, count, h("button", { class: "chip-button", onclick: reset }, "Clear filters"), next),
-      grid, empty,
-      h("div", { class: "lab-footer" }, h("button", { class: "chip-button", onclick: () => this.home() }, "← Drive lab"),
-        h("span", { class: "lab-footer-links" }, this.resultsLink(),
-          h("a", { href: appUrl(this.demo ? "arena.html" : "arena"), target: "_blank", rel: "noopener" }, "Evaluate agents ↗")))));
+    this.open(
+      h(
+        "div",
+        {},
+        h("div", { class: "lab-eyebrow" }, "SAME STREET. SAME HAZARD. YOUR MOVE."),
+        h("h1", { class: "challenge-title" }, "Can you beat the AI?"),
+        h(
+          "p",
+          { class: "lab-hero-copy" },
+          "Choose a short drive. Compare complete arrivals under the same conditions; a higher score alone does not mean a safer driver.",
+        ),
+        h(
+          "label",
+          { class: "challenge-driver" },
+          "Drive with ",
+          (this.challengeDriver = h(
+            "select",
+            { "aria-label": "Challenge driver", onchange: render },
+            h("option", { value: "manual" }, "Me · manual"),
+            ...agentDefinitions()
+              .filter((a) => a.available !== false)
+              .map((a) => h("option", { value: a.id }, agentOptionLabel(a))),
+          )),
+        ),
+        h(
+          "section",
+          { class: "road-test-library", "aria-labelledby": "road-tests-heading" },
+          h("h2", { id: "road-tests-heading", class: "road-test-heading" }, "Road tests"),
+          h(
+            "p",
+            { class: "lab-footnote" },
+            `Longer licence-style drives on a fixed route, with an examiner's directions and sheet. Any dangerous action or violation fails; minor errors are demerits. Any driver can take one; only an unchanged manual attempt is recorded as yours${roadTests.available ? "" : ", and browser storage is unavailable"}.`,
+          ),
+          roadGrid,
+        ),
+        h("h2", { class: "road-test-heading" }, "Challenges"),
+        h(
+          "div",
+          { class: "challenge-filters", role: "group", "aria-label": "Find a challenge" },
+          h(
+            "label",
+            { class: "challenge-search" },
+            h("span", {}, "Search challenges"),
+            (controls.query = h("input", {
+              type: "search",
+              value: filters.query,
+              placeholder: "Title, city, street or lesson",
+              "aria-label": "Search challenges",
+              oninput: () => {
+                filters.query = controls.query.value;
+                render();
+              },
+            })),
+          ),
+          picker(
+            "city",
+            "City",
+            unique(CHALLENGES.map(challengeCity)).map((value) => [value, value]),
+          ),
+          picker(
+            "skill",
+            "Skill",
+            unique(CHALLENGES.map((c) => c.difficulty)).map((value) => [value, value]),
+          ),
+          picker(
+            "weather",
+            "Weather",
+            unique(CHALLENGES.map((c) => c.weather)).map((value) => [value, value]),
+          ),
+          picker("progress", "Progress", Object.entries(PRACTICE_LABELS)),
+        ),
+        h(
+          "p",
+          { class: "lab-footnote" },
+          practice.available
+            ? "Your manual practice is saved in this browser. A clean completion means arriving under the authored conditions with no challenge failures. AI, mixed-driver, modified and replay attempts stay separate."
+            : "Browser storage is unavailable. Practice progress cannot be saved on this device.",
+        ),
+        h(
+          "div",
+          { class: "challenge-library-actions" },
+          count,
+          h("button", { class: "chip-button", onclick: reset }, "Clear filters"),
+          next,
+        ),
+        grid,
+        empty,
+        h(
+          "div",
+          { class: "lab-footer" },
+          h("button", { class: "chip-button", onclick: () => this.home() }, "← Drive lab"),
+          h(
+            "span",
+            { class: "lab-footer-links" },
+            this.resultsLink(),
+            h(
+              "a",
+              { href: appUrl(this.demo ? "arena.html" : "arena"), target: "_blank", rel: "noopener" },
+              "Evaluate agents ↗",
+            ),
+          ),
+        ),
+      ),
+    );
     render();
   }
-  setAgent(name) { this.agent.value = name; }
+  setAgent(name) {
+    this.agent.value = name;
+  }
   async loadAgent() {
     try {
       const url = new URL(this.module.value, location.href);
-      if (url.origin !== location.origin || !url.pathname.endsWith(".js")) throw new Error("Use a trusted .js module served by this app.");
+      if (url.origin !== location.origin || !url.pathname.endsWith(".js"))
+        throw new Error("Use a trusted .js module served by this app.");
       const { default: definition } = await import(url.href);
-      registerAgent(definition); this.onAgent(definition.id, definition);
+      registerAgent(definition);
+      this.onAgent(definition.id, definition);
       this.refreshAgents();
-      this.agent.value = definition.id; this.agentStatus.textContent = `${definition.label} loaded. Set a destination and enable autopilot.`;
-    } catch (error) { this.agentStatus.textContent = error.message; }
+      this.agent.value = definition.id;
+      this.agentStatus.textContent = `${definition.label} loaded. Set a destination and enable autopilot.`;
+    } catch (error) {
+      this.agentStatus.textContent = error.message;
+    }
   }
   showPerception(data) {
     if (!data) return;
     this.sight.textContent = `${data.roadClosed ? `${data.roadClosed} · ` : ""}${data.officer ? `${data.officer} · ` : ""}${data.tailgater ? `${data.tailgater} · ` : ""}${data.runner ? `${data.runner} · ` : ""}${data.following ? `${data.following} · ` : ""}${data.emergency ? `${data.emergency} · ` : ""}${data.bus ? `${data.bus} · ` : ""}${data.crosswalk ? `${data.crosswalk} · ` : ""}${data.school ? `${data.school} · ` : ""}${data.streetcar ? `${data.streetcar} · ` : ""}${data.crossing ? `${data.crossing} · ` : ""}${data.box ? `${data.box} · ` : ""}${data.workZone ? `${data.workZone} · ` : ""}${data.closure ? `${data.closure} · ` : ""}${data.van ? `${data.van} · ` : ""}${data.calm ? `${data.calm} · ` : ""}${data.scramble ? `${data.scramble} · ` : ""}${data.plow ? `${data.plow} · ` : ""}${data.cyclist ? `${data.cyclist} · ` : ""}${data.guard ? `${data.guard} · ` : ""}${data.contraflow ? `${data.contraflow} · ` : ""}${data.reversing ? `${data.reversing} · ` : ""}${data.pothole ? `${data.pothole} · ` : ""}${data.puddle ? `${data.puddle} · ` : ""}${data.ball ? `${data.ball} · ` : ""}${data.geese ? `${data.geese} · ` : ""}${data.ice ? `${data.ice} · ` : ""}${data.snowbank ? `${data.snowbank} · ` : ""}${data.parker ? `${data.parker} · ` : ""}${data.blind ? `${data.blind} · ` : ""}${data.lane ? `${data.lane} · ` : ""}${data.roadside ? `${data.roadside} · ` : ""}${data.zone ? `${data.zone} · ` : ""}${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`;
-    this.rejections.replaceChildren(...data.rejected.slice(0, 4).map(c => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason))));
+    this.rejections.replaceChildren(
+      ...data.rejected
+        .slice(0, 4)
+        .map((c) => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason))),
+    );
   }
   update(recorder, now) {
-    this.recorder = recorder; this.replay.hidden = recorder.frames.length < 2;
+    this.recorder = recorder;
+    this.replay.hidden = recorder.frames.length < 2;
     if (this.reviewing && this.playing) {
-      const position = replayPosition(recorder.frames, Number(this.slider.value), this.replayElapsed + Math.max(0, now - this.lastTick) / 1000);
+      const position = replayPosition(
+        recorder.frames,
+        Number(this.slider.value),
+        this.replayElapsed + Math.max(0, now - this.lastTick) / 1000,
+      );
       if (position.index !== Number(this.slider.value)) this.seek(position.index);
-      this.replayElapsed = position.elapsed; this.replayAlpha = position.alpha;
-      if (position.ended) { this.playing = false; this.play.textContent = "Play replay"; }
+      this.replayElapsed = position.elapsed;
+      this.replayAlpha = position.alpha;
+      if (position.ended) {
+        this.playing = false;
+        this.play.textContent = "Play replay";
+      }
       this.lastTick = now;
     }
-    if (!this.reviewing) { this.slider.max = Math.max(0, recorder.frames.length - 1); this.slider.value = this.slider.max; }
+    if (!this.reviewing) {
+      this.slider.max = Math.max(0, recorder.frames.length - 1);
+      this.slider.value = this.slider.max;
+    }
   }
   togglePlayback() {
     if (!this.reviewing || !this.recorder?.frames.length) return;
     if (!this.playing && Number(this.slider.value) === this.recorder.frames.length - 1) this.seek(0);
-    this.playing = !this.playing; this.lastTick = performance.now();
+    this.playing = !this.playing;
+    this.lastTick = performance.now();
     this.play.textContent = this.playing ? "Pause replay" : "Play replay";
   }
   openReplay(index) {
-    if (!this.recorder?.frames.length || this.reviewing && index === undefined) return;
-    this.reviewing = true; this.controls.hidden = false;
-    this.playing = false; this.play.textContent = "Play replay";
+    if (!this.recorder?.frames.length || (this.reviewing && index === undefined)) return;
+    this.reviewing = true;
+    this.controls.hidden = false;
+    this.playing = false;
+    this.play.textContent = "Play replay";
     this.slider.max = this.recorder.frames.length - 1;
     this.seek(index === undefined ? Math.max(0, this.recorder.frames.length - 11) : index);
   }
   seek(index) {
-    this.replayElapsed = 0; this.replayAlpha = 0; this.lastTick = performance.now();
-    this.slider.value = index; this.onSeek(index);
+    this.replayElapsed = 0;
+    this.replayAlpha = 0;
+    this.lastTick = performance.now();
+    this.slider.value = index;
+    this.onSeek(index);
     const frame = this.recorder.frames[index];
-    this.branchCandidate.replaceChildren(...(frame?.state.pilot.lastDecision?.candidates || []).filter(c => c.eligible).map(c => h("option", { value: c.id },
-      `${c.steer || "Hold lane"} · ${Number.isFinite(c.law.vTarget) ? `${Math.round(c.law.vTarget * 3.6)} km/h` : c.speed || "stop"}`)));
+    this.branchCandidate.replaceChildren(
+      ...(frame?.state.pilot.lastDecision?.candidates || [])
+        .filter((c) => c.eligible)
+        .map((c) =>
+          h(
+            "option",
+            { value: c.id },
+            `${c.steer || "Hold lane"} · ${Number.isFinite(c.law.vTarget) ? `${Math.round(c.law.vTarget * 3.6)} km/h` : c.speed || "stop"}`,
+          ),
+        ),
+    );
     this.replayStatus.textContent = `${frame?.t.toFixed(1) || 0} s · recorded checkpoints every 0.5 s`;
   }
   previousIncident() {
     const t = this.recorder.frames[Number(this.slider.value)]?.t ?? Infinity;
-    const marker = [...this.recorder.markers].reverse().find(m => m.t < t);
+    const marker = [...this.recorder.markers].reverse().find((m) => m.t < t);
     const target = marker ? Math.max(this.recorder.frames[0].t, marker.t - 3) : this.recorder.frames[0].t;
-    this.seek(Math.max(0, this.recorder.frames.findLastIndex(f => f.t <= target)));
+    this.seek(
+      Math.max(
+        0,
+        this.recorder.frames.findLastIndex((f) => f.t <= target),
+      ),
+    );
   }
-  branch(driver) { if (this.onBranch(Number(this.slider.value), driver) !== false) this.endReview(); }
-  live() { this.onLive(); this.endReview(); }
-  endReview() { this.reviewing = false; this.playing = false; this.replayElapsed = 0; this.replayAlpha = 0; this.controls.hidden = true; this.play.textContent = "Play replay"; this.replayStatus.textContent = "Recording · last 120 seconds"; }
+  branch(driver) {
+    if (this.onBranch(Number(this.slider.value), driver) !== false) this.endReview();
+  }
+  live() {
+    this.onLive();
+    this.endReview();
+  }
+  endReview() {
+    this.reviewing = false;
+    this.playing = false;
+    this.replayElapsed = 0;
+    this.replayAlpha = 0;
+    this.controls.hidden = true;
+    this.play.textContent = "Play replay";
+    this.replayStatus.textContent = "Recording · last 120 seconds";
+  }
 }

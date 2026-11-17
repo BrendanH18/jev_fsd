@@ -1,4 +1,5 @@
 """Suggest three distinct, reachable routes from the car's actual position."""
+
 from __future__ import annotations
 
 import math
@@ -34,16 +35,38 @@ def suggested_drives(router, start: dict) -> list:
             continue
         controls = [router.edges[e].get("control", {}) for e in route["edges"]]
         turns = sum(t["dir"] in ("left", "right") for t in route["turns"])
-        routes.append({"route": route, "destination": route["polyline"][-1], "length_m": round(length),
-                       "signals": sum(c.get("type") == "signal" for c in controls),
-                       "stops": sum(c.get("type") == "stop" for c in controls), "turns": turns})
+        routes.append(
+            {
+                "route": route,
+                "destination": route["polyline"][-1],
+                "length_m": round(length),
+                "signals": sum(c.get("type") == "signal" for c in controls),
+                "stops": sum(c.get("type") == "stop" for c in controls),
+                "turns": turns,
+            }
+        )
     presets = (
-        ("neighbourhood", "Neighbourhood cruise", "Find your rhythm. Smooth braking and a generous following gap.", "Easy",
-         lambda r: abs(r["length_m"] - 500) + r["signals"] * 40 + r["turns"] * 15),
-        ("junctions", "City precision", "Read the junctions. Full stops, clean turns and patient yielding.", "Focused",
-         lambda r: abs(r["length_m"] - 850) - r["signals"] * 65 - r["stops"] * 35 - r["turns"] * 20),
-        ("tour", "The long way home", "Put it all together across a longer stretch of the neighbourhood.", "Extended",
-         lambda r: abs(r["length_m"] - 1300)),
+        (
+            "neighbourhood",
+            "Neighbourhood cruise",
+            "Find your rhythm. Smooth braking and a generous following gap.",
+            "Easy",
+            lambda r: abs(r["length_m"] - 500) + r["signals"] * 40 + r["turns"] * 15,
+        ),
+        (
+            "junctions",
+            "City precision",
+            "Read the junctions. Full stops, clean turns and patient yielding.",
+            "Focused",
+            lambda r: abs(r["length_m"] - 850) - r["signals"] * 65 - r["stops"] * 35 - r["turns"] * 20,
+        ),
+        (
+            "tour",
+            "The long way home",
+            "Put it all together across a longer stretch of the neighbourhood.",
+            "Extended",
+            lambda r: abs(r["length_m"] - 1300),
+        ),
     )
     picked = []
     for ident, title, description, difficulty, rank in presets:

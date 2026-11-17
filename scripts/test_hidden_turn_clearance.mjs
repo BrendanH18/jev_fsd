@@ -7,18 +7,35 @@ const { MapData } = await import("../static/js/map/mapdata.js");
 const { setupChallenge } = await import("../static/js/lab/evaluation.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
-const root = new URL("../data/maps/", import.meta.url), key = "623b012bc8b5";
+const root = new URL("../data/maps/", import.meta.url),
+  key = "623b012bc8b5";
 const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
-for (const name of ["transit", "crossings", "zones", "rail", "calming", "scrambles", "buslanes", "restrictions", "contraflow", "driveways", "parks", "bridges"]) {
-  const url = [2, 1].map(v => new URL(`${key}.${name}.v${v}.json`, root)).find(u => fs.existsSync(u));
+for (const name of [
+  "transit",
+  "crossings",
+  "zones",
+  "rail",
+  "calming",
+  "scrambles",
+  "buslanes",
+  "restrictions",
+  "contraflow",
+  "driveways",
+  "parks",
+  "bridges",
+]) {
+  const url = [2, 1].map((v) => new URL(`${key}.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
   if (url) pack[name] = JSON.parse(fs.readFileSync(url));
 }
-const map = new MapData(pack), lesson = CHALLENGES.find(c => c.id === "blind-left");
-const ctx = setupChallenge(map, lesson, { brain: "rules" }), { world, autopilot } = ctx;
-const control = world.route.controls.find(c => c.control.type === "signal");
+const map = new MapData(pack),
+  lesson = CHALLENGES.find((c) => c.id === "blind-left");
+const ctx = setupChallenge(map, lesson, { brain: "rules" }),
+  { world, autopilot } = ctx;
+const control = world.route.controls.find((c) => c.control.type === "signal");
 const edge = control.sJunction - map.crossingHalfWidth(control.edge);
 const front = world.ego.spec.length - world.ego.spec.rearOverhang;
-let stoppedHidden = false, deepest = -Infinity;
+let stoppedHidden = false,
+  deepest = -Infinity;
 for (let k = 0; k < 80 * 60 && autopilot.enabled; k++) {
   stepWorld(ctx, 1 / 60, world.t * 1000);
   if (autopilot.firing) await autopilot.firing;

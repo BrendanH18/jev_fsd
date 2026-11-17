@@ -21,19 +21,22 @@ import { STOP_ZONE_M } from "./signals.js";
 import { wrap } from "./world.js";
 
 export const TIE_S = 1.0;
-const PAST_M = 6;           // the stop zone reaches this far past the line, as in StopMemory
+const PAST_M = 6; // the stop zone reaches this far past the line, as in StopMemory
 const STOPPED_MPS = 0.2;
 const GOING_MPS = 0.3;
 const GONE_MPS = 0.5;
-const STALE_TICKS = 2;      // an entry not refreshed for this many ticks has left
-const CLEAR_M = 6;          // past the junction's centre, a vehicle that went has cleared it
-const CLEAR_PAST_M = 2;     // (at a dark signal, this far past the far side of the widest street)
-const GOING_MAX_S = 20;     // and one still going after this long has gone elsewhere
+const STALE_TICKS = 2; // an entry not refreshed for this many ticks has left
+const CLEAR_M = 6; // past the junction's centre, a vehicle that went has cleared it
+const CLEAR_PAST_M = 2; // (at a dark signal, this far past the far side of the widest street)
+const GOING_MAX_S = 20; // and one still going after this long has gone elsewhere
 
 const lefty = (turn) => turn === "left" || turn === "uturn";
 
 export class AllWayStops {
-  constructor(map) { this.map = map; this.entries = new Map(); }
+  constructor(map) {
+    this.map = map;
+    this.entries = new Map();
+  }
 
   // Each tick, for a vehicle whose next control is an all-way stop: the edge it is on, the turn it
   // makes at the junction, how far its front bumper is from the line and its speed. Returns the
@@ -43,8 +46,15 @@ export class AllWayStops {
     const junction = control.junction ?? this.map.stops.get(control.id)?.junction ?? this.map.edges.get(edgeId)?.to;
     let e = this.entries.get(vehicle);
     // one that went has the right of way until it clears the junction (see `at`)
-    if (e?.going) { if (!this.cleared(e, world)) return null; this.entries.delete(vehicle); e = null; }
-    if (e && (e.junction !== junction || e.edge !== edgeId)) { this.entries.delete(vehicle); e = null; }
+    if (e?.going) {
+      if (!this.cleared(e, world)) return null;
+      this.entries.delete(vehicle);
+      e = null;
+    }
+    if (e && (e.junction !== junction || e.edge !== edgeId)) {
+      this.entries.delete(vehicle);
+      e = null;
+    }
     if (bumperToLine > STOP_ZONE_M || bumperToLine < -PAST_M || (e && bumperToLine < 0 && v > GONE_MPS)) {
       if (!e) return null;
       const out = bumperToLine < 0 ? this.turnOf(e, world).wait_for : null;
@@ -53,7 +63,15 @@ export class AllWayStops {
     }
     if (!e) {
       if (Math.abs(v) >= STOPPED_MPS) return null;
-      e = { vehicle, junction, edge: edgeId, heading: this.map.headingIn(edgeId), arrived: world.t, going: false, lastB: bumperToLine };
+      e = {
+        vehicle,
+        junction,
+        edge: edgeId,
+        heading: this.map.headingIn(edgeId),
+        arrived: world.t,
+        going: false,
+        lastB: bumperToLine,
+      };
       this.entries.set(vehicle, e);
     }
     e.turn = turn;
@@ -61,11 +79,16 @@ export class AllWayStops {
     const crossed = e.lastB >= 0 && bumperToLine < 0;
     e.lastB = bumperToLine;
     const turnNow = this.turnOf(e, world);
-    if (v > GOING_MPS && turnNow.go) { e.going = true; e.since = world.t; }
+    if (v > GOING_MPS && turnNow.go) {
+      e.going = true;
+      e.since = world.t;
+    }
     return crossed && !turnNow.go ? turnNow.wait_for : null;
   }
 
-  forget(vehicle) { this.entries.delete(vehicle); }
+  forget(vehicle) {
+    this.entries.delete(vehicle);
+  }
 
   // The vehicles waiting at a junction, or going through it, without any that have left.
   at(junction, world) {
@@ -80,7 +103,8 @@ export class AllWayStops {
   cleared({ vehicle, junction, since }, world) {
     const node = this.map.nodes.get(junction) ?? this.map.intersections?.get(junction);
     if (!node || world.t - since > GOING_MAX_S) return true;
-    const dx = node.x - vehicle.x, dy = node.y - vehicle.y;
+    const dx = node.x - vehicle.x,
+      dy = node.y - vehicle.y;
     return Math.hypot(dx, dy) > this.clearM(junction) && dx * Math.cos(vehicle.psi) + dy * Math.sin(vehicle.psi) < 0;
   }
 
@@ -90,8 +114,17 @@ export class AllWayStops {
     if (!inter) return CLEAR_M;
     this.clears ||= new Map();
     if (!this.clears.has(junction)) {
-      const spread = Math.max(0, ...(inter.vertices || []).map((id) => { const n = this.map.nodes.get(id); return n ? Math.hypot(n.x - inter.x, n.y - inter.y) : 0; }));
-      this.clears.set(junction, Math.max(CLEAR_M, ...inter.approaches.map((a) => spread + this.map.crossingHalfWidth(a.edge) + CLEAR_PAST_M)));
+      const spread = Math.max(
+        0,
+        ...(inter.vertices || []).map((id) => {
+          const n = this.map.nodes.get(id);
+          return n ? Math.hypot(n.x - inter.x, n.y - inter.y) : 0;
+        }),
+      );
+      this.clears.set(
+        junction,
+        Math.max(CLEAR_M, ...inter.approaches.map((a) => spread + this.map.crossingHalfWidth(a.edge) + CLEAR_PAST_M)),
+      );
     }
     return this.clears.get(junction);
   }
@@ -100,8 +133,8 @@ export class AllWayStops {
   precedes(b, a) {
     if (a === b || a.going) return false;
     const rel = wrap(b.heading - a.heading);
-    if (Math.abs(rel) < Math.PI / 6) return false;              // the same approach: one behind the other
-    const opposite = Math.abs(rel) > Math.PI * 5 / 6;
+    if (Math.abs(rel) < Math.PI / 6) return false; // the same approach: one behind the other
+    const opposite = Math.abs(rel) > (Math.PI * 5) / 6;
     if (opposite && lefty(a.turn) === lefty(b.turn)) return false;
     if (b.going) return true;
     if (b.arrived < a.arrived - TIE_S) return true;
@@ -120,7 +153,9 @@ export class AllWayStops {
     if (!before.length) return { go: true, wait_for: null, before: [] };
     // everyone waiting for someone: the first to stop goes
     if (all.every((e) => all.some((b) => this.precedes(b, e)))) {
-      const first = all.reduce((x, y) => (y.arrived < x.arrived || (y.arrived === x.arrived && String(y.vehicle.id) < String(x.vehicle.id)) ? y : x));
+      const first = all.reduce((x, y) =>
+        y.arrived < x.arrived || (y.arrived === x.arrived && String(y.vehicle.id) < String(x.vehicle.id)) ? y : x,
+      );
       if (first === entry) return { go: true, wait_for: null, before: [] };
     }
     return { go: false, wait_for: before[0].vehicle, before: before.map((b) => b.vehicle) };

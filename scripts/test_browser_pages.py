@@ -5,6 +5,7 @@ Runs the /tests page (simulation, HUD and explorer assertions), the WebGL render
 the simulator page, and a layout check that the pilot controls fit the HUD panel. Requires
 Playwright and its Chromium browser (or --chromium /path/to/chromium).
 """
+
 import argparse
 import sys
 
@@ -157,8 +158,11 @@ def report(label, results):
 def check(url, chromium=None):
     ok = True
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, executable_path=chromium,
-                                    args=["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path=chromium,
+            args=["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+        )
         # The app's CSP forbids eval, which Playwright's wait/evaluate helpers rely on.
         page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
         errors = []
@@ -176,13 +180,31 @@ def check(url, chromium=None):
         ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
         page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
 
-        for kind in ["early", "arrived", "rules", "modified", "branched", "parked", "wide-kerb", "outside-space", "simulation-error", "resume"]:
+        for kind in [
+            "early",
+            "arrived",
+            "rules",
+            "modified",
+            "branched",
+            "parked",
+            "wide-kerb",
+            "outside-space",
+            "simulation-error",
+            "resume",
+        ]:
             page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
             page.on("pageerror", lambda error: errors.append(str(error)))
             driver = "rules" if kind == "rules" else "manual"
-            challenge = "parallel-park" if kind in ["parked", "wide-kerb", "outside-space", "simulation-error"] else "pothole-season"
-            page.goto(url.rstrip("/") + f"/?challenge={challenge}&drive={driver}&quality=low",
-                      wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+            challenge = (
+                "parallel-park"
+                if kind in ["parked", "wide-kerb", "outside-space", "simulation-error"]
+                else "pothole-season"
+            )
+            page.goto(
+                url.rstrip("/") + f"/?challenge={challenge}&drive={driver}&quality=low",
+                wait_until="domcontentloaded",
+                timeout=TIMEOUT_MS,
+            )
             page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
             page.evaluate("window.__jev.world.paused = true")
             ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
@@ -190,16 +212,22 @@ def check(url, chromium=None):
 
         page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.goto(url.rstrip("/") + "/?challenge=pothole-season&drive=manual&quality=low",
-                  wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+        page.goto(
+            url.rstrip("/") + "/?challenge=pothole-season&drive=manual&quality=low",
+            wait_until="domcontentloaded",
+            timeout=TIMEOUT_MS,
+        )
         page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
         ok &= report("debrief replay integration", page.evaluate(DEBRIEF_REPLAY))
         page.close()
 
         page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.goto(url.rstrip("/") + "/?challenge=door-zone&drive=rules&quality=low",
-                  wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+        page.goto(
+            url.rstrip("/") + "/?challenge=door-zone&drive=rules&quality=low",
+            wait_until="domcontentloaded",
+            timeout=TIMEOUT_MS,
+        )
         page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
         page.evaluate("""() => {
           const app = window.__jev, render = app.view.render.bind(app.view);
@@ -211,7 +239,9 @@ def check(url, chromium=None):
         # Let the actual animation loop encounter the throw, and prove it keeps rendering afterwards.
         page.wait_for_selector("#simulation-error", timeout=TIMEOUT_MS)
         page.wait_for_function("window.__containedRenders >= 3", timeout=TIMEOUT_MS)
-        ok &= report("simulation error containment", page.evaluate("""() => {
+        ok &= report(
+            "simulation error containment",
+            page.evaluate("""() => {
           const app = window.__jev, tick = app.world.tick;
           document.querySelector('#pause-world').click();
           document.querySelector('#autopilot').click();
@@ -223,15 +253,19 @@ def check(url, chromium=None):
               && document.querySelector('#simulation-error').textContent.includes(app.simulationError)
               && !document.querySelector('#settings').hidden,
             detail: JSON.stringify({ tick, after: app.world.tick, paused: app.world.paused, error: app.simulationError }) }];
-        }"""))
+        }"""),
+        )
         page.get_by_role("button", name="Restart drive", exact=True).click(timeout=TIMEOUT_MS)
         page.wait_for_function("!!window.__jev?.advance && !window.__jev.simulationError", timeout=TIMEOUT_MS)
-        ok &= report("simulation error restart", page.evaluate("""() => {
+        ok &= report(
+            "simulation error restart",
+            page.evaluate("""() => {
           const app = window.__jev, tick = app.world.tick;
           app.world.paused = false; app.advance(0.1);
           return [{ name: 'Restart replaces the broken world with a drive that steps again',
             ok: app.world.tick > tick && !app.simulationError && !document.querySelector('#simulation-error') }];
-        }"""))
+        }"""),
+        )
         page.close()
 
         if errors:

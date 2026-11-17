@@ -8,12 +8,15 @@ import { stepTurnaround } from "./turnaround.js";
 import { stepParking } from "./parallel-park.js";
 import { slowCap } from "./potholes.js";
 
-export function lookahead(v) { return clamp(0.8 * Math.abs(v), 4, 15); }
+export function lookahead(v) {
+  return clamp(0.8 * Math.abs(v), 4, 15);
+}
 
 // steer command to reach the route point `Ld` ahead, shifted `offset` meters to the right
 export function purePursuit(vehicle, route, s, offset = 0, Ld = lookahead(vehicle.v)) {
   const target = route.offsetPointAt(Math.min(s + Ld, route.length), offset);
-  const dx = target[0] - vehicle.x, dy = target[1] - vehicle.y;
+  const dx = target[0] - vehicle.x,
+    dy = target[1] - vehicle.y;
   const alpha = Math.atan2(dy, dx) - vehicle.psi;
   const dist = Math.max(1, Math.hypot(dx, dy));
   return Math.atan2(2 * (vehicle.spec || CAR).wheelbase * Math.sin(alpha), dist);
@@ -21,7 +24,8 @@ export function purePursuit(vehicle, route, s, offset = 0, Ld = lookahead(vehicl
 
 // steer toward an arbitrary point (used for recovery when off the route)
 export function steerToward(vehicle, point) {
-  const dx = point[0] - vehicle.x, dy = point[1] - vehicle.y;
+  const dx = point[0] - vehicle.x,
+    dy = point[1] - vehicle.y;
   let alpha = Math.atan2(dy, dx) - vehicle.psi;
   while (alpha > Math.PI) alpha -= 2 * Math.PI;
   while (alpha <= -Math.PI) alpha += 2 * Math.PI;
@@ -63,7 +67,12 @@ export function lateralAt(law, s, route = null) {
 export function detourAt(detour, s) {
   if (!detour || s <= detour.from || s >= detour.to) return 0;
   const ease = (u) => u * u * (3 - 2 * u);
-  const u = s < detour.full ? ease((s - detour.from) / (detour.full - detour.from)) : s > detour.back ? ease((detour.to - s) / (detour.to - detour.back)) : 1;
+  const u =
+    s < detour.full
+      ? ease((s - detour.from) / (detour.full - detour.from))
+      : s > detour.back
+        ? ease((detour.to - s) / (detour.to - detour.back))
+        : 1;
   return detour.shift * u;
 }
 
@@ -75,7 +84,9 @@ export function laneCenterAt(law, s, route = null) {
 
 // Distance over which a lane change completes: about 3.5 s of travel, at least 18 m and at most 50 m,
 // which keeps lateral acceleration under about 1.6 m/s^2 for a 3.3 m lane.
-export function laneChangeLength(v) { return clamp(3.5 * Math.abs(v), 18, 50); }
+export function laneChangeLength(v) {
+  return clamp(3.5 * Math.abs(v), 18, 50);
+}
 
 const CURVE_HORIZON_M = 60;
 
@@ -111,31 +122,57 @@ export function applyLaw(vehicle, law, route, s, dt, world = null) {
   switch (law.kind) {
     case "hard_brake":
       // (reversing, the brakes push forward)
-      return vehicle.step(dt, { steer: route ? purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)) : vehicle.delta, accel: (vehicle.v < 0 ? 1 : -1) * comfort().hardDecel });
+      return vehicle.step(dt, {
+        steer: route ? purePursuit(vehicle, route, s, lateralAt(law, s + lookahead(vehicle.v), route)) : vehicle.delta,
+        accel: (vehicle.v < 0 ? 1 : -1) * comfort().hardDecel,
+      });
     case "reverse": {
       const steer = law.target ? -steerToward(vehicle, law.target) : 0;
-      return vehicle.step(dt, { steer, accel: speedControl(vehicle.v, -2, { maxAccel: 2, maxBrake: 4 }), reverse: true });
+      return vehicle.step(dt, {
+        steer,
+        accel: speedControl(vehicle.v, -2, { maxAccel: 2, maxBrake: 4 }),
+        reverse: true,
+      });
     }
     case "steer":
       return vehicle.step(dt, { steer: law.steer, accel: speedControl(vehicle.v, law.vTarget) });
+    // biome-ignore lint/suspicious/noFallthroughSwitchClause: falls through to the lane law on purpose
     case "park":
       if (world && stepParking(vehicle, law, world, dt, speedControl)) return;
-      // falls through: once out of the space, it follows the lane like any lane law
+    // falls through: once out of the space, it follows the lane like any lane law
+    // biome-ignore lint/suspicious/noFallthroughSwitchClause: falls through to the lane law on purpose
     case "turnaround":
-      if (law.kind === "turnaround" && world && route && stepTurnaround(vehicle, law, route, world, dt, purePursuit, speedControl)) return;
-      // falls through: once round, it follows the lane like any lane law
+      if (
+        law.kind === "turnaround" &&
+        world &&
+        route &&
+        stepTurnaround(vehicle, law, route, world, dt, purePursuit, speedControl)
+      )
+        return;
+    // falls through: once round, it follows the lane like any lane law
     case "lane":
     default: {
       const stopAt = law.stopAt;
       let vTarget = Math.min(law.vTarget, curveProfileSpeed(route, s).v);
-      if (stopAt !== undefined && stopAt !== null) vTarget = Math.min(vTarget, stopSpeedFor(stopAt - (s - (law.s0 ?? s)) - Math.max(0, vehicle.v) * (law.stopReaction || 0), law.stopDecel ? Math.min(law.stopDecel, law.stopFirm ? comfort().hardDecel : comfort().decel) : undefined));
+      if (stopAt !== undefined && stopAt !== null)
+        vTarget = Math.min(
+          vTarget,
+          stopSpeedFor(
+            stopAt - (s - (law.s0 ?? s)) - Math.max(0, vehicle.v) * (law.stopReaction || 0),
+            law.stopDecel ? Math.min(law.stopDecel, law.stopFirm ? comfort().hardDecel : comfort().decel) : undefined,
+          ),
+        );
       // (down to the speed to drive over each pothole its wheels cross, by then, and no faster until its
       // rear wheels are over: sim/potholes.js; route arc lengths)
       if (law.slowTo) for (const slow of law.slowTo) vTarget = Math.min(vTarget, slowCap(slow, s));
       // A short pull-over must finish steering within the room before its stop,
       // rather than aiming four metres ahead beyond the control line.
-      const Ld = law.steerAtStop && stopAt != null ? Math.max(1, Math.min(lookahead(vehicle.v), (stopAt - (s - (law.s0 ?? s))) / 2)) : lookahead(vehicle.v);
-      const steer = purePursuit(vehicle, route, s, lateralAt(law, s + Ld, route), Ld), accel = speedControl(vehicle.v, vTarget);
+      const Ld =
+        law.steerAtStop && stopAt != null
+          ? Math.max(1, Math.min(lookahead(vehicle.v), (stopAt - (s - (law.s0 ?? s))) / 2))
+          : lookahead(vehicle.v);
+      const steer = purePursuit(vehicle, route, s, lateralAt(law, s + Ld, route), Ld),
+        accel = speedControl(vehicle.v, vTarget);
       // (on black ice it has seen, the driver only eases the pedals and the wheel: sim/black-ice.js)
       if (law.ice && ROAD.gripAt) return vehicle.step(dt, gentleOnIce(vehicle, steer, accel, dt));
       return vehicle.step(dt, { steer, accel });

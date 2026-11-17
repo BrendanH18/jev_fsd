@@ -18,8 +18,19 @@ PROJ = Projection(ORIGIN["lat"], ORIGIN["lon"])
 
 def street(eid="e0", frm="n1", to="n2", pts=((0, 0), (200, 0)), **extra):
     length = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
-    return {"id": eid, "from": frm, "to": to, "pts": [list(p) for p in pts], "length": length, "lanes": 1, "lane_width": 3.3,
-            "oneway": False, "name": "Test Street", "asphalt": [-5.5, 5.5], **extra}
+    return {
+        "id": eid,
+        "from": frm,
+        "to": to,
+        "pts": [list(p) for p in pts],
+        "length": length,
+        "lanes": 1,
+        "lane_width": 3.3,
+        "oneway": False,
+        "name": "Test Street",
+        "asphalt": [-5.5, 5.5],
+        **extra,
+    }
 
 
 def box(x0, y0, x1, y1):
@@ -32,7 +43,7 @@ def osm_with(*ways):
     osm, nid = OsmData(), 100
     for wid, (pts, tags) in enumerate(ways, start=1):
         ids = []
-        for x, y in (pts[:-1] if pts[0] == pts[-1] else pts):
+        for x, y in pts[:-1] if pts[0] == pts[-1] else pts:
             lat, lon = PROJ.to_latlon(x, y)
             osm.add_node(nid, lat, lon)
             ids.append(nid)
@@ -90,8 +101,8 @@ class SpanTests(unittest.TestCase):
         self.assertEqual((by_edge["e0"]["left"], by_edge["e0"]["right"]), (None, "w1"))
         self.assertEqual((by_edge["e1"]["left"], by_edge["e1"]["right"]), ("w1", None))
         # (the span runs as far as the park is within reach of the centreline)
-        self.assertLess(abs(by_edge["e0"]["from"] - 40 + math.sqrt(25 ** 2 - 12 ** 2)), 3)
-        self.assertLess(abs(by_edge["e0"]["to"] - 160 - math.sqrt(25 ** 2 - 12 ** 2)), 3)
+        self.assertLess(abs(by_edge["e0"]["from"] - 40 + math.sqrt(25**2 - 12**2)), 3)
+        self.assertLess(abs(by_edge["e0"]["to"] - 160 - math.sqrt(25**2 - 12**2)), 3)
         self.assertFalse(by_edge["e0"]["water"])
 
     def test_between_a_park_and_water(self):
@@ -162,7 +173,9 @@ class LayerTests(unittest.TestCase):
         ottawa = load_parks(PRESET_BBOXES["ottawa"], MAPS_DIR)
         names = {a["id"]: a["name"] for a in ottawa["areas"]}
         clemow = [s for s in ottawa["spans"] if s["name"] == "Clemow Avenue" and s["left"] and s["right"]]
-        self.assertTrue(any({names[s["left"]], names[s["right"]]} == {"Central Park", "Patterson's Creek Park"} for s in clemow))
+        self.assertTrue(
+            any({names[s["left"]], names[s["right"]]} == {"Central Park", "Patterson's Creek Park"} for s in clemow)
+        )
         self.assertTrue(any(s["water"] for s in load_parks(PRESET_BBOXES["saskatoon"], MAPS_DIR)["spans"]))
 
 

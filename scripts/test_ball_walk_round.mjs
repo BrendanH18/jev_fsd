@@ -23,9 +23,14 @@ const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challen
 
 const root = new URL("../data/maps/", import.meta.url);
 const KITS = new MapData(JSON.parse(fs.readFileSync(new URL("623b012bc8b5.v6.pack.json", root))));
-const scenario = challengeScenario(KITS, CHALLENGES.find((c) => c.id === "chasing-the-ball"));
-const E = KITS.edges.get(scenario.ball.edge), AT = scenario.ball.at;
-const lane = KITS.lane(E.id, E.lanes - 1), k = lane.length / E.length;
+const scenario = challengeScenario(
+  KITS,
+  CHALLENGES.find((c) => c.id === "chasing-the-ball"),
+);
+const E = KITS.edges.get(scenario.ball.edge),
+  AT = scenario.ball.at;
+const lane = KITS.lane(E.id, E.lanes - 1),
+  k = lane.length / E.length;
 
 // `across`: where the driven car's body centre stands, along the street from the gap (metres), once the
 // child has the ball; null leaves it well back.
@@ -33,16 +38,35 @@ function run(across) {
   setWeather("dry");
   const world = new World(KITS, { seed: 3, parked: 0, pedestrians: 0, balls: true });
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 5 });
-  world.parked.nextDoor = 1e9; fleet.nextPark = 1e9; fleet.nextPull = 1e9; world.balls.target = 0;
+  world.parked.nextDoor = 1e9;
+  fleet.nextPark = 1e9;
+  fleet.nextPull = 1e9;
+  world.balls.target = 0;
   const ctx = { world, fleet, autopilot: { enabled: false, step() {} } };
   world.placeOnLane(lane, (AT - 140) * k);
   const lat = curbOffset(E, CAR);
   for (const rear of [AT + 1.1, AT + 6.9, AT + 12.7, AT - 5.5, AT - 11.3, AT - 17.1, AT - 22.9]) {
-    const s = rear + CAR.rearOverhang, p = pointAt(E.pts, E.cum, s), h = headingAt(E.pts, E.cum, s);
-    world.parked.add(Object.assign(new Vehicle(p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, h, 0), { id: `kerb_${rear}`, curb: "right", edge: E.id, stay: true }));
+    const s = rear + CAR.rearOverhang,
+      p = pointAt(E.pts, E.cum, s),
+      h = headingAt(E.pts, E.cum, s);
+    world.parked.add(
+      Object.assign(new Vehicle(p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, h, 0), {
+        id: `kerb_${rear}`,
+        curb: "right",
+        edge: E.id,
+        stay: true,
+      }),
+    );
   }
-  const b = world.balls.place({ edge: E.id, s: AT, lat: lat - CAR.width / 2 + 0.6, side: 1 }, { speed: 4.4, drift: 0, delay: 1.2, childSpeed: 2.5 });
-  let placed = null, crossed = false, home = null, touched = false, blocked = false;
+  const b = world.balls.place(
+    { edge: E.id, s: AT, lat: lat - CAR.width / 2 + 0.6, side: 1 },
+    { speed: 4.4, drift: 0, delay: 1.2, childSpeed: 2.5 },
+  );
+  let placed = null,
+    crossed = false,
+    home = null,
+    touched = false,
+    blocked = false;
   for (let i = 0; i < 60 * 60 && home === null; i++) {
     stepWorld(ctx, 1 / 60, world.t * 1000);
     if (b.phase === "carried" && placed === null && b.child?.pause > 0) {
@@ -77,5 +101,7 @@ assert.ok(stood.home !== null, "the child still gets home");
 assert.ok(stood.rounds >= 1, "round the car");
 assert.equal(stood.touched, false, "never walking into it");
 assert.equal(stood.collisions, 0);
-console.log(`A child walks round a car standing across their way back (home ${(stood.home - stood.placed).toFixed(1)} s after picking the ball up, ${(free.home - free.placed).toFixed(1)} s with the way clear)`);
+console.log(
+  `A child walks round a car standing across their way back (home ${(stood.home - stood.placed).toFixed(1)} s after picking the ball up, ${(free.home - free.placed).toFixed(1)} s with the way clear)`,
+);
 process.exit(0);

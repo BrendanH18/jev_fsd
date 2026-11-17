@@ -2,40 +2,70 @@
 // gamepad (ui/gamepad.js) and the touch controls (ui/touch.js). The keys give 1 or 0; a source gives
 // any amount between, and World.stepManual takes either.
 
-const editing = target => target?.isContentEditable || target?.closest?.("input, textarea, select, [role='textbox']");
-const control = target => target?.closest?.("button, a, [role='button'], [role='radio'], [role='switch']");
+const editing = (target) => target?.isContentEditable || target?.closest?.("input, textarea, select, [role='textbox']");
+const control = (target) => target?.closest?.("button, a, [role='button'], [role='radio'], [role='switch']");
 
 export class Input {
   constructor(actions = {}) {
     this.keys = new Set();
     this.actions = actions;
     this.manualActive = false;
-    this.sources = [];                  // analog sources, each with a `state` (see poll)
+    this.sources = []; // analog sources, each with a `state` (see poll)
     this.analog = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
     window.addEventListener("keydown", (ev) => {
-      if (document.querySelector("dialog[open]") || editing(ev.target)) { this.keys.clear(); return; }
+      if (document.querySelector("dialog[open]") || editing(ev.target)) {
+        this.keys.clear();
+        return;
+      }
       const k = ev.key.toLowerCase();
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-      if (control(ev.target) && ["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
+      if (
+        control(ev.target) &&
+        ["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)
+      )
+        return;
       if (["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
         ev.preventDefault();
         this.keys.add(k);
         return;
       }
-      const map = { j: "autopilot", c: "camera", r: "reset", p: "pause", q: "signalLeft", e: "signalRight", h: "horn", "1": "brain1", "2": "brain2", "3": "brain3", o: "photo", "?": "help", "/": "help", escape: "escape" };
+      const map = {
+        j: "autopilot",
+        c: "camera",
+        r: "reset",
+        p: "pause",
+        q: "signalLeft",
+        e: "signalRight",
+        h: "horn",
+        1: "brain1",
+        2: "brain2",
+        3: "brain3",
+        o: "photo",
+        "?": "help",
+        "/": "help",
+        escape: "escape",
+      };
       if (ev.repeat && map[k]) return;
-      if (map[k] && this.actions[map[k]]) { ev.preventDefault(); this.actions[map[k]](); }
+      if (map[k] && this.actions[map[k]]) {
+        ev.preventDefault();
+        this.actions[map[k]]();
+      }
     });
     window.addEventListener("keyup", (ev) => this.keys.delete(ev.key.toLowerCase()));
     window.addEventListener("blur", () => this.keys.clear());
-    document.addEventListener("visibilitychange", () => { if (document.hidden) this.keys.clear(); });
-    document.addEventListener("focusin", ev => {
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this.keys.clear();
+    });
+    document.addEventListener("focusin", (ev) => {
       if (document.querySelector("dialog[open]") || editing(ev.target) || control(ev.target)) this.keys.clear();
     });
   }
   // Adds an analog source: anything with a `state` of { steer -1..1 (right positive), throttle and
   // brake 0..1, hardBrake }, and an optional poll() run once a frame.
-  addSource(source) { this.sources.push(source); return source; }
+  addSource(source) {
+    this.sources.push(source);
+    return source;
+  }
   // Reads the analog sources once a frame (main.js, before the physics steps). Nothing drives while
   // a dialog is open, as with the keys.
   poll() {
@@ -53,10 +83,22 @@ export class Input {
     this.analog = sum;
     return sum;
   }
-  get throttle() { return Math.max(Number(this.keys.has("w") || this.keys.has("arrowup")), this.analog.throttle); }
-  get brake() { return Math.max(Number(this.keys.has("s") || this.keys.has("arrowdown")), this.analog.brake); }
-  get left() { return Math.max(Number(this.keys.has("a") || this.keys.has("arrowleft")), -this.analog.steer); }
-  get right() { return Math.max(Number(this.keys.has("d") || this.keys.has("arrowright")), this.analog.steer); }
-  get hardBrake() { return this.keys.has(" ") || this.analog.hardBrake; }
-  get anyDriving() { return !!(this.throttle || this.brake || this.left || this.right || this.hardBrake); }
+  get throttle() {
+    return Math.max(Number(this.keys.has("w") || this.keys.has("arrowup")), this.analog.throttle);
+  }
+  get brake() {
+    return Math.max(Number(this.keys.has("s") || this.keys.has("arrowdown")), this.analog.brake);
+  }
+  get left() {
+    return Math.max(Number(this.keys.has("a") || this.keys.has("arrowleft")), -this.analog.steer);
+  }
+  get right() {
+    return Math.max(Number(this.keys.has("d") || this.keys.has("arrowright")), this.analog.steer);
+  }
+  get hardBrake() {
+    return this.keys.has(" ") || this.analog.hardBrake;
+  }
+  get anyDriving() {
+    return !!(this.throttle || this.brake || this.left || this.right || this.hardBrake);
+  }
 }

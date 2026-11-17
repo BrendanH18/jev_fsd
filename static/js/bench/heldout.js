@@ -17,11 +17,14 @@ export const HELDOUT_DEFAULT = { seeds: [101], count: 2 };
 export const heldoutPlan = (mapId) => HELDOUT[mapId] || HELDOUT_DEFAULT;
 
 // Seeds that must never be used to tune: every held-out seed of every map.
-export const HELDOUT_SEEDS = [...new Set([...Object.values(HELDOUT), HELDOUT_DEFAULT].flatMap((p) => p.seeds))].sort((a, b) => a - b);
+export const HELDOUT_SEEDS = [...new Set([...Object.values(HELDOUT), HELDOUT_DEFAULT].flatMap((p) => p.seeds))].sort(
+  (a, b) => a - b,
+);
 
 // The held-out suite for a map: each held-out seed's routes, in seed order.
 export async function buildHeldoutSuite(map, mapId, options = {}) {
-  const plan = heldoutPlan(mapId), suite = [];
-  for (const seed of plan.seeds) suite.push(...await buildSuite(map, { ...options, count: plan.count, seed }));
+  const plan = heldoutPlan(mapId),
+    suite = [];
+  for (const seed of plan.seeds) suite.push(...(await buildSuite(map, { ...options, count: plan.count, seed })));
   return suite;
 }

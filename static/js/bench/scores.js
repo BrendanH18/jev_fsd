@@ -73,23 +73,49 @@ function rawScores(r) {
   const time = num(r.time_s) ?? 0;
   const lost = Math.max(0, time - ideal);
   const pace = time > 0 ? 100 * Math.min(1, ideal / time) : 0;
-  const comfort = comfortScore(r), margin = marginScore(r);
-  return { progress, length_m: length, time_lost_s: lost, pace, comfort, margin, score: (progress * (pace + comfort + margin)) / 3 };
+  const comfort = comfortScore(r),
+    margin = marginScore(r);
+  return {
+    progress,
+    length_m: length,
+    time_lost_s: lost,
+    pace,
+    comfort,
+    margin,
+    score: (progress * (pace + comfort + margin)) / 3,
+  };
 }
 
 export function driveScores(r) {
   const s = rawScores(r);
-  return { progress: round(s.progress, 3), pace: round(s.pace), comfort: round(s.comfort), margin: round(s.margin), score: round(s.score),
-    time_lost_s: round(s.time_lost_s), time_lost_s_per_km: s.length_m > 0 ? round(s.time_lost_s / (s.length_m / 1000)) : null };
+  return {
+    progress: round(s.progress, 3),
+    pace: round(s.pace),
+    comfort: round(s.comfort),
+    margin: round(s.margin),
+    score: round(s.score),
+    time_lost_s: round(s.time_lost_s),
+    time_lost_s_per_km: s.length_m > 0 ? round(s.time_lost_s / (s.length_m / 1000)) : null,
+  };
 }
 
 export function driverScores(results) {
   const raw = results.map(rawScores);
   const mean = (k, d = 1) => (raw.length ? round(raw.reduce((a, s) => a + s[k], 0) / raw.length, d) : null);
-  const lost = raw.reduce((a, s) => a + s.time_lost_s, 0), km = raw.reduce((a, s) => a + s.length_m, 0) / 1000;
-  return { drives: results.length, passed: results.filter((r) => r.pass).length,
-    progress: mean("progress", 3), pace: mean("pace"), comfort: mean("comfort"), margin: mean("margin"), score: mean("score"),
-    time_lost_s: round(lost), time_lost_s_per_km: km > 0 ? round(lost / km) : null, km: round(km, 2) };
+  const lost = raw.reduce((a, s) => a + s.time_lost_s, 0),
+    km = raw.reduce((a, s) => a + s.length_m, 0) / 1000;
+  return {
+    drives: results.length,
+    passed: results.filter((r) => r.pass).length,
+    progress: mean("progress", 3),
+    pace: mean("pace"),
+    comfort: mean("comfort"),
+    margin: mean("margin"),
+    score: mean("score"),
+    time_lost_s: round(lost),
+    time_lost_s_per_km: km > 0 ? round(lost / km) : null,
+    km: round(km, 2),
+  };
 }
 
 const driveId = (r) => r.id ?? r.challenge;
@@ -97,11 +123,17 @@ const driveId = (r) => r.id ?? r.challenge;
 // entries: [{ driver, results }]. Ranks the drivers on the drives they all have (by `id`, or
 // `challenge` for arena results); returns those ids and, best first, each driver's scores and rank.
 export function rankDrivers(entries, { key = driveId } = {}) {
-  const ids = entries.length ? entries.map((e) => new Set(e.results.map(key))).reduce((a, b) => new Set([...a].filter((id) => b.has(id)))) : new Set();
+  const ids = entries.length
+    ? entries.map((e) => new Set(e.results.map(key))).reduce((a, b) => new Set([...a].filter((id) => b.has(id))))
+    : new Set();
   const matched = [...ids].sort();
-  const ranking = entries.map((e) => ({ driver: e.driver, ...driverScores(matched.map((id) => e.results.find((r) => key(r) === id))) }))
+  const ranking = entries
+    .map((e) => ({ driver: e.driver, ...driverScores(matched.map((id) => e.results.find((r) => key(r) === id))) }))
     .sort((a, b) => b.passed - a.passed || b.score - a.score || String(a.driver).localeCompare(String(b.driver)));
-  ranking.forEach((r, i) => { r.rank = i > 0 && ranking[i - 1].passed === r.passed && ranking[i - 1].score === r.score ? ranking[i - 1].rank : i + 1; });
+  ranking.forEach((r, i) => {
+    r.rank =
+      i > 0 && ranking[i - 1].passed === r.passed && ranking[i - 1].score === r.score ? ranking[i - 1].rank : i + 1;
+  });
   return { matched, ranking };
 }
 

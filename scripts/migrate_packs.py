@@ -27,7 +27,7 @@ from jev.osm.graph import asphalt_span  # noqa: E402
 from jev.osm.pack import PACK_VERSION  # noqa: E402
 
 FROM_VERSION = "5"
-MATCH_M = 0.015   # a stored line within rounding of the setback formula was placed by it
+MATCH_M = 0.015  # a stored line within rounding of the setback formula was placed by it
 
 
 def crossing_half_widths(pack: dict) -> dict:
@@ -70,7 +70,7 @@ def migrate(pack: dict) -> dict:
     def move(edge_id: str, s_line: float, clearance: float, kind: str) -> float:
         e = edges[edge_id]
         if abs(s_line - line_s(e["length"], before[edge_id], clearance)) > MATCH_M:
-            return s_line   # placed at the stop sign's own node, not by the crossing road
+            return s_line  # placed at the stop sign's own node, not by the crossing road
         new = line_s(e["length"], after[edge_id], clearance)
         if new != s_line:
             moved[kind] += 1

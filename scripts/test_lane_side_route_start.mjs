@@ -17,10 +17,43 @@ const { sampleCandidates, simulateAll } = await import("../static/js/brain/candi
 
 // A one-way street with two lanes, east from x = 0; the route keeps to the right lane (y = -1.75).
 const offsets = [-1.75, 1.75];
-const main = { id: "main", from: "a", to: "b", pts: [[0, 0], [300, 0]], length: 300, cls: "secondary", lanes: 2, oneway: true,
-  lane_offsets: offsets, lane_width: 3.5, asphalt: [-3.5, 3.5], parking: [0, 0], limit: 13.9 };
-const map = new MapData({ extent: [-10, -20, 310, 20], nodes: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 300, y: 0 }],
-  edges: [main], lanes: offsets.map((o, k) => ({ edge: "main", idx: k, pts: [[0, -o], [300, -o]] })), intersections: [], stops: [], buildings: [] });
+const main = {
+  id: "main",
+  from: "a",
+  to: "b",
+  pts: [
+    [0, 0],
+    [300, 0],
+  ],
+  length: 300,
+  cls: "secondary",
+  lanes: 2,
+  oneway: true,
+  lane_offsets: offsets,
+  lane_width: 3.5,
+  asphalt: [-3.5, 3.5],
+  parking: [0, 0],
+  limit: 13.9,
+};
+const map = new MapData({
+  extent: [-10, -20, 310, 20],
+  nodes: [
+    { id: "a", x: 0, y: 0 },
+    { id: "b", x: 300, y: 0 },
+  ],
+  edges: [main],
+  lanes: offsets.map((o, k) => ({
+    edge: "main",
+    idx: k,
+    pts: [
+      [0, -o],
+      [300, -o],
+    ],
+  })),
+  intersections: [],
+  stops: [],
+  buildings: [],
+});
 
 // The car stands in the left lane at x = 100, where its route starts, with a car stopped `back` metres
 // behind it (from rear axle to rear axle) in the right lane.
@@ -45,7 +78,10 @@ function start(back) {
   assert.ok(right.rear.gap_m > 40, `${right.rear.gap_m.toFixed(1)} m back`);
   assert.equal(right.gap_ok, true, "the change into the route's lane is clear");
   const ids = simulateAll(sampleCandidates(snap, world), snap, world).eligible.map((c) => c.id);
-  assert.ok(ids.some((id) => id.startsWith("change_right")), `the change right is eligible (${ids.join(", ")})`);
+  assert.ok(
+    ids.some((id) => id.startsWith("change_right")),
+    `the change right is eligible (${ids.join(", ")})`,
+  );
 }
 {
   const { right } = start(1);

@@ -57,15 +57,15 @@ export const AHEAD_M = [50, 110];
 export const TRIGGER_M = [26, 42];
 const RETRY_S = 5;
 const GIVE_UP_S = 60;
-const GAP_M = [0.9, 3.5];             // the gap between two parked cars it rolls out of
-const HIDE_IN_M = 0.6;                // the ball, and the child, start this far in from the cars' traffic side
-const ROW_M = 6;                      // a parked car this far from the car's side, either side of the street
+const GAP_M = [0.9, 3.5]; // the gap between two parked cars it rolls out of
+const HIDE_IN_M = 0.6; // the ball, and the child, start this far in from the cars' traffic side
+const ROW_M = 6; // a parked car this far from the car's side, either side of the street
 const RESIDENTIAL = new Set(["residential", "living_street"]);
 // The ball: how fast it comes out, how fast rolling resistance slows it, how much speed a bounce keeps.
 export const BALL_MPS = [3.0, 4.5];
 export const ROLL_DECEL = 0.35;
 export const RESTITUTION = 0.45;
-const DRIFT_MPS = 0.5;                // along the street, either way
+const DRIFT_MPS = 0.5; // along the street, either way
 const REST_MPS = 0.05;
 // The child: CHILD_DELAY_S after the ball, at a child's running pace (crossing, pedestrians hurry 15%),
 // picking it up for PICKUP_S and walking back at RETURN_MPS.
@@ -84,7 +84,7 @@ export const CREEP_MPS = 1.5;
 export const COVER_S = 8;
 const WARN_MAX_S = 40;
 export const LOOK_M = 80;
-const STREET_M = 16;                  // the gap's line reaches this far across the street
+const STREET_M = 16; // the gap's line reaches this far across the street
 // The audit: from AUDIT_REACT_S after the car saw the ball, faster than allowed by AUDIT_SLACK_MPS.
 export const AUDIT_REACT_S = 1.0;
 export const AUDIT_SLACK_MPS = 1.0;
@@ -93,22 +93,30 @@ const RETIRE_M = 220;
 const COLORS = [0xe8322b, 0xffd21f, 0x2f7de1, 0xff7a1a, 0x2bb673, 0xd63cc7];
 
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-const offset = (e, s, lat) => { const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s); return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat]; };
+const offset = (e, s, lat) => {
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
+  return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
+};
 
 // The cover speed `d` metres short of the gap's line (m/s), on the road as it is now.
 export function coverSpeed(d) {
-  const a = comfort().decel, t = COVER_REACT_S, room = Math.max(0, d - COVER_MARGIN_M);
-  return Math.max(CREEP_MPS, a * (Math.sqrt(t * t + 2 * room / a) - t));
+  const a = comfort().decel,
+    t = COVER_REACT_S,
+    room = Math.max(0, d - COVER_MARGIN_M);
+  return Math.max(CREEP_MPS, a * (Math.sqrt(t * t + (2 * room) / a) - t));
 }
 
 // The speed to be at `horizon` seconds from now, slowing from `v` along the way, so as to be at the
 // cover speed for where the car is then: x = coverSpeed(d - (v + x) / 2 * horizon), by bisection.
 export function coverAfter(d, v, horizon) {
   const now = Math.min(Math.max(0, v), coverSpeed(d));
-  let lo = CREEP_MPS, hi = Math.max(CREEP_MPS, coverSpeed(d));
+  let lo = CREEP_MPS,
+    hi = Math.max(CREEP_MPS, coverSpeed(d));
   for (let k = 0; k < 24; k++) {
     const x = (lo + hi) / 2;
-    if (coverSpeed(Math.max(0, d - (now + x) / 2 * horizon)) > x) lo = x; else hi = x;
+    if (coverSpeed(Math.max(0, d - ((now + x) / 2) * horizon)) > x) lo = x;
+    else hi = x;
   }
   return lo;
 }
@@ -120,8 +128,11 @@ const inRoad = (b) => b?.phase === "rolling" || b?.phase === "stopped";
 // Whether cars parked at the kerb hide ball `b` from `observer` (with hidden hazards on): the line
 // between them passes through one.
 export function ballHidden(world, observer, b) {
-  const mx = (observer.x + b.x) / 2, my = (observer.y + b.y) / 2;
-  const bodies = world.parked.near(mx, my, Math.hypot(b.x - observer.x, b.y - observer.y) / 2 + 6).filter((c) => c !== observer);
+  const mx = (observer.x + b.x) / 2,
+    my = (observer.y + b.y) / 2;
+  const bodies = world.parked
+    .near(mx, my, Math.hypot(b.x - observer.x, b.y - observer.y) / 2 + 6)
+    .filter((c) => c !== observer);
   return bodies.some((c) => segmentHitsBox([observer.x, observer.y], [b.x, b.y], c.obb()));
 }
 
@@ -135,17 +146,27 @@ export function ballVisible(world, observer, b) {
 // Where a vehicle going along `line` ({ pts, cum }) meets the gap's line across the street: the first arc
 // length between `from` and `to`, or null. (Only going along the street, either way.)
 export function gapCrossing(b, line, from, to) {
-  const { pts, cum } = line, g = b.gap;
-  const a = [g.x - g.n[0], g.y - g.n[1]], c = [g.x + g.n[0] * STREET_M, g.y + g.n[1] * STREET_M];
-  let lo = 0, hi = cum.length - 1;
-  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (cum[mid] <= from) lo = mid; else hi = mid - 1; }
+  const { pts, cum } = line,
+    g = b.gap;
+  const a = [g.x - g.n[0], g.y - g.n[1]],
+    c = [g.x + g.n[0] * STREET_M, g.y + g.n[1] * STREET_M];
+  let lo = 0,
+    hi = cum.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (cum[mid] <= from) lo = mid;
+    else hi = mid - 1;
+  }
   for (let i = lo; i < pts.length - 1 && cum[i] <= to; i++) {
-    const p = pts[i], q = pts[i + 1];
-    const r = [q[0] - p[0], q[1] - p[1]], s = [c[0] - a[0], c[1] - a[1]];
+    const p = pts[i],
+      q = pts[i + 1];
+    const r = [q[0] - p[0], q[1] - p[1]],
+      s = [c[0] - a[0], c[1] - a[1]];
     const den = r[0] * s[1] - r[1] * s[0];
     if (Math.abs(den) < 1e-9) continue;
     const w = [a[0] - p[0], a[1] - p[1]];
-    const t = (w[0] * s[1] - w[1] * s[0]) / den, u = (w[0] * r[1] - w[1] * r[0]) / den;
+    const t = (w[0] * s[1] - w[1] * s[0]) / den,
+      u = (w[0] * r[1] - w[1] * r[0]) / den;
     if (t < 0 || t > 1 || u < 0 || u > 1) continue;
     // (along the street, not across it at a junction)
     if (Math.abs(Math.cos(Math.atan2(r[1], r[0]) - g.h)) < 0.7) continue;
@@ -158,15 +179,20 @@ export function gapCrossing(b, line, from, to) {
 // How far `v`'s front is short of the gap's line, going along the street (negative once past it), or
 // null where it is not on that street going along it.
 export function frontToGap(b, v) {
-  const g = b.gap, spec = v.spec || CAR, f = spec.length - spec.rearOverhang;
+  const g = b.gap,
+    spec = v.spec || CAR,
+    f = spec.length - spec.rearOverhang;
   const along = Math.cos(v.psi - g.h);
   if (Math.abs(along) < 0.7) return null;
-  const fx = v.x + Math.cos(v.psi) * f, fy = v.y + Math.sin(v.psi) * f;
-  const dx = g.x - fx, dy = g.y - fy;
+  const fx = v.x + Math.cos(v.psi) * f,
+    fy = v.y + Math.sin(v.psi) * f;
+  const dx = g.x - fx,
+    dy = g.y - fy;
   // (on the street: within its width of the gap's line)
   const across = dx * g.n[0] + dy * g.n[1];
   if (across > 1.5 || across < -STREET_M) return null;
-  const t = [Math.cos(g.h), Math.sin(g.h)], sign = Math.sign(along);
+  const t = [Math.cos(g.h), Math.sin(g.h)],
+    sign = Math.sign(along);
   return (dx * t[0] + dy * t[1]) * sign;
 }
 
@@ -223,18 +249,54 @@ export class BallChase {
   // between parked cars on its `side` (+1 right, -1 left)), rolling out once the driven car's front is
   // `trigger` metres short of the gap's line, or at once with trigger null; the child following
   // `delay` seconds later at `speed`. Returns it.
-  place(gap, { trigger = null, speed = null, drift = 0, delay = null, childSpeed = null, color = null, id = null, keep = false } = {}) {
-    const map = this.world.map, e = map.edges.get(gap.edge);
-    const h = headingAt(e.pts, e.cum, gap.s), [x, y] = offset(e, gap.s, gap.lat);
+  place(
+    gap,
+    {
+      trigger = null,
+      speed = null,
+      drift = 0,
+      delay = null,
+      childSpeed = null,
+      color = null,
+      id = null,
+      keep = false,
+    } = {},
+  ) {
+    const map = this.world.map,
+      e = map.edges.get(gap.edge);
+    const h = headingAt(e.pts, e.cum, gap.s),
+      [x, y] = offset(e, gap.s, gap.lat);
     // (into the street: from a gap on the right, to the left of the edge's way)
     const n = gap.side > 0 ? [-Math.sin(h), Math.cos(h)] : [Math.sin(h), -Math.cos(h)];
     const r = this.random || (() => 0.5);
     this.made++;
-    const b = { id: id || `ball_${this.made}`, kind: "ball", x, y, vx: 0, vy: 0, spin: 0, axis: [0, 1], burst: false, color: color ?? COLORS[this.made % COLORS.length],
-      gap: { x, y, edge: e.id, s: gap.s, lat: gap.lat, side: gap.side, h, n }, phase: trigger === null ? "rolling" : "waiting", trigger, keep, since: this.world.t,
-      speed: speed ?? BALL_MPS[0] + r() * (BALL_MPS[1] - BALL_MPS[0]), drift: drift ?? 0,
-      delay: delay ?? CHILD_DELAY_S[0] + r() * (CHILD_DELAY_S[1] - CHILD_DELAY_S[0]), childSpeed: childSpeed ?? CHILD_MPS[0] + r() * (CHILD_MPS[1] - CHILD_MPS[0]),
-      out: null, child: null, childState: "hidden", seenBy: new Map(), childSeenBy: new Set(), look: Math.floor(r() * 1e6) };
+    const b = {
+      id: id || `ball_${this.made}`,
+      kind: "ball",
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      spin: 0,
+      axis: [0, 1],
+      burst: false,
+      color: color ?? COLORS[this.made % COLORS.length],
+      gap: { x, y, edge: e.id, s: gap.s, lat: gap.lat, side: gap.side, h, n },
+      phase: trigger === null ? "rolling" : "waiting",
+      trigger,
+      keep,
+      since: this.world.t,
+      speed: speed ?? BALL_MPS[0] + r() * (BALL_MPS[1] - BALL_MPS[0]),
+      drift: drift ?? 0,
+      delay: delay ?? CHILD_DELAY_S[0] + r() * (CHILD_DELAY_S[1] - CHILD_DELAY_S[0]),
+      childSpeed: childSpeed ?? CHILD_MPS[0] + r() * (CHILD_MPS[1] - CHILD_MPS[0]),
+      out: null,
+      child: null,
+      childState: "hidden",
+      seenBy: new Map(),
+      childSeenBy: new Set(),
+      look: Math.floor(r() * 1e6),
+    };
     if (b.phase === "rolling") this.release(b);
     this.balls.push(b);
     return b;
@@ -242,27 +304,36 @@ export class BallChase {
 
   release(b) {
     const g = b.gap;
-    b.phase = "rolling"; b.out = this.world.t;
+    b.phase = "rolling";
+    b.out = this.world.t;
     const t = [Math.cos(g.h), Math.sin(g.h)];
-    b.vx = g.n[0] * b.speed + t[0] * b.drift; b.vy = g.n[1] * b.speed + t[1] * b.drift;
+    b.vx = g.n[0] * b.speed + t[0] * b.drift;
+    b.vy = g.n[1] * b.speed + t[1] * b.drift;
   }
 
   // Free drives: a gap between two cars parked along the residential street the car is on, either side,
   // AHEAD_M ahead of its front (and on its route, where it has one), by day and not in snow. True if placed.
   spawn() {
-    const world = this.world, ego = world.ego, map = world.map, random = this.random;
+    const world = this.world,
+      ego = world.ego,
+      map = world.map,
+      random = this.random;
     if (world.visibility.night >= 0.5 || world.weather === "snow") return false;
     const FRONT = ego.spec.length - ego.spec.rearOverhang;
     const near = map.nearestLane(ego.x, ego.y, ego.psi, 6);
     const e = near?.lane.edgeRef;
     if (!e || e.ring || !RESIDENTIAL.has(e.cls)) return false;
-    const twin = (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((x) => x.to === e.from && Math.abs(x.length - e.length) < 1)?.id;
+    const twin = (map.out.get(e.to) || [])
+      .map((id) => map.edges.get(id))
+      .find((x) => x.to === e.from && Math.abs(x.length - e.length) < 1)?.id;
     const rows = { 1: [], [-1]: [] };
     for (const c of world.parked.near(ego.x, ego.y, AHEAD_M[1] + FRONT + 12)) {
       if (c.roadside || c.workzone || c.closure || c.doubleParked || (c.edge !== e.id && c.edge !== twin)) continue;
       const d = Math.abs(wrap(c.psi - ego.psi));
-      if (d > Math.PI / 6 && d < Math.PI * 5 / 6) continue;
-      const [cx, cy] = c.center, l = ego.toLocal(cx, cy), cs = c.spec || CAR;
+      if (d > Math.PI / 6 && d < (Math.PI * 5) / 6) continue;
+      const [cx, cy] = c.center,
+        l = ego.toLocal(cx, cy),
+        cs = c.spec || CAR;
       const gap = Math.abs(l.right) - cs.width / 2 - ego.spec.width / 2;
       if (gap < 0 || gap > ROW_M) continue;
       rows[Math.sign(l.right) || 1].push({ ahead: l.ahead, right: l.right, half: cs.length / 2, width: cs.width });
@@ -271,7 +342,9 @@ export class BallChase {
     for (const side of [1, -1]) {
       const row = rows[side].sort((a, b) => a.ahead - b.ahead);
       for (let i = 0; i + 1 < row.length; i++) {
-        const a = row[i], b = row[i + 1], g = (b.ahead - b.half) - (a.ahead + a.half);
+        const a = row[i],
+          b = row[i + 1],
+          g = b.ahead - b.half - (a.ahead + a.half);
         if (g < GAP_M[0] || g > GAP_M[1] || Math.abs(a.right - b.right) > 0.6) continue;
         const ahead = (a.ahead + a.half + b.ahead - b.half) / 2;
         if (ahead - FRONT < AHEAD_M[0] || ahead - FRONT > AHEAD_M[1]) continue;
@@ -281,8 +354,10 @@ export class BallChase {
     }
     if (!gaps.length) return false;
     const pick = gaps[Math.floor(random() * gaps.length)];
-    const c = Math.cos(ego.psi), s = Math.sin(ego.psi);
-    const x = ego.x + c * pick.ahead + s * pick.right, y = ego.y + s * pick.ahead - c * pick.right;
+    const c = Math.cos(ego.psi),
+      s = Math.sin(ego.psi);
+    const x = ego.x + c * pick.ahead + s * pick.right,
+      y = ego.y + s * pick.ahead - c * pick.right;
     // (on the car's route, where it has one)
     const route = world.route;
     if (route) {
@@ -290,18 +365,22 @@ export class BallChase {
       if (!q || q.distance > 12) return false;
     }
     const pr = projectPoint(e.pts, e.cum, [x, y]);
-    const b = this.place({ edge: e.id, s: pr.s, lat: pr.lateral, side: pr.lateral > 0 ? 1 : -1 },
-      { trigger: TRIGGER_M[0] + random() * (TRIGGER_M[1] - TRIGGER_M[0]), drift: (random() * 2 - 1) * DRIFT_MPS });
+    const b = this.place(
+      { edge: e.id, s: pr.s, lat: pr.lateral, side: pr.lateral > 0 ? 1 : -1 },
+      { trigger: TRIGGER_M[0] + random() * (TRIGGER_M[1] - TRIGGER_M[0]), drift: (random() * 2 - 1) * DRIFT_MPS },
+    );
     // (out of sight of the car until it rolls out, as anyone between the cars would be)
     return !!b;
   }
 
   step(dt) {
     if (!this.enabled) return;
-    const world = this.world, ego = world.ego;
+    const world = this.world,
+      ego = world.ego;
     for (const b of [...this.balls]) {
       const far = Math.hypot(b.x - ego.x, b.y - ego.y) > RETIRE_M;
-      const waitingGone = b.phase === "waiting" && (far || (!b.keep && world.t - b.since > GIVE_UP_S) || (frontToGap(b, ego) ?? 1) < -2);
+      const waitingGone =
+        b.phase === "waiting" && (far || (!b.keep && world.t - b.since > GIVE_UP_S) || (frontToGap(b, ego) ?? 1) < -2);
       if (waitingGone || b.phase === "gone" || (far && b.phase !== "waiting" && b.childState !== "out")) this.retire(b);
     }
     if (this.balls.length < this.target && world.t >= this.next) {
@@ -328,51 +407,92 @@ export class BallChase {
       // (a child still at the kerb goes home with it; one in the street finishes on their own)
       if (j >= 0 && b.childState !== "out") this.world.crowd.list.splice(j, 1);
     }
-    if (this.random) this.next = Math.max(this.next, this.world.t + NEXT_S[0] + this.random() * (NEXT_S[1] - NEXT_S[0]));
+    if (this.random)
+      this.next = Math.max(this.next, this.world.t + NEXT_S[0] + this.random() * (NEXT_S[1] - NEXT_S[0]));
   }
 
   // The ball rolls: rolling resistance, the kerbs either side and the parked cars, and any vehicle that
   // runs over it.
   roll(b, dt) {
-    const world = this.world, e = world.map.edges.get(b.gap.edge);
+    const world = this.world,
+      e = world.map.edges.get(b.gap.edge);
     const v = Math.hypot(b.vx, b.vy);
-    if (!b.burst) for (const o of [world.ego, ...world.npcs]) {
-      if (Math.abs(o.x - b.x) > 8 || Math.abs(o.y - b.y) > 8) continue;
-      const box = o.obb(), c = Math.cos(box.heading), s = Math.sin(box.heading), dx = b.x - box.center[0], dy = b.y - box.center[1];
-      if (Math.abs(dx * c + dy * s) < box.halfLength && Math.abs(-dx * s + dy * c) < box.halfWidth - 0.2) { b.burst = true; b.vx = 0; b.vy = 0; b.phase = "stopped"; }
+    if (!b.burst)
+      for (const o of [world.ego, ...world.npcs]) {
+        if (Math.abs(o.x - b.x) > 8 || Math.abs(o.y - b.y) > 8) continue;
+        const box = o.obb(),
+          c = Math.cos(box.heading),
+          s = Math.sin(box.heading),
+          dx = b.x - box.center[0],
+          dy = b.y - box.center[1];
+        if (Math.abs(dx * c + dy * s) < box.halfLength && Math.abs(-dx * s + dy * c) < box.halfWidth - 0.2) {
+          b.burst = true;
+          b.vx = 0;
+          b.vy = 0;
+          b.phase = "stopped";
+        }
+      }
+    if (b.burst || v < REST_MPS) {
+      b.vx = 0;
+      b.vy = 0;
+      b.phase = "stopped";
+      return;
     }
-    if (b.burst || v < REST_MPS) { b.vx = 0; b.vy = 0; b.phase = "stopped"; return; }
     const k = Math.max(0, v - ROLL_DECEL * dt) / v;
-    b.vx *= k; b.vy *= k;
-    let nx = b.x + b.vx * dt, ny = b.y + b.vy * dt;
+    b.vx *= k;
+    b.vy *= k;
+    let nx = b.x + b.vx * dt,
+      ny = b.y + b.vy * dt;
     // (the kerbs: off the edge of the asphalt either side, back it comes)
     const pr = projectPoint(e.pts, e.cum, [nx, ny]);
-    const h = headingAt(e.pts, e.cum, pr.s), right = [Math.sin(h), -Math.cos(h)];
-    const lo = e.asphalt[0] + BALL_R, hi = e.asphalt[1] - BALL_R;
+    const h = headingAt(e.pts, e.cum, pr.s),
+      right = [Math.sin(h), -Math.cos(h)];
+    const lo = e.asphalt[0] + BALL_R,
+      hi = e.asphalt[1] - BALL_R;
     if (pr.lateral < lo || pr.lateral > hi) {
       const vr = b.vx * right[0] + b.vy * right[1];
       if ((pr.lateral > hi && vr > 0) || (pr.lateral < lo && vr < 0)) {
-        b.vx -= (1 + RESTITUTION) * vr * right[0]; b.vy -= (1 + RESTITUTION) * vr * right[1];
-        b.vx *= 0.85; b.vy *= 0.85;
+        b.vx -= (1 + RESTITUTION) * vr * right[0];
+        b.vy -= (1 + RESTITUTION) * vr * right[1];
+        b.vx *= 0.85;
+        b.vy *= 0.85;
       }
-      const lat = Math.max(lo, Math.min(hi, pr.lateral)), back = lat - pr.lateral;
-      nx += right[0] * back; ny += right[1] * back;
+      const lat = Math.max(lo, Math.min(hi, pr.lateral)),
+        back = lat - pr.lateral;
+      nx += right[0] * back;
+      ny += right[1] * back;
     }
     // (the side of a parked car)
     for (const p of world.parked.near(nx, ny, 4)) {
-      const box = p.obb(), c = Math.cos(box.heading), s = Math.sin(box.heading), dx = nx - box.center[0], dy = ny - box.center[1];
-      const lx = dx * c + dy * s, ly = -dx * s + dy * c;
-      const px = box.halfLength + BALL_R - Math.abs(lx), py = box.halfWidth + BALL_R - Math.abs(ly);
+      const box = p.obb(),
+        c = Math.cos(box.heading),
+        s = Math.sin(box.heading),
+        dx = nx - box.center[0],
+        dy = ny - box.center[1];
+      const lx = dx * c + dy * s,
+        ly = -dx * s + dy * c;
+      const px = box.halfLength + BALL_R - Math.abs(lx),
+        py = box.halfWidth + BALL_R - Math.abs(ly);
       if (px <= 0 || py <= 0) continue;
       // (out along the shallower side, its speed that way turned back)
-      const axis = px < py ? [c, s] : [-s, c], depth = Math.min(px, py), sign = Math.sign(px < py ? lx : ly) || 1;
+      const axis = px < py ? [c, s] : [-s, c],
+        depth = Math.min(px, py),
+        sign = Math.sign(px < py ? lx : ly) || 1;
       const vn = b.vx * axis[0] + b.vy * axis[1];
-      if (vn * sign < 0) { b.vx -= (1 + RESTITUTION) * vn * axis[0]; b.vy -= (1 + RESTITUTION) * vn * axis[1]; }
-      nx += axis[0] * sign * depth; ny += axis[1] * sign * depth;
+      if (vn * sign < 0) {
+        b.vx -= (1 + RESTITUTION) * vn * axis[0];
+        b.vy -= (1 + RESTITUTION) * vn * axis[1];
+      }
+      nx += axis[0] * sign * depth;
+      ny += axis[1] * sign * depth;
     }
     const moved = Math.hypot(nx - b.x, ny - b.y);
-    if (moved > 1e-6) { b.axis = [(nx - b.x) / moved, (ny - b.y) / moved]; b.spin += moved / BALL_R; }
-    b.x = nx; b.y = ny;
+    if (moved > 1e-6) {
+      b.axis = [(nx - b.x) / moved, (ny - b.y) / moved];
+      b.spin += moved / BALL_R;
+    }
+    b.x = nx;
+    b.y = ny;
     b.phase = Math.hypot(b.vx, b.vy) < REST_MPS ? "stopped" : "rolling";
   }
 
@@ -381,52 +501,107 @@ export class BallChase {
   chase(b) {
     const world = this.world;
     if (b.childState === "hidden" && b.out !== null && world.t - b.out >= b.delay) {
-      const g = b.gap, e = world.map.edges.get(g.edge);
-      const ped = new Pedestrian({ id: `kid_ball_${b.id}`, x: g.x, y: g.y, psi: Math.atan2(g.n[1], g.n[0]), v: 0, speed: b.childSpeed, child: true, dart: true, ballChase: b.id,
-        path: [{ p: [b.x, b.y], cross: { node: null, from: [g.x, g.y], to: farSide(e, g, [b.x, b.y]), jaywalk: true, ballChase: true } }],
-        crossing: null, waiting: 0, phase: 0, look: b.look, at: null });
+      const g = b.gap,
+        e = world.map.edges.get(g.edge);
+      const ped = new Pedestrian({
+        id: `kid_ball_${b.id}`,
+        x: g.x,
+        y: g.y,
+        psi: Math.atan2(g.n[1], g.n[0]),
+        v: 0,
+        speed: b.childSpeed,
+        child: true,
+        dart: true,
+        ballChase: b.id,
+        path: [
+          {
+            p: [b.x, b.y],
+            cross: { node: null, from: [g.x, g.y], to: farSide(e, g, [b.x, b.y]), jaywalk: true, ballChase: true },
+          },
+        ],
+        crossing: null,
+        waiting: 0,
+        phase: 0,
+        look: b.look,
+        at: null,
+      });
       ped.crossing = ped.path[0].cross;
       world.crowd.list.push(ped);
-      b.child = ped; b.childState = "out";
+      b.child = ped;
+      b.childState = "out";
       return;
     }
     const ped = b.child;
     if (!ped || b.childState === "gone") return;
-    if (!world.crowd.list.includes(ped)) { b.childState = "gone"; if (b.phase === "carried") b.phase = "gone"; return; }
-    if (ped.frozen > 0) return;   // (knocked down)
+    if (!world.crowd.list.includes(ped)) {
+      b.childState = "gone";
+      if (b.phase === "carried") b.phase = "gone";
+      return;
+    }
+    if (ped.frozen > 0) return; // (knocked down)
     if (b.phase === "carried") {
-      b.x = ped.x; b.y = ped.y;
+      b.x = ped.x;
+      b.y = ped.y;
       // (back at the kerb: clear of the road)
       if (b.childState === "out" && !ped.crossing && ped.path.length <= 1) b.childState = "clear";
       // (stopped on the way back by a vehicle standing across it, one that braked for them over the gap,
       // say, and is waiting for them in turn: round the end of its body)
-      else if (b.childState === "out" && ped.crossing?.ballBack && ped.v === 0 && !(ped.pause > 0)) walkRound(world, ped);
+      else if (b.childState === "out" && ped.crossing?.ballBack && ped.v === 0 && !(ped.pause > 0))
+        walkRound(world, ped);
       return;
     }
     // (after the ball, wherever it has got to)
     const wp = ped.path[0];
-    if (wp?.cross?.ballChase) { wp.p = [b.x, b.y]; wp.cross.to = farSide(world.map.edges.get(b.gap.edge), b.gap, [b.x, b.y]); }
+    if (wp?.cross?.ballChase) {
+      wp.p = [b.x, b.y];
+      wp.cross.to = farSide(world.map.edges.get(b.gap.edge), b.gap, [b.x, b.y]);
+    }
     if (Math.hypot(ped.x - b.x, ped.y - b.y) < CATCH_M || (!ped.path.length && !ped.crossing)) {
       // picked up: a moment, then back the way they came, to the kerb, and home along the sidewalk
-      const g = b.gap, e = world.map.edges.get(g.edge);
+      const g = b.gap,
+        e = world.map.edges.get(g.edge);
       const walk = offset(e, g.s, sidewalkOffset(e, g.side));
-      ped.path = [{ p: [g.x, g.y], cross: { node: null, from: farSide(e, g, [ped.x, ped.y]), to: [g.x, g.y], jaywalk: true, ballBack: true } }, { p: walk }];
+      ped.path = [
+        {
+          p: [g.x, g.y],
+          cross: { node: null, from: farSide(e, g, [ped.x, ped.y]), to: [g.x, g.y], jaywalk: true, ballBack: true },
+        },
+        { p: walk },
+      ];
       ped.crossing = ped.path[0].cross;
       // (walking now, and looking: a car bearing down that could not stop, they wait for)
-      ped.speed = RETURN_MPS; ped.home = true; ped.pause = PICKUP_S; ped.dart = false;
-      b.phase = "carried"; b.vx = 0; b.vy = 0;
+      ped.speed = RETURN_MPS;
+      ped.home = true;
+      ped.pause = PICKUP_S;
+      ped.dart = false;
+      b.phase = "carried";
+      b.vx = 0;
+      b.vy = 0;
     }
   }
 
   // Who has seen the ball, and the child: the driven car (by `World.sees` for the child) and traffic near it.
   look(b) {
-    const world = this.world, t = world.t;
+    const world = this.world,
+      t = world.t;
     if (!activeBall(b)) return;
-    const observers = [[EGO, world.ego], ...world.npcs.filter((n) => Math.abs(n.x - b.x) < LOOK_M + 10 && Math.abs(n.y - b.y) < LOOK_M + 10).map((n) => [n.id, n])];
+    const observers = [
+      [EGO, world.ego],
+      ...world.npcs
+        .filter((n) => Math.abs(n.x - b.x) < LOOK_M + 10 && Math.abs(n.y - b.y) < LOOK_M + 10)
+        .map((n) => [n.id, n]),
+    ];
     for (const [id, o] of observers) {
       if (!b.seenBy.has(id) && ballVisible(world, o, b)) b.seenBy.set(id, t);
       const ped = b.child;
-      if (ped && b.seenBy.has(id) && !b.childSeenBy.has(id) && world.crowd.list.includes(ped) && (id === EGO ? world.sees(o, ped) : world.visibility.sees(o, ped))) b.childSeenBy.add(id);
+      if (
+        ped &&
+        b.seenBy.has(id) &&
+        !b.childSeenBy.has(id) &&
+        world.crowd.list.includes(ped) &&
+        (id === EGO ? world.sees(o, ped) : world.visibility.sees(o, ped))
+      )
+        b.childSeenBy.add(id);
     }
   }
 }
@@ -441,24 +616,38 @@ const ROUNDS_MAX = 3;
 export function walkRound(world, ped) {
   const wp = ped.path[0];
   if (!wp || (ped.rounds || 0) >= ROUNDS_MAX) return false;
-  const from = [ped.x, ped.y], margin = Math.max(PED.length, PED.width) / 2 + 0.1;
-  const standing = [world.ego, ...world.npcs].filter((o) => Math.abs(o.v || 0) < 0.5 && Math.abs(o.x - ped.x) < 15 && Math.abs(o.y - ped.y) < 15);
+  const from = [ped.x, ped.y],
+    margin = Math.max(PED.length, PED.width) / 2 + 0.1;
+  const standing = [world.ego, ...world.npcs].filter(
+    (o) => Math.abs(o.v || 0) < 0.5 && Math.abs(o.x - ped.x) < 15 && Math.abs(o.y - ped.y) < 15,
+  );
   const grow = (box, m) => ({ ...box, halfLength: box.halfLength + m, halfWidth: box.halfWidth + m });
-  const blocked = (a, z, skip = null) => standing.some((o) => o !== skip && segmentHitsBox(a, z, grow(o.obb(), margin)));
+  const blocked = (a, z, skip = null) =>
+    standing.some((o) => o !== skip && segmentHitsBox(a, z, grow(o.obb(), margin)));
   const o = standing.find((v) => segmentHitsBox(from, wp.p, grow(v.obb(), margin)));
   if (!o) return false;
-  const box = o.obb(), c = Math.cos(box.heading), s = Math.sin(box.heading);
-  const local = (p) => { const x = p[0] - box.center[0], y = p[1] - box.center[1]; return [x * c + y * s, -x * s + y * c]; };
+  const box = o.obb(),
+    c = Math.cos(box.heading),
+    s = Math.sin(box.heading);
+  const local = (p) => {
+    const x = p[0] - box.center[0],
+      y = p[1] - box.center[1];
+    return [x * c + y * s, -x * s + y * c];
+  };
   const world_ = ([u, v]) => [box.center[0] + u * c - v * s, box.center[1] + u * s + v * c];
-  const [pu, pv] = local(from), [, tv] = local(wp.p);
-  const L = box.halfLength + ROUND_M + margin, W = box.halfWidth + ROUND_M + margin;
-  const sideP = Math.sign(pv) || 1, sideT = Math.sign(tv) || -sideP;
+  const [pu, pv] = local(from),
+    [, tv] = local(wp.p);
+  const L = box.halfLength + ROUND_M + margin,
+    W = box.halfWidth + ROUND_M + margin;
+  const sideP = Math.sign(pv) || 1,
+    sideT = Math.sign(tv) || -sideP;
   for (const end of [Math.sign(pu) || 1, -(Math.sign(pu) || 1)]) {
     const pts = [world_([end * L, sideP * W])];
     if (sideT !== sideP) pts.push(world_([end * L, sideT * W]));
     const legs = [from, ...pts, wp.p];
     let clear = true;
-    for (let k = 0; k + 1 < legs.length && clear; k++) clear = !blocked(legs[k], legs[k + 1], o) && !segmentHitsBox(legs[k], legs[k + 1], grow(box, 0.1));
+    for (let k = 0; k + 1 < legs.length && clear; k++)
+      clear = !blocked(legs[k], legs[k + 1], o) && !segmentHitsBox(legs[k], legs[k + 1], grow(box, 0.1));
     if (!clear) continue;
     ped.path.unshift(...pts.map((p) => ({ p, round: true })));
     ped.rounds = (ped.rounds || 0) + 1;
@@ -471,10 +660,18 @@ export function walkRound(world, ped) {
 // `p` (the crossing a child chasing the ball is on, for everyone's pedestrian checks: sim/pedestrians.js
 // crosswalkConflict; and, the way back, where it starts from).
 function farSide(e, g, p) {
-  let ux = p[0] - g.x, uy = p[1] - g.y, d = Math.hypot(ux, uy);
-  if (d < 0.5 || ux * g.n[0] + uy * g.n[1] < 0.3 * d) { ux = g.n[0]; uy = g.n[1]; d = 1; }
-  ux /= d; uy /= d;
-  const width = e.asphalt[1] - e.asphalt[0] + 2, k = Math.min(STREET_M, width / Math.max(0.3, ux * g.n[0] + uy * g.n[1]));
+  let ux = p[0] - g.x,
+    uy = p[1] - g.y,
+    d = Math.hypot(ux, uy);
+  if (d < 0.5 || ux * g.n[0] + uy * g.n[1] < 0.3 * d) {
+    ux = g.n[0];
+    uy = g.n[1];
+    d = 1;
+  }
+  ux /= d;
+  uy /= d;
+  const width = e.asphalt[1] - e.asphalt[0] + 2,
+    k = Math.min(STREET_M, width / Math.max(0.3, ux * g.n[0] + uy * g.n[1]));
   return [g.x + ux * k, g.y + uy * k];
 }
 
@@ -482,7 +679,8 @@ function farSide(e, g, p) {
 // as it is in the road or its warning stands, or null. `limit_mps`: the cover speed while the warning
 // stands and the gap's line is ahead.
 export function ballInRoad(world, p, frontS) {
-  const { ego, route } = world, balls = world.balls?.balls;
+  const { ego, route } = world,
+    balls = world.balls?.balls;
   if (!balls?.length || !route) return null;
   let best = null;
   for (const b of balls) {
@@ -494,13 +692,26 @@ export function ballInRoad(world, p, frontS) {
     if (at === null) continue;
     const gap = at - frontS;
     if (best && gap >= best.gap_m) continue;
-    const l = ego.toLocal(b.gap.x, b.gap.y), lb = ego.toLocal(b.x, b.y);
+    const l = ego.toLocal(b.gap.x, b.gap.y),
+      lb = ego.toLocal(b.x, b.y);
     const childSeen = b.childSeenBy.has(EGO);
-    best = { id: b.id, side: l.right > 0 ? "right" : "left", gap_m: gap, stop_s_route: at, ball: b.phase === "carried" ? "picked up" : b.burst ? "squashed" : b.phase,
-      ball_speed: Math.hypot(b.vx, b.vy), ball_ahead_m: lb.ahead, ball_right_m: lb.right, seen_for_s: world.t - seen,
-      child: !childSeen ? "not_seen" : b.childState === "out" ? "in_road" : "clear", child_id: childSeen && b.child ? b.child.id : null,
-      warning: warn, limit_mps: warn && gap > 0 ? coverSpeed(gap) : null, creep_mps: CREEP_MPS,
-      cover_left_s: warn && !childSeen ? Math.max(0, COVER_S - (world.t - seen)) : null };
+    best = {
+      id: b.id,
+      side: l.right > 0 ? "right" : "left",
+      gap_m: gap,
+      stop_s_route: at,
+      ball: b.phase === "carried" ? "picked up" : b.burst ? "squashed" : b.phase,
+      ball_speed: Math.hypot(b.vx, b.vy),
+      ball_ahead_m: lb.ahead,
+      ball_right_m: lb.right,
+      seen_for_s: world.t - seen,
+      child: !childSeen ? "not_seen" : b.childState === "out" ? "in_road" : "clear",
+      child_id: childSeen && b.child ? b.child.id : null,
+      warning: warn,
+      limit_mps: warn && gap > 0 ? coverSpeed(gap) : null,
+      creep_mps: CREEP_MPS,
+      cover_left_s: warn && !childSeen ? Math.max(0, COVER_S - (world.t - seen)) : null,
+    };
   }
   return best;
 }
@@ -511,15 +722,21 @@ export function ballInRoad(world, p, frontS) {
 export function auditBalls(world) {
   const balls = world.balls?.balls;
   if (!balls?.length) return;
-  const ego = world.ego, calls = world.ballCalls ||= new Map(), t = world.t;
+  const ego = world.ego,
+    calls = (world.ballCalls ||= new Map()),
+    t = world.t;
   for (const b of balls) {
     const seen = b.seenBy.get(EGO);
     if (seen === undefined) continue;
     const call = calls.get(b.id) || { v0: null, over: 0, last: null, counted: false };
     calls.set(b.id, call);
     if (call.counted) continue;
-    const d = frontToGap(b, ego), warn = warningStands(world, b, EGO);
-    if (d === null) { call.last = null; continue; }
+    const d = frontToGap(b, ego),
+      warn = warningStands(world, b, EGO);
+    if (d === null) {
+      call.last = null;
+      continue;
+    }
     const t0 = seen + AUDIT_REACT_S;
     if (warn && d > 0 && t >= t0) {
       if (call.v0 === null) call.v0 = { v: ego.v, t };
@@ -530,7 +747,12 @@ export function auditBalls(world) {
     if (call.last !== null && call.last > 0 && d <= 0 && warn && call.over > 0) {
       call.counted = true;
       world.violations.ball_warnings_ignored = (world.violations.ball_warnings_ignored || 0) + 1;
-      world.events.push({ type: "ball_warning_ignored", ball: b.id, kmh: Math.round(ego.v * 36) / 10, over_kmh: Math.round(call.over * 36) / 10 });
+      world.events.push({
+        type: "ball_warning_ignored",
+        ball: b.id,
+        kmh: Math.round(ego.v * 36) / 10,
+        over_kmh: Math.round(call.over * 36) / 10,
+      });
     }
     call.last = d;
   }
@@ -545,8 +767,14 @@ export function ballNotice(world, snap = null) {
     if (!b.seenBy.has(EGO) || !activeBall(b)) continue;
     const s = snap?.ball_in_road?.id === b.id ? snap.ball_in_road : null;
     const childSeen = b.childSeenBy.has(EGO);
-    if (childSeen && b.childState === "out") return { key: `${b.id}:child`, text: "CHILD CHASING THE BALL · STOP", wait: true };
-    if (warningStands(world, b, EGO) && !childSeen) return { key: `${b.id}:ball`, text: `BALL IN THE ROAD · A CHILD MAY FOLLOW${s?.limit_mps ? ` · ${Math.round(s.limit_mps * 3.6)} KM/H` : " · SLOW DOWN"}`, wait: false };
+    if (childSeen && b.childState === "out")
+      return { key: `${b.id}:child`, text: "CHILD CHASING THE BALL · STOP", wait: true };
+    if (warningStands(world, b, EGO) && !childSeen)
+      return {
+        key: `${b.id}:ball`,
+        text: `BALL IN THE ROAD · A CHILD MAY FOLLOW${s?.limit_mps ? ` · ${Math.round(s.limit_mps * 3.6)} KM/H` : " · SLOW DOWN"}`,
+        wait: false,
+      };
   }
   return null;
 }

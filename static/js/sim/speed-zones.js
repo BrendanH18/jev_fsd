@@ -15,15 +15,15 @@ export const ZONE_HOURS = { school: "8:00 to 17:00 on school days", playground: 
 
 // The sun in late September, as the sky draws it (render/atmosphere.js), by default in Vancouver
 // (~49.27 N, solar noon at 13:10 daylight time).
-const DECLINATION = -1.5 * Math.PI / 180;
-const LAT = 49.27 * Math.PI / 180;
+const DECLINATION = (-1.5 * Math.PI) / 180;
+const LAT = (49.27 * Math.PI) / 180;
 const SOLAR_NOON_H = 13.17;
 
 // The sun's elevation (rad) at a local clock hour, and its hour angle (rad, + in the afternoon).
 export function sunAngles(hour, location = null) {
-  const latitude = location ? location.latitude * Math.PI / 180 : LAT;
+  const latitude = location ? (location.latitude * Math.PI) / 180 : LAT;
   const solarNoon = location ? 12 + location.utcOffset - location.longitude / 15 : SOLAR_NOON_H;
-  const H = (hour - solarNoon) * 15 * Math.PI / 180;
+  const H = ((hour - solarNoon) * 15 * Math.PI) / 180;
   const sinEl = Math.sin(latitude) * Math.sin(DECLINATION) + Math.cos(latitude) * Math.cos(DECLINATION) * Math.cos(H);
   return { elevation: Math.asin(sinEl), H, latitude, declination: DECLINATION };
 }
@@ -32,20 +32,23 @@ export function sunAngles(hour, location = null) {
 // 5 degrees up and 3 below the horizon. The sky (render/atmosphere.js) and the benchmark's clock hours
 // (bench/runner.js) both use it.
 export function nightLevel(elevation) {
-  const t = Math.max(0, Math.min(1, (elevation * 180 / Math.PI + 3) / 8));
+  const t = Math.max(0, Math.min(1, ((elevation * 180) / Math.PI + 3) / 8));
   return 1 - t * t * (3 - 2 * t);
 }
 
 // The world's clock at a local hour in a place ({ latitude, longitude, utcOffset }).
 export function zoneClock(hour, location = null) {
-  return { hour, sun_deg: Math.round(sunAngles(hour, location).elevation * 1800 / Math.PI) / 10 };
+  return { hour, sun_deg: Math.round((sunAngles(hour, location).elevation * 1800) / Math.PI) / 10 };
 }
 
 // The world's clock at a local hour on a map (MapData), the sun placed by its origin and UTC offset
 // (Pacific daylight time when the map does not say).
 export function mapClock(hour, map) {
   const origin = map?.pack?.origin;
-  return zoneClock(hour, origin ? { latitude: origin.lat, longitude: origin.lon, utcOffset: map.utcOffset ?? -7 } : null);
+  return zoneClock(
+    hour,
+    origin ? { latitude: origin.lat, longitude: origin.lon, utcOffset: map.utcOffset ?? -7 } : null,
+  );
 }
 
 export function inEffect(kind, clock) {
@@ -81,4 +84,4 @@ export function zoneAt(spans, edgeId, s, clock) {
 }
 
 // A street's limit with the zone in effect, if any.
-export const zoneLimit = (limit, span) => span ? Math.min(limit || ZONE_LIMIT_MPS, ZONE_LIMIT_MPS) : limit;
+export const zoneLimit = (limit, span) => (span ? Math.min(limit || ZONE_LIMIT_MPS, ZONE_LIMIT_MPS) : limit);

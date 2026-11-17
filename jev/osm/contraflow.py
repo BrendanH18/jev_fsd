@@ -9,6 +9,7 @@ side of the street the contraflow cyclist rides on, seen from a driver going the
 (the driver's left in Canada, unless the tags put the lane on the right). The sim
 (static/js/sim/contraflow.js) puts contraflow cyclists on these edges; nothing else reads it.
 """
+
 from __future__ import annotations
 
 import json
@@ -87,6 +88,7 @@ def contraflow_from_osm(osm, pack):
     `side` relative to the edge's (the traffic's) direction."""
     from .crossings import _snap
     from .project import Projection
+
     proj = Projection(pack["origin"]["lat"], pack["origin"]["lon"])
     tagged = []
     for w in osm.ways:
@@ -128,5 +130,7 @@ def contraflow_from_osm(osm, pack):
         # (the side is the way's; along an edge drawn against the way, it is the other one)
         if not forward:
             side = "right" if side == "left" else "left"
-        out.append({"edge": edge["id"], "kind": kind, "side": side, "tag": tag, "way": w["id"], "name": edge.get("name", "")})
+        out.append(
+            {"edge": edge["id"], "kind": kind, "side": side, "tag": tag, "way": w["id"], "name": edge.get("name", "")}
+        )
     return {"contraflow_version": "1", "name": pack.get("name", ""), "edges": out}

@@ -47,8 +47,19 @@ def pack_of(lines: dict) -> dict:
     edges = []
     for eid, pts in lines.items():
         pts = [tuple(p) for p in pts]
-        edges.append({"id": eid, "from": node(pts[0]), "to": node(pts[-1]), "pts": pts, "lanes": 1,
-                      "lane_offsets": [0], "length": _length(pts), "name": eid, "oneway": True})
+        edges.append(
+            {
+                "id": eid,
+                "from": node(pts[0]),
+                "to": node(pts[-1]),
+                "pts": pts,
+                "lanes": 1,
+                "lane_offsets": [0],
+                "length": _length(pts),
+                "name": eid,
+                "oneway": True,
+            }
+        )
     return {"edges": edges, "lanes": [{"edge": e["id"], "idx": 0, "pts": e["pts"]} for e in edges]}
 
 
@@ -76,8 +87,7 @@ def python_turn(case: dict) -> dict:
     router = Router(pack_of({"in": case["in"], "out": case["out"], "ahead": ahead}))
     angle = router.turn_angle("in", "out")
     # with another way on, a U-turn (or a turn sharp enough to count as one) is priced out of reach
-    return {"turn_angle": angle, "kind": g.classify_turn(angle),
-            "allowed": router.turn_penalty("in", "out") < 1e6}
+    return {"turn_angle": angle, "kind": g.classify_turn(angle), "allowed": router.turn_penalty("in", "out") < 1e6}
 
 
 def python_join(case: dict) -> list:
@@ -112,14 +122,20 @@ def join_differences(py: list, js: list, tolerance: float) -> list:
 def run_js(cases_path: Path) -> dict:
     proc = subprocess.run(
         ["node", "--experimental-default-type=module", str(ROOT / "scripts/parity_js.mjs"), str(cases_path)],
-        cwd=ROOT, capture_output=True, text=True, timeout=120)
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
     if proc.returncode != 0:
         raise AssertionError(f"scripts/parity_js.mjs failed:\n{proc.stderr}")
     return json.loads(proc.stdout)
 
 
-@unittest.skipUnless(shutil.which("node") or os.environ.get("JEV_REQUIRE_NODE"),
-                     "Node is not on PATH (set JEV_REQUIRE_NODE to make this a failure)")
+@unittest.skipUnless(
+    shutil.which("node") or os.environ.get("JEV_REQUIRE_NODE"),
+    "Node is not on PATH (set JEV_REQUIRE_NODE to make this a failure)",
+)
 class ParityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -133,19 +149,25 @@ class ParityTests(unittest.TestCase):
             with self.subTest(kind=kind, case=case["name"]):
                 found = differences(case, js)
                 if case.get("known_difference"):
-                    self.assertTrue(found, f"{case['name']!r} is marked as a known difference but now agrees: "
-                                           "remove known_difference from tests/fixtures/parity_cases.json")
+                    self.assertTrue(
+                        found,
+                        f"{case['name']!r} is marked as a known difference but now agrees: "
+                        "remove known_difference from tests/fixtures/parity_cases.json",
+                    )
                 else:
                     self.assertFalse(found, f"{case['name']!r}: " + "; ".join(found))
 
     def test_turn_angle_kind_and_sharp_turn_rule(self):
-        self.check("turn", self.cases["turns"], self.js["turns"],
-                   lambda c, js: turn_differences(python_turn(c), js))
+        self.check("turn", self.cases["turns"], self.js["turns"], lambda c, js: turn_differences(python_turn(c), js))
 
     def test_lane_joins_route_the_same_way(self):
         tol = self.cases["tolerance_m"]
-        self.check("join", self.cases["joins"], self.js["joins"],
-                   lambda c, js: join_differences(python_join(c), js["polyline"], tol))
+        self.check(
+            "join",
+            self.cases["joins"],
+            self.js["joins"],
+            lambda c, js: join_differences(python_join(c), js["polyline"], tol),
+        )
 
     def test_the_fixture_covers_both_sides_of_each_threshold(self):
         angles = [abs(c["angle_deg"]) for c in self.cases["turns"]]
@@ -160,8 +182,17 @@ class ParityTests(unittest.TestCase):
         self.assertTrue(join_differences(python_join(moved), python_join(case), self.cases["tolerance_m"]))
         turn = next(c for c in self.cases["turns"] if 130 < abs(c["angle_deg"]) < 150)
         py = python_turn(turn)
-        self.assertTrue(turn_differences(py, dict(npc_allowed=not py["allowed"], browser_allowed=py["allowed"],
-                                                  turn_angle=py["turn_angle"], kind=py["kind"])))
+        self.assertTrue(
+            turn_differences(
+                py,
+                dict(
+                    npc_allowed=not py["allowed"],
+                    browser_allowed=py["allowed"],
+                    turn_angle=py["turn_angle"],
+                    kind=py["kind"],
+                ),
+            )
+        )
 
 
 if __name__ == "__main__":

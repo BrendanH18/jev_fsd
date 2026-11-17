@@ -73,7 +73,10 @@ def main(argv: list) -> int:
             pack = build_pack(bbox, MAPS_DIR, log=print)
             fetch.fetch_osm_xml(bbox, MAPS_DIR, force=force, log=print)
             contraflow = build_contraflow(bbox, MAPS_DIR, pack, force=True, log=print)
-            print("contraflow: %s (%d one-way edges cyclists may ride both ways)" % (contraflow_path(MAPS_DIR, bbox), len(contraflow["edges"])))
+            print(
+                "contraflow: %s (%d one-way edges cyclists may ride both ways)"
+                % (contraflow_path(MAPS_DIR, bbox), len(contraflow["edges"]))
+            )
             return 0
         if "--driveways" in argv:
             # Rebuild only the sidecar; never rebuild the street pack or other layers.
@@ -87,7 +90,10 @@ def main(argv: list) -> int:
             pack = build_pack(bbox, MAPS_DIR, log=print)
             fetch.fetch_osm_xml(bbox, MAPS_DIR, force=force, log=print)
             parks = build_parks(bbox, MAPS_DIR, pack, force=True, log=print)
-            print("parks: %s (%d parks and waters, %d street spans beside them)" % (parks_path(MAPS_DIR, bbox), len(parks["areas"]), len(parks["spans"])))
+            print(
+                "parks: %s (%d parks and waters, %d street spans beside them)"
+                % (parks_path(MAPS_DIR, bbox), len(parks["areas"]), len(parks["spans"]))
+            )
             return 0
         if "--bridges" in argv:
             # Rebuild only the sidecar; never rebuild the street pack or other layers.
@@ -116,8 +122,16 @@ def main(argv: list) -> int:
         buslanes = build_buslanes(bbox, MAPS_DIR, pack, force=force or busonly, log=print)
         transit = build_transit(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
         crossings = build_crossings(bbox, MAPS_DIR, pack, force=force or "--transit" in argv, log=print)
-        zones = build_zones(bbox, MAPS_DIR, pack, force=force or (only and "--rail" not in argv and not calm and not busonly), log=print)
-        rail = build_rail(bbox, MAPS_DIR, pack, force=force or (only and "--zones" not in argv and not calm and not busonly), log=print)
+        zones = build_zones(
+            bbox, MAPS_DIR, pack, force=force or (only and "--rail" not in argv and not calm and not busonly), log=print
+        )
+        rail = build_rail(
+            bbox,
+            MAPS_DIR,
+            pack,
+            force=force or (only and "--zones" not in argv and not calm and not busonly),
+            log=print,
+        )
         calming = build_calming(bbox, MAPS_DIR, pack, force=force or calm, log=print)
         scrambles = build_scrambles(bbox, MAPS_DIR, pack, force=force or calm, log=print)
         contraflow = build_contraflow(bbox, MAPS_DIR, pack, force=force, log=print)
@@ -130,28 +144,51 @@ def main(argv: list) -> int:
     if buslanes:
         print("buslanes: %s (%d lanes)" % (buslanes_path(MAPS_DIR, bbox), len(buslanes["lanes"])))
     if transit:
-        print("transit: %s (%d routes, %d stops)" % (transit_path(MAPS_DIR, bbox), len(transit["routes"]), len(transit["stops"])))
+        print(
+            "transit: %s (%d routes, %d stops)"
+            % (transit_path(MAPS_DIR, bbox), len(transit["routes"]), len(transit["stops"]))
+        )
     if crossings:
         print("crossings: %s (%d crosswalks)" % (crossings_path(MAPS_DIR, bbox), len(crossings["crossings"])))
     if zones:
         print("zones: %s (%d school and playground zones)" % (zones_path(MAPS_DIR, bbox), len(zones["zones"])))
     if rail:
-        print("rail: %s (%d tracks, %d level crossings)" % (rail_path(MAPS_DIR, bbox), len(rail["tracks"]), len(rail["crossings"])))
+        print(
+            "rail: %s (%d tracks, %d level crossings)"
+            % (rail_path(MAPS_DIR, bbox), len(rail["tracks"]), len(rail["crossings"]))
+        )
     if calming:
-        print("calming: %s (%d speed humps, tables, cushions and bumps)" % (calming_path(MAPS_DIR, bbox), len(calming["devices"])))
+        print(
+            "calming: %s (%d speed humps, tables, cushions and bumps)"
+            % (calming_path(MAPS_DIR, bbox), len(calming["devices"]))
+        )
     if scrambles:
         print("scrambles: %s (%d scramble crossings)" % (scrambles_path(MAPS_DIR, bbox), len(scrambles["scrambles"])))
     if contraflow:
-        print("contraflow: %s (%d one-way edges cyclists may ride both ways)" % (contraflow_path(MAPS_DIR, bbox), len(contraflow["edges"])))
+        print(
+            "contraflow: %s (%d one-way edges cyclists may ride both ways)"
+            % (contraflow_path(MAPS_DIR, bbox), len(contraflow["edges"]))
+        )
     if driveways:
         print("driveways: %s (%d driveways)" % (driveways_path(MAPS_DIR, bbox), len(driveways["driveways"])))
     if parks:
-        print("parks: %s (%d parks and waters, %d street spans beside them)" % (parks_path(MAPS_DIR, bbox), len(parks["areas"]), len(parks["spans"])))
+        print(
+            "parks: %s (%d parks and waters, %d street spans beside them)"
+            % (parks_path(MAPS_DIR, bbox), len(parks["areas"]), len(parks["spans"]))
+        )
     if bridges:
         print("bridges: %s (%d street spans on bridges)" % (bridges_path(MAPS_DIR, bbox), len(bridges["spans"])))
     print("pack: %s" % pack_path(MAPS_DIR, bbox))
-    print("edges %d, lanes %d, signalled intersections %d, stop signs %d, buildings %d" % (
-        len(pack["edges"]), len(pack["lanes"]), len(pack["intersections"]), len(pack["stops"]), len(pack["buildings"])))
+    print(
+        "edges %d, lanes %d, signalled intersections %d, stop signs %d, buildings %d"
+        % (
+            len(pack["edges"]),
+            len(pack["lanes"]),
+            len(pack["intersections"]),
+            len(pack["stops"]),
+            len(pack["buildings"]),
+        )
+    )
     for k, v in sorted(pack["stats"].items()):
         print("  %-24s %s" % (k, v))
     return 0

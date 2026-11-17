@@ -38,26 +38,59 @@ from .endpoints import _OPENER, _Watchdog, check_common, headers_for, is_local_h
 from .llm import EndpointConfig, LlmRegistry
 
 MODELS_TIMEOUT_S = 8.0
-MAX_MODELS_BYTES = 16 * 1024 * 1024   # OpenRouter lists hundreds of models with descriptions
+MAX_MODELS_BYTES = 16 * 1024 * 1024  # OpenRouter lists hundreds of models with descriptions
 MAX_MODELS = 5000
 CUSTOM_KEY_PREFIX = "JEV_FSD_LLM_KEY_"
 
 PROVIDERS = (
-    {"id": "openrouter", "label": "OpenRouter", "base_url": "https://openrouter.ai/api/v1",
-     "key_env": "OPENROUTER_API_KEY", "key_url": "https://openrouter.ai/keys", "response_format": "json_object",
-     "hint": "One key for models from OpenAI, Anthropic, Google, Meta and others. Prices fill in automatically."},
-    {"id": "openai", "label": "OpenAI", "base_url": "https://api.openai.com/v1",
-     "key_env": "OPENAI_API_KEY", "key_url": "https://platform.openai.com/api-keys",
-     "hint": "Prices are not listed by OpenAI's API; add them to count spend against the budget."},
-    {"id": "groq", "label": "Groq", "base_url": "https://api.groq.com/openai/v1",
-     "key_env": "GROQ_API_KEY", "key_url": "https://console.groq.com/keys", "response_format": "json_object",
-     "hint": "Fast hosted open models."},
-    {"id": "ollama", "label": "Ollama", "base_url": "http://localhost:11434/v1", "timeout_s": 20, "rpm": 0,
-     "hint": "Free, on this computer. Install Ollama, run `ollama pull llama3.2`, and keep it running."},
-    {"id": "lmstudio", "label": "LM Studio", "base_url": "http://localhost:1234/v1", "timeout_s": 20, "rpm": 0,
-     "hint": "Free, on this computer. Load a model and start LM Studio's local server."},
-    {"id": "custom", "label": "Other", "base_url": None,
-     "hint": "Any server that speaks the OpenAI Chat Completions protocol (vLLM, Together, a proxy, ...)."},
+    {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "key_url": "https://openrouter.ai/keys",
+        "response_format": "json_object",
+        "hint": "One key for models from OpenAI, Anthropic, Google, Meta and others. Prices fill in automatically.",
+    },
+    {
+        "id": "openai",
+        "label": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "key_env": "OPENAI_API_KEY",
+        "key_url": "https://platform.openai.com/api-keys",
+        "hint": "Prices are not listed by OpenAI's API; add them to count spend against the budget.",
+    },
+    {
+        "id": "groq",
+        "label": "Groq",
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_env": "GROQ_API_KEY",
+        "key_url": "https://console.groq.com/keys",
+        "response_format": "json_object",
+        "hint": "Fast hosted open models.",
+    },
+    {
+        "id": "ollama",
+        "label": "Ollama",
+        "base_url": "http://localhost:11434/v1",
+        "timeout_s": 20,
+        "rpm": 0,
+        "hint": "Free, on this computer. Install Ollama, run `ollama pull llama3.2`, and keep it running.",
+    },
+    {
+        "id": "lmstudio",
+        "label": "LM Studio",
+        "base_url": "http://localhost:1234/v1",
+        "timeout_s": 20,
+        "rpm": 0,
+        "hint": "Free, on this computer. Load a model and start LM Studio's local server.",
+    },
+    {
+        "id": "custom",
+        "label": "Other",
+        "base_url": None,
+        "hint": "Any server that speaks the OpenAI Chat Completions protocol (vLLM, Together, a proxy, ...).",
+    },
 )
 _lock = threading.Lock()
 
@@ -70,9 +103,17 @@ class Pillar:
     """What differs between LLM and decision-model setup: the presets, the endpoints file, how an
     entry is validated, where custom keys live, and which preset fields are copied into an entry."""
 
-    def __init__(self, *, prefix: str, providers: tuple, path: Callable[[Settings], Any],
-                 validate: Callable[[dict, str, List[str]], Any], key_prefix: str, preset_fields: Tuple[str, ...],
-                 reserved: Callable[[Settings, str], Optional[str]] = lambda settings, name: None):
+    def __init__(
+        self,
+        *,
+        prefix: str,
+        providers: tuple,
+        path: Callable[[Settings], Any],
+        validate: Callable[[dict, str, List[str]], Any],
+        key_prefix: str,
+        preset_fields: Tuple[str, ...],
+        reserved: Callable[[Settings, str], Optional[str]] = lambda settings, name: None,
+    ):
         self.prefix, self.providers, self.path, self.validate = prefix, providers, path, validate
         self.key_prefix, self.preset_fields, self.reserved = key_prefix, preset_fields, reserved
         self.by_id = {p["id"]: p for p in providers}
@@ -88,17 +129,29 @@ class Pillar:
         out = []
         for p in self.providers:
             key_env = p.get("key_env")
-            out.append({
-                "id": p["id"], "label": p["label"], "hint": p["hint"], "key_url": p.get("key_url"),
-                "base_url": p["base_url"], "local": bool(p["base_url"] and is_local_host(p["base_url"])),
-                "needs_key": bool(key_env), "key_env": key_env, "key_set": bool(key_env and settings.get(key_env)),
-            })
+            out.append(
+                {
+                    "id": p["id"],
+                    "label": p["label"],
+                    "hint": p["hint"],
+                    "key_url": p.get("key_url"),
+                    "base_url": p["base_url"],
+                    "local": bool(p["base_url"] and is_local_host(p["base_url"])),
+                    "needs_key": bool(key_env),
+                    "key_env": key_env,
+                    "key_set": bool(key_env and settings.get(key_env)),
+                }
+            )
         return out
 
     def custom_key_env(self, name: str) -> str:
         """<prefix><NAME>_<hash>: one variable per endpoint name. The hash keeps names that differ only
         in '-' versus '_' (lab-1, lab_1) apart, so one endpoint's key never reaches another's URL."""
-        return "%s%s_%s" % (self.key_prefix, name.upper().replace("-", "_"), hashlib.sha256(name.encode()).hexdigest()[:8].upper())
+        return "%s%s_%s" % (
+            self.key_prefix,
+            name.upper().replace("-", "_"),
+            hashlib.sha256(name.encode()).hexdigest()[:8].upper(),
+        )
 
 
 def _reserved_llm_name(settings: Settings, name: str) -> Optional[str]:
@@ -107,8 +160,15 @@ def _reserved_llm_name(settings: Settings, name: str) -> Optional[str]:
     return None
 
 
-LLM = Pillar(prefix="llm:", providers=PROVIDERS, path=lambda s: s.llm_endpoints_path, validate=EndpointConfig,
-             key_prefix=CUSTOM_KEY_PREFIX, preset_fields=("response_format", "timeout_s", "rpm"), reserved=_reserved_llm_name)
+LLM = Pillar(
+    prefix="llm:",
+    providers=PROVIDERS,
+    path=lambda s: s.llm_endpoints_path,
+    validate=EndpointConfig,
+    key_prefix=CUSTOM_KEY_PREFIX,
+    preset_fields=("response_format", "timeout_s", "rpm"),
+    reserved=_reserved_llm_name,
+)
 
 
 def providers_public(settings: Settings) -> List[dict]:
@@ -136,10 +196,11 @@ def _free_name(entries: list, name: str, model: str, base_url: str) -> str:
     gpt-4o.mini both slug to gpt-4o-mini. The same model on the same server keeps its name (an update)."""
     taken = {e.get("name"): e for e in entries if isinstance(e, dict)}
     candidate, n = name, 2
-    while candidate in taken and (taken[candidate].get("model") != model
-                                  or str(taken[candidate].get("base_url") or "").rstrip("/") != base_url):
+    while candidate in taken and (
+        taken[candidate].get("model") != model or str(taken[candidate].get("base_url") or "").rstrip("/") != base_url
+    ):
         suffix = "-%d" % n
-        candidate, n = name[:32 - len(suffix)].rstrip("-_") + suffix, n + 1
+        candidate, n = name[: 32 - len(suffix)].rstrip("-_") + suffix, n + 1
     return candidate
 
 
@@ -168,14 +229,17 @@ def _read_file(pillar: Pillar, settings: Settings) -> dict:
     try:
         data = json.loads(path.read_text())
     except FileNotFoundError:
-        return {"_comment": "Written by the app's Connect a model dialog; edit freely. Keys live in .env, "
-                            "never here. See docs/agents.md.", "endpoints": []}
+        return {
+            "_comment": "Written by the app's Connect a model dialog; edit freely. Keys live in .env, "
+            "never here. See docs/agents.md.",
+            "endpoints": [],
+        }
     except (OSError, ValueError) as err:
         raise SetupError("%s could not be read (%s); fix or delete it first." % (path.name, err))
     if isinstance(data, list):
         data = {"endpoints": data}
     if not isinstance(data, dict) or not isinstance(data.get("endpoints"), list):
-        raise SetupError("%s must contain {\"endpoints\": [...]}; fix or delete it first." % path.name)
+        raise SetupError('%s must contain {"endpoints": [...]}; fix or delete it first.' % path.name)
     return data
 
 
@@ -192,16 +256,23 @@ def write_key(settings: Settings, key_env: str, key: str) -> List[str]:
     except envfile.EnvFileError as err:
         raise SetupError("The key was not saved: %s" % err)
     if settings.environ.get(key_env):
-        return ["%s is also set in the shell that started the server, and that value wins over .env. "
-                "Unset it and restart to use the key you just saved." % key_env]
+        return [
+            "%s is also set in the shell that started the server, and that value wins over .env. "
+            "Unset it and restart to use the key you just saved." % key_env
+        ]
     return []
 
 
 def probe_url(base_url: str, keyed: bool) -> str:
     """Validate a URL with the same rules as a saved endpoint (http(s), no credentials, https for keys)."""
     problems: List[str] = []
-    common = check_common({"name": "probe", "base_url": base_url, "model": "probe", "api_key_env": "PROBE_KEY" if keyed else None},
-                          "endpoint", problems, "https://example.com/v1", "API_KEY")
+    common = check_common(
+        {"name": "probe", "base_url": base_url, "model": "probe", "api_key_env": "PROBE_KEY" if keyed else None},
+        "endpoint",
+        problems,
+        "https://example.com/v1",
+        "API_KEY",
+    )
     if common is None:
         raise SetupError(problems[0].replace("endpoint 'probe': ", ""))
     return common["base_url"]
@@ -221,8 +292,8 @@ def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float) -> An
     try:
         with _OPENER.open(req, timeout=timeout_s) as resp:
             raw = resp.read(MAX_MODELS_BYTES + 1)
-            expired = watchdog.cancel()   # stop it before closing: a slow close is not a late list
-        if expired:   # the socket was shut mid-reply, so the list may be cut short
+            expired = watchdog.cancel()  # stop it before closing: a slow close is not a late list
+        if expired:  # the socket was shut mid-reply, so the list may be cut short
             raise late
     except urllib.error.HTTPError as err:
         err.close()
@@ -259,7 +330,7 @@ def parse_models(data: Any) -> List[dict]:
         if isinstance(item.get("name"), str):
             model["name"] = item["name"][:120]
         pricing = item.get("pricing")
-        if isinstance(pricing, dict):   # OpenRouter: USD per token, as strings
+        if isinstance(pricing, dict):  # OpenRouter: USD per token, as strings
             try:
                 prices = (float(pricing["prompt"]) * 1e6, float(pricing["completion"]) * 1e6)
                 if all(0 <= v < 1e6 for v in prices):
@@ -308,19 +379,25 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
             key_env = p["key_env"]
             if not key and not settings.get(key_env):
                 raise SetupError("Paste your %s API key." % p["label"])
-        else:   # local or custom: a key is optional and, for custom, private to this endpoint
+        else:  # local or custom: a key is optional and, for custom, private to this endpoint
             key_env = None
             kept = existing.get("api_key_env") if existing else None
             if key:
                 key_env = pillar.custom_key_env(name)
-                if any(isinstance(e, dict) and e.get("api_key_env") == key_env and e.get("name") != name for e in entries):
+                if any(
+                    isinstance(e, dict) and e.get("api_key_env") == key_env and e.get("name") != name for e in entries
+                ):
                     raise SetupError("%s is already used by another endpoint; choose another name." % key_env)
             elif kept and str(kept).startswith(pillar.key_prefix) and settings.get(kept):
                 if str(existing.get("base_url") or "").rstrip("/") != base_url:
                     raise SetupError("This endpoint's saved key is not sent to a new URL. Paste the key again.")
                 key_env = kept
-        raw: Dict[str, Any] = {"name": name, "label": text(body, "label", 60) or "%s (%s)" % (model.rsplit("/", 1)[-1], p["label"]),
-                               "base_url": base_url, "model": model}
+        raw: Dict[str, Any] = {
+            "name": name,
+            "label": text(body, "label", 60) or "%s (%s)" % (model.rsplit("/", 1)[-1], p["label"]),
+            "base_url": base_url,
+            "model": model,
+        }
         if key_env:
             raw["api_key_env"] = key_env
         for field in pillar.preset_fields:
@@ -359,12 +436,15 @@ def remove_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) ->
         entries = data["endpoints"]
         existing = next((e for e in entries if isinstance(e, dict) and e.get("name") == name), None)
         if existing is None:
-            raise SetupError("%r is not in %s; only models saved there can be removed here."
-                             % (name, pillar.path(settings).name))
+            raise SetupError(
+                "%r is not in %s; only models saved there can be removed here." % (name, pillar.path(settings).name)
+            )
         entries.remove(existing)
         _write_file(pillar, settings, data)
         key_env = str(existing.get("api_key_env") or "")
-        if key_env.startswith(pillar.key_prefix) and not any(isinstance(e, dict) and e.get("api_key_env") == key_env for e in entries):
+        if key_env.startswith(pillar.key_prefix) and not any(
+            isinstance(e, dict) and e.get("api_key_env") == key_env for e in entries
+        ):
             envfile.forget_key(settings.env_file.parent, settings.env_file.name, var=key_env)
         registry.reload()
     return {"removed": name}

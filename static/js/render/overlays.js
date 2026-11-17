@@ -9,7 +9,15 @@ const COLORS = { eligible: 0x57d27f, rejected: 0xff6b6b, chosen: 0xffe066, route
 
 // Transparent, unlit, depth-tested against cars and buildings; the ground layers never write depth,
 // so these always sit on top of the road.
-const overlayMat = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+const overlayMat = (color, opacity) =>
+  new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
 
 function ribbonMesh(pts, width, material, order) {
   const b = new GeoBuilder();
@@ -33,10 +41,24 @@ export class Overlays {
       chosen: overlayMat(COLORS.chosen, 0.9),
     };
     this.marker = new THREE.Group();
-    const ring = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.2, 48).rotateX(-Math.PI / 2), overlayMat(COLORS.eligible, 0.9));
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.7, 2.2, 48).rotateX(-Math.PI / 2),
+      overlayMat(COLORS.eligible, 0.9),
+    );
     ring.position.y = 0.05;
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 24, 32, 1, true).translate(0, 12, 0),
-      new THREE.MeshBasicMaterial({ map: beamTexture(), color: COLORS.eligible, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.9, 0.9, 24, 32, 1, true).translate(0, 12, 0),
+      new THREE.MeshBasicMaterial({
+        map: beamTexture(),
+        color: COLORS.eligible,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      }),
+    );
     this.marker.add(ring, beam);
     this.ring = ring;
     this.marker.visible = false;
@@ -45,8 +67,15 @@ export class Overlays {
   }
 
   setRoute(route) {
-    if (this.routeMesh) { this.scene.remove(this.routeMesh); this.routeMesh.geometry.dispose(); this.routeMesh = null; }
-    if (!route) { this.marker.visible = false; return; }
+    if (this.routeMesh) {
+      this.scene.remove(this.routeMesh);
+      this.routeMesh.geometry.dispose();
+      this.routeMesh = null;
+    }
+    if (!route) {
+      this.marker.visible = false;
+      return;
+    }
     this.routeMesh = ribbonMesh(route.pts, 0.35, this.mats.route, 1);
     this.scene.add(this.routeMesh);
     const end = route.endPoint();
@@ -55,7 +84,10 @@ export class Overlays {
   }
 
   setCandidates(candidates, chosenId) {
-    for (const m of this.candidateMeshes) { this.group.remove(m); m.geometry.dispose(); }
+    for (const m of this.candidateMeshes) {
+      this.group.remove(m);
+      m.geometry.dispose();
+    }
     this.candidateMeshes = [];
     if (!this.showCandidates || !candidates) return;
     for (const c of candidates) {

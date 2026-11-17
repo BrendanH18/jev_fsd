@@ -44,9 +44,24 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import decide
 from .config import Settings
-from .endpoints import (MAX_TRACE_DEPTH, Endpoint, EndpointError, EndpointRegistry, check_common, deeper_than,
-                        error_body, load_entries, number, post_json, price, public_url, reported_cost, scrub, tokens,
-                        unique)
+from .endpoints import (
+    MAX_TRACE_DEPTH,
+    Endpoint,
+    EndpointError,
+    EndpointRegistry,
+    check_common,
+    deeper_than,
+    error_body,
+    load_entries,
+    number,
+    post_json,
+    price,
+    public_url,
+    reported_cost,
+    scrub,
+    tokens,
+    unique,
+)
 
 PATH_RE = re.compile(r"^/[A-Za-z0-9._~/-]{0,200}$")
 DEFAULT_PATH = "/v1/systemone"
@@ -86,7 +101,7 @@ class DecisionConfig:
             problems.append("%s: path and check_path must be URL paths such as /v1/systemone" % where)
             return
         try:
-            timeout_s = float(number(raw.get("timeout_s", 5)))   # float(None) raises: timeout_s cannot be null
+            timeout_s = float(number(raw.get("timeout_s", 5)))  # float(None) raises: timeout_s cannot be null
             rpm = number(raw.get("rpm"), integer=True)
             rpm = None if rpm is None else max(0, rpm)
         except (TypeError, ValueError, OverflowError):
@@ -133,12 +148,22 @@ def _choice_answer(answer: Any, options: List[str], qid: str) -> Tuple[Optional[
         return None, "the answer for %s is a %s, not a choice" % (qid, str(answer.get("type"))[:20])
     choice = answer.get("choice")
     if not isinstance(choice, str) or choice not in options:
-        return None, "the answer for %s, %s, is not one of the options" % (qid, json.dumps(choice)[:60] if choice is not None else "nothing")
+        return None, "the answer for %s, %s, is not one of the options" % (
+            qid,
+            json.dumps(choice)[:60] if choice is not None else "nothing",
+        )
     probabilities = answer.get("probabilities")
-    clean = {k: p for k, p in ((k, _probability(probabilities.get(k))) for k in options) if p is not None} \
-        if isinstance(probabilities, dict) else {}
-    return {"type": "choice", "choice": choice, "probabilities": clean,
-            "confidence": _probability(answer.get("confidence"))}, None
+    clean = (
+        {k: p for k, p in ((k, _probability(probabilities.get(k))) for k in options) if p is not None}
+        if isinstance(probabilities, dict)
+        else {}
+    )
+    return {
+        "type": "choice",
+        "choice": choice,
+        "probabilities": clean,
+        "confidence": _probability(answer.get("confidence")),
+    }, None
 
 
 def check_answers(response: Optional[dict], questions: Dict[str, dict]) -> Tuple[Dict[str, dict], Optional[str]]:
@@ -146,7 +171,7 @@ def check_answers(response: Optional[dict], questions: Dict[str, dict]) -> Tuple
     or unusable route answer is dropped rather than failing the decision: the car already follows
     the first route option, as for LLM drivers."""
     raw = response.get("answers") if isinstance(response, dict) else None
-    raw = raw if isinstance(raw, dict) else {}   # judged per question, so a route-only request can still pass
+    raw = raw if isinstance(raw, dict) else {}  # judged per question, so a route-only request can still pass
     answers: Dict[str, dict] = {}
     for qid, question in questions.items():
         answer, why = _choice_answer(raw.get(qid), list(question["criteria"]), qid)
@@ -164,7 +189,7 @@ def _error_text(body: Any) -> str:
         detail = body.get("detail", body.get("error", body))
         if isinstance(detail, dict):
             return str(detail.get("message") or json.dumps(detail))[:300]
-        if isinstance(detail, list):   # FastAPI-style validation errors
+        if isinstance(detail, list):  # FastAPI-style validation errors
             return json.dumps(detail)[:300]
         return str(detail)[:300]
     return str(body)[:300]
@@ -188,15 +213,19 @@ class DecisionResult:
         if reported is not None:
             self.cost_usd, self.cost_source = reported, "provider"
         elif config.priced:
-            self.cost_usd = (self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)) / 1_000_000
+            self.cost_usd = (
+                self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)
+            ) / 1_000_000
             self.cost_source = "price"
         else:
             self.cost_usd, self.cost_source = 0.0, None
         if self.unparsed:
             self.response = {"note": "reply nested too deeply to parse; not shown"}
         elif deeper_than(response, MAX_TRACE_DEPTH):
-            self.response = {"note": "reply nested deeper than %d levels; not shown" % MAX_TRACE_DEPTH,
-                             "usage": {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens}}
+            self.response = {
+                "note": "reply nested deeper than %d levels; not shown" % MAX_TRACE_DEPTH,
+                "usage": {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens},
+            }
         else:
             self.response = response
         model, provider = response.get("model"), response.get("provider")
@@ -206,11 +235,16 @@ class DecisionResult:
     def meta(self) -> dict:
         config = self.endpoint.config
         return {
-            "model": self.model, "endpoint": config.name, "latency_ms": round(self.latency_ms, 1),
+            "model": self.model,
+            "endpoint": config.name,
+            "latency_ms": round(self.latency_ms, 1),
             "question_count": len(self.request.get("questions", {})),
-            "input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
-            "cost_usd": self.cost_usd, "cost_known": self.cost_source is not None,
-            "backend": "system one (stdlib)" + (" via %s" % self.provider if self.provider else ""), "live_call": True,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cost_usd": self.cost_usd,
+            "cost_known": self.cost_source is not None,
+            "backend": "system one (stdlib)" + (" via %s" % self.provider if self.provider else ""),
+            "live_call": True,
         }
 
 
@@ -241,9 +275,13 @@ class DecisionEndpoint(Endpoint):
             if 300 <= err.code < 400:
                 raise self.fail(str(err.reason), 502)
             if err.code in (401, 403):
-                raise self.fail("the endpoint rejected the API key (%d): %s" % (err.code, _error_text(body)), err.code, body)
+                raise self.fail(
+                    "the endpoint rejected the API key (%d): %s" % (err.code, _error_text(body)), err.code, body
+                )
             if err.code == 402:
-                raise self.fail("the provider says this account is out of credits (402): %s" % _error_text(body), 402, body)
+                raise self.fail(
+                    "the provider says this account is out of credits (402): %s" % _error_text(body), 402, body
+                )
             if err.code in (429, 529):
                 raise self.fail("rate limited or overloaded (%d): %s" % (err.code, _error_text(body)), 429, body)
             raise self.fail("HTTP %d: %s" % (err.code, _error_text(body)), 502, body)
@@ -295,14 +333,26 @@ def decision_decide(registry: DecisionRegistry, body: dict) -> dict:
     else:
         try:
             answers, invalid = check_answers(result.response, req["questions"])
-        except Exception as err:   # e.g. RecursionError from an absurd reply
+        except Exception as err:  # e.g. RecursionError from an absurd reply
             answers, invalid = {}, "could not read the reply (%s)" % type(err).__name__
     meta = dict(result.meta(), source="decision:" + endpoint.config.name)
     if invalid:
         meta["invalid"] = invalid
         endpoint.invalid(invalid)
-    request = dict(result.request, url=public_url(endpoint.config.base_url) + endpoint.config.path,
-                   api_key_env=endpoint.config.api_key_env)
+    request = dict(
+        result.request,
+        url=public_url(endpoint.config.base_url) + endpoint.config.path,
+        api_key_env=endpoint.config.api_key_env,
+    )
     trace = {"request": request, "response": result.response, "meta": meta}
-    return scrub({"tick": req["tick"], "epoch": req["epoch"], "answers": answers, "invalid": invalid,
-                  "meta": meta, "trace": trace}, endpoint.api_key)
+    return scrub(
+        {
+            "tick": req["tick"],
+            "epoch": req["epoch"],
+            "answers": answers,
+            "invalid": invalid,
+            "meta": meta,
+            "trace": trace,
+        },
+        endpoint.api_key,
+    )

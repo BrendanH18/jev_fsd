@@ -61,17 +61,17 @@ export const LEAD_M = 2;
 export const RETURN_M = 5;
 export const EASE_S = 2.5;
 export const EASE_MIN_M = 12;
-export const MIN_EASE_M = 8;         // the driven car pulls out only with this much room to do it, or drops back
+export const MIN_EASE_M = 8; // the driven car pulls out only with this much room to do it, or drops back
 export const MARGIN_S = 2;
-export const AIM_M = 0.25;           // aiming this much wider than the minimum passing distance
-export const LOOK_M = 50;            // a cyclist this far ahead counts
-export const DECIDE_M = 25;          // traffic decides whether to pass once its front is this near the cyclist
-export const FOLLOW_M = 8;           // staying behind, the driven car keeps this gap to the cyclist's rear wheel
+export const AIM_M = 0.25; // aiming this much wider than the minimum passing distance
+export const LOOK_M = 50; // a cyclist this far ahead counts
+export const DECIDE_M = 25; // traffic decides whether to pass once its front is this near the cyclist
+export const FOLLOW_M = 8; // staying behind, the driven car keeps this gap to the cyclist's rear wheel
 export const JUNCTION_CLEAR_M = 5;
 export const CROSSWALK_CLEAR_M = 10;
 export const RAIL_CLEAR_M = 30;
-const ROOM_AHEAD_M = 6;              // moving back in, at least this behind whoever is ahead of the cyclist
-const EDGE_SLACK_M = 0.2;            // across, the driver's far side stays this far inside the oncoming lane
+const ROOM_AHEAD_M = 6; // moving back in, at least this behind whoever is ahead of the cyclist
+const EDGE_SLACK_M = 0.2; // across, the driver's far side stays this far inside the oncoming lane
 const SIGHT_SLACK_M = 10;
 const IN_LANE_M = 1.6;
 const STEP_S = 0.05;
@@ -86,14 +86,17 @@ const laneCentre = (e) => e.lane_offsets?.[0] ?? e.lane_width / 2;
 const streetCache = new WeakMap();
 export function passStreet(map, edgeId) {
   let cache = streetCache.get(map);
-  if (!cache) streetCache.set(map, cache = new Map());
+  if (!cache) streetCache.set(map, (cache = new Map()));
   if (cache.has(edgeId)) return cache.get(edgeId);
-  const e = map.edges.get(edgeId), o = e && !e.oneway && e.lanes === 1 && !e.ring ? oppositeOf(map, e) : null;
+  const e = map.edges.get(edgeId),
+    o = e && !e.oneway && e.lanes === 1 && !e.ring ? oppositeOf(map, e) : null;
   let out = null;
   if (o) {
     const along = (edge, s) => (edge === e.id ? s : edge === o.id ? e.length - s : null);
     const crosswalks = (map.crosswalks || []).map((c) => along(c.edge, c.s)).filter((s) => s !== null);
-    const rails = railIndex(map).crossings.flatMap((c) => c.edges.map((on) => along(on.edge, on.s))).filter((s) => s !== null);
+    const rails = railIndex(map)
+      .crossings.flatMap((c) => c.edges.map((on) => along(on.edge, on.s)))
+      .filter((s) => s !== null);
     out = { opposite: o.id, crosswalks, rails };
   }
   cache.set(edgeId, out);
@@ -112,11 +115,16 @@ export function ridingIn(e, b) {
 // or null when it never does.
 function gainOn(gain, v0, vb, vTop, accel, react = 0) {
   if (gain <= 0) return { t: 0, d: 0 };
-  let t = 0, x = 0, v = Math.max(0, v0);
+  let t = 0,
+    x = 0,
+    v = Math.max(0, v0);
   while (t < 60) {
-    const a = t < react ? 0 : v < vTop ? Math.min(accel, (vTop - v) / STEP_S) : -Math.min(PASS_DECEL, (v - vTop) / STEP_S);
+    const a =
+      t < react ? 0 : v < vTop ? Math.min(accel, (vTop - v) / STEP_S) : -Math.min(PASS_DECEL, (v - vTop) / STEP_S);
     const v1 = Math.max(0, v + a * STEP_S);
-    x += (v + v1) / 2 * STEP_S; v = v1; t += STEP_S;
+    x += ((v + v1) / 2) * STEP_S;
+    v = v1;
+    t += STEP_S;
     if (x - vb * t >= gain) return { t, d: x };
   }
   return null;
@@ -130,26 +138,52 @@ function gainOn(gain, v0, vb, vTop, accel, react = 0) {
 // when it needs no pass: it is past the cyclist with room in its own lane. `driver` ({ accel, react,
 // vmax }), for traffic: as that driver pulls away. `others`: vehicles that may be in the way.
 export function planPass(world, e, { front, v, spec = CAR, bike, on, driver = null, others = [] }) {
-  const map = world.map, street = passStreet(map, e.id);
+  const map = world.map,
+    street = passStreet(map, e.id);
   if (!street) return null;
-  const o = map.edges.get(street.opposite), bs = bike.spec || BIKE, lc = laneCentre(e), oc = o.lane_offsets?.[0] ?? o.lane_width / 2;
-  const limit = e.limit || 11.2, min = minPassM(limit);
+  const o = map.edges.get(street.opposite),
+    bs = bike.spec || BIKE,
+    lc = laneCentre(e),
+    oc = o.lane_offsets?.[0] ?? o.lane_width / 2;
+  const limit = e.limit || 11.2,
+    min = minPassM(limit);
   // (the driver's centre, right of the centre line, the minimum passing distance clear of the cyclist)
   const target = on.lateral - bs.width / 2 - min - AIM_M - spec.width / 2;
   if (target - lc > -0.05) return null;
-  const rear = on.s - bs.rearOverhang, vb = Math.max(0, bike.v);
+  const rear = on.s - bs.rearOverhang,
+    vb = Math.max(0, bike.v);
   const vp = Math.min(limit, vb + PASS_MARGIN_MPS, driver?.vmax ?? Infinity);
-  const out = { bike, edge: e.id, opposite: o.id, front, min_pass_m: min, shift: target - lc, gap_m: rear - front, bike_rear: rear, bike_front: rear + bs.length,
-    bike_speed: vb, pass_mps: vp, ease_m: Math.max(EASE_MIN_M, EASE_S * vp),
-    start: front - spec.length, possible: true, why: null };
+  const out = {
+    bike,
+    edge: e.id,
+    opposite: o.id,
+    front,
+    min_pass_m: min,
+    shift: target - lc,
+    gap_m: rear - front,
+    bike_rear: rear,
+    bike_front: rear + bs.length,
+    bike_speed: vb,
+    pass_mps: vp,
+    ease_m: Math.max(EASE_MIN_M, EASE_S * vp),
+    start: front - spec.length,
+    possible: true,
+    why: null,
+  };
   const fail = (why) => Object.assign(out, { possible: false, why });
   if (target - spec.width / 2 < -(oc + o.lane_width / 2) + EDGE_SLACK_M) return fail("no_room");
   if (vp - vb < MIN_GAIN_MPS - 1e-9) return fail("too_fast");
-  const accel = Math.min(PASS_ACCEL, driver?.accel ?? PASS_ACCEL), react = v < 0.3 ? driver?.react ?? 0 : 0;
+  const accel = Math.min(PASS_ACCEL, driver?.accel ?? PASS_ACCEL),
+    react = v < 0.3 ? (driver?.react ?? 0) : 0;
   const full = gainOn(out.gap_m - LEAD_M, v, vb, vp, accel, react);
   const back = gainOn(out.gap_m + bs.length + RETURN_M + spec.length, v, vb, vp, accel, react);
   if (!full || !back) return fail("too_fast");
-  Object.assign(out, { full: front + full.d, back: front + back.d, to: front + back.d + out.ease_m, need_s: back.t + out.ease_m / vp });
+  Object.assign(out, {
+    full: front + full.d,
+    back: front + back.d,
+    to: front + back.d + out.ease_m,
+    need_s: back.t + out.ease_m / vp,
+  });
   out.from = out.full - out.ease_m;
   // (all of it this side of any level crossing, any marked crosswalk and the junction ahead)
   if (street.rails.some((s) => s > front - RAIL_CLEAR_M && s < out.to + RAIL_CLEAR_M)) return fail("level_crossing");
@@ -160,11 +194,20 @@ export function planPass(world, e, { front, v, spec = CAR, bike, on, driver = nu
   if ((world.workZones?.zones || []).some((z) => ids.has(z.closed) || ids.has(z.open))) return fail("work_zone");
   if ((world.laneClosures?.zones || []).some((z) => ids.has(z.edge))) return fail("lane_closure");
   for (const d of world.doubleParked?.vans || []) {
-    const lo = d.edge === e.id ? d.rear : e.length - d.front, hi = d.edge === e.id ? d.front : e.length - d.rear;
+    const lo = d.edge === e.id ? d.rear : e.length - d.front,
+      hi = d.edge === e.id ? d.front : e.length - d.rear;
     if (ids.has(d.edge) && hi > front - 10 && lo < out.to + 10) return fail("double_parked");
   }
   for (const n of others) {
-    if (n === bike || n.parked || n.kind === "pedestrian" || n.kind === "door" || Math.abs(n.x - bike.x) > 150 || Math.abs(n.y - bike.y) > 150) continue;
+    if (
+      n === bike ||
+      n.parked ||
+      n.kind === "pedestrian" ||
+      n.kind === "door" ||
+      Math.abs(n.x - bike.x) > 150 ||
+      Math.abs(n.y - bike.y) > 150
+    )
+      continue;
     const q = onStreet(e, n);
     if (!q) continue;
     if (redsOn(n) || (isStreetcar(n) && n.v < 0.5)) {
@@ -185,8 +228,14 @@ export function planPass(world, e, { front, v, spec = CAR, bike, on, driver = nu
 // `s` along the street): { clear, need_s, oncoming: { vehicle, eta_s } (the first one coming that
 // leaves too little time), sees_far_enough }.
 export function wayClear(world, plan, others, sight = null) {
-  const map = world.map, e = map.edges.get(plan.edge), by = plan.need_s + MARGIN_S;
-  const d = { edge: plan.edge, opposite: plan.opposite, detour: { from: Math.min(plan.start, plan.from), to: plan.to } };
+  const map = world.map,
+    e = map.edges.get(plan.edge),
+    by = plan.need_s + MARGIN_S;
+  const d = {
+    edge: plan.edge,
+    opposite: plan.opposite,
+    detour: { from: Math.min(plan.start, plan.from), to: plan.to },
+  };
   const [mx, my] = pointAt(e.pts, e.cum, Math.max(0, Math.min(e.length, (plan.start + plan.to) / 2)));
   let first = null;
   for (const n of others) {
@@ -205,9 +254,13 @@ export function wayClear(world, plan, others, sight = null) {
 // What `observer` (the driven car) can see along the oncoming lane by pass `plan`: sight(s), as for wayClear.
 // It looks out to PASS_SIGHT_M by clear daylight (sim/visibility.js); `sight.reach` is how far that is now.
 export function sightFor(world, plan, observer = world.ego) {
-  const map = world.map, e = map.edges.get(plan.edge), o = map.edges.get(plan.opposite), lat = -(o.lane_offsets?.[0] ?? o.lane_width / 2);
+  const map = world.map,
+    e = map.edges.get(plan.edge),
+    o = map.edges.get(plan.opposite),
+    lat = -(o.lane_offsets?.[0] ?? o.lane_width / 2);
   const sight = (s) => {
-    const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+    const p = pointAt(e.pts, e.cum, s),
+      h = headingAt(e.pts, e.cum, s);
     return world.visibility.canSee(observer, p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat, PASS_SIGHT_M);
   };
   sight.reach = world.visibility.reachAt(observer, observer.x, observer.y, PASS_SIGHT_M);
@@ -218,7 +271,9 @@ export function sightFor(world, plan, observer = world.ego) {
 // looking out to PASS_SIGHT_M by clear daylight.
 export function passOthers(world, observer = world.ego) {
   const reach = world.visibility.reachAt(observer, observer.x, observer.y, PASS_SIGHT_M);
-  return world.obstaclesNear(observer.x, observer.y, reach + 10).filter((n) => n !== observer && n.kind !== "pedestrian" && world.sees(observer, n, PASS_SIGHT_M));
+  return world
+    .obstaclesNear(observer.x, observer.y, reach + 10)
+    .filter((n) => n !== observer && n.kind !== "pedestrian" && world.sees(observer, n, PASS_SIGHT_M));
 }
 
 // Someone ahead of a driver whose front is `front` along edge `e`, between it and the cyclist of pass
@@ -242,15 +297,22 @@ export function queuedBehind(e, front, plan, driver, others) {
 // of the centre line) }, or null. Sensing-free, for the audit, coaching and the HUD.
 export function egoPassing(world) {
   if (!world.passCyclists) return null;
-  const ego = world.ego, map = world.map, FRONT = ego.spec.length - ego.spec.rearOverhang;
+  const ego = world.ego,
+    map = world.map,
+    FRONT = ego.spec.length - ego.spec.rearOverhang;
   for (const b of world.npcs) {
     if (b.kind !== "bike" || Math.abs(b.x - ego.x) > 40 || Math.abs(b.y - ego.y) > 40) continue;
-    const pe = b.path?.currentEdge?.(), e = pe && map.edges.get(pe.id);
+    const pe = b.path?.currentEdge?.(),
+      e = pe && map.edges.get(pe.id);
     if (!e || !passStreet(map, e.id)) continue;
-    const bon = ridingIn(e, b), on = bon && onStreet(e, ego);
+    const bon = ridingIn(e, b),
+      on = bon && onStreet(e, ego);
     if (!on?.same || on.lateral > laneCentre(e) - 0.5) continue;
-    const bs = b.spec || BIKE, rear = bon.s - bs.rearOverhang, front = on.s + FRONT;
-    if (front > rear - LEAD_M - 8 && front - ego.spec.length < rear + bs.length + RETURN_M + 12) return { bike: b, e, front, lateral: on.lateral, across: on.lateral < 0 };
+    const bs = b.spec || BIKE,
+      rear = bon.s - bs.rearOverhang,
+      front = on.s + FRONT;
+    if (front > rear - LEAD_M - 8 && front - ego.spec.length < rear + bs.length + RETURN_M + 12)
+      return { bike: b, e, front, lateral: on.lateral, across: on.lateral < 0 };
   }
   return null;
 }
@@ -261,30 +323,60 @@ export function egoPassing(world) {
 // going }, or null. Sensing-free, for the HUD.
 export function egoView(world) {
   if (!world.passCyclists) return null;
-  const ego = world.ego, map = world.map, FRONT = ego.spec.length - ego.spec.rearOverhang;
+  const ego = world.ego,
+    map = world.map,
+    FRONT = ego.spec.length - ego.spec.rearOverhang;
   const passing = egoPassing(world);
   let best = null;
   for (const b of world.npcs) {
     if (b.kind !== "bike" || Math.abs(b.x - ego.x) > LOOK_M + 10 || Math.abs(b.y - ego.y) > LOOK_M + 10) continue;
-    const pe = b.path?.currentEdge?.(), e = pe && map.edges.get(pe.id);
+    const pe = b.path?.currentEdge?.(),
+      e = pe && map.edges.get(pe.id);
     if (!e || !passStreet(map, e.id) || !world.sees(ego, b)) continue;
-    const bon = ridingIn(e, b), on = bon && onStreet(e, ego);
+    const bon = ridingIn(e, b),
+      on = bon && onStreet(e, ego);
     if (!on?.same) continue;
-    const front = on.s + FRONT, gap = bon.s - (b.spec || BIKE).rearOverhang - front;
+    const front = on.s + FRONT,
+      gap = bon.s - (b.spec || BIKE).rearOverhang - front;
     if ((gap < -0.5 && passing?.bike !== b) || gap > LOOK_M || (best && gap > best.gap)) continue;
     best = { bike: b, e, bon, front, gap };
   }
   if (!best) return null;
   const others = passOthers(world);
-  const plan = planPass(world, best.e, { front: best.front, v: ego.v, spec: ego.spec, bike: best.bike, on: best.bon, others });
+  const plan = planPass(world, best.e, {
+    front: best.front,
+    v: ego.v,
+    spec: ego.spec,
+    bike: best.bike,
+    on: best.bon,
+    others,
+  });
   if (!plan) return null;
   const way = plan.possible ? wayClear(world, plan, others, sightFor(world, plan)) : null;
-  return { bike: best.bike, plan, way, queued: queuedBehind(best.e, best.front, plan, ego, others), gap: best.gap, going: passing?.bike === best.bike };
+  return {
+    bike: best.bike,
+    plan,
+    way,
+    queued: queuedBehind(best.e, best.front, plan, ego, others),
+    gap: best.gap,
+    going: passing?.bike === best.bike,
+  };
 }
 
 // Why a pass is not on, for the HUD.
-const NOT_ON = { too_fast: "TOO FAST TO PASS", no_room: "NO ROOM TO PASS", junction: "JUNCTION AHEAD", crosswalk: "CROSSWALK AHEAD", level_crossing: "LEVEL CROSSING AHEAD",
-  work_zone: "WORK ZONE AHEAD", lane_closure: "LANE CLOSED AHEAD", double_parked: "VAN STOPPED AHEAD", school_bus: "SCHOOL BUS STOPPED", streetcar: "STREETCAR STOPPED", no_room_ahead: "NO ROOM TO PULL BACK IN" };
+const NOT_ON = {
+  too_fast: "TOO FAST TO PASS",
+  no_room: "NO ROOM TO PASS",
+  junction: "JUNCTION AHEAD",
+  crosswalk: "CROSSWALK AHEAD",
+  level_crossing: "LEVEL CROSSING AHEAD",
+  work_zone: "WORK ZONE AHEAD",
+  lane_closure: "LANE CLOSED AHEAD",
+  double_parked: "VAN STOPPED AHEAD",
+  school_bus: "SCHOOL BUS STOPPED",
+  streetcar: "STREETCAR STOPPED",
+  no_room_ahead: "NO ROOM TO PULL BACK IN",
+};
 
 // What the HUD tells the driver of the car about a cyclist riding in its lane ahead that it can pass
 // only through the oncoming lane, from when it can see it until it is back in its lane ahead of it:
@@ -293,12 +385,25 @@ const NOT_ON = { too_fast: "TOO FAST TO PASS", no_room: "NO ROOM TO PASS", junct
 export function cyclistNotice(world) {
   const view = egoView(world);
   if (!view) return null;
-  const { bike, plan, way, queued, going } = view, room = `${plan.min_pass_m === 1 ? "1" : "1.5"} M`;
-  if (going) return { key: `${bike.id}:going`, wait: false, text: `PASSING A CYCLIST · ${room} CLEAR · BACK IN WELL AHEAD OF THEM` };
+  const { bike, plan, way, queued, going } = view,
+    room = `${plan.min_pass_m === 1 ? "1" : "1.5"} M`;
+  if (going)
+    return {
+      key: `${bike.id}:going`,
+      wait: false,
+      text: `PASSING A CYCLIST · ${room} CLEAR · BACK IN WELL AHEAD OF THEM`,
+    };
   if (view.gap < 0) return null;
-  if (!plan.possible) return { key: `${bike.id}:${plan.why}`, wait: true, text: `CYCLIST AHEAD · ${NOT_ON[plan.why]} · STAY BEHIND` };
+  if (!plan.possible)
+    return { key: `${bike.id}:${plan.why}`, wait: true, text: `CYCLIST AHEAD · ${NOT_ON[plan.why]} · STAY BEHIND` };
   if (queued) return { key: `${bike.id}:queued`, wait: true, text: "CYCLIST AHEAD · WAIT YOUR TURN BEHIND" };
-  if (!way.clear) return { key: `${bike.id}:wait:${way.sees_far_enough ? "traffic" : "sight"}`, wait: true,
-    text: way.sees_far_enough ? "CYCLIST AHEAD · ONCOMING TRAFFIC · STAY BEHIND" : "CYCLIST AHEAD · CAN'T SEE FAR ENOUGH · STAY BEHIND" };
+  if (!way.clear)
+    return {
+      key: `${bike.id}:wait:${way.sees_far_enough ? "traffic" : "sight"}`,
+      wait: true,
+      text: way.sees_far_enough
+        ? "CYCLIST AHEAD · ONCOMING TRAFFIC · STAY BEHIND"
+        : "CYCLIST AHEAD · CAN'T SEE FAR ENOUGH · STAY BEHIND",
+    };
   return { key: `${bike.id}:clear`, wait: false, text: `CYCLIST AHEAD · WAY CLEAR · PASS WITH ${room}` };
 }

@@ -1,8 +1,12 @@
 // Oriented bounding boxes (separating axis theorem) and corridor queries along a route.
 
 function axes(obb) {
-  const c = Math.cos(obb.heading), s = Math.sin(obb.heading);
-  return [[c, s], [-s, c]];
+  const c = Math.cos(obb.heading),
+    s = Math.sin(obb.heading);
+  return [
+    [c, s],
+    [-s, c],
+  ];
 }
 
 function project(obb, axis) {
@@ -30,24 +34,35 @@ export function obbOverlap(a, b, margin = 0) {
 // Exact footprint overlap with a simple polygon, including concave buildings. Testing only
 // bounding boxes or vertices misses wall crossings and fills in concave recesses.
 export function obbPolygonOverlap(box, pts, margin = 0) {
-  const c = Math.cos(box.heading), s = Math.sin(box.heading);
-  const hl = box.halfLength + margin / 2, hw = box.halfWidth + margin / 2;
+  const c = Math.cos(box.heading),
+    s = Math.sin(box.heading);
+  const hl = box.halfLength + margin / 2,
+    hw = box.halfWidth + margin / 2;
   const local = pts.map(([x, y]) => {
-    const dx = x - box.center[0], dy = y - box.center[1];
+    const dx = x - box.center[0],
+      dy = y - box.center[1];
     return [dx * c + dy * s, -dx * s + dy * c];
   });
   if (local.some(([x, y]) => Math.abs(x) <= hl && Math.abs(y) <= hw)) return true;
   // Clip each wall segment against the vehicle rectangle (Liang–Barsky).
   for (let i = 0; i < local.length; i++) {
-    const a = local[i], b = local[(i + 1) % local.length];
-    let lo = 0, hi = 1;
+    const a = local[i],
+      b = local[(i + 1) % local.length];
+    let lo = 0,
+      hi = 1;
     for (let axis = 0; axis < 2; axis++) {
-      const half = axis === 0 ? hl : hw, d = b[axis] - a[axis];
+      const half = axis === 0 ? hl : hw,
+        d = b[axis] - a[axis];
       if (Math.abs(d) < 1e-12) {
-        if (Math.abs(a[axis]) > half) { hi = -1; break; }
+        if (Math.abs(a[axis]) > half) {
+          hi = -1;
+          break;
+        }
       } else {
-        const t0 = (-half - a[axis]) / d, t1 = (half - a[axis]) / d;
-        lo = Math.max(lo, Math.min(t0, t1)); hi = Math.min(hi, Math.max(t0, t1));
+        const t0 = (-half - a[axis]) / d,
+          t1 = (half - a[axis]) / d;
+        lo = Math.max(lo, Math.min(t0, t1));
+        hi = Math.min(hi, Math.max(t0, t1));
       }
     }
     if (lo <= hi) return true;
@@ -55,8 +70,9 @@ export function obbPolygonOverlap(box, pts, margin = 0) {
   // If no wall crosses the rectangle, the vehicle may be wholly inside the building.
   let inside = false;
   for (let i = 0, j = local.length - 1; i < local.length; j = i++) {
-    const a = local[i], b = local[j];
-    if ((a[1] > 0) !== (b[1] > 0) && 0 < (b[0] - a[0]) * -a[1] / (b[1] - a[1]) + a[0]) inside = !inside;
+    const a = local[i],
+      b = local[j];
+    if (a[1] > 0 !== b[1] > 0 && 0 < ((b[0] - a[0]) * -a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
   }
   return inside;
 }
@@ -71,7 +87,11 @@ export function corridorQuery(route, s0, s1, halfWidth, vehicles, hint = null, c
     // `frame(s)` re-measures a lateral from where the route was at the query's start, when the
     // route has moved to another lane in between
     const lateral = frame ? p.lateral + frame(p.s) : p.lateral;
-    if (p.distance > halfWidth + Math.abs(center) + Math.abs(lateral - p.lateral) + 3 || Math.abs(lateral - center) > halfWidth) continue;
+    if (
+      p.distance > halfWidth + Math.abs(center) + Math.abs(lateral - p.lateral) + 3 ||
+      Math.abs(lateral - center) > halfWidth
+    )
+      continue;
     out.push({ vehicle: v, s: p.s, lateral });
   }
   return out.sort((a, b) => a.s - b.s);

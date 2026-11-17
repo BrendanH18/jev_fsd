@@ -4,10 +4,17 @@
 // node --experimental-default-type=module scripts/test_demo_bench_runs.mjs   (no server, no network)
 import assert from "node:assert/strict";
 const store = new Map();
-globalThis.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) };
+globalThis.localStorage = {
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+};
 const { demoApi } = await import("../static/js/demo/api.js");
 
-const { saved } = await demoApi("/api/bench/save", { config: { brain: "rules" }, summary: { pass_rate: 1 }, results: [{ id: "s1-1", pass: true }] });
+const { saved } = await demoApi("/api/bench/save", {
+  config: { brain: "rules" },
+  summary: { pass_rate: 1 },
+  results: [{ id: "s1-1", pass: true }],
+});
 const { runs } = await demoApi("/api/bench/runs");
 assert.equal(runs.length, 1);
 assert.equal(runs[0].name, saved);

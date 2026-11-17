@@ -15,7 +15,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Tuple
 
 Bbox = Tuple[float, float, float, float]  # W, S, E, N
 
@@ -51,14 +51,14 @@ def overpass_query(bbox: Bbox) -> str:
     # ways of their multipolygons; and the stops beside the tracks)
     return (
         "[out:xml][timeout:90][bbox:%f,%f,%f,%f];"
-        "(way[\"highway\"];way[\"building\"];way[\"railway\"~\"^(rail|light_rail|tram|narrow_gauge)$\"];way[\"amenity\"=\"school\"];way[\"leisure\"=\"playground\"];"
-        "way[\"leisure\"~\"^(park|garden|recreation_ground)$\"];way[\"natural\"=\"water\"];way[\"waterway\"~\"^(river|canal|riverbank)$\"];way[\"landuse\"=\"grass\"];)->.a;"
-        "(rel[\"amenity\"=\"school\"];rel[\"leisure\"~\"^(playground|park|garden|recreation_ground)$\"];rel[\"natural\"=\"water\"];rel[\"waterway\"=\"riverbank\"];rel[\"landuse\"=\"grass\"];)->.z;way(r.z)->.zw;"
+        '(way["highway"];way["building"];way["railway"~"^(rail|light_rail|tram|narrow_gauge)$"];way["amenity"="school"];way["leisure"="playground"];'
+        'way["leisure"~"^(park|garden|recreation_ground)$"];way["natural"="water"];way["waterway"~"^(river|canal|riverbank)$"];way["landuse"="grass"];)->.a;'
+        '(rel["amenity"="school"];rel["leisure"~"^(playground|park|garden|recreation_ground)$"];rel["natural"="water"];rel["waterway"="riverbank"];rel["landuse"="grass"];)->.z;way(r.z)->.zw;'
         "(.a;.zw;)->.a;"
         ".a out body;.a >;out body qt;"
-        "(node[\"amenity\"=\"school\"];node[\"leisure\"=\"playground\"];node[\"railway\"~\"^(tram_stop|halt|station)$\"];);out body qt;"
-        ".z out body;rel[\"type\"~\"^restriction(:on_red)?$\"];out body;"
-        "rel[\"route\"~\"^(bus|trolleybus|tram)$\"];out body;" % (s, w, n, e)
+        '(node["amenity"="school"];node["leisure"="playground"];node["railway"~"^(tram_stop|halt|station)$"];);out body qt;'
+        '.z out body;rel["type"~"^restriction(:on_red)?$"];out body;'
+        'rel["route"~"^(bus|trolleybus|tram)$"];out body;' % (s, w, n, e)
     )
 
 
@@ -68,10 +68,15 @@ def _http(url: str, data: Optional[bytes], timeout: float) -> bytes:
         return resp.read()
 
 
-def fetch_osm_xml(bbox: Bbox, cache_dir: Path, timeout: float = 90.0, force: bool = False,
-                  log: Callable[[str], None] = lambda _msg: None,
-                  http: Callable[[str, Optional[bytes], float], bytes] = _http,
-                  sleep: Callable[[float], None] = time.sleep) -> Path:
+def fetch_osm_xml(
+    bbox: Bbox,
+    cache_dir: Path,
+    timeout: float = 90.0,
+    force: bool = False,
+    log: Callable[[str], None] = lambda _msg: None,
+    http: Callable[[str, Optional[bytes], float], bytes] = _http,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Path:
     """Return the path of the cached XML for `bbox`, downloading it first when needed."""
     w, s, e, n = bbox
     if (e - w) * (n - s) > MAX_AREA_DEG2:

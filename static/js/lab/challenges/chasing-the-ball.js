@@ -17,70 +17,145 @@ import { curbOffset } from "../../sim/roadside.js";
 import { legalStretches, straight as straightKerb } from "../../sim/parallel-park.js";
 import { rng } from "../../common.js";
 
-export const challenge = { id: "chasing-the-ball", title: "Chasing the ball", map: "kitsilano", weather: "dry", time: "afternoon", seed: 52042, icon: "●", difficulty: "Anticipation", hazard: "ball", balls: true, hidden: true, street: "West 7th Avenue",
-  description: "A sunny afternoon on West 7th Avenue in Kitsilano, a residential street lined with parked cars, the limit 50 km/h. Ahead, a ball bounces out from between the parked cars on your right and rolls across the street.", lesson: "A ball rolling into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb. Driver's handbooks across Canada say the same." };
+export const challenge = {
+  id: "chasing-the-ball",
+  title: "Chasing the ball",
+  map: "kitsilano",
+  weather: "dry",
+  time: "afternoon",
+  seed: 52042,
+  icon: "●",
+  difficulty: "Anticipation",
+  hazard: "ball",
+  balls: true,
+  hidden: true,
+  street: "West 7th Avenue",
+  description:
+    "A sunny afternoon on West 7th Avenue in Kitsilano, a residential street lined with parked cars, the limit 50 km/h. Ahead, a ball bounces out from between the parked cars on your right and rolls across the street.",
+  lesson:
+    "A ball rolling into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb. Driver's handbooks across Canada say the same.",
+};
 
-export const BALL_START_M = 120, BALL_TRIGGER_M = 28, BALL_PAST_M = 40, CHILD_AFTER_S = 1.2;
-export const BALL_ROW_M = [55, 30], BALL_GAP_M = 1.4, BALL_OPEN_M = 2.2;
-const HIDE_IN_M = 0.6, FAR_ROW_M = [45, 35];
+export const BALL_START_M = 120,
+  BALL_TRIGGER_M = 28,
+  BALL_PAST_M = 40,
+  CHILD_AFTER_S = 1.2;
+export const BALL_ROW_M = [55, 30],
+  BALL_GAP_M = 1.4,
+  BALL_OPEN_M = 2.2;
+const HIDE_IN_M = 0.6,
+  FAR_ROW_M = [45, 35];
 
 const siteCache = new WeakMap();
 export function ballSites(map, street = null) {
   if (!siteCache.has(map)) {
-    const sites = [], front = CAR.length - CAR.rearOverhang, crossed = new Set((map.crosswalks || []).map((c) => c.edge));
+    const sites = [],
+      front = CAR.length - CAR.rearOverhang,
+      crossed = new Set((map.crosswalks || []).map((c) => c.edge));
     for (const e of map.edges.values()) {
-      if (e.cls !== "residential" || !e.parking?.[1] || e.ring || e.oneway || e.lanes !== 1 || (e.limit || 0) < 40 / 3.6 - 0.1 || crossed.has(e.id) || map.zoneSpans.get(e.id)?.length || map.calmingSpans?.get?.(e.id)?.length) continue;
-      const at = BALL_START_M + front + 4, lo = at - BALL_ROW_M[0], hi = at + BALL_ROW_M[1];
+      if (
+        e.cls !== "residential" ||
+        !e.parking?.[1] ||
+        e.ring ||
+        e.oneway ||
+        e.lanes !== 1 ||
+        (e.limit || 0) < 40 / 3.6 - 0.1 ||
+        crossed.has(e.id) ||
+        map.zoneSpans.get(e.id)?.length ||
+        map.calmingSpans?.get?.(e.id)?.length
+      )
+        continue;
+      const at = BALL_START_M + front + 4,
+        lo = at - BALL_ROW_M[0],
+        hi = at + BALL_ROW_M[1];
       if (at + BALL_PAST_M > (e.control?.s_line ?? e.length) - 4) continue;
       if (!legalStretches(map, e).some(([a, b]) => a <= lo && b >= hi) || !straightKerb(e, lo - 2, hi + 2)) continue;
       sites.push({ edge: e.id, at, name: e.name });
     }
     siteCache.set(map, sites);
   }
-  const sites = siteCache.get(map), on = sites.filter((s) => s.name === street);
+  const sites = siteCache.get(map),
+    on = sites.filter((s) => s.name === street);
   return on.length ? on : sites;
 }
 
 export function ballScenario(map, challenge) {
   const site = ballSites(map, challenge.street)[0];
   if (!site) throw new Error(`No residential street with room for the "Chasing the ball" challenge.`);
-  const e = map.edges.get(site.edge), lane = map.lane(e.id, e.lanes - 1), k = lane.length / e.length;
+  const e = map.edges.get(site.edge),
+    lane = map.lane(e.id, e.lanes - 1),
+    k = lane.length / e.length;
   const front = CAR.length - CAR.rearOverhang;
   const s = (site.at - BALL_START_M - front) * k;
   const route = routeFromLanes(map, [lane], s, (site.at + BALL_PAST_M) * k);
   const p = pointAt(lane.pts, lane.cum, s);
-  return { id: challenge.id, start: { edge: e.id, lane: lane.idx, s, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, s) }, route, goal: route.polyline.at(-1), traffic_seed: challenge.seed,
+  return {
+    id: challenge.id,
+    start: { edge: e.id, lane: lane.idx, s, x: p[0], y: p[1], psi: headingAt(lane.pts, lane.cum, s) },
+    route,
+    goal: route.polyline.at(-1),
+    traffic_seed: challenge.seed,
     ball: { edge: e.id, at: site.at },
-    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 0 } };
+    tags: { length_m: Math.round(cumulative(route.polyline).at(-1)), signals: 0, stops: 0, lefts: 0, rights: 0 },
+  };
 }
 
 // The cars along both kerbs, staying put, and the ball waiting in the gap on the right (the world's own
 // balls off).
 export function placeBall(world, { edge, at }, seed) {
-  const map = world.map, e = map.edges.get(edge), random = rng(seed), lat = curbOffset(e, CAR);
+  const map = world.map,
+    e = map.edges.get(edge),
+    random = rng(seed),
+    lat = curbOffset(e, CAR);
   const colors = [0x8d9299, 0x2b3a55, 0xeeeeea, 0x1a1c20, 0x6b7f5e, 0x9b1e1e, 0xc4c8cc];
   let n = 0;
   const park = (side, s, l) => {
-    const p = pointAt(side.pts, side.cum, s), h = headingAt(side.pts, side.cum, s);
+    const p = pointAt(side.pts, side.cum, s),
+      h = headingAt(side.pts, side.cum, s);
     const car = new Vehicle(p[0] + Math.sin(h) * l, p[1] - Math.cos(h) * l, h, 0);
-    Object.assign(car, { id: `challenge_parked_${++n}`, color: colors[Math.floor(random() * colors.length)], style: n % 6, curb: "right", edge: side.id, stay: true });
+    Object.assign(car, {
+      id: `challenge_parked_${++n}`,
+      color: colors[Math.floor(random() * colors.length)],
+      style: n % 6,
+      curb: "right",
+      edge: side.id,
+      stay: true,
+    });
     world.parked.add(car);
   };
   // (the right kerb: bumper to bumper either side of the gap the ball comes out of)
   const rears = [];
-  for (let rear = at + BALL_OPEN_M / 2; rear + CAR.length <= at + BALL_ROW_M[1]; rear += CAR.length + BALL_GAP_M) rears.push(rear);
-  for (let rear = at - BALL_OPEN_M / 2 - CAR.length; rear >= at - BALL_ROW_M[0]; rear -= CAR.length + BALL_GAP_M) rears.push(rear);
+  for (let rear = at + BALL_OPEN_M / 2; rear + CAR.length <= at + BALL_ROW_M[1]; rear += CAR.length + BALL_GAP_M)
+    rears.push(rear);
+  for (let rear = at - BALL_OPEN_M / 2 - CAR.length; rear >= at - BALL_ROW_M[0]; rear -= CAR.length + BALL_GAP_M)
+    rears.push(rear);
   for (const rear of rears.sort((x, y) => x - y)) park(e, rear + CAR.rearOverhang, lat);
   // (and the far kerb, its twin edge's right, where one may park)
-  const twin = [...map.edges.values()].find((o) => o.from === e.to && o.to === e.from && Math.abs(o.length - e.length) < 1);
+  const twin = [...map.edges.values()].find(
+    (o) => o.from === e.to && o.to === e.from && Math.abs(o.length - e.length) < 1,
+  );
   if (twin?.parking?.[1] > 0) {
-    const tl = curbOffset(twin, CAR), L = twin.cum[twin.cum.length - 1], mid = L - at;
-    for (let r = mid - FAR_ROW_M[1]; r + CAR.length <= mid + FAR_ROW_M[0]; r += CAR.length + 1.2 + random() * 1.8) park(twin, r + CAR.rearOverhang, tl);
+    const tl = curbOffset(twin, CAR),
+      L = twin.cum[twin.cum.length - 1],
+      mid = L - at;
+    for (let r = mid - FAR_ROW_M[1]; r + CAR.length <= mid + FAR_ROW_M[0]; r += CAR.length + 1.2 + random() * 1.8)
+      park(twin, r + CAR.rearOverhang, tl);
   }
   const balls = world.balls;
   balls.target = 0;
-  const ball = balls.place({ edge, s: at, lat: lat - CAR.width / 2 + HIDE_IN_M, side: 1 },
-    { trigger: BALL_TRIGGER_M, speed: 3.6, drift: 0.25, delay: CHILD_AFTER_S, childSpeed: 2.5, color: 0xe8322b, id: "challenge_ball", keep: true });
+  const ball = balls.place(
+    { edge, s: at, lat: lat - CAR.width / 2 + HIDE_IN_M, side: 1 },
+    {
+      trigger: BALL_TRIGGER_M,
+      speed: 3.6,
+      drift: 0.25,
+      delay: CHILD_AFTER_S,
+      childSpeed: 2.5,
+      color: 0xe8322b,
+      id: "challenge_ball",
+      keep: true,
+    },
+  );
   return { ballId: ball.id, at: [ball.gap.x, ball.gap.y] };
 }
 

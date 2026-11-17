@@ -5,19 +5,36 @@
 import { featureFailures, featureMetrics } from "../sim/features/index.js";
 
 const SAMPLE_S = 0.1;
-const HARD_BRAKE = -3.5;     // m/s^2, sustained for 0.2 s counts as a hard brake
-const SPEEDING = 1.1;        // over 110% of the limit counts as speeding
+const HARD_BRAKE = -3.5; // m/s^2, sustained for 0.2 s counts as a hard brake
+const SPEEDING = 1.1; // over 110% of the limit counts as speeding
 
 export class DriveMetrics {
   constructor(routeLength) {
     this.routeLength = routeLength;
-    this.t = 0; this.distance = 0;
-    this.acc = 0; this.lastV = null; this.lastA = null;
-    this.maxAccel = 0; this.maxDecel = 0; this.jerkSq = 0; this.jerkN = 0; this.maxJerk = 0;
-    this.maxLatAccel = 0; this.hardBrakes = 0; this.hardFor = 0;
-    this.latSq = 0; this.latN = 0; this.maxLat = 0; this.laneChanges = 0; this.lastShift = null;
-    this.minGap = Infinity; this.minTtc = Infinity; this.minHeadway = Infinity;
-    this.speeding = 0; this.stopped = 0; this.maxProgress = 0;
+    this.t = 0;
+    this.distance = 0;
+    this.acc = 0;
+    this.lastV = null;
+    this.lastA = null;
+    this.maxAccel = 0;
+    this.maxDecel = 0;
+    this.jerkSq = 0;
+    this.jerkN = 0;
+    this.maxJerk = 0;
+    this.maxLatAccel = 0;
+    this.hardBrakes = 0;
+    this.hardFor = 0;
+    this.latSq = 0;
+    this.latN = 0;
+    this.maxLat = 0;
+    this.laneChanges = 0;
+    this.lastShift = null;
+    this.minGap = Infinity;
+    this.minTtc = Infinity;
+    this.minHeadway = Infinity;
+    this.speeding = 0;
+    this.stopped = 0;
+    this.maxProgress = 0;
     this.latencies = [];
   }
 
@@ -38,7 +55,9 @@ export class DriveMetrics {
       this.lastShift = shift;
       if (snap.onRoute) {
         const l = Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral);
-        this.latSq += l * l; this.latN++; this.maxLat = Math.max(this.maxLat, l);
+        this.latSq += l * l;
+        this.latN++;
+        this.maxLat = Math.max(this.maxLat, l);
       }
     }
     // a non-positive gap is a car alongside in the detection corridor, not one ahead (a real
@@ -58,10 +77,15 @@ export class DriveMetrics {
       const a = (v - this.lastV) / h;
       this.maxAccel = Math.max(this.maxAccel, a);
       this.maxDecel = Math.min(this.maxDecel, a);
-      if (a < HARD_BRAKE) { this.hardFor += h; if (this.hardFor >= 0.2 && this.hardFor - h < 0.2) this.hardBrakes++; } else this.hardFor = 0;
+      if (a < HARD_BRAKE) {
+        this.hardFor += h;
+        if (this.hardFor >= 0.2 && this.hardFor - h < 0.2) this.hardBrakes++;
+      } else this.hardFor = 0;
       if (this.lastA !== null) {
         const j = (a - this.lastA) / h;
-        this.jerkSq += j * j; this.jerkN++; this.maxJerk = Math.max(this.maxJerk, Math.abs(j));
+        this.jerkSq += j * j;
+        this.jerkN++;
+        this.maxJerk = Math.max(this.maxJerk, Math.abs(j));
       }
       this.lastA = a;
     }
@@ -214,18 +238,29 @@ export function decidedBy(autopilot) {
 // report counts from the start of the drive: main.js).
 export function decidedByCounts(by, since = {}) {
   const d = (k) => by[k] - (since[k] || 0);
-  return withShares({ model_decisions: d("model"), partial_decisions: d("partial"), local_decisions: d("local"), fallback_decisions: d("fallback") });
+  return withShares({
+    model_decisions: d("model"),
+    partial_decisions: d("partial"),
+    local_decisions: d("local"),
+    fallback_decisions: d("fallback"),
+  });
 }
 function withShares(c) {
   const n = c.model_decisions + c.local_decisions + c.fallback_decisions;
   const share = (k) => (n ? Math.round((c[k] / n) * 1000) / 1000 : null);
-  return { ...c, model_share: share("model_decisions"), local_share: share("local_decisions"), fallback_share: share("fallback_decisions") };
+  return {
+    ...c,
+    model_share: share("model_decisions"),
+    local_share: share("local_decisions"),
+    fallback_share: share("fallback_decisions"),
+  };
 }
 // The counts and shares over the results that report who decided: none for Rules, so its summaries
 // stay as they were.
 export function decidedByTotals(results) {
   return results.some((r) => r.model_decisions !== undefined)
-    ? withShares(Object.fromEntries(DECIDED_BY.map((k) => [k, results.reduce((a, r) => a + (r[k] || 0), 0)]))) : {};
+    ? withShares(Object.fromEntries(DECIDED_BY.map((k) => [k, results.reduce((a, r) => a + (r[k] || 0), 0)])))
+    : {};
 }
 // "62% model · 30% local · 8% fallback" for a result or summary with the shares, else null.
 export function decidedByText(r) {
@@ -251,16 +286,33 @@ export function aggregate(results) {
     pass_rate: Math.round((results.filter((r) => r.pass).length / n) * 1000) / 1000,
     arrived_rate: Math.round((results.filter((r) => r.arrived).length / n) * 1000) / 1000,
     km: Math.round(km * 100) / 100,
-    collisions: sum("collisions"), at_fault: sum("at_fault"), red_lights: sum("red_lights"), stop_signs: sum("stop_signs"),
+    collisions: sum("collisions"),
+    at_fault: sum("at_fault"),
+    red_lights: sum("red_lights"),
+    stop_signs: sum("stop_signs"),
     failed_to_yield: sum("failed_to_yield"),
     off_road_s: Math.round(sum("off_road_s") * 10) / 10,
-    safety_brakes: sum("safety_brakes"), deadlocks: sum("deadlocks"), fallbacks: sum("fallbacks"),
-    violations_per_km: km > 0 ? Math.round(((sum("collisions") + sum("red_lights") + sum("stop_signs") + sum("failed_to_yield")) / km) * 100) / 100 : null,
+    safety_brakes: sum("safety_brakes"),
+    deadlocks: sum("deadlocks"),
+    fallbacks: sum("fallbacks"),
+    violations_per_km:
+      km > 0
+        ? Math.round(
+            ((sum("collisions") + sum("red_lights") + sum("stop_signs") + sum("failed_to_yield")) / km) * 100,
+          ) / 100
+        : null,
     avg_kmh: mean("avg_kmh"),
-    min_gap_m: min("min_gap_m"), min_ttc_s: min("min_ttc_s"),
-    hard_brakes: sum("hard_brakes"), rms_jerk: mean("rms_jerk"), max_lat_accel: mean("max_lat_accel"),
-    lane_rms_m: mean("lane_rms_m"), lane_changes: sum("lane_changes"), speeding_s: Math.round(sum("speeding_s") * 10) / 10,
-    decisions: sum("decisions"), calls: sum("calls"), tokens: sum("tokens"),
+    min_gap_m: min("min_gap_m"),
+    min_ttc_s: min("min_ttc_s"),
+    hard_brakes: sum("hard_brakes"),
+    rms_jerk: mean("rms_jerk"),
+    max_lat_accel: mean("max_lat_accel"),
+    lane_rms_m: mean("lane_rms_m"),
+    lane_changes: sum("lane_changes"),
+    speeding_s: Math.round(sum("speeding_s") * 10) / 10,
+    decisions: sum("decisions"),
+    calls: sum("calls"),
+    tokens: sum("tokens"),
     cost_usd: Math.round(sum("cost_usd") * 1e6) / 1e6,
     ...decidedByTotals(results),
   };

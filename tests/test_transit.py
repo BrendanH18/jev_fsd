@@ -67,8 +67,13 @@ class TransitTests(unittest.TestCase):
     def test_stops_on_the_right_hand_side_are_placed_along_the_run_in_order(self):
         # eastbound stops are south of the avenue (right of travel); a westbound one north of it is not
         # this route's, and a stop on the road and its sign 8 m on are one stop
-        stops = [(31, 60, -8, "platform"), (32, -200, -9, "platform 1"), (33, -100, 9, "platform"), (34, 68, -1, "stop"),
-                 (35, 290, -8, "platform")]
+        stops = [
+            (31, 60, -8, "platform"),
+            (32, -200, -9, "platform 1"),
+            (33, -100, 9, "platform"),
+            (34, 68, -1, "stop"),
+            (35, 290, -8, "platform"),
+        ]
         osm, bbox = avenue(stops)
         pack = pack_from_osm(osm, bbox)
         transit = transit_from_osm(osm, pack)
@@ -118,7 +123,9 @@ class TransitTests(unittest.TestCase):
         median = track(osm, 1200, 62, -9, [-290, 0, 290])
         lat, lon = proj.to_latlon(60, -1.6)
         osm.add_node(1300, lat, lon, {"railway": "tram_stop", "name": "Tram 1"})
-        osm.add_relation(950, east + [("node", 1300, "stop")], {"type": "route", "route": "tram", "ref": "5", "name": "5 East"})
+        osm.add_relation(
+            950, east + [("node", 1300, "stop")], {"type": "route", "route": "tram", "ref": "5", "name": "5 East"}
+        )
         osm.add_relation(951, west, {"type": "route", "route": "tram", "ref": "5", "name": "5 West"})
         osm.add_relation(952, median, {"type": "route", "route": "tram", "ref": "6", "name": "6 Median"})
         pack = pack_from_osm(osm, bbox)
@@ -161,11 +168,28 @@ class TransitTests(unittest.TestCase):
             # (written as OSM XML, the way a download is cached)
             lines = ['<?xml version="1.0"?><osm>']
             for nid, (lat, lon, tags) in osm.nodes.items():
-                lines.append('<node id="%d" lat="%.8f" lon="%.8f">%s</node>' % (nid, lat, lon, "".join('<tag k="%s" v="%s"/>' % kv for kv in tags.items())))
+                lines.append(
+                    '<node id="%d" lat="%.8f" lon="%.8f">%s</node>'
+                    % (nid, lat, lon, "".join('<tag k="%s" v="%s"/>' % kv for kv in tags.items()))
+                )
             for w in osm.ways:
-                lines.append('<way id="%d">%s%s</way>' % (w["id"], "".join('<nd ref="%d"/>' % n for n in w["nodes"]), "".join('<tag k="%s" v="%s"/>' % kv for kv in w["tags"].items())))
+                lines.append(
+                    '<way id="%d">%s%s</way>'
+                    % (
+                        w["id"],
+                        "".join('<nd ref="%d"/>' % n for n in w["nodes"]),
+                        "".join('<tag k="%s" v="%s"/>' % kv for kv in w["tags"].items()),
+                    )
+                )
             for r in osm.relations:
-                lines.append('<relation id="%d">%s%s</relation>' % (r["id"], "".join('<member type="%s" ref="%d" role="%s"/>' % m for m in r["members"]), "".join('<tag k="%s" v="%s"/>' % kv for kv in r["tags"].items())))
+                lines.append(
+                    '<relation id="%d">%s%s</relation>'
+                    % (
+                        r["id"],
+                        "".join('<member type="%s" ref="%d" role="%s"/>' % m for m in r["members"]),
+                        "".join('<tag k="%s" v="%s"/>' % kv for kv in r["tags"].items()),
+                    )
+                )
             lines.append("</osm>")
             fetch.cache_path(maps, bbox).write_text("".join(lines))
             built = build_transit(bbox, maps, pack)
@@ -185,6 +209,7 @@ class TransitTests(unittest.TestCase):
 
     def test_demo_bundles_transit_with_each_map(self):
         from scripts import build_demo
+
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "site"
             with contextlib.redirect_stdout(io.StringIO()):

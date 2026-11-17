@@ -5,10 +5,13 @@ globalThis.document = { querySelector: () => null };
 const { scenarioTimeLimit } = await import("../static/js/bench/runner.js");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 for (const length_m of [0, 100, 300, 520, 662, 1400]) {
-  const sc = { tags: { length_m } }, original = Math.max(120, length_m / 2.5);
+  const sc = { tags: { length_m } },
+    original = Math.max(120, length_m / 2.5);
   assert.equal(scenarioTimeLimit(sc), original);
-  for (const weather of Object.keys(WEATHER)) assert.equal(scenarioTimeLimit(sc, { features: "bare", weather }), original);
-  for (const weather of ["dry", "rain", "fog"]) assert.equal(scenarioTimeLimit(sc, { features: "city", weather }), original);
+  for (const weather of Object.keys(WEATHER))
+    assert.equal(scenarioTimeLimit(sc, { features: "bare", weather }), original);
+  for (const weather of ["dry", "rain", "fog"])
+    assert.equal(scenarioTimeLimit(sc, { features: "city", weather }), original);
   assert.equal(scenarioTimeLimit(sc, { features: "city", weather: "snow" }), original / WEATHER.snow.speed);
   assert.equal(Number.isFinite(scenarioTimeLimit(sc, { features: "city", weather: "snow" })), true);
 }

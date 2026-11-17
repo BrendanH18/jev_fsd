@@ -8,12 +8,11 @@ All coordinates are meters in the projection's frame (x east, y north), rounded 
 
 from __future__ import annotations
 
-import hashlib
 import json
 import random
 import time
 from pathlib import Path
-from typing import Callable, Optional, Tuple
+from typing import Callable, Tuple
 
 from .. import geometry as g
 from . import fetch
@@ -31,8 +30,13 @@ def pack_path(maps_dir: Path, bbox: Bbox) -> Path:
     return maps_dir / ("%s.v%s.pack.json" % (fetch.cache_key(bbox), PACK_VERSION))
 
 
-def build_pack(bbox: Bbox, maps_dir: Path, force: bool = False, log: Callable[[str], None] = lambda m: None,
-               include_service: bool = False) -> dict:
+def build_pack(
+    bbox: Bbox,
+    maps_dir: Path,
+    force: bool = False,
+    log: Callable[[str], None] = lambda m: None,
+    include_service: bool = False,
+) -> dict:
     """Cached pack for a bbox. Raises fetch.FetchError when the map cannot be downloaded."""
     path = pack_path(maps_dir, bbox)
     if path.exists() and not force:
@@ -42,9 +46,17 @@ def build_pack(bbox: Bbox, maps_dir: Path, force: bool = False, log: Callable[[s
     osm = parse_xml(xml_path)
     pack = pack_from_osm(osm, bbox, include_service=include_service, name=fetch.cache_key(bbox))
     pack["stats"]["build_ms"] = round((time.perf_counter() - started) * 1000)
-    log("map: built pack %s in %d ms (%d edges, %d intersections, %d stops, %d buildings)" % (
-        path.name, pack["stats"]["build_ms"], len(pack["edges"]), len(pack["intersections"]),
-        len(pack["stops"]), len(pack["buildings"])))
+    log(
+        "map: built pack %s in %d ms (%d edges, %d intersections, %d stops, %d buildings)"
+        % (
+            path.name,
+            pack["stats"]["build_ms"],
+            len(pack["edges"]),
+            len(pack["intersections"]),
+            len(pack["stops"]),
+            len(pack["buildings"]),
+        )
+    )
     maps_dir.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(pack, separators=(",", ":")))
     return pack
@@ -64,11 +76,19 @@ def serialize(graph: RoadGraph, controls: dict, buildings: list, bbox: Bbox, pro
     lanes = []
     for e in graph.edges.values():
         item = {
-            "id": e["id"], "from": e["from"], "to": e["to"],
+            "id": e["id"],
+            "from": e["from"],
+            "to": e["to"],
             "pts": [(g.r2(x), g.r2(y)) for x, y in e["pts"]],
-            "lanes": e["lanes"], "lane_width": e["lane_width"], "width": g.r2(e["width"]),
-            "limit": g.r1(e["limit"]), "oneway": e["oneway"], "name": e["name"], "cls": e["cls"],
-            "length": g.r2(e["length"]), "lane_offsets": [g.r2(d) for d in e["lane_offsets"]],
+            "lanes": e["lanes"],
+            "lane_width": e["lane_width"],
+            "width": g.r2(e["width"]),
+            "limit": g.r1(e["limit"]),
+            "oneway": e["oneway"],
+            "name": e["name"],
+            "cls": e["cls"],
+            "length": g.r2(e["length"]),
+            "lane_offsets": [g.r2(d) for d in e["lane_offsets"]],
             "asphalt": [g.r2(e["asphalt"][0]), g.r2(e["asphalt"][1])],
             "parking": [g.r2(e["parking"][0]), g.r2(e["parking"][1])],
         }
@@ -86,12 +106,19 @@ def serialize(graph: RoadGraph, controls: dict, buildings: list, bbox: Bbox, pro
     stats["buildings"] = len(buildings)
     x0, y0, x1, y1 = proj.bbox_xy(bbox)
     return {
-        "pack_version": PACK_VERSION, "name": name, "bbox": list(bbox),
+        "pack_version": PACK_VERSION,
+        "name": name,
+        "bbox": list(bbox),
         "extent": [g.r2(x0), g.r2(y0), g.r2(x1), g.r2(y1)],
-        "origin": proj.as_dict(), "stats": stats,
-        "nodes": nodes, "edges": edges, "lanes": lanes,
-        "intersections": controls["intersections"], "stops": controls["stops"],
-        "yields": controls.get("yields", []), "roundabouts": graph.roundabouts,
+        "origin": proj.as_dict(),
+        "stats": stats,
+        "nodes": nodes,
+        "edges": edges,
+        "lanes": lanes,
+        "intersections": controls["intersections"],
+        "stops": controls["stops"],
+        "yields": controls.get("yields", []),
+        "roundabouts": graph.roundabouts,
         "buildings": buildings,
     }
 

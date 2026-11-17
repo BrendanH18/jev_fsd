@@ -21,8 +21,16 @@ assert.equal(clock.hour, 7, "fixed clock ignores elapsed simulation time");
 assert.equal(formatClock(23.99999), "23:59");
 assert.equal(formatClock(24), "00:00");
 assert.equal(formatClock(-0.5), "23:30");
-assert.deepEqual(worldOptions(new URLSearchParams("seed=71&traffic=0&clock=60")), { seed: 71, traffic: 0, clockRate: 60 });
-assert.deepEqual(worldOptions(new URLSearchParams("seed=bad&traffic=-5&clock=NaN"), 16), { seed: 1, traffic: 16, clockRate: 0 });
+assert.deepEqual(worldOptions(new URLSearchParams("seed=71&traffic=0&clock=60")), {
+  seed: 71,
+  traffic: 0,
+  clockRate: 60,
+});
+assert.deepEqual(worldOptions(new URLSearchParams("seed=bad&traffic=-5&clock=NaN"), 16), {
+  seed: 1,
+  traffic: 16,
+  clockRate: 0,
+});
 assert.equal(worldOptions(new URLSearchParams("traffic=9999")).traffic, 120);
 
 setWeather("dry");
@@ -49,7 +57,21 @@ assert.ok(!sight.canSee(observer, 0, 30));
 sight.setNight(NaN);
 assert.equal(sight.night, 0);
 setWeather("dry");
-const blocked = new Visibility({ pack: { buildings: [{ h: 4, pts: [[10, -5], [20, -5], [20, 5], [10, 5]] }] } });
+const blocked = new Visibility({
+  pack: {
+    buildings: [
+      {
+        h: 4,
+        pts: [
+          [10, -5],
+          [20, -5],
+          [20, 5],
+          [10, 5],
+        ],
+      },
+    ],
+  },
+});
 assert.ok(!blocked.canSee({ x: 0, y: 0, psi: 0 }, 30, 0), "headlights do not reveal hazards through buildings");
 blocked.setNight(1);
 assert.ok(!blocked.canSee({ x: 0, y: 0, psi: 0 }, 30, 0));
@@ -58,7 +80,8 @@ const { fixtureWorld } = await import("../static/tests/jev-fixtures.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
 const world = fixtureWorld();
-const farCar = new Vehicle(75, 0, 0, 0); farCar.id = "far_car";
+const farCar = new Vehicle(75, 0, 0, 0);
+farCar.id = "far_car";
 world.npcs = [farCar];
 const daySnapshot = buildSnapshot(world);
 assert.ok(daySnapshot.observed.includes(farCar));
@@ -70,5 +93,8 @@ world.npcs = [];
 const nightTarget = buildSnapshot(world).target;
 world.visibility.setNight(0);
 const dayTarget = buildSnapshot(world).target;
-assert.ok(nightTarget.v < dayTarget.v && nightTarget.reasons.includes("limited visibility"), "night sight limits feed the actual driving target");
+assert.ok(
+  nightTarget.v < dayTarget.v && nightTarget.reasons.includes("limited visibility"),
+  "night sight limits feed the actual driving target",
+);
 console.log("World clock, settings and night visibility checks passed");

@@ -43,7 +43,7 @@ CROSSING_TAGS = ("level_crossing", "tram_level_crossing")
 STOP_TAGS = ("tram_stop", "halt", "station")
 SNAP_M = 3.0
 STOP_NEAR_M = 12.0
-MIN_ANGLE_DEG = 20.0   # (a track this nearly along a street runs in it: not a crossing of it)
+MIN_ANGLE_DEG = 20.0  # (a track this nearly along a street runs in it: not a crossing of it)
 
 Bbox = Tuple[float, float, float, float]
 Point = Tuple[float, float]
@@ -58,8 +58,9 @@ def load_rail(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_rail(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-               log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_rail(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached tracks and level crossings for a bbox, built from its raw OSM download if that is
     on disk (it is never downloaded here). None when there is neither."""
     path = rail_path(maps_dir, bbox)
@@ -122,10 +123,20 @@ def rail_from_osm(osm: OsmData, pack: dict) -> dict:
             if not on:
                 continue
             ntags = osm.nodes[nid][2]
-            found.append({"id": "lx%d" % nid, "track": tid, "s": g.r1(q["s"]), "x": g.r2(p[0]), "y": g.r2(p[1]),
-                          "heading_deg": g.r1(math.degrees(q["heading"])),
-                          "lights": ntags.get("crossing:light") not in (None, "no"), "gates": ntags.get("crossing:barrier") not in (None, "no"),
-                          "bell": ntags.get("crossing:bell") not in (None, "no"), "edges": sorted(on, key=lambda o: o["edge"])})
+            found.append(
+                {
+                    "id": "lx%d" % nid,
+                    "track": tid,
+                    "s": g.r1(q["s"]),
+                    "x": g.r2(p[0]),
+                    "y": g.r2(p[1]),
+                    "heading_deg": g.r1(math.degrees(q["heading"])),
+                    "lights": ntags.get("crossing:light") not in (None, "no"),
+                    "gates": ntags.get("crossing:barrier") not in (None, "no"),
+                    "bell": ntags.get("crossing:bell") not in (None, "no"),
+                    "edges": sorted(on, key=lambda o: o["edge"]),
+                }
+            )
         if not found:
             continue
         stops = []
@@ -137,12 +148,26 @@ def rail_from_osm(osm: OsmData, pack: dict) -> dict:
                 stops.append({"id": "rs%d" % n, "name": ntags.get("name") or "", "s": g.r1(q["s"])})
         # (an end inside the map is a terminus: the track stops there; one cut by the map's edge goes on)
         ends = ["terminus" if a_in else "edge", "terminus" if b_in else "edge"]
-        tracks.append({"id": tid, "kind": kind, "name": tags.get("name") or "", "operator": tags.get("operator") or "",
-                       "usage": tags.get("usage") or "", "length": g.r1(cum[-1]), "ends": ends,
-                       "pts": [[g.r2(x), g.r2(y)] for x, y in kept], "stops": sorted(stops, key=lambda st: st["s"])})
+        tracks.append(
+            {
+                "id": tid,
+                "kind": kind,
+                "name": tags.get("name") or "",
+                "operator": tags.get("operator") or "",
+                "usage": tags.get("usage") or "",
+                "length": g.r1(cum[-1]),
+                "ends": ends,
+                "pts": [[g.r2(x), g.r2(y)] for x, y in kept],
+                "stops": sorted(stops, key=lambda st: st["s"]),
+            }
+        )
         crossings.extend(found)
-    return {"rail_version": RAIL_VERSION, "name": pack.get("name", ""),
-            "tracks": sorted(tracks, key=lambda t: t["id"]), "crossings": sorted(crossings, key=lambda c: c["id"])}
+    return {
+        "rail_version": RAIL_VERSION,
+        "name": pack.get("name", ""),
+        "tracks": sorted(tracks, key=lambda t: t["id"]),
+        "crossings": sorted(crossings, key=lambda c: c["id"]),
+    }
 
 
 def _chains(ways: List[dict]):

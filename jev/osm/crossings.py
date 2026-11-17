@@ -38,7 +38,7 @@ CROSSINGS_VERSION = "2"
 SNAP_M = 3.0
 JUNCTION_M = 16.0
 MERGE_M = 8.0
-END_M = 12.0          # (nor this close to a dead end or the edge of the map, where people turn back)
+END_M = 12.0  # (nor this close to a dead end or the edge of the map, where people turn back)
 MARKED = ("uncontrolled", "marked", "zebra")
 NOT_MARKED = ("unmarked", "no", "informal", "traffic_signals", "impossible")
 # how each marking is painted: bars along the traffic (`zebra`), or two lines across it (`lines`)
@@ -58,8 +58,9 @@ def load_crossings(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_crossings(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                    log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_crossings(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached crossings for a bbox, built from its raw OSM download if that is on disk (it is
     never downloaded here). None when there is neither."""
     path = crossings_path(maps_dir, bbox)
@@ -102,9 +103,15 @@ def is_pxo(tags: dict, origin: dict) -> bool:
     if not ontario or markings(tags) is None:
         return False
     ref = tags.get("crossing_ref", "").lower()
-    return ref == "pxo" or ref.startswith("pxo:") or (
-        tags.get("crossing:signed") == "yes" and tags.get("crossing:signals") == "no"
-        and tags.get("flashing_lights") in ("button", "yes", "always"))
+    return (
+        ref == "pxo"
+        or ref.startswith("pxo:")
+        or (
+            tags.get("crossing:signed") == "yes"
+            and tags.get("crossing:signals") == "no"
+            and tags.get("flashing_lights") in ("button", "yes", "always")
+        )
+    )
 
 
 def crossings_from_osm(osm: OsmData, pack: dict) -> dict:
@@ -149,13 +156,26 @@ def crossings_from_osm(osm: OsmData, pack: dict) -> dict:
         twin = {e["id"]} | {o["id"] for o in edges if o["from"] == e["to"] and o["to"] == e["from"]}
         if any(c["street"] & twin and math.hypot(c["x"] - q[0], c["y"] - q[1]) < MERGE_M for c in kept):
             continue
-        kept.append({"id": "x%d" % nid, "edge": e["id"], "s": g.r1(s), "x": g.r2(q[0]), "y": g.r2(q[1]),
-                     **({"pxo": True, "beacons": tags.get("flashing_lights") in ("button", "yes", "always")} if pxo else {}),
-                     "markings": mark, "island": tags.get("crossing:island") == "yes", "street": twin})
+        kept.append(
+            {
+                "id": "x%d" % nid,
+                "edge": e["id"],
+                "s": g.r1(s),
+                "x": g.r2(q[0]),
+                "y": g.r2(q[1]),
+                **({"pxo": True, "beacons": tags.get("flashing_lights") in ("button", "yes", "always")} if pxo else {}),
+                "markings": mark,
+                "island": tags.get("crossing:island") == "yes",
+                "street": twin,
+            }
+        )
     for c in kept:
         c.pop("street")
-    return {"crossings_version": CROSSINGS_VERSION, "name": pack.get("name", ""),
-            "crossings": sorted(kept, key=lambda c: c["id"])}
+    return {
+        "crossings_version": CROSSINGS_VERSION,
+        "name": pack.get("name", ""),
+        "crossings": sorted(kept, key=lambda c: c["id"]),
+    }
 
 
 def _snap(edges: List[dict], p: Tuple[float, float], snap_m: float = SNAP_M):

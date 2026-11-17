@@ -36,9 +36,9 @@ from .project import Projection
 from .zones import _to_segment
 
 BRIDGES_VERSION = "1"
-MATCH_M = 4.0          # a street's centreline this near a bridge way's line runs along it
-MAX_TURN_DEG = 25.0    # ... going its way, either direction
-STEP_M = 2.0           # each street is checked this often along its centreline
+MATCH_M = 4.0  # a street's centreline this near a bridge way's line runs along it
+MAX_TURN_DEG = 25.0  # ... going its way, either direction
+STEP_M = 2.0  # each street is checked this often along its centreline
 JOIN_M = 6.0
 MIN_SPAN_M = 8.0
 
@@ -55,8 +55,9 @@ def load_bridges(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def build_bridges(bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False,
-                  log: Callable[[str], None] = lambda m: None) -> Optional[dict]:
+def build_bridges(
+    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+) -> Optional[dict]:
     """The cached bridges for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = bridges_path(maps_dir, bbox)
@@ -85,7 +86,14 @@ def bridge_ways(osm: OsmData, proj: Projection) -> List[dict]:
             continue
         line = [proj.to_xy(*osm.nodes[n][:2]) for n in w["nodes"] if n in osm.nodes]
         if len(line) >= 2:
-            out.append({"id": "w%d" % w["id"], "name": tags.get("bridge:name") or tags.get("name", ""), "kind": tags["bridge"], "line": line})
+            out.append(
+                {
+                    "id": "w%d" % w["id"],
+                    "name": tags.get("bridge:name") or tags.get("name", ""),
+                    "kind": tags["bridge"],
+                    "line": line,
+                }
+            )
     return out
 
 
@@ -129,11 +137,15 @@ def bridges_from_osm(osm: OsmData, pack: dict) -> dict:
         scale = e["length"] / cum[-1]
         ex = [x for x, _ in pts]
         ey = [y for _, y in pts]
-        near = [w for w, b in zip(ways, boxes) if b[0] <= max(ex) and b[2] >= min(ex) and b[1] <= max(ey) and b[3] >= min(ey)]
+        near = [
+            w
+            for w, b in zip(ways, boxes)
+            if b[0] <= max(ex) and b[2] >= min(ex) and b[1] <= max(ey) and b[3] >= min(ey)
+        ]
         if not near:
             continue
         n = max(1, int(math.ceil(cum[-1] / STEP_M)))
-        runs: List[list] = []   # [from, to, way]
+        runs: List[list] = []  # [from, to, way]
         for i in range(n + 1):
             s = cum[-1] * i / n
             p = g.point_at(pts, s, cum)
@@ -151,5 +163,13 @@ def bridges_from_osm(osm: OsmData, pack: dict) -> dict:
         for a, b, way in runs:
             if b - a < MIN_SPAN_M:
                 continue
-            spans.append({"edge": e["id"], "from": g.r1(a), "to": g.r1(min(b, e["length"])), "name": way["name"] or e.get("name", ""), "kind": way["kind"]})
+            spans.append(
+                {
+                    "edge": e["id"],
+                    "from": g.r1(a),
+                    "to": g.r1(min(b, e["length"])),
+                    "name": way["name"] or e.get("name", ""),
+                    "kind": way["kind"],
+                }
+            )
     return {"bridges_version": BRIDGES_VERSION, "name": pack.get("name", ""), "spans": spans}

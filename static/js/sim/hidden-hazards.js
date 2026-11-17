@@ -34,7 +34,21 @@ import { sidewalkOffset } from "../map/streets.js";
 import { rng } from "../common.js";
 import { Pedestrian } from "./pedestrians.js";
 
-export { STEP_OUT_M, BLIND_REACT_S, BLIND_BRAKE, BLIND_MARGIN_M, BLIND_GAP_M, BLIND_LOOK_M, BLIND_APPROACH, BLIND_LEAD_M, QUIET, blindSpeed, blindApproach, standingNear, blindSpot } from "./blind-spot.js";
+export {
+  STEP_OUT_M,
+  BLIND_REACT_S,
+  BLIND_BRAKE,
+  BLIND_MARGIN_M,
+  BLIND_GAP_M,
+  BLIND_LOOK_M,
+  BLIND_APPROACH,
+  BLIND_LEAD_M,
+  QUIET,
+  blindSpeed,
+  blindApproach,
+  standingNear,
+  blindSpot,
+} from "./blind-spot.js";
 import { STEP_OUT_M, BLIND_GAP_M, QUIET, blindSpot } from "./blind-spot.js";
 const PARALLEL = Math.PI / 6;
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -48,11 +62,11 @@ const EVERY_S = [60, 150];
 const RETRY_S = 3;
 const PLACE_M = [35, 70];
 const GAP_M = [0.9, 3.5];
-const HIDE_IN_M = 0.6;               // they stand this far in from the parked cars' traffic side
+const HIDE_IN_M = 0.6; // they stand this far in from the parked cars' traffic side
 const GIVE_UP_S = 40;
-const CLEAR_PAST_M = 45;             // nobody else on the street ahead of the car up to this far past their line
+const CLEAR_PAST_M = 45; // nobody else on the street ahead of the car up to this far past their line
 const STREET_M = 9;
-const LATE_M = 6;                    // the car's front already this much nearer than STEP_OUT_M: too late, they wait
+const LATE_M = 6; // the car's front already this much nearer than STEP_OUT_M: too late, they wait
 
 export class StepOuts {
   constructor(world, { count = 0, seed = 1 } = {}) {
@@ -66,11 +80,14 @@ export class StepOuts {
 
   step(dt) {
     if (!this.count) return;
-    const { world } = this, ego = world.ego, FRONT = ego.spec.length - ego.spec.rearOverhang;
+    const { world } = this,
+      ego = world.ego,
+      FRONT = ego.spec.length - ego.spec.rearOverhang;
     for (const p of [...this.people]) {
       const ped = p.ped;
       if (p.state === "waiting") {
-        const local = ego.toLocal(ped.x, ped.y), toLine = local.ahead - FRONT;
+        const local = ego.toLocal(ped.x, ped.y),
+          toLine = local.ahead - FRONT;
         const toward = Math.abs(wrap(ego.psi - p.psi)) < PARALLEL && Math.abs(local.right) < STREET_M;
         if (toward && toLine <= STEP_OUT_M && toLine > STEP_OUT_M - LATE_M) {
           if (this.clear(ped, toLine)) this.release(p);
@@ -93,7 +110,8 @@ export class StepOuts {
   // Nothing else is on the street ahead of the car up to CLEAR_PAST_M past their line: no vehicle in
   // traffic (or cyclist) going either way that could meet them.
   clear(ped, toLine) {
-    const ego = this.world.ego, FRONT = ego.spec.length - ego.spec.rearOverhang;
+    const ego = this.world.ego,
+      FRONT = ego.spec.length - ego.spec.rearOverhang;
     return !this.world.npcs.some((n) => {
       const l = ego.toLocal(n.x, n.y);
       return Math.abs(l.right) < STREET_M && l.ahead > 0 && l.ahead < FRONT + toLine + CLEAR_PAST_M;
@@ -110,18 +128,24 @@ export class StepOuts {
   // Someone hidden between two cars parked along the car's side of the quiet street it is on, PLACE_M
   // ahead of its front. True if placed.
   place() {
-    const { world } = this, ego = world.ego, map = world.map, random = this.random;
+    const { world } = this,
+      ego = world.ego,
+      map = world.map,
+      random = this.random;
     const FRONT = ego.spec.length - ego.spec.rearOverhang;
     const near = map.nearestLane(ego.x, ego.y, ego.psi, 6);
     const e = near?.lane.edgeRef;
     if (!e || e.ring || (!QUIET.has(e.cls) && !world._road?.zone)) return false;
     // the parked cars along the car's side, in order along its way
-    const rows = { 1: [], [-1]: [] }, twin = twinOf(map, e)?.id;
+    const rows = { 1: [], [-1]: [] },
+      twin = twinOf(map, e)?.id;
     for (const c of world.parked.near(ego.x, ego.y, PLACE_M[1] + FRONT + 12)) {
       if (c.roadside || c.workzone || c.closure || c.doubleParked || (c.edge !== e.id && c.edge !== twin)) continue;
       const d = Math.abs(wrap(c.psi - ego.psi));
       if (d > PARALLEL && d < Math.PI - PARALLEL) continue;
-      const [cx, cy] = c.center, l = ego.toLocal(cx, cy), cs = c.spec || CAR;
+      const [cx, cy] = c.center,
+        l = ego.toLocal(cx, cy),
+        cs = c.spec || CAR;
       const gap = Math.abs(l.right) - cs.width / 2 - ego.spec.width / 2;
       if (gap < 0 || gap > BLIND_GAP_M) continue;
       rows[Math.sign(l.right) || 1].push({ c, ahead: l.ahead, right: l.right, half: cs.length / 2, width: cs.width });
@@ -130,7 +154,9 @@ export class StepOuts {
     for (const side of [1, -1]) {
       const row = rows[side].sort((a, b) => a.ahead - b.ahead);
       for (let i = 0; i + 1 < row.length; i++) {
-        const a = row[i], b = row[i + 1], g = (b.ahead - b.half) - (a.ahead + a.half);
+        const a = row[i],
+          b = row[i + 1],
+          g = b.ahead - b.half - (a.ahead + a.half);
         if (g < GAP_M[0] || g > GAP_M[1] || Math.abs(a.right - b.right) > 0.6) continue;
         const ahead = (a.ahead + a.half + b.ahead - b.half) / 2;
         if (ahead - FRONT < PLACE_M[0] || ahead - FRONT > PLACE_M[1]) continue;
@@ -140,38 +166,58 @@ export class StepOuts {
     }
     if (!gaps.length) return false;
     const pick = gaps[Math.floor(random() * gaps.length)];
-    const c = Math.cos(ego.psi), s = Math.sin(ego.psi);
-    const x = ego.x + c * pick.ahead + s * pick.right, y = ego.y + s * pick.ahead - c * pick.right;
+    const c = Math.cos(ego.psi),
+      s = Math.sin(ego.psi);
+    const x = ego.x + c * pick.ahead + s * pick.right,
+      y = ego.y + s * pick.ahead - c * pick.right;
     // across the street, to just past the far kerb, then onto the sidewalk there
     const pr = projectPoint(e.pts, e.cum, [x, y]);
-    const lat = pr.lateral, farSide = lat > 0 ? -1 : 1;
+    const lat = pr.lateral,
+      farSide = lat > 0 ? -1 : 1;
     const to = offset(e, pr.s, farSide < 0 ? e.asphalt[0] - 0.4 : e.asphalt[1] + 0.4);
     const walk = offset(e, pr.s, sidewalkOffset(e, farSide));
     const child = random() < 0.6;
-    const ped = new Pedestrian({ id: `stepout_${++this.made}`, x, y, psi: Math.atan2(to[1] - y, to[0] - x), v: 0,
-      speed: child ? 1.4 + random() * 0.5 : 1.3 + random() * 0.5, child, dart: true, stepOut: true, held: true,
+    const ped = new Pedestrian({
+      id: `stepout_${++this.made}`,
+      x,
+      y,
+      psi: Math.atan2(to[1] - y, to[0] - x),
+      v: 0,
+      speed: child ? 1.4 + random() * 0.5 : 1.3 + random() * 0.5,
+      child,
+      dart: true,
+      stepOut: true,
+      held: true,
       path: [{ p: to, cross: { node: null, from: [x, y], to, jaywalk: true, stepOut: true } }, { p: walk }],
-      crossing: null, waiting: 0, phase: 0, look: Math.floor(random() * 1e6), at: null });
+      crossing: null,
+      waiting: 0,
+      phase: 0,
+      look: Math.floor(random() * 1e6),
+      at: null,
+    });
     if (world.sees(ego, ped)) return false;
     // then on along the far sidewalk with the crowd (or, where it does not know the street, home)
     const st = world.crowd.streetOf?.(e);
     if (st) {
-      const flip = st.edge !== e, sAlong = flip ? st.edge.cum.at(-1) - pr.s : pr.s;
+      const flip = st.edge !== e,
+        sAlong = flip ? st.edge.cum.at(-1) - pr.s : pr.s;
       ped.then = { st, side: flip ? -farSide : farSide, s: sAlong, dir: random() < 0.5 ? 1 : -1 };
     } else ped.home = true;
     world.crowd.list.push(ped);
     this.people.push({ ped, psi: ego.psi, since: world.t, state: "waiting" });
     return true;
   }
-
 }
 
 function twinOf(map, e) {
-  return (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((x) => x.to === e.from && Math.abs(x.length - e.length) < 1);
+  return (map.out.get(e.to) || [])
+    .map((id) => map.edges.get(id))
+    .find((x) => x.to === e.from && Math.abs(x.length - e.length) < 1);
 }
 
 function offset(e, s, lat) {
-  const p = pointAt(e.pts, e.cum, s), h = headingAt(e.pts, e.cum, s);
+  const p = pointAt(e.pts, e.cum, s),
+    h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
 }
 
@@ -180,8 +226,18 @@ function offset(e, s, lat) {
 export function hazardNotice(world) {
   if (!world.hazards) return null;
   const out = world.crowd.list.find((p) => p.stepOut && p.crossing && world.sees(world.ego, p));
-  if (out) return { key: `out:${out.id}`, text: `${out.child ? "CHILD" : "PERSON"} STEPPING OUT FROM THE PARKED CARS · STOP`, wait: true };
+  if (out)
+    return {
+      key: `out:${out.id}`,
+      text: `${out.child ? "CHILD" : "PERSON"} STEPPING OUT FROM THE PARKED CARS · STOP`,
+      wait: true,
+    };
   const bs = blindSpot(world);
-  if (bs && bs.from_m < STEP_OUT_M + 15) return { key: `blind:${bs.edge}:${bs.side}`, text: `PARKED CARS HIDE THE SIDEWALK · ${Math.round(bs.limit_mps * 3.6)} KM/H`, wait: false };
+  if (bs && bs.from_m < STEP_OUT_M + 15)
+    return {
+      key: `blind:${bs.edge}:${bs.side}`,
+      text: `PARKED CARS HIDE THE SIDEWALK · ${Math.round(bs.limit_mps * 3.6)} KM/H`,
+      wait: false,
+    };
   return null;
 }

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    // static/vendor/ is a vendored copy of Three.js.
+    "includes": ["static/js/**/*.js", "static/tests/**/*.js", "scripts/**/*.mjs", "scripts/**/*.js"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        // Off when Biome was added: each had many existing findings in deliberate code. Enable one at a time later.
+        "noAssignInExpressions": "off", // 112 findings, mostly `while ((m = re.exec(s)))` loops and chained assignments
+        "noThenProperty": "off", // 14 findings: map data records whose next edge is called `then`
+        "useIterableCallbackReturn": "off" // 10 forEach callbacks written as expressions
+      }
+    }
+  },
+  "assist": {
+    "enabled": false
+  }
+}

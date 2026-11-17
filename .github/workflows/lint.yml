@@ -1,0 +1,36 @@
+name: Lint
+# Ruff lints and checks the formatting of the Python; Biome does both for the browser JavaScript.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Lint and format
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Lint Python
+        run: uv run --locked ruff check
+      - name: Check Python formatting
+        run: uv run --locked ruff format --check
+      - uses: biomejs/setup-biome@v2
+        with:
+          version: 2.6.4
+      - name: Lint and check formatting of JavaScript
+        run: biome ci .

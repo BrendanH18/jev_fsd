@@ -27,9 +27,9 @@ import { CAR, STREETCAR } from "./vehicle.js";
 
 export const HOLD_M = 2;
 export const STOP_M = 4;
-export const DOOR_M = 2.9;           // its rear doors' rear edge, ahead of its rear bumper
+export const DOOR_M = 2.9; // its rear doors' rear edge, ahead of its rear bumper
 export const SIDE_M = 6;
-export const IN_LANE_M = 1.5;        // a driver this close to its centreline is in its lane
+export const IN_LANE_M = 1.5; // a driver this close to its centreline is in its lane
 export const OWED_DECEL = 3.5;
 export const DWELL_S = [12, 22];
 export const DWELL_MAX_S = 60;
@@ -49,7 +49,7 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // Where a driver `right` metres right of a streetcar's centreline stops, as metres ahead of its rear:
 // STOP_M behind its rear doors beside it, STOP_M behind its rear in its lane.
-export const holdFromRear = (right) => Math.abs(right) < IN_LANE_M ? -STOP_M : DOOR_M - STOP_M;
+export const holdFromRear = (right) => (Math.abs(right) < IN_LANE_M ? -STOP_M : DOOR_M - STOP_M);
 const holdAhead = (car, right) => holdFromRear(right) - (car.spec || STREETCAR).rearOverhang;
 
 // Where a driver whose path is the polyline `pts`/`cum`, its front `front` metres along, stops for
@@ -58,18 +58,24 @@ const holdAhead = (car, right) => holdFromRear(right) - (car.spec || STREETCAR).
 // of the path do not run past its right side going its way, or the driver's front has already reached
 // its rear doors (its rear, in its lane). The first stretch of the path ahead that does counts.
 export function streetcarHold(pts, cum, front, car, look = LOOK_M) {
-  const cs = car.spec || STREETCAR, c = Math.cos(car.psi), s = Math.sin(car.psi);
+  const cs = car.spec || STREETCAR,
+    c = Math.cos(car.psi),
+    s = Math.sin(car.psi);
   const from = front - cs.length;
   for (let i = 0; i < pts.length - 1 && cum[i] <= front + look; i++) {
     const len = cum[i + 1] - cum[i];
     if (cum[i + 1] < from || len <= 0) continue;
-    const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dy = b[1] - a[1];
+    const a = pts[i],
+      b = pts[i + 1],
+      dx = b[0] - a[0],
+      dy = b[1] - a[1];
     if (Math.abs(wrap(car.psi - Math.atan2(dy, dx))) > SAME_WAY) continue;
     // (how far right of the streetcar's centreline this stretch runs, at its rear)
-    const rx = car.x - c * cs.rearOverhang, ry = car.y - s * cs.rearOverhang;
+    const rx = car.x - c * cs.rearOverhang,
+      ry = car.y - s * cs.rearOverhang;
     const t = ((rx - a[0]) * dx + (ry - a[1]) * dy) / (len * len);
     if (t < 0 || t > 1) continue;
-    const right = ((a[0] + dx * t - rx) * s - (a[1] + dy * t - ry) * c);
+    const right = (a[0] + dx * t - rx) * s - (a[1] + dy * t - ry) * c;
     if (right < -IN_LANE_M || right > SIDE_M) continue;
     const at = holdFromRear(right);
     const gap = cum[i] + t * len - front;
@@ -85,9 +91,17 @@ export function streetcarHold(pts, cum, front, car, look = LOOK_M) {
 // centreline it is) }, or null when it is not going the streetcar's way.
 export function streetcarRelation(o, car) {
   if (o === car || Math.abs(wrap(car.psi - o.psi)) > SAME_WAY) return null;
-  const cs = car.spec || STREETCAR, os = o.spec || CAR, l = car.toLocal(o.x, o.y);
-  const right = l.right, front = l.ahead + os.length - os.rearOverhang;
-  return { beside: Math.abs(right) >= IN_LANE_M, ahead_m: holdAhead(car, right) - front, right_m: right, behind_m: -cs.rearOverhang - front };
+  const cs = car.spec || STREETCAR,
+    os = o.spec || CAR,
+    l = car.toLocal(o.x, o.y);
+  const right = l.right,
+    front = l.ahead + os.length - os.rearOverhang;
+  return {
+    beside: Math.abs(right) >= IN_LANE_M,
+    ahead_m: holdAhead(car, right) - front,
+    right_m: right,
+    behind_m: -cs.rearOverhang - front,
+  };
 }
 
 // Whether a driver at speed `v` can stop within `room` metres braking at no more than OWED_DECEL.
@@ -96,7 +110,10 @@ export const canStopFor = (v, room) => room >= Math.max(0, v) ** 2 / (2 * OWED_D
 // Where a streetcar's doors are, as points beside it on the curb side (`side` metres right of its
 // right flank): its four doors, front to rear.
 export function doorPoints(car, side = 0.4) {
-  const cs = car.spec || STREETCAR, c = Math.cos(car.psi), s = Math.sin(car.psi), right = cs.width / 2 + side;
+  const cs = car.spec || STREETCAR,
+    c = Math.cos(car.psi),
+    s = Math.sin(car.psi),
+    right = cs.width / 2 + side;
   return [cs.length - 3.4, cs.length * 0.62, cs.length * 0.36, DOOR_M + 0.6].map((d) => {
     const ahead = d - cs.rearOverhang;
     return [car.x + c * ahead + s * right, car.y + s * ahead - c * right];
