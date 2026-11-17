@@ -2,9 +2,11 @@
 
 ## Commands
 
-No build step and no linter are configured. Python runs through `uv` (one dependency, `typesafe-sdk`); the browser app is plain ES modules with Three.js from a CDN import map.
+No build step. Python runs through `uv` (one dependency, `typesafe-sdk`); the browser app is plain ES modules with Three.js from a CDN import map. Ruff (config in `pyproject.toml`) and Biome (`biome.jsonc`; `static/vendor/` is left out) lint and format; CI runs both (`.github/workflows/lint.yml`). Fix what they report rather than hand-formatting. Node checks that read source with regexes must accept the formatter's line breaks and trailing commas.
 
 ```sh
+uv run --locked ruff check && uv run --locked ruff format --check && npx --yes @biomejs/biome@2.6.4 ci .   # lint and format checks
+uv run --locked ruff format && npx --yes @biomejs/biome@2.6.4 check --write .                            # apply formatting and safe fixes
 uv run server.py                                            # serves http://127.0.0.1:8322 (PORT to change)
 uv run python -m unittest discover -s tests                 # offline Python tests
 uv run python -m unittest discover -s tests -p "test_routing.py"          # one file
