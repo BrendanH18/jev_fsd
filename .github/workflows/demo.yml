@@ -143,6 +143,22 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: .demo-site
+  # The check the main ruleset requires. A job that a failed job `needs` is skipped, and a skipped
+  # required check counts as passing, so this runs always() and passes only if every check job and the demo build passed.
+  demo-passed:
+    name: Demo checks passed
+    needs: [python, node, browser, build]
+    if: always()
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        run: |
+          echo "Results: $RESULTS"
+          test "$(echo "$RESULTS" | tr ' ' '\n' | sort -u)" = success
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build

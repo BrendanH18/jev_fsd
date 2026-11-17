@@ -17,6 +17,8 @@ node --experimental-default-type=module scripts/bench_node.mjs --features city  
 node --experimental-default-type=module scripts/arena_node.mjs --brain jev --record out.json.gz   # challenges + road tests under Node (server running); --replay to check
 ```
 
+The main ruleset requires three checks: `Lint and format`, `Demo checks passed` (`demo.yml`) and `Benchmark passed` (`bench.yml`). The last two pass only when every job they `need` passed, so add any new job in those workflows to their `needs`.
+
 `python -m unittest tests.test_x` fails: `tests/helpers.py` fixes `sys.path`, so always use `discover -s tests`.
 
 Browser-side checks need the server running:

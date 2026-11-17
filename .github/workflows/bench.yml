@@ -66,3 +66,19 @@ jobs:
       - name: Server log
         if: failure()
         run: tail -n 200 server.log
+
+  # The check the main ruleset requires. A job that a failed job `needs` is skipped, and a skipped
+  # required check counts as passing, so this runs always() and passes only if every benchmark leg passed.
+  bench-passed:
+    name: Benchmark passed
+    needs: [suite]
+    if: always()
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        run: |
+          echo "Results: $RESULTS"
+          test "$(echo "$RESULTS" | tr ' ' '\n' | sort -u)" = success
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
