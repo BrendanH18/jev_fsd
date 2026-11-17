@@ -378,10 +378,7 @@ const MINOR = junction({ cls: { n: "secondary", s: "secondary" } });
   assert.equal(state.intersection.right_of_way, "no sign: give way to traffic from the right");
   assert.deepEqual([state.intersection.give_way.clear, state.intersection.give_way.wait_for], [false, "from_right"]);
   const clause = situationClauses(snap).find((c) => c.includes("no sign or signal"));
-  assert.ok(
-    clause && clause.includes("`from_right` has the right of way") && clause.includes("from the right"),
-    clause,
-  );
+  assert.ok(clause?.includes("`from_right` has the right of way") && clause.includes("from the right"), clause);
   const { questions } = buildQuestions(snap, eligible);
   assert.ok(questions.motion.criteria.stop.includes("`intersection.give_way.stop_in_m` under 2"));
   const { messages } = buildLlmPrompt(snap, { state, questions });
@@ -671,7 +668,7 @@ function withFleet(world) {
   return fleet;
 }
 // the order vehicles enter the junction (front within 5 m of the centre)
-function entryOrder(world) {
+function entryOrder(_world) {
   const order = [];
   return {
     order,
@@ -688,23 +685,21 @@ const counts = (world) => [
   world.violations.deadlock_overrides,
 ];
 
-{
-  // without a sign: a traffic car from the right goes first; one from the left gives way to the car
-  for (const [arm, first] of [
-    ["s", "other"],
-    ["n", "ego"],
-  ]) {
-    const world = setup(EQUAL, { front: -45, v: 9 });
-    const fleet = withFleet(world);
-    npc(world, "other", arm, 47, { v: 9, fleet });
-    const log = entryOrder(world);
-    drive(world, fleet, { seconds: 30, watch: log.watch });
-    assert.ok(world.route === null, `arrives (${arm})`);
-    assert.equal(log.order[0], first, `${arm}: ${log.order.join()}`);
-    assert.deepEqual(counts(world), [0, 0, 0, 0], `${arm}: ${counts(world).join()}`);
-  }
-  console.log("✓ closed loop without a sign: a car from the right goes first, a car from the left waits for the car");
+// without a sign: a traffic car from the right goes first; one from the left gives way to the car
+for (const [arm, first] of [
+  ["s", "other"],
+  ["n", "ego"],
+]) {
+  const world = setup(EQUAL, { front: -45, v: 9 });
+  const fleet = withFleet(world);
+  npc(world, "other", arm, 47, { v: 9, fleet });
+  const log = entryOrder(world);
+  drive(world, fleet, { seconds: 30, watch: log.watch });
+  assert.ok(world.route === null, `arrives (${arm})`);
+  assert.equal(log.order[0], first, `${arm}: ${log.order.join()}`);
+  assert.deepEqual(counts(world), [0, 0, 0, 0], `${arm}: ${counts(world).join()}`);
 }
+console.log("✓ closed loop without a sign: a car from the right goes first, a car from the left waits for the car");
 
 {
   // at a blind two-way stop, a through car hidden by the building: the car stops, creeps to look,

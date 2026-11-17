@@ -94,7 +94,7 @@ function placeGuard(world, { crosswalk }, seed) {
   return { guardPostId: post.id, guardId: post.guard.id, childIds: kids.map((k) => k.id), at: post.mid };
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, challenge, scenario) {
   Object.assign(world.challenge, placeGuard(world, scenario.crossingGuard, challenge.seed));
 }
 
@@ -102,7 +102,7 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(GUARD_TRIGGER_M),
     // (the crossing guard looks for a gap, to walk the children across)
-    release: (world, fleet, state) => {
+    release: (world, _fleet, state) => {
       const post = state.guardPostId && world.crossingGuards.posts.find((p) => p.id === state.guardPostId);
       if (post) post.held = false;
     },

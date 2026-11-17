@@ -12,18 +12,8 @@ const { NpcFleet } = await import("../static/js/sim/npc.js");
 const { Vehicle, SCHOOL_BUS } = await import("../static/js/sim/vehicle.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
-const {
-  AMBER_M,
-  BEHIND_M,
-  ONCOMING_M,
-  SIDE_M,
-  firstStop,
-  isSchoolBus,
-  redsOn,
-  schoolBusHold,
-  schoolBusRelation,
-  stopRange,
-} = await import("../static/js/sim/school-bus.js");
+const { BEHIND_M, ONCOMING_M, SIDE_M, firstStop, isSchoolBus, redsOn, schoolBusHold, schoolBusRelation, stopRange } =
+  await import("../static/js/sim/school-bus.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, buildQuestions, situationClauses } = await import("../static/js/brain/state.js");
@@ -372,7 +362,7 @@ test("challenge: a school bus coming the other way on West 2nd Avenue, its reds 
     "on the same street, coming the other way",
   );
   assert.ok(
-    child && child.child && child.path.some((w) => w.cross?.school === bus.id),
+    child?.child && child.path.some((w) => w.cross?.school === bus.id),
     "a child by its door, to cross in front of it",
   );
   assert.equal(schoolBusRelation(world.ego, bus).relation, "oncoming");

@@ -196,7 +196,7 @@ export function runnerThreat(world, observer, inter, heading, others) {
     else {
       const a = approachTo(map, o, inter.id);
       const edge = a ? map.edges.get(a.edge) : null;
-      if (!edge || edge.control?.type !== "signal" || edge.control.id !== inter.id) continue;
+      if (edge?.control?.type !== "signal" || edge.control.id !== inter.id) continue;
       const light = movementSignal(approachPhase(inter, a.edge, world.t), "straight");
       if (light !== "red" && light !== "yellow") continue;
       toLine = a.to_node_m - (edge.length - edge.control.s_line);
@@ -230,7 +230,7 @@ export function runnerHold(world, n, edgeId, inter, bumperToLine, others) {
 // The driven car's sensing: a runner crossing its way at the signal ahead while its own light is green
 // and it has not entered, from the vehicles it can see. Null when there is none.
 export function redLightRunner(world, i, heading) {
-  if (!i || i.control !== "signal" || i.signal !== "green" || i.entered || i.bumper_to_line_m > LOOK_M) return null;
+  if (i?.control !== "signal" || i.signal !== "green" || i.entered || i.bumper_to_line_m > LOOK_M) return null;
   const inter = world.map.intersections.get(i.id);
   if (!inter) return null;
   const threat = runnerThreat(world, world.ego, inter, heading, seenNear(world, inter));
@@ -275,7 +275,7 @@ export function auditRunner(world, interId, edgeId, turn, heading, past) {
 }
 
 // The HUD line for a runner the car waits for, or sees: said once each time it changes.
-export function runnerNotice(world, snap) {
+export function runnerNotice(_world, snap) {
   const r = snap?.red_light_runner;
   if (!r) return null;
   return {

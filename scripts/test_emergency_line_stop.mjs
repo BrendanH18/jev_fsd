@@ -143,8 +143,7 @@ const oncoming = (world) =>
     [ARM, 1.6],
     [-ARM, 1.6],
   ]);
-const lineAt = -ARM + LINE,
-  nodeAt = 0;
+const nodeAt = 0;
 const plan = (world) => buildSnapshot(world).emergency;
 
 // Stopped exactly where Rules stops for a red light, 0.5 m short of the line: not in the junction.

@@ -15,19 +15,8 @@ const { StopMemory } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { obbOverlap } = await import("../static/js/sim/collision.js");
-const {
-  DECIDE_M,
-  LEAD_M,
-  PASS_MPS,
-  RETURN_M,
-  VAN_COUNT,
-  WAIT_M,
-  passTime,
-  queuedAhead,
-  vanNotice,
-  vanSites,
-  wayRound,
-} = await import("../static/js/sim/double-parked.js");
+const { LEAD_M, PASS_MPS, RETURN_M, VAN_COUNT, WAIT_M, passTime, queuedAhead, vanNotice, vanSites, wayRound } =
+  await import("../static/js/sim/double-parked.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
@@ -359,7 +348,7 @@ await test("sensing: the car waits behind the van while the way round is not cle
   const onc = npc(world, fleet, { past: 35, v: 8.3, id: "onc" });
   let snap = buildSnapshot(world);
   const d = snap.double_parked;
-  assert.ok(d && d.wait && !d.go && !d.detour && d.way.oncoming?.id === "onc", "waits for the oncoming car");
+  assert.ok(d?.wait && !d.go && !d.detour && d.way.oncoming?.id === "onc", "waits for the oncoming car");
   assert.ok(Math.abs(d.bumper_to_stop_m - (30 - WAIT_M)) < 1, `${d.bumper_to_stop_m.toFixed(1)} m to where it waits`);
   assert.ok(
     snap.limit <= Math.sqrt(PASS_MPS ** 2 + 2 * 1.5 * d.bumper_to_stop_m) + 0.01,
@@ -409,7 +398,7 @@ await test("sensing: the car cannot see far enough in fog, so it waits; once sta
   drive(world, { back: WAIT_M });
   const fog = buildSnapshot(world).double_parked;
   setWeather("dry");
-  assert.ok(fog && fog.wait && !fog.way.sees_far_enough, "fog: it cannot know the way is clear");
+  assert.ok(fog?.wait && !fog.way.sees_far_enough, "fog: it cannot know the way is clear");
   drive(world, { back: WAIT_M });
   const snap = buildSnapshot(world),
     cands = sampleCandidates(snap, world);

@@ -42,7 +42,7 @@ export async function buildSuite(map, { count = 12, seed = 1, restrictions = nul
     } catch {
       continue;
     }
-    const data = res.routes && res.routes[0];
+    const data = res.routes?.[0];
     if (!data) continue;
     const route = new Route(data, map);
     if (route.length < MIN_ROUTE_M || route.length > MAX_ROUTE_M) continue;

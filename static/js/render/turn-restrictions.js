@@ -16,7 +16,7 @@ function hoursText(c) {
         : run
           ? `${DAYS[d[0]]}-${DAYS[d.at(-1)]}`
           : d.map((x) => DAYS[x]).join(" ");
-  return `${clockText(c.start)}-${clockText(c.end)}${days ? " " + days : ""}`;
+  return `${clockText(c.start)}-${clockText(c.end)}${days ? ` ${days}` : ""}`;
 }
 function hoursPlate(condition) {
   const canvas = document.createElement("canvas");

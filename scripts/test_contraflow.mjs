@@ -271,10 +271,7 @@ await test("the driven car, turning into the street, waits short of the junction
   ctx.world.contraflow.place({ edge: VILLENEUVE, at: 42, v: 4.5, v0: 4.5 });
   const snap = snapOf(ctx.world),
     cf = snap.contraflow_cyclist;
-  assert.ok(
-    cf && cf.wait && cf.relation === "turning_in",
-    JSON.stringify(cf && { relation: cf.relation, wait: cf.wait }),
-  );
+  assert.ok(cf?.wait && cf.relation === "turning_in", JSON.stringify(cf && { relation: cf.relation, wait: cf.wait }));
   const junction = ctx.world.route.edgeStarts[1];
   assert.ok(cf.stop_s_route < junction - 1.5, `waits ${(junction - cf.stop_s_route).toFixed(1)} m short of the street`);
   const cands = sampleCandidates(snap, ctx.world);

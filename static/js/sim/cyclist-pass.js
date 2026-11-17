@@ -44,7 +44,7 @@
 
 import { CAR, BIKE } from "./vehicle.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
-import { DAYLIGHT_RANGE_M, PASS_SIGHT_M } from "./visibility.js";
+import { PASS_SIGHT_M } from "./visibility.js";
 import { arrival, isVan, onStreet, oppositeOf } from "./double-parked.js";
 import { railIndex } from "./rail.js";
 import { redsOn } from "./school-bus.js";
@@ -107,7 +107,7 @@ export function passStreet(map, edgeId) {
 // (onStreet), or null.
 export function ridingIn(e, b) {
   const on = onStreet(e, b);
-  return on && on.same && Math.abs(on.lateral - laneCentre(e)) < e.lane_width / 2 ? on : null;
+  return on?.same && Math.abs(on.lateral - laneCentre(e)) < e.lane_width / 2 ? on : null;
 }
 
 // How long, and how far, a driver at `v0` takes to gain `gain` metres on a cyclist riding at `vb`,
@@ -284,7 +284,7 @@ export function queuedBehind(e, front, plan, driver, others) {
     if (n === driver || n === plan.bike || n.parked || n.kind === "pedestrian" || n.kind === "door") continue;
     if (Math.abs(n.x - plan.bike.x) > 60 || Math.abs(n.y - plan.bike.y) > 60) continue;
     const q = onStreet(e, n);
-    if (!q || !q.same) continue;
+    if (!q?.same) continue;
     const rear = q.s - (n.spec || CAR).rearOverhang;
     if (rear > front - 0.5 && rear < plan.bike_front + RETURN_M) return n;
   }

@@ -23,7 +23,7 @@ export function analyzeStreets(map) {
     legs = new Map(),
     nodeR = new Map();
   for (const e of (map.edges || new Map()).values()) {
-    const key = [e.from, e.to].sort().join("|") + "|" + Math.round(e.length);
+    const key = `${[e.from, e.to].sort().join("|")}|${Math.round(e.length)}`;
     if (seen.has(key)) {
       seen.get(key).twin = e;
       continue;

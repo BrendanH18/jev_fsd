@@ -1844,7 +1844,7 @@ export class World {
       // (the vehicle is beside the car now, so no longer ahead of it)
       for (const n of stoppedAt(this, cw, ego, this.npcs, false)) {
         const rec = this.crosswalkCalls.get(`${cw.id}:${n.id}`);
-        if (!rec || !rec.owed || rec.counted) continue;
+        if (!rec?.owed || rec.counted) continue;
         rec.counted = true;
         this.violations.failed_to_yield++;
         this.events.push({ type: "failed_to_yield", to: "vehicle stopped at a crosswalk", with: n.id });
@@ -1861,7 +1861,7 @@ export class World {
       const key = `${bus.id}:${bus.transit.departures}`,
         r = busRelation(ego, bus);
       let rec = this.busCalls.get(key);
-      if (!r || !r.inLane) continue;
+      if (!r?.inLane) continue;
       // (it owes the bus the right of way if it was behind it when it first saw it signal, and could
       // stop then; until it sees it, nothing is decided)
       if (!rec) {

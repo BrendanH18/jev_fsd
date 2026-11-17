@@ -79,4 +79,4 @@ const joins = cases.joins.map((c) => {
   return { name: c.name, polyline: route.polyline };
 });
 
-process.stdout.write(JSON.stringify({ turns, joins }) + "\n");
+process.stdout.write(`${JSON.stringify({ turns, joins })}\n`);

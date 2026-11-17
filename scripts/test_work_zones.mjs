@@ -87,7 +87,7 @@ function drive(world, zone, { side = "closed", back = 40, v = 0 } = {}) {
   return lane;
 }
 // A car of the traffic on `edge`, its front `back` metres short of that side's stop line.
-function car(world, fleet, zone, side, back, id) {
+function car(_world, fleet, zone, side, back, id) {
   const edge = side === "closed" ? CLOSED : OPEN,
     lane = OTT.lane(edge, 0),
     s = marksOn(zone, side).line - back - FRONT;

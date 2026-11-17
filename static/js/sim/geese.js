@@ -594,7 +594,7 @@ export const seesGaggle = (world, observer, g) => g.geese.some((o) => world.sees
 // The driven car's sensing (brain/sensors.js `geese_crossing`): the gaggle it must stop or slow for
 // first, as far as it can see. `wait`: stop with the front at `stop_s_route` (route arc length) until
 // the last goose is off the roadway; otherwise slow to `limit_mps`. Or null.
-export function geeseCrossing(world, p, frontS, lane) {
+export function geeseCrossing(world, _p, frontS, lane) {
   const { ego, route } = world;
   const c = geeseAhead(world, route, {
     front: frontS,

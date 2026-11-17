@@ -747,7 +747,7 @@ if (process.argv.includes("--write-snapshot")) {
   const round = eligible.filter((c) => c.id === "ease_round_puddle").map((c) => c.id);
   fs.writeFileSync(
     new URL("../data/snapshots/dont_splash.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "dont_splash",
         state,
@@ -757,7 +757,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/dont_splash.json (puddle in ${snap.puddle_splash.starts_in_m.toFixed(1)} m, ${eligible.length} eligible)`,

@@ -172,7 +172,7 @@ async function run(ctx, seconds = 120, each = () => {}) {
   }
   return out;
 }
-function car(world, fleet, id, x, v, { kind = "car" } = {}) {
+function car(_world, fleet, id, x, v, { kind = "car" } = {}) {
   const spec = kind === "bike" ? BIKE : CAR,
     y = kind === "bike" ? -(LANE + 1.1) : -LANE;
   const n = new Vehicle(x, y, 0, v, spec);
@@ -349,7 +349,7 @@ await test("on its own, the manoeuvre parks the car parallel, within 30 cm of th
       if (P.tyres(world.ego, spec).some((p) => MAP.roadDistance(p[0], p[1]).distance > 0.02)) kerb = true;
     }
     assert.equal(law.phase, "parked", `${model} in ${gap} m`);
-    const pose = P.parkedPose(world.ego, law, world);
+    const pose = P.parkedPose(world.ego, law);
     assert.ok(
       pose.within_kerb && pose.kerb_m >= 0 && pose.kerb_m <= P.KERB_MAX_M,
       `${model} in ${gap} m: ${pose.kerb_m} m from the kerb at ${pose.angle_deg} deg`,
@@ -480,8 +480,7 @@ await test("pulling out: it backs up, waits for traffic coming up the lane, pull
     // halfway out, a car stops in the way for 6 s, then drives off: the car waits, then carries on out
     if (w.parking?.mode === "out" && w.parking.phase === "out2" && !blocker) {
       const h = w.ego.psi,
-        x = w.ego.x + Math.cos(h) * 7.5,
-        y = -LANE;
+        x = w.ego.x + Math.cos(h) * 7.5;
       blocker = car(w, fleet, "blocker", x, 0);
       blocker.frozen = 1e6;
     }
@@ -614,7 +613,7 @@ await test("a checkpoint taken partway in restores the space, the manoeuvre and 
 
 await test("the challenge, closed loop: Rules and the cautious agent pull up, keep the car behind back, and park within 30 cm of the kerb", async () => {
   const challenge = CHALLENGES.find((c) => c.id === "parallel-park");
-  assert.ok(challenge && challenge.park && challenge.map === "kitsilano");
+  assert.ok(challenge?.park && challenge.map === "kitsilano");
   for (const brain of ["rules", "cautious"]) {
     const r = await evaluateChallenge(KITS, challenge, { brain });
     assert.ok(

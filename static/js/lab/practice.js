@@ -106,8 +106,7 @@ export function challengeFailures(challenge, report) {
 // Only the unchanged authored manual drive can earn progress (road tests use the same rule).
 export function practiceEligible(challenge, report) {
   if (
-    !report ||
-    report.driver !== "manual" ||
+    report?.driver !== "manual" ||
     report.branched !== false ||
     report.modified !== false ||
     !["arrived", "finished"].includes(report.status) ||

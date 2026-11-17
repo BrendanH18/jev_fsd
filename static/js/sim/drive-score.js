@@ -297,8 +297,7 @@ export class DriveScore {
     }
     if (passing?.room && passing.relation.ahead_m > 0) this.moveOverRoom.add(passing.vehicle.id);
     if (
-      passing &&
-      passing.relation.adjacent &&
+      passing?.relation.adjacent &&
       passing.other_lane &&
       passing.relation.ahead_m <= 0 &&
       speed > 1 &&

@@ -128,7 +128,7 @@ export function stepFreshGreen(world) {
 
 export const scenario = freshGreenScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   installFreshGreen(world, fleet, scenario);
 }
 

@@ -161,6 +161,6 @@ export function placeBall(world, { edge, at }, seed) {
 
 export const scenario = ballScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, challenge, scenario) {
   Object.assign(world.challenge, placeBall(world, scenario.ball, challenge.seed));
 }

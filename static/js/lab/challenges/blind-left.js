@@ -115,7 +115,7 @@ function releaseHidden(world, fleet, { edge, straight: then }) {
   return car.id;
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   Object.assign(world.challenge, placeBlindLeft(world, fleet, scenario.blindLeft));
 }
 

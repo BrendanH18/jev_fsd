@@ -190,7 +190,7 @@ export async function boot() {
   const cityStyle = CITY_STYLES[status.map.id];
   const buildings = buildBuildings(map, { houseColors: cityStyle?.houses });
   view.scene.add(buildings);
-  view.addScenery(buildTrees(map, roads, buildings.userData.index));
+  view.addScenery(buildTrees(map));
   view.addScenery(buildBusStops(map));
   view.addScenery(buildTracks(map));
   view.addScenery(buildRail(map));
@@ -945,13 +945,13 @@ export async function boot() {
         const f = frameOf(car, p),
           side = (spec.width / 2) * Math.abs(Math.sin(f.phi));
         return (
-          parkedPose(car, p, world).within_kerb &&
+          parkedPose(car, p).within_kerb &&
           f.u - spec.rearOverhang * Math.cos(f.phi) - side >= p.sFrom &&
           f.u + (spec.length - spec.rearOverhang) * Math.cos(f.phi) + side <= p.sTo
         );
       });
       if (space) {
-        drive.noteArrival({ parked: true, ...parkedPose(car, space, world) });
+        drive.noteArrival({ parked: true, ...parkedPose(car, space) });
         reason = "arrived";
       }
     }

@@ -9,9 +9,7 @@ const { StopMemory } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { World } = await import("../static/js/sim/world.js");
 const { controlAt } = await import("../static/js/sim/outage.js");
-const { flashing, flashMain, flashState, NIGHT_CAUTION_MPS, nightFlashNotice } = await import(
-  "../static/js/sim/night-flash.js"
-);
+const { flashing, flashMain, NIGHT_CAUTION_MPS, nightFlashNotice } = await import("../static/js/sim/night-flash.js");
 const { approachPhase, advanceHolds, pedPhase, scrambleState } = await import("../static/js/sim/signals.js");
 const { outranks } = await import("../static/js/sim/priority.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");

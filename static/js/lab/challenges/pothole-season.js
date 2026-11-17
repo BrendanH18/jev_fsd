@@ -78,6 +78,6 @@ export function installPotholes(world, scenario) {
 
 export const scenario = potholeScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   installPotholes(world, scenario);
 }

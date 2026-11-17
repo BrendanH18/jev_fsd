@@ -678,7 +678,7 @@ function farSide(e, g, p) {
 // The driven car's sensing (brain/sensors.js `ball_in_road`): the nearest ball ahead it has seen, as long
 // as it is in the road or its warning stands, or null. `limit_mps`: the cover speed while the warning
 // stands and the gap's line is ahead.
-export function ballInRoad(world, p, frontS) {
+export function ballInRoad(world, _p, frontS) {
   const { ego, route } = world,
     balls = world.balls?.balls;
   if (!balls?.length || !route) return null;

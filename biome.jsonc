@@ -1,5 +1,6 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+  // The installed Biome's own schema (`npm ci`), so it always matches the version in package-lock.json.
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",

@@ -63,8 +63,7 @@ export function buildRoads(map) {
     let from = trimAt(nodeR, legs, e.from),
       to = L - trimAt(nodeR, legs, e.to);
     if (e.control) to = Math.min(to, e.control.s_line - 0.6);
-    if (st.twin && st.twin.control)
-      from = Math.max(from, st.twin.cum[st.twin.cum.length - 1] - st.twin.control.s_line + 0.6);
+    if (st.twin?.control) from = Math.max(from, st.twin.cum[st.twin.cum.length - 1] - st.twin.control.s_line + 0.6);
     if (to - from > 2) {
       if (st.twin && ARTERIAL.has(e.cls)) {
         yellow.ribbon(e.pts, -0.2, -0.08, 0, { from, to });
@@ -237,7 +236,7 @@ export function buildRoads(map) {
   buildYieldSigns(map, group);
   buildCrosswalkSigns(map, group);
   buildZoneSigns(map, group);
-  const streetLights = buildStreetLights(map, group, streets, (id) => trimAt(nodeR, legs, id));
+  const streetLights = buildStreetLights(map, group);
   return { group, signals, streets, nodeR, legs, streetLights };
 }
 

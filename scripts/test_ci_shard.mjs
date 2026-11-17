@@ -15,7 +15,7 @@ const workflow = readFileSync(`${root}.github/workflows/demo.yml`, "utf8");
 const counts = [...workflow.matchAll(/scripts\/ci_shard\.mjs --shards (\d+) --shard \$\{\{ matrix\.shard \}\}/g)].map(
   (m) => Number(m[1]),
 );
-assert.equal(counts.length, 1, "demo.yml runs scripts/ci_shard.mjs --shards N --shard ${{ matrix.shard }} once");
+assert.equal(counts.length, 1, "demo.yml runs scripts/ci_shard.mjs --shards N --shard <the matrix shard> once");
 const count = counts[0];
 const matrices = [...workflow.matchAll(/^\s+shard: \[([\d, ]+)\]\s*$/gm)].map((m) => m[1].split(",").map(Number));
 assert.equal(matrices.length, 1, "demo.yml has one shard matrix");

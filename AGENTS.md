@@ -2,11 +2,12 @@
 
 ## Commands
 
-No build step. Python runs through `uv` (one dependency, `typesafe-sdk`); the browser app is plain ES modules with Three.js from a CDN import map. Ruff (config in `pyproject.toml`) and Biome (`biome.jsonc`; `static/vendor/` is left out) lint and format; CI runs both (`.github/workflows/lint.yml`). Fix what they report rather than hand-formatting. Node checks that read source with regexes must accept the formatter's line breaks and trailing commas.
+No build step. Python runs through `uv` (one dependency, `typesafe-sdk`); the browser app is plain ES modules with Three.js from a CDN import map. Ruff (config in `pyproject.toml`) and Biome (`biome.jsonc`; `static/vendor/` and `data/` are left out) lint and format; CI runs both (`.github/workflows/lint.yml`). Biome is the only npm package: `package.json` and `package-lock.json` pin it (Dependabot updates it), so run `npm ci` once. Biome warnings fail CI as errors do. Fix what they report rather than hand-formatting or silencing a rule; an unused parameter a callback signature needs gets a leading `_`. Node checks that read source with regexes must accept the formatter's line breaks and trailing commas.
 
 ```sh
-uv run --locked ruff check && uv run --locked ruff format --check && npx --yes @biomejs/biome@2.6.4 ci .   # lint and format checks
-uv run --locked ruff format && npx --yes @biomejs/biome@2.6.4 check --write .                            # apply formatting and safe fixes
+npm ci                                                      # install the pinned Biome (once)
+uv run --locked ruff check && uv run --locked ruff format --check && npm run lint   # lint and format checks
+uv run --locked ruff format && npm run format               # apply formatting and safe fixes
 uv run server.py                                            # serves http://127.0.0.1:8322 (PORT to change)
 uv run python -m unittest discover -s tests                 # offline Python tests
 uv run python -m unittest discover -s tests -p "test_routing.py"          # one file
@@ -18,6 +19,8 @@ node --experimental-default-type=module scripts/arena_node.mjs --brain jev --rec
 ```
 
 The main ruleset requires three checks: `Lint and format`, `Demo checks passed` (`demo.yml`) and `Benchmark passed` (`bench.yml`). The last two pass only when every job they `need` passed, so add any new job in those workflows to their `needs`.
+
+Workflows (`.github/workflows/`) run on Namespace runners and pin every action to a full commit SHA with a `# vX.Y.Z` comment, which Dependabot keeps up to date. CodeQL is an advanced setup (`codeql.yml`), not GitHub's default setup. The weekly city soak (`soak.yml`) is report-only: a failing leg leaves the run green, and its `Soak summary` job lists the failed routes in the run summary and as warnings (`scripts/soak_summary.py`).
 
 `python -m unittest tests.test_x` fails: `tests/helpers.py` fixes `sys.path`, so always use `discover -s tests`.
 

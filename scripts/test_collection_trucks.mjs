@@ -86,7 +86,7 @@ function standing(fleet, rear = SITE.lo + 5, cross = false) {
   fleet.collection.arrive(truck, { cross });
   return truck;
 }
-function car(world, fleet, id, lane, s, v = 0) {
+function car(_world, fleet, id, lane, s, v = 0) {
   const p = pointAt(lane.pts, lane.cum, s),
     c = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, CAR);
   Object.assign(c, {

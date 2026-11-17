@@ -199,7 +199,7 @@ export const flatRoofTexture = () =>
 // mask's red channel is 1 where the building's tint applies (wall) and its green channel is 1 on
 // window glass (which can light up at night).
 export function facadeTextures(kind) {
-  return once("facade:" + kind, () => {
+  return once(`facade:${kind}`, () => {
     const size = 512,
       m = size / 12; // pixels per meter
     const map = canvas(size),
@@ -792,6 +792,6 @@ export function withMacroVariation(material, macroScale, strength = 0.35) {
         diffuseColor.rgb *= 1.0 + (macroV - 0.5) * ${(strength * 2).toFixed(3)};`,
       );
   };
-  material.customProgramCacheKey = () => "macro" + macroScale + ":" + strength;
+  material.customProgramCacheKey = () => `macro${macroScale}:${strength}`;
   return material;
 }

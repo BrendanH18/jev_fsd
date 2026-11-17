@@ -25,7 +25,7 @@ export async function runPracticeTests() {
     last_at: "2026-11-07T10:00:00Z",
   });
   const authoredLink = (anchor, challenge, driver) => {
-    if (!anchor || anchor.tagName !== "A") return false;
+    if (anchor?.tagName !== "A") return false;
     const url = new URL(anchor.href),
       expected = challengeConfig(challenge);
     return (
@@ -300,7 +300,7 @@ export async function runPracticeTests() {
     driveReport.onReplay = (index) => {
       replayIndex = index;
     };
-    driveReport.getReplayTarget = (r, incident) => (!incident || incident.at_s === 5 ? target : null);
+    driveReport.getReplayTarget = (_r, incident) => (!incident || incident.at_s === 5 ? target : null);
     const events = [
       { at_s: 5, at_m: 10, message: "Hard braking" },
       { at_s: 1, at_m: 2, message: "Earlier event" },

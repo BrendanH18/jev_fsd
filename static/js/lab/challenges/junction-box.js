@@ -66,7 +66,7 @@ function boxSites(map, street) {
       for (let k = 0; k < BOX_AHEAD_EDGES; k++) {
         const next = turn(cur, "straight"),
           ne = next && map.edges.get(next);
-        if (!ne || ne.lanes !== 1 || ne.ring || ne.control?.type === "signal") break;
+        if (ne?.lanes !== 1 || ne.ring || ne.control?.type === "signal") break;
         ahead.push(next);
         cur = next;
         if (isJunction(map, ne.to)) {

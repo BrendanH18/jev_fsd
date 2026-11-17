@@ -74,16 +74,15 @@ export class RulesBrain {
     if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;
     if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) stop = true;
     // (parking, the space is the destination: sim/parallel-park.js)
-    if (snap.nav && snap.nav.arrived && snap.parking?.mode !== "in") stop = true;
+    if (snap.nav?.arrived && snap.parking?.mode !== "in") stop = true;
 
     const vDesired = snap.target ? snap.target.v : desiredSpeed(snap).v;
     // A manoeuvre that leaves the car outside the lane its route takes for a turn ahead gains
     // nothing by driving faster than that lane's traffic, since the car has to move into it anyway:
     // it joins a queue there from behind instead of driving past it.
     const l = snap.lane;
-    const toward =
-      l && l.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
-    const vTurnLane = !l || !l.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
+    const toward = l?.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
+    const vTurnLane = !l?.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
 
     const rs = snap.roadside_stop;
     const cp = snap.cyclist_pass;

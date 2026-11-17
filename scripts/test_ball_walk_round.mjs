@@ -63,7 +63,6 @@ function run(across) {
     { speed: 4.4, drift: 0, delay: 1.2, childSpeed: 2.5 },
   );
   let placed = null,
-    crossed = false,
     home = null,
     touched = false,
     blocked = false;
@@ -78,7 +77,6 @@ function run(across) {
       touched ||= obbOverlap(ped.obb(), world.ego.obb());
       // (whether the straight way from where they picked it up to the gap ran through the car)
       if (world.t - placed < 0.1) blocked = ped.path.length > 0 && segmentThrough(ped, ped.path[0].p, world.ego.obb());
-      crossed ||= !!ped.rounds;
     }
     if (b.childState === "gone" || b.childState === "clear") home = world.t;
   }

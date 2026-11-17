@@ -2,7 +2,7 @@ globalThis.document = { querySelector: () => null };
 import assert from "node:assert/strict";
 import fs from "node:fs";
 const { MapData } = await import("../static/js/map/mapdata.js");
-const { busLaneActive, legalBusLane, routeBusLane, auditBusLanes } = await import("../static/js/sim/bus-lanes.js");
+const { busLaneActive, legalBusLane, auditBusLanes } = await import("../static/js/sim/bus-lanes.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { busTravelLane } = await import("../static/js/sim/bus.js");

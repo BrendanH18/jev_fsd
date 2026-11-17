@@ -112,6 +112,6 @@ export function placeContraflowRider(world, spec) {
 
 export const scenario = contraflowScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   Object.assign(world.challenge, placeContraflowRider(world, scenario.contraflow));
 }

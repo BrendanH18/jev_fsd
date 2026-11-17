@@ -44,7 +44,7 @@ export async function exportDriveCard(report, config = {}) {
   ctx.fillStyle = "#f3f6f9";
   ctx.font = "bold 48px system-ui";
   let title = report.title;
-  while (ctx.measureText(title).width > 1040 && title.length > 1) title = title.slice(0, -2) + "…";
+  while (ctx.measureText(title).width > 1040 && title.length > 1) title = `${title.slice(0, -2)}…`;
   ctx.fillText(title, 70, 157);
   ctx.fillStyle = "#a2b6c6";
   ctx.font = "24px system-ui";

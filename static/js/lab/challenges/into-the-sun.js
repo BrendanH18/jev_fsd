@@ -101,10 +101,10 @@ export function installSunGlare(world, scenario, seed) {
 
 export const scenario = sunGlareScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, challenge, scenario) {
   installSunGlare(world, scenario, challenge.seed);
 }
 
 // (the person crossing mid-block sets off once the car is 43 m from them)
 export const step = (world, fleet) =>
-  stepAuthored(world, fleet, { release: (world, fleet, state) => releasePedestrian(world, state) });
+  stepAuthored(world, fleet, { release: (world, _fleet, state) => releasePedestrian(world, state) });

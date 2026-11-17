@@ -184,8 +184,8 @@ async function run() {
     const hold = cands.find((c) => c.id === "keep_lane_hold");
     check(
       "hold-speed candidate predicts a collision",
-      hold && hold.sim.collision && hold.sim.collision.t > 0.3 && hold.sim.collision.t < 2.0,
-      JSON.stringify(hold && hold.sim.collision),
+      hold?.sim.collision && hold.sim.collision.t > 0.3 && hold.sim.collision.t < 2.0,
+      JSON.stringify(hold?.sim.collision),
     );
     check("hard_brake stays eligible", cands.find((c) => c.id === "hard_brake").eligible);
     check("rejected counts collisions", sim.rejected.collision >= 1, JSON.stringify(sim.rejected));
@@ -216,7 +216,7 @@ async function run() {
       Object.keys(state).every((k) => allowed.has(k)),
       Object.keys(state).join(","),
     );
-    const { questions, local } = buildQuestions(snap, sim.eligible);
+    const { questions } = buildQuestions(snap, sim.eligible);
     check("motion asked when following closely", !!questions.motion);
     check(
       "vector asked with several eligible",
@@ -355,7 +355,7 @@ async function run() {
     for (let k = 0; k < 20 && !car; k++) car = fleet.maybePullOut();
     check(
       "a parked car pulled out",
-      car && car.pull && world.parked.list.length === before - 1 && fleet.vehicles.includes(car),
+      car?.pull && world.parked.list.length === before - 1 && fleet.vehicles.includes(car),
       car ? car.id : "none nearby",
     );
   }
@@ -683,7 +683,7 @@ async function run() {
         stepParking(world.ego, law, world, 1 / 60, speedControl);
         if (world.parked.list.some((c) => obbOverlap(world.ego.obb(), c.obb(), 0.05))) touched = true;
       }
-      const pose = parkedPose(world.ego, law, world);
+      const pose = parkedPose(world.ego, law);
       check(
         "parallel parking: parked parallel, within 30 cm of the kerb, touching nothing",
         law.phase === "parked" && pose.within_kerb && pose.kerb_m <= KERB_MAX_M && !touched,

@@ -12,7 +12,7 @@ globalThis.document = { querySelector: () => null };
 const { MapData, pointAt, headingAt } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
-const { Vehicle, CAR, comfort } = await import("../static/js/sim/vehicle.js");
+const { Vehicle, CAR } = await import("../static/js/sim/vehicle.js");
 const { StopMemory } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
@@ -96,8 +96,6 @@ function street({ potholes = true, weather = "dry", s = 10, v = 0, holes = [], b
 }
 // The car's (or a vehicle's) lateral offset from the lane's centre.
 const lateralOf = (v) => {
-  const c = Math.cos(headingAt(lane.pts, lane.cum, 0)),
-    p = lane.pts[0];
   let best = null;
   for (let i = 0; i + 1 < lane.pts.length; i++) {
     const a = lane.pts[i],
@@ -618,7 +616,7 @@ if (process.argv.includes("--write-snapshot")) {
   const round = eligible.filter((c) => c.id === "ease_round_pothole").map((c) => c.id);
   fs.writeFileSync(
     new URL("../data/snapshots/pothole_season.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "pothole_season",
         state,
@@ -628,7 +626,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/pothole_season.json (pothole in ${snap.pothole.starts_in_m.toFixed(1)} m, ${eligible.length} eligible)`,

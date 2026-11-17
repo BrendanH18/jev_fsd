@@ -179,7 +179,7 @@ function refresh(world) {
   const world = new World(map, { parked: 0, pedestrians: 0 });
   const q = new AllWayStops(map);
   const v = (id) => ({ id });
-  const [a, b, c, d] = ["a", "b", "c", "d"].map(v);
+  const [a, b, c] = ["a", "b", "c"].map(v);
   const go = (n) => q.status(n, world).go;
   q.note(a, map.edges.get("w_in").control, "w_in", "straight", 1, 0, world);
   world.t = 2;
@@ -310,7 +310,7 @@ function refresh(world) {
     goes_first: ["first", "second"],
   });
   const clause = situationClauses(snap).find((c) => c.includes("all-way stop"));
-  assert.ok(clause && clause.includes("`first` goes first") && clause.includes("Hold still"), clause);
+  assert.ok(clause?.includes("`first` goes first") && clause.includes("Hold still"), clause);
   const { questions } = buildQuestions(snap, eligible);
   assert.ok(questions.motion.criteria.stop.includes("`intersection.priority.your_turn` is false"));
   const { messages } = buildLlmPrompt(snap, { state, questions });
@@ -345,7 +345,7 @@ function refresh(world) {
   const hidden = npc(world, "hidden", "s", 0.8);
   arrive(world, hidden, "s_in", -5);
   stopAtLine(world);
-  world.visibility.sees = (observer, o) => o !== hidden;
+  world.visibility.sees = (_observer, o) => o !== hidden;
   world.visibleObstaclesNear = (x, y, r) => world.obstaclesNear(x, y, r).filter((o) => o !== hidden);
   const { snap } = decide(world);
   assert.equal(snap.intersection.priority.go, true);
@@ -368,7 +368,7 @@ function refresh(world) {
   arrive(world, left, "n_in", t0 + 0.3);
   assert.equal(world.allWay.status(world.ego, world).go, true, "in the full order the car goes");
   const hidden = new Set([across, left]);
-  world.visibility.sees = (observer, o) => !hidden.has(o);
+  world.visibility.sees = (_observer, o) => !hidden.has(o);
   world.visibleObstaclesNear = (x, y, r) => world.obstaclesNear(x, y, r).filter((o) => !hidden.has(o));
   const { snap } = decide(world);
   assert.deepEqual([snap.intersection.priority.go, snap.intersection.priority.wait_for], [false, "visible_right"]);
@@ -568,7 +568,7 @@ function withFleet(world) {
 }
 // the order vehicles enter the junction (front within 5 m of the centre), and any two from
 // crossing approaches inside it together
-function junctionLog(world) {
+function junctionLog(_world) {
   const log = { order: [], overlaps: 0 };
   return Object.assign(log, {
     watch(w) {
@@ -615,25 +615,23 @@ function junctionLog(world) {
   console.log(`✓ Rules waits ${waited.toFixed(1)} s for a car that stopped first on its right, then goes and arrives`);
 }
 
-{
-  // the car stops first: traffic arriving after it, on its right, left and ahead, waits for it
-  for (const [arm, exit] of [
-    ["s", "n_out"],
-    ["n", "s_out"],
-    ["e", "s_out"],
-  ]) {
-    const world = setup({ x: egoX(12), v: 5, route: LEFT });
-    const fleet = withFleet(world);
-    npc(world, `from_${arm}`, arm, 40, { v: 7, exit, fleet });
-    const log = junctionLog(world);
-    drive(world, fleet, { watch: log.watch });
-    assert.deepEqual(log.order, ["ego", `from_${arm}`], `traffic from ${arm}`);
-    assert.equal(log.overlaps, 0);
-    assert.deepEqual([world.violations.collisions, world.violations.failed_to_yield], [0, 0]);
-    assert.ok(world.route === null, "arrived");
-  }
-  console.log("✓ traffic that stops after the car, on any side, waits while the car turns left");
+// the car stops first: traffic arriving after it, on its right, left and ahead, waits for it
+for (const [arm, exit] of [
+  ["s", "n_out"],
+  ["n", "s_out"],
+  ["e", "s_out"],
+]) {
+  const world = setup({ x: egoX(12), v: 5, route: LEFT });
+  const fleet = withFleet(world);
+  npc(world, `from_${arm}`, arm, 40, { v: 7, exit, fleet });
+  const log = junctionLog(world);
+  drive(world, fleet, { watch: log.watch });
+  assert.deepEqual(log.order, ["ego", `from_${arm}`], `traffic from ${arm}`);
+  assert.equal(log.overlaps, 0);
+  assert.deepEqual([world.violations.collisions, world.violations.failed_to_yield], [0, 0]);
+  assert.ok(world.route === null, "arrived");
 }
+console.log("✓ traffic that stops after the car, on any side, waits while the car turns left");
 
 {
   // four arrivals close together: everyone gets through, none in the junction with crossing traffic

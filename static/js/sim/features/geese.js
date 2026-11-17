@@ -36,7 +36,7 @@ export default {
   obstacles(world, x, y, r) {
     return world.geese?.gaggles.length ? world.geese.near(x, y, r) : null;
   },
-  stepAfterTraffic(world, fleet, dt) {
+  stepAfterTraffic(world, _fleet, dt) {
     if (world.geese?.enabled) world.geese.step(dt);
   },
   audit: {
@@ -103,7 +103,7 @@ export default {
   // Where the car stops for them: a metre past it is still short of their way.
   sim: {
     at: "balls",
-    run(world, snap) {
+    run(_world, snap) {
       const geeseStop = snap.geese_crossing?.wait ? snap.geese_crossing.stop_s_route : null;
       if (geeseStop === null) return null;
       let into = false;

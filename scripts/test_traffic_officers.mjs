@@ -71,7 +71,6 @@ const TOR = load("4a96d42cb3f2");
 const lesson = CHALLENGES.find((c) => c.id === "follow-the-officer");
 // Bloor Street West at Spadina (sig7): Spadina Avenue northbound (group B) and Bloor eastbound (group A).
 const SIG = "sig7",
-  SPADINA = ["e177", "e344", "e221", "e218"],
   BLOOR = ["e182", "e336", "e388", "e184", "e390", "e264"];
 const DT = 1 / 60;
 const idle = { enabled: false, step() {} };
@@ -104,7 +103,7 @@ function world({ officers = true, toLine = 40, v = 8, t = 0, seed = 3, traffic =
 }
 // A traffic car on `ids` (its first street, `s` along it, at `v`).
 function car(ctx, ids, s, v, id) {
-  const { world: w, fleet } = ctx,
+  const { fleet } = ctx,
     lane = TOR.lane(ids[0], TOR.edges.get(ids[0]).lanes - 1),
     p = pointAt(lane.pts, lane.cum, s);
   const n = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, CAR);
@@ -780,7 +779,7 @@ if (process.argv.includes("--write-snapshot")) {
   const state = toJevState(snap, candidates, { rejected });
   fs.writeFileSync(
     new URL("../data/snapshots/follow_the_officer.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "follow_the_officer",
         state,
@@ -790,7 +789,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/follow_the_officer.json (officer holding the car ${snap.traffic_officer.bumper_to_line_m} m short of the line on green, ${eligible.length} eligible)`,

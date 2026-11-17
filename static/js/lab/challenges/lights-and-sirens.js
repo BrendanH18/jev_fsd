@@ -62,7 +62,7 @@ function sirenSites(map) {
 }
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random) => {
+  laneScenario(map, challenge, (map, _challenge, random) => {
     const siren = pick(
       sirenSites(map),
       random,
@@ -79,7 +79,7 @@ export const scenario = (map, challenge) =>
 export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: reach(ONCOMING_TRIGGER_M),
-    release: (world, fleet, state) => {
+    release: (_world, fleet, state) => {
       state.emergencyId = fleet.dispatchEmergency(state.emergency)?.id || null;
     },
   });

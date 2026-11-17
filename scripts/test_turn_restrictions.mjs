@@ -10,7 +10,7 @@ const { restrictionActive, turnBanned, auditRestrictions } = await import("../st
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { routeFromLanes, browserRoute } = await import("../static/js/demo/routing.js");
 const { WorldClock } = await import("../static/js/sim/world-clock.js");
-const { failures, DriveMetrics } = await import("../static/js/bench/metrics.js");
+const { failures } = await import("../static/js/bench/metrics.js");
 const { rng } = await import("../static/js/common.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
@@ -19,7 +19,7 @@ let checks = 0;
 function test(name, fn) {
   fn();
   checks++;
-  console.log("✓ " + name);
+  console.log(`✓ ${name}`);
 }
 const pack = JSON.parse(fs.readFileSync(new URL("../data/maps/4a96d42cb3f2.v6.pack.json", import.meta.url)));
 for (const name of [

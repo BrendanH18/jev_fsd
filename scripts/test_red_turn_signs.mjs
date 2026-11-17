@@ -83,7 +83,7 @@ let checks = 0;
 function test(name, fn) {
   fn();
   checks++;
-  console.log("✓ " + name);
+  console.log(`✓ ${name}`);
 }
 
 test("mapped sign blocks a stopped right turn; disabled feature preserves the previous behavior", () => {
@@ -110,7 +110,7 @@ test("mapped sign blocks a stopped right turn; disabled feature preserves the pr
   if (process.argv.includes("--write-snapshot")) {
     fs.writeFileSync(
       new URL("../data/snapshots/no_turn_on_red.json", import.meta.url),
-      JSON.stringify({ name: "no_turn_on_red", state, questions, expect: { motion: "stop" } }, null, 2) + "\n",
+      `${JSON.stringify({ name: "no_turn_on_red", state, questions, expect: { motion: "stop" } }, null, 2)}\n`,
     );
   }
 });

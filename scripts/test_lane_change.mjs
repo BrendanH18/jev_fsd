@@ -779,7 +779,7 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
   const { snap, candidates, eligible } = decide(world);
   assert.deepEqual([snap.lane.delta, snap.lane.route_ahead, snap.lane.sides.left.offer], [1, true, "return"]);
   const change = eligible.find((c) => c.id.startsWith("change_left_"));
-  assert.ok(change && change.change.prepare, candidates.map((c) => `${c.id}:${c.reject}`).join(" "));
+  assert.ok(change?.change.prepare, candidates.map((c) => `${c.id}:${c.reject}`).join(" "));
   assert.equal(change.steer, "change to the left lane for the turn ahead");
   assert.match(new RulesBrain().decideSync(snap, eligible).candidateId, /^change_left_/);
   const state = toJevState(snap, candidates, {}, "test");
@@ -953,7 +953,7 @@ function turnSetup({ x, y = RIGHT, v = 10, npcs = [], m = turnMap }) {
   world._road = world.roadInfo();
   const mid = decide(world, executing);
   const cont = mid.candidates.find((c) => c.id === "keep_lane_target" || c.id === "keep_lane_hold");
-  assert.ok(cont && cont.law.shift, mid.candidates.map((c) => c.id).join(" "));
+  assert.ok(cont?.law.shift, mid.candidates.map((c) => c.id).join(" "));
   const sNow = mid.snap.routeProj.s;
   for (const ds of [0, 4, 8, 12]) {
     const a = lateralAt(executing.law, sNow + ds, world.route),

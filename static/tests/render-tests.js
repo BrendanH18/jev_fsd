@@ -211,11 +211,11 @@ export function runRenderTests() {
   chunk.update(camera);
   check("detail returns when camera approaches", chunk.getCurrentLevel() === 0);
 
-  const trees = buildTrees(
-    { extent: [1000, 500, 1080, 580], roundabouts: new Map(), roadDistance: () => ({ distance: 20 }) },
-    { streets: [] },
-    { near: () => false },
-  );
+  const trees = buildTrees({
+    extent: [1000, 500, 1080, 580],
+    roundabouts: new Map(),
+    roadDistance: () => ({ distance: 20 }),
+  });
   check("tree fixture contains foliage", trees.userData.count > 0);
   check(
     "distant tree batches reduce triangles and draw calls",

@@ -177,7 +177,7 @@ export class PuddleView {
 
   // Droplets thrown out to the kerb side from the tyres in puddle `h`, more the faster over the splash
   // speed the vehicle is going.
-  spray(v, h, over, dt) {
+  spray(v, _h, over, dt) {
     const wheels = wheelPoints(v),
       c = Math.cos(v.psi),
       s = Math.sin(v.psi),

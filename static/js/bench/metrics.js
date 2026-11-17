@@ -47,7 +47,7 @@ export class DriveMetrics {
     if (road && v > road.limit * SPEEDING) this.speeding += dt;
     const lat = Math.abs(world.ego.latAccel || 0);
     this.maxLatAccel = Math.max(this.maxLatAccel, lat);
-    if (snap && snap.routeProj) {
+    if (snap?.routeProj) {
       this.maxProgress = Math.max(this.maxProgress, snap.routeProj.s);
       // lane keeping is measured from the lane centre the car is tracking, which moves during a change
       const shift = snap.lane && snap.lane.from_delta !== null ? snap.lane.shift : null;
@@ -62,7 +62,7 @@ export class DriveMetrics {
     }
     // a non-positive gap is a car alongside in the detection corridor, not one ahead (a real
     // overlap is counted as a collision)
-    if (snap && snap.following && v > 0.5 && snap.following.gap_m > 0) {
+    if (snap?.following && v > 0.5 && snap.following.gap_m > 0) {
       const f = snap.following;
       const gap = f.gap_m;
       this.minGap = Math.min(this.minGap, gap);

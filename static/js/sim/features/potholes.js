@@ -40,7 +40,7 @@ export default {
   key: "potholes",
   seen: "potholesSeen",
   calls: "potholeCalls",
-  build: (world, { enabled, seed, map }) => new Potholes(map, { enabled, seed }),
+  build: (_world, { enabled, seed, map }) => new Potholes(map, { enabled, seed }),
   metric: { at: "driveways", name: "pothole_hits", failure: "hit a pothole too fast" },
   priority: ["ease_round_pothole"],
 

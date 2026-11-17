@@ -48,7 +48,7 @@ export function scenario(map, challenge) {
   };
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   const cw = world.crowd.marked.find((c) => c.id === scenario.pxoCrossing);
   const start = world.ego,
     near =

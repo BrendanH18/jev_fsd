@@ -12,7 +12,7 @@ fs.mkdirSync(directory, { recursive: true });
 let failures = 0;
 for (const fixture of buildRealismCases()) {
   const target = path.join(directory, `${fixture.name}.json`);
-  const expected = JSON.stringify(fixture, null, 2) + "\n";
+  const expected = `${JSON.stringify(fixture, null, 2)}\n`;
   if (checking) {
     if (!fs.existsSync(target) || fs.readFileSync(target, "utf8") !== expected) {
       console.error(`Stale fixture: ${fixture.name}`);

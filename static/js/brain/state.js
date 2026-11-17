@@ -1037,7 +1037,7 @@ export function situationClauses(snap) {
     }
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "yield") {
-    const exit = snap.nav && snap.nav.exit ? ` and take exit ${snap.nav.exit}` : "";
+    const exit = snap.nav?.exit ? ` and take exit ${snap.nav.exit}` : "";
     if (i.entered) out.push(`The car is in a roundabout: keep circulating counter-clockwise${exit}.`);
     else if (i.cross_traffic_moving)
       out.push(
@@ -1202,7 +1202,7 @@ export function situationClauses(snap) {
     );
   else if (snap.nav && snap.nav.next_turn !== "none" && snap.nav.next_turn !== "roundabout" && snap.nav.turn_in_m < 40)
     out.push(
-      `A ${snap.nav.next_turn === "uturn" ? "U-turn" : snap.nav.next_turn + " turn"} is coming in ${Math.round(snap.nav.turn_in_m)} m; \`car.target_speed\` already accounts for it.`,
+      `A ${snap.nav.next_turn === "uturn" ? "U-turn" : `${snap.nav.next_turn} turn`} is coming in ${Math.round(snap.nav.turn_in_m)} m; \`car.target_speed\` already accounts for it.`,
     );
   if (weather.name !== "dry")
     out.push(
@@ -1217,7 +1217,7 @@ export function situationClauses(snap) {
     out.push(
       `The ${snap.following.kind} ahead is slower than this lane allows and the ${pass.dir} lane has room: a \`change_${pass.dir}_*\` candidate passes it, and staying behind is also acceptable. Change lanes only to get past it.`,
     );
-  if (snap.lane && snap.lane.delta && !snap.lane.shift) {
+  if (snap.lane?.delta && !snap.lane.shift) {
     const back = snap.lane.delta < 0 ? "right" : "left";
     const within = Math.max(0, Math.round(snap.lane.until_s - snap.routeProj.s - snap.ego.front_m));
     const car = laneName(snap.lane.index, snap.lane.lanes),

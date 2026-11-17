@@ -21,7 +21,6 @@ import { Vehicle, BIKE, comfort } from "./vehicle.js";
 import { cumulative, pointAt, headingAt, joinLanes } from "../map/mapdata.js";
 import { approachPhase, movementSignal } from "./signals.js";
 import { rng } from "../common.js";
-import { obbOverlap } from "./collision.js";
 import { crosswalkConflict } from "./pedestrians.js";
 import { current as weather } from "./weather.js";
 import { purePursuit } from "./controller.js";
@@ -559,7 +558,7 @@ export class ContraflowRiders {
     }
     // (how long it has been held up by the same vehicle standing in its way)
     const standing =
-      blocker && blocker.spec && n.v < 0.2 && Math.abs(blocker.v || 0) < 0.2 && (stopAt === null || stopAt > gap + 1);
+      blocker?.spec && n.v < 0.2 && Math.abs(blocker.v || 0) < 0.2 && (stopAt === null || stopAt > gap + 1);
     if (standing) {
       if (n.waitedOn !== blocker) {
         n.waitedOn = blocker;
@@ -899,7 +898,7 @@ export function auditContraflow(world, frontOnPath) {
 }
 
 // What the HUD says about a contraflow rider the car is waiting for or moving over for, or null.
-export function contraflowNotice(world, snap) {
+export function contraflowNotice(_world, snap) {
   const c = snap?.contraflow_cyclist;
   if (!c) return null;
   if (c.wait)

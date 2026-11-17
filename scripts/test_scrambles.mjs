@@ -255,7 +255,7 @@ await test("at a scramble some people at a corner cross diagonally, on the all-w
 });
 
 await test("All walk: Rules and the cautious agent wait through the scramble, let the slow walker finish, and turn on green", async () => {
-  assert.ok(CH && CH.scrambles);
+  assert.ok(CH?.scrambles);
   for (const brain of ["rules", "cautious"]) {
     const r = await evaluateChallenge(VIC, CH, { brain });
     assert.equal(r.pass, true, `${brain}: ${r.failures}`);

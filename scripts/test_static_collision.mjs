@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 
 const { obbPolygonOverlap } = await import("../static/js/sim/collision.js");
-const { StaticObstacles, poseOf } = await import("../static/js/sim/static-obstacles.js");
+const { StaticObstacles } = await import("../static/js/sim/static-obstacles.js");
 const { Vehicle, CAR } = await import("../static/js/sim/vehicle.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
 const { stepWorld } = await import("../static/js/sim/step.js");

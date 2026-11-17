@@ -118,7 +118,7 @@ export class ParkedCars {
       for (const lat of sides) {
         const zones = lat > 0 ? this.zones?.get(e.id) : null;
         for (let s = from + SLOT_M / 2; s + SLOT_M / 2 <= to; s += SLOT_M) {
-          if (zones && zones.some(([a, b]) => s + SLOT_M / 2 > a && s - SLOT_M / 2 < b)) continue;
+          if (zones?.some(([a, b]) => s + SLOT_M / 2 > a && s - SLOT_M / 2 < b)) continue;
           // (a bay on the inside of a tight bend is left out; its draws are still made, and its car's
           // number used, so every other bay keeps the car it had)
           if (bayIntrusion(e, s, lat) > BEND_INTRUSION_M) {
@@ -274,7 +274,7 @@ export class ParkedCars {
     const after = key(car);
     if (after === before) return;
     const cell = this.grid.get(before);
-    if (cell && cell.includes(car)) cell.splice(cell.indexOf(car), 1);
+    if (cell?.includes(car)) cell.splice(cell.indexOf(car), 1);
     if (!this.grid.has(after)) this.grid.set(after, []);
     this.grid.get(after).push(car);
   }

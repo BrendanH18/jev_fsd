@@ -1,0 +1,12 @@
+{
+  "name": "jev-fsd",
+  "private": true,
+  "description": "Pins Biome, the JavaScript linter and formatter. The app itself has no npm dependencies.",
+  "scripts": {
+    "lint": "biome ci --error-on-warnings .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8"
+  }
+}

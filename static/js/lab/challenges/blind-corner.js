@@ -82,7 +82,7 @@ function twoWayCars(map, site) {
 }
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random) => {
+  laneScenario(map, challenge, (map, _challenge, random) => {
     const blind = pick(
       twoWaySites(map),
       random,

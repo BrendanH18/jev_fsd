@@ -156,7 +156,7 @@ export function parkerPlan(world, n) {
     path = n.path,
     cur = path?.currentEdge();
   const e = cur && map.edges.get(cur.id);
-  if (!e || !e.parking?.[1] || cur.lane !== e.lanes - 1 || e.ring) return null;
+  if (!e?.parking?.[1] || cur.lane !== e.lanes - 1 || e.ring) return null;
   // (never on the block of a work zone, a lane closure or a double-parked van, as for the driven car)
   if (
     world.workZones?.zones.some((z) => z.closed === e.id || z.open === e.id) ||

@@ -129,7 +129,7 @@ export function sampleCandidates(snap, world) {
     ...(lane ? { laneIdx: lane.index, chain: lane.chain } : {}),
   };
   const shifting = lane?.shift || null;
-  const laneUntil = lane && lane.delta ? lane.until_s : null;
+  const laneUntil = lane?.delta ? lane.until_s : null;
   // A continuing change keeps the lane it started from, so going back stays on offer.
   const carry = shifting
     ? {
@@ -242,8 +242,8 @@ export function sampleCandidates(snap, world) {
     // started from. The car signals and eases across over about 3.5 s, or more sharply to finish
     // before the lane it is leaving ends; too late for that, it waits. The prediction checks the car
     // is actually across by then (`leave`).
-    const leaving = lane && lane.delta ? lane.until_s - s - FRONT : Infinity;
-    const leave = lane && lane.delta ? { by: lane.until_s, center: lane.center } : null;
+    const leaving = lane?.delta ? lane.until_s - s - FRONT : Infinity;
+    const leave = lane?.delta ? { by: lane.until_s, center: lane.center } : null;
     const len = Math.max(MIN_CHANGE_M, Math.min(laneChangeLength(v), leaving));
     for (const side of lane ? Object.values(lane.sides) : []) {
       if (!side.offer) continue;
@@ -685,7 +685,7 @@ export function sampleCandidates(snap, world) {
     // A streetcar ahead with its doors open: stop behind its rear doors (behind it, in its lane), and
     // stay stopped while they are open.
     const tram = snap.streetcar;
-    if (tram && tram.doors && tram.bumper_to_stop_m > 0.3) {
+    if (tram?.doors && tram.bumper_to_stop_m > 0.3) {
       out.push({
         id: "stop_for_streetcar",
         laneUntil,
@@ -1210,7 +1210,6 @@ export function simulateAll(candidates, snap, world) {
       crosses = false,
       lateral = 0,
       headingErr = 0,
-      offroadFrac = 0,
       offSteps = 0;
     let intoNarrowing = false,
       splashes = false,
@@ -1584,7 +1583,7 @@ export function simulateAll(candidates, snap, world) {
 
 // Re-simulate only the currently executing law against fresh traffic: returns a hazard or null.
 export function pathHazard(executing, snap, world) {
-  if (!executing || !executing.candidate) return null;
+  if (!executing?.candidate) return null;
   const c = { id: executing.candidate.id, law: executing.law || executing.candidate.law };
   simulateAll([c], snap, world);
   if (c.sim.collision) return { id: c.sim.collision.id, in_s: c.sim.collision.t, kind: c.sim.collision.kind };

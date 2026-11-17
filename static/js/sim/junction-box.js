@@ -82,7 +82,7 @@ export function signalBoxesAhead(map, path, front, v) {
   for (const e of path.edges) {
     if (e.sEnd < front - 30) continue;
     const c = e.control;
-    if (!c || c.type !== "signal") continue;
+    if (c?.type !== "signal") continue;
     const line = e.sStart + (c.s_line / Math.max(1, map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
     if (line - front > LOOK_M) break;
     if (!waitsAt(line - front, boxStart(map, e.id, e.sEnd) - front, v)) continue;

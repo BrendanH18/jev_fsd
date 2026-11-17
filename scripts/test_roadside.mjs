@@ -60,7 +60,7 @@ function princess({ kind = "tow_truck" } = {}) {
 }
 // The car `back` metres behind the truck's rear (front bumper), in lane `idx` (2 is the curb lane),
 // at `v`, with a route straight on.
-function drive(world, truck, { idx = 2, back = 50, v = 13.9 } = {}) {
+function drive(world, _truck, { idx = 2, back = 50, v = 13.9 } = {}) {
   const lane = WPG.lane(PRINCESS.id, idx),
     FRONT = CAR.length - CAR.rearOverhang;
   const s = 91.2 - back - FRONT;
@@ -89,7 +89,7 @@ test("it holds from 30 m short of the vehicle's rear until past it, for drivers 
     return roadsideRelation(world.ego, truck);
   };
   const curb = at(2, 50);
-  assert.ok(curb && curb.adjacent && curb.ahead_m > APPROACH_M && !curb.holds, "40 m back: not yet");
+  assert.ok(curb?.adjacent && curb.ahead_m > APPROACH_M && !curb.holds, "40 m back: not yet");
   assert.ok(at(2, 70).holds && at(2, 70).adjacent, "20 m back, in the curb lane: it holds, in the lane next to it");
   const middle = at(1, 70);
   assert.ok(middle.holds && !middle.adjacent, "in the next lane over it still holds, but that lane is not next to it");
@@ -201,7 +201,7 @@ test("traffic slows to 40 km/h past one, in every lane going its way, and speeds
       else if (!r && c.v > after[i]) after[i] = c.v;
     });
   }
-  cars.forEach((c, i) => {
+  cars.forEach((_c, i) => {
     assert.ok(
       top[i] > 0 && kmh(top[i]) < 40 + SPEED_GRACE_MPS * 3.6,
       `lane ${2 - i}: ${kmh(top[i]).toFixed(1)} km/h past it`,
@@ -223,8 +223,7 @@ test("sensing: the car in the lane next to it slows, and is offered the lane to 
   assert.equal(snap.lane.sides.left.offer, "move_over");
   const change = sampleCandidates(snap, world).find((c) => c.change?.offer === "move_over");
   assert.ok(
-    change &&
-      change.id.startsWith("change_left") &&
+    change?.id.startsWith("change_left") &&
       /move over to the left lane, away from the stopped tow truck/.test(change.steer),
   );
   // within 30 m of it, 40 km/h is the limit: nothing faster is on offer
@@ -472,7 +471,7 @@ test("challenge: a tow truck at the curb on Princess Street, Winnipeg, its opera
   const truck = world.roadside.vehicles[0],
     op = world.crowd.list.find((p) => p.id === "challenge_operator");
   assert.ok(truck.kind === "tow_truck" && truck.flashing && WINNIPEG.edges.get(truck.edge).name === "Princess Street");
-  assert.ok(op && op.dart && op.frozen > 0, "the operator waits for the car");
+  assert.ok(op?.dart && op.frozen > 0, "the operator waits for the car");
   const r = roadsideRelation(world.ego, truck);
   assert.ok(
     r.adjacent && r.ahead_m > 70 && r.ahead_m < 82,

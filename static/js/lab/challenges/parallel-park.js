@@ -139,7 +139,7 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(PARK_TRIGGER_M),
     // (the car behind sets off up the street)
-    release: (world, fleet, state) => {
+    release: (_world, fleet, state) => {
       for (const id of state.followerIds || []) {
         const car = fleet.vehicles.find((v) => v.id === id);
         if (car) car.frozen = 0;

@@ -238,7 +238,7 @@ if (process.argv.includes("--write-snapshots")) {
       .map((c) => c.id);
     fs.writeFileSync(
       new URL(`../data/snapshots/${name}.json`, import.meta.url),
-      JSON.stringify({ name, state, questions, local, expect: { vector_in: slowing } }, null, 2) + "\n",
+      `${JSON.stringify({ name, state, questions, local, expect: { vector_in: slowing } }, null, 2)}\n`,
     );
   }
 }

@@ -124,6 +124,6 @@ export function placeGeese(world, spec) {
 
 export const scenario = geeseScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   Object.assign(world.challenge, placeGeese(world, scenario.geese));
 }

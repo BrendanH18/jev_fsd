@@ -254,7 +254,7 @@ function driveThrough(world, path, { speed = 6, seconds = 3 } = {}) {
   assert.equal(state.intersection.oncoming.yield, true);
   assert.ok(state.intersection.oncoming.wait_in_m > 0);
   const clause = situationClauses(snap).find((c) => c.includes("oncoming traffic has the right of way"));
-  assert.ok(clause && clause.includes("stop_for_oncoming"), clause);
+  assert.ok(clause?.includes("stop_for_oncoming"), clause);
   const { questions } = buildQuestions(snap, eligible);
   assert.ok(questions.motion.criteria.stop.includes("waits for oncoming traffic"));
   assert.ok(questions.vector.criteria.stop_for_oncoming.includes("short of oncoming traffic's path"));
@@ -357,13 +357,11 @@ function driveThrough(world, path, { speed = 6, seconds = 3 } = {}) {
   console.log("✓ a car caught in the junction by a red light clears it");
 }
 
-{
-  // the turn comes from the streets either side of the junction, wherever the router measured its
-  // turn instruction (its distances add up edge lengths, not the rounded polyline)
-  for (const turns of [[], [{ at_m: ARM + 45, dir: "left" }]])
-    assert.equal(new Route({ ...LEFT, turns }, map).controls[0].turn, "left");
-  console.log("✓ the turn at a junction comes from the route's streets, not from the turn instruction's distance");
-}
+// the turn comes from the streets either side of the junction, wherever the router measured its
+// turn instruction (its distances add up edge lengths, not the rounded polyline)
+for (const turns of [[], [{ at_m: ARM + 45, dir: "left" }]])
+  assert.equal(new Route({ ...LEFT, turns }, map).controls[0].turn, "left");
+console.log("✓ the turn at a junction comes from the route's streets, not from the turn instruction's distance");
 
 {
   // stopped just past the line at a red (an overshoot) it still holds; well inside, it clears
@@ -560,31 +558,29 @@ function drive(world, { seconds = 40, watch = () => {} } = {}) {
   console.log("✓ entering the path of an oncoming car already turning inside the junction counts too");
 }
 
-{
-  // an oncoming car that goes straight through the signal and turns left at the next junction,
-  // 10 m on, still has the right of way here: turning in front of it is a failure to yield
-  // (also where the street back from that junction is a short approach of this signal, so that
-  // junction's node counts as one of this junction's)
-  for (const back of [false, true]) {
-    const next = junction({
-      nodes: { x: [-10, 0], q: [-10, -ARM] },
-      streets: [["c_x", "c", "x"], ["x_q", "x", "q"], ...(back ? [["x_c", "x", "c", true]] : [])],
-    });
-    const other = car("then_left", 29, HALF, Math.PI, 11);
-    other.path = new NpcPath(next.map, rng(1));
-    other.path.start("e_in", 0, ARM - 29, [
-      ["c_x", 0],
-      ["x_q", 0],
-    ]);
-    const world = setup({ x: -14, route: next.routeData("n_out", "left"), on: next.map, npcs: [other] });
-    assert.deepEqual(
-      driveThrough(world, world.route).map((e) => e.with),
-      ["then_left"],
-      back ? "with a short approach back from it" : "",
-    );
-  }
-  console.log("✓ an oncoming car turning left at the next junction, not this one, still counts");
+// an oncoming car that goes straight through the signal and turns left at the next junction,
+// 10 m on, still has the right of way here: turning in front of it is a failure to yield
+// (also where the street back from that junction is a short approach of this signal, so that
+// junction's node counts as one of this junction's)
+for (const back of [false, true]) {
+  const next = junction({
+    nodes: { x: [-10, 0], q: [-10, -ARM] },
+    streets: [["c_x", "c", "x"], ["x_q", "x", "q"], ...(back ? [["x_c", "x", "c", true]] : [])],
+  });
+  const other = car("then_left", 29, HALF, Math.PI, 11);
+  other.path = new NpcPath(next.map, rng(1));
+  other.path.start("e_in", 0, ARM - 29, [
+    ["c_x", 0],
+    ["x_q", 0],
+  ]);
+  const world = setup({ x: -14, route: next.routeData("n_out", "left"), on: next.map, npcs: [other] });
+  assert.deepEqual(
+    driveThrough(world, world.route).map((e) => e.with),
+    ["then_left"],
+    back ? "with a short approach back from it" : "",
+  );
 }
+console.log("✓ an oncoming car turning left at the next junction, not this one, still counts");
 
 {
   // nor does a left turn it made onto a short approach just before this junction: it now comes

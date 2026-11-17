@@ -18,7 +18,6 @@ const { setWeather } = await import("../static/js/sim/weather.js");
 const { detourAt } = await import("../static/js/sim/controller.js");
 const { obbOverlap } = await import("../static/js/sim/collision.js");
 const {
-  AHEAD_M,
   GIVE_UP_S,
   LANE_CLOSURE_COUNT,
   LC_LIMIT_MPS,
@@ -445,7 +444,7 @@ await test("the audit: going through the merge point out of turn, forcing in, fa
     }
     assert.ok(ev, "merged out of turn");
     assert.equal(world.violations.merge_cut_ins, 1);
-    assert.ok(ev.cut && ev.cut.startsWith("o"), JSON.stringify(ev));
+    assert.ok(ev.cut?.startsWith("o"), JSON.stringify(ev));
     const m = metrics.summary(world, { totals: { decisions: 0, fallbacks: 0 }, brainName: "manual" }, false);
     assert.equal(m.merge_cut_ins, 1);
     assert.ok(failures(m).includes("merged out of turn"));

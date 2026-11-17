@@ -101,7 +101,7 @@ export function stepRoadClosure(world) {
 
 export const scenario = roadClosureScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   installRoadClosure(world, fleet, scenario);
 }
 

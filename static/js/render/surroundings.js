@@ -4,7 +4,6 @@
 // Scenery only — instanced/chunked, not simulated.
 
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { LAYER, groundLayer, toThree } from "./scene.js";
 import { lighting } from "./atmosphere.js";
 import { hash01 } from "./geo.js";
@@ -120,7 +119,7 @@ function sceneryMaterial({ facade = null, roughness = 0.85, metalness = 0 } = {}
     );
     shader.fragmentShader = frag;
   };
-  mat.customProgramCacheKey = () => "scenery-" + (facade ? JSON.stringify(facade) : "plain");
+  mat.customProgramCacheKey = () => `scenery-${facade ? JSON.stringify(facade) : "plain"}`;
   return mat;
 }
 

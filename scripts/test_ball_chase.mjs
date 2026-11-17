@@ -704,7 +704,7 @@ if (process.argv.includes("--write-snapshot")) {
     .map((c) => c.id);
   fs.writeFileSync(
     new URL("../data/snapshots/chasing_the_ball.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "chasing_the_ball",
         state,
@@ -714,7 +714,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/chasing_the_ball.json (gap ${snap.ball_in_road.gap_m.toFixed(1)} m, slow to ${snap.ball_in_road.limit_mps.toFixed(1)} m/s, ${eligible.length} eligible)`,

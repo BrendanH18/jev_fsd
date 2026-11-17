@@ -114,8 +114,7 @@ function resample(pts) {
 const { map, routeData } = junction();
 map.edges.get("w_in").oneway = true;
 map.edges.get("n_out").oneway = true;
-const RIGHT = routeData("s_out", "right"),
-  STRAIGHT = routeData("e_out", null),
+const STRAIGHT = routeData("e_out", null),
   LEFT = routeData("n_out", "left");
 const plan = map.intersections.get("sig").plan;
 // red for the car (group A), green for the street from the left (group B), walk for people crossing
@@ -131,8 +130,6 @@ function car(id, x, y, psi, v = 0, extra = {}) {
   const n = new Vehicle(x, y, psi, v);
   return Object.assign(n, { id }, extra);
 }
-// from the left: southbound on North Street, `y` m north of the centre
-const fromLeft = (y, v = 11, extra = {}) => car("cross", -HALF, y, -Math.PI / 2, v, extra);
 const AT_LINE = -8 - 0.8 - FRONT; // rear axle with the front bumper 0.8 m short of the line
 function setup({
   x = AT_LINE,
@@ -192,7 +189,6 @@ function driveThrough(world, path, { speed = 5, seconds = 5 } = {}) {
   }
   return events;
 }
-const types = (events) => events.map((e) => e.type + (e.to ? `:${e.to}` : ""));
 
 function pedestrian(world, { crossing = false } = {}) {
   const info = world.crowd.legsAt.get("c"),

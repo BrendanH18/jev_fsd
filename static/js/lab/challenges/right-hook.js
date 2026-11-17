@@ -63,7 +63,7 @@ function hookSites(map) {
 }
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random) => {
+  laneScenario(map, challenge, (map, _challenge, random) => {
     const hook = pick(
       hookSites(map),
       random,
@@ -105,7 +105,7 @@ function placeCyclist(world, fleet, { edge, s, then }) {
   return bike.id;
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   world.challenge.cyclistId = placeCyclist(world, fleet, scenario.cyclist);
 }
 

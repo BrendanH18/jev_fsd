@@ -143,7 +143,7 @@ const rules = new RulesBrain();
   // path, not one it has passed, one following it, or one well away
   const { world, fleet } = setup({ front: -60, v: 10 });
   const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 });
-  assert.ok(ev && ev.siren && ev.kind === "ambulance", "dispatched");
+  assert.ok(ev?.siren && ev.kind === "ambulance", "dispatched");
   assert.ok(Math.abs(world.ego.x - ev.x - 60) < 0.5, `${ev.x}`);
   assert.equal(emergencyCall(world.ego, ev)?.relation, "behind");
   const oncoming = new Vehicle(-40, HALF, Math.PI, 8);
@@ -244,7 +244,7 @@ const rules = new RulesBrain();
   assert.equal(state.emergency_vehicle.pull_over, true);
   assert.equal(state.emergency_vehicle.coming_from, "behind");
   const clause = situationClauses(snap).find((c) => c.includes("fire truck"));
-  assert.ok(clause && clause.includes("`pull_over`") && clause.startsWith("A fire truck"), clause);
+  assert.ok(clause?.includes("`pull_over`") && clause.startsWith("A fire truck"), clause);
   const { questions } = buildQuestions(snap, eligible);
   assert.ok(questions.motion.criteria.stop.includes("emergency_vehicle.stop_in_m"));
   assert.ok(
@@ -492,7 +492,6 @@ for (const followingDistance of [false, true]) {
       );
   const truck = fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 60 });
   let led = false,
-    failed = 0,
     stopped = null,
     touched = false,
     pulled = 0;

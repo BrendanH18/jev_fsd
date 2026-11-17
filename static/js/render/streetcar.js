@@ -234,7 +234,7 @@ export function createStreetcarMesh(id = "streetcar", text = "") {
   return g;
 }
 
-export function syncStreetcar(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
+export function syncStreetcar(mesh, vehicle, dt = 0, _t = 0, lightsOn = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;

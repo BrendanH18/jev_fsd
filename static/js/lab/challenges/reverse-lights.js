@@ -168,6 +168,6 @@ export function placeReverser(world, spec, seed) {
 
 export const scenario = drivewayScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, challenge, scenario) {
   Object.assign(world.challenge, placeReverser(world, scenario.reverser, challenge.seed));
 }

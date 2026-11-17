@@ -53,7 +53,7 @@ export function stopSpeedFor(distance, decel = comfort().decel) {
 // zone's closed stretch (sim/work-zone.js).
 export function lateralAt(law, s, route = null) {
   const shift = law.shift;
-  const move = (s0) => (route && route.frameMove ? route.frameMove(s0, s) : 0);
+  const move = (s0) => (route?.frameMove ? route.frameMove(s0, s) : 0);
   const to = (law.offset || 0) - move(law.s0) + detourAt(law.detour, s);
   if (!shift) return to;
   const from = shift.from - move(shift.start);
@@ -149,8 +149,7 @@ export function applyLaw(vehicle, law, route, s, dt, world = null) {
         stepTurnaround(vehicle, law, route, world, dt, purePursuit, speedControl)
       )
         return;
-    // falls through: once round, it follows the lane like any lane law
-    case "lane":
+    // falls through: once round, it follows the lane like any lane law ("lane" and the rest)
     default: {
       const stopAt = law.stopAt;
       let vTarget = Math.min(law.vTarget, curveProfileSpeed(route, s).v);

@@ -25,7 +25,6 @@ const {
   streetcarHold,
   streetcarRelation,
 } = await import("../static/js/sim/streetcar.js");
-const { isBus } = await import("../static/js/sim/bus.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, buildQuestions, situationClauses } = await import("../static/js/brain/state.js");
@@ -237,10 +236,7 @@ test("challenge: a 511 at its stop on Bathurst Street in the lane beside the car
   assert.ok(scenario.start.lane === world.map.edges.get(scenario.start.edge).lanes - 1, "the car in the curb lane");
   const r = streetcarRelation(world.ego, tram);
   assert.ok(r.beside && r.ahead_m > 0, "beside its track, behind it");
-  assert.ok(
-    rider && rider.held && rider.path[0].cross.streetcar === tram.id,
-    "a rider waiting to walk out to its doors",
-  );
+  assert.ok(rider?.held && rider.path[0].cross.streetcar === tram.id, "a rider waiting to walk out to its doors");
   const door = doorPoints(tram)[3];
   assert.ok(Math.hypot(rider.path[0].p[0] - door[0], rider.path[0].p[1] - door[1]) < 1e-6, "to its rear doors");
 });
@@ -249,7 +245,7 @@ test("the car is told to stop, offered a stop behind the doors, and driving on i
   const { world } = doors({ back: 40, v: 11 });
   const snap = buildSnapshot(world),
     sc = snap.streetcar;
-  assert.ok(sc && sc.doors && sc.beside, "sensed");
+  assert.ok(sc?.doors && sc.beside, "sensed");
   assert.ok(
     Math.abs(sc.bumper_to_stop_m - 40) < 1,
     `stops 4 m behind its rear doors (${sc.bumper_to_stop_m.toFixed(1)} m)`,

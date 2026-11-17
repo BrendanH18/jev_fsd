@@ -92,7 +92,7 @@ export class Crowd {
     const streets = new Map();
     for (const e of map.edges.values()) {
       if (e.ring) continue;
-      const key = [e.from, e.to].sort().join("|") + "|" + Math.round(e.length);
+      const key = `${[e.from, e.to].sort().join("|")}|${Math.round(e.length)}`;
       if (!streets.has(key)) streets.set(key, { id: key, edge: e });
     }
     this.streets = [...streets.values()];
@@ -103,7 +103,7 @@ export class Crowd {
     for (const c of [...(map.crosswalks || []), ...(this.pxo ? map.pxos || [] : [])]) {
       if (c.pxo && !this.pxo) continue;
       const e0 = map.edges.get(c.edge);
-      const st = e0 && streets.get([e0.from, e0.to].sort().join("|") + "|" + Math.round(e0.length));
+      const st = e0 && streets.get(`${[e0.from, e0.to].sort().join("|")}|${Math.round(e0.length)}`);
       if (!st) continue;
       const e = st.edge,
         s = projectPoint(e.pts, e.cum, [c.x, c.y]).s;
@@ -136,7 +136,7 @@ export class Crowd {
       // how far out the crosswalks sit: past the widest street's asphalt at this node
       let half = 0;
       for (const l of list) half = Math.max(half, Math.abs(l.st.edge.asphalt[0]), Math.abs(l.st.edge.asphalt[1]));
-      const inter = [...map.intersections.values()].find((i) => i.vertices && i.vertices.includes(node)) || null;
+      const inter = [...map.intersections.values()].find((i) => i.vertices?.includes(node)) || null;
       for (const l of list) {
         const e = l.st.edge,
           L = e.cum[e.cum.length - 1];
@@ -203,7 +203,7 @@ export class Crowd {
 
   // The street (one entry for both directions of a two-way street) edge `e` is on, or undefined.
   streetOf(e) {
-    return this.streetIndex.get([e.from, e.to].sort().join("|") + "|" + Math.round(e.length));
+    return this.streetIndex.get(`${[e.from, e.to].sort().join("|")}|${Math.round(e.length)}`);
   }
 
   // A child getting off school bus `bus`, stopped on street edge `e` (sim/school-bus.js), by its front
@@ -720,7 +720,7 @@ export function crosswalkConflict(pts, cum, sFrom, sTo, crowd, laneHalf = 1.8) {
 // across that crosswalk now would meet them in it.
 const KERB_M = 6;
 export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
-  if (!crowd || !crowd.legsAt) return null;
+  if (!crowd?.legsAt) return null;
   for (const ped of peds) {
     if (ped.crossing || ped.frozen > 0) continue;
     const wp = ped.path.slice(0, 2).find((w) => w.cross);

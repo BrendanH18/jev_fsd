@@ -113,7 +113,7 @@ function street({ pass = true, line = true, seed = 3, hazards = false } = {}) {
 }
 // A cyclist out in the westbound lane, its rear wheel `rear` metres along it, riding straight on.
 function cyclist(
-  world,
+  _world,
   fleet,
   { rear = 40, v = 4.5, id = "bike", map = KITS, edge = EDGE, next = NEXT, side = IN_LANE } = {},
 ) {
@@ -141,7 +141,7 @@ function cyclist(
 }
 // A car of the traffic, westbound with its front `front` metres along West 10th, or eastbound (coming
 // the other way) with its front `front` metres along it in the westbound edge's own `s`.
-function car(world, fleet, { front, v = 0, id, oncoming = false }) {
+function car(_world, fleet, { front, v = 0, id, oncoming = false }) {
   const e = oncoming ? KITS.edges.get(OPP) : W10,
     lane = KITS.lane(e.id, 0);
   const s = ((oncoming ? W10.length - front + FRONT : front - FRONT) * lane.length) / e.length,

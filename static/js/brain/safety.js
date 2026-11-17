@@ -49,7 +49,7 @@ export function safetyBrake(world, snap, executing) {
     }
     return null;
   }
-  if (snap && snap.following) {
+  if (snap?.following) {
     const gap = snap.following.gap_m,
       closing = snap.following.closing_mps;
     const ttc = closing > 0.1 ? gap / closing : Infinity;
@@ -74,8 +74,7 @@ export function safetyBrake(world, snap, executing) {
     const closing = ego.v - n.v * Math.cos(n.psi - ego.psi);
     if (gap < gapMoving || (closing > 0.1 && gap / closing < ttcMoving)) return { reason: "ahead", gap, closing };
   }
-  if (executing && executing.hazard && executing.hazard.in_s < 1.0)
-    return { reason: "predicted", hazard: executing.hazard };
+  if (executing?.hazard && executing.hazard.in_s < 1.0) return { reason: "predicted", hazard: executing.hazard };
   return null;
 }
 
@@ -86,8 +85,7 @@ export class DeadlockDetector {
   update(world, snap, dt) {
     const ego = world.ego;
     const legit =
-      (snap &&
-        snap.intersection &&
+      (snap?.intersection &&
         ((snap.intersection.control === "signal" &&
           snap.intersection.signal !== "green" &&
           snap.intersection.bumper_to_line_m < 12 &&
@@ -111,40 +109,35 @@ export class DeadlockDetector {
             snap.intersection.bumper_to_line_m < 8) ||
           (snap.intersection.oncoming && snap.intersection.oncoming.bumper_to_yield_m < 8) ||
           (snap.intersection.give_way?.wait_for && snap.intersection.give_way.bumper_to_hold_m < 8))) ||
-      (snap && snap.following && snap.following.gap_m < 8) ||
-      (snap && snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12) ||
-      (snap && snap.right_hook && snap.right_hook.bumper_to_yield_m < 8) ||
+      (snap?.following && snap.following.gap_m < 8) ||
+      (snap?.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12) ||
+      (snap?.right_hook && snap.right_hook.bumper_to_yield_m < 8) ||
       (snap && snap.emergency && snap.emergency.bumper_to_stop_m !== null && snap.emergency.bumper_to_stop_m < 8) ||
-      (snap && snap.emergency_ahead && snap.emergency_ahead.speed < 1) ||
-      (snap && snap.bus && snap.bus.bumper_to_stop_m < 8) ||
-      (snap && snap.crosswalk_stop && snap.crosswalk_stop.bumper_to_stop_m < 8) ||
+      (snap?.emergency_ahead && snap.emergency_ahead.speed < 1) ||
+      (snap?.bus && snap.bus.bumper_to_stop_m < 8) ||
+      (snap?.crosswalk_stop && snap.crosswalk_stop.bumper_to_stop_m < 8) ||
       (snap && snap.school_bus?.lights === "red" && snap.school_bus.bumper_to_stop_m < 8) ||
-      (snap && snap.streetcar?.doors && snap.streetcar.bumper_to_stop_m < 8) ||
-      (snap && snap.level_crossing?.wait && snap.level_crossing.bumper_to_stop_m < 8) ||
-      (snap && snap.junction_box && snap.junction_box.bumper_to_stop_m < 8) ||
-      (snap && snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 8) ||
-      (snap && snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 8) ||
-      (snap && snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 8) ||
-      (snap && snap.red_light_runner?.wait && snap.red_light_runner.bumper_to_stop_m < 8) ||
-      (snap && snap.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 8) ||
-      (snap && snap.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 8) ||
-      (snap && snap.snowbank?.narrowing?.wait && snap.snowbank.narrowing.bumper_to_stop_m < 8) ||
-      (snap &&
-        snap.parking_ahead?.wait &&
+      (snap?.streetcar?.doors && snap.streetcar.bumper_to_stop_m < 8) ||
+      (snap?.level_crossing?.wait && snap.level_crossing.bumper_to_stop_m < 8) ||
+      (snap?.junction_box && snap.junction_box.bumper_to_stop_m < 8) ||
+      (snap?.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 8) ||
+      (snap?.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 8) ||
+      (snap?.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 8) ||
+      (snap?.red_light_runner?.wait && snap.red_light_runner.bumper_to_stop_m < 8) ||
+      (snap?.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 8) ||
+      (snap?.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 8) ||
+      (snap?.snowbank?.narrowing?.wait && snap.snowbank.narrowing.bumper_to_stop_m < 8) ||
+      (snap?.parking_ahead?.wait &&
         snap.parking_ahead.bumper_to_stop_m < 8 &&
         snap.parking_ahead.bumper_to_stop_m > -1) ||
-      (snap && snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8) ||
+      (snap?.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8) ||
       (snap && snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 8) ||
       // (behind a cyclist that has stopped, at the gap it keeps to one it cannot pass yet)
-      (snap &&
-        snap.cyclist_pass &&
-        !snap.cyclist_pass.go &&
-        snap.cyclist_pass.gap_m < snap.cyclist_pass.follow_gap_m + 4) ||
-      (snap && snap.nav && snap.nav.remaining_m < DESTINATION_ZONE_M) ||
-      (snap && snap.turnaround?.executing && snap.turnaround.idle_s < TURN_ROUND_IDLE_S) ||
+      (snap?.cyclist_pass && !snap.cyclist_pass.go && snap.cyclist_pass.gap_m < snap.cyclist_pass.follow_gap_m + 4) ||
+      (snap?.nav && snap.nav.remaining_m < DESTINATION_ZONE_M) ||
+      (snap?.turnaround?.executing && snap.turnaround.idle_s < TURN_ROUND_IDLE_S) ||
       // (waiting to park, or to pull out, signalling, for what is coming; and parking, at walking pace)
-      (snap &&
-        snap.parking &&
+      (snap?.parking &&
         ((snap.parking.mode === "in"
           ? !snap.parking.phase && snap.parking.near_start
           : !snap.parking.phase || snap.parking.executing) ||
@@ -155,7 +148,7 @@ export class DeadlockDetector {
       looking = g && !g.wait_for && g.hold_s_route !== null;
     const crawling =
       Math.abs(ego.v) < 1.0 &&
-      (!snap || !snap.target || snap.target.v > 2.0 || (looking && snap.target.v > 0 && Math.abs(ego.v) < 0.3));
+      (!snap?.target || snap.target.v > 2.0 || (looking && snap.target.v > 0 && Math.abs(ego.v) < 0.3));
     if (crawling && !legit) this.stoppedFor += dt;
     else this.stoppedFor = 0;
     world.stuckFor = this.stoppedFor;

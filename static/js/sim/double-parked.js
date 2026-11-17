@@ -229,7 +229,7 @@ export function queuedAhead(world, d, frontS, driver, others) {
     if (n === driver || isVan(n) || n.parked || n.kind === "pedestrian" || n.kind === "door") continue;
     if (Math.abs(n.x - d.x) > 60 || Math.abs(n.y - d.y) > 60) continue;
     const on = onStreet(e, n);
-    if (!on || !on.same || Math.abs(on.lateral - lane) > 1.6) continue;
+    if (!on?.same || Math.abs(on.lateral - lane) > 1.6) continue;
     const rear = on.s - (n.spec || CAR).rearOverhang;
     if (rear > frontS - 0.5 && rear < d.rear) return n;
   }
@@ -486,7 +486,7 @@ export class DoubleParked {
       if (Math.abs(ego.x - d.x) > VAN_LOOK_M + 30 || Math.abs(ego.y - d.y) > VAN_LOOK_M + 30) continue;
       const e = map.edges.get(d.edge),
         on = onStreet(e, ego);
-      if (!on || !on.same) continue;
+      if (!on?.same) continue;
       const front = on.s + FRONT;
       if (front < d.rear - VAN_LOOK_M || front > d.detour.to) continue;
       const seen = world.sees(ego, d.van);
@@ -546,7 +546,7 @@ export class DoubleParked {
 const NOTICE_M = 60;
 export function vanNotice(world) {
   const view = world.doubleParked?.egoView();
-  if (!view || !view.seen || view.front < view.van.rear - NOTICE_M) return null;
+  if (!view?.seen || view.front < view.van.rear - NOTICE_M) return null;
   const { van, way, queued, going } = view,
     name = van.truck ? "GARBAGE TRUCK" : "DOUBLE-PARKED VAN";
   if (going)

@@ -67,7 +67,7 @@ export class Minimap {
     }
   }
 
-  draw({ ego, npcs = [], route = null, destination = null, candidates = null }) {
+  draw({ ego, npcs = [], route = null, destination = null }) {
     const c = this.ctx;
     c.drawImage(this.roads, 0, 0);
     if (route) {

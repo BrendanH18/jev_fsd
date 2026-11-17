@@ -147,8 +147,7 @@ export function outageNotice(world) {
   if (!p || p.distance > 4) return null;
   const front = p.s + ego.spec.length - ego.spec.rearOverhang;
   const c = route.controls.find((k) => k.sRoute > front - 1);
-  if (!c || c.control.type !== "signal" || c.sRoute - front > NOTICE_M || !world.outages.isDark(c.control.id))
-    return null;
+  if (c?.control.type !== "signal" || c.sRoute - front > NOTICE_M || !world.outages.isDark(c.control.id)) return null;
   const inter = map.intersections.get(c.control.id);
   if (!inter || !world.visibility.canSee(ego, inter.x, inter.y)) return null;
   const st = world.allWay.status(ego, world);

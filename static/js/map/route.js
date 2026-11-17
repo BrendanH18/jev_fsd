@@ -128,7 +128,7 @@ export class Route {
     this.limitMarks = [];
     for (let i = 1; i < this.edges.length; i++) {
       const e = map.edges.get(this.edges[i]);
-      if (!e || !e.limit) continue;
+      if (!e?.limit) continue;
       const p = projectPoint(this.pts, this.cum, e.pts[0]);
       if (p && p.distance < 12) this.limitMarks.push({ at: p.s, limit: e.limit });
     }
@@ -352,7 +352,7 @@ export class Route {
   // index (0 is the leftmost), the edge's lane count and offsets, the chain the edge belongs to and
   // the lane's centre in metres right of the polyline at s.
   laneAt(s) {
-    const { i, info, chain, idx } = this.laneIndexAt(s);
+    const { info, chain, idx } = this.laneIndexAt(s);
     return {
       lanes: info.lanes,
       idx,

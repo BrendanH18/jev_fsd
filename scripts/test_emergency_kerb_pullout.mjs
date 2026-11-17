@@ -107,7 +107,7 @@ function street() {
   return world;
 }
 // A car in the right parking lane just ahead of where the car stops for the ambulance.
-function kerbCar(world, stopX) {
+function kerbCar(_world, stopX) {
   const c = new Vehicle(stopX + 1, -4.25, 0, 0);
   c.id = "car_p1";
   c.edge = "in";

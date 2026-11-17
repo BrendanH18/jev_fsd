@@ -63,6 +63,6 @@ export function installRedTurn(world, scenario) {
 
 export const scenario = redTurnScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   installRedTurn(world, scenario);
 }

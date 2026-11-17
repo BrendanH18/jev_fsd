@@ -82,8 +82,6 @@ export function crosswalksAlong(route, crowd) {
   if (list && list.crowd === crowd.marked) return list.items;
   const items = [];
   for (const cw of crowd.marked) {
-    const a = cw.ends[1],
-      b = cw.ends[-1];
     for (let i = 0; i < route.pts.length - 1; i++) {
       const p = route.pts[i],
         q = route.pts[i + 1];

@@ -1,6 +1,7 @@
-# Monthly, grouped update pull requests for the workflow actions and the uv-locked Python
-# dependencies. The Playwright version CI installs is pinned by hand in the PLAYWRIGHT env var of
-# .github/workflows/demo.yml (it is not a project dependency), so Dependabot does not track it.
+# Monthly, grouped update pull requests for the workflow actions (pinned to commit SHAs), the
+# uv-locked Python dependencies and Biome (package.json, package-lock.json). The Playwright version
+# CI installs is pinned by hand in the PLAYWRIGHT env var of .github/workflows/demo.yml (it is not a
+# project dependency), so Dependabot does not track it.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -17,4 +18,12 @@ updates:
       interval: monthly
     groups:
       python:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
         patterns: ['*']
