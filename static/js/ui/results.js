@@ -121,10 +121,7 @@ function summaryTable(data, { drivers, pilots }) {
             i ? "; " : "",
             h("strong", {}, p.label),
             ` (${p.model}) ${p.passed}/${p.total} on `,
-            p.rows
-              .map((r) => r.drives.map((d) => challenge(d.id)?.title || d.id))
-              .flat()
-              .join(", "),
+            p.rows.flatMap((r) => r.drives.map((d) => challenge(d.id)?.title || d.id)).join(", "),
             ((cost) => (cost ? `, ${moneyText(cost)} billed` : ", no cost"))(
               p.rows.reduce((t, r) => t + r.cost_usd, 0),
             ),

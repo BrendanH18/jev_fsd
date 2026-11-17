@@ -2112,7 +2112,7 @@ export class NpcFleet {
       const D = n.driver || IDM;
       let a;
       if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
-      else if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
+      else if (gap === Infinity) a = D.aMax * (1 - (n.v / v0) ** 4);
       else {
         const dv = n.v - leadV;
         // on a slippery road drivers leave more room and brake more gently
@@ -2120,7 +2120,7 @@ export class NpcFleet {
         const b = D.b * grip,
           T = D.T / Math.max(0.5, grip);
         const sStar = D.s0 + Math.max(0, n.v * T + (n.v * dv) / (2 * Math.sqrt(D.aMax * b)));
-        a = D.aMax * (1 - Math.pow(n.v / v0, 4) - Math.pow(sStar / Math.max(gap, 0.1), 2));
+        a = D.aMax * (1 - (n.v / v0) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2);
       }
       // (a tailgater brakes for the driven car as hard as it sees it braking, and more: sim/tailgaters.js)
       if (n.tailgate && leader === world.ego && gap < Infinity) a = Math.min(a, tailgateBrake(world, n, gap));
@@ -2409,13 +2409,13 @@ export class NpcFleet {
     );
     const D = n.driver;
     let a;
-    if (gap === Infinity) a = D.aMax * (1 - Math.pow(n.v / v0, 4));
+    if (gap === Infinity) a = D.aMax * (1 - (n.v / v0) ** 4);
     else {
       const dv = n.v - leadV,
         grip = Math.min(1, comfort().decel / 2.5);
       const sStar =
         D.s0 + Math.max(0, (n.v * D.T) / Math.max(0.5, grip) + (n.v * dv) / (2 * Math.sqrt(D.aMax * D.b * grip)));
-      a = D.aMax * (1 - Math.pow(n.v / v0, 4) - Math.pow(sStar / Math.max(gap, 0.1), 2));
+      a = D.aMax * (1 - (n.v / v0) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2);
     }
     a = Math.max(-Math.min(6, comfort().hardDecel * 1.1), Math.min(D.aMax, a));
     if (n.v < 0.05 && a < 0) a = -1;

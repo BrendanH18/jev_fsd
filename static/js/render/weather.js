@@ -60,9 +60,7 @@ export function snowable(material, surface) {
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.98), uSnow * smoothstep(0.35, 0.85, vUp));`,
       );
   };
-  const prevKey = Object.prototype.hasOwnProperty.call(material, "customProgramCacheKey")
-    ? material.customProgramCacheKey
-    : null;
+  const prevKey = Object.hasOwn(material, "customProgramCacheKey") ? material.customProgramCacheKey : null;
   material.customProgramCacheKey = () => `snow-${surface}-${prevKey ? prevKey() : ""}`;
   material.needsUpdate = true;
   return material;

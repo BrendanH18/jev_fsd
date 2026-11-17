@@ -390,7 +390,7 @@ def readme_block(data: dict) -> str:
             f"| {info['label']} | {model} | {challenge} | {home} | {other} | {percent(share) if full and 'model_share' in full else 'n/a'} | {cost} |"
         )
     dates = sorted({r["date"] for r in rows if r["suite"] in ("challenges", "city")})
-    plain = lambda values: " or ".join(str(v) for v in sorted(set(values), key=str))
+    plain = lambda values: " or ".join(str(v) for v in sorted(set(values), key=str))  # noqa: E731
     notes = [
         "",
         f"Built from the committed records ({dates[0]} to {dates[-1]}) by `scripts/build_results.py`, which also writes "

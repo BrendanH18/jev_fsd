@@ -43,7 +43,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .config import Settings
 from .endpoints import (
-    MAX_SCRUB_DEPTH,
+    MAX_SCRUB_DEPTH,  # noqa: F401  (tests read it as llm.MAX_SCRUB_DEPTH)
     MAX_TRACE_DEPTH,
     Endpoint,
     EndpointError,

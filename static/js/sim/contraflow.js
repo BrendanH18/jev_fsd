@@ -605,7 +605,7 @@ export class ContraflowRiders {
       squeezing ? SQUEEZE_MPS : Infinity,
     );
     let a;
-    if (gap === Infinity) a = IDM.aMax * (1 - Math.pow(n.v / Math.max(0.1, v0), 4));
+    if (gap === Infinity) a = IDM.aMax * (1 - (n.v / Math.max(0.1, v0)) ** 4);
     else {
       const grip = Math.min(1, comfort().decel / 2.5),
         dv = n.v - leadV,
@@ -613,7 +613,7 @@ export class ContraflowRiders {
       const sStar =
         IDM.s0 * (gap < 3 && leadV === 0 && stopAt !== null && gap === Math.max(0.05, stopAt) ? 0.1 : 1) +
         Math.max(0, n.v * T + (n.v * dv) / (2 * Math.sqrt(IDM.aMax * IDM.b * grip)));
-      a = IDM.aMax * (1 - Math.pow(n.v / Math.max(0.1, v0), 4) - Math.pow(sStar / Math.max(gap, 0.1), 2));
+      a = IDM.aMax * (1 - (n.v / Math.max(0.1, v0)) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2);
     }
     a = Math.max(-4, Math.min(IDM.aMax, a));
     if (n.v < 0.05 && a < 0) a = -1;

@@ -27,7 +27,7 @@ import json
 import math
 import re
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 from .. import geometry as g
 from . import fetch

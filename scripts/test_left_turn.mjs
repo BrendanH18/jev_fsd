@@ -57,38 +57,36 @@ function junction({ count = 1, arms = { w: 180, e: 0, n: 90, s: -90 }, nodes = {
       [`${arm}_out`, "c", arm, false, arm],
     ])
     .concat(streets.map(([id, from, to, approach]) => [id, from, to, !!approach, null]));
-  {
-    for (const [id, from, to, control, arm] of all) {
-      const pts = [ends[from], ends[to]];
-      const [rx, ry] = right(...pts);
-      edges.push({
-        id,
-        from,
-        to,
-        pts,
-        length: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]),
-        lanes: count,
-        lane_width: 3.2,
-        lane_offsets: offsets,
-        asphalt: [-3.2 * count, 3.2 * count],
-        parking: [0, 0],
-        cls: "secondary",
-        limit: 13.9,
-        oneway: false,
-        name: names[arm] || "Bent Street",
-        ...(control
-          ? {
-              control: {
-                type: "signal",
-                id: "sig",
-                s_line: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]) - 8,
-                group: groups[arm] || "A",
-              },
-            }
-          : {}),
-      });
-      offsets.forEach((o, idx) => lanes.push({ edge: id, idx, pts: pts.map(([x, y]) => [x + rx * o, y + ry * o]) }));
-    }
+  for (const [id, from, to, control, arm] of all) {
+    const pts = [ends[from], ends[to]];
+    const [rx, ry] = right(...pts);
+    edges.push({
+      id,
+      from,
+      to,
+      pts,
+      length: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]),
+      lanes: count,
+      lane_width: 3.2,
+      lane_offsets: offsets,
+      asphalt: [-3.2 * count, 3.2 * count],
+      parking: [0, 0],
+      cls: "secondary",
+      limit: 13.9,
+      oneway: false,
+      name: names[arm] || "Bent Street",
+      ...(control
+        ? {
+            control: {
+              type: "signal",
+              id: "sig",
+              s_line: Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]) - 8,
+              group: groups[arm] || "A",
+            },
+          }
+        : {}),
+    });
+    offsets.forEach((o, idx) => lanes.push({ edge: id, idx, pts: pts.map(([x, y]) => [x + rx * o, y + ry * o]) }));
   }
   const map = new MapData({
     bbox: [0, 0, 1, 1],

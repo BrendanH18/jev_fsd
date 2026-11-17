@@ -158,7 +158,7 @@ async function run() {
       cands.some((c) => c.id === "hard_brake"),
     );
     check("sampler excludes reverse on the road", !cands.some((c) => c.id === "reverse"));
-    let { eligible } = simulateAll(cands, snap, world);
+    const { eligible } = simulateAll(cands, snap, world);
     check(
       "clear road: most candidates eligible",
       eligible.length >= cands.length - 2,

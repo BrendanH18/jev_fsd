@@ -78,7 +78,7 @@ export function stoppedAt(world, cw, car, vehicles = world.npcs, ahead = true) {
 const along = new WeakMap();
 export function crosswalksAlong(route, crowd) {
   if (!route || !crowd?.marked?.length) return [];
-  let list = along.get(route);
+  const list = along.get(route);
   if (list && list.crowd === crowd.marked) return list.items;
   const items = [];
   for (const cw of crowd.marked) {

@@ -15,7 +15,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Tuple
 
 Bbox = Tuple[float, float, float, float]  # W, S, E, N
 

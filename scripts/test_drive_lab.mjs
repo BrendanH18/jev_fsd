@@ -286,7 +286,7 @@ for (const challenge of CHALLENGES.filter((c) => ["pedestrian", "occluded-pedest
   const challenge = CHALLENGES.find((c) => c.hazard === "oncoming"),
     ctx = setupChallenge(load(challenge.map), challenge),
     { world, fleet } = ctx;
-  let yielded = new Set();
+  const yielded = new Set();
   while (world.t < 30 && ctx.autopilot.enabled) {
     stepWorld(ctx, 1 / 60, world.t * 1000);
     if (ctx.autopilot.firing) await ctx.autopilot.firing;

@@ -8,12 +8,11 @@ All coordinates are meters in the projection's frame (x east, y north), rounded 
 
 from __future__ import annotations
 
-import hashlib
 import json
 import random
 import time
 from pathlib import Path
-from typing import Callable, Optional, Tuple
+from typing import Callable, Tuple
 
 from .. import geometry as g
 from . import fetch

@@ -256,45 +256,43 @@ test("traffic coming up behind lets a bus pulling out go first, and the bus wait
     assert.ok(minGap > 1, `the car stops behind it (${minGap.toFixed(1)} m)`);
     assert.ok(world.violations.collisions === 0, "nothing touches");
   }
-  {
-    // coming up fast, 20 m behind at 11 m/s (it would need 20.2 m braking at 3 m/s^2) and then
-    // beside it: the bus pulls out only when the car can stop behind it, and never while it is beside
-    for (const [back, v] of [
-      [20, 11],
-      [-6, 3],
-    ]) {
-      const { world, fleet, bus } = setup();
-      assert.ok(until(world, fleet, bus, "leaving", 80), "at its stop, done");
-      for (let k = 0; k < 60 * 1.9; k++) step(world, fleet); // (signalling for most of 2 s)
-      const car = add(world, fleet, bus.x - bus.spec.rearOverhang - back - (4.5 - 0.9), v);
-      // (beside it, it has eased over to pass it)
-      if (back < 0) {
-        car.nudge = -0.45;
-        car.y = -HALF + 0.45;
-      }
-      let outAt = null,
-        roomAtOut = null,
-        vAtOut = null,
-        beside = null;
-      for (let k = 0; k < 60 * 12 && outAt === null; k++) {
-        step(world, fleet);
-        if (bus.transit.phase === "out") {
-          outAt = world.t;
-          vAtOut = car.v;
-          roomAtOut = bus.x - bus.spec.rearOverhang - (car.x + 4.5 - 0.9) - 2;
-          beside =
-            car.x + 4.5 - 0.9 > bus.x - bus.spec.rearOverhang &&
-            car.x - 0.9 < bus.x + bus.spec.length - bus.spec.rearOverhang;
-        }
-      }
-      assert.ok(outAt !== null, `${back} m: it pulls out in the end`);
-      assert.ok(!beside, `${back} m: not while the car is beside it`);
-      assert.ok(
-        roomAtOut < 0 || roomAtOut >= vAtOut ** 2 / 6 - 1e-6,
-        `${back} m: only once the car can stop behind it (${roomAtOut.toFixed(1)} m at ${vAtOut.toFixed(1)} m/s)`,
-      );
-      assert.ok(world.violations.collisions === 0, "nothing touches");
+  // coming up fast, 20 m behind at 11 m/s (it would need 20.2 m braking at 3 m/s^2) and then
+  // beside it: the bus pulls out only when the car can stop behind it, and never while it is beside
+  for (const [back, v] of [
+    [20, 11],
+    [-6, 3],
+  ]) {
+    const { world, fleet, bus } = setup();
+    assert.ok(until(world, fleet, bus, "leaving", 80), "at its stop, done");
+    for (let k = 0; k < 60 * 1.9; k++) step(world, fleet); // (signalling for most of 2 s)
+    const car = add(world, fleet, bus.x - bus.spec.rearOverhang - back - (4.5 - 0.9), v);
+    // (beside it, it has eased over to pass it)
+    if (back < 0) {
+      car.nudge = -0.45;
+      car.y = -HALF + 0.45;
     }
+    let outAt = null,
+      roomAtOut = null,
+      vAtOut = null,
+      beside = null;
+    for (let k = 0; k < 60 * 12 && outAt === null; k++) {
+      step(world, fleet);
+      if (bus.transit.phase === "out") {
+        outAt = world.t;
+        vAtOut = car.v;
+        roomAtOut = bus.x - bus.spec.rearOverhang - (car.x + 4.5 - 0.9) - 2;
+        beside =
+          car.x + 4.5 - 0.9 > bus.x - bus.spec.rearOverhang &&
+          car.x - 0.9 < bus.x + bus.spec.length - bus.spec.rearOverhang;
+      }
+    }
+    assert.ok(outAt !== null, `${back} m: it pulls out in the end`);
+    assert.ok(!beside, `${back} m: not while the car is beside it`);
+    assert.ok(
+      roomAtOut < 0 || roomAtOut >= vAtOut ** 2 / 6 - 1e-6,
+      `${back} m: only once the car can stop behind it (${roomAtOut.toFixed(1)} m at ${vAtOut.toFixed(1)} m/s)`,
+    );
+    assert.ok(world.violations.collisions === 0, "nothing touches");
   }
   {
     // on a road over 60 km/h, traffic need not yield: the bus waits for a gap

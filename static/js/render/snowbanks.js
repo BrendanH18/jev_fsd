@@ -59,7 +59,7 @@ export function buildSnowbanks(world) {
       for (let j = 0; j < ACROSS; j++) {
         const u = j / (ACROSS - 1),
           lat = inner + (outer - inner) * u;
-        const shape = Math.pow(Math.sin(Math.PI * Math.min(1, u / 0.9)), 0.7) * (u > 0.9 ? 1 - (u - 0.9) * 6 : 1);
+        const shape = Math.sin(Math.PI * Math.min(1, u / 0.9)) ** 0.7 * (u > 0.9 ? 1 - (u - 0.9) * 6 : 1);
         const lumpy = 1 + (hash(s * 1.7, u * 9.3 + run.dirt) - 0.5) * 0.18;
         const y = LIFT + Math.max(0, top * shape * lumpy);
         pos.push(p[0] + Math.sin(h) * lat, y, -(p[1] - Math.cos(h) * lat));

@@ -42,7 +42,7 @@ export function hull(points) {
 // [{ node, poly }] for every junction that has a fill: two or more legs, not a roundabout's (its disc is
 // drawn instead), and not a straight run through a two-leg node (the ribbons already meet there).
 export function junctionFills(map) {
-  let entry = cache.get(map);
+  const entry = cache.get(map);
   if (entry) return entry.list;
   const { legs, nodeR } = analyzeStreets(map);
   const ringNodes = new Set();

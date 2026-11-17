@@ -306,7 +306,7 @@ export const leafTexture = () =>
     };
     for (let i = 0; i < 70; i++) {
       const a = rnd() * Math.PI * 2,
-        d = Math.pow(rnd(), 0.6) * size * 0.4;
+        d = rnd() ** 0.6 * size * 0.4;
       const x = size / 2 + Math.cos(a) * d,
         y = size / 2 + Math.sin(a) * d;
       const len = size * (0.07 + rnd() * 0.05),
@@ -347,8 +347,8 @@ export const leafTexture = () =>
 // Three's shadow pass tests alpha-to-coverage materials at 0.5, so the leaves use the same cutoff.
 export const LEAF_CUTOFF = 0.5;
 
-const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 
 // Mip levels for an alpha-tested texture, built by hand because the GPU's own chain fails it in two
 // ways. Transparent canvas texels are black, so filtering darkens every leaf edge and whole distant
@@ -746,7 +746,7 @@ export const poolTexture = () =>
         v = y / 127;
       const spread = 0.1 + 0.28 * u;
       const across = Math.exp(-((v - 0.5) ** 2) / (2 * spread * spread));
-      const along = Math.min(1, u / 0.08) * Math.pow(1 - u, 1.6);
+      const along = Math.min(1, u / 0.08) * (1 - u) ** 1.6;
       const k = across * along * 255;
       return [k, k, k];
     });

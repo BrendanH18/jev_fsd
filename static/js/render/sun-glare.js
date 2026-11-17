@@ -89,7 +89,7 @@ export class SunGlareView {
     camera.getWorldDirection(this._fwd);
     this._sun.copy(a?.sun?.dir || this._fwd);
     const facing = Math.max(0, this._fwd.dot(this._sun));
-    const target = low * clear * Math.max(Math.pow(facing, 6), glare * 0.6);
+    const target = low * clear * Math.max(facing ** 6, glare * 0.6);
     // ease, so a glance does not flash
     this.strength += (target - this.strength) * 0.15;
     const k = this.strength,

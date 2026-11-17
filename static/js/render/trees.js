@@ -30,7 +30,7 @@ function crownGeometry(seed, count = 150, cardScale = 1) {
     const r = Math.sqrt(1 - u * u);
     const dir = new THREE.Vector3(r * Math.cos(th), u * 0.85, r * Math.sin(th));
     const lump = 0.8 + 0.25 * Math.sin(th * 3 + seed) * Math.cos(u * 4 + seed);
-    const depth = 0.55 + 0.45 * Math.pow(rnd(), 0.5);
+    const depth = 0.55 + 0.45 * rnd() ** 0.5;
     // larger cards sit a little deeper, so the crown's silhouette keeps its size
     const c = dir.clone().multiplyScalar((lump * depth) / Math.sqrt(cardScale));
     const size = (0.55 + rnd() * 0.35) * cardScale;

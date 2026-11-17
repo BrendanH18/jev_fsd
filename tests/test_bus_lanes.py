@@ -1,5 +1,5 @@
 import unittest
-import helpers
+import helpers  # noqa: F401  (puts the project on the path)
 from jev.osm.bus_lanes import parse_hours, buslanes_from_osm
 from jev.osm.parse import OsmData
 

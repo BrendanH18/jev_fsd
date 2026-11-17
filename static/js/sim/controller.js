@@ -136,9 +136,11 @@ export function applyLaw(vehicle, law, route, s, dt, world = null) {
     }
     case "steer":
       return vehicle.step(dt, { steer: law.steer, accel: speedControl(vehicle.v, law.vTarget) });
+    // biome-ignore lint/suspicious/noFallthroughSwitchClause: falls through to the lane law on purpose
     case "park":
       if (world && stepParking(vehicle, law, world, dt, speedControl)) return;
     // falls through: once out of the space, it follows the lane like any lane law
+    // biome-ignore lint/suspicious/noFallthroughSwitchClause: falls through to the lane law on purpose
     case "turnaround":
       if (
         law.kind === "turnaround" &&

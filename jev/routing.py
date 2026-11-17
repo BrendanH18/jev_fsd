@@ -362,7 +362,7 @@ def _exits_between(router: "Router", path: Sequence[str], first: int, last: int)
     """Exits of the ring passed from path[first] up to and including the one taken after path[last]."""
     count = 0
     for j in range(first, last + 1):
-        e = router.edges[path[j]]
+        e = router.edges[path[j]]  # noqa: F841  (the lookup checks the edge exists)
         if any(not router.edges[o].get("ring") for o in router.successors(path[j])):
             count += 1
     return max(1, count)

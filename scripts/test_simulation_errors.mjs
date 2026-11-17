@@ -40,7 +40,7 @@ const scenario = { ...route, id: "broken-step", traffic_seed: challenge.seed, ta
 const realStep = NpcFleet.prototype.step;
 let benchmark, evaluation;
 try {
-  NpcFleet.prototype.step = function () {
+  NpcFleet.prototype.step = () => {
     throw new TypeError("Injected parking-slot failure");
   };
   benchmark = await runScenario(map, scenario, { npcs: 0 });
@@ -70,7 +70,7 @@ try {
     true,
   );
   console.log("✓ arena step errors return a failed attempt with a trace and report incident");
-  NpcFleet.prototype.step = function () {
+  NpcFleet.prototype.step = () => {
     throw "x".repeat(1000);
   };
   const longError = await evaluateChallenge(map, challenge);

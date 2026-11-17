@@ -79,19 +79,18 @@ class Transaction {
     this.check();
   }
   objectStore(name) {
-    const store = this.db.data.stores.get(name),
-      tx = this;
+    const store = this.db.data.stores.get(name);
     const write = (fn) => {
-      if (tx.mode !== "readwrite") throw fail("ReadOnlyError");
-      return tx.request(() => {
-        if (tx.db.idb.failWrites) throw fail("UnknownError", "disk failed");
+      if (this.mode !== "readwrite") throw fail("ReadOnlyError");
+      return this.request(() => {
+        if (this.db.idb.failWrites) throw fail("UnknownError", "disk failed");
         return fn();
       });
     };
     return {
-      get: (key) => tx.request(() => structuredClone(store.records.get(key))),
+      get: (key) => this.request(() => structuredClone(store.records.get(key))),
       getAll: () =>
-        tx.request(() =>
+        this.request(() =>
           [...store.records.keys()].sort((a, b) => a - b).map((k) => structuredClone(store.records.get(k))),
         ),
       put: (value, key) =>

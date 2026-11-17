@@ -19,9 +19,10 @@ const worldKeys = Object.keys(free.world).sort(),
 // it names, and each registered feature's (sim/features/index.js), which it takes as `...features`.
 const worldSource = fs.readFileSync(new URL("../static/js/sim/world.js", import.meta.url), "utf8");
 const named = worldSource
-  .match(/constructor\(map, \{([^}]*)\} = \{\}\)/)[1]
+  .match(/constructor\(\s*map,\s*\{([^}]*)\}\s*=\s*\{\}\s*,?\s*\)/)[1]
   .split(",")
-  .map((s) => s.trim().split(" ")[0]);
+  .map((s) => s.trim().split(" ")[0])
+  .filter(Boolean); // the formatter leaves a trailing comma after the last option
 assert.ok(named.includes("...features"), "the World takes the registered features' options");
 const constructorOptions = [...named.filter((k) => k !== "...features"), ...FEATURE_OPTIONS];
 assert.equal(
@@ -48,11 +49,17 @@ const main = fs.readFileSync(new URL("../static/js/main.js", import.meta.url), "
 const freeWorld = main.match(/world = new World\(map, \{([^}]*)\}\);\n\s*fleet = new NpcFleet\(world, \{([^}]*)\}\);/);
 assert.ok(freeWorld, "main.js builds the free drive's world and fleet together");
 assert.deepEqual(
-  freeWorld[1].split(",").map((s) => s.trim().split(":")[0]),
+  freeWorld[1]
+    .split(",")
+    .map((s) => s.trim().split(":")[0])
+    .filter(Boolean),
   ["seed", "weather", "vehicleSpec", "...free.world"],
 );
 assert.deepEqual(
-  freeWorld[2].split(",").map((s) => s.trim().split(":")[0]),
+  freeWorld[2]
+    .split(",")
+    .map((s) => s.trim().split(":")[0])
+    .filter(Boolean),
   ["count", "seed", "...free.fleet"],
 );
 console.log("✓ the app's free drive takes its features from freeDriveOptions alone");

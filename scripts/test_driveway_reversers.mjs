@@ -527,13 +527,11 @@ await test("free drives: one now and then in a driveway ahead on the route, clea
   // (on the route's street, AHEAD_M along it, nothing parked across its way out)
   const r = w.driveways.spawn();
   assert.equal(!!r, true);
-  {
-    assert.equal(r.geo.e.id, e.id);
-    assert.equal(r.phase, "parked");
-    assert.equal(w.driveways.clearWay(r.geo), false); // (it stands there itself now)
-    w.driveways.retire(r);
-    assert.equal(w.driveways.clearWay(r.geo), true);
-  }
+  assert.equal(r.geo.e.id, e.id);
+  assert.equal(r.phase, "parked");
+  assert.equal(w.driveways.clearWay(r.geo), false); // (it stands there itself now)
+  w.driveways.retire(r);
+  assert.equal(w.driveways.clearWay(r.geo), true);
   // (the drive score reports reversing_conflicts once one has backed out near the car)
   const score = new DriveScore(w, {});
   score.record(w, w.roadInfo(), 1 / 60);

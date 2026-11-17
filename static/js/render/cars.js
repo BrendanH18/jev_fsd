@@ -139,7 +139,7 @@ function extrude(outline, width, bevel = BEVEL, { tumble = 0, tuck = 0, top = 1.
       const x = p.getX(i),
         y = p.getY(i);
       const endness = Math.min(1, Math.abs(x - mid) / half);
-      let k = 1 - tuck * Math.pow(endness, 6);
+      let k = 1 - tuck * endness ** 6;
       k *= 1 - tumble * Math.max(0, (y - 0.55) / (top - 0.55));
       p.setZ(i, p.getZ(i) * k);
     }

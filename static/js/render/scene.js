@@ -316,7 +316,7 @@ export class SceneView {
   applyLook() {
     const a = this.atmosphere;
     if (!a) return;
-    this.renderer.toneMappingExposure = a.exposure * Math.pow(2, this.look.exposure);
+    this.renderer.toneMappingExposure = a.exposure * 2 ** this.look.exposure;
     if (this.post) {
       const g = a.grade;
       this.post.setGrade({
@@ -395,7 +395,7 @@ export class SceneView {
     let target,
       look,
       up = new THREE.Vector3(0, 1, 0),
-      lerp = 1 - Math.pow(0.002, dt);
+      lerp = 1 - 0.002 ** dt;
     this.camera.fov = this.mode === "hood" ? 64 : 58;
     if (this.mode === "cinematic") {
       const shot = this.cinematic.pose(ego, dt, this.vehicleHeight);
@@ -403,7 +403,7 @@ export class SceneView {
       look = toThree(...shot.look);
       this.camera.fov = shot.fov;
       if (shot.cut) this.camPos.set(0, 0, 0);
-      lerp = 1 - Math.pow(shot.lag, dt);
+      lerp = 1 - shot.lag ** dt;
     } else if (this.mode === "orbit") {
       const pose = this.orbit.pose(ego, this.vehicleHeight);
       target = toThree(pose.x, pose.y, pose.z);
@@ -413,7 +413,7 @@ export class SceneView {
       target = toThree(ego.x, ego.y, 130);
       look = toThree(ego.x, ego.y, 0);
       up = new THREE.Vector3(0, 0, -1);
-      lerp = 1 - Math.pow(0.02, dt);
+      lerp = 1 - 0.02 ** dt;
     } else if (this.mode === "far") {
       target = toThree(ego.x - fx * 28, ego.y - fy * 28, 17);
       look = toThree(ego.x + fx * 12, ego.y + fy * 12, 0.5);
