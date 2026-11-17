@@ -151,7 +151,7 @@ export function stepPuddles(world) {
 
 export const scenario = puddleScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   installPuddles(world, scenario);
 }
 

@@ -23,7 +23,7 @@ export default {
   key: "roadClosures",
   seen: "roadClosuresSeen",
   calls: "roadClosureCalls",
-  build: (world, { enabled, seed }) => new RoadClosures({ enabled, seed }),
+  build: (_world, { enabled, seed }) => new RoadClosures({ enabled, seed }),
   metric: { at: "parkers", name: "closure_entries", failure: "drove onto a closed road" },
   // (a barricade is stopped short of, or gone round by the detour, never followed; in the forward sims it
   // stands where it is, like scenery)
@@ -89,7 +89,7 @@ export default {
   // is, first of all, onto a closed road.
   sim: {
     at: "first",
-    run(world, snap) {
+    run(_world, snap) {
       const closedLine = snap.road_closed?.on_route ? snap.road_closed.line_s_route : null;
       if (closedLine === null) return null;
       let into = false;

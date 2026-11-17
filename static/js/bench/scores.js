@@ -123,10 +123,8 @@ const driveId = (r) => r.id ?? r.challenge;
 // entries: [{ driver, results }]. Ranks the drivers on the drives they all have (by `id`, or
 // `challenge` for arena results); returns those ids and, best first, each driver's scores and rank.
 export function rankDrivers(entries, { key = driveId } = {}) {
-  const ids = entries.length
-    ? entries.map((e) => new Set(e.results.map(key))).reduce((a, b) => new Set([...a].filter((id) => b.has(id))))
-    : new Set();
-  const matched = [...ids].sort();
+  const [first = new Set(), ...rest] = entries.map((e) => new Set(e.results.map(key)));
+  const matched = [...first].filter((id) => rest.every((b) => b.has(id))).sort();
   const ranking = entries
     .map((e) => ({ driver: e.driver, ...driverScores(matched.map((id) => e.results.find((r) => key(r) === id))) }))
     .sort((a, b) => b.passed - a.passed || b.score - a.score || String(a.driver).localeCompare(String(b.driver)));

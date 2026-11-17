@@ -11,7 +11,6 @@ globalThis.document = { querySelector: () => null };
 const { MapData, joinLanes, cumulative, pointAt } = await import("../static/js/map/mapdata.js");
 const { Route } = await import("../static/js/map/route.js");
 const { World } = await import("../static/js/sim/world.js");
-const { NpcFleet } = await import("../static/js/sim/npc.js");
 const { Vehicle, CAR, BIKE, DELIVERY_VAN } = await import("../static/js/sim/vehicle.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
@@ -20,7 +19,6 @@ const { DriveScore } = await import("../static/js/sim/drive-score.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { toJevState, situationClauses } = await import("../static/js/brain/state.js");
 const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
-const { Autopilot } = await import("../static/js/brain/brain.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 

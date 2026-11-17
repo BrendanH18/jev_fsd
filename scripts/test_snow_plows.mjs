@@ -113,7 +113,7 @@ function projectOn(lane, v) {
   return best;
 }
 // A car of the traffic on William Avenue, lane `lane`, rear axle `s`, at `v`.
-function npc(world, fleet, { lane, s, v = 8, id, lcRate = 0 }) {
+function npc(_world, fleet, { lane, s, v = 8, id, lcRate = 0 }) {
   const l = WPG.lane(EDGE, lane),
     p = pointAt(l.pts, l.cum, s);
   const n = new Vehicle(p[0], p[1], headingAt(l.pts, l.cum, s), v);
@@ -431,8 +431,8 @@ await test("three lanes one way: a plow two lanes to the left still holds the ca
   }
   // (the audit counts passing it two lanes over)
   const { world, fleet } = william({ weather: "snow" });
-  const map3 = WPG,
-    plow = fleet.addPlow(map3.lane(E, 0), 80, 0, [[N, 0]]);
+  const map3 = WPG;
+  fleet.addPlow(map3.lane(E, 0), 80, 0, [[N, 0]]);
   const l = map3.lane(E, 2);
   for (let s = 30; s <= 120; s += 0.5) {
     const p = pointAt(l.pts, l.cum, s);

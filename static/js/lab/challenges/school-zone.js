@@ -114,12 +114,12 @@ function placeChild(world, lane, s, seed) {
   return { pedestrianId: ped.id };
 }
 
-export function install(world, fleet, challenge, scenario, at) {
+export function install(world, _fleet, challenge, scenario, at) {
   Object.assign(world.challenge, placeChild(world, at.lane, scenario.child.s, challenge.seed));
 }
 
 export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(CHILD_TRIGGER_M),
-    release: (world, fleet, state) => releasePedestrian(world, state),
+    release: (world, _fleet, state) => releasePedestrian(world, state),
   });

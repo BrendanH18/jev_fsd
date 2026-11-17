@@ -96,13 +96,6 @@ function addCar(ctx, edge, front, v, id) {
   ctx.fleet.vehicles.push(car);
   return car;
 }
-const twin = (id) =>
-  SB.narrowingSites(MTL)
-    .flatMap((s) => [
-      [s.edge, s.opposite],
-      [s.opposite, s.edge],
-    ])
-    .find(([a]) => a === id)[1];
 
 await test("banks along every kerb in snow, high at the corners; narrowings only on two-way residential blocks with parking at both kerbs", () => {
   const { world: w } = world({ narrowing: null, parked: 0.5 });
@@ -593,7 +586,7 @@ if (process.argv.includes("--write-snapshot")) {
     .map((c) => c.id);
   fs.writeFileSync(
     new URL("../data/snapshots/one_car_at_a_time.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "one_car_at_a_time",
         state,
@@ -603,7 +596,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/one_car_at_a_time.json (wait in ${snap.snowbank.narrowing.bumper_to_stop_m.toFixed(1)} m, ${eligible.length} eligible)`,

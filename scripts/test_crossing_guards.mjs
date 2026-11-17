@@ -95,7 +95,7 @@ function egoAt(world, front, v = 0, goal = 190) {
   world.route.project(world.ego.x, world.ego.y);
 }
 // A car (or a cyclist) on Rue Berri, its front `front` metres along, at `v`, going straight on.
-function npcAt(world, fleet, { front, v = 8, id = "car", bike = false }) {
+function npcAt(_world, fleet, { front, v = 8, id = "car", bike = false }) {
   const spec = bike ? BIKE : CAR,
     lane = MTL.lane(EDGE, 0),
     s = front - (spec.length - spec.rearOverhang);
@@ -144,7 +144,7 @@ await test("posts: every marked crosswalk in a school zone, and no other; Rue Be
   assert.equal(world.crossingGuards.posts.length, 0, "nobody on duty before the first step");
   step({ world, fleet: new NpcFleet(world, { count: 0, bikes: 0 }), autopilot: idle });
   const p = post(world);
-  assert.ok(p && p.onDuty && p.zone?.name.includes("Louis-Hippolyte"), "on duty at 9:00, in the school's zone");
+  assert.ok(p?.onDuty && p.zone?.name.includes("Louis-Hippolyte"), "on duty at 9:00, in the school's zone");
   assert.ok(
     world.crowd.list.includes(p.guard) && p.guard.worker && p.guard.crossingGuard === p.id && p.guard.paddle === "down",
   );
@@ -305,8 +305,7 @@ await test("the driven car: crossing_guard sensing, the stop_for_crossing_guard 
   // (children waiting, the sign down: ready to stop)
   let snap = buildSnapshot(ctx.world);
   assert.ok(
-    snap.crossing_guard &&
-      snap.crossing_guard.ready &&
+    snap.crossing_guard?.ready &&
       !snap.crossing_guard.wait &&
       snap.crossing_guard.paddle === "down" &&
       snap.crossing_guard.waiting === 2,
@@ -322,7 +321,7 @@ await test("the driven car: crossing_guard sensing, the stop_for_crossing_guard 
   ctx.world._road = ctx.world.roadInfo();
   snap = buildSnapshot(ctx.world);
   const cg = snap.crossing_guard;
-  assert.ok(cg && cg.wait && cg.paddle === "up" && cg.guard_id === p.guard.id && cg.crosswalk_id === CW);
+  assert.ok(cg?.wait && cg.paddle === "up" && cg.guard_id === p.guard.id && cg.crosswalk_id === CW);
   assert.ok(
     Math.abs(cg.bumper_to_crosswalk_m - 40) < 0.6 && Math.abs(cg.bumper_to_stop_m - (40 - STOP_M)) < 0.6,
     `${cg.bumper_to_stop_m.toFixed(2)} m to the stop point`,
@@ -655,7 +654,7 @@ await test("the challenge: Rules and the cautious agent stop short of the crossw
     const { world, fleet, autopilot } = ctx,
       g = world.crossingGuards,
       p = g.posts.find((x) => x.id === world.challenge.guardPostId);
-    assert.ok(p && p.held && p.kids.length === 3 && !g.arrivals);
+    assert.ok(p?.held && p.kids.length === 3 && !g.arrivals);
     const metrics = new DriveMetrics(world.route.length);
     let maxFront = -Infinity,
       stood = 0,

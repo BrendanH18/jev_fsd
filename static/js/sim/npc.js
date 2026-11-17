@@ -2997,7 +2997,7 @@ export class NpcFleet {
   // The work zone on the street a driver is on, or the next it will be on, within WZ_LOOK_M of its
   // stop line (sim/work-zone.js), with its marks along the driver's path: { zone, side, line, from,
   // to (the one-lane section), detour (on the side whose lane is closed) }, or null once past it.
-  workZoneAhead(n, path, front) {
+  workZoneAhead(_n, path, front) {
     const zones = this.world.workZones;
     if (!zones?.zones.length) return null;
     for (const e of path.edges) {
@@ -3198,7 +3198,7 @@ export class NpcFleet {
   // ("closed" when the driver's lane is the one closed, or "open"), m (the merge point), to (its end), at
   // (from the edge's `s` to the path's), detour (in the closed lane: across into the open lane and back) },
   // or null.
-  closureAhead(n, path, front) {
+  closureAhead(_n, path, front) {
     const lc = this.world.laneClosures;
     for (const e of path.edges) {
       if (e.sEnd < path.s) continue;
@@ -3489,8 +3489,7 @@ export class NpcFleet {
   // count steady, the traffic car farthest from the ego (well out of sight) leaves.
   maybePullOut() {
     const world = this.world,
-      ego = world.ego,
-      map = this.map;
+      ego = world.ego;
     const cx = ego.x + Math.cos(ego.psi) * 55,
       cy = ego.y + Math.sin(ego.psi) * 55;
     const near = world.parked.near(cx, cy, 45).filter((c) => {

@@ -134,7 +134,7 @@ for (let k = 0; k < 120 / DT && law.phase !== "parked" && law.phase !== "stuck";
 assert.ok(phases.has("shuffle"), `a straight leg to make room (${[...phases].join(", ")})`);
 assert.equal(law.phase, "parked", `parks (${law.phase} after ${law.legs} legs)`);
 assert.equal(touched, false, "never touches the parked cars");
-const pose = P.parkedPose(ego, plan, world);
+const pose = P.parkedPose(ego, plan);
 assert.ok(pose.kerb_m >= 0 && pose.kerb_m <= P.KERB_MAX_M, `within the kerb (${pose.kerb_m} m)`);
 assert.ok(pose.angle_deg < 3, `parallel (${pose.angle_deg} degrees)`);
 for (const c of world.obstaclesNear(ego.x, ego.y, 10))

@@ -121,7 +121,7 @@ export const busHasRightOfWay = (bus) => busSignalling(bus) && bus.transit.limit
 export function busYield(o, bus) {
   if (!busHasRightOfWay(bus)) return null;
   const r = busRelation(o, bus);
-  if (!r || !r.inLane || r.beside || r.behind_m <= 0) return null;
+  if (!r?.inLane || r.beside || r.behind_m <= 0) return null;
   return { ...r, stop_m: r.behind_m - BUS_YIELD_GAP_M };
 }
 
@@ -136,7 +136,7 @@ export function busMayPullOut(bus, others, yielding = () => false) {
   for (const o of others) {
     if (o === bus || Math.abs(o.x - bus.x) > LOOK_BEHIND_M + 15 || Math.abs(o.y - bus.y) > LOOK_BEHIND_M + 15) continue;
     const r = busRelation(o, bus);
-    if (!r || !r.inLane) continue;
+    if (!r?.inLane) continue;
     if (r.beside) return false;
     if (r.behind_m < 0 || o.v < 0.3) continue;
     if (t.limit > BUS_YIELD_LIMIT_MPS) {

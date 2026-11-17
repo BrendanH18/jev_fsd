@@ -370,7 +370,7 @@ export async function run({
 function compareSummary() {
   const name = $("#compare").value;
   const runs = $("#compare")._runs || [];
-  return name ? { ...(runs.find((r) => r.name === name) || {}).summary, ...compareScores.get(name) } : null;
+  return name ? { ...runs.find((r) => r.name === name)?.summary, ...compareScores.get(name) } : null;
 }
 
 // The run list carries summaries only, so a compared run's scores come from its results, once.

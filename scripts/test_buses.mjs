@@ -221,7 +221,7 @@ test("a bus signals, pulls in to the curb, waits with its doors open, signals le
 });
 
 test("traffic coming up behind lets a bus pulling out go first, and the bus waits for one that can't stop", () => {
-  const add = (world, fleet, x, v) => {
+  const add = (_world, fleet, x, v) => {
     const car = new Vehicle(x, -HALF, 0, v);
     Object.assign(car, {
       id: `car_${x.toFixed(0)}`,
@@ -401,7 +401,7 @@ test("the car sees a bus signalling ahead, is told to let it out, and models get
   const candidates = sampleCandidates(snap, world);
   simulateAll(candidates, snap, world);
   const yieldTo = candidates.find((c) => c.id === "yield_to_bus");
-  assert.ok(yieldTo && yieldTo.eligible, "a candidate that stops behind it");
+  assert.ok(yieldTo?.eligible, "a candidate that stops behind it");
   assert.ok(
     candidates.filter((c) => c.eligible && c.law.kind === "lane").every((c) => c.sim.progress_m < 18 + 1.5),
     "nothing eligible carries on past it",

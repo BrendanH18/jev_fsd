@@ -18,7 +18,7 @@ export const challenge = {
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);
 
-export function install(world, fleet, challenge, scenario, at) {
+export function install(world, _fleet, _challenge, _scenario, at) {
   placeCurbCar(world, at);
 }
 

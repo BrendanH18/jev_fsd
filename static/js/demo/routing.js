@@ -1,6 +1,6 @@
 import { turnBanned } from "../sim/turn-restrictions.js";
 // Browser routing for the public demo. Uses the same directed lane graph and turn geometry.
-import { joinLanes, pointAt, headingAt, cumulative, projectPoint } from "../map/mapdata.js";
+import { joinLanes, pointAt, cumulative, projectPoint } from "../map/mapdata.js";
 
 function sliceLane(lane, start, end) {
   return [

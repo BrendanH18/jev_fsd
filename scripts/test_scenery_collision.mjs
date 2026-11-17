@@ -5,7 +5,7 @@ globalThis.document = { querySelector: () => null };
 const { MapData, projectPoint } = await import("../static/js/map/mapdata.js");
 const { Route } = await import("../static/js/map/route.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
-const { sceneryFor, sceneryHash } = await import("../static/js/map/scenery.js");
+const { sceneryFor } = await import("../static/js/map/scenery.js");
 const { buildingShapes, boxPolygon } = await import("../static/js/map/building-scenery.js");
 const { StaticObstacles, obbCircleOverlap } = await import("../static/js/sim/static-obstacles.js");
 const { World } = await import("../static/js/sim/world.js");

@@ -206,7 +206,7 @@ test("the car is told not to pass, offered a stop short of the crosswalk, and pa
   const candidates = sampleCandidates(snap, world);
   simulateAll(candidates, snap, world);
   const stop = candidates.find((c) => c.id === "stop_at_crosswalk");
-  assert.ok(stop && stop.eligible, "stop_at_crosswalk on offer");
+  assert.ok(stop?.eligible, "stop_at_crosswalk on offer");
   // close up, driving on at speed would pass it
   const near = threat({ back: 9, v: 6 }),
     s2 = buildSnapshot(near.world);

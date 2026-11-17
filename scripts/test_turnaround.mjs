@@ -314,74 +314,72 @@ function parkedCar(id, x, y, psi = 0) {
   );
 }
 
-{
-  // the same dead end facing each way: the turn goes left whichever way round the half turn
-  // works out
-  for (const deg of [90, 180, 270]) {
-    const a = (deg * Math.PI) / 180,
-      c = Math.cos(a),
-      sn = Math.sin(a);
-    const rot = ([x, y]) => [x * c - y * sn, x * sn + y * c];
-    const turned = new MapData({
-      bbox: [0, 0, 1, 1],
-      extent: [-100, -100, 100, 100],
-      edges: [...map.edges.values()].map((e) => ({
-        id: e.id,
-        from: e.from,
-        to: e.to,
-        pts: e.pts.map(rot),
-        length: e.length,
-        ...street,
-      })),
-      lanes: [
-        {
-          edge: "in",
-          idx: 0,
-          pts: [
-            [0, -LANE],
-            [END, -LANE],
-          ].map(rot),
-        },
-        {
-          edge: "out",
-          idx: 0,
-          pts: [
-            [END, LANE],
-            [0, LANE],
-          ].map(rot),
-        },
-      ],
-      nodes: [
-        { id: "a", x: 0, y: 0 },
-        { id: "b", ...Object.fromEntries(rot([END, 0]).map((v, k) => [k ? "y" : "x", v])) },
-      ],
-      intersections: [],
-      stops: [],
-      buildings: [],
-    });
-    const world = new World(turned, { parked: 0, pedestrians: 0 });
-    const [x, y] = rot([20, -LANE]);
-    Object.assign(world.ego, { x, y, psi: a, v: 5, delta: 0 });
-    world.route = new Route(
-      { ...routeData, polyline: polyline.filter(([px, py]) => py < 0 || px >= GOAL_X).map(rot) },
-      turned,
-    );
-    world.destination = rot([GOAL_X, LANE]);
-    world.npcs = [];
-    const law = planTurnaround(world.route, world.route.turns[0]);
-    assert.equal(law.side, 1, `turns left facing ${deg} degrees`);
-    const autopilot = new Autopilot(world);
-    autopilot.brainName = "rules";
-    autopilot.setEnabled(true);
-    const fleet = { step() {} };
-    const dt = 1 / 30;
-    for (let i = 0; i < 90 / dt && world.route; i++) stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
-    assert.ok(world.route === null, `arrived facing ${deg} degrees`);
-    assert.equal(world.violations.deadlock_overrides, 0);
-    assert.equal(world.violations.off_road_s, 0);
-  }
-  console.log("✓ the same dead end facing any way round is turned the same way, and the car arrives");
+// the same dead end facing each way: the turn goes left whichever way round the half turn
+// works out
+for (const deg of [90, 180, 270]) {
+  const a = (deg * Math.PI) / 180,
+    c = Math.cos(a),
+    sn = Math.sin(a);
+  const rot = ([x, y]) => [x * c - y * sn, x * sn + y * c];
+  const turned = new MapData({
+    bbox: [0, 0, 1, 1],
+    extent: [-100, -100, 100, 100],
+    edges: [...map.edges.values()].map((e) => ({
+      id: e.id,
+      from: e.from,
+      to: e.to,
+      pts: e.pts.map(rot),
+      length: e.length,
+      ...street,
+    })),
+    lanes: [
+      {
+        edge: "in",
+        idx: 0,
+        pts: [
+          [0, -LANE],
+          [END, -LANE],
+        ].map(rot),
+      },
+      {
+        edge: "out",
+        idx: 0,
+        pts: [
+          [END, LANE],
+          [0, LANE],
+        ].map(rot),
+      },
+    ],
+    nodes: [
+      { id: "a", x: 0, y: 0 },
+      { id: "b", ...Object.fromEntries(rot([END, 0]).map((v, k) => [k ? "y" : "x", v])) },
+    ],
+    intersections: [],
+    stops: [],
+    buildings: [],
+  });
+  const world = new World(turned, { parked: 0, pedestrians: 0 });
+  const [x, y] = rot([20, -LANE]);
+  Object.assign(world.ego, { x, y, psi: a, v: 5, delta: 0 });
+  world.route = new Route(
+    { ...routeData, polyline: polyline.filter(([px, py]) => py < 0 || px >= GOAL_X).map(rot) },
+    turned,
+  );
+  world.destination = rot([GOAL_X, LANE]);
+  world.npcs = [];
+  const law = planTurnaround(world.route, world.route.turns[0]);
+  assert.equal(law.side, 1, `turns left facing ${deg} degrees`);
+  const autopilot = new Autopilot(world);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  const fleet = { step() {} };
+  const dt = 1 / 30;
+  for (let i = 0; i < 90 / dt && world.route; i++) stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+  assert.ok(world.route === null, `arrived facing ${deg} degrees`);
+  assert.equal(world.violations.deadlock_overrides, 0);
+  assert.equal(world.violations.off_road_s, 0);
 }
+console.log("✓ the same dead end facing any way round is turned the same way, and the car arrives");
 
 {
   // held by the safety brake before a leg has moved (something just in front, about to go): the
@@ -413,35 +411,33 @@ function parkedCar(id, x, y, psi = 0) {
   console.log("✓ held before its first leg moves, the turnaround waits and then turns round");
 }
 
-{
-  // a destination just beyond the U-turn, in the lane out: the drive ends only once the car is in
-  // that lane, facing along it (not standing between legs in the lane coming in, where the route's
-  // end is just as near)
-  for (const goalX of [50, 56]) {
-    const world = setup({ x: 20, v: 5 });
-    world.route = new Route({ ...routeData, polyline: polyline.filter(([px, py]) => py < 0 || px >= goalX) }, map);
-    world.destination = [goalX, LANE];
-    const autopilot = new Autopilot(world);
-    autopilot.brainName = "rules";
-    autopilot.setEnabled(true);
-    const fleet = { step() {} };
-    const dt = 1 / 30;
-    let overKerb = 0;
-    for (let i = 0; i < 90 / dt && world.route; i++) {
-      stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
-      for (const [px, py] of world.ego.corners()) overKerb = Math.max(overKerb, map.roadDistance(px, py).distance);
-    }
-    const y = world.ego.y,
-      heading = (Math.abs(world.ego.psi) * 180) / Math.PI;
-    assert.ok(world.route === null, `goal ${goalX}: arrived (car at ${world.ego.x.toFixed(1)}, ${y.toFixed(1)})`);
-    assert.ok(Math.abs(y - LANE) < 1, `goal ${goalX}: in the lane out at the end (y=${y.toFixed(2)})`);
-    assert.ok(heading > 150, `goal ${goalX}: facing the way out (${heading.toFixed(0)} degrees)`);
-    assert.equal(world.violations.collisions, 0);
-    assert.equal(world.violations.deadlock_overrides, 0);
-    assert.ok(overKerb <= 0.25, `goal ${goalX}: bumpers stay within reach of the kerb (${overKerb.toFixed(2)} m)`);
+// a destination just beyond the U-turn, in the lane out: the drive ends only once the car is in
+// that lane, facing along it (not standing between legs in the lane coming in, where the route's
+// end is just as near)
+for (const goalX of [50, 56]) {
+  const world = setup({ x: 20, v: 5 });
+  world.route = new Route({ ...routeData, polyline: polyline.filter(([px, py]) => py < 0 || px >= goalX) }, map);
+  world.destination = [goalX, LANE];
+  const autopilot = new Autopilot(world);
+  autopilot.brainName = "rules";
+  autopilot.setEnabled(true);
+  const fleet = { step() {} };
+  const dt = 1 / 30;
+  let overKerb = 0;
+  for (let i = 0; i < 90 / dt && world.route; i++) {
+    stepWorld({ world, fleet, autopilot }, dt, world.t * 1000);
+    for (const [px, py] of world.ego.corners()) overKerb = Math.max(overKerb, map.roadDistance(px, py).distance);
   }
-  console.log("✓ a destination just beyond the U-turn: the drive ends once the car is in the lane out");
+  const y = world.ego.y,
+    heading = (Math.abs(world.ego.psi) * 180) / Math.PI;
+  assert.ok(world.route === null, `goal ${goalX}: arrived (car at ${world.ego.x.toFixed(1)}, ${y.toFixed(1)})`);
+  assert.ok(Math.abs(y - LANE) < 1, `goal ${goalX}: in the lane out at the end (y=${y.toFixed(2)})`);
+  assert.ok(heading > 150, `goal ${goalX}: facing the way out (${heading.toFixed(0)} degrees)`);
+  assert.equal(world.violations.collisions, 0);
+  assert.equal(world.violations.deadlock_overrides, 0);
+  assert.ok(overKerb <= 0.25, `goal ${goalX}: bumpers stay within reach of the kerb (${overKerb.toFixed(2)} m)`);
 }
+console.log("✓ a destination just beyond the U-turn: the drive ends once the car is in the lane out");
 
 {
   // autopilot switched off partway round: the turnaround is dropped, so it does not outlive the

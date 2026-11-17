@@ -93,7 +93,7 @@ export const scenario = (map, challenge) =>
   });
 
 // (the signal's lights are out for the whole drive)
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   world.outages.cut(scenario.outage.signal);
   world.challenge.signalId = scenario.outage.signal;
 }

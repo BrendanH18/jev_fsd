@@ -60,7 +60,7 @@ class ScriptedAgent {
     this.calls = 0;
     this.produced = { valid: 0, timeout: 0, invalid_vector: 0, error: 0, no_headlights: 0 };
   }
-  async decide(snap, eligible, request, signal) {
+  async decide(snap, eligible, request, _signal) {
     const kind = SCRIPT[this.calls++ % SCRIPT.length];
     this.produced[kind]++;
     const meta = { source: this.name, live_call: true, latency_ms: 5, input_tokens: 10, cost_usd: 0 };
@@ -117,9 +117,10 @@ await test("the shares are of all decisions, rounded to 0.001, and read as text"
 const { Autopilot } = await import("../static/js/brain/brain.js");
 const applyOf = Autopilot.prototype.apply,
   rulesBy = {};
-Autopilot.prototype.apply = function (result, snap, candidates, request, by) {
+Autopilot.prototype.apply = function (...args) {
+  const by = args[4]; // apply(result, snap, candidates, request, by)
   rulesBy[by] = (rulesBy[by] || 0) + 1;
-  return applyOf.apply(this, arguments);
+  return applyOf.apply(this, args);
 };
 const rules = await evaluateChallenge(map, challenge, { brain: "rules" });
 Autopilot.prototype.apply = applyOf;

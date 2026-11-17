@@ -121,7 +121,7 @@ function gridWorld({ toLine = 1, v = 0, t = greenA, enabled = true } = {}) {
   return world;
 }
 // Traffic on arm `edge`, `toLine` short of its line (front bumper), going on to `exit`.
-function npc(world, fleet, edge, exit, toLine, v, id) {
+function npc(_world, fleet, edge, exit, toLine, v, id) {
   const lane = grid.lane(edge, 0),
     s = LINE - toLine - FRONT,
     p = pointAt(lane.pts, lane.cum, s);

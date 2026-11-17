@@ -102,7 +102,6 @@ const TALL = new Set([
   "ambulance",
   "tow_truck",
 ]);
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const ease = (u) => {
   const t = clamp(u, 0, 1);

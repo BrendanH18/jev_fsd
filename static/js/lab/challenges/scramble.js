@@ -153,6 +153,6 @@ function placeScramble(world, { signal }, seed) {
   return { walkerIds: ids, signalId: signal, at: [inter.x, inter.y] };
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, challenge, scenario) {
   Object.assign(world.challenge, placeScramble(world, scenario.scramble, challenge.seed));
 }

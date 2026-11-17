@@ -42,7 +42,7 @@ let checks = 0;
 function test(name, fn) {
   fn();
   checks++;
-  console.log("✓ " + name);
+  console.log(`✓ ${name}`);
 }
 function world(on = true) {
   const w = new World(map, { highBeams: on, parked: 0, pedestrians: 0 });

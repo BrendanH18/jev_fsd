@@ -19,7 +19,7 @@ export async function runRoadTestTests() {
     before = localStorage.getItem(ROAD_TEST_KEY);
   let lab, driveReport;
   const authoredLink = (anchor, test, driver) => {
-    if (!anchor || anchor.tagName !== "A") return false;
+    if (anchor?.tagName !== "A") return false;
     const url = new URL(anchor.href),
       expected = challengeConfig(test);
     return (
@@ -193,7 +193,7 @@ export async function runRoadTestTests() {
     driveReport.onReplay = (index) => {
       replayIndex = index;
     };
-    driveReport.getReplayTarget = (r, incident) => (!incident || incident.at_s === 54 ? 7 : null);
+    driveReport.getReplayTarget = (_r, incident) => (!incident || incident.at_s === 54 ? 7 : null);
     driveReport.show(report);
     const rewind = sheet().querySelector('[data-category="right_of_way"] .incident-replay');
     check(

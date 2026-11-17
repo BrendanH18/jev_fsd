@@ -34,7 +34,7 @@ export function scenario(map, challenge) {
       to = { x: goal[0], y: goal[1] };
     const direct = browserRoute(map, from, to),
       route = browserRoute(map, from, to, { restrictions: true, hour: 9 });
-    if (!route || !direct || !direct.edges.some((id, i) => id === r.from && direct.edges[i + 1] === r.to[0])) continue;
+    if (!route || !direct?.edges.some((id, i) => id === r.from && direct.edges[i + 1] === r.to[0])) continue;
     return {
       id: challenge.id,
       start: { edge: lane.edge, lane: lane.idx, s },

@@ -131,7 +131,7 @@ export class Autopilot {
   step(dt, now) {
     const world = this.world;
     if (!this.enabled || !world.route) return;
-    const road = (world._road = world.roadInfo());
+    world._road = world.roadInfo();
     // A turnaround hands back once the car faces the way out and the route's projection finds it
     // beyond the U-turn, in the lane there and facing along it (which runs right beside the lane it came in
     // on, so the projection looks only from the U-turn on); the next decision comes at once, so
@@ -191,7 +191,7 @@ export class Autopilot {
           : nav.next_turn
         : null;
     // A lane change signals toward the new lane until the car is across.
-    const shift = snap.lane && snap.lane.shift && this.executing?.law;
+    const shift = snap.lane?.shift && this.executing?.law;
     if (shift)
       world.ego.signal =
         lateralAt(shift, snap.routeProj.s, world.route) >
@@ -234,7 +234,7 @@ export class Autopilot {
           Object.assign(ev, {
             space: law.id,
             legs: law.legs + 1,
-            ...parkedPose(world.ego, law, world),
+            ...parkedPose(world.ego, law),
             ...(law.phase === "stuck" ? { stuck: true } : {}),
           });
         if (ev.parked) world.ego.signal = null;
@@ -274,7 +274,7 @@ export class Autopilot {
       if (turning.travelled >= 0.2) endLeg(turning);
       else turning.idle = (turning.idle || 0) + dt;
     }
-    if (brake && brake.hold) {
+    if (brake?.hold) {
       world.ego.step(dt, { steer: world.ego.delta, accel: -3 * brakeSign });
       this.safetyActive = false;
     } else if (brake) {
@@ -364,7 +364,7 @@ export class Autopilot {
     const candidates = sampleCandidates(snap, world);
     const { eligible, rejected, mustStop } = simulateAll(candidates, snap, world);
     this.goalBlockedBy = atGoal(snap) ? goalBlocker(candidates, world) : null;
-    if (this.executing && this.executing.candidate) {
+    if (this.executing?.candidate) {
       this.executing.hazard = pathHazard(this.executing, snap, world);
       if (this.executing.hazard) snap.current_path_hazard = this.executing.hazard;
     }
@@ -637,7 +637,7 @@ function stallContext(snap, decision, stuckFor) {
     rejected,
     ...(f ? { ahead: f.id, gap_m: r1(f.gap_m) } : {}),
     ...(i ? { control: i.id ? `${i.control} ${i.id}` : i.control, line_m: r1(i.bumper_to_line_m) } : {}),
-    ...(snap.lane && snap.lane.delta ? { lanes_from_route: snap.lane.delta } : {}),
+    ...(snap.lane?.delta ? { lanes_from_route: snap.lane.delta } : {}),
     ...(nav && nav.next_turn !== "none" ? { next_turn: nav.next_turn, turn_in_m: r1(nav.turn_in_m) } : {}),
   };
 }

@@ -244,13 +244,10 @@ export async function runUiTests() {
       "Touch steering and the accelerator work together",
       Math.abs(input.left - 0.5) < 1e-9 && input.right === 0 && input.throttle === 1 && input.anyDriving,
     );
-    check(
-      "A second finger cannot take over the steering pad",
-      (pointer(touch.wheel, "pointerdown", 3, 0),
-      pointer(touch.wheel, "pointermove", 3, 999),
-      input.poll(),
-      Math.abs(input.left - 0.5) < 1e-9),
-    );
+    pointer(touch.wheel, "pointerdown", 3, 0);
+    pointer(touch.wheel, "pointermove", 3, 999);
+    input.poll();
+    check("A second finger cannot take over the steering pad", Math.abs(input.left - 0.5) < 1e-9);
     check("The pressed pedal shows its state", touch.pedalEls.throttle.getAttribute("aria-pressed") === "true");
     pointer(touch.wheel, "pointerup", 1);
     pointer(touch.pedalEls.throttle, "pointerup", 2);

@@ -40,7 +40,7 @@ export function scenario(map, challenge) {
   };
 }
 
-export function install(world, fleet, challenge, scenario, { lane }) {
+export function install(world, fleet, _challenge, scenario, { lane }) {
   world.streetLightsOut = true;
   for (const [edge, s, v, id] of [
     [lane.edge, 370, 4, "beam_leader"],

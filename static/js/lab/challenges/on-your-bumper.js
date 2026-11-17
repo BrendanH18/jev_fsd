@@ -118,7 +118,7 @@ export function stepTailgater(world) {
 
 export const scenario = tailgaterScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   installTailgater(world, fleet, scenario);
 }
 

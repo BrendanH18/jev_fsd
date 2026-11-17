@@ -385,7 +385,7 @@ if (process.argv.includes("--write-snapshot")) {
     .map((c) => c.id);
   fs.writeFileSync(
     new URL("../data/snapshots/into_the_sun.json", import.meta.url),
-    JSON.stringify({ name: "into_the_sun", state, questions, local, expect: { vector_in: slowing } }, null, 2) + "\n",
+    `${JSON.stringify({ name: "into_the_sun", state, questions, local, expect: { vector_in: slowing } }, null, 2)}\n`,
   );
   console.log(`wrote data/snapshots/into_the_sun.json (slowing: ${slowing.join(", ")})`);
 }

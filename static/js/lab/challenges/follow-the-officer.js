@@ -102,7 +102,7 @@ function greenOnset(inter, edge, t) {
   return null;
 }
 
-export function installOfficer(world, fleet, scenario) {
+export function installOfficer(world, _fleet, scenario) {
   const setup = scenario.officer,
     map = world.map,
     inter = map.intersections.get(setup.signal);
@@ -167,7 +167,7 @@ export function stepOfficerChallenge(world, fleet) {
 
 export const scenario = officerScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   installOfficer(world, fleet, scenario);
 }
 

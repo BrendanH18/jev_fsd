@@ -247,7 +247,7 @@ await test("models are told: a blind_spot field, a situation line, and a prompt 
   assert.equal(state.blind_spot.stop_within_m, H.STEP_OUT_M);
   assert.equal(state.blind_spot.pass_at, Math.round(H.blindSpeed() * 10) / 10);
   const line = situationClauses(snap).find((c) => c.startsWith("Cars parked along the right"));
-  assert.ok(line && line.includes("32 km/h") && line.includes("step out"), line);
+  assert.ok(line?.includes("32 km/h") && line.includes("step out"), line);
   assert.ok(SYSTEM_PROMPT.includes("`blind_spot`"));
   assert.equal(toJevState(buildSnapshot(scene({ hazards: false, x: 50, v: 9 }).world), [], {}).blind_spot, undefined);
 });
@@ -370,7 +370,7 @@ await test("step-outs never happen with hazards off, and a world without them dr
 
 await test("the challenge, closed loop: Rules and the cautious agent keep to the blind-spot speed, see the child only as they step out, and stop short", async () => {
   const challenge = CHALLENGES.find((c) => c.id === "step-out");
-  assert.ok(challenge && challenge.hidden && challenge.map === "kitsilano");
+  assert.ok(challenge?.hidden && challenge.map === "kitsilano");
   for (const brain of ["rules", "cautious"]) {
     const r = await evaluateChallenge(KITS, challenge, { brain });
     assert.ok(r.pass, `${brain}: ${JSON.stringify(r.failures)}`);

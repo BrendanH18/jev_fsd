@@ -32,7 +32,7 @@ const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 const { failureCategory } = await import("../static/js/lab/examiner.js");
 const { Route } = await import("../static/js/map/route.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
-const { browserRoute, routeFromLanes } = await import("../static/js/demo/routing.js");
+const { browserRoute } = await import("../static/js/demo/routing.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
 
 let checks = 0;
@@ -475,7 +475,7 @@ await test("what models are told, and the drive score's report", () => {
   assert.equal(state.road_closed.on_route, true);
   assert.equal(state.road_closed.street, "Spring Garden Road");
   const clause = situationClauses(snap).find((c) => c.includes("ROAD CLOSED"));
-  assert.ok(clause && clause.includes("stop_for_closure"));
+  assert.ok(clause?.includes("stop_for_closure"));
   const { questions } = buildQuestions(snap, sim.eligible);
   assert.ok(questions.motion.criteria.stop.includes("road_closed.on_route"));
   assert.ok(questions.vector.criteria.stop_for_closure.includes("waits for a detour"));
@@ -693,7 +693,7 @@ if (process.argv.includes("--write-snapshot")) {
   const state = toJevState(snap, candidates, { rejected });
   fs.writeFileSync(
     new URL("../data/snapshots/road_closed.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "road_closed",
         state,
@@ -703,7 +703,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/road_closed.json (barricade ${Math.round(snap.road_closed.distance_m)} m ahead, ${eligible.length} eligible)`,

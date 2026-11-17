@@ -179,7 +179,7 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(TRACKS_TRIGGER_M),
     // (the streetcar sets off toward the crossing, ringing)
-    release: (world, fleet, state) => {
+    release: (_world, fleet, state) => {
       const train = state.trainId && fleet.vehicles.find((v) => v.id === state.trainId);
       if (train) Object.assign(train.rail, { held: false, dwell: 0 });
     },

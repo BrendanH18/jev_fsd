@@ -52,7 +52,6 @@ export const LOOK_GAP_M = 0.8;
 export const LOOK_S = 0.8;
 const PAUSE_S = [1.0, 2.0];
 const BACK_ROOM_M = 0.4; // the car's rear bumper stands this far behind the sidewalk
-const MAX_ANGLE = (15 * Math.PI) / 180;
 // It goes into the lane once whatever it can see or hear coming along it is further than COMMIT_M and
 // COMMIT_S away; anything within HEAR_M it notices, seen or not.
 export const COMMIT_M = 12;
@@ -668,7 +667,7 @@ export function reverserYield(world, n, front) {
 // The driven car's sensing (brain/sensors.js `reversing_vehicle`): the car backing out it must give room
 // to first, as far as it can see. `wait`: stop with the front at `stop_s_route` (route arc length) until
 // it has driven off; otherwise slow to `limit_mps`. Or null.
-export function reversingVehicle(world, p, frontS, lane) {
+export function reversingVehicle(world, _p, frontS, lane) {
   const { ego, route } = world;
   const c = reverserAhead(world, route, {
     front: frontS,

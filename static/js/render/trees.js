@@ -224,7 +224,7 @@ function withWind(material, amount) {
   return material;
 }
 
-export function buildTrees(map, roads, footprints) {
+export function buildTrees(map) {
   const spots = sceneryFor(map).trees;
 
   const crowns = [],

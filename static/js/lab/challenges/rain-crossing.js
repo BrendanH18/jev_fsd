@@ -19,9 +19,9 @@ export const challenge = {
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);
 
-export function install(world, fleet, challenge, scenario, at) {
+export function install(world, _fleet, challenge, scenario, at) {
   placeCrossingPedestrian(world, challenge, scenario, at);
 }
 
 export const step = (world, fleet) =>
-  stepAuthored(world, fleet, { release: (world, fleet, state) => releasePedestrian(world, state) });
+  stepAuthored(world, fleet, { release: (world, _fleet, state) => releasePedestrian(world, state) });

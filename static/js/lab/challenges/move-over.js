@@ -122,16 +122,16 @@ function placeTowTruck(world, { edge, from, to }, seed) {
   return { pedestrianId: ped.id, roadsideId: truck.id, at: start };
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, challenge, scenario) {
   Object.assign(world.challenge, placeTowTruck(world, scenario.roadside, challenge.seed));
 }
 
 export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(OPERATOR_TRIGGER_M),
-    release: (world, fleet, state) => releasePedestrian(world, state),
+    release: (world, _fleet, state) => releasePedestrian(world, state),
     // (the tow truck's operator stands in the lane a moment before stepping back)
-    follow: (world, fleet, state) => {
+    follow: (world, _fleet, state) => {
       const ped = state.pedestrianId && world.crowd.list.find((p) => p.id === state.pedestrianId);
       if (ped && state.triggered && !state.paused && ped.path.length === 1) {
         state.paused = true;

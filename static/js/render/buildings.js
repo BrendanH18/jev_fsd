@@ -69,7 +69,7 @@ function wallMaterial(kind) {
       )
       .replace("#include <roughnessmap_fragment>", "float roughnessFactor = mix( 0.12, roughness, wallMask );");
   };
-  mat.customProgramCacheKey = () => "facade-" + kind;
+  mat.customProgramCacheKey = () => `facade-${kind}`;
   return mat;
 }
 
@@ -300,7 +300,7 @@ export class FootprintIndex {
       }
       for (let gx = Math.floor(x0 / cell); gx <= Math.floor(x1 / cell); gx++)
         for (let gy = Math.floor(y0 / cell); gy <= Math.floor(y1 / cell); gy++) {
-          const k = gx + "," + gy;
+          const k = `${gx},${gy}`;
           if (!this.grid.has(k)) this.grid.set(k, []);
           this.grid.get(k).push(i);
         }
@@ -314,7 +314,7 @@ export class FootprintIndex {
       gy = Math.floor(y / this.cell);
     for (let i = gx - r; i <= gx + r; i++)
       for (let j = gy - r; j <= gy + r; j++) {
-        for (const idx of this.grid.get(i + "," + j) || []) {
+        for (const idx of this.grid.get(`${i},${j}`) || []) {
           if (seen.has(idx)) continue;
           seen.add(idx);
           if (insideOrNear(this.polys[idx], x, y, margin)) return true;

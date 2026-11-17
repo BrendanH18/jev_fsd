@@ -516,8 +516,7 @@ await test("free drives: one now and then in a driveway ahead on the route, clea
   }
   assert.equal(openAcross, 0, `${openAcross} free bays across driveways`);
   const w = new World(CGY, { seed: 4, parked: 0, pedestrians: 0, driveways: true });
-  const fleet = new NpcFleet(w, { count: 0, bikes: 0, seed: 5 });
-  const ctx = { world: w, fleet, autopilot: idle };
+  new NpcFleet(w, { count: 0, bikes: 0, seed: 5 }); // (traffic: sets w.npcs)
   const e = CGY.edges.get(D.edge),
     lane = CGY.lane(e.id, e.lanes - 1);
   w.placeOnLane(lane, 2);
@@ -610,7 +609,7 @@ if (process.argv.includes("--write-snapshots")) {
     .map((c) => c.id);
   fs.writeFileSync(
     new URL("../data/snapshots/reverse_lights.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "reverse_lights",
         state,
@@ -620,7 +619,7 @@ if (process.argv.includes("--write-snapshots")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/reverse_lights.json (stop in ${snap.reversing_vehicle.bumper_to_stop_m.toFixed(1)} m, ${eligible.length} eligible)`,

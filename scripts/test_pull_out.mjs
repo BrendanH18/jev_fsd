@@ -127,31 +127,29 @@ function parkedCar(world, id, x, y = CURB_Y) {
   console.log("✓ with the street clear, a boxed-in car still pulls out");
 }
 
-{
-  // However long the car in front holds it, a pull-out stays one (signalling, and checking for a
-  // gap) until the car is moving: drivers who are slow to move off must not lose it at the curb.
-  for (let seed = 1; seed <= 8; seed++) {
-    const world = new World(map, { parked: 0, pedestrians: 0 });
-    const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed });
-    const x = 150;
-    const leaving = parkedCar(world, "leaving", x);
-    parkedCar(world, "in_front", x + CAR.length + 1.2);
-    Object.assign(world.ego, { x: 20, y: 0, psi: 0, v: 0 });
-    const merging = fleet.startPullOut(leaving);
-    let movedOff = false;
-    for (let i = 0; i < 15 * 60; i++) {
-      fleet.step(1 / 60);
-      world.t += 1 / 60;
-      if (merging.v > 0.3) movedOff = true;
-      assert.ok(
-        merging.pull || movedOff,
-        `seed ${seed}: the pull-out ended at ${world.t.toFixed(2)} s with the car still at the curb (v=${merging.v.toFixed(2)})`,
-      );
-    }
-    assert.ok(movedOff && !merging.pull, `seed ${seed}: pulled out`);
+// However long the car in front holds it, a pull-out stays one (signalling, and checking for a
+// gap) until the car is moving: drivers who are slow to move off must not lose it at the curb.
+for (let seed = 1; seed <= 8; seed++) {
+  const world = new World(map, { parked: 0, pedestrians: 0 });
+  const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed });
+  const x = 150;
+  const leaving = parkedCar(world, "leaving", x);
+  parkedCar(world, "in_front", x + CAR.length + 1.2);
+  Object.assign(world.ego, { x: 20, y: 0, psi: 0, v: 0 });
+  const merging = fleet.startPullOut(leaving);
+  let movedOff = false;
+  for (let i = 0; i < 15 * 60; i++) {
+    fleet.step(1 / 60);
+    world.t += 1 / 60;
+    if (merging.v > 0.3) movedOff = true;
+    assert.ok(
+      merging.pull || movedOff,
+      `seed ${seed}: the pull-out ended at ${world.t.toFixed(2)} s with the car still at the curb (v=${merging.v.toFixed(2)})`,
+    );
   }
-  console.log("✓ a boxed-in car keeps signalling and checking for a gap until it is moving");
+  assert.ok(movedOff && !merging.pull, `seed ${seed}: pulled out`);
 }
+console.log("✓ a boxed-in car keeps signalling and checking for a gap until it is moving");
 
 function drive(blocker) {
   const world = new World(map, { parked: 0, pedestrians: 0 });

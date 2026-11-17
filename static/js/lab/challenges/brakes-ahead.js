@@ -21,7 +21,7 @@ export const challenge = {
 
 export const scenario = followingScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   installFollowing(world, fleet, scenario);
 }
 

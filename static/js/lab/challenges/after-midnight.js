@@ -61,7 +61,7 @@ function nightSites(map) {
 }
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random) => {
+  laneScenario(map, challenge, (map, _challenge, random) => {
     const night = pick(nightSites(map), random, "No overnight flashing side-street approach.");
     return {
       lane: night.lane,

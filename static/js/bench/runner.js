@@ -93,7 +93,7 @@ export function setupScenario(
   const fleet = new NpcFleet(world, { count: npcs, seed: sc.traffic_seed, ...preset.fleet });
   const events = [];
   const autopilot = new Autopilot(world, {
-    onDecision: (d) => onDecision && onDecision(d),
+    onDecision: (d) => onDecision?.(d),
     onEvent: (e) => {
       events.push({ t: Math.round(world.t * 10) / 10, ...e });
       if (onEvent) onEvent(e);

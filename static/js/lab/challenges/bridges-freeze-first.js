@@ -154,7 +154,7 @@ export function stepIce(world, fleet) {
 
 export const scenario = iceScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   installIce(world, fleet, scenario);
 }
 

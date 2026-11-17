@@ -22,6 +22,6 @@ export const challenge = {
 
 export const scenario = amberScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, _challenge, scenario) {
   installAmber(world, scenario);
 }

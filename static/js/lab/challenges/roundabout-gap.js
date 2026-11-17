@@ -104,6 +104,6 @@ export function placeRoundaboutTraffic(world, fleet, spec) {
 
 export const scenario = roundaboutScenario;
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   Object.assign(world.challenge, placeRoundaboutTraffic(world, fleet, scenario.roundabout));
 }

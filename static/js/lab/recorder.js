@@ -59,7 +59,7 @@ export class DriveRecorder {
     this.indexedMap = null;
     this.recordingId = crypto.randomUUID();
   }
-  sharedFor({ world, fleet, autopilot }) {
+  sharedFor({ world, autopilot }) {
     const shared = (this.baseShared ||= new Set([
       world.map,
       world.staticObstacles,

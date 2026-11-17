@@ -50,7 +50,7 @@ function occludedCrossings(map, lanes) {
 }
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random, lanes) => {
+  laneScenario(map, challenge, (map, _challenge, random, lanes) => {
     const site = pick(
       occludedCrossings(map, lanes),
       random,
@@ -63,9 +63,9 @@ export const scenario = (map, challenge) =>
     };
   });
 
-export function install(world, fleet, challenge, scenario, at) {
+export function install(world, _fleet, challenge, scenario, at) {
   placeCrossingPedestrian(world, challenge, scenario, at);
 }
 
 export const step = (world, fleet) =>
-  stepAuthored(world, fleet, { release: (world, fleet, state) => releasePedestrian(world, state) });
+  stepAuthored(world, fleet, { release: (world, _fleet, state) => releasePedestrian(world, state) });

@@ -26,7 +26,7 @@ export const challenge = {
 };
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random) => {
+  laneScenario(map, challenge, (map, _challenge, random) => {
     const left = pick(oncomingSites(map), random, "This map has no signalled left turn with oncoming traffic.");
     return {
       lane: left.lane,

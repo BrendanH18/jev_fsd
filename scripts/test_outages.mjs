@@ -65,7 +65,7 @@ function quiet(seed = 3) {
   return { world, fleet };
 }
 // A car `back` metres (its front) short of `edge`'s line, at `v`, going straight on.
-function car(world, fleet, id, edge, back, v) {
+function car(_world, fleet, id, edge, back, v) {
   const e = HFX.edges.get(edge),
     lane = HFX.lane(edge, e.lanes - 1),
     s = e.control.s_line - back - FRONT;

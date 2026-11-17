@@ -126,6 +126,6 @@ export function install(world, fleet, challenge, scenario) {
 // (the arrow comes on, and the cars beside the car turn)
 export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
-    trigger: (local, world, state) =>
+    trigger: (_local, world, state) =>
       approachPhase(world.map.intersections.get(state.signalId), state.arrowEdge, world.t) === "arrow",
   });

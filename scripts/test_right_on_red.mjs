@@ -791,7 +791,7 @@ function drive(world, { seconds = 30, watch = () => {} } = {}) {
     turnedAt = null;
   drive(world, {
     seconds: 45,
-    watch: (w, ap) => {
+    watch: (w, _ap) => {
       if (w.ego.v < 0.2 && w.ego.x < -8) stoppedFor += 1 / 30;
       if (turnedAt === null && w.ego.y < -HALF - 2)
         turnedAt = {

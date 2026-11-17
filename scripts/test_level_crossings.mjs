@@ -328,7 +328,7 @@ test("challenge: 106 Street at the tracks, a queue back from 86 Avenue to just p
   const lead = fleet.vehicles.find((n) => n.id === world.challenge.queueIds[0]);
   assert.equal(lead.signal, "left");
   const train = fleet.vehicles.find((n) => n.id === world.challenge.trainId);
-  assert.ok(train && train.rail.held && !world.visibility.sees(world.ego, train), "held, out of sight");
+  assert.ok(train?.rail.held && !world.visibility.sees(world.ego, train), "held, out of sight");
 });
 
 test("with the queue past the tracks the car is told to wait short of them for room, offered the stop, and driving on is rejected", () => {

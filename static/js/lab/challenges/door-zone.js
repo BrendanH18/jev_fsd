@@ -22,7 +22,7 @@ export const challenge = {
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);
 
-export function install(world, fleet, challenge, scenario, at) {
+export function install(world, fleet, _challenge, scenario, at) {
   placeCurbCar(world, at);
   const lane = at.lane,
     bp = pointAt(lane.pts, lane.cum, scenario.start.s + 30);
@@ -44,5 +44,5 @@ export function install(world, fleet, challenge, scenario, at) {
 
 export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
-    release: (world, fleet, state) => world.parked.openDoor(world.parked.list.find((c) => c.id === state.carId)),
+    release: (world, _fleet, state) => world.parked.openDoor(world.parked.list.find((c) => c.id === state.carId)),
   });

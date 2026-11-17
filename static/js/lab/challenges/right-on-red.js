@@ -84,7 +84,7 @@ function crossSites(map) {
 }
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random) => {
+  laneScenario(map, challenge, (map, _challenge, random) => {
     const right = pick(
       crossSites(map),
       random,

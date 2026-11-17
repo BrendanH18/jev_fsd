@@ -145,7 +145,7 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(RIDER_TRIGGER_M),
     // (the rider walks out to the streetcar's doors)
-    release: (world, fleet, state) => {
+    release: (world, _fleet, state) => {
       const rider = state.riderId && world.crowd.list.find((p) => p.id === state.riderId);
       if (rider) {
         rider.held = false;

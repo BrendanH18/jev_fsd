@@ -807,7 +807,7 @@ function nextLeg(vehicle, law, world) {
   // (neither swing has the room, the car in front or behind in the way of its corner: standing as the law
   // allows already, it is parked; else a little way straight, toward where swinging in goes, else away
   // from it, and then it tries again, once)
-  if (parkedPose(vehicle, law, world).within_kerb) {
+  if (parkedPose(vehicle, law).within_kerb) {
     law.phase = "parked";
     return;
   }
@@ -950,7 +950,7 @@ function stepOut(vehicle, law, world, dt, speedControl, hold) {
 
 // How the car stands once parked (or wherever it is in the space): its right tyres' distance from
 // the kerb (negative: on it), how far from parallel it is (degrees), and the room in front and behind.
-export function parkedPose(vehicle, plan, world) {
+export function parkedPose(vehicle, plan) {
   const spec = vehicle.spec,
     f = frameOf(vehicle, plan);
   const right = tyres(vehicle, spec).filter((_, k) => k % 2 === 1);

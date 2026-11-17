@@ -630,7 +630,7 @@ export function buildSnapshot(world, executing = null) {
           block_end_in_m: b.remaining,
         };
     }
-    const lane = (snap.lane = laneState(route, p, executing && executing.law));
+    const lane = (snap.lane = laneState(route, p, executing?.law));
     snap.right_hook = rightHook(world, p, frontS, lane);
     snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
@@ -866,7 +866,7 @@ export function buildSnapshot(world, executing = null) {
   snap.roadside = snap.roadside.slice(0, 6);
   snap.traffic.sort((a, b) => a.dist - b.dist);
   snap.traffic = snap.traffic.slice(0, 8);
-  if (executing && executing.hazard) snap.current_path_hazard = executing.hazard;
+  if (executing?.hazard) snap.current_path_hazard = executing.hazard;
   snap.speed_zone = speedZone(world, snap, FRONT);
   // (and, with calming on, the next speed hump, table, cushion or bump along the route: sim/traffic-calming.js)
   if (world.calming && snap.route && snap.routeProj) {
@@ -1026,8 +1026,7 @@ function turnaroundState(world, snap, executing) {
       : { phase: t.phase, legs: t.legs, executing: executing?.law === t, idle_s: t.idle || 0 };
   const nav = snap.nav;
   if (
-    !nav ||
-    nav.next_turn !== "uturn" ||
+    nav?.next_turn !== "uturn" ||
     nav.turn_in_m > TURN_ROUND_START_M ||
     nav.turn_in_m < 0.5 ||
     Math.abs(world.ego.v) > TURN_ROUND_OFFER_MPS
@@ -1244,7 +1243,7 @@ function oncomingYield(world, c, frontS, look = true) {
 function rightHook(world, p, frontS, lane) {
   const { ego, route } = world;
   const turn = route.turns.find((t) => t.at_m > frontS - JUNCTION_BOX_M);
-  if (!turn || turn.dir !== "right" || turn.at_m - frontS > HOOK_TURN_M) return null;
+  if (turn?.dir !== "right" || turn.at_m - frontS > HOOK_TURN_M) return null;
   const inward = route.headingAt(Math.max(0, turn.at_m - 15));
   const toClear = (hit) => hit - frontS + ego.spec.length;
   let best = null;
@@ -1699,7 +1698,7 @@ function levelCrossing(world, route, frontS, vehicles) {
 // side, the way round the closed stretch through the other lane in route arc lengths
 // (sim/controller.js detourAt); `limit_mps` the zone's limit, never above the street's. Or null.
 const WZ_LOOK_M = 120;
-function workZone(world, p, frontS, road) {
+function workZone(world, _p, frontS, road) {
   const { ego, route, map } = world,
     zones = world.workZones?.zones;
   if (!zones?.length) return null;
@@ -2798,7 +2797,7 @@ function laneOptions(snap, world) {
   // move over, to the lane on the left, if it runs on past it.
   const rs = snap.roadside_stop;
   const sp = snap.snow_plow;
-  const moveOver = rs && rs.in_adjacent_lane && rs.other_lane && rs.gap_m > MOVE_OVER_MIN_M;
+  const moveOver = rs?.in_adjacent_lane && rs.other_lane && rs.gap_m > MOVE_OVER_MIN_M;
   for (const dir of ["left", "right"]) {
     const delta = lane.delta + (dir === "left" ? -1 : 1);
     const span = route.laneSpan(s, delta);
@@ -2933,7 +2932,7 @@ export function desiredSpeed(snap) {
     }
     // a lower limit on the next street: be down to it, gently, a little before the car gets there
     for (const { at, limit } of snap.route.limitsAhead ? snap.route.limitsAhead(snap.routeProj.s) : []) {
-      const lim = limit * (weather.speed < 1 ? weather.speed : 1);
+      const lim = limit * Math.min(weather.speed, 1);
       const vl = Math.sqrt(lim * lim + 2 * decel * 0.6 * Math.max(0, at - snap.routeProj.s - FRONT - 15));
       if (vl < v) {
         v = vl;
@@ -2945,7 +2944,7 @@ export function desiredSpeed(snap) {
   const z = snap.speed_zone;
   if (z?.in_zone) reasons.push(ZONE_NAMES[z.kind]);
   else if (z) {
-    const lim = z.limit_mps * (weather.speed < 1 ? weather.speed : 1);
+    const lim = z.limit_mps * Math.min(weather.speed, 1);
     const vz = Math.sqrt(lim * lim + 2 * decel * 0.6 * Math.max(0, z.starts_in_m - 2));
     if (vz < v) {
       v = vz;
@@ -2966,7 +2965,7 @@ export function desiredSpeed(snap) {
   // little before APPROACH_M short of it, gently, and no faster until past it
   const rs = snap.roadside_stop;
   if (rs) {
-    const vr = roadsideSpeed(rs, weather.speed < 1 ? weather.speed : 1);
+    const vr = roadsideSpeed(rs, Math.min(weather.speed, 1));
     if (vr <= v + 0.05) {
       v = Math.min(v, vr);
       reasons.push(
@@ -3082,7 +3081,7 @@ export function desiredSpeed(snap) {
       reasons.push(i.cross_traffic_moving ? "yield to roundabout traffic" : "roundabout");
     }
   }
-  if (i && i.oncoming) {
+  if (i?.oncoming) {
     const room = i.oncoming.bumper_to_yield_m;
     const vo = room < 1.5 ? 0 : stopSpeedFor(room - 1.0, decel);
     if (vo < v) {
@@ -3365,7 +3364,7 @@ export function desiredSpeed(snap) {
 // from which the car slows to it comfortably by CALM_EARLY_M before it; in poor weather, no faster than
 // the weather allows.
 function calmingSpeed(tc) {
-  const lim = tc.speed_mps * (weather.speed < 1 ? weather.speed : 1);
+  const lim = tc.speed_mps * Math.min(weather.speed, 1);
   return tc.over ? lim : Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, tc.starts_in_m - CALM_EARLY_M));
 }
 

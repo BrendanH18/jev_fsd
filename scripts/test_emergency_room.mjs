@@ -12,7 +12,6 @@ globalThis.document = { querySelector: () => null };
 const { MapData, cumulative } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Route } = await import("../static/js/map/route.js");
-const { NpcFleet } = await import("../static/js/sim/npc.js");
 const { Vehicle, AMBULANCE, BUS } = await import("../static/js/sim/vehicle.js");
 const { parkedRoom, PARKED_CLEAR_M } = await import("../static/js/sim/emergency.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");

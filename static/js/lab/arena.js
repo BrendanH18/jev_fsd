@@ -364,7 +364,7 @@ function busy(value) {
     "arena-mode",
     "arena-road-tests",
   ])
-    if ($("#" + id)) $("#" + id).disabled = value;
+    if ($(`#${id}`)) $(`#${id}`).disabled = value;
   $("#agents")
     .querySelectorAll("input")
     .forEach((i) => {

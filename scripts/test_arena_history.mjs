@@ -94,7 +94,7 @@ test("storage write failures are reported without destroying prior history", () 
 test("a shared browser quota trims older evaluations before giving up", () => {
   const quota = {
     getItem: () => JSON.stringify([run, run]),
-    setItem(k, json) {
+    setItem(_k, json) {
       if (JSON.parse(json).length > 1) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
     },
   };
@@ -104,7 +104,7 @@ test("trimming history keeps the chosen baseline, dropping other older evaluatio
   const at = (m) => ({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, m)).toISOString() });
   const quota = {
     getItem: () => JSON.stringify([at(3), at(2), at(1)]),
-    setItem(k, json) {
+    setItem(_k, json) {
       if (JSON.parse(json).length > 2) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
     },
   };

@@ -29,7 +29,7 @@ export class Panel {
     $("#save-snapshot").addEventListener("click", () => this.saveSnapshot());
     $("#edit-style").addEventListener("click", () => {
       const next = prompt("driving_style (sent with every request):", this.autopilot.style);
-      if (next !== null && next.trim()) {
+      if (next?.trim()) {
         this.autopilot.style = next.trim();
         this.hud.badge("driving style updated", "", 900);
       }

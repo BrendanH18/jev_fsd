@@ -79,13 +79,12 @@ const NEAR_M = 1,
   NEAR_SIDE_M = 0.2;
 // How far ahead a driver sees a puddle in the rain.
 export const SEE_M = 60;
-// Planning to slow for one, drivers brake at no more than this share of comfort().decel, to be below its
-// splash speed this far before the front wheels reach it; and the car plans to go through at this
-// share of the splash speed.
-const SLOW_SHARE = 0.6,
-  EARLY_M = 5,
+// Planning to slow for one, the car aims to be below its splash speed this far before the front wheels
+// reach it, and plans to go through at this share of the splash speed.
+const EARLY_M = 5,
   PLAN_SHARE = 0.9;
-// Traffic plans more gently, a little earlier, a little slower.
+// Traffic plans more gently (braking at no more than this share of comfort().decel), a little earlier,
+// a little slower.
 const NPC_SLOW_SHARE = 0.4,
   NPC_EARLY_M = 6,
   NPC_SHARE = 0.85;

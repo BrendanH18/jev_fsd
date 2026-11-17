@@ -76,10 +76,8 @@ await test("option off preserves crowd geometry, pedestrians and random streams"
 });
 await test("PXO sensing, whole-road occupancy and traffic conflict persist after lane clears", () => {
   const { world } = setupChallenge(map, challenge),
-    ped = world.crowd.list[0],
-    cw = world.crowd.marked.find((c) => c.pxo && c.id === ped.crossing.marked);
-  const route = world.route,
-    p = route.project(world.ego.x, world.ego.y, 0);
+    ped = world.crowd.list[0];
+  const route = world.route;
   let sawCleared = false;
   for (let u = 0.1; u < 0.95; u += 0.05) {
     ped.x = ped.crossing.from[0] * (1 - u) + ped.crossing.to[0] * u;

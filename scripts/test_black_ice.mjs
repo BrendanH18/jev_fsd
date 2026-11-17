@@ -756,7 +756,6 @@ await test("regression: a patch in a bend is crossed no faster than the ice's si
       ],
       brain,
     });
-    const snapAt = [];
     const r = await watch(ctx);
     assert.deepEqual(r.events, [], brain);
     assert.equal(r.slip <= ICE.SKID, true, `${brain}: ${r.slip}`);
@@ -931,7 +930,7 @@ if (process.argv.includes("--write-snapshot")) {
     state = toJevState(snap, candidates, { rejected });
   fs.writeFileSync(
     new URL("../data/snapshots/bridges_freeze_first.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "bridges_freeze_first",
         state,
@@ -952,7 +951,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/bridges_freeze_first.json (black ice in ${snap.black_ice.starts_in_m.toFixed(1)} m, ${eligible.length} eligible)`,

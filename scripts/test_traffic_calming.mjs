@@ -14,7 +14,7 @@ const { StopMemory } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { rng } = await import("../static/js/common.js");
-const { DEVICES, HIT_OVER_MPS, calmingAhead, calmingNotice, liftAt, pathCalmLimit, riseAt, slowsFor } = await import(
+const { DEVICES, HIT_OVER_MPS, calmingNotice, liftAt, pathCalmLimit, riseAt, slowsFor } = await import(
   "../static/js/sim/traffic-calming.js"
 );
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
@@ -76,7 +76,7 @@ function street({ calming = true, seed = 3 } = {}) {
   return { world, fleet };
 }
 
-function npc(world, fleet, id, s, spec = CAR, v = 13.9) {
+function npc(_world, fleet, id, s, spec = CAR, v = 13.9) {
   const p = pointAt(lane.pts, lane.cum, s),
     car = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, spec);
   Object.assign(car, {
@@ -97,8 +97,7 @@ function npc(world, fleet, id, s, spec = CAR, v = 13.9) {
 
 // The speed vehicle `n` (or the car) crosses edge BLOCK's hump at with its front axle.
 function crossingSpeed(ctx, n, max_s = 30) {
-  const a = OTTAWA.edges.get(BLOCK),
-    [hx, hy] = [hump.device.x, hump.device.y];
+  const [hx, hy] = [hump.device.x, hump.device.y];
   let before = null;
   for (let i = 0; i < 60 * max_s; i++) {
     step(ctx);
@@ -295,7 +294,7 @@ await test("models are told about the hump in the state, the situation and the p
 
 await test("Over the humps: Rules and the cautious agent cross both humps without a hard hit and arrive", async () => {
   const ch = CHALLENGES.find((c) => c.id === "speed-humps");
-  assert.ok(ch && ch.calming);
+  assert.ok(ch?.calming);
   const scenario = challengeScenario(OTTAWA, ch);
   assert.equal(scenario.start.edge, BLOCK);
   const ctx = setupChallenge(OTTAWA, ch);

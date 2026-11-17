@@ -22,10 +22,9 @@
 // crossing, and clear of the junctions at each end; never by a work zone, a lane closure, a van or a
 // vehicle stopped at the roadside.
 
-import { Vehicle, CAR, COLLECTION_TRUCK, DELIVERY_VAN } from "./vehicle.js";
+import { Vehicle, COLLECTION_TRUCK, DELIVERY_VAN } from "./vehicle.js";
 import { StopMemory } from "./signals.js";
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
-import { sidewalkOffset } from "../map/streets.js";
 import { Pedestrian } from "./pedestrians.js";
 import { QUIET } from "./hidden-hazards.js";
 import { DAYLIGHT_RANGE_M } from "./visibility.js";
@@ -244,8 +243,10 @@ export class CollectionTrucks {
           const e = map.edges.get(pe.id),
             k = (pe.sEnd - pe.sStart) / Math.max(1, e.length);
           const rear = (front - pe.sStart) / k - COLLECTION_TRUCK.length + (n.v * n.v) / (2 * STOP_DECEL) + 2;
-          if (rear >= site.lo && rear <= site.hi && this.clearToStop(e, rear))
-            (c.stop = { edge: pe.id, rear }), (c.phase = "approach");
+          if (rear >= site.lo && rear <= site.hi && this.clearToStop(e, rear)) {
+            c.stop = { edge: pe.id, rear };
+            c.phase = "approach";
+          }
         }
       }
     }

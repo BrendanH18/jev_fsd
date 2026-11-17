@@ -474,8 +474,6 @@ await test("the audit: moving above a crawl near a goose on the road counts; sta
     const e = OTT.edges.get(SITE.edge),
       lane = OTT.lane(e.id, 0),
       k = lane.length / e.length;
-    const p = lane.pts,
-      cum = lane.cum;
     // (the car's front `gap` m short of the goose, along the lane)
     const sG = SITE.s * k,
       s = sG - gap - FRONT - G.GOOSE.length / 2;
@@ -694,7 +692,7 @@ if (process.argv.includes("--write-snapshot")) {
     .map((c) => c.id);
   fs.writeFileSync(
     new URL("../data/snapshots/goose_crossing.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "goose_crossing",
         state,
@@ -704,7 +702,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/goose_crossing.json (stop in ${snap.geese_crossing.bumper_to_stop_m.toFixed(1)} m, ${snap.geese_crossing.on_road} on the road, ${eligible.length} eligible)`,

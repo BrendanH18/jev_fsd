@@ -152,7 +152,7 @@ export function behindInLane(observer, o, look = TAIL_LOOK_M) {
 
 // The one test. Of `others`, the vehicle tailgating `observer`, nearest behind it, or null:
 // { vehicle, gap_m, headway_s, closing_mps }.
-export function tailgaterThreat(world, observer, others) {
+export function tailgaterThreat(_world, observer, others) {
   let best = null;
   for (const o of others) {
     if (
@@ -230,7 +230,7 @@ export function manageTailgaters(world, fleet, dt) {
   if (state.easing) {
     const n = fleet.vehicles.find((v) => v.id === state.easing);
     if (n) n.tgPeek = ease(n.tgPeek || 0, 0, TAIL_PEEK_MPS * dt);
-    if (!n || !n.tgPeek) state.easing = null;
+    if (!n?.tgPeek) state.easing = null;
   }
   if (state.active) {
     const n = fleet.vehicles.find((v) => v.id === state.active);

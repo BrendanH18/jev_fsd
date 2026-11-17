@@ -187,7 +187,7 @@ await test("the parker stops alongside the car in front of the gap, pauses, reve
   // (the driven car simply waits where it is, well back)
   drive(ctx, { kind: "hard_brake" }, 60 * 60, () => {
     const pk = n.parker;
-    const ph = pk ? `${pk.phase}${pk.law ? ":" + pk.law.phase : ""}` : "done";
+    const ph = pk ? `${pk.phase}${pk.law ? `:${pk.law.phase}` : ""}` : "done";
     if (phases.at(-1) !== ph) phases.push(ph);
     if (pk?.phase === "stop" && !stopAt) stopAt = frameOf(n, pk.plan);
     if (n.reverseLamps) sawLamps = true;
@@ -644,7 +644,7 @@ if (process.argv.includes("--write-snapshot")) {
   const state = toJevState(snap, candidates, { rejected });
   fs.writeFileSync(
     new URL("../data/snapshots/room_to_park.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "room_to_park",
         state,
@@ -664,7 +664,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/room_to_park.json (hold line ${snap.parking_ahead.bumper_to_stop_m} m ahead, ${eligible.length} eligible)`,

@@ -101,18 +101,16 @@ function tick(world, dt = 1 / 60) {
   assert.equal(world.egoStop.controlId, "stop");
   console.log("✓ manual driving retains physical-lane traffic control auditing");
 }
-{
-  for (const phase of ["red", "green"]) {
-    const world = fixture("signal");
-    world.phase = () => ({ A: phase });
-    tick(world);
-    world.ego.v = 5;
-    tick(world, 0.5);
-    tick(world);
-    assert.equal(world.violations.red_lights_run, phase === "red" ? 1 : 0);
-  }
-  console.log("✓ route signal crossings retain phase-aware red-light auditing");
+for (const phase of ["red", "green"]) {
+  const world = fixture("signal");
+  world.phase = () => ({ A: phase });
+  tick(world);
+  world.ego.v = 5;
+  tick(world, 0.5);
+  tick(world);
+  assert.equal(world.violations.red_lights_run, phase === "red" ? 1 : 0);
 }
+console.log("✓ route signal crossings retain phase-aware red-light auditing");
 {
   const world = fixture();
   world.route.project = (x) => ({ s: x + 50, distance: 100, heading: 0 });

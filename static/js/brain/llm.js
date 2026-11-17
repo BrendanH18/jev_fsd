@@ -23,7 +23,7 @@ export class LlmBrain {
     this.timeoutMs = Math.round((endpoint.timeout_s || 10) * 1000) + TIMEOUT_MARGIN_MS;
   }
 
-  async decide(snap, eligible, request, signal) {
+  async decide(snap, _eligible, request, signal) {
     const started = performance.now();
     const { messages, expect } = buildLlmPrompt(snap, request);
     const res = await this.transport(

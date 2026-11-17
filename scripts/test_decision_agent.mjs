@@ -268,7 +268,7 @@ for (const [name, reply, configure, pattern] of [
   ],
   [
     "a timeout",
-    (body, signal) =>
+    (_body, signal) =>
       new Promise((_, reject) =>
         signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))),
       ),

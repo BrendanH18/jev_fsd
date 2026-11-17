@@ -140,7 +140,7 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(VAN_TRIGGER_M),
     // (the cars coming the other way past the double-parked van set off down the oncoming lane)
-    release: (world, fleet, state) => {
+    release: (_world, fleet, state) => {
       for (const id of state.vanCarIds || []) {
         const car = fleet.vehicles.find((v) => v.id === id);
         if (car) {

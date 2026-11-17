@@ -11,7 +11,7 @@ globalThis.document = { querySelector: () => null };
 const { MapData, pointAt, headingAt, projectPoint } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
-const { Vehicle, CAR, comfort } = await import("../static/js/sim/vehicle.js");
+const { Vehicle, CAR } = await import("../static/js/sim/vehicle.js");
 const { StopMemory } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
@@ -633,7 +633,7 @@ if (process.argv.includes("--write-snapshot")) {
   const state = toJevState(snap, candidates, { rejected });
   fs.writeFileSync(
     new URL("../data/snapshots/on_your_bumper.json", import.meta.url),
-    JSON.stringify(
+    `${JSON.stringify(
       {
         name: "on_your_bumper",
         state,
@@ -643,7 +643,7 @@ if (process.argv.includes("--write-snapshot")) {
       },
       null,
       2,
-    ) + "\n",
+    )}\n`,
   );
   console.log(
     `wrote data/snapshots/on_your_bumper.json (tailgater ${snap.tailgater.gap_m} m, ${snap.tailgater.headway_s} s behind, ${eligible.length} eligible)`,

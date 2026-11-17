@@ -107,7 +107,7 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(WZ_TRIGGER_M),
     // (the cars at the far end of the work zone set off through its one lane)
-    release: (world, fleet, state) => {
+    release: (_world, fleet, state) => {
       for (const id of state.zoneCarIds || []) {
         const car = fleet.vehicles.find((v) => v.id === id);
         if (car) car.frozen = 0;

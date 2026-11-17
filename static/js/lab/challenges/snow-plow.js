@@ -97,6 +97,6 @@ function placePlow(world, fleet, { edge, ahead }, start) {
   return { plowId: plow.id, at: [plow.x, plow.y] };
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   Object.assign(world.challenge, placePlow(world, fleet, scenario.snowPlow, scenario.start));
 }

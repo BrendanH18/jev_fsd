@@ -107,7 +107,7 @@ function placeBus(world, fleet, { route: routeId, run: runIndex, stop: stopId, e
   };
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, fleet, _challenge, scenario) {
   Object.assign(world.challenge, placeBus(world, fleet, scenario.bus));
 }
 
@@ -115,7 +115,7 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: reach(ONCOMING_TRIGGER_M),
     // (its doors close and it signals to pull out)
-    release: (world, fleet, state) => {
+    release: (_world, fleet, state) => {
       const bus = state.busId && fleet.vehicles.find((v) => v.id === state.busId);
       if (bus && bus.transit.phase === "dwell") bus.transit.dwell = bus.transit.t;
     },

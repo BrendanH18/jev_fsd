@@ -227,7 +227,7 @@ const J = junction();
     state.candidates.some((c) => c.id === "stop_for_cyclist" && c.outcome.includes("short of the cyclist's path")),
   );
   const clause = situationClauses(snap).find((c) => c.includes("cyclist `rider`"));
-  assert.ok(clause && clause.includes("right of way") && clause.includes("`stop_for_cyclist`"), clause);
+  assert.ok(clause?.includes("right of way") && clause.includes("`stop_for_cyclist`"), clause);
   const { questions } = buildQuestions(snap, eligible);
   assert.ok(questions.motion.criteria.stop.includes("`cyclist_on_right.wait_in_m` under 2"));
   const { messages } = buildLlmPrompt(snap, { state, questions });

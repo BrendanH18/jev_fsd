@@ -42,7 +42,7 @@ function design(tall) {
   return { pole, head: head.toNonIndexed(), lens, h, reach };
 }
 
-export function buildStreetLights(map, group, streets, trimAt) {
+export function buildStreetLights(map, group) {
   const lamps = sceneryFor(map).lamps;
   if (!lamps.length) return { lamps, lights: null };
 

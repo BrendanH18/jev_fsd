@@ -63,7 +63,7 @@ function allWaySites(map) {
 }
 
 export const scenario = (map, challenge) =>
-  laneScenario(map, challenge, (map, challenge, random) => {
+  laneScenario(map, challenge, (map, _challenge, random) => {
     const stop = pick(allWaySites(map), random, "This map has no all-way stop with traffic from the right and ahead.");
     return {
       lane: stop.lane,

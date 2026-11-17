@@ -109,7 +109,7 @@ export class StepOuts {
 
   // Nothing else is on the street ahead of the car up to CLEAR_PAST_M past their line: no vehicle in
   // traffic (or cyclist) going either way that could meet them.
-  clear(ped, toLine) {
+  clear(_ped, toLine) {
     const ego = this.world.ego,
       FRONT = ego.spec.length - ego.spec.rearOverhang;
     return !this.world.npcs.some((n) => {

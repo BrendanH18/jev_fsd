@@ -146,12 +146,12 @@ function placeStepOut(world, { edge, at }, seed) {
   return { pedestrianId: ped.id, at: from };
 }
 
-export function install(world, fleet, challenge, scenario) {
+export function install(world, _fleet, challenge, scenario) {
   Object.assign(world.challenge, placeStepOut(world, scenario.stepOut, challenge.seed));
 }
 
 export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: frontWithin(STEP_OUT_M),
-    release: (world, fleet, state) => releasePedestrian(world, state),
+    release: (world, _fleet, state) => releasePedestrian(world, state),
   });
