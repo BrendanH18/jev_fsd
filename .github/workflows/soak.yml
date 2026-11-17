@@ -20,10 +20,15 @@ jobs:
       fail-fast: false
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      # The leg's artifact name; scripts/soak_summary.py expands these LEG lines to list every leg.
+      LEG: soak-${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Name the leg
+        run: echo "$LEG" > leg.txt
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
@@ -43,8 +48,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: soak-${{ matrix.shard }}
+          name: ${{ env.LEG }}
           path: |
+            leg.txt
             soak.json
             server.log
 
@@ -61,10 +67,14 @@ jobs:
           - { label: dry 23h30, weather: dry, options: '--hour 23.5' }
           - { label: dry 06h30, weather: dry, options: '--hour 6.5' }
           - { label: fog 23h30, weather: fog, options: '--hour 23.5' }
+    env:
+      LEG: city ${{ matrix.label }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Name the leg
+        run: echo "$LEG" > leg.txt
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
@@ -83,8 +93,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: city ${{ matrix.label }}
+          name: ${{ env.LEG }}
           path: |
+            leg.txt
             run.json
             server.log
 
@@ -98,7 +109,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # (one directory per artifact, but a lone artifact lands directly in legs/: its leg.txt names it)
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
         with:
           path: legs
       - name: Failed legs
