@@ -22,7 +22,7 @@ jobs:
   suite:
     name: ${{ matrix.features }} world, ${{ matrix.weather }}
     runs-on: namespace-profile-gitrunner
-    # Weekly and manual runs take 20-35 min a leg (the city world in snow is the slowest), so they get
+    # On weekly and manual runs the city legs took about 20 min, and city snow over 30, so they get
     # 60 min; pushes and pull requests run dry only, in under 10 min, and keep the 30 min limit.
     timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 60 || 30 }}
     strategy:
