@@ -755,6 +755,27 @@ function distantCarGeometry(style) {
 // Both detail levels retain instance references, so a pull-out removes the car at any distance.
 const PARKED_CHUNK = 360;
 const STYLE_NAMES = ["sedan", "sedan", "hatch", "suv", "suv", "sport", "wagon", "pickup"];
+// Keep the same instance buffers and draw count. A style batch only needs spokes while
+// one of its cars is close enough to see them. Photo mode keeps the original near detail.
+class ParkedCarLOD extends THREE.LOD {
+  constructor(cars, wheels, detailed, simple) {
+    super();
+    this.cars = cars;
+    this.wheels = wheels;
+    this.detailed = detailed;
+    this.simple = simple;
+  }
+
+  update(camera, photoMode = false) {
+    super.update(camera);
+    if (this.getCurrentLevel() !== 0) return;
+    const radius = this.wheels.geometry === this.detailed ? 16 : 12;
+    const { x, y, z } = camera.position;
+    const close = photoMode || this.cars.some((car) => (car.x - x) ** 2 + (car.y + z) ** 2 + y * y < radius * radius);
+    this.wheels.geometry = close ? this.detailed : this.simple;
+  }
+}
+
 export function buildParkedCars(cars) {
   const group = new THREE.Group();
   const white = snowable(
@@ -805,6 +826,7 @@ export function buildParkedCars(cars) {
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
       level.add(mesh);
+      return mesh;
     };
     const colors = list.map((c) => new THREE.Color(c.color));
     emit(near, geo.paint, white, mats, colors, true);
@@ -820,12 +842,13 @@ export function buildParkedCars(cars) {
         wheels.push(m.clone().multiply(new THREE.Matrix4().makeTranslation(lx, st.tire, lz)));
       }
     }
-    emit(near, wheelGeometry(st.tire, style), [shared.tire, shared.rim], wheels);
+    const detailed = wheelGeometry(st.tire, style);
+    const nearWheels = emit(near, detailed, [shared.tire, shared.rim], wheels);
     emit(far, distant.paint, white, mats, colors, true);
     emit(far, distant.glass, shared.glass, mats, null, true);
     emit(far, distant.trim, shared.trim, mats);
     emit(far, distant.wheels, [shared.tire, shared.rim], wheels);
-    group.add(chunkLOD(near, far));
+    group.add(chunkLOD(near, far, 100, new ParkedCarLOD(list, nearWheels, detailed, distant.wheels)));
   }
   group.userData.count = cars.length;
   return group;
