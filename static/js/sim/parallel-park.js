@@ -804,14 +804,15 @@ function nextLeg(vehicle, law, world) {
     Object.assign(law, { phase: "square", ...leg, sign: Math.sign(phi) });
     return;
   }
-  // (neither swing has the room, the car in front or behind in the way of its corner: standing as the law
-  // allows already, it is parked; else a little way straight, toward where swinging in goes, else away
-  // from it, and then it tries again, once)
+  // A corner blocks both swings. If the car still needs to straighten, shuffle in half-metre
+  // increments and recheck the swings. Keep the same direction on consecutive shuffles so a
+  // blocked car never oscillates between the two poses.
   if (parkedPose(vehicle, law).within_kerb) {
     law.phase = "parked";
     return;
   }
-  const shuffle = law.phase === "shuffle" ? undefined : [gain.dir, -gain.dir].find((dir) => can(dir, 0));
+  const directions = law.phase === "shuffle" ? [law.dir] : [gain.dir, -gain.dir];
+  const shuffle = directions.find((dir) => can(dir, 0));
   if (shuffle === undefined) {
     law.phase = "stuck";
     return;

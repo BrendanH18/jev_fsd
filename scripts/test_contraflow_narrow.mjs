@@ -16,7 +16,7 @@ globalThis.document = { querySelector: () => null };
 const { MapData, pointAt, headingAt } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
 const { NpcPath } = await import("../static/js/sim/npc.js");
-const { Vehicle, CAR } = await import("../static/js/sim/vehicle.js");
+const { Vehicle, CAR, BIKE } = await import("../static/js/sim/vehicle.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { trafficYield } = await import("../static/js/sim/contraflow.js");
 const { placeOfficer } = await import("../static/js/sim/traffic-officer.js");
@@ -30,25 +30,28 @@ async function test(name, fn) {
   console.log(`✓ ${name}`);
 }
 const root = new URL("../data/maps/", import.meta.url);
-const pack = JSON.parse(fs.readFileSync(new URL("8e99888cb743.v6.pack.json", root)));
-for (const name of [
-  "transit",
-  "crossings",
-  "zones",
-  "rail",
-  "calming",
-  "scrambles",
-  "buslanes",
-  "restrictions",
-  "contraflow",
-  "driveways",
-  "parks",
-  "bridges",
-]) {
-  const url = [2, 1].map((v) => new URL(`8e99888cb743.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
-  if (url) pack[name] = JSON.parse(fs.readFileSync(url));
+function loadMap(key) {
+  const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
+  for (const name of [
+    "transit",
+    "crossings",
+    "zones",
+    "rail",
+    "calming",
+    "scrambles",
+    "buslanes",
+    "restrictions",
+    "contraflow",
+    "driveways",
+    "parks",
+    "bridges",
+  ]) {
+    const url = [2, 1].map((v) => new URL(`${key}.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
+    if (url) pack[name] = JSON.parse(fs.readFileSync(url));
+  }
+  return new MapData(pack);
 }
-const QC = new MapData(pack);
+const QC = loadMap("8e99888cb743");
 // Charest Est (e560, signal sig15, group A) into Rue Caron (e549, contraflow); Caron's other block (e746,
 // group B) beyond the junction.
 const CHAREST = "e560",
@@ -175,6 +178,37 @@ await test("a rider squeezes by the driven car standing face to face, short of m
     if (local.ahead < -CAR.rearOverhang - n.spec.length) passed = true;
   }
   assert.ok(passed, "went by");
+});
+
+await test("a rider can use the remaining asphalt beside a stationary car centred on 81 Avenue NW", () => {
+  const map = loadMap("3e794edbefcb");
+  const lane = map.lane("e261", 0);
+  for (const obstruction of [null, "parked", "driveway"]) {
+    const w = new World(map, { seed: 1, parked: 0, pedestrians: 0, contraflow: true });
+    w.placeOnLane(lane, 100);
+    const rider = w.contraflow.place({ edge: "e261", at: lane.length - 110, v: 2 });
+    // Split the straight at the meeting point, as an interior OSM vertex would.
+    const at = rider.path.s + 10;
+    const i = rider.path.cum.findIndex((s) => s > at);
+    rider.path.pts.splice(i, 0, rider.path.pointAt(at));
+    rider.path.cum.splice(i, 0, at);
+    // A bicycle left against the kerb beside the car occupies only the rider's wider line.
+    const h = w.ego.psi;
+    const parked = new Vehicle(w.ego.x - 2.1 * Math.sin(h), w.ego.y + 2.1 * Math.cos(h), h, 0, BIKE);
+    if (obstruction === "parked") w.parked.add(parked);
+    if (obstruction === "driveway") w.driveways.cars.push(parked);
+    let passed = false;
+    for (let t = 0; t < 40 && !passed; t += DT) {
+      w.contraflow.ride(rider, DT);
+      w.t += DT;
+      assert.equal(obbOverlap(rider.obb(), w.ego.obb(), 0), false, "rides clear of the stationary car");
+      if (obstruction) assert.equal(obbOverlap(rider.obb(), parked.obb(), 0), false, "avoids the parked bicycle");
+      for (const [x, y] of rider.corners())
+        assert.ok(w.ego.toLocal(x, y).right >= lane.edgeRef.asphalt[0], "stays inside the kerb");
+      passed = w.ego.toLocal(rider.x, rider.y).ahead < -CAR.rearOverhang - rider.spec.length;
+    }
+    assert.equal(passed, !obstruction, "passes only when the gap is clear");
+  }
 });
 
 console.log(`${checks} checks passed`);

@@ -72,9 +72,10 @@ const BLOCKED_S = 6;
 // Past a vehicle standing still facing it, a rider leaves at least this between them, at SQUEEZE_MPS.
 const SQUEEZE_M = 0.1;
 const SQUEEZE_MPS = 2;
-// Squeezing by a vehicle standing face to face along a contraflow street, it may ride up to HUG_M nearer
-// the kerb than its line, moving over at HUG_MPS.
+// A rider passing a stationary car first tries its usual move toward the kerb. On a straight
+// it can use the remaining width down to KERB_MARGIN_M if the whole strip is clear.
 const HUG_M = 0.2;
+const KERB_MARGIN_M = 0.025;
 const HUG_MPS = 0.4;
 
 export const isContraflowRider = (o) => !!o?.contra;
@@ -492,10 +493,9 @@ export class ContraflowRiders {
       leadV = n.v0,
       blocker = null,
       squeezing = false,
-      hug = false;
+      hug = 0;
     const reach = spec.width / 2 + 0.15;
-    // (squeezing by, along a contraflow street, it may keep up to HUG_M nearer the kerb than its line:
-    // which way that is, or 0)
+    // The kerb side of the rider’s line on a contraflow street.
     const seg0 = path.segs.find((g) => path.s < g.sEnd),
       kerb = seg0?.contra ? (contraflowOf(map, seg0.id)?.side === "right" ? -1 : 1) : 0;
     const bodies = [
@@ -522,19 +522,44 @@ export class ContraflowRiders {
       // (one standing face to face that has not moved over far enough, the driven car stopped short of
       // where it meant to, say: by the kerb, where that fits)
       if (still && kerb && Math.abs(wrap(o.psi - n.psi)) > (Math.PI * 2) / 3) {
-        const blocks = (off) => {
-          for (let d = 0; d <= BODY_LOOK_M; d += 0.5) {
-            const [x, y] = path.offsetPointAt(Math.min(path.length, front + d), off),
-              dx = x - b.center[0],
-              dy = y - b.center[1];
-            if (Math.abs(dx * c + dy * s) <= b.halfLength + side && Math.abs(dy * c - dx * s) <= b.halfWidth + side)
+        const blocks = (off, box = b, from = front) => {
+          const c = Math.cos(box.heading),
+            s = Math.sin(box.heading);
+          for (let at = from; at <= front + BODY_LOOK_M; at += 0.5) {
+            const [x, y] = path.offsetPointAt(Math.min(path.length, at), off),
+              dx = x - box.center[0],
+              dy = y - box.center[1];
+            if (Math.abs(dx * c + dy * s) <= box.halfLength + side && Math.abs(dy * c - dx * s) <= box.halfWidth + side)
               return true;
           }
           return false;
         };
-        if (blocks(0) && !blocks(kerb * HUG_M)) {
-          hug = squeezing = true;
-          continue;
+        if (blocks(0)) {
+          let shift = HUG_M;
+          if (blocks(kerb * shift)) {
+            shift = RIDE_IN_M - spec.width / 2 - KERB_MARGIN_M;
+            const rear = path.s - spec.rearOverhang;
+            const end = front + BODY_LOOK_M;
+            const [x0, y0] = path.pointAt(rear);
+            const [x1, y1] = path.pointAt(end);
+            // On a straight block the chord equals the path length, even across map vertices.
+            if (
+              shift <= HUG_M ||
+              rear < seg0.sStart ||
+              end > seg0.sEnd ||
+              end - rear - Math.hypot(x1 - x0, y1 - y0) > 1e-8 ||
+              blocks(kerb * shift, world.ego.obb(), rear) ||
+              world
+                .obstaclesNear(n.x, n.y, BODY_LOOK_M + 8)
+                .some((body) => body !== n && blocks(kerb * shift, body.obb(), rear))
+            )
+              shift = 0;
+          }
+          if (shift) {
+            hug = Math.max(hug, shift);
+            squeezing = true;
+            continue;
+          }
         }
       }
       for (let d = 0; d <= BODY_LOOK_M && d < gap; d += 0.5) {
@@ -617,8 +642,7 @@ export class ContraflowRiders {
     a = Math.max(-4, Math.min(IDM.aMax, a));
     if (n.v < 0.05 && a < 0) a = -1;
     n.held = stopAt !== null && n.v < 0.3;
-    if (hug || n.hug)
-      n.hug = (n.hug || 0) + Math.max(-HUG_MPS * dt, Math.min(HUG_MPS * dt, (hug ? kerb * HUG_M : 0) - (n.hug || 0)));
+    if (hug || n.hug) n.hug = (n.hug || 0) + Math.max(-HUG_MPS * dt, Math.min(HUG_MPS * dt, kerb * hug - (n.hug || 0)));
     n.step(dt, { steer: purePursuit(n, path, path.s, n.hug || 0), accel: a });
     if (n.v < 0) n.v = 0;
   }

@@ -24,6 +24,11 @@ only to traffic from its right), or `major`. A signal that is dark, or flashing 
 body in its way just ahead. Riders are `kind: "bike"` with `contra: true`; `world.obstaclesNear`,
 collisions, sight lines and the forward sims see them; `world.npcs` does not hold them.
 
+When an oncoming car is standing still, the rider checks whether it can pass at up to 2 m/s with
+0.1 m of clearance. It usually moves 0.2 m toward the kerb. On a straight stretch where that falls
+short, it can use the remaining width down to 0.025 m between its body and the kerb. Before using
+that extra room it checks the shifted line for nearby vehicles, parked cars, open doors and people.
+
 `riderConflict` is the one test everyone uses: along a vehicle's way (its path or route), from its
 front, against the rider's way ahead (to a stop it means to make), samples that cross its way within
 half the widths plus 0.5 m, or meet it head on within half the widths plus the minimum passing

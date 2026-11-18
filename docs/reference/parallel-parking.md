@@ -32,7 +32,9 @@ where the space allows, its body 15 cm off the kerb. Legs go at 0.15 to 0.8 m/s,
 at 0.6 m/s^2, and the car stops and turns the wheel to within 3 deg of its target before each one. A leg
 ends early 0.4 m short of anything standing still, before a tyre would touch the kerb (a bumper may reach
 0.25 m over it), or after 9 m; then the next leg squares the car up, gaining on the kerb where it can, or
-moves it toward the kerb in another S, and after 12 legs it gives up (`stuck`, arriving with `parked:
+moves it toward the kerb in another S. When both steering directions are blocked, the car moves
+straight in half-metre increments while there is clearance, checking after each one whether it
+can straighten. After 12 legs it gives up (`stuck`, arriving with `parked:
 false`, `stuck: true`). Parked within 2.5 deg of parallel and 8 cm of its lateral goal, it arrives
 (`parked: true`, `kerb_m`, the right tyres' distance from the kerb, `angle_deg` and `within_kerb`, wheels
 within 30 cm and within 4 deg of parallel). The space then stays the car's (World.parkedIn) until it has

@@ -140,4 +140,28 @@ assert.ok(pose.angle_deg < 3, `parallel (${pose.angle_deg} degrees)`);
 for (const c of world.obstaclesNear(ego.x, ego.y, 10))
   assert.equal(obbOverlap(ego.obb(), c.obb(), 0.3), false, `clear of ${c.id}`);
 console.log(`Parks after ${law.legs} legs: ${pose.kerb_m} m off the kerb, ${pose.angle_deg} degrees`);
+
+// On Stephens Street the first straight move left both swings blocked by the car in front.
+// There was another half-metre of clear space behind. Start as the first shuffle ends.
+{
+  const world = new World(MAP, { parked: 1e-9, pedestrians: 0, park: true });
+  const frontU = 120;
+  const car = new Vehicle(frontU + CAR.rearOverhang, -(KERB - 1), 0, 0);
+  car.id = "front";
+  world.parked.add(car);
+  const ego = world.ego;
+  Object.assign(ego, { x: frontU - 3.31, y: -(KERB - 2.29), psi: (21.3 * Math.PI) / 180 });
+  const space = P.planSpaceOn(world, MAP.lane("in", 0), MAP.edges.get("in"), frontU - 8.73, frontU, CAR, [
+    [frontU, frontU + CAR.length, KERB - 1 - CAR.width / 2],
+  ]);
+  assert.ok(!!space, "the 8.73 m space allows a parking manoeuvre");
+  const law = P.planParking(space);
+  Object.assign(law, { phase: "shuffle", dir: -1, travelled: 0.6, legs: 2 });
+  for (let k = 0; k < 120 / DT && law.phase !== "parked" && law.phase !== "stuck"; k++) {
+    P.stepParking(ego, law, world, DT, speedControl);
+    assert.equal(obbOverlap(ego.obb(), car.obb()), false, "clear of the car in front");
+  }
+  assert.equal(law.phase, "parked", "continues straight until the swing is clear");
+  assert.ok(P.parkedPose(ego, law).within_kerb, "finishes parallel within the kerb limit");
+}
 process.exit(0);
