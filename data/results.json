@@ -613,9 +613,9 @@
    "map": "edmonton",
    "preset": "city",
    "weather": "dry",
-   "passed": 1,
+   "passed": 2,
    "total": 2,
-   "date": "2026-11-12",
+   "date": "2026-11-18",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -624,22 +624,14 @@
    "model_requested": null,
    "fallbacks": 0,
    "hard_brakes": 0,
-   "safety_brakes": 0,
-   "driving_s": 674.1,
-   "km": 1.81,
+   "safety_brakes": 1,
+   "driving_s": 566.1,
+   "km": 2.68,
    "cost_usd": 0,
    "cost_basis": "none",
-   "failed": [
-    {
-     "id": "s1-2",
-     "map": "edmonton",
-     "failures": [
-      "timeout"
-     ]
-    }
-   ],
+   "failed": [],
    "sources": [
-    "data/runs/20261112-190006-rules.json"
+    "data/runs/20261118-081006-rules.json"
    ],
    "recording": null
   },

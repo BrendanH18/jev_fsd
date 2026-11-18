@@ -16,7 +16,7 @@ globalThis.document = { querySelector: () => null };
 const { MapData, pointAt, headingAt } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
 const { NpcPath } = await import("../static/js/sim/npc.js");
-const { Vehicle, CAR } = await import("../static/js/sim/vehicle.js");
+const { Vehicle, CAR, BIKE } = await import("../static/js/sim/vehicle.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { trafficYield } = await import("../static/js/sim/contraflow.js");
 const { placeOfficer } = await import("../static/js/sim/traffic-officer.js");
@@ -30,25 +30,28 @@ async function test(name, fn) {
   console.log(`✓ ${name}`);
 }
 const root = new URL("../data/maps/", import.meta.url);
-const pack = JSON.parse(fs.readFileSync(new URL("8e99888cb743.v6.pack.json", root)));
-for (const name of [
-  "transit",
-  "crossings",
-  "zones",
-  "rail",
-  "calming",
-  "scrambles",
-  "buslanes",
-  "restrictions",
-  "contraflow",
-  "driveways",
-  "parks",
-  "bridges",
-]) {
-  const url = [2, 1].map((v) => new URL(`8e99888cb743.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
-  if (url) pack[name] = JSON.parse(fs.readFileSync(url));
+function loadMap(key) {
+  const pack = JSON.parse(fs.readFileSync(new URL(`${key}.v6.pack.json`, root)));
+  for (const name of [
+    "transit",
+    "crossings",
+    "zones",
+    "rail",
+    "calming",
+    "scrambles",
+    "buslanes",
+    "restrictions",
+    "contraflow",
+    "driveways",
+    "parks",
+    "bridges",
+  ]) {
+    const url = [2, 1].map((v) => new URL(`${key}.${name}.v${v}.json`, root)).find((u) => fs.existsSync(u));
+    if (url) pack[name] = JSON.parse(fs.readFileSync(url));
+  }
+  return new MapData(pack);
 }
-const QC = new MapData(pack);
+const QC = loadMap("8e99888cb743");
 // Charest Est (e560, signal sig15, group A) into Rue Caron (e549, contraflow); Caron's other block (e746,
 // group B) beyond the junction.
 const CHAREST = "e560",
@@ -175,6 +178,104 @@ await test("a rider squeezes by the driven car standing face to face, short of m
     if (local.ahead < -CAR.rearOverhang - n.spec.length) passed = true;
   }
   assert.ok(passed, "went by");
+});
+
+await test("a rider can use the remaining asphalt beside a stationary car centred on 81 Avenue NW", () => {
+  const map = loadMap("3e794edbefcb");
+  const lane = map.lane("e261", 0);
+  for (const [start, speed, obstruction, shouldPass, carAt = 100] of [
+    [110, 2, null, true],
+    [19, 2, null, true, 9], // Lookahead reaches the end of the block before the rear clears.
+    [106, 0, null, false], // A clear strip alongside, but too little approach to steer onto it.
+    [106, 0, "traffic", false],
+    [110, 2, "parked", false],
+    [110, 2, "driveway", false],
+    [110, 2, "entering", true],
+    [110, 2, "traffic_blocked", false],
+    [110, 2, "moving", true],
+    [110, 2, "moving_clear", true],
+  ]) {
+    const w = new World(map, { seed: 1, parked: 0, pedestrians: 0, contraflow: true });
+    w.placeOnLane(lane, carAt);
+    const rider = w.contraflow.place({ edge: "e261", at: lane.length - start, v: speed });
+    // Split the straight at the meeting point, as an interior OSM vertex would.
+    const at = rider.path.s + 10;
+    const i = rider.path.cum.findIndex((s) => s > at);
+    rider.path.pts.splice(i, 0, rider.path.pointAt(at));
+    rider.path.cum.splice(i, 0, at);
+    // A bicycle left against the kerb beside the car occupies only the rider's wider line.
+    const h = w.ego.psi;
+    const parked = new Vehicle(w.ego.x - 2.1 * Math.sin(h), w.ego.y + 2.1 * Math.cos(h), h, 0, BIKE);
+    if (obstruction === "parked") w.parked.add(parked);
+    if (obstruction === "driveway" || obstruction === "traffic_blocked") w.driveways.cars.push(parked);
+    let car = w.ego;
+    if (obstruction === "traffic" || obstruction === "traffic_blocked") {
+      car = w.ego.clone();
+      w.npcs.push(car);
+      w.placeOnLane(lane, 85);
+    }
+    let reverser = null;
+    let enteredAt = null;
+    let waited = false;
+    let passed = false;
+    for (let t = 0; t < 40 && !passed; t += DT) {
+      w.contraflow.ride(rider, DT);
+      w.t += DT;
+      assert.ok(!rider.gone, "rider remains on the street");
+      assert.equal(
+        obbOverlap(rider.obb(), car.obb(), 0),
+        false,
+        `rides clear of the stationary car (start=${start}, t=${t.toFixed(2)})`,
+      );
+      if (obstruction === "parked" || obstruction === "driveway")
+        assert.equal(obbOverlap(rider.obb(), parked.obb(), 0), false, "avoids the parked bicycle");
+      for (const [x, y] of rider.corners())
+        assert.ok(car.toLocal(x, y).right >= lane.edgeRef.asphalt[0], "stays inside the kerb");
+      const along = rider.corners().map(([x, y]) => car.toLocal(x, y).ahead);
+      if (Math.min(...along) < -CAR.rearOverhang && Math.max(...along) > -CAR.rearOverhang) {
+        assert.ok(Math.abs(rider.hug) > 0.2, "keeps the wider line until the rear passes");
+        assert.ok(rider.v <= 2.05, "keeps its squeeze speed until the rear passes");
+      }
+      if (obstruction === "moving_clear" && Math.min(...along) < -CAR.rearOverhang) enteredAt ??= t;
+      if ((obstruction === "moving" || obstruction === "moving_clear") && enteredAt !== null) {
+        car.v = t - enteredAt < 0.7 ? 0.5 : 0;
+        car.x += car.v * DT * Math.cos(h);
+        car.y += car.v * DT * Math.sin(h);
+      }
+      if (
+        (obstruction === "entering" || obstruction === "moving") &&
+        Math.min(...along) < -CAR.rearOverhang &&
+        enteredAt === null
+      ) {
+        // The nose is past the car, with the rear beside it. A driveway vehicle enters
+        // the riding line two metres past the rear bumper.
+        const distance = 2 * CAR.rearOverhang + 2;
+        reverser = new Vehicle(
+          car.x - 1.4 * Math.sin(h) - distance * Math.cos(h),
+          car.y + 1.4 * Math.cos(h) - distance * Math.sin(h),
+          h + Math.PI,
+          0,
+          CAR,
+        );
+        w.driveways.cars.push(reverser);
+        enteredAt = t;
+      }
+      if (reverser) {
+        assert.equal(obbOverlap(rider.obb(), reverser.obb(), 0), false, "brakes for the driveway vehicle");
+        if (t - enteredAt > 3) {
+          assert.ok(rider.v < 0.05, "stopped for the driveway vehicle");
+          assert.ok(Math.max(...along) >= -CAR.rearOverhang, "waits alongside the car");
+          waited = true;
+          w.driveways.cars.splice(w.driveways.cars.indexOf(reverser), 1);
+          reverser = null;
+        }
+      }
+      passed = car.toLocal(rider.x, rider.y).ahead < -CAR.rearOverhang - rider.spec.length;
+    }
+    if (obstruction === "entering" || obstruction === "moving")
+      assert.ok(waited, "encountered and waited for the driveway vehicle");
+    assert.equal(passed, shouldPass, "passes when the approach and gap are clear");
+  }
 });
 
 console.log(`${checks} checks passed`);

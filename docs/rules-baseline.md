@@ -60,6 +60,29 @@ there uses the distance driven, so a longer way round looks like less time lost)
 route length when a road closure re-plans the route (a drive that does not arrive after a detour
 under-reports its progress).
 
+# Edmonton and destination parking — 2026-11-18
+
+Rules, lockstep, suite seed 1, 40 traffic cars, Node 22.23.4. The Edmonton city smoke suite and
+the Kitsilano dry city suite with destination parking each recover one route.
+
+| Route | Before | After |
+|---|---|---|
+| Edmonton `s1-2`, 81 Avenue NW | Timed out at 454.0 s while waiting for a contraflow cyclist | Arrived at 346.0 s |
+| Kitsilano parking `s1-10`, Stephens Street | Gave up 1.46 m from the kerb at 21.3° | Parked in the same bay at 236.9 s, 0.13 m from the kerb at 0.2° |
+
+The cyclist can use the remaining asphalt beside a stopped car when the bicycle fits and the
+approach is clear. The parking car needed two successive straight shuffles to clear the car
+in front. Both drives finish within their original deadlines. The new records are
+[Edmonton city dry](../data/runs/20261118-081006-rules.json) and
+[Kitsilano city dry with parking](../data/runs/20261118-081011-rules.json).
+
+Across 94 seed-1 drives, 93 pass. Winnipeg `s1-1` still fails to yield. The other 92 drives match
+their comparison results, excluding timings and floating-point roundoff. The suite covers Kitsilano
+bare dry, city in four weathers and city dry with parking, plus two city dry routes on each other
+map. Calgary, Québec City and Winnipeg already differed from their November 12 records on the
+unchanged base. See the [base replay](https://github.com/BrendanH18/jev_fsd/actions/runs/44256473041)
+and [per-route artifacts](https://github.com/BrendanH18/jev_fsd/actions/runs/44260942935).
+
 # Weekly city matrix fixed — 2026-11-14
 
 Rules, lockstep, 40 traffic cars, suite seed 1, Node 22.23.4 through `scripts/bench_node.mjs`. These
