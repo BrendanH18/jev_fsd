@@ -190,6 +190,7 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
     [106, 0, "traffic", false],
     [110, 2, "parked", false],
     [110, 2, "driveway", false],
+    [110, 2, "entering", true],
   ]) {
     const w = new World(map, { seed: 1, parked: 0, pedestrians: 0, contraflow: true });
     w.placeOnLane(lane, carAt);
@@ -210,10 +211,14 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
       w.npcs.push(car);
       w.placeOnLane(lane, 85);
     }
+    let reverser = null;
+    let enteredAt = null;
+    let waited = false;
     let passed = false;
     for (let t = 0; t < 40 && !passed; t += DT) {
       w.contraflow.ride(rider, DT);
       w.t += DT;
+      assert.ok(!rider.gone, "rider remains on the street");
       assert.equal(
         obbOverlap(rider.obb(), car.obb(), 0),
         false,
@@ -226,8 +231,33 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
       const along = rider.corners().map(([x, y]) => car.toLocal(x, y).ahead);
       if (Math.min(...along) < -CAR.rearOverhang && Math.max(...along) > -CAR.rearOverhang)
         assert.ok(Math.abs(rider.hug) > 0.2, "keeps the wider line until the rear passes");
+      if (obstruction === "entering" && Math.min(...along) < -CAR.rearOverhang && enteredAt === null) {
+        // The nose is past the car, with the rear beside it. A driveway vehicle enters
+        // the riding line two metres past the rear bumper.
+        const distance = 2 * CAR.rearOverhang + 2;
+        reverser = new Vehicle(
+          car.x - 1.4 * Math.sin(h) - distance * Math.cos(h),
+          car.y + 1.4 * Math.cos(h) - distance * Math.sin(h),
+          h + Math.PI,
+          0,
+          CAR,
+        );
+        w.driveways.cars.push(reverser);
+        enteredAt = t;
+      }
+      if (reverser) {
+        assert.equal(obbOverlap(rider.obb(), reverser.obb(), 0), false, "brakes for the driveway vehicle");
+        if (t - enteredAt > 3) {
+          assert.ok(rider.v < 0.05, "stopped for the driveway vehicle");
+          assert.ok(Math.max(...along) >= -CAR.rearOverhang, "waits alongside the car");
+          waited = true;
+          w.driveways.cars.splice(w.driveways.cars.indexOf(reverser), 1);
+          reverser = null;
+        }
+      }
       passed = car.toLocal(rider.x, rider.y).ahead < -CAR.rearOverhang - rider.spec.length;
     }
+    if (obstruction === "entering") assert.ok(waited, "encountered and waited for the driveway vehicle");
     assert.equal(passed, shouldPass, "passes when the approach and gap are clear");
   }
 });

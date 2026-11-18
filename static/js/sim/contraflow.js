@@ -548,12 +548,9 @@ export class ContraflowRiders {
             const heading = path.headingAt(rear);
             const [rx, ry] = path.pointAt(rear);
             const angle = b.heading - heading;
-            const far =
-              rear +
-              (b.center[0] - rx) * Math.cos(heading) +
-              (b.center[1] - ry) * Math.sin(heading) +
-              b.halfLength * Math.abs(Math.cos(angle)) +
-              b.halfWidth * Math.abs(Math.sin(angle));
+            const center = rear + (b.center[0] - rx) * Math.cos(heading) + (b.center[1] - ry) * Math.sin(heading);
+            const halfLength = b.halfLength * Math.abs(Math.cos(angle)) + b.halfWidth * Math.abs(Math.sin(angle));
+            const far = center + halfLength;
             const end = Math.max(front, far + spec.length + side);
 
             const [x1, y1] = path.pointAt(end);
@@ -562,13 +559,20 @@ export class ContraflowRiders {
               shift <= HUG_M ||
               rear < seg0.sStart ||
               end > seg0.sEnd ||
-              end - rear - Math.hypot(x1 - rx, y1 - ry) > 1e-8 ||
+              end - rear - Math.hypot(x1 - rx, y1 - ry) > 1e-8
+            )
+              shift = 0;
+            else if (
               blocks(kerb * shift, world.ego.obb(), rear, end) ||
               world
                 .obstaclesNear(n.x, n.y, end - rear + 8)
                 .some((body) => body !== n && blocks(kerb * shift, body.obb(), rear, end))
-            )
-              shift = 0;
+            ) {
+              // A vehicle can enter the strip after the rider has committed. Brake in the
+              // strip until it clears: steering back now would run into the car alongside.
+              if (Math.abs(n.hug || 0) > HUG_M && front >= center - halfLength && rear <= far) stopAt = 0;
+              else shift = 0;
+            }
           }
           if (shift) {
             hug = Math.max(hug, shift);
