@@ -151,11 +151,14 @@ export function runRenderTests() {
   check("parked wheels simplify before the body", lod.getCurrentLevel() === 0 && nearWheels.geometry === lod.simple);
   at(car.x - 14, 2, -car.y);
   lod.update(camera);
-  check("wheel detail holds through its hysteresis band", nearWheels.geometry === lod.simple);
+  check("approaching wheels stay simple in the hysteresis band", nearWheels.geometry === lod.simple);
   at(neighbor.x, 2, -neighbor.y);
   lod.update(camera);
   check("a neighboring curbside car restores the spokes", nearWheels.geometry === detailed);
-  at(car.x, 40, -car.y);
+  at(car.x - 14, 2, -car.y);
+  lod.update(camera);
+  check("receding wheels retain spokes in the hysteresis band", nearWheels.geometry === detailed);
+  at(car.x, 17, -car.y);
   lod.update(camera);
   check("wheel detail accounts for camera height", nearWheels.geometry === lod.simple);
   lod.update(camera, true);
