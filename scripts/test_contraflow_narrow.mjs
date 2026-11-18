@@ -183,10 +183,16 @@ await test("a rider squeezes by the driven car standing face to face, short of m
 await test("a rider can use the remaining asphalt beside a stationary car centred on 81 Avenue NW", () => {
   const map = loadMap("3e794edbefcb");
   const lane = map.lane("e261", 0);
-  for (const obstruction of [null, "parked", "driveway"]) {
+  for (const [start, speed, obstruction, shouldPass] of [
+    [110, 2, null, true],
+    [106, 0, null, false], // A clear strip alongside, but too little approach to steer onto it.
+    [106, 0, "traffic", false],
+    [110, 2, "parked", false],
+    [110, 2, "driveway", false],
+  ]) {
     const w = new World(map, { seed: 1, parked: 0, pedestrians: 0, contraflow: true });
     w.placeOnLane(lane, 100);
-    const rider = w.contraflow.place({ edge: "e261", at: lane.length - 110, v: 2 });
+    const rider = w.contraflow.place({ edge: "e261", at: lane.length - start, v: speed });
     // Split the straight at the meeting point, as an interior OSM vertex would.
     const at = rider.path.s + 10;
     const i = rider.path.cum.findIndex((s) => s > at);
@@ -197,17 +203,31 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
     const parked = new Vehicle(w.ego.x - 2.1 * Math.sin(h), w.ego.y + 2.1 * Math.cos(h), h, 0, BIKE);
     if (obstruction === "parked") w.parked.add(parked);
     if (obstruction === "driveway") w.driveways.cars.push(parked);
+    let car = w.ego;
+    if (obstruction === "traffic") {
+      car = w.ego.clone();
+      w.npcs.push(car);
+      w.placeOnLane(lane, 85);
+    }
     let passed = false;
     for (let t = 0; t < 40 && !passed; t += DT) {
       w.contraflow.ride(rider, DT);
       w.t += DT;
-      assert.equal(obbOverlap(rider.obb(), w.ego.obb(), 0), false, "rides clear of the stationary car");
-      if (obstruction) assert.equal(obbOverlap(rider.obb(), parked.obb(), 0), false, "avoids the parked bicycle");
+      assert.equal(
+        obbOverlap(rider.obb(), car.obb(), 0),
+        false,
+        `rides clear of the stationary car (start=${start}, t=${t.toFixed(2)})`,
+      );
+      if (obstruction === "parked" || obstruction === "driveway")
+        assert.equal(obbOverlap(rider.obb(), parked.obb(), 0), false, "avoids the parked bicycle");
       for (const [x, y] of rider.corners())
-        assert.ok(w.ego.toLocal(x, y).right >= lane.edgeRef.asphalt[0], "stays inside the kerb");
-      passed = w.ego.toLocal(rider.x, rider.y).ahead < -CAR.rearOverhang - rider.spec.length;
+        assert.ok(car.toLocal(x, y).right >= lane.edgeRef.asphalt[0], "stays inside the kerb");
+      const along = rider.corners().map(([x, y]) => car.toLocal(x, y).ahead);
+      if (Math.min(...along) < -CAR.rearOverhang && Math.max(...along) > -CAR.rearOverhang)
+        assert.ok(Math.abs(rider.hug) > 0.2, "keeps the wider line until the rear passes");
+      passed = car.toLocal(rider.x, rider.y).ahead < -CAR.rearOverhang - rider.spec.length;
     }
-    assert.equal(passed, !obstruction, "passes only when the gap is clear");
+    assert.equal(passed, shouldPass, "passes when the approach and gap are clear");
   }
 });
 

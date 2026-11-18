@@ -492,6 +492,7 @@ export class ContraflowRiders {
     let gap = Infinity,
       leadV = n.v0,
       blocker = null,
+      blockerNeedsApproach = false,
       squeezing = false,
       hug = 0;
     const reach = spec.width / 2 + 0.15;
@@ -518,11 +519,15 @@ export class ContraflowRiders {
         o.spec &&
         Math.abs(o.v || 0) < 0.3 &&
         (Math.abs(wrap(o.psi - n.psi)) > (Math.PI * 2) / 3 || (n.waitedOn === o && n.waited > BLOCKED_S));
+      let needsApproach = false;
       const side = still ? spec.width / 2 + SQUEEZE_M : reach;
       // (one standing face to face that has not moved over far enough, the driven car stopped short of
       // where it meant to, say: by the kerb, where that fits)
       if (still && kerb && Math.abs(wrap(o.psi - n.psi)) > (Math.PI * 2) / 3) {
-        const blocks = (off, box = b, from = front) => {
+        const rear = path.s - spec.rearOverhang;
+        // Keep the wider passing line and its speed ceiling until the entire bike is past.
+        const fromBody = Math.abs(n.hug || 0) > HUG_M ? rear : front;
+        const blocks = (off, box = b, from = fromBody) => {
           const c = Math.cos(box.heading),
             s = Math.sin(box.heading);
           for (let at = from; at <= front + BODY_LOOK_M; at += 0.5) {
@@ -538,7 +543,6 @@ export class ContraflowRiders {
           let shift = HUG_M;
           if (blocks(kerb * shift)) {
             shift = RIDE_IN_M - spec.width / 2 - KERB_MARGIN_M;
-            const rear = path.s - spec.rearOverhang;
             const end = front + BODY_LOOK_M;
             const [x0, y0] = path.pointAt(rear);
             const [x1, y1] = path.pointAt(end);
@@ -558,7 +562,17 @@ export class ContraflowRiders {
           if (shift) {
             hug = Math.max(hug, shift);
             squeezing = true;
-            continue;
+            // Steer toward the wider line while braking for the car. A clear strip beside
+            // the car is reachable only if the bicycle's front clears its kerb-side face.
+            if (
+              shift <= HUG_M ||
+              n
+                .corners()
+                .slice(0, 2)
+                .every(([x, y]) => kerb * ((y - b.center[1]) * c - (x - b.center[0]) * s) > b.halfWidth)
+            )
+              continue;
+            needsApproach = true;
           }
         }
       }
@@ -577,6 +591,7 @@ export class ContraflowRiders {
           gap = d;
           leadV = Math.max(0, (o.v || 0) * Math.cos(o.psi - n.psi));
           blocker = o;
+          blockerNeedsApproach = needsApproach;
           break;
         }
       }
@@ -614,7 +629,7 @@ export class ContraflowRiders {
         n.gone = true;
         return;
       }
-      n.squeeze = blocker;
+      if (!blockerNeedsApproach) n.squeeze = blocker;
     }
     if (stopAt !== null && stopAt < gap) {
       gap = Math.max(0.05, stopAt);
