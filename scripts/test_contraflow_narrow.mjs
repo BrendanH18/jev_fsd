@@ -191,6 +191,9 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
     [110, 2, "parked", false],
     [110, 2, "driveway", false],
     [110, 2, "entering", true],
+    [110, 2, "traffic_blocked", false],
+    [110, 2, "moving", true],
+    [110, 2, "moving_clear", true],
   ]) {
     const w = new World(map, { seed: 1, parked: 0, pedestrians: 0, contraflow: true });
     w.placeOnLane(lane, carAt);
@@ -204,9 +207,9 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
     const h = w.ego.psi;
     const parked = new Vehicle(w.ego.x - 2.1 * Math.sin(h), w.ego.y + 2.1 * Math.cos(h), h, 0, BIKE);
     if (obstruction === "parked") w.parked.add(parked);
-    if (obstruction === "driveway") w.driveways.cars.push(parked);
+    if (obstruction === "driveway" || obstruction === "traffic_blocked") w.driveways.cars.push(parked);
     let car = w.ego;
-    if (obstruction === "traffic") {
+    if (obstruction === "traffic" || obstruction === "traffic_blocked") {
       car = w.ego.clone();
       w.npcs.push(car);
       w.placeOnLane(lane, 85);
@@ -229,9 +232,21 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
       for (const [x, y] of rider.corners())
         assert.ok(car.toLocal(x, y).right >= lane.edgeRef.asphalt[0], "stays inside the kerb");
       const along = rider.corners().map(([x, y]) => car.toLocal(x, y).ahead);
-      if (Math.min(...along) < -CAR.rearOverhang && Math.max(...along) > -CAR.rearOverhang)
+      if (Math.min(...along) < -CAR.rearOverhang && Math.max(...along) > -CAR.rearOverhang) {
         assert.ok(Math.abs(rider.hug) > 0.2, "keeps the wider line until the rear passes");
-      if (obstruction === "entering" && Math.min(...along) < -CAR.rearOverhang && enteredAt === null) {
+        assert.ok(rider.v <= 2.05, "keeps its squeeze speed until the rear passes");
+      }
+      if (obstruction === "moving_clear" && Math.min(...along) < -CAR.rearOverhang) enteredAt ??= t;
+      if ((obstruction === "moving" || obstruction === "moving_clear") && enteredAt !== null) {
+        car.v = t - enteredAt < 0.7 ? 0.5 : 0;
+        car.x += car.v * DT * Math.cos(h);
+        car.y += car.v * DT * Math.sin(h);
+      }
+      if (
+        (obstruction === "entering" || obstruction === "moving") &&
+        Math.min(...along) < -CAR.rearOverhang &&
+        enteredAt === null
+      ) {
         // The nose is past the car, with the rear beside it. A driveway vehicle enters
         // the riding line two metres past the rear bumper.
         const distance = 2 * CAR.rearOverhang + 2;
@@ -257,7 +272,8 @@ await test("a rider can use the remaining asphalt beside a stationary car centre
       }
       passed = car.toLocal(rider.x, rider.y).ahead < -CAR.rearOverhang - rider.spec.length;
     }
-    if (obstruction === "entering") assert.ok(waited, "encountered and waited for the driveway vehicle");
+    if (obstruction === "entering" || obstruction === "moving")
+      assert.ok(waited, "encountered and waited for the driveway vehicle");
     assert.equal(passed, shouldPass, "passes when the approach and gap are clear");
   }
 });

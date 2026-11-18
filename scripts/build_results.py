@@ -394,10 +394,11 @@ def readme_block(data: dict) -> str:
     notes = [
         "",
         f"Built from the committed records ({dates[0]} to {dates[-1]}) by `scripts/build_results.py`, which also writes "
-        "[`data/results.json`](data/results.json) with each row's source files; the "
-        f"[leaderboard]({LEADERBOARD}) shows every run and drive. Each city cell is the newest committed run "
-        f"(suite seed {plain(r['seed'] for r in city_rows)}, {plain(r['mode'] for r in city_rows)} clock, "
-        f"{plain(r['traffic'] for r in city_rows)} traffic cars); a driver's runs may come from different dates. "
+        "[`data/results.json`](data/results.json) with each row's source files. The "
+        f"[leaderboard]({LEADERBOARD}) shows published challenge results and the newest standard benchmark run "
+        "for each driver, map, preset, weather, suite size and seed. City runs in this table use "
+        f"suite seed {plain(r['seed'] for r in city_rows)}, {plain(r['mode'] for r in city_rows)} clock, "
+        f"{plain(r['traffic'] for r in city_rows)} traffic cars. A driver's runs may come from different dates. "
         '"Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. '
         "Model drives are recorded under `data/recordings/` and replay without a key. "
         "Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).",

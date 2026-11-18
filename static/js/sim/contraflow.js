@@ -494,7 +494,8 @@ export class ContraflowRiders {
       blocker = null,
       blockerNeedsApproach = false,
       squeezing = false,
-      hug = 0;
+      hug = 0,
+      widePass = null;
     const reach = spec.width / 2 + 0.15;
     // The kerb side of the rider’s line on a contraflow street.
     const seg0 = path.segs.find((g) => path.s < g.sEnd),
@@ -519,11 +520,18 @@ export class ContraflowRiders {
         o.spec &&
         Math.abs(o.v || 0) < 0.3 &&
         (Math.abs(wrap(o.psi - n.psi)) > (Math.PI * 2) / 3 || (n.waitedOn === o && n.waited > BLOCKED_S));
+      // Once alongside, finish the same pass even if the car starts rolling. Measure
+      // both bodies along the car's axis so the rear of the bicycle must clear it.
+      let alongside = false;
+      if (n.widePass === o) {
+        const along = n.corners().map(([x, y]) => (x - b.center[0]) * c + (y - b.center[1]) * s);
+        alongside = Math.min(...along) <= b.halfLength && Math.max(...along) >= -b.halfLength;
+      }
       let needsApproach = false;
-      const side = still ? spec.width / 2 + SQUEEZE_M : reach;
+      const side = still || alongside ? spec.width / 2 + SQUEEZE_M : reach;
       // (one standing face to face that has not moved over far enough, the driven car stopped short of
       // where it meant to, say: by the kerb, where that fits)
-      if (still && kerb && Math.abs(wrap(o.psi - n.psi)) > (Math.PI * 2) / 3) {
+      if (kerb && (alongside || (still && Math.abs(wrap(o.psi - n.psi)) > (Math.PI * 2) / 3))) {
         const rear = path.s - spec.rearOverhang;
         // Keep the wider passing line and its speed ceiling until the entire bike is past.
         const fromBody = Math.abs(n.hug || 0) > HUG_M ? rear : front;
@@ -539,9 +547,11 @@ export class ContraflowRiders {
           }
           return false;
         };
-        if (blocks(0)) {
+        if (alongside || blocks(0)) {
           let shift = HUG_M;
-          if (blocks(kerb * shift)) {
+          if (alongside || blocks(kerb * shift)) {
+            // The nominal line is occupied. A timeout cannot clear a rejected pass.
+            needsApproach = true;
             shift = RIDE_IN_M - spec.width / 2 - KERB_MARGIN_M;
             // Check through the far end of the car plus room for the whole bicycle to clear it.
             // That distance stays fixed as the rider passes, even near the end of the block.
@@ -559,10 +569,7 @@ export class ContraflowRiders {
               shift <= HUG_M ||
               rear < seg0.sStart ||
               end > seg0.sEnd ||
-              end - rear - Math.hypot(x1 - rx, y1 - ry) > 1e-8
-            )
-              shift = 0;
-            else if (
+              end - rear - Math.hypot(x1 - rx, y1 - ry) > 1e-8 ||
               blocks(kerb * shift, world.ego.obb(), rear, end) ||
               world
                 .obstaclesNear(n.x, n.y, end - rear + 8)
@@ -570,7 +577,7 @@ export class ContraflowRiders {
             ) {
               // A vehicle can enter the strip after the rider has committed. Brake in the
               // strip until it clears: steering back now would run into the car alongside.
-              if (Math.abs(n.hug || 0) > HUG_M && front >= center - halfLength && rear <= far) stopAt = 0;
+              if (alongside) stopAt = 0;
               else shift = 0;
             }
           }
@@ -581,13 +588,15 @@ export class ContraflowRiders {
             // the car is reachable only if the bicycle's front clears its kerb-side face.
             if (
               shift <= HUG_M ||
+              alongside ||
               n
                 .corners()
                 .slice(0, 2)
                 .every(([x, y]) => kerb * ((y - b.center[1]) * c - (x - b.center[0]) * s) > b.halfWidth)
-            )
+            ) {
+              if (shift > HUG_M && (!widePass || alongside)) widePass = o;
               continue;
-            needsApproach = true;
+            }
           }
         }
       }
@@ -611,6 +620,7 @@ export class ContraflowRiders {
         }
       }
     }
+    if (widePass || n.widePass) n.widePass = widePass;
     // (how long it has been held up by the same vehicle standing in its way)
     const standing =
       blocker?.spec && n.v < 0.2 && Math.abs(blocker.v || 0) < 0.2 && (stopAt === null || stopAt > gap + 1);
