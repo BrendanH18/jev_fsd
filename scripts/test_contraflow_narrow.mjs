@@ -183,15 +183,16 @@ await test("a rider squeezes by the driven car standing face to face, short of m
 await test("a rider can use the remaining asphalt beside a stationary car centred on 81 Avenue NW", () => {
   const map = loadMap("3e794edbefcb");
   const lane = map.lane("e261", 0);
-  for (const [start, speed, obstruction, shouldPass] of [
+  for (const [start, speed, obstruction, shouldPass, carAt = 100] of [
     [110, 2, null, true],
+    [19, 2, null, true, 9], // Lookahead reaches the end of the block before the rear clears.
     [106, 0, null, false], // A clear strip alongside, but too little approach to steer onto it.
     [106, 0, "traffic", false],
     [110, 2, "parked", false],
     [110, 2, "driveway", false],
   ]) {
     const w = new World(map, { seed: 1, parked: 0, pedestrians: 0, contraflow: true });
-    w.placeOnLane(lane, 100);
+    w.placeOnLane(lane, carAt);
     const rider = w.contraflow.place({ edge: "e261", at: lane.length - start, v: speed });
     // Split the straight at the meeting point, as an interior OSM vertex would.
     const at = rider.path.s + 10;

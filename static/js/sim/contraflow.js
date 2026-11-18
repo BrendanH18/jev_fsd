@@ -527,10 +527,10 @@ export class ContraflowRiders {
         const rear = path.s - spec.rearOverhang;
         // Keep the wider passing line and its speed ceiling until the entire bike is past.
         const fromBody = Math.abs(n.hug || 0) > HUG_M ? rear : front;
-        const blocks = (off, box = b, from = fromBody) => {
+        const blocks = (off, box = b, from = fromBody, to = front + BODY_LOOK_M) => {
           const c = Math.cos(box.heading),
             s = Math.sin(box.heading);
-          for (let at = from; at <= front + BODY_LOOK_M; at += 0.5) {
+          for (let at = from; at <= to; at += 0.5) {
             const [x, y] = path.offsetPointAt(Math.min(path.length, at), off),
               dx = x - box.center[0],
               dy = y - box.center[1];
@@ -543,19 +543,30 @@ export class ContraflowRiders {
           let shift = HUG_M;
           if (blocks(kerb * shift)) {
             shift = RIDE_IN_M - spec.width / 2 - KERB_MARGIN_M;
-            const end = front + BODY_LOOK_M;
-            const [x0, y0] = path.pointAt(rear);
+            // Check through the far end of the car plus room for the whole bicycle to clear it.
+            // That distance stays fixed as the rider passes, even near the end of the block.
+            const heading = path.headingAt(rear);
+            const [rx, ry] = path.pointAt(rear);
+            const angle = b.heading - heading;
+            const far =
+              rear +
+              (b.center[0] - rx) * Math.cos(heading) +
+              (b.center[1] - ry) * Math.sin(heading) +
+              b.halfLength * Math.abs(Math.cos(angle)) +
+              b.halfWidth * Math.abs(Math.sin(angle));
+            const end = Math.max(front, far + spec.length + side);
+
             const [x1, y1] = path.pointAt(end);
             // On a straight block the chord equals the path length, even across map vertices.
             if (
               shift <= HUG_M ||
               rear < seg0.sStart ||
               end > seg0.sEnd ||
-              end - rear - Math.hypot(x1 - x0, y1 - y0) > 1e-8 ||
-              blocks(kerb * shift, world.ego.obb(), rear) ||
+              end - rear - Math.hypot(x1 - rx, y1 - ry) > 1e-8 ||
+              blocks(kerb * shift, world.ego.obb(), rear, end) ||
               world
-                .obstaclesNear(n.x, n.y, BODY_LOOK_M + 8)
-                .some((body) => body !== n && blocks(kerb * shift, body.obb(), rear))
+                .obstaclesNear(n.x, n.y, end - rear + 8)
+                .some((body) => body !== n && blocks(kerb * shift, body.obb(), rear, end))
             )
               shift = 0;
           }
