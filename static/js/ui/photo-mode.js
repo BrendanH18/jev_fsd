@@ -213,7 +213,7 @@ export class PhotoMode {
   // Render a fresh frame and read it back in the same task, before the browser clears the buffer.
   capture() {
     const canvas = this.view.renderer.domElement;
-    this.view.render(0);
+    this.view.render(0, true);
     canvas.toBlob((blob) => {
       if (!blob) {
         this.status.textContent = "This browser could not save the frame.";

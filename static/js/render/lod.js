@@ -4,10 +4,9 @@
 // object stays detailed, even when it sits at the closest edge of a large chunk.
 import * as THREE from "three";
 
-export function chunkLOD(near, far, distance = 100) {
+export function chunkLOD(near, far, distance = 100, lod = new THREE.LOD()) {
   const bounds = new THREE.Box3().setFromObject(near);
   const sphere = bounds.getBoundingSphere(new THREE.Sphere());
-  const lod = new THREE.LOD();
   lod.position.copy(sphere.center);
   near.position.copy(sphere.center).negate();
   far.position.copy(near.position);

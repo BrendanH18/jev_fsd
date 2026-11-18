@@ -8,7 +8,7 @@ import { VEHICLE_MODELS } from "../js/sim/vehicle-models.js";
 import { buildTrees } from "../js/render/trees.js";
 import { SceneView, groundLayer, LAYER } from "../js/render/scene.js";
 import { GroundReflection, reflection } from "../js/render/reflection.js";
-import { lighting, sunPosition } from "../js/render/atmosphere.js";
+import { atmosphereFor, lighting, sunPosition } from "../js/render/atmosphere.js";
 import { PostFX } from "../js/render/post.js";
 import { buildStreetSigns } from "../js/render/signs.js";
 import { CITY_STYLES, buildCityIdentity } from "../js/render/city-identity.js";
@@ -144,6 +144,25 @@ export function runRenderTests() {
     "near parked car uses detailed wheels and trim",
     lod.getCurrentLevel() === 0 && lod.levels[0].object.visible && !lod.levels[1].object.visible,
   );
+  const nearWheels = lod.wheels;
+  const detailed = nearWheels.geometry;
+  at(car.x - 25, 2, -car.y);
+  lod.update(camera);
+  check("parked wheels simplify before the body", lod.getCurrentLevel() === 0 && nearWheels.geometry === lod.simple);
+  at(car.x - 14, 2, -car.y);
+  lod.update(camera);
+  check("approaching wheels stay simple in the hysteresis band", nearWheels.geometry === lod.simple);
+  at(neighbor.x, 2, -neighbor.y);
+  lod.update(camera);
+  check("a neighboring curbside car restores the spokes", nearWheels.geometry === detailed);
+  at(car.x - 14, 2, -car.y);
+  lod.update(camera);
+  check("receding wheels retain spokes in the hysteresis band", nearWheels.geometry === detailed);
+  at(car.x, 17, -car.y);
+  lod.update(camera);
+  check("wheel detail accounts for camera height", nearWheels.geometry === lod.simple);
+  lod.update(camera, true);
+  check("photo mode preserves detailed near wheels", nearWheels.geometry === detailed);
   at(car.x + 1000, 3, -car.y);
   lod.update(camera);
   check(
@@ -529,6 +548,35 @@ export function runRenderTests() {
         "street signs add no shadow-map casters",
         signs.children.every((o) => !o.castShadow),
       );
+    }
+    const originalSky = live.atmosphere;
+    try {
+      const afternoon = atmosphereFor(15, "dry");
+      live.setAtmosphere(afternoon);
+      const environment = live.scene.environment;
+      const later = atmosphereFor(15.001, "dry");
+      live.setAtmosphere(later);
+      check(
+        "small clock steps move the visible sun and reuse the reflection map",
+        live.sky.material.uniforms.sunDir.value.equals(later.sun.dir) && live.scene.environment === environment,
+      );
+      const memory = { ...live.renderer.info.memory };
+      for (const [hour, weather] of [
+        [16, "dry"],
+        [16, "rain"],
+        [18, "dry"],
+      ]) {
+        const previous = live.scene.environment;
+        live.setAtmosphere(atmosphereFor(hour, weather));
+        check(`reflection map refreshes at ${hour} in ${weather}`, live.scene.environment !== previous);
+      }
+      check(
+        "sky refreshes keep texture and geometry counts stable",
+        live.renderer.info.memory.textures === memory.textures &&
+          live.renderer.info.memory.geometries === memory.geometries,
+      );
+    } finally {
+      live.setAtmosphere(originalSky);
     }
     const quality = live.quality,
       wet = lighting.wet.value,

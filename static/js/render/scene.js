@@ -69,6 +69,8 @@ export function groundLayer(mesh, order) {
   return mesh;
 }
 
+// A one-degree change moves the reflected sun enough to refresh the prefiltered sky.
+const ENVIRONMENT_SUN_DOT = Math.cos(THREE.MathUtils.degToRad(1));
 const SHADOW_HALF = 70; // meters of shadow coverage around the car
 
 function skyMaterial() {
@@ -195,6 +197,14 @@ export class SceneView {
     this.sky.renderOrder = LAYER.sky;
     this.sky.frustumCulled = false;
     this.scene.add(this.sky);
+    this.environmentScene = new THREE.Scene();
+    const environmentMaterial = this.sky.material.clone();
+    environmentMaterial.uniforms = { ...this.sky.material.uniforms, stars: { value: 0 } };
+    environmentMaterial.depthTest = true;
+    this.environmentScene.add(new THREE.Mesh(this.sky.geometry, environmentMaterial));
+    this.environmentGenerator = new THREE.PMREMGenerator(renderer);
+    this.environmentTarget = null;
+    this.environmentSun = new THREE.Vector3();
 
     this.hemi = new THREE.HemisphereLight(0xcfe0f2, 0x6c7358, 0.55);
     this.scene.add(this.hemi);
@@ -300,8 +310,14 @@ export class SceneView {
     lighting.wet.value = a.wet;
     lighting.sunDir.value.copy(a.sun.dir);
     updateNightMaterials();
-    if (this.scene.environment) this.scene.environment.dispose();
-    this.scene.environment = this.buildEnvironment();
+    if (this.environmentWeather !== a.weather || this.environmentSun.dot(a.sun.dir) < ENVIRONMENT_SUN_DOT) {
+      const next = this.environmentGenerator.fromScene(this.environmentScene, 0.02, 0.1, 1000);
+      this.scene.environment = next.texture;
+      this.environmentTarget?.dispose();
+      this.environmentTarget = next;
+      this.environmentSun.copy(a.sun.dir);
+      this.environmentWeather = a.weather;
+    }
     this._basis = this.lightBasis();
   }
 
@@ -326,22 +342,6 @@ export class SceneView {
         vignette: THREE.MathUtils.clamp(g.vignette + this.look.vignette, 0, 1),
       });
     }
-  }
-
-  // Reflections come from the same sky, rendered into a prefiltered environment map.
-  buildEnvironment() {
-    const envScene = new THREE.Scene();
-    const mat = skyMaterial();
-    for (const [k, v] of Object.entries(this.sky.material.uniforms))
-      mat.uniforms[k].value = v.value.clone ? v.value.clone() : v.value;
-    mat.uniforms.stars.value = 0;
-    mat.depthTest = true;
-    envScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), mat));
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const tex = pmrem.fromScene(envScene, 0.02, 0.1, 1000).texture;
-    pmrem.dispose();
-    mat.dispose();
-    return tex;
   }
 
   lightBasis() {
@@ -457,13 +457,13 @@ export class SceneView {
     this.followShadow(ego.x, ego.y);
   }
 
-  render(dt = 0) {
+  render(dt = 0, photoMode = false) {
     lighting.time.value += dt;
     this.sky.material.uniforms.cloudTime.value = lighting.time.value;
     this.camera.updateMatrixWorld();
     // Select detail once from the viewing camera. A mirrored camera must not change the meshes
     // between the reflection, shadow and main passes within the same frame.
-    for (const lod of this.sceneryLODs) lod.update(this.camera);
+    for (const lod of this.sceneryLODs) lod.update(this.camera, photoMode);
     const shadows = this.renderer.shadowMap.autoUpdate;
     try {
       // Wet frames update shadows in the first scene pass (the reflection), then reuse those same

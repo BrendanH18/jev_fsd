@@ -1971,7 +1971,7 @@ export async function boot() {
     officerView?.sync(world, dt, view.camera, lightsOn);
     if (sunGlareView) sunGlareView.update(view.camera, view.atmosphere, egoGlare(world)?.severity ?? 0);
     ballView?.update(world, view.camera);
-    view.render(dt);
+    view.render(dt, photo.active);
     cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
     audio.update(world.ego, world.weather, world.paused || document.hidden, view.mode === "hood");
     const blink = world.ego.signal && world.t % 0.8 < 0.45;

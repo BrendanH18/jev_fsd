@@ -10,6 +10,27 @@ flickering between levels. This conservatively keeps every nearby object detaile
 levels do not cast shadows; the detailed levels retain shadows around the car. Static chunk
 transforms are computed once, while parked-instance edits still upload normally.
 
+## Parked wheels and sky refreshes
+
+Parked bodies retain their 360 m batches. Near each batch, detailed wheels appear when a car of
+that style is within 12 m of the camera and stay until all are at least 16 m away. The wheel mesh
+switches geometry in place, retaining its instance transforms and draw count. Photo mode uses the
+original detailed wheels wherever the body uses its near level.
+
+On an Apple M5 in offscreen WebKit, the frozen Kitsilano afternoon chase view (seed 1, High,
+1440 × 900) submitted 0.95 million fewer triangles per dry frame and 1.90 million fewer per
+rainy frame. Switching between photo and driving wheel detail at the same pose kept the draw
+count identical within each comparison. Rain took 22 ms with the original detail and 21 ms with
+the driving detail. Dry took 14–15 ms and 14 ms respectively. These are median render times
+over 24 frames after eight warm-ups per switch, including a one-pixel GPU readback.
+
+The visible sky and lights follow every clock update. The prefiltered sky used by reflective
+materials refreshes when the weather changes or the sun moves one degree since the previous
+capture. Captures reuse the sphere and filter generator and dispose the previous render target.
+The generator keeps a roughly 6 MiB scratch texture available for the next capture.
+In the same dry view, 120 one-second clock increments reused the reflection map. Ten subsequent
+time and weather changes left the renderer counts steady at 643 geometries and 91 textures.
+
 ## Road, shadow and reflection stability
 
 Wet frames previously triggered WebGL feedback-loop errors: a reflective material left the
