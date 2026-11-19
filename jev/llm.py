@@ -1,9 +1,10 @@
-"""Any OpenAI-compatible Chat Completions endpoint as a driver.
+"""Any OpenAI-compatible Chat Completions endpoint, or Anthropic's Messages API, as a driver.
 
 Each configured endpoint becomes an agent named `llm:<name>` in the simulator, the arena and the
 bench. The browser builds the prompt (static/js/brain/llm-prompt.js) from the same decision state
 Jev sees and posts it to /api/llm/decide with the endpoint's *name*. This module looks the name up
-in server-side config, calls `POST {base_url}/chat/completions`, parses the reply leniently and
+in server-side config, calls `POST {base_url}/chat/completions` (or, for an entry with
+`"api": "anthropic"`, `POST {base_url}/messages`), parses the reply leniently and
 checks the chosen manoeuvre against the ids the browser offered. Only already-safe candidates are
 offered, and the browser re-checks the answer with validAgentChoice before anything executes.
 
@@ -27,7 +28,12 @@ holds a key. Calls share Jev's SpendGuard (JEV_FSD_BUDGET_USD, JEV_FSD_RPM). Cos
 either an endpoint reports tokens and an unknown ($0) cost, so the budget cannot stop it; the RPM cap still does,
 unless the endpoint sets `rpm: 0`, which removes that too.
 
-Standard library only (urllib), no SDK.
+Anthropic entries (the Claude Platform preset) send the key as `x-api-key`, put the system message in
+`system` with prompt caching, put the schema in `output_config.format`, and send no temperature, which
+that API no longer takes. Cache writes and reads are priced at Anthropic's 1.25x and 0.1x input rates.
+
+Standard library only (urllib), no SDK: every provider shares the redirect-refusing, deadline-bound
+transport in jev/endpoints.py.
 """
 
 from __future__ import annotations
@@ -66,6 +72,12 @@ ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 MOTIONS = ("drive", "stop", "reverse")
 RESPONSE_FORMATS = ("json_schema", "json_object", "none")
 RESERVED_BODY_KEYS = {"model", "messages", "stream", "response_format", "n"}
+# "openai": Chat Completions, which most servers speak. "anthropic": Anthropic's Messages API (Claude Platform).
+APIS = ("openai", "anthropic")
+ANTHROPIC_RESERVED_BODY_KEYS = {"model", "messages", "system", "stream"}
+# Anthropic bills prompt-cache writes (5-minute) at 1.25 times its input price and reads at 0.1 times
+CACHE_WRITE_RATE = 1.25
+CACHE_READ_RATE = 0.1
 
 MAX_MESSAGES = 6
 MAX_PROMPT_CHARS = 64 * 1024
@@ -95,20 +107,35 @@ class EndpointConfig:
         name, where, base_url, model, key_env = (
             common[k] for k in ("name", "where", "base_url", "model", "api_key_env")
         )
+        api = str(raw.get("api") or "openai")
+        if api not in APIS:
+            problems.append("%s: api must be one of %s" % (where, ", ".join(APIS)))
+            return
+        anthropic = api == "anthropic"
         response_format = str(raw.get("response_format") or "json_schema")
         if response_format not in RESPONSE_FORMATS:
             problems.append("%s: response_format must be one of %s" % (where, ", ".join(RESPONSE_FORMATS)))
             return
-        extra = raw.get("extra_body") or {}
-        if not isinstance(extra, dict) or RESERVED_BODY_KEYS & set(extra):
-            problems.append(
-                "%s: extra_body must be an object without %s" % (where, ", ".join(sorted(RESERVED_BODY_KEYS)))
-            )
+        if anthropic and response_format == "json_object":
+            problems.append("%s: Anthropic's API has no json_object mode; use json_schema or none" % where)
             return
+        reserved = ANTHROPIC_RESERVED_BODY_KEYS if anthropic else RESERVED_BODY_KEYS
+        extra = raw.get("extra_body") or {}
+        if not isinstance(extra, dict) or reserved & set(extra):
+            problems.append("%s: extra_body must be an object without %s" % (where, ", ".join(sorted(reserved))))
+            return
+        if anthropic and "output_config" in extra:
+            output_config = extra["output_config"]
+            if not isinstance(output_config, dict) or "format" in output_config:
+                problems.append(
+                    "%s: extra_body.output_config must be an object without format (response_format sets it)" % where
+                )
+                return
         try:
             timeout_s = float(number(raw.get("timeout_s", 10)))  # float(None) raises: timeout_s cannot be null
             max_tokens = number(raw.get("max_tokens", 400), integer=True)
-            temperature = number(raw.get("temperature", 0))
+            # (Anthropic's API takes no sampling parameters, so there is no temperature to default to)
+            temperature = number(raw.get("temperature", None if anthropic else 0))
             rpm = number(raw.get("rpm"), integer=True)
             rpm = None if rpm is None else max(0, rpm)
         except (TypeError, ValueError, OverflowError):
@@ -117,6 +144,15 @@ class EndpointConfig:
                 "(max_tokens, temperature and rpm may be null)" % where
             )
             return
+        if anthropic and temperature is not None:
+            problems.append("%s: Anthropic's API takes no temperature; remove it" % where)
+            return
+        if anthropic and max_tokens is None:
+            problems.append("%s: Anthropic's API needs max_tokens; it may not be null" % where)
+            return
+        self.api = api
+        # (where calls go, after base_url)
+        self.call_path = "/messages" if anthropic else "/chat/completions"
         self.name = name
         self.label = str(raw.get("label") or name)[:60]
         self.base_url = base_url
@@ -175,17 +211,27 @@ class LlmResult:
         unparsed = response is None
         response = {} if response is None else response
         usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+        config = endpoint.config
+        self.anthropic = config.api == "anthropic"
         self.input_tokens = tokens(usage.get("prompt_tokens", usage.get("input_tokens")))
         self.output_tokens = tokens(usage.get("completion_tokens", usage.get("output_tokens")))
-        config = endpoint.config
+        # Anthropic's input_tokens leaves out the prompt-cache writes and reads, which are billed apart;
+        # input_tokens here is every input token, as for the other APIs.
+        self.cache_write_tokens = tokens(usage.get("cache_creation_input_tokens")) if self.anthropic else 0
+        self.cache_read_tokens = tokens(usage.get("cache_read_input_tokens")) if self.anthropic else 0
+        uncached = self.input_tokens
+        self.input_tokens += self.cache_write_tokens + self.cache_read_tokens
         # (the provider's billed cost when it reports one, as for decision models: OpenRouter's can be
         # several times tokens at list prices, which is what the budget must stop)
         reported = reported_cost(usage)
         if reported is not None:
             self.cost_usd, self.cost_source = reported, "provider"
         elif config.priced:
+            billed_input = (
+                uncached + CACHE_WRITE_RATE * self.cache_write_tokens + CACHE_READ_RATE * self.cache_read_tokens
+            )
             self.cost_usd = (
-                self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)
+                billed_input * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)
             ) / 1_000_000
             self.cost_source = "price"
         else:
@@ -209,7 +255,7 @@ class LlmResult:
         try:
             if unparsed:
                 raise ValueError("nested too deeply to parse")
-            self.content, self.refusal = _message_text(response)
+            self.content, self.refusal = (_anthropic_text if self.anthropic else _message_text)(response)
         except Exception as err:  # ValueError for a missing choice or message; RecursionError for absurd nesting
             self.content, self.refusal = "", ""
             self.malformed = str(err) if isinstance(err, ValueError) else type(err).__name__
@@ -225,8 +271,13 @@ class LlmResult:
             "cost_usd": self.cost_usd,
             "cost_known": self.cost_source is not None,
             "response_format": self.format_used,
-            "backend": "openai-compatible (stdlib)",
+            "backend": "anthropic messages (stdlib)" if self.anthropic else "openai-compatible (stdlib)",
             "live_call": True,
+            **(
+                {"cache_read_tokens": self.cache_read_tokens, "cache_write_tokens": self.cache_write_tokens}
+                if self.anthropic
+                else {}
+            ),
         }
 
 
@@ -242,6 +293,22 @@ def _message_text(response: dict) -> Tuple[str, str]:
         content = "".join(str(p.get("text", "")) for p in content if isinstance(p, dict))
     refusal = message.get("refusal")
     return (str(content) if content is not None else "")[:MAX_CONTENT_CHARS], (str(refusal) if refusal else "")
+
+
+def _anthropic_text(response: dict) -> Tuple[str, str]:
+    """A Messages API reply: its text blocks (thinking blocks are left out), or a refusal. A refused
+    reply's text may not match the schema, so it counts as no answer."""
+    blocks = response.get("content")
+    if not isinstance(blocks, list):
+        raise ValueError("no content")
+    content = "".join(str(b.get("text", "")) for b in blocks if isinstance(b, dict) and b.get("type") == "text")
+    stop = response.get("stop_reason")
+    if stop == "refusal":
+        details = response.get("stop_details") if isinstance(response.get("stop_details"), dict) else {}
+        return "", str(details.get("explanation") or details.get("category") or "declined")[:300]
+    if not content.strip() and stop == "max_tokens":
+        raise ValueError("stopped at max_tokens before it answered; raise max_tokens")
+    return content[:MAX_CONTENT_CHARS], ""
 
 
 _THINK_BLOCK = re.compile(r"<think>.*?(</think>|$)", re.S | re.I)
@@ -340,28 +407,46 @@ def parse_answer(content: str, expect: dict) -> Tuple[Optional[dict], Optional[s
     return answer, None
 
 
+def _decision_schema(expect: dict) -> dict:
+    properties: Dict[str, Any] = {}
+    for field in ("motion", "candidate", "route", "headlights"):
+        if expect.get(field):
+            properties[field] = {"type": "string", "enum": list(expect[field])}
+    return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
+
+
 def response_format_for(kind: str, expect: dict) -> Optional[dict]:
     if kind == "json_object":
         return {"type": "json_object"}
     if kind != "json_schema":
         return None
-    properties: Dict[str, Any] = {}
-    for field in ("motion", "candidate", "route", "headlights"):
-        if expect.get(field):
-            properties[field] = {"type": "string", "enum": list(expect[field])}
     return {
         "type": "json_schema",
-        "json_schema": {
-            "name": "driving_decision",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties),
-                "additionalProperties": False,
-            },
-        },
+        "json_schema": {"name": "driving_decision", "strict": True, "schema": _decision_schema(expect)},
     }
+
+
+def anthropic_payload(config: "EndpointConfig", messages: List[dict], expect: dict, fmt: str) -> dict:
+    """A Messages API request. The system messages become the system prompt, marked for prompt caching:
+    the browser keeps it identical between calls (brain/llm-prompt.js), so after the first call it is
+    billed at the cache-read rate. A prompt shorter than the model's cache minimum is simply not cached.
+    The schema goes in output_config.format, beside any output_config (effort, say) from extra_body."""
+    system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
+    payload: Dict[str, Any] = {
+        "model": config.model,
+        "max_tokens": config.max_tokens,
+        "messages": [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] != "system"],
+    }
+    if system:
+        payload["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+    extra = dict(config.extra_body)
+    output_config = dict(extra.pop("output_config", None) or {})
+    if fmt == "json_schema":
+        output_config["format"] = {"type": "json_schema", "schema": _decision_schema(expect)}
+    payload.update(extra)
+    if output_config:
+        payload["output_config"] = output_config
+    return payload
 
 
 def _error_text(body: Any) -> str:
@@ -401,19 +486,22 @@ class LlmEndpoint(Endpoint):
         downgraded_from: Optional[str] = None
         while True:
             self.limit()
-            payload: Dict[str, Any] = {"model": self.config.model, "messages": messages}
-            if self.config.temperature is not None:
-                payload["temperature"] = self.config.temperature
-            if self.config.max_tokens is not None:
-                payload["max_tokens"] = self.config.max_tokens
-            response_format = response_format_for(fmt, expect)
-            if response_format:
-                payload["response_format"] = response_format
-            payload.update(self.config.extra_body)
+            if self.config.api == "anthropic":
+                payload = anthropic_payload(self.config, messages, expect, fmt)
+            else:
+                payload = {"model": self.config.model, "messages": messages}
+                if self.config.temperature is not None:
+                    payload["temperature"] = self.config.temperature
+                if self.config.max_tokens is not None:
+                    payload["max_tokens"] = self.config.max_tokens
+                response_format = response_format_for(fmt, expect)
+                if response_format:
+                    payload["response_format"] = response_format
+                payload.update(self.config.extra_body)
             attempt_started = time.monotonic()
             try:
                 response, latency_ms = post_json(
-                    self.config.base_url + "/chat/completions", payload, self.api_key, deadline
+                    self.config.base_url + self.config.call_path, payload, self.api_key, deadline, self.config.api
                 )
                 break
             except urllib.error.HTTPError as err:
@@ -549,7 +637,7 @@ def llm_decide(registry: LlmRegistry, body: dict) -> dict:
         meta["invalid"] = invalid
     request = dict(
         result.request,
-        url=public_url(endpoint.config.base_url) + "/chat/completions",
+        url=public_url(endpoint.config.base_url) + endpoint.config.call_path,
         api_key_env=endpoint.config.api_key_env,
     )
     trace = {"request": request, "response": result.response, "meta": meta}

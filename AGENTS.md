@@ -146,7 +146,8 @@ Where features reach into shared code:
 ## Decisions
 
 - Ask before adding any dependency, tool or service.
-- New maps are Canadian cities. LLM drivers use a generic OpenAI-compatible endpoint. A Claude brain is deferred; keep the brain interface open for it.
+- New maps are Canadian cities. LLM drivers use a generic OpenAI-compatible endpoint, or Anthropic's Messages API for Claude models (`"api": "anthropic"`, the Claude Platform preset in `jev/llm_setup.py`).
+- Hosted provider presets in Connect a model are the major labs' own APIs (OpenAI, Anthropic, Google, xAI, Mistral), through an OpenAI-compatible endpoint where the lab offers one, plus OpenRouter and Groq. Don't add presets for Chinese-hosted APIs.
 
 ## Context maintenance
 

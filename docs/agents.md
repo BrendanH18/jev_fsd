@@ -151,7 +151,8 @@ total deadline work exactly as for LLM endpoints below.
 
 The driver speaks the OpenAI Chat Completions protocol (`POST {base_url}/chat/completions`),
 so it should work with servers that offer it: OpenAI, OpenRouter, Together, Groq, vLLM,
-LM Studio, Ollama, Anthropic's OpenAI-compatible endpoint and others. It was checked live on
+LM Studio, Ollama and others. Claude models go through Anthropic's own Messages API instead
+(`"api": "anthropic"`, the **Claude Platform** preset; see [Claude Platform](#claude-platform)). It was checked live on
 11 November 2026 against OpenRouter (`openai/gpt-6-luna`, `openai/gpt-6.1-terra`,
 `deepseek/deepseek-v4.1-flash-1017`, all with the default `json_schema` format) and a local
 Ollama (`granite4.2:3b`); other providers may still need `response_format`, `max_tokens` or
@@ -167,15 +168,20 @@ so several models can be compared side by side under identical conditions.
 The quickest way: in the drive app, click **LLM** next to Rules and Decision (or **LLM ▾ → Connect a
 model**, or **Settings → Connect a model** and its **LLMs** tab).
 
-1. Pick a provider: OpenRouter, OpenAI, Groq, Ollama, LM Studio, or **Other** for any
-   OpenAI-compatible URL.
+1. Pick a provider: OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI, Mistral, Groq, Ollama,
+   LM Studio, or **Other** for any OpenAI-compatible URL. Gemini, xAI and Mistral go through each
+   lab's own OpenAI-compatible endpoint; Gemini and xAI start with `reasoning_effort: low` (their
+   newer models always reason), and Gemini with `max_tokens` 2048. None of the three has been
+   checked against its live API yet.
 2. Paste your API key (local servers need none). **Get a key** links to the provider's key page.
 3. Choose a model. The list loads from the provider's `/models` (OpenRouter lists without a key,
-   with prices); type to search, or type any model id.
+   with prices; Claude Platform's list needs the key, and prices fill in for current Claude
+   models); type to search, or type any model id.
 4. **Save and drive.**
 
 The server saves the key in `.env` under the provider's usual variable (`OPENROUTER_API_KEY`,
-`OPENAI_API_KEY`, `GROQ_API_KEY`) and adds the endpoint to `data/llm-endpoints.json`, then reloads
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`,
+`GROQ_API_KEY`) and adds the endpoint to `data/llm-endpoints.json`, then reloads
 without a restart. It refuses to write the key unless `.env` is gitignored and untracked, and keeps
 the file owner-only. The key is never sent back to the browser; the dialog only shows whether one is
 saved. A preset always uses its provider's URL, so a saved provider key only goes to that provider.
@@ -183,7 +189,7 @@ An **Other** endpoint's key gets a variable of its own (`JEV_FSD_LLM_KEY_<NAME>_
 different URL needs the key again. If the variable is also set in the shell that started the
 server, the shell value wins; the dialog says so.
 
-With prices (filled in from OpenRouter's list, or typed), spend counts toward
+With prices (filled in from OpenRouter's list or the Claude price table, or typed), spend counts toward
 `JEV_FSD_BUDGET_USD`. The **LLM** button drives with the last model chosen; the ▾ menu switches
 models, and **Connect or manage models…** adds or removes them. Removing an endpoint keeps a
 provider key in `.env` (other endpoints may use it) but deletes an **Other** endpoint's own key.
@@ -224,6 +230,27 @@ Then add `OPENAI_API_KEY=sk-...` to `.env`. Reasoning models that reject `max_to
  "response_format": "json_object"}
 ```
 
+<a id="claude-platform"></a>**Claude Platform** (Anthropic's Messages API, billed to your Claude
+Platform credits; get a key at [platform.claude.com](https://platform.claude.com/settings/keys))
+
+```json
+{"name": "claude-haiku-5-5", "api": "anthropic", "base_url": "https://api.anthropic.com/v1",
+ "model": "claude-haiku-5-5", "api_key_env": "ANTHROPIC_API_KEY", "timeout_s": 20, "max_tokens": 2048,
+ "extra_body": {"output_config": {"effort": "low"}},
+ "price_per_mtok_input": 0.1, "price_per_mtok_output": 0.5}
+```
+
+With `"api": "anthropic"` the driver posts to `{base_url}/messages` with the key in `x-api-key`
+and `anthropic-version: 2026-10-21`. The system message goes in `system`, marked for prompt caching:
+the browser keeps it the same on every call (about 5,000 tokens), so after the first call it costs a
+tenth of the input price. The schema goes in `output_config.format`, next to any `output_config`
+in `extra_body` (the preset sets `effort` to `low`, which keeps a decision quick). That API takes
+no `temperature`, so an entry that sets one is refused, and `max_tokens` cannot be `null`; thinking
+tokens count toward it. A refusal (`stop_reason: "refusal"`) is an invalid answer and falls back to
+Rules. Cost counts cache writes at 1.25 times and cache reads at 0.1 times the input price, and the
+decision trace shows `cache_read_tokens` and `cache_write_tokens`. Not yet checked against the live
+API.
+
 **Ollama** (`ollama pull llama3.2` first; no key)
 
 ```json
@@ -251,15 +278,16 @@ variables. `JEV_FSD_LLM_ENDPOINTS` points at a different config file.
 | Field | Default | Meaning |
 |---|---|---|
 | `name` | required | Driver id `llm:<name>`; lowercase letters, digits, `-`, `_` |
+| `api` | `openai` | `openai` (Chat Completions) or `anthropic` (Anthropic's Messages API) |
 | `base_url`, `model` | required | The API root (up to `/v1`) and the model name it expects |
 | `label` | `name` | Name shown in pickers and results |
 | `api_key_env` | none | Variable holding the key; omit for local servers that need none |
 | `price_per_mtok_input`, `price_per_mtok_output` | none | USD per million tokens, used when the reply has no `usage.cost` (OpenRouter sends it, and it can be several times the listed price). Cost is unknown ($0), and the budget cannot stop the endpoint, only when the reply has no `usage.cost` and no prices are set |
 | `timeout_s` | `10` | Total server deadline for one decision, covering the TCP connect, any proxy tunnel, the TLS handshake, the whole reply and any plain retry; only DNS lookup is outside it (1–60); the browser waits 0.75 s more |
-| `response_format` | `json_schema` | `json_schema`, `json_object` or `none` |
-| `max_tokens`, `temperature` | `400`, `0` | Sent when not `null` |
+| `response_format` | `json_schema` | `json_schema`, `json_object` or `none` (`anthropic`: no `json_object`) |
+| `max_tokens`, `temperature` | `400`, `0` | Sent when not `null` (`anthropic`: no temperature, and `max_tokens` is required) |
 | `rpm` | shared | This endpoint's own calls-per-minute cap instead of the shared `JEV_FSD_RPM`; `0` = no rate limit at all |
-| `extra_body` | `{}` | Extra request fields, e.g. `reasoning_effort`; cannot replace model or messages |
+| `extra_body` | `{}` | Extra request fields, e.g. `reasoning_effort`; cannot replace model or messages (`anthropic`: or `system`; `output_config` is merged with the schema) |
 
 **Status.** Pickers label each endpoint: unlabelled when the server can reach it, or
 *unreachable*, *key rejected* or *no key* (set the named variable). The server checks with

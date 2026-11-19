@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **The big labs' own APIs as LLM presets.** The Connect a model dialog's LLMs tab adds **Google Gemini**,
+  **xAI** and **Mistral** beside OpenAI, each through the lab's own OpenAI-compatible endpoint, with its
+  key page and key variable (`GEMINI_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`). Gemini and xAI start
+  with `reasoning_effort: low` so a decision stays quick. Not yet checked against the live APIs.
+- **Claude Platform as an LLM provider.** The Connect a model dialog's LLMs tab has a **Claude Platform**
+  preset: paste an Anthropic API key (saved as `ANTHROPIC_API_KEY`), pick a Claude model from Anthropic's
+  model list (prices fill in for current models) and drive. Entries with `"api": "anthropic"` call
+  Anthropic's Messages API directly, with the key in `x-api-key`, the system prompt prompt-cached, the
+  schema in `output_config.format`, low effort by default and no temperature. Cost counts cache writes
+  and reads at Anthropic's rates. Still standard library only. Not yet checked against the live API.
 - **README rewritten around people and stories.** It opens on a challenge you can try at once, tells the
   first comparison as what happened (DeepSeek stuck behind the double-parked van, Rules' road-test
   demerits), says plainly that the challenges mostly test the shared safety filter for now, and puts

@@ -116,6 +116,66 @@ class SaveTests(SetupTestCase):
         self.assertEqual(luna["extra_body"], {"reasoning": {"effort": "low"}})  # hand-edited option kept
         self.assertNotIn("price_per_mtok_input", luna)  # prices belong to the old model unless sent again
 
+    def test_the_claude_platform_preset_saves_an_anthropic_entry_and_keeps_later_edits(self):
+        res = self.save(
+            provider="anthropic",
+            model="claude-haiku-5-5",
+            api_key=KEY,
+            price_per_mtok_input=0.1,
+            price_per_mtok_output=0.5,
+        )
+        self.assertEqual(res["id"], "llm:claude-haiku-5-5")
+        self.assertIn("ANTHROPIC_API_KEY=%s" % KEY, self.env())
+        entry = self.file()["endpoints"][0]
+        self.assertEqual(
+            {k: entry[k] for k in ("api", "base_url", "api_key_env", "timeout_s", "max_tokens", "extra_body")},
+            {
+                "api": "anthropic",
+                "base_url": "https://api.anthropic.com/v1",
+                "api_key_env": "ANTHROPIC_API_KEY",
+                "timeout_s": 20,
+                "max_tokens": 2048,
+                "extra_body": {"output_config": {"effort": "low"}},
+            },
+        )
+        self.assertNotIn("temperature", entry)
+        self.assertEqual(entry["label"], "claude-haiku-5-5 (Claude Platform)")
+        self.assertEqual(self.registry.get("claude-haiku-5-5").config.call_path, "/messages")
+        # A hand-edited effort and max_tokens survive saving the same model again.
+        data = self.file()
+        data["endpoints"][0].update(max_tokens=4096, extra_body={"output_config": {"effort": "medium"}})
+        (self.root / "llm.json").write_text(json.dumps(data))
+        self.save(provider="anthropic", model="claude-haiku-5-5")
+        entry = self.file()["endpoints"][0]
+        self.assertEqual((entry["max_tokens"], entry["extra_body"]["output_config"]["effort"]), (4096, "medium"))
+
+    def test_the_labs_openai_compatible_presets_save_their_url_key_and_defaults(self):
+        cases = [
+            (
+                "gemini",
+                "gemini-3.8-flash",
+                "https://generativelanguage.googleapis.com/v1beta/openai",
+                "GEMINI_API_KEY",
+                {"max_tokens": 2048, "extra_body": {"reasoning_effort": "low"}},
+            ),
+            ("xai", "grok-4.7", "https://api.x.ai/v1", "XAI_API_KEY", {"extra_body": {"reasoning_effort": "low"}}),
+            ("mistral", "mistral-small-latest", "https://api.mistral.ai/v1", "MISTRAL_API_KEY", {}),
+        ]
+        for provider, model, base_url, key_env, defaults in cases:
+            with self.subTest(provider=provider):
+                self.save(provider=provider, model=model, api_key=KEY)
+                entry = next(e for e in self.file()["endpoints"] if e["model"] == model)
+                self.assertEqual((entry["base_url"], entry["api_key_env"], entry["timeout_s"]), (base_url, key_env, 20))
+                self.assertNotIn("api", entry)  # Chat Completions, as for OpenAI
+                for field, value in defaults.items():
+                    self.assertEqual(entry[field], value)
+                self.assertIn("%s=%s" % (key_env, KEY), self.env())
+                endpoint = self.registry.get(entry["name"])
+                self.assertEqual(endpoint.config.call_path, "/chat/completions")
+        self.assertNotIn(
+            "extra_body", next(e for e in self.file()["endpoints"] if e["model"] == "mistral-small-latest")
+        )
+
     def test_moving_a_name_to_another_provider_drops_the_old_providers_settings(self):
         self.save(provider="ollama", name="main", model="llama3.2")
         self.save(provider="openrouter", name="main", model="openai/gpt-6-luna", api_key=KEY)
@@ -274,6 +334,54 @@ class ModelListTests(SetupTestCase):
         llm_setup.list_models(self.settings, {"provider": "custom", "base_url": mock.url, "api_key": KEY})
         self.assertEqual(mock.requests[1]["headers"]["Authorization"], "Bearer " + KEY)
 
+    def test_claude_models_are_listed_with_x_api_key_and_list_prices(self):
+        listing = {
+            "data": [
+                {"id": "claude-opus-5-5", "display_name": "Claude Opus 5.5", "max_input_tokens": 1000000},
+                {"id": "claude-haiku-5-5", "display_name": "Claude Haiku 5.5", "max_input_tokens": 1000000},
+                {"id": "claude-next-9", "display_name": "Claude Next 9"},
+            ],
+            "has_more": False,
+        }
+        mock = self.mock(lambda h, body: (200, listing, {}))
+        with patch.dict(llm_setup.LLM.by_id["anthropic"], {"base_url": mock.url}):
+            with self.assertRaises(llm_setup.SetupError) as ctx:
+                llm_setup.list_models(self.settings, {"provider": "anthropic"})
+            self.assertIn("Paste your Claude Platform API key", str(ctx.exception))
+            self.assertEqual(mock.requests, [])
+            res = llm_setup.list_models(self.settings, {"provider": "anthropic", "api_key": KEY})
+        self.assertEqual([m["id"] for m in res["models"]], ["claude-haiku-5-5", "claude-next-9", "claude-opus-5-5"])
+        haiku, unknown, opus = res["models"]
+        self.assertEqual((haiku["name"], haiku["context_length"]), ("Claude Haiku 5.5", 1000000))
+        self.assertEqual((haiku["price_per_mtok_input"], haiku["price_per_mtok_output"]), (0.1, 0.5))
+        self.assertEqual((opus["price_per_mtok_input"], opus["price_per_mtok_output"]), (4.0, 20.0))
+        self.assertNotIn("price_per_mtok_input", unknown)  # left for the person to fill in
+        sent = mock.requests[0]
+        headers = {k.lower(): v for k, v in sent["headers"].items()}
+        self.assertEqual(sent["path"], "/v1/models?limit=1000")
+        self.assertEqual(headers["x-api-key"], KEY)
+        self.assertIn("anthropic-version", headers)
+        self.assertNotIn("authorization", headers)
+
+    def test_a_400_for_a_wrong_key_quotes_the_providers_own_message(self):
+        # (Google and xAI answer a wrong key with 400, not 401; these are their bodies, seen 18 November 2026)
+        cases = [
+            ({"error": {"code": 400, "message": "Please pass a valid API key"}}, "Please pass a valid API key"),
+            (
+                {"code": "invalid-argument", "error": "Incorrect API key provided: %s" % KEY},
+                "Incorrect API key provided",
+            ),
+            ({"detail": "Invalid API Key"}, "Invalid API Key"),
+            (b"not json", "Bad Request"),  # no message: the reason phrase, as before
+        ]
+        for body, text in cases:
+            with self.subTest(text=text):
+                mock = self.mock(lambda h, b, body=body: (400, body, {}))
+                with self.assertRaises(llm_setup.SetupError) as ctx:
+                    llm_setup.list_models(self.settings, {"provider": "custom", "base_url": mock.url, "api_key": KEY})
+                self.assertIn("answered HTTP 400: " + text, str(ctx.exception))
+                self.assertNotIn(KEY, str(ctx.exception))
+
     def test_a_rejected_key_and_an_unreachable_server_explain_themselves_without_the_key(self):
         mock = self.mock(lambda h, body: (401, {"error": {"message": "bad key %s" % KEY}}, {}))
         with self.assertRaises(llm_setup.SetupError) as ctx:
@@ -339,7 +447,10 @@ class ServerTests(unittest.TestCase):
 
     def test_status_lists_the_presets(self):
         providers = llm_setup.public(server.settings, server.llm_registry)["providers"]
-        self.assertEqual([p["id"] for p in providers], ["openrouter", "openai", "groq", "ollama", "lmstudio", "custom"])
+        self.assertEqual(
+            [p["id"] for p in providers],
+            ["openrouter", "anthropic", "openai", "gemini", "xai", "mistral", "groq", "ollama", "lmstudio", "custom"],
+        )
         self.assertTrue(all(p["local"] for p in providers if p["id"] in ("ollama", "lmstudio")))
 
 

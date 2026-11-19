@@ -26,7 +26,7 @@ Measured on 2026-11-09 at `0b5bdd3`.
 | Area | State |
 |---|---|
 | World | 12 neighbourhoods in 11 cities, 60 challenges, 2 road tests, about 32 opt-in world features |
-| Drivers | Rules, the cautious agent, decision models (Jev and others), any OpenAI-compatible LLM, your own module |
+| Drivers | Rules, the cautious agent, decision models (Jev and others), any OpenAI-compatible LLM or Claude through the Claude Platform, your own module |
 | Public demo | Live on GitHub Pages, Rules and browser agents only |
 | Checks | 268 Python tests, 76 Node checks, browser and renderer suites; CI green, 10 to 17 minutes |
 | Seeded benchmark, features off | Rules 12/12 on Kitsilano dry; full 70-route matrix last run 31 October |
@@ -391,7 +391,6 @@ A scenario is ready when all of these hold:
 
 | Item | Why |
 |---|---|
-| A Claude brain | Deferred by decision; the driver interface stays open for it |
 | Road elevation, camber, suspension | Large, and does not help compare drivers |
 | Controlling a real vehicle | Never a goal |
 

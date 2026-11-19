@@ -1,6 +1,19 @@
 {
-  "_comment": "Copy to data/llm-endpoints.json (gitignored) and keep the entries you want. Each entry becomes a driver named llm:<name>. Keys never go in this file: api_key_env names a variable in .env or the environment. Omit api_key_env for local servers that need no key. Prices are USD per million tokens, used when a reply carries no usage.cost (OpenRouter sends the billed cost, which wins); with neither, the cost is unknown ($0). rpm 0 removes the rate limit for a free local server; the budget still applies but counts an unknown cost as $0, so such an endpoint with rpm 0 has no limit. The driver speaks the OpenAI Chat Completions protocol; it was checked live against OpenRouter and Ollama (start Ollama with OLLAMA_CONTEXT_LENGTH=16384, as the prompt is longer than its default context). See docs/agents.md.",
+  "_comment": "Copy to data/llm-endpoints.json (gitignored) and keep the entries you want. Each entry becomes a driver named llm:<name>. Keys never go in this file: api_key_env names a variable in .env or the environment. Omit api_key_env for local servers that need no key. Prices are USD per million tokens, used when a reply carries no usage.cost (OpenRouter sends the billed cost, which wins); with neither, the cost is unknown ($0). rpm 0 removes the rate limit for a free local server; the budget still applies but counts an unknown cost as $0, so such an endpoint with rpm 0 has no limit. The driver speaks the OpenAI Chat Completions protocol, or Anthropic's Messages API for an entry with \"api\": \"anthropic\" (Claude Platform; it takes no temperature and needs max_tokens); it was checked live against OpenRouter and Ollama (start Ollama with OLLAMA_CONTEXT_LENGTH=16384, as the prompt is longer than its default context). See docs/agents.md.",
   "endpoints": [
+    {
+      "name": "claude-haiku-5-5",
+      "label": "Claude Haiku 5.5 (Claude Platform)",
+      "api": "anthropic",
+      "base_url": "https://api.anthropic.com/v1",
+      "model": "claude-haiku-5-5",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "timeout_s": 20,
+      "max_tokens": 2048,
+      "extra_body": {"output_config": {"effort": "low"}},
+      "price_per_mtok_input": 0.1,
+      "price_per_mtok_output": 0.5
+    },
     {
       "name": "gpt-4o-mini",
       "label": "GPT-4o mini",

@@ -40,6 +40,7 @@ MAX_SCRUB_DEPTH = 2 * MAX_TRACE_DEPTH  # scrub() summarises anything deeper; tra
 CHECK_TTL_S = 15.0
 CHECK_TIMEOUT_S = 3.0
 USER_AGENT = "jev-fsd/0.2.0"
+ANTHROPIC_VERSION = "2026-10-21"  # the `anthropic-version` header for Anthropic's API
 
 
 class EndpointError(JevError):
@@ -193,21 +194,31 @@ class _HTTPSHandler(_WatchedHandler, urllib.request.HTTPSHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect, _HTTPHandler, _HTTPSHandler)
 
 
-def headers_for(key: Optional[str], json_body: bool = False) -> Dict[str, str]:
+def headers_for(key: Optional[str], json_body: bool = False, api: str = "openai") -> Dict[str, str]:
+    """Request headers. `api` "anthropic" sends the key as `x-api-key` with the API version Anthropic's
+    Messages and Models APIs need; every other server takes it as a bearer token."""
     headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
     if json_body:
         headers["Content-Type"] = "application/json"
-    if key:
+    if api == "anthropic":
+        headers["anthropic-version"] = ANTHROPIC_VERSION
+        if key:
+            headers["x-api-key"] = key
+    elif key:
         headers["Authorization"] = "Bearer " + key
     return headers
 
 
-def post_json(url: str, payload: dict, key: Optional[str], deadline: float) -> Tuple[Optional[dict], float]:
+def post_json(
+    url: str, payload: dict, key: Optional[str], deadline: float, api: str = "openai"
+) -> Tuple[Optional[dict], float]:
     """One POST that must finish by `deadline` (time.monotonic()): TCP connect, proxy tunnel, TLS
     handshake, headers and body. Raises TimeoutError past it; an HTTPError carries its (short)
     body as `body_text`. Returns (reply, latency_ms); the reply is None when it is nested too deeply
     to parse at all. Infinity, NaN and 1e400 become null, since the reply goes on to the browser."""
-    req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST", headers=headers_for(key, True))
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(), method="POST", headers=headers_for(key, True, api)
+    )
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise TimeoutError("deadline passed")
@@ -561,7 +572,9 @@ class Endpoint:
         else:
             url = self.check_url()
             path = urlsplit(url).path
-            req = urllib.request.Request(url, headers=headers_for(self.api_key))
+            req = urllib.request.Request(
+                url, headers=headers_for(self.api_key, api=getattr(self.config, "api", "openai"))
+            )
             limit = min(CHECK_TIMEOUT_S, self.config.timeout_s)
             req.watchdog = watchdog = _Watchdog(time.monotonic() + limit)  # a trickled reply cannot hold the probe
             try:

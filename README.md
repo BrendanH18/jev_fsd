@@ -129,7 +129,7 @@ checks, and watch what happens.
 |---|---|---|
 | **Rules** | Plain code that scores each safe manoeuvre | Nothing. Free and offline. |
 | **Decision models** | Jev, or another model that answers typed questions with probabilities, through TypeSafe or OpenRouter's Decisions API | A key, or a local server |
-| **LLMs** | Any chat model behind an OpenAI-compatible API: OpenAI, OpenRouter, Groq, vLLM, LM Studio, Ollama… | A key, or a local server |
+| **LLMs** | Claude, OpenAI, Gemini, Grok and Mistral models from each lab's own API, or any chat model behind an OpenAI-compatible API: OpenRouter, Groq, vLLM, LM Studio, Ollama… | A key, or a local server |
 | **Your own agent** | A JavaScript module with one `decide()` function | A local clone and a text editor |
 
 Your own agent can be this small. Save it as `static/js/agents/my-driver.js`:
@@ -255,7 +255,8 @@ A gamepad works too, and on touch screens the controls appear on screen
 ### Connecting a model
 
 Click **Decision ▾** or **LLM ▾**, choose **Connect a model…**, pick a provider (TypeSafe for Jev,
-OpenRouter, Ollama, or any OpenAI-compatible server), paste a key and choose **Save and drive**. It
+OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI, Mistral, Ollama, or any OpenAI-compatible
+server), paste a key and choose **Save and drive**. It
 starts driving straight away, without a restart, and one OpenRouter key covers both kinds.
 
 Keys are saved to `.env` by your local server and are never sent back to the browser. A spend cap
