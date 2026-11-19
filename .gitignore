@@ -33,3 +33,7 @@ data/maps/*.osm.xml
 # Claude Code machine-local files
 .claude/settings.local.json
 .claude/worktrees/
+
+# Secrets and local-only files
+*.pem
+*.key
