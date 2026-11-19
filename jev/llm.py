@@ -75,7 +75,9 @@ RESERVED_BODY_KEYS = {"model", "messages", "stream", "response_format", "n"}
 # "openai": Chat Completions, which most servers speak. "anthropic": Anthropic's Messages API (Claude Platform).
 APIS = ("openai", "anthropic")
 ANTHROPIC_RESERVED_BODY_KEYS = {"model", "messages", "system", "stream"}
-# Anthropic bills prompt-cache writes (5-minute) at 1.25 times its input price and reads at 0.1 times
+# Anthropic bills prompt-cache writes (5-minute) at 1.25 times its input price and reads at 0.1 times on
+# most models. Some read cheaper (Opus and Sonnet 5.5 at 0.05, Fable and Mythos 5.1 and 5.2 at 0.025),
+# so for those the count is a conservative estimate: it can only stop the budget early, never late.
 CACHE_WRITE_RATE = 1.25
 CACHE_READ_RATE = 0.1
 
@@ -306,8 +308,8 @@ def _anthropic_text(response: dict) -> Tuple[str, str]:
     if stop == "refusal":
         details = response.get("stop_details") if isinstance(response.get("stop_details"), dict) else {}
         return "", str(details.get("explanation") or details.get("category") or "declined")[:300]
-    if not content.strip() and stop == "max_tokens":
-        raise ValueError("stopped at max_tokens before it answered; raise max_tokens")
+    if stop == "max_tokens":  # (cut off, so whatever text came may be incomplete JSON)
+        raise ValueError("stopped at max_tokens before it finished answering; raise max_tokens")
     return content[:MAX_CONTENT_CHARS], ""
 
 
@@ -426,11 +428,28 @@ def response_format_for(kind: str, expect: dict) -> Optional[dict]:
     }
 
 
+# One schema for every Claude decision. Anthropic renders output_config.format into the prompt, so a
+# schema listing each decision's own ids would change the cached prefix on almost every call. The
+# user message names the keys and ids to answer with (`answer`), and parse_answer still checks them.
+ANTHROPIC_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "motion": {"type": "string", "enum": list(MOTIONS)},
+        "candidate": {"type": "string"},
+        "route": {"type": "string"},
+        "headlights": {"type": "string"},
+    },
+    "required": [],
+    "additionalProperties": False,
+}
+
+
 def anthropic_payload(config: "EndpointConfig", messages: List[dict], expect: dict, fmt: str) -> dict:
     """A Messages API request. The system messages become the system prompt, marked for prompt caching:
     the browser keeps it identical between calls (brain/llm-prompt.js), so after the first call it is
     billed at the cache-read rate. A prompt shorter than the model's cache minimum is simply not cached.
-    The schema goes in output_config.format, beside any output_config (effort, say) from extra_body."""
+    The fixed ANTHROPIC_SCHEMA goes in output_config.format, beside any output_config (effort, say)
+    from extra_body. (`expect` is unused here: parse_answer checks the reply against it.)"""
     system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
     payload: Dict[str, Any] = {
         "model": config.model,
@@ -442,7 +461,7 @@ def anthropic_payload(config: "EndpointConfig", messages: List[dict], expect: di
     extra = dict(config.extra_body)
     output_config = dict(extra.pop("output_config", None) or {})
     if fmt == "json_schema":
-        output_config["format"] = {"type": "json_schema", "schema": _decision_schema(expect)}
+        output_config["format"] = {"type": "json_schema", "schema": ANTHROPIC_SCHEMA}
     payload.update(extra)
     if output_config:
         payload["output_config"] = output_config

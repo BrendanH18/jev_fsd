@@ -149,6 +149,14 @@ class SaveTests(SetupTestCase):
         entry = self.file()["endpoints"][0]
         self.assertEqual((entry["max_tokens"], entry["extra_body"]["output_config"]["effort"]), (4096, "medium"))
 
+    def test_the_claude_effort_default_goes_only_to_models_that_take_it(self):
+        self.save(provider="anthropic", model="claude-haiku-4-5", api_key=KEY)  # rejects output_config.effort
+        self.save(provider="anthropic", model="claude-opus-5-5")
+        entries = {e["model"]: e for e in self.file()["endpoints"]}
+        self.assertNotIn("extra_body", entries["claude-haiku-4-5"])
+        self.assertEqual(entries["claude-opus-5-5"]["extra_body"], {"output_config": {"effort": "low"}})
+        self.assertEqual(entries["claude-haiku-4-5"]["max_tokens"], 2048)  # other defaults still apply
+
     def test_the_labs_openai_compatible_presets_save_their_url_key_and_defaults(self):
         cases = [
             (
@@ -373,6 +381,7 @@ class ModelListTests(SetupTestCase):
             ),
             ({"detail": "Invalid API Key"}, "Invalid API Key"),
             (b"not json", "Bad Request"),  # no message: the reason phrase, as before
+            ({"error": "x" * 190 + " " + KEY}, "x" * 10),  # a key across the 200-character cut
         ]
         for body, text in cases:
             with self.subTest(text=text):
@@ -380,7 +389,7 @@ class ModelListTests(SetupTestCase):
                 with self.assertRaises(llm_setup.SetupError) as ctx:
                     llm_setup.list_models(self.settings, {"provider": "custom", "base_url": mock.url, "api_key": KEY})
                 self.assertIn("answered HTTP 400: " + text, str(ctx.exception))
-                self.assertNotIn(KEY, str(ctx.exception))
+                self.assertNotIn(KEY[:8], str(ctx.exception))  # not even the part before a cut
 
     def test_a_rejected_key_and_an_unreachable_server_explain_themselves_without_the_key(self):
         mock = self.mock(lambda h, body: (401, {"error": {"message": "bad key %s" % KEY}}, {}))

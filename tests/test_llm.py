@@ -1026,10 +1026,7 @@ class AnthropicTests(LlmTestCase):
         self.assertNotIn("temperature", body)
         self.assertNotIn("response_format", body)
         self.assertEqual(body["output_config"]["effort"], "low")
-        schema = body["output_config"]["format"]["schema"]
-        self.assertEqual(body["output_config"]["format"]["type"], "json_schema")
-        self.assertEqual(schema["properties"]["candidate"]["enum"], EXPECT["candidate"])
-        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(body["output_config"]["format"], {"type": "json_schema", "schema": llm.ANTHROPIC_SCHEMA})
         meta = out["meta"]
         self.assertEqual((meta["input_tokens"], meta["output_tokens"]), (5300, 40))
         self.assertEqual((meta["cache_read_tokens"], meta["cache_write_tokens"]), (5000, 0))
@@ -1038,12 +1035,24 @@ class AnthropicTests(LlmTestCase):
         self.assertTrue(out["trace"]["request"]["url"].endswith("/v1/messages"))
         self.assertNotIn(SECRET, json.dumps(out))
 
+    def test_the_schema_is_the_same_whatever_is_offered_so_the_cached_prefix_holds(self):
+        # (Anthropic renders output_config.format into the prompt; the user message names the ids)
+        server = self.mock(lambda h, body: (200, message('{"route": "r2"}'), {}))
+        reg = self.claude(server)
+        self.decide(reg, "haiku", expect={"motion": ["drive", "stop"]})
+        out = self.decide(reg, "haiku", expect={"route": ["r1", "r2"], "headlights": ["high", "low"]})
+        self.assertEqual(out["answer"], {"route": "r2"})  # (headlights is optional in parse_answer)
+        first, second = (r["body"]["output_config"]["format"] for r in server.requests)
+        self.assertEqual(first, second)
+        out = self.decide(reg, "haiku", expect={"candidate": ["keep_lane_target"]})
+        self.assertIn("no candidate", out["invalid"])  # the ids are still checked against what was offered
+
     def test_a_cache_write_is_priced_at_its_premium(self):
         mock = self.mock(lambda h, body: (200, message('{"motion": "drive"}', cache_write=5000), {}))
         out = self.decide(self.claude(mock), "haiku", expect={"motion": ["drive", "stop"]})
         self.assertAlmostEqual(out["meta"]["cost_usd"], ((300 + 1.25 * 5000) * 0.1 + 40 * 0.5) / 1e6)
 
-    def test_a_refusal_or_a_reply_cut_off_before_answering_is_an_invalid_answer(self):
+    def test_a_refusal_or_a_reply_cut_off_by_max_tokens_is_an_invalid_answer(self):
         refused = message(
             '{"motion": "drive"}',
             stop_reason="refusal",
@@ -1053,7 +1062,7 @@ class AnthropicTests(LlmTestCase):
         out = self.decide(self.claude(mock), "haiku")
         self.assertIsNone(out["answer"])
         self.assertIn("the model refused: declined", out["invalid"])
-        cut = message("", stop_reason="max_tokens")
+        cut = message('{"motion": "dri', stop_reason="max_tokens")  # cut off inside the JSON
         mock = self.mock(lambda h, body: (200, cut, {}))
         out = self.decide(self.claude(mock), "haiku")
         self.assertIsNone(out["answer"])

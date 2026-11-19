@@ -243,11 +243,14 @@ Platform credits; get a key at [platform.claude.com](https://platform.claude.com
 With `"api": "anthropic"` the driver posts to `{base_url}/messages` with the key in `x-api-key`
 and `anthropic-version: 2026-10-21`. The system message goes in `system`, marked for prompt caching:
 the browser keeps it the same on every call (about 5,000 tokens), so after the first call it costs a
-tenth of the input price. The schema goes in `output_config.format`, next to any `output_config`
-in `extra_body` (the preset sets `effort` to `low`, which keeps a decision quick). That API takes
+tenth of the input price or less, depending on the model. A fixed schema goes in `output_config.format` (one for every decision,
+since Anthropic renders it into the cached prompt; the user message names the ids, and the server
+still checks them), next to any `output_config` in `extra_body`. The preset sets `effort` to `low`,
+which keeps a decision quick, on the Claude models that accept it (not Claude Haiku 4.5). That API takes
 no `temperature`, so an entry that sets one is refused, and `max_tokens` cannot be `null`; thinking
 tokens count toward it. A refusal (`stop_reason: "refusal"`) is an invalid answer and falls back to
-Rules. Cost counts cache writes at 1.25 times and cache reads at 0.1 times the input price, and the
+Rules. Cost counts cache writes at 1.25 times and cache reads at 0.1 times the input price (a
+conservative estimate on the models whose reads cost less, such as Opus and Sonnet 5.5), and the
 decision trace shows `cache_read_tokens` and `cache_write_tokens`. Not yet checked against the live
 API.
 

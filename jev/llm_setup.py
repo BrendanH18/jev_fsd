@@ -42,6 +42,30 @@ MAX_MODELS_BYTES = 16 * 1024 * 1024  # OpenRouter lists hundreds of models with 
 MAX_MODELS = 5000
 CUSTOM_KEY_PREFIX = "JEV_FSD_LLM_KEY_"
 
+# Anthropic's list prices, USD per million (input, output) tokens, as of November 2026, for filling the
+# dialog's price fields. Anthropic's Models API lists no prices. A model missing here leaves the fields
+# empty to fill in by hand. Update with https://platform.claude.com/docs/en/about-claude/pricing.
+CLAUDE_PRICES = {
+    "claude-fable-5-2": (8.0, 40.0),
+    "claude-mythos-5-2": (8.0, 40.0),
+    "claude-fable-5-1": (10.0, 50.0),
+    "claude-mythos-5-1": (10.0, 50.0),
+    "claude-fable-5": (10.0, 50.0),
+    "claude-opus-5-5": (4.0, 20.0),
+    "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-6": (5.0, 25.0),
+    "claude-sonnet-5-5": (2.0, 10.0),
+    "claude-sonnet-5": (2.0, 10.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-haiku-5-5": (0.1, 0.5),  # (prompts up to 100K tokens; a driving decision is far below)
+    "claude-haiku-4-5": (1.0, 5.0),
+}
+# The Claude models that take output_config.effort: every listed one but Claude Haiku 4.5, which
+# rejects it. Other models (older ones, or ones newer than this list) get no effort default.
+CLAUDE_EFFORT_MODELS = tuple(m for m in CLAUDE_PRICES if m != "claude-haiku-4-5")
+
 PROVIDERS = (
     {
         "id": "openrouter",
@@ -64,6 +88,7 @@ PROVIDERS = (
         # max_tokens, and low effort keeps a driving decision quick.
         "max_tokens": 2048,
         "extra_body": {"output_config": {"effort": "low"}},
+        "extra_body_models": CLAUDE_EFFORT_MODELS,  # (extra_body only for these models)
         "hint": "Claude models through Anthropic's own API, billed to your Claude Platform credits. "
         "Prices fill in for current models.",
     },
@@ -143,27 +168,6 @@ PROVIDERS = (
     },
 )
 _lock = threading.Lock()
-
-# Anthropic's list prices, USD per million (input, output) tokens, as of November 2026, for filling the
-# dialog's price fields. Anthropic's Models API lists no prices. A model missing here leaves the fields
-# empty to fill in by hand. Update with https://platform.claude.com/docs/en/about-claude/pricing.
-CLAUDE_PRICES = {
-    "claude-fable-5-2": (8.0, 40.0),
-    "claude-mythos-5-2": (8.0, 40.0),
-    "claude-fable-5-1": (10.0, 50.0),
-    "claude-mythos-5-1": (10.0, 50.0),
-    "claude-fable-5": (10.0, 50.0),
-    "claude-opus-5-5": (4.0, 20.0),
-    "claude-opus-5": (5.0, 25.0),
-    "claude-opus-4-8": (5.0, 25.0),
-    "claude-opus-4-7": (5.0, 25.0),
-    "claude-opus-4-6": (5.0, 25.0),
-    "claude-sonnet-5-5": (2.0, 10.0),
-    "claude-sonnet-5": (2.0, 10.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-5-5": (0.1, 0.5),  # (prompts up to 100K tokens; a driving decision is far below)
-    "claude-haiku-4-5": (1.0, 5.0),
-}
 
 
 class SetupError(ValueError):
@@ -369,7 +373,7 @@ def _error_message(body: str) -> str:
     error = data.get("error")
     for value in (error.get("message") if isinstance(error, dict) else error, data.get("detail"), data.get("message")):
         if isinstance(value, str) and value.strip():
-            return value.strip()[:200]
+            return value.strip()
     return ""
 
 
@@ -398,7 +402,8 @@ def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float, api: 
         if err.code in (401, 403):
             raise SetupError("%s rejected the key (HTTP %d). Check it and try again." % (label, err.code))
         # (Google and xAI answer a wrong key with 400, so their own words say what went wrong)
-        said = _error_message(body) or err.reason
+        # (scrubbed before it is shortened, so a key cut in two cannot leave its first half behind)
+        said = scrub(_error_message(body), key)[:200] or err.reason
         raise SetupError(scrub("%s answered HTTP %d: %s" % (where, err.code, said), key))
     except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as err:
         if watchdog.cancel():
@@ -527,7 +532,7 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
                 if body.get(field) in (None, ""):
                     raw.pop(field, None)
         for field in pillar.default_fields:
-            if field in p:
+            if field in p and model in p.get(field + "_models", (model,)):
                 raw.setdefault(field, p[field])
         problems: List[str] = []
         if not pillar.validate(raw, "endpoint %r" % name, problems).ok or problems:
