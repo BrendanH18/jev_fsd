@@ -42,6 +42,30 @@ MAX_MODELS_BYTES = 16 * 1024 * 1024  # OpenRouter lists hundreds of models with 
 MAX_MODELS = 5000
 CUSTOM_KEY_PREFIX = "JEV_FSD_LLM_KEY_"
 
+# Anthropic's list prices, USD per million (input, output) tokens, as of November 2026, for filling the
+# dialog's price fields. Anthropic's Models API lists no prices. A model missing here leaves the fields
+# empty to fill in by hand. Update with https://platform.claude.com/docs/en/about-claude/pricing.
+CLAUDE_PRICES = {
+    "claude-fable-5-2": (8.0, 40.0),
+    "claude-mythos-5-2": (8.0, 40.0),
+    "claude-fable-5-1": (10.0, 50.0),
+    "claude-mythos-5-1": (10.0, 50.0),
+    "claude-fable-5": (10.0, 50.0),
+    "claude-opus-5-5": (4.0, 20.0),
+    "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-6": (5.0, 25.0),
+    "claude-sonnet-5-5": (2.0, 10.0),
+    "claude-sonnet-5": (2.0, 10.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-haiku-5-5": (0.1, 0.5),  # (prompts up to 100K tokens; a driving decision is far below)
+    "claude-haiku-4-5": (1.0, 5.0),
+}
+# The Claude models that take output_config.effort: every listed one but Claude Haiku 4.5, which
+# rejects it. Other models (older ones, or ones newer than this list) get no effort default.
+CLAUDE_EFFORT_MODELS = tuple(m for m in CLAUDE_PRICES if m != "claude-haiku-4-5")
+
 PROVIDERS = (
     {
         "id": "openrouter",
@@ -53,12 +77,63 @@ PROVIDERS = (
         "hint": "One key for models from OpenAI, Anthropic, Google, Meta and others. Prices fill in automatically.",
     },
     {
+        "id": "anthropic",
+        "label": "Claude Platform",
+        "base_url": "https://api.anthropic.com/v1",
+        "api": "anthropic",
+        "key_env": "ANTHROPIC_API_KEY",
+        "key_url": "https://platform.claude.com/settings/keys",
+        "timeout_s": 20,
+        # Defaults for a new entry; an entry saved before keeps its own. Thinking tokens count toward
+        # max_tokens, and low effort keeps a driving decision quick.
+        "max_tokens": 2048,
+        "extra_body": {"output_config": {"effort": "low"}},
+        "extra_body_models": CLAUDE_EFFORT_MODELS,  # (extra_body only for these models)
+        "hint": "Claude models through Anthropic's own API, billed to your Claude Platform credits. "
+        "Prices fill in for current models.",
+    },
+    {
         "id": "openai",
         "label": "OpenAI",
         "base_url": "https://api.openai.com/v1",
         "key_env": "OPENAI_API_KEY",
         "key_url": "https://platform.openai.com/api-keys",
         "hint": "Prices are not listed by OpenAI's API; add them to count spend against the budget.",
+    },
+    {
+        "id": "gemini",
+        "label": "Google Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "key_env": "GEMINI_API_KEY",
+        "key_url": "https://aistudio.google.com/apikey",
+        "timeout_s": 20,
+        # Gemini 3 and later always think; low effort keeps a decision quick, and the larger max_tokens
+        # leaves room in case thinking counts toward it (Google's compatibility docs do not say).
+        "max_tokens": 2048,
+        "extra_body": {"reasoning_effort": "low"},
+        "hint": "Gemini through Google's OpenAI-compatible endpoint (in beta). Add prices to count spend "
+        "against the budget.",
+    },
+    {
+        "id": "xai",
+        "label": "xAI",
+        "base_url": "https://api.x.ai/v1",
+        "key_env": "XAI_API_KEY",
+        "key_url": "https://console.x.ai/team/default/api-keys",
+        "timeout_s": 20,
+        # Grok's reasoning cannot be turned off and defaults to high; low keeps a decision quick. A model
+        # without reasoning may refuse the setting: remove extra_body from its entry.
+        "extra_body": {"reasoning_effort": "low"},
+        "hint": "Grok models. Add prices to count spend against the budget.",
+    },
+    {
+        "id": "mistral",
+        "label": "Mistral",
+        "base_url": "https://api.mistral.ai/v1",
+        "key_env": "MISTRAL_API_KEY",
+        "key_url": "https://console.mistral.ai/api-keys",
+        "timeout_s": 20,
+        "hint": "Mistral's models from its own API. Add prices to count spend against the budget.",
     },
     {
         "id": "groq",
@@ -113,9 +188,12 @@ class Pillar:
         key_prefix: str,
         preset_fields: Tuple[str, ...],
         reserved: Callable[[Settings, str], Optional[str]] = lambda settings, name: None,
+        default_fields: Tuple[str, ...] = (),
     ):
         self.prefix, self.providers, self.path, self.validate = prefix, providers, path, validate
         self.key_prefix, self.preset_fields, self.reserved = key_prefix, preset_fields, reserved
+        # (preset_fields always come from the preset; default_fields only where the entry has none)
+        self.default_fields = default_fields
         self.by_id = {p["id"]: p for p in providers}
 
     def provider(self, pid: Any) -> dict:
@@ -166,8 +244,9 @@ LLM = Pillar(
     path=lambda s: s.llm_endpoints_path,
     validate=EndpointConfig,
     key_prefix=CUSTOM_KEY_PREFIX,
-    preset_fields=("response_format", "timeout_s", "rpm"),
+    preset_fields=("api", "response_format", "timeout_s", "rpm"),
     reserved=_reserved_llm_name,
+    default_fields=("max_tokens", "extra_body"),
 )
 
 
@@ -282,11 +361,27 @@ def base_url_for(p: dict, body: dict) -> str:
     return p["base_url"] or text(body, "base_url", 500).rstrip("/")
 
 
-def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float) -> Any:
+def _error_message(body: str) -> str:
+    """The message in a JSON error reply: OpenAI-style error.message, Google's, xAI's "error" string,
+    Mistral's "detail", or a top-level "message". Empty when there is none."""
+    try:
+        data = json.loads(body)
+    except (ValueError, RecursionError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    error = data.get("error")
+    for value in (error.get("message") if isinstance(error, dict) else error, data.get("detail"), data.get("message")):
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float, api: str = "openai") -> Any:
     """GET a model list for the dialog, with one total deadline: a socket timeout bounds each read, so
     a server that trickles its reply could otherwise hold this request open indefinitely. Costs nothing."""
     where = public_url(url)
-    req = urllib.request.Request(url, headers=headers_for(key))
+    req = urllib.request.Request(url, headers=headers_for(key, api=api))
     req.watchdog = watchdog = _Watchdog(time.monotonic() + timeout_s)
     late = SetupError("%s did not send its model list within %g s." % (where, timeout_s))
     try:
@@ -296,12 +391,20 @@ def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float) -> An
         if expired:  # the socket was shut mid-reply, so the list may be cut short
             raise late
     except urllib.error.HTTPError as err:
-        err.close()
+        try:  # read the error body while the watchdog still guards the socket
+            body = err.read(4096).decode("utf-8", errors="replace") if err.fp else ""
+        except (OSError, http.client.HTTPException):
+            body = ""
+        finally:
+            err.close()
         if watchdog.cancel():
             raise late
         if err.code in (401, 403):
             raise SetupError("%s rejected the key (HTTP %d). Check it and try again." % (label, err.code))
-        raise SetupError(scrub("%s answered HTTP %d: %s" % (where, err.code, err.reason), key))
+        # (Google and xAI answer a wrong key with 400, so their own words say what went wrong)
+        # (scrubbed before it is shortened, so a key cut in two cannot leave its first half behind)
+        said = scrub(_error_message(body), key)[:200] or err.reason
+        raise SetupError(scrub("%s answered HTTP %d: %s" % (where, err.code, said), key))
     except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as err:
         if watchdog.cancel():
             raise late
@@ -318,17 +421,19 @@ def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float) -> An
         raise SetupError("%s did not return a JSON model list." % where)
 
 
-def parse_models(data: Any) -> List[dict]:
+def parse_models(data: Any, prices_by_id: bool = False) -> List[dict]:
     """{data: [...]} or a bare list -> [{id, name?, price_per_mtok_input?, price_per_mtok_output?,
-    context_length?}], sorted by id. OpenRouter's per-token prices become USD per million tokens."""
+    context_length?}], sorted by id. OpenRouter's per-token prices become USD per million tokens.
+    Anthropic's list has no prices, so with `prices_by_id` they come from CLAUDE_PRICES."""
     items = data.get("data", data.get("models")) if isinstance(data, dict) else data
     models = []
     for item in items if isinstance(items, list) else []:
         if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not 0 < len(item["id"]) <= 200:
             continue
         model: Dict[str, Any] = {"id": item["id"]}
-        if isinstance(item.get("name"), str):
-            model["name"] = item["name"][:120]
+        name = item.get("name", item.get("display_name"))  # (display_name: Anthropic's Models API)
+        if isinstance(name, str):
+            model["name"] = name[:120]
         pricing = item.get("pricing")
         if isinstance(pricing, dict):  # OpenRouter: USD per token, as strings
             try:
@@ -337,7 +442,10 @@ def parse_models(data: Any) -> List[dict]:
                     model["price_per_mtok_input"], model["price_per_mtok_output"] = (round(v, 6) for v in prices)
             except (KeyError, TypeError, ValueError):
                 pass
-        context = item.get("context_length")
+        listed = CLAUDE_PRICES.get(item["id"]) if prices_by_id else None
+        if listed:
+            model["price_per_mtok_input"], model["price_per_mtok_output"] = listed
+        context = item.get("context_length", item.get("max_input_tokens"))
         if isinstance(context, int) and not isinstance(context, bool) and context > 0:
             model["context_length"] = context
         models.append(model)
@@ -354,8 +462,17 @@ def list_models(settings: Settings, body: dict) -> dict:
     p = LLM.provider(body.get("provider"))
     key = text(body, "api_key", 512) or (settings.get(p["key_env"]) if p.get("key_env") else None)
     base_url = probe_url(base_url_for(p, body), keyed=bool(key))
-    data = fetch_json(base_url + "/models", key, p["label"], MODELS_TIMEOUT_S)
-    return {"provider": p["id"], "endpoint": public_url(base_url), "models": parse_models(data)}
+    api = p.get("api", "openai")
+    if api == "anthropic" and not key:
+        raise SetupError("Paste your %s API key to list its models." % p["label"])
+    # (Anthropic's list is paged, 20 to a page by default; one page of 1000 holds every model)
+    url = base_url + ("/models?limit=1000" if api == "anthropic" else "/models")
+    data = fetch_json(url, key, p["label"], MODELS_TIMEOUT_S, api)
+    return {
+        "provider": p["id"],
+        "endpoint": public_url(base_url),
+        "models": parse_models(data, prices_by_id=api == "anthropic"),
+    }
 
 
 def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> dict:
@@ -414,6 +531,14 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
             for field in ("price_per_mtok_input", "price_per_mtok_output"):
                 if body.get(field) in (None, ""):
                     raw.pop(field, None)
+        for field in pillar.default_fields:
+            if field not in p:
+                continue
+            if model in p.get(field + "_models", (model,)):
+                raw.setdefault(field, p[field])
+            elif raw.get(field) == p[field]:
+                # the preset's default, kept from a model that took it, would break this one
+                del raw[field]
         problems: List[str] = []
         if not pillar.validate(raw, "endpoint %r" % name, problems).ok or problems:
             raise SetupError(problems[0])

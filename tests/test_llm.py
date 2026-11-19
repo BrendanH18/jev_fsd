@@ -960,6 +960,166 @@ class EndpointTests(LlmTestCase):
                 llm.llm_decide(reg, {"endpoint": "a", **body})
 
 
+def message(text, stop_reason="end_turn", input_tokens=300, output_tokens=40, cache_write=0, cache_read=0, **extra):
+    """A Messages API reply, as Anthropic's API sends it."""
+    return {
+        "id": "msg_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-haiku-5-5",
+        "content": [{"type": "thinking", "thinking": "", "signature": "sig"}, {"type": "text", "text": text}],
+        "stop_reason": stop_reason,
+        "usage": {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_creation_input_tokens": cache_write,
+            "cache_read_input_tokens": cache_read,
+        },
+        **extra,
+    }
+
+
+def lower_keys(headers):
+    return {k.lower(): v for k, v in headers.items()}
+
+
+class AnthropicTests(LlmTestCase):
+    """Entries with "api": "anthropic" (the Claude Platform preset) against a mock Messages API."""
+
+    def claude(self, mock, **entry):
+        return self.registry(
+            [
+                {
+                    "name": "haiku",
+                    "api": "anthropic",
+                    "base_url": mock.url,
+                    "model": "claude-haiku-5-5",
+                    "api_key_env": "ANTHROPIC_API_KEY",
+                    "max_tokens": 2048,
+                    "extra_body": {"output_config": {"effort": "low"}},
+                    "price_per_mtok_input": 0.1,
+                    "price_per_mtok_output": 0.5,
+                    **entry,
+                }
+            ],
+            environ={"ANTHROPIC_API_KEY": SECRET},
+        )
+
+    def test_messages_request_with_cached_system_prompt_schema_and_cache_priced_cost(self):
+        reply = message('{"motion": "stop", "candidate": "stop_at_line"}', cache_write=0, cache_read=5000)
+        mock = self.mock(lambda h, body: (200, reply, {}))
+        out = self.decide(self.claude(mock), "haiku")
+        self.assertEqual(out["answer"], {"motion": "stop", "candidate": "stop_at_line"})
+        self.assertIsNone(out["invalid"])
+        sent = mock.requests[0]
+        self.assertEqual(sent["path"], "/v1/messages")
+        headers = lower_keys(sent["headers"])
+        self.assertEqual(headers["x-api-key"], SECRET)
+        self.assertNotIn("authorization", headers)
+        self.assertEqual(headers["anthropic-version"], endpoints.ANTHROPIC_VERSION)
+        body = sent["body"]
+        self.assertEqual(
+            body["system"], [{"type": "text", "text": "You drive.", "cache_control": {"type": "ephemeral"}}]
+        )
+        self.assertEqual(body["messages"], [MESSAGES[1]])
+        self.assertEqual(body["max_tokens"], 2048)
+        self.assertNotIn("temperature", body)
+        self.assertNotIn("response_format", body)
+        self.assertEqual(body["output_config"]["effort"], "low")
+        self.assertEqual(body["output_config"]["format"], {"type": "json_schema", "schema": llm.ANTHROPIC_SCHEMA})
+        meta = out["meta"]
+        self.assertEqual((meta["input_tokens"], meta["output_tokens"]), (5300, 40))
+        self.assertEqual((meta["cache_read_tokens"], meta["cache_write_tokens"]), (5000, 0))
+        self.assertEqual(meta["backend"], "anthropic messages (stdlib)")
+        self.assertAlmostEqual(meta["cost_usd"], ((300 + 0.1 * 5000) * 0.1 + 40 * 0.5) / 1e6)
+        self.assertTrue(out["trace"]["request"]["url"].endswith("/v1/messages"))
+        self.assertNotIn(SECRET, json.dumps(out))
+
+    def test_the_schema_is_the_same_whatever_is_offered_so_the_cached_prefix_holds(self):
+        # (Anthropic renders output_config.format into the prompt; the user message names the ids)
+        server = self.mock(lambda h, body: (200, message('{"route": "r2"}'), {}))
+        reg = self.claude(server)
+        self.decide(reg, "haiku", expect={"motion": ["drive", "stop"]})
+        out = self.decide(reg, "haiku", expect={"route": ["r1", "r2"], "headlights": ["high", "low"]})
+        self.assertEqual(out["answer"], {"route": "r2"})  # (headlights is optional in parse_answer)
+        first, second = (r["body"]["output_config"]["format"] for r in server.requests)
+        self.assertEqual(first, second)
+        out = self.decide(reg, "haiku", expect={"candidate": ["keep_lane_target"]})
+        self.assertIn("no candidate", out["invalid"])  # the ids are still checked against what was offered
+
+    def test_a_cache_write_is_priced_at_its_premium(self):
+        mock = self.mock(lambda h, body: (200, message('{"motion": "drive"}', cache_write=5000), {}))
+        out = self.decide(self.claude(mock), "haiku", expect={"motion": ["drive", "stop"]})
+        self.assertAlmostEqual(out["meta"]["cost_usd"], ((300 + 1.25 * 5000) * 0.1 + 40 * 0.5) / 1e6)
+
+    def test_a_refusal_or_a_reply_cut_off_by_max_tokens_is_an_invalid_answer(self):
+        refused = message(
+            '{"motion": "drive"}',
+            stop_reason="refusal",
+            stop_details={"type": "refusal", "category": None, "explanation": "declined"},
+        )
+        mock = self.mock(lambda h, body: (200, refused, {}))
+        out = self.decide(self.claude(mock), "haiku")
+        self.assertIsNone(out["answer"])
+        self.assertIn("the model refused: declined", out["invalid"])
+        cut = message('{"motion": "dri', stop_reason="max_tokens")  # cut off inside the JSON
+        mock = self.mock(lambda h, body: (200, cut, {}))
+        out = self.decide(self.claude(mock), "haiku")
+        self.assertIsNone(out["answer"])
+        self.assertIn("max_tokens", out["invalid"])
+        self.assertEqual(out["meta"]["output_tokens"], 40)  # the call still counts
+
+    def test_unsupported_structured_output_drops_only_the_format(self):
+        def reply(h, body):
+            if "format" in body.get("output_config", {}):
+                return 400, {"type": "error", "error": {"type": "invalid_request_error", "message": "no format"}}, {}
+            return 200, message('{"motion": "drive", "candidate": "keep_lane_target"}'), {}
+
+        mock = self.mock(reply)
+        out = self.decide(self.claude(mock), "haiku")
+        self.assertEqual(out["answer"]["candidate"], "keep_lane_target")
+        self.assertEqual(mock.requests[1]["body"]["output_config"], {"effort": "low"})
+        self.assertEqual(out["meta"]["response_format"], "none")
+
+    def test_errors_quote_anthropics_error_message(self):
+        mock = self.mock(
+            lambda h, body: (401, {"type": "error", "error": {"type": "authentication_error", "message": "bad"}}, {})
+        )
+        with self.assertRaises(JevError) as ctx:
+            self.decide(self.claude(mock), "haiku")
+        self.assertEqual(ctx.exception.status, 401)
+        self.assertIn("rejected the API key (401): bad", str(ctx.exception))
+
+    def test_check_sends_the_key_as_x_api_key(self):
+        mock = self.mock(lambda h, body: (200, {"data": []}, {}))
+        self.assertEqual(self.claude(mock).check_all()[0]["status"], "ready")
+        headers = lower_keys(mock.requests[0]["headers"])
+        self.assertEqual((mock.requests[0]["path"], headers["x-api-key"]), ("/v1/models", SECRET))
+        self.assertNotIn("authorization", headers)
+
+    def test_settings_anthropics_api_does_not_take_are_config_problems(self):
+        base = {"name": "c", "api": "anthropic", "base_url": "https://api.anthropic.com/v1", "model": "m"}
+        cases = [
+            ({"api": "gemini"}, "api must be one of"),
+            ({"response_format": "json_object"}, "no json_object mode"),
+            ({"temperature": 0}, "takes no temperature"),
+            ({"max_tokens": None}, "needs max_tokens"),
+            ({"extra_body": {"system": "x"}}, "extra_body must be an object without"),
+            ({"extra_body": {"top_p": 0.9}}, "extra_body must be an object without"),
+            ({"extra_body": {"output_config": {"format": {}}}}, "without format"),
+        ]
+        for change, text in cases:
+            with self.subTest(change=change):
+                problems = []
+                self.assertFalse(llm.EndpointConfig({**base, **change}, "entry", problems).ok)
+                self.assertIn(text, problems[0])
+        problems = []
+        config = llm.EndpointConfig(base, "entry", problems)
+        self.assertTrue(config.ok and not problems)
+        self.assertIsNone(config.temperature)  # no default temperature to send
+        self.assertEqual(config.call_path, "/messages")
+
+
 class ServerRouteTests(LlmTestCase):
     """The browser-facing routes: same security checks as Jev, and the key never leaves the server."""
 
