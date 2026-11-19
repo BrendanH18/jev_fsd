@@ -96,8 +96,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # scripts/test_browser_pages.py took 16-20 min as one job; its groups take about 5 min each.
           - title: simulation, HUD, explorer and renderer
-            script: scripts/test_browser_pages.py
+            script: scripts/test_browser_pages.py --group pages
+          - title: practice finishes
+            script: scripts/test_browser_pages.py --group practice
+          - title: parking finishes, debrief replay and error recovery
+            script: scripts/test_browser_pages.py --group parking
           - title: arena evaluation, history and comparisons
             script: scripts/test_arena_browser.py
     env:
