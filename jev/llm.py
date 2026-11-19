@@ -74,7 +74,8 @@ RESPONSE_FORMATS = ("json_schema", "json_object", "none")
 RESERVED_BODY_KEYS = {"model", "messages", "stream", "response_format", "n"}
 # "openai": Chat Completions, which most servers speak. "anthropic": Anthropic's Messages API (Claude Platform).
 APIS = ("openai", "anthropic")
-ANTHROPIC_RESERVED_BODY_KEYS = {"model", "messages", "system", "stream"}
+# (version 2026-10-21 of Anthropic's API refuses every sampling parameter)
+ANTHROPIC_RESERVED_BODY_KEYS = {"model", "messages", "system", "stream", "temperature", "top_p", "top_k"}
 # Anthropic bills prompt-cache writes (5-minute) at 1.25 times its input price and reads at 0.1 times on
 # most models. Some read cheaper (Opus and Sonnet 5.5 at 0.05, Fable and Mythos 5.1 and 5.2 at 0.025),
 # so for those the count is a conservative estimate: it can only stop the budget early, never late.

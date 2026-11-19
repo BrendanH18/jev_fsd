@@ -156,6 +156,17 @@ class SaveTests(SetupTestCase):
         self.assertNotIn("extra_body", entries["claude-haiku-4-5"])
         self.assertEqual(entries["claude-opus-5-5"]["extra_body"], {"output_config": {"effort": "low"}})
         self.assertEqual(entries["claude-haiku-4-5"]["max_tokens"], 2048)  # other defaults still apply
+        # A name moved to a model that rejects effort drops the preset's effort, but not a hand edit.
+        self.save(provider="anthropic", name="main", model="claude-opus-5-5")
+        self.save(provider="anthropic", name="main", model="claude-haiku-4-5")
+        main = next(e for e in self.file()["endpoints"] if e["name"] == "main")
+        self.assertNotIn("extra_body", main)
+        data = self.file()
+        next(e for e in data["endpoints"] if e["name"] == "main")["extra_body"] = {"metadata": {"user_id": "lab"}}
+        (self.root / "llm.json").write_text(json.dumps(data))
+        self.save(provider="anthropic", name="main", model="claude-haiku-4-5")
+        main = next(e for e in self.file()["endpoints"] if e["name"] == "main")
+        self.assertEqual(main["extra_body"], {"metadata": {"user_id": "lab"}})
 
     def test_the_labs_openai_compatible_presets_save_their_url_key_and_defaults(self):
         cases = [

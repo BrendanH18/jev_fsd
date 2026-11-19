@@ -532,8 +532,13 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
                 if body.get(field) in (None, ""):
                     raw.pop(field, None)
         for field in pillar.default_fields:
-            if field in p and model in p.get(field + "_models", (model,)):
+            if field not in p:
+                continue
+            if model in p.get(field + "_models", (model,)):
                 raw.setdefault(field, p[field])
+            elif raw.get(field) == p[field]:
+                # the preset's default, kept from a model that took it, would break this one
+                del raw[field]
         problems: List[str] = []
         if not pillar.validate(raw, "endpoint %r" % name, problems).ok or problems:
             raise SetupError(problems[0])

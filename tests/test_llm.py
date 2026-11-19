@@ -1105,6 +1105,7 @@ class AnthropicTests(LlmTestCase):
             ({"temperature": 0}, "takes no temperature"),
             ({"max_tokens": None}, "needs max_tokens"),
             ({"extra_body": {"system": "x"}}, "extra_body must be an object without"),
+            ({"extra_body": {"top_p": 0.9}}, "extra_body must be an object without"),
             ({"extra_body": {"output_config": {"format": {}}}}, "without format"),
         ]
         for change, text in cases:
