@@ -4,7 +4,9 @@ name: City interaction soak
 # and as warning annotations (scripts/soak_summary.py), so they stay visible.
 on:
   schedule:
-    - cron: '43 9 * * 1'
+    # Thursdays, so it never shares runners with the Monday benchmark (bench.yml), which ran twice
+    # as slow when both ran at once.
+    - cron: '43 9 * * 4'
   workflow_dispatch:
 
 permissions:

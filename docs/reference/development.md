@@ -35,7 +35,7 @@ uv run scripts/verify_jev.py --offline
 ```
 
 With a running app, `uv run --with playwright python scripts/test_browser_pages.py` runs the `/tests`
-page, the renderer assertions and a check that the pilot controls fit the HUD panel in headless Chromium, and `scripts/test_arena_browser.py` runs the
+page, the renderer assertions, a check that the pilot controls fit the HUD panel, and the practice finish, debrief replay and error recovery cases in headless Chromium (`--group pages`, `practice` or `parking` runs one part, as CI does), and `scripts/test_arena_browser.py` runs the
 arena workflow (install the browser once with `uv run --with playwright python -m playwright install chromium`).
 CI runs all of the above on every pull request.
 

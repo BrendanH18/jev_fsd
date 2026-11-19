@@ -4,6 +4,10 @@ uv run --with playwright python scripts/test_browser_pages.py --url http://127.0
 Runs the /tests page (simulation, HUD and explorer assertions), the WebGL renderer assertions from
 the simulator page, and a layout check that the pilot controls fit the HUD panel. Requires
 Playwright and its Chromium browser (or --chromium /path/to/chromium).
+
+--group runs one part, so CI can run them side by side (each takes about 5 minutes there):
+pages (the /tests page, renderer and HUD layout), practice (Pothole season finishes) and parking
+(Squeeze in finishes, debrief replay and simulation error recovery). Without it, all three run.
 """
 
 import argparse
@@ -155,7 +159,13 @@ def report(label, results):
     return not failed and len(results) > 0
 
 
-def check(url, chromium=None):
+GROUPS = ["pages", "practice", "parking"]
+# Practice finish fixtures by the challenge they drive; the parking ones end in Squeeze in.
+PRACTICE_KINDS = ["early", "arrived", "rules", "modified", "branched", "resume"]
+PARKING_KINDS = ["parked", "wide-kerb", "outside-space", "simulation-error"]
+
+
+def check(url, chromium=None, groups=GROUPS):
     ok = True
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -163,110 +173,84 @@ def check(url, chromium=None):
             executable_path=chromium,
             args=["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
         )
-        # The app's CSP forbids eval, which Playwright's wait/evaluate helpers rely on.
-        page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
         errors = []
-        page.on("pageerror", lambda error: errors.append(str(error)))
 
-        page.goto(url.rstrip("/") + "/tests")
-        page.wait_for_function("Array.isArray(window.__results)", timeout=TIMEOUT_MS)
-        ok &= report("browser tests", page.evaluate("window.__results"))
-
-        page.goto(url.rstrip("/") + "/")
-        page.wait_for_function("!!window.__jev?.view", timeout=TIMEOUT_MS)
-        page.evaluate("window.__jev.advance(1)")
-        results = page.evaluate("import('/tests/render-tests.js').then(m => m.runRenderTests())")
-        ok &= report("renderer tests", results)
-        ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
-        page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
-
-        for kind in [
-            "early",
-            "arrived",
-            "rules",
-            "modified",
-            "branched",
-            "parked",
-            "wide-kerb",
-            "outside-space",
-            "simulation-error",
-            "resume",
-        ]:
+        def open_page(path):
+            # The app's CSP forbids eval, which Playwright's wait/evaluate helpers rely on.
             page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
             page.on("pageerror", lambda error: errors.append(str(error)))
+            if path is not None:
+                page.goto(url.rstrip("/") + path, wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+                page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+            return page
+
+        if "pages" in groups:
+            page = open_page(None)
+            page.goto(url.rstrip("/") + "/tests")
+            page.wait_for_function("Array.isArray(window.__results)", timeout=TIMEOUT_MS)
+            ok &= report("browser tests", page.evaluate("window.__results"))
+
+            page.goto(url.rstrip("/") + "/")
+            page.wait_for_function("!!window.__jev?.view", timeout=TIMEOUT_MS)
+            page.evaluate("window.__jev.advance(1)")
+            results = page.evaluate("import('/tests/render-tests.js').then(m => m.runRenderTests())")
+            ok &= report("renderer tests", results)
+            ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
+            page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
+
+        kinds = (PRACTICE_KINDS if "practice" in groups else []) + (PARKING_KINDS if "parking" in groups else [])
+        for kind in kinds:
             driver = "rules" if kind == "rules" else "manual"
-            challenge = (
-                "parallel-park"
-                if kind in ["parked", "wide-kerb", "outside-space", "simulation-error"]
-                else "pothole-season"
-            )
-            page.goto(
-                url.rstrip("/") + f"/?challenge={challenge}&drive={driver}&quality=low",
-                wait_until="domcontentloaded",
-                timeout=TIMEOUT_MS,
-            )
-            page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+            challenge = "parallel-park" if kind in PARKING_KINDS else "pothole-season"
+            page = open_page(f"/?challenge={challenge}&drive={driver}&quality=low")
             page.evaluate("window.__jev.world.paused = true")
             ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
             page.close()
 
-        page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
-        page.on("pageerror", lambda error: errors.append(str(error)))
-        page.goto(
-            url.rstrip("/") + "/?challenge=pothole-season&drive=manual&quality=low",
-            wait_until="domcontentloaded",
-            timeout=TIMEOUT_MS,
-        )
-        page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
-        ok &= report("debrief replay integration", page.evaluate(DEBRIEF_REPLAY))
-        page.close()
+        if "parking" in groups:
+            page = open_page("/?challenge=pothole-season&drive=manual&quality=low")
+            ok &= report("debrief replay integration", page.evaluate(DEBRIEF_REPLAY))
+            page.close()
 
-        page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
-        page.on("pageerror", lambda error: errors.append(str(error)))
-        page.goto(
-            url.rstrip("/") + "/?challenge=door-zone&drive=rules&quality=low",
-            wait_until="domcontentloaded",
-            timeout=TIMEOUT_MS,
-        )
-        page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
-        page.evaluate("""() => {
-          const app = window.__jev, render = app.view.render.bind(app.view);
-          window.__containedRenders = 0;
-          app.view.render = (...args) => { window.__containedRenders++; return render(...args); };
-          app.world.parked.step = () => { throw new Error('Injected simulation step failure'); };
-          app.world.paused = false;
-        }""")
-        # Let the actual animation loop encounter the throw, and prove it keeps rendering afterwards.
-        page.wait_for_selector("#simulation-error", timeout=TIMEOUT_MS)
-        page.wait_for_function("window.__containedRenders >= 3", timeout=TIMEOUT_MS)
-        ok &= report(
-            "simulation error containment",
+            page = open_page("/?challenge=door-zone&drive=rules&quality=low")
             page.evaluate("""() => {
-          const app = window.__jev, tick = app.world.tick;
-          document.querySelector('#pause-world').click();
-          document.querySelector('#autopilot').click();
-          app.advance(0.1);
-          document.querySelector('#settings-toggle').click();
-          return [{ name: 'A thrown step pauses the drive, explains the error and leaves controls usable',
-            ok: app.world.paused && !app.autopilot.enabled && app.world.tick === tick
-              && app.simulationError === 'Injected simulation step failure'
-              && document.querySelector('#simulation-error').textContent.includes(app.simulationError)
-              && !document.querySelector('#settings').hidden,
-            detail: JSON.stringify({ tick, after: app.world.tick, paused: app.world.paused, error: app.simulationError }) }];
-        }"""),
-        )
-        page.get_by_role("button", name="Restart drive", exact=True).click(timeout=TIMEOUT_MS)
-        page.wait_for_function("!!window.__jev?.advance && !window.__jev.simulationError", timeout=TIMEOUT_MS)
-        ok &= report(
-            "simulation error restart",
-            page.evaluate("""() => {
-          const app = window.__jev, tick = app.world.tick;
-          app.world.paused = false; app.advance(0.1);
-          return [{ name: 'Restart replaces the broken world with a drive that steps again',
-            ok: app.world.tick > tick && !app.simulationError && !document.querySelector('#simulation-error') }];
-        }"""),
-        )
-        page.close()
+              const app = window.__jev, render = app.view.render.bind(app.view);
+              window.__containedRenders = 0;
+              app.view.render = (...args) => { window.__containedRenders++; return render(...args); };
+              app.world.parked.step = () => { throw new Error('Injected simulation step failure'); };
+              app.world.paused = false;
+            }""")
+            # Let the actual animation loop encounter the throw, and prove it keeps rendering afterwards.
+            page.wait_for_selector("#simulation-error", timeout=TIMEOUT_MS)
+            page.wait_for_function("window.__containedRenders >= 3", timeout=TIMEOUT_MS)
+            ok &= report(
+                "simulation error containment",
+                page.evaluate("""() => {
+              const app = window.__jev, tick = app.world.tick;
+              document.querySelector('#pause-world').click();
+              document.querySelector('#autopilot').click();
+              app.advance(0.1);
+              document.querySelector('#settings-toggle').click();
+              return [{ name: 'A thrown step pauses the drive, explains the error and leaves controls usable',
+                ok: app.world.paused && !app.autopilot.enabled && app.world.tick === tick
+                  && app.simulationError === 'Injected simulation step failure'
+                  && document.querySelector('#simulation-error').textContent.includes(app.simulationError)
+                  && !document.querySelector('#settings').hidden,
+                detail: JSON.stringify({ tick, after: app.world.tick, paused: app.world.paused, error: app.simulationError }) }];
+            }"""),
+            )
+            page.get_by_role("button", name="Restart drive", exact=True).click(timeout=TIMEOUT_MS)
+            page.wait_for_function("!!window.__jev?.advance && !window.__jev.simulationError", timeout=TIMEOUT_MS)
+            ok &= report(
+                "simulation error restart",
+                page.evaluate("""() => {
+              const app = window.__jev, tick = app.world.tick;
+              app.world.paused = false; app.advance(0.1);
+              return [{ name: 'Restart replaces the broken world with a drive that steps again',
+                ok: app.world.tick > tick && !app.simulationError && !document.querySelector('#simulation-error') }];
+            }"""),
+            )
+            page.close()
 
         if errors:
             ok = False
@@ -279,5 +263,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:8322")
     parser.add_argument("--chromium")
+    parser.add_argument("--group", choices=GROUPS, help="run only this part")
     args = parser.parse_args()
-    sys.exit(0 if check(args.url, args.chromium) else 1)
+    sys.exit(0 if check(args.url, args.chromium, [args.group] if args.group else GROUPS) else 1)
