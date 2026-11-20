@@ -2,8 +2,8 @@
 
 The app has three kinds of driver, one button each in the HUD: **Rules** (deterministic code,
 free), **Decision** (decision models: Jev, or any other model that answers typed questions with
-probabilities) and **LLM** (any OpenAI-compatible chat model). Keys 1, 2 and 3 select Decision,
-Rules and LLM.
+probabilities) and **LLM** (OpenAI-compatible chat models or Claude through Anthropic's Messages
+API). Keys 1, 2 and 3 select Decision, Rules and LLM.
 
 Open `/arena` to evaluate Rules, Jev (when configured), the free cautious starter, your own
 decision models and LLM endpoints, or your own agent on all 60 challenges (and the two road tests, if you tick the box). The public demo uses `arena.html` and supports browser agents.
@@ -61,9 +61,9 @@ each run. Stateful agent internals are not rewound by the simulator's replay rec
 A decision model takes a state and typed questions and returns each answer with probabilities.
 Jev introduced the protocol (TypeSafe's System One API, `POST /v1/systemone` with
 `{model, state, questions}`), and other services now speak it with the same request and answer
-shapes: OpenRouter's Decisions API (`POST /api/alpha/decisions`) serves Jev, Perplexity Decider,
-Liquid d1, Microsoft Decision 1, GPT-6 Luna Decisions and others with one key, and llama.cpp
-0.6.0 or later serves open models such as Kev 4B at `/v1/systemone`. Jev is the built-in decision
+shapes. The model picker lists the models available through OpenRouter's Decisions API
+(`POST /api/alpha/decisions`). A local llama.cpp server (0.6.0 or later) serves open models such
+as Kev 4B at `/v1/systemone`. Jev is the built-in decision
 driver, `jev`; every other decision model you connect becomes its own driver, `decision:<name>`,
 in the HUD's **Decision ▾** menu, **Settings → Active agent**, the challenge picker, replay
 branches, the arena and the `/bench` brain list.
@@ -73,18 +73,16 @@ Every decision model receives exactly the state and questions Jev does (built by
 whether to drive or stop when that is in question, and which route when there are several. So
 a comparison between Jev and another decision model measures the model, not the prompt. These
 drivers were checked live on 11 November 2026 against TypeSafe (Jev through this endpoint type,
-`jev-1.14.0`) and OpenRouter's Decisions API (`liquid/d1`); llama.cpp has not been tried. The
-Perplexity decider the examples used to list is no longer served by OpenRouter (HTTP 404).
+`jev-1.14.0`) and OpenRouter's Decisions API (`liquid/d1`); llama.cpp has not been tried.
 
 ### Connect a decision model in the app
 
 Click **Decision** (or press 1) when no decision model is usable, or choose **Decision ▾ →
 Connect a decision model…**. The **Connect a model** dialog opens on its **Decision models** tab:
 
-- **TypeSafe** is the API option for Jev. Paste a TypeSafe key and save: the key is written to
-  `.env` as `TYPESAFE_API_KEY`, the variable the built-in Jev driver reads, and Jev becomes
-  available at once, without a restart. The model starts on the built-in driver's model
-  (`jev-latest` unless `TYPESAFE_DEFAULT_MODEL` says otherwise). Choosing another version, such as
+- **TypeSafe** connects the built-in Jev driver. Paste a TypeSafe key, keep the preselected model
+  (`jev-latest` unless `TYPESAFE_DEFAULT_MODEL` is set) and click **Save and drive**. The server
+  saves the key and Jev is available at once. Choosing another version, such as
   `jev-preview`, saves it as a driver of its own (`decision:jev-preview`) on the same key, so the
   two can be compared.
 - **OpenRouter** lists every model OpenRouter offers with the `decisions` output modality
@@ -165,8 +163,8 @@ so several models can be compared side by side under identical conditions.
 
 ### Connect a model in the app
 
-The quickest way: in the drive app, click **LLM** next to Rules and Decision (or **LLM ▾ → Connect a
-model**, or **Settings → Connect a model** and its **LLMs** tab).
+Click **LLM** to connect your first LLM. To add another, choose **LLM ▾ → Connect or manage
+models…**. You can also open **Settings → Connect a model** and select the **LLMs** tab.
 
 1. Pick a provider: OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI, Mistral, Groq, Ollama,
    LM Studio, or **Other** for any OpenAI-compatible URL. Gemini, xAI and Mistral go through each
@@ -371,11 +369,16 @@ A model recording keeps every answer a model driver (Jev, `decision:<name>` or `
 got from the server, keyed by what the model saw, so a run can be published and replayed
 exactly by anyone, with no key and no model call (`static/js/brain/recording.js`).
 
+Start `uv run server.py` before running either Node script. With the server on its usual port,
+pass `--port 8322` as below. For a live run, connect the model in the app and select its driver
+with `--brain`. For scripted Jev runs, you can also set `TYPESAFE_API_KEY` in the environment
+before starting the server or running `uv run scripts/verify_jev.py` directly.
+
 ```sh
 # record: the run makes live calls, as any model run does
-node --experimental-default-type=module scripts/bench_node.mjs --brain llm:luna --count 4 --record data/recordings/luna-kitsilano.json
+node --experimental-default-type=module scripts/bench_node.mjs --port 8322 --brain llm:luna --count 4 --record data/recordings/luna-kitsilano.json
 # replay: no key, no model call; the driver, map, scenarios and options come from the recording
-node --experimental-default-type=module scripts/bench_node.mjs --replay data/recordings/luna-kitsilano.json --check 1
+node --experimental-default-type=module scripts/bench_node.mjs --port 8322 --replay data/recordings/luna-kitsilano.json --check 1
 ```
 
 On `/bench`, `await window.__bench.run({ brain: "llm:luna", record: true })` saves the
@@ -408,8 +411,8 @@ recorded. With recording off, results and drives are exactly as before.
 the arena does, and takes the same `--record` and `--replay`:
 
 ```sh
-node --experimental-default-type=module scripts/arena_node.mjs --brain jev --set all --record data/recordings/jev-arena.json.gz
-node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/jev-arena-2026-11-11.json.gz --check 1
+node --experimental-default-type=module scripts/arena_node.mjs --port 8322 --brain jev --set all --record data/recordings/jev-arena.json.gz
+node --experimental-default-type=module scripts/arena_node.mjs --port 8322 --replay data/recordings/jev-arena-2026-11-11.json.gz --check 1
 ```
 
 Its recordings span several maps, so the header keeps a fingerprint per map (`maps`) and the drives
