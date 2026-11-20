@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.3.0 (20 November 2026)
+
+The first release since September. The project became a driving test for AI models: 60 challenges and 2
+road tests across 12 neighbourhoods in 11 Canadian cities, a seeded city suite with every free-drive
+feature on, published and replayable model results, and now an open track on which the safety filter
+flags rule breaks instead of removing them, so models can be told apart. Rules passes every seeded
+reference; Jev passes all 62 drives on both tracks, Claude Haiku 5.5 61 on each.
+
+- **First open-track results (ROADMAP Phase 4 exit).** Jev passes 62/62 on the open track, taking a flagged
+  manoeuvre 8 times; Claude Haiku 5.5 (Claude Platform) passes 61/62, taking one 216 times, and fails
+  `flagger`. Claude Haiku also ran the guarded track: 61/62 (fails `on-your-bumper`). Recorded under
+  `data/recordings/*-2026-11-20.json.gz`, published in `data/results/2026-11-20/`, and written up in
+  `docs/model-results.md`. The leaderboard and the README table have an open-track column with each
+  driver's flagged choices.
+- **Model runs in parts, and smaller Claude recordings.** `scripts/merge_recordings.mjs` merges arena
+  recordings made in parts with `--only`, refusing parts that disagree or repeat a drive. The server leaves
+  the Claude Platform's encrypted thinking `signature` out of the trace it returns (`without_signatures`,
+  `jev/llm.py`): about 1.7 KB a call that nothing reads, which made a recording of the challenge set 16 MB.
 - **The open track (ROADMAP 4.2).** A second way to run the benchmark and the arena: on the open track the
   safety filter flags a manoeuvre that fails a road-rule check instead of removing it, so the driver's own
   judgment decides the outcome, and the audit judges it as on any track. A predicted collision is still

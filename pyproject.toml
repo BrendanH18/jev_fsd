@@ -1,6 +1,6 @@
 [project]
 name = "jev-fsd"
-version = "0.2.0"
+version = "0.3.0"
 description = "Jev Drive Lab: a driving test for AI models, on real Canadian streets, that you can also take yourself"
 readme = "README.md"
 requires-python = ">=3.10"

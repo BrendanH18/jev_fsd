@@ -46,7 +46,7 @@ from jev.routing import Router
 from jev.maps import catalog, map_identity
 from jev.drives import suggested_drives
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 STATIC = PROJECT_ROOT / "static"
 PAGES = {
     "/": "index.html",

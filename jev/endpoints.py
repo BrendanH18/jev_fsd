@@ -39,7 +39,7 @@ MAX_REPORTED_COST_USD = 100.0  # a larger per-call cost is a broken usage block,
 MAX_SCRUB_DEPTH = 2 * MAX_TRACE_DEPTH  # scrub() summarises anything deeper; traces fit well inside it
 CHECK_TTL_S = 15.0
 CHECK_TIMEOUT_S = 3.0
-USER_AGENT = "jev-fsd/0.2.0"
+USER_AGENT = "jev-fsd/0.3.0"
 ANTHROPIC_VERSION = "2026-10-21"  # the `anthropic-version` header for Anthropic's API
 
 
