@@ -38,18 +38,10 @@ autopilot; `W A S D` takes over manually. You can also click a destination on th
 start a free drive with the keyboard. Cycle **View** to hood view and enable **Sound** for driving
 ambience. Open **Settings** to change weather, time and graphics, or press `?` for keyboard help.
 
-To enable Jev, obtain a key from the [TypeSafe console](https://console.typesafe.ai), click
-**Decision** (or press `1`), paste the key under **TypeSafe** and choose **Save and drive**. The
-server saves it to `.env` as `TYPESAFE_API_KEY` and Jev is available at once. Or create the file
-by hand:
-
-```sh
-cp .env.example .env
-# Set TYPESAFE_API_KEY in .env, then restart the server.
-```
-
-The key stays on the server. Jev sends decision requests to TypeSafe; Rules driving, drive
-scoring and the bundled maps need no API key.
+To enable Jev, get a key from the [TypeSafe console](https://console.typesafe.ai). Open
+**Decision ▾ → Connect a decision model…**, choose **TypeSafe**, paste the key and keep the
+preselected model. Click **Save and drive**. The local server saves the key and sends Jev's
+decision requests to TypeSafe. To connect another driver, see [Connecting a model](../../README.md#connecting-a-model).
 
 ## Explore twelve Canadian neighbourhoods
 

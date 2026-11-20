@@ -54,26 +54,20 @@ all 60 challenges and both road tests.
   fails 6 of its 12 snowy city drives in Kitsilano. That's what the seeded city suite is for: ordinary
   routes with the city's hazards switched on.
 
-Every published model drive is committed as a recording of each answer the model gave, so anyone can replay it
-with one command, with no key and no model call ([how, and its limits](docs/model-results.md)). The
-full table is [below](#results).
+See the [full results](#results) or [replay a recorded model drive](docs/model-results.md) without a key.
 
-**One honest caveat.** An AI driver chooses among manoeuvres a shared safety filter has already
-screened, with a controller and an emergency brake underneath. We measured how much that leaves to
-the driver: in 55 of the 60 challenges, no option the filter let through led to a failure at any decision we
-sampled. So for
-now the challenges mostly test the filter, and the clearest way left to fail is DeepSeek's: by not
-making progress. Making them tell drivers apart is the next phase of the [roadmap](ROADMAP.md)
-([the measurement](docs/validation/driver-latitude-2026-11-14.md)).
+How much did the safety filter decide? In 55 of the 60 challenges, none of the allowed manoeuvres
+we tried at sampled decisions caused a violation within six seconds. A driver could still time out
+by waiting, as DeepSeek did. [Read the measurement](docs/validation/driver-latitude-2026-11-14.md).
 
 ## Take the test yourself
 
 Everything an AI can drive, you can drive too, with the keyboard, a gamepad or a touch screen. You
 don't get the safety filter or the emergency brake.
 
-- **Practise the challenges.** Work through the library by city, skill or weather. Your clean,
-  unaided runs are saved in your browser, and each drive ends with a debrief: what went wrong, the
-  lesson behind the challenge, and links to rewind to each moment.
+- **Practise the challenges.** Work through the library by city, skill or weather. Your browser
+  saves your practice progress. The debrief explains the lesson and lets you rewind to incidents
+  still in the replay.
 - **Book a road test.** There's a Class 5-style test in Kitsilano and a G2-style test in Toronto's
   Annex: a longer drive on a fixed route, an examiner giving directions, and an examiner's sheet at
   the end. Any dangerous action fails you, and minor errors cost demerits. Run an AI through the same
@@ -106,10 +100,9 @@ Each one is a situation real drivers get wrong. A few of them:
 [See all sixty →](docs/challenges.md)
 
 The rules are local. You can't turn right on red in Montréal, BC traffic stops both ways for a school
-bus's flashing reds, and Ontario has pedestrian crossovers. A challenge **passes** only if the driver
-arrives with no collision, no red light or stop sign run, no failure to yield and less than a second
-off the road (and, in Squeeze in, parks within 30 cm of the kerb). A good style score doesn't save a
-drive that broke a rule.
+bus's flashing reds, and Ontario has pedestrian crossovers. To pass a challenge, arrive without a
+collision or a driving violation and spend less than a second off the road. In **Squeeze in**, you
+also have to park within 30 cm of the kerb. The coaching score is separate.
 
 ## See what the AI saw
 
@@ -119,7 +112,7 @@ Turn on **AI eyes** to see the world the way the driver sees it: which hazards i
 a building is hiding, how far it can see in fog, where it thinks everyone else is going, and why it
 turned down each manoeuvre it considered.
 
-The last two minutes of every drive are recorded. Scrub back to the moment before a car door opened,
+Replay keeps the last two minutes of the active drive. Scrub back to the moment before a car door opened,
 then take over, swap in a different driver, or make it try another manoeuvre that passed the safety
 checks, and watch what happens.
 
@@ -150,9 +143,9 @@ export default {
 };
 ```
 
-Load it from **Settings → Local agent module**, then put it up against Rules, Jev and your favourite
-LLM in the arena, which runs every challenge and compares safety, comfort, latency and cost. The
-[agent guide](docs/agents.md) has the starter template and step-by-step setup for every provider.
+Enter `/js/agents/my-driver.js` under **Settings → Local agent module** and click **Load agent**.
+To compare it with other drivers, load the same path under **Add a trusted local agent** in the
+[local arena](http://127.0.0.1:8322/arena). The [agent guide](docs/agents.md) has the full example.
 
 ## Results
 
@@ -196,12 +189,13 @@ restrictions come from OpenStreetMap, with sensible defaults where a tag is miss
 them is full of traffic, cyclists and people on foot, plus buses, streetcars, snow plows, garbage
 trucks, road crews and police officers directing traffic. Each city has its own house colours and
 something on the horizon: Citadel Hill in Halifax, a river-valley truss bridge in Edmonton, the North
-Shore mountains behind Vancouver. All twelve ship with the project, so it works offline.
+Shore mountains behind Vancouver. All twelve maps ship with the project, so once the local app
+is installed you can drive manually or with Rules offline.
 
 ## How a decision is made
 
-Every AI driver goes through the same loop, every 650 ms on a clear road and every 250 ms near a
-hazard:
+Every AI driver goes through the same loop. The next decision can start after 650 ms on a clear
+road or 250 ms near a hazard, once the previous decision has finished.
 
 ```mermaid
 flowchart LR
@@ -214,19 +208,16 @@ flowchart LR
 
 - **Sensing is honest.** Buildings block the view, fog and darkness shorten it, and a light you can't
   see counts as unknown.
-- **Only the choice differs.** Physics, the controller and the emergency brake are shared, so
-  results come down to the decisions.
-- **Runs repeat.** Seeded routes and a lockstep clock give the same numbers every time on the same
-  simulation version and JavaScript engine. A recorded model run replays without the model; the
-  [model results](docs/model-results.md) say which revision replays each published run exactly.
-- **A wrong answer is never silent.** If a model's answer is late, malformed or fails, Rules drives
-  that step, the HUD says so, and the fallback counts against the model.
+- **Rules runs repeat.** Use the same scenario, simulation version and JavaScript engine with the
+  lockstep clock. For a model driver, replay its recorded answers to repeat the run.
+- **Fallbacks count.** If a model times out or returns an unusable decision, Rules drives that
+  step. The HUD shows the fallback and the run counts it.
 
 ## Run it yourself
 
 The [browser demo](https://brendanh18.github.io/jev_fsd/) has Rules, the cautious starter agent, the
-challenges and the road tests. To load your own agent or connect a model, run it locally. You need
-[uv](https://docs.astral.sh/uv/), and uv fetches Python 3.10+ if you don't have it:
+challenges and the road tests. To connect a model or develop your own agent, run the app locally
+with [uv](https://docs.astral.sh/uv/). It fetches Python 3.10 or newer if needed.
 
 ```sh
 git clone https://github.com/BrendanH18/jev_fsd
@@ -234,8 +225,28 @@ cd jev_fsd
 uv run server.py
 ```
 
-Open **<http://127.0.0.1:8322>** in a desktop browser with WebGL. That's it: one Python dependency, no
-frontend build, and every map included.
+Open **<http://127.0.0.1:8322>** in a browser with WebGL. Rules is ready to drive without a key.
+
+### Connecting a model
+
+Open the **Connect a model** dialog from the local driving screen.
+
+- **Jev and other decision models.** Open **Decision ▾ → Connect a decision model…** (or
+  **Connect or manage decision models…** if you've already added one). For the
+  built-in Jev driver, choose **TypeSafe**, paste your TypeSafe API key and keep the preselected
+  model. For another decision model, choose its provider, enter a key if it needs one and select
+  the model.
+- **LLMs.** Click **LLM** to connect your first model. If one is already connected, open
+  **LLM ▾ → Connect or manage models…**. Choose a provider, enter a key if it needs one and
+  select or type the model.
+
+Click **Save and drive**. The local server saves the key in `.env` and makes the model available
+without a restart. It never sends the saved key back to the browser. Press `J` if autopilot is off.
+One OpenRouter key works for both decision models and LLMs.
+
+The default budget is $1 of counted spend per server run. Calls without a reported cost or
+configured price count as $0. The [agent guide](docs/agents.md#decision-models-jev-and-others)
+covers providers, prices and rate limits. This project is independent of TypeSafe AI.
 
 ### Controls
 
@@ -251,24 +262,6 @@ frontend build, and every map included.
 A gamepad works too, and on touch screens the controls appear on screen
 ([details](docs/drive-experience.md#gamepad-and-touch)). Click the minimap to set a destination, or open
 **Explore cities** for suggested drives.
-
-### Connecting a model
-
-Click **Decision ▾** or **LLM ▾**, choose **Connect a model…**, pick a provider (TypeSafe for Jev,
-OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI, Mistral, Ollama, or any OpenAI-compatible
-server), paste a key and choose **Save and drive**. It
-starts driving straight away, without a restart, and one OpenRouter key covers both kinds.
-
-Keys are saved to `.env` by your local server and are never sent back to the browser. A spend cap
-(`JEV_FSD_BUDGET_USD`, $1 per server run by default) and a rate cap (`JEV_FSD_RPM`) keep live runs
-from surprising you. To set Jev up by hand instead:
-
-```sh
-cp .env.example .env    # then set TYPESAFE_API_KEY=... and restart the server
-```
-
-This project is independent and not affiliated with TypeSafe AI. Every provider, and how the spend
-cap counts, is covered in the [agent guide](docs/agents.md#decision-models-jev-and-others).
 
 ## Contributing
 
@@ -294,10 +287,10 @@ node --experimental-default-type=module scripts/test_drive_lab.mjs   # one of th
 python3 scripts/build_demo.py                                # build the static GitHub Pages demo
 ```
 
-Each `scripts/test_*.mjs` file is a standalone Node 22 check. The
-[development reference](docs/reference/development.md) lists them all, along with the browser suites.
-CI runs every check on every pull request and deploys the demo from `main`. If you change physics,
-sensing or planning, run a seeded `/bench` comparison before and after against the
+Run the standalone `scripts/test_*.mjs` checks with Node 22. The
+[development reference](docs/reference/development.md) covers the browser suites and offline checks.
+Pull requests run lint, tests and the dry seeded benchmarks. The demo deploys from `main`.
+If you change physics, sensing or planning, run a seeded `/bench` comparison before and after against the
 [Rules baseline](docs/rules-baseline.md).
 
 ```
