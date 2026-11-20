@@ -73,7 +73,13 @@ def build_transit(
         return None
     transit = transit_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d routes, %d stops)" % (path.name, len(transit["routes"]), len(transit["stops"])))
-    path.write_text(json.dumps(transit, separators=(",", ":")))
+    base_dir = maps_dir.resolve()
+    path_resolved = path.resolve()
+    try:
+        path_resolved.relative_to(base_dir)
+    except ValueError:
+        raise Exception("Invalid file path")
+    path_resolved.write_text(json.dumps(transit, separators=(",", ":")))
     return transit
 
 

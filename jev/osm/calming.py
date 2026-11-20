@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
@@ -64,7 +65,11 @@ def build_calming(
         return None
     calming = calming_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d speed humps, tables, cushions and bumps)" % (path.name, len(calming["devices"])))
-    path.write_text(json.dumps(calming, separators=(",", ":")))
+    base_real = os.path.realpath(maps_dir)
+    target_real = os.path.realpath(path)
+    if os.path.commonpath([base_real, target_real]) != base_real:
+        raise Exception("Invalid file path")
+    Path(target_real).write_text(json.dumps(calming, separators=(",", ":")))
     return calming
 
 

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -71,7 +72,12 @@ def build_rail(
         return None
     rail = rail_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d tracks, %d level crossings)" % (path.name, len(rail["tracks"]), len(rail["crossings"])))
-    path.write_text(json.dumps(rail, separators=(",", ":")))
+    base_real = os.path.realpath(maps_dir)
+    target_real = os.path.realpath(path)
+    if os.path.commonpath([base_real, target_real]) != base_real:
+        raise Exception("Invalid file path")
+    with open(target_real, "w") as f:
+        f.write(json.dumps(rail, separators=(",", ":")))
     return rail
 
 

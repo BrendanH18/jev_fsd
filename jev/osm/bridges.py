@@ -67,7 +67,13 @@ def build_bridges(
     if not xml_path.is_file():
         return None
     layer = bridges_from_osm(parse_xml(xml_path), pack)
-    path.write_text(json.dumps(layer, separators=(",", ":")))
+    base_dir = maps_dir.resolve()
+    path_resolved = path.resolve()
+    try:
+        path_resolved.relative_to(base_dir)
+    except ValueError:
+        raise Exception("Invalid file path")
+    path_resolved.write_text(json.dumps(layer, separators=(",", ":")))
     log("map: built %s (%d street spans on bridges)" % (path.name, len(layer["spans"])))
     return layer
 
