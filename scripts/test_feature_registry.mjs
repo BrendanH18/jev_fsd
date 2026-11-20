@@ -238,10 +238,21 @@ test("a record at a slot the core never runs is refused", () => {
 test("every record loads in a fresh process, through the registry as the core loads it", () => {
   const dir = new URL("../static/js/sim/features/", import.meta.url);
   for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "index.js")) {
-    const code = `globalThis.document = { querySelector: () => null }; await import(${JSON.stringify(new URL("index.js", dir).href)}); const r = await import(${JSON.stringify(new URL(file, dir).href)}); if (!r.default?.key) throw new Error("no record");`;
-    execFileSync(process.execPath, ["--experimental-default-type=module", "--input-type=module", "-e", code], {
-      stdio: "pipe",
-    });
+    // (fixed code; the two modules come in as arguments)
+    const code =
+      'globalThis.document = { querySelector: () => null }; await import(process.argv[1]); const r = await import(process.argv[2]); if (!r.default?.key) throw new Error("no record");';
+    execFileSync(
+      process.execPath,
+      [
+        "--experimental-default-type=module",
+        "--input-type=module",
+        "-e",
+        code,
+        new URL("index.js", dir).href,
+        new URL(file, dir).href,
+      ],
+      { stdio: "pipe" },
+    );
   }
 });
 
