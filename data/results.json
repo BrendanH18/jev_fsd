@@ -34,6 +34,12 @@
    "model": "jev-1.14.0",
    "about": "decision model (TypeSafe)"
   },
+  "llm:claude-haiku-5-5": {
+   "label": "Claude Haiku 5.5",
+   "kind": "llm",
+   "model": "claude-haiku-5-5",
+   "about": "LLM, Claude Platform"
+  },
   "llm:deepseek": {
    "label": "DeepSeek V4.1 Flash",
    "kind": "llm",
@@ -459,6 +465,409 @@
    ],
    "sources": [
     "data/results/2026-11-11/rules-arena.json"
+   ],
+   "recording": null
+  },
+  {
+   "driver": "rules",
+   "suite": "open",
+   "track": "open",
+   "label": "Open track: 60 challenges and 2 road tests",
+   "map": null,
+   "preset": null,
+   "weather": "authored per challenge",
+   "passed": 62,
+   "total": 62,
+   "date": "2026-11-20",
+   "seed": "authored per challenge",
+   "mode": "lockstep",
+   "engine": "node v22.23.4",
+   "model": null,
+   "model_requested": null,
+   "fallbacks": 0,
+   "hard_brakes": 132,
+   "safety_brakes": 1,
+   "flagged_choices": 0,
+   "driving_s": 3516.8,
+   "cost_usd": 0,
+   "cost_basis": "none",
+   "failed": [],
+   "drives": [
+    {
+     "id": "door-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 61.7
+    },
+    {
+     "id": "fog-junction",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 71.2
+    },
+    {
+     "id": "rain-crossing",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 62.7
+    },
+    {
+     "id": "snow-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 76.2
+    },
+    {
+     "id": "curb-merge",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 34
+    },
+    {
+     "id": "blind-crossing",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 97.9
+    },
+    {
+     "id": "unprotected-left",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 27.4
+    },
+    {
+     "id": "right-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 63.1
+    },
+    {
+     "id": "four-way-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 84.6
+    },
+    {
+     "id": "blind-corner",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 60.5
+    },
+    {
+     "id": "right-hook",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 54.6
+    },
+    {
+     "id": "lights-and-sirens",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 42.8
+    },
+    {
+     "id": "bus-pulling-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 47.1
+    },
+    {
+     "id": "multiple-threat",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 93
+    },
+    {
+     "id": "school-bus",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 53.8
+    },
+    {
+     "id": "school-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 32.4
+    },
+    {
+     "id": "move-over",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 34.4
+    },
+    {
+     "id": "streetcar",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 74.9
+    },
+    {
+     "id": "level-crossing",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 76
+    },
+    {
+     "id": "junction-box",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 87.2
+    },
+    {
+     "id": "left-arrow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 55.1
+    },
+    {
+     "id": "flagger",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 53.5
+    },
+    {
+     "id": "after-midnight",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 44.3
+    },
+    {
+     "id": "lights-out",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 56.6
+    },
+    {
+     "id": "double-parked",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 32.7
+    },
+    {
+     "id": "parallel-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 33.1
+    },
+    {
+     "id": "step-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 23.3
+    },
+    {
+     "id": "blind-left",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 53.2
+    },
+    {
+     "id": "snow-plow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 71.9
+    },
+    {
+     "id": "zipper",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 40.6
+    },
+    {
+     "id": "cyclist-pass",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 33.8
+    },
+    {
+     "id": "speed-humps",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 34.2
+    },
+    {
+     "id": "scramble",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 97
+    },
+    {
+     "id": "collection",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 33.3
+    },
+    {
+     "id": "crossing-guard",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 30.8
+    },
+    {
+     "id": "pxo-far-curb",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 24.5
+    },
+    {
+     "id": "bus-lanes",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 19.2
+    },
+    {
+     "id": "no-left-turn",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 120.1
+    },
+    {
+     "id": "contraflow",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 29.9
+    },
+    {
+     "id": "dip-your-lights",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 73.5
+    },
+    {
+     "id": "left-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 30.6
+    },
+    {
+     "id": "roundabout-gap",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 37.2
+    },
+    {
+     "id": "wait-for-green",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 53.3
+    },
+    {
+     "id": "amber-stop",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 44.2
+    },
+    {
+     "id": "amber-clear",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 14.7
+    },
+    {
+     "id": "brakes-ahead",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 34.9
+    },
+    {
+     "id": "make-room",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 21.1
+    },
+    {
+     "id": "fresh-green",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 23.5
+    },
+    {
+     "id": "into-the-sun",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 65.6
+    },
+    {
+     "id": "reverse-lights",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 31.2
+    },
+    {
+     "id": "pothole-season",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 26.7
+    },
+    {
+     "id": "chasing-the-ball",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 28.3
+    },
+    {
+     "id": "goose-crossing",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 68
+    },
+    {
+     "id": "on-your-bumper",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 91.2
+    },
+    {
+     "id": "bridges-freeze-first",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 39.3
+    },
+    {
+     "id": "one-car-at-a-time",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 75.4
+    },
+    {
+     "id": "dont-splash",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 27.4
+    },
+    {
+     "id": "room-to-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 41.8
+    },
+    {
+     "id": "road-closed",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 57.9
+    },
+    {
+     "id": "follow-the-officer",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 49
+    },
+    {
+     "id": "road-test-kitsilano",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 254.6
+    },
+    {
+     "id": "road-test-toronto",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 204.8
+    }
+   ],
+   "sources": [
+    "data/results/2026-11-20/rules-open.json"
    ],
    "recording": null
   },
@@ -1345,6 +1754,413 @@
    ],
    "sources": [
     "data/results/2026-11-11/cautious-arena.json"
+   ],
+   "recording": null
+  },
+  {
+   "driver": "cautious",
+   "suite": "open",
+   "track": "open",
+   "label": "Open track: 60 challenges and 2 road tests",
+   "map": null,
+   "preset": null,
+   "weather": "authored per challenge",
+   "passed": 62,
+   "total": 62,
+   "date": "2026-11-20",
+   "seed": "authored per challenge",
+   "mode": "lockstep",
+   "engine": "node v22.23.4",
+   "model": null,
+   "model_requested": null,
+   "decisions": 12317,
+   "model_share": 0.9998,
+   "local_share": 0.0002,
+   "fallback_share": 0.0,
+   "fallbacks": 0,
+   "hard_brakes": 181,
+   "safety_brakes": 0,
+   "flagged_choices": 0,
+   "driving_s": 3876.6,
+   "cost_usd": 0,
+   "cost_basis": "none",
+   "failed": [],
+   "drives": [
+    {
+     "id": "door-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 60.3
+    },
+    {
+     "id": "fog-junction",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 73.3
+    },
+    {
+     "id": "rain-crossing",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 65.8
+    },
+    {
+     "id": "snow-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 76.1
+    },
+    {
+     "id": "curb-merge",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 41.6
+    },
+    {
+     "id": "blind-crossing",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 116.3
+    },
+    {
+     "id": "unprotected-left",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 29
+    },
+    {
+     "id": "right-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 65.9
+    },
+    {
+     "id": "four-way-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 86.7
+    },
+    {
+     "id": "blind-corner",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 62.5
+    },
+    {
+     "id": "right-hook",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 52.7
+    },
+    {
+     "id": "lights-and-sirens",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 48
+    },
+    {
+     "id": "bus-pulling-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 51.4
+    },
+    {
+     "id": "multiple-threat",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 108.3
+    },
+    {
+     "id": "school-bus",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 56
+    },
+    {
+     "id": "school-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 33.4
+    },
+    {
+     "id": "move-over",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 42.1
+    },
+    {
+     "id": "streetcar",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 109.9
+    },
+    {
+     "id": "level-crossing",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 81.2
+    },
+    {
+     "id": "junction-box",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 90.8
+    },
+    {
+     "id": "left-arrow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 56.6
+    },
+    {
+     "id": "flagger",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 56.7
+    },
+    {
+     "id": "after-midnight",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 46.3
+    },
+    {
+     "id": "lights-out",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 54.5
+    },
+    {
+     "id": "double-parked",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 36.5
+    },
+    {
+     "id": "parallel-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 35
+    },
+    {
+     "id": "step-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 26.3
+    },
+    {
+     "id": "blind-left",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 54.8
+    },
+    {
+     "id": "snow-plow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 73.4
+    },
+    {
+     "id": "zipper",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 52.3
+    },
+    {
+     "id": "cyclist-pass",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 37.6
+    },
+    {
+     "id": "speed-humps",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 41.2
+    },
+    {
+     "id": "scramble",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 99.9
+    },
+    {
+     "id": "collection",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 37
+    },
+    {
+     "id": "crossing-guard",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 34.7
+    },
+    {
+     "id": "pxo-far-curb",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 27.2
+    },
+    {
+     "id": "bus-lanes",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 21.6
+    },
+    {
+     "id": "no-left-turn",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 121
+    },
+    {
+     "id": "contraflow",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 32.8
+    },
+    {
+     "id": "dip-your-lights",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 74.4
+    },
+    {
+     "id": "left-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 31.4
+    },
+    {
+     "id": "roundabout-gap",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 38.3
+    },
+    {
+     "id": "wait-for-green",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 55.6
+    },
+    {
+     "id": "amber-stop",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 46
+    },
+    {
+     "id": "amber-clear",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 16.8
+    },
+    {
+     "id": "brakes-ahead",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 36.3
+    },
+    {
+     "id": "make-room",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 23.6
+    },
+    {
+     "id": "fresh-green",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 25.6
+    },
+    {
+     "id": "into-the-sun",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 99
+    },
+    {
+     "id": "reverse-lights",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 32.9
+    },
+    {
+     "id": "pothole-season",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 28.2
+    },
+    {
+     "id": "chasing-the-ball",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 30.9
+    },
+    {
+     "id": "goose-crossing",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 69.6
+    },
+    {
+     "id": "on-your-bumper",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 92.3
+    },
+    {
+     "id": "bridges-freeze-first",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 45.8
+    },
+    {
+     "id": "one-car-at-a-time",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 97.9
+    },
+    {
+     "id": "dont-splash",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 28.7
+    },
+    {
+     "id": "room-to-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 43.2
+    },
+    {
+     "id": "road-closed",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 60.3
+    },
+    {
+     "id": "follow-the-officer",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 51.8
+    },
+    {
+     "id": "road-test-kitsilano",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 342.1
+    },
+    {
+     "id": "road-test-toronto",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 209.2
+    }
+   ],
+   "sources": [
+    "data/results/2026-11-20/cautious-open.json"
    ],
    "recording": null
   },
@@ -2429,6 +3245,1254 @@
     "data/recordings/jev-arena-2026-11-11.json.gz"
    ],
    "recording": "data/recordings/jev-arena-2026-11-11.json.gz"
+  },
+  {
+   "driver": "jev",
+   "suite": "open",
+   "track": "open",
+   "label": "Open track: 60 challenges and 2 road tests",
+   "map": null,
+   "preset": null,
+   "weather": "authored per challenge",
+   "passed": 62,
+   "total": 62,
+   "date": "2026-11-20",
+   "seed": "authored per challenge",
+   "mode": "lockstep",
+   "engine": "node v22.23.4",
+   "model": "jev-1.14.0",
+   "model_requested": "jev-latest",
+   "decisions": 12204,
+   "model_decisions": 12201,
+   "model_share": 0.9998,
+   "local_decisions": 0,
+   "local_share": 0.0,
+   "fallback_decisions": 3,
+   "fallback_share": 0.0002,
+   "fallbacks": 3,
+   "hard_brakes": 140,
+   "safety_brakes": 5,
+   "flagged_choices": 8,
+   "driving_s": 3798.1,
+   "cost_usd": 1.466663,
+   "cost_basis": "as recorded (the cost the server counted for each call)",
+   "failed": [],
+   "drives": [
+    {
+     "id": "curb-merge",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 42.4
+    },
+    {
+     "id": "bus-pulling-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 49.7
+    },
+    {
+     "id": "multiple-threat",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 95.4
+    },
+    {
+     "id": "crossing-guard",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 34
+    },
+    {
+     "id": "bus-lanes",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 20.7
+    },
+    {
+     "id": "dip-your-lights",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 75.1
+    },
+    {
+     "id": "brakes-ahead",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 39.1
+    },
+    {
+     "id": "into-the-sun",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 100.2
+    },
+    {
+     "id": "goose-crossing",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 69.1
+    },
+    {
+     "id": "dont-splash",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 28.8
+    },
+    {
+     "id": "room-to-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 45.2
+    },
+    {
+     "id": "road-test-kitsilano",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 255.3
+    },
+    {
+     "id": "fog-junction",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 73.6
+    },
+    {
+     "id": "snow-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 75.7
+    },
+    {
+     "id": "school-bus",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 56.4
+    },
+    {
+     "id": "left-arrow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 57.5
+    },
+    {
+     "id": "after-midnight",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 46.8
+    },
+    {
+     "id": "step-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 25
+    },
+    {
+     "id": "blind-left",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 61.2
+    },
+    {
+     "id": "cyclist-pass",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 35
+    },
+    {
+     "id": "left-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 37.1
+    },
+    {
+     "id": "fresh-green",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 24.9
+    },
+    {
+     "id": "road-test-toronto",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 203.4
+    },
+    {
+     "id": "blind-crossing",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 100.2
+    },
+    {
+     "id": "blind-corner",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 58.5
+    },
+    {
+     "id": "lights-and-sirens",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 50.4
+    },
+    {
+     "id": "double-parked",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 35.9
+    },
+    {
+     "id": "speed-humps",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 43.2
+    },
+    {
+     "id": "scramble",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 99
+    },
+    {
+     "id": "pxo-far-curb",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 27.5
+    },
+    {
+     "id": "roundabout-gap",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 39.3
+    },
+    {
+     "id": "wait-for-green",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 55.7
+    },
+    {
+     "id": "amber-clear",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 15.9
+    },
+    {
+     "id": "reverse-lights",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 32.6
+    },
+    {
+     "id": "chasing-the-ball",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 30.7
+    },
+    {
+     "id": "one-car-at-a-time",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 84.3
+    },
+    {
+     "id": "road-closed",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 150.4
+    },
+    {
+     "id": "follow-the-officer",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 51.5
+    },
+    {
+     "id": "rain-crossing",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 68.6
+    },
+    {
+     "id": "unprotected-left",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 28.8
+    },
+    {
+     "id": "school-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 31.9
+    },
+    {
+     "id": "level-crossing",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 78.4
+    },
+    {
+     "id": "lights-out",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 51.8
+    },
+    {
+     "id": "parallel-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 32.7
+    },
+    {
+     "id": "collection",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 37
+    },
+    {
+     "id": "no-left-turn",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 128.7
+    },
+    {
+     "id": "amber-stop",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 45.7
+    },
+    {
+     "id": "make-room",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 25.5
+    },
+    {
+     "id": "pothole-season",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 28.7
+    },
+    {
+     "id": "on-your-bumper",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 91.6
+    },
+    {
+     "id": "right-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 65.7
+    },
+    {
+     "id": "four-way-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 87
+    },
+    {
+     "id": "move-over",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 36.9
+    },
+    {
+     "id": "streetcar",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 77.5
+    },
+    {
+     "id": "junction-box",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 89.6
+    },
+    {
+     "id": "flagger",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 56.1
+    },
+    {
+     "id": "snow-plow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 73.4
+    },
+    {
+     "id": "zipper",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 44.5
+    },
+    {
+     "id": "door-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 63.4
+    },
+    {
+     "id": "right-hook",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 52
+    },
+    {
+     "id": "contraflow",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 35.2
+    },
+    {
+     "id": "bridges-freeze-first",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 40.7
+    }
+   ],
+   "sources": [
+    "data/results/2026-11-20/jev-open.json",
+    "data/recordings/jev-open-2026-11-20.json.gz"
+   ],
+   "recording": "data/recordings/jev-open-2026-11-20.json.gz"
+  },
+  {
+   "driver": "llm:claude-haiku-5-5",
+   "suite": "challenges",
+   "track": "guarded",
+   "label": "60 challenges and 2 road tests",
+   "map": null,
+   "preset": null,
+   "weather": "authored per challenge",
+   "passed": 61,
+   "total": 62,
+   "date": "2026-11-20",
+   "seed": "authored per challenge",
+   "mode": "lockstep",
+   "engine": "node v22.23.4",
+   "model": "claude-haiku-5-5",
+   "model_requested": null,
+   "decisions": 11694,
+   "model_decisions": 11692,
+   "model_share": 0.9998,
+   "local_decisions": 2,
+   "local_share": 0.0002,
+   "fallback_decisions": 0,
+   "fallback_share": 0.0,
+   "fallbacks": 0,
+   "hard_brakes": 144,
+   "safety_brakes": 2,
+   "driving_s": 3655.1,
+   "cost_usd": 4.066673,
+   "cost_basis": "as recorded (the cost the server counted for each call)",
+   "failed": [
+    {
+     "id": "on-your-bumper",
+     "map": "winnipeg",
+     "failures": [
+      "braked hard with a tailgater close behind"
+     ]
+    }
+   ],
+   "drives": [
+    {
+     "id": "snow-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 74.4
+    },
+    {
+     "id": "door-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 59.2
+    },
+    {
+     "id": "unprotected-left",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 29.3
+    },
+    {
+     "id": "rain-crossing",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 66.1
+    },
+    {
+     "id": "curb-merge",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 36.9
+    },
+    {
+     "id": "fog-junction",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 73.1
+    },
+    {
+     "id": "blind-crossing",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 99.5
+    },
+    {
+     "id": "school-bus",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 52.4
+    },
+    {
+     "id": "four-way-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 86.7
+    },
+    {
+     "id": "bus-pulling-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 48.5
+    },
+    {
+     "id": "move-over",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 35.3
+    },
+    {
+     "id": "left-arrow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 57
+    },
+    {
+     "id": "cyclist-pass",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 47
+    },
+    {
+     "id": "reverse-lights",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 32.4
+    },
+    {
+     "id": "bridges-freeze-first",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 40.2
+    },
+    {
+     "id": "one-car-at-a-time",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 82.7
+    },
+    {
+     "id": "road-test-kitsilano",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 253.8
+    },
+    {
+     "id": "right-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 65.1
+    },
+    {
+     "id": "multiple-threat",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 94.6
+    },
+    {
+     "id": "pxo-far-curb",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 26.7
+    },
+    {
+     "id": "left-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 34
+    },
+    {
+     "id": "roundabout-gap",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 38.4
+    },
+    {
+     "id": "brakes-ahead",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 38.8
+    },
+    {
+     "id": "goose-crossing",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 68.9
+    },
+    {
+     "id": "dont-splash",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 28.5
+    },
+    {
+     "id": "room-to-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 45.3
+    },
+    {
+     "id": "blind-corner",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 56
+    },
+    {
+     "id": "double-parked",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 33.8
+    },
+    {
+     "id": "blind-left",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 52.9
+    },
+    {
+     "id": "bus-lanes",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 21.6
+    },
+    {
+     "id": "no-left-turn",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 116.7
+    },
+    {
+     "id": "contraflow",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 31
+    },
+    {
+     "id": "wait-for-green",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 55.3
+    },
+    {
+     "id": "pothole-season",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 27.9
+    },
+    {
+     "id": "road-test-toronto",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 203.4
+    },
+    {
+     "id": "lights-out",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 65.4
+    },
+    {
+     "id": "step-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 25.4
+    },
+    {
+     "id": "snow-plow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 72.4
+    },
+    {
+     "id": "zipper",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 42.5
+    },
+    {
+     "id": "speed-humps",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 41
+    },
+    {
+     "id": "scramble",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 98.1
+    },
+    {
+     "id": "into-the-sun",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 70.6
+    },
+    {
+     "id": "chasing-the-ball",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 31.4
+    },
+    {
+     "id": "follow-the-officer",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 50.7
+    },
+    {
+     "id": "lights-and-sirens",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 48.7
+    },
+    {
+     "id": "school-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 29.9
+    },
+    {
+     "id": "streetcar",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 76.5
+    },
+    {
+     "id": "junction-box",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 89.1
+    },
+    {
+     "id": "flagger",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 52.5
+    },
+    {
+     "id": "after-midnight",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 46
+    },
+    {
+     "id": "amber-stop",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 45.4
+    },
+    {
+     "id": "amber-clear",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 15.5
+    },
+    {
+     "id": "fresh-green",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 25.6
+    },
+    {
+     "id": "right-hook",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 51.7
+    },
+    {
+     "id": "level-crossing",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 77.3
+    },
+    {
+     "id": "parallel-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 33.1
+    },
+    {
+     "id": "collection",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 34.4
+    },
+    {
+     "id": "crossing-guard",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 34.1
+    },
+    {
+     "id": "dip-your-lights",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 74.7
+    },
+    {
+     "id": "make-room",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 25
+    },
+    {
+     "id": "on-your-bumper",
+     "map": "winnipeg",
+     "pass": false,
+     "time_s": 88.3
+    },
+    {
+     "id": "road-closed",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 96.4
+    }
+   ],
+   "sources": [
+    "data/results/2026-11-20/claude-haiku-arena.json",
+    "data/recordings/claude-haiku-arena-2026-11-20.json.gz"
+   ],
+   "recording": "data/recordings/claude-haiku-arena-2026-11-20.json.gz"
+  },
+  {
+   "driver": "llm:claude-haiku-5-5",
+   "suite": "open",
+   "track": "open",
+   "label": "Open track: 60 challenges and 2 road tests",
+   "map": null,
+   "preset": null,
+   "weather": "authored per challenge",
+   "passed": 61,
+   "total": 62,
+   "date": "2026-11-20",
+   "seed": "authored per challenge",
+   "mode": "lockstep",
+   "engine": "node v22.23.4",
+   "model": "claude-haiku-5-5",
+   "model_requested": null,
+   "decisions": 12081,
+   "model_decisions": 12081,
+   "model_share": 1.0,
+   "local_decisions": 0,
+   "local_share": 0.0,
+   "fallback_decisions": 0,
+   "fallback_share": 0.0,
+   "fallbacks": 0,
+   "hard_brakes": 158,
+   "safety_brakes": 6,
+   "flagged_choices": 216,
+   "driving_s": 3761.2,
+   "cost_usd": 4.531261,
+   "cost_basis": "as recorded (the cost the server counted for each call)",
+   "failed": [
+    {
+     "id": "flagger",
+     "map": "ottawa",
+     "failures": [
+      "timeout"
+     ]
+    }
+   ],
+   "drives": [
+    {
+     "id": "snow-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 74
+    },
+    {
+     "id": "multiple-threat",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 94.4
+    },
+    {
+     "id": "after-midnight",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 46.3
+    },
+    {
+     "id": "blind-left",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 43.6
+    },
+    {
+     "id": "zipper",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 42.2
+    },
+    {
+     "id": "cyclist-pass",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 34.7
+    },
+    {
+     "id": "crossing-guard",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 32.7
+    },
+    {
+     "id": "brakes-ahead",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 39
+    },
+    {
+     "id": "road-test-kitsilano",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 255.9
+    },
+    {
+     "id": "flagger",
+     "map": "ottawa",
+     "pass": false,
+     "time_s": 180
+    },
+    {
+     "id": "snow-plow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 72.4
+    },
+    {
+     "id": "speed-humps",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 39.3
+    },
+    {
+     "id": "dip-your-lights",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 74.9
+    },
+    {
+     "id": "left-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 31.3
+    },
+    {
+     "id": "amber-clear",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 15.5
+    },
+    {
+     "id": "pothole-season",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 27.8
+    },
+    {
+     "id": "road-test-toronto",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 204.3
+    },
+    {
+     "id": "unprotected-left",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 28.5
+    },
+    {
+     "id": "right-on-red",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 64.9
+    },
+    {
+     "id": "lights-and-sirens",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 48.5
+    },
+    {
+     "id": "lights-out",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 56.8
+    },
+    {
+     "id": "collection",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 42
+    },
+    {
+     "id": "pxo-far-curb",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 25.2
+    },
+    {
+     "id": "wait-for-green",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 55.3
+    },
+    {
+     "id": "reverse-lights",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 32.5
+    },
+    {
+     "id": "one-car-at-a-time",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 84.3
+    },
+    {
+     "id": "road-closed",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 93.9
+    },
+    {
+     "id": "rain-crossing",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 66
+    },
+    {
+     "id": "curb-merge",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 37.1
+    },
+    {
+     "id": "bus-pulling-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 48.5
+    },
+    {
+     "id": "streetcar",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 76.4
+    },
+    {
+     "id": "step-out",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 25.4
+    },
+    {
+     "id": "no-left-turn",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 117.4
+    },
+    {
+     "id": "roundabout-gap",
+     "map": "halifax",
+     "pass": true,
+     "time_s": 38.4
+    },
+    {
+     "id": "fresh-green",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 28.4
+    },
+    {
+     "id": "into-the-sun",
+     "map": "calgary",
+     "pass": true,
+     "time_s": 67.6
+    },
+    {
+     "id": "fog-junction",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 72.7
+    },
+    {
+     "id": "four-way-stop",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 86.6
+    },
+    {
+     "id": "blind-corner",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 56
+    },
+    {
+     "id": "move-over",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 35.5
+    },
+    {
+     "id": "parallel-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 33.1
+    },
+    {
+     "id": "bus-lanes",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 21.2
+    },
+    {
+     "id": "amber-stop",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 45.4
+    },
+    {
+     "id": "goose-crossing",
+     "map": "ottawa",
+     "pass": true,
+     "time_s": 68.8
+    },
+    {
+     "id": "on-your-bumper",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 91.1
+    },
+    {
+     "id": "dont-splash",
+     "map": "mount_pleasant",
+     "pass": true,
+     "time_s": 28.3
+    },
+    {
+     "id": "follow-the-officer",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 51.1
+    },
+    {
+     "id": "blind-crossing",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 99.5
+    },
+    {
+     "id": "school-bus",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 52.9
+    },
+    {
+     "id": "school-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 30.3
+    },
+    {
+     "id": "level-crossing",
+     "map": "edmonton",
+     "pass": true,
+     "time_s": 83.9
+    },
+    {
+     "id": "junction-box",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 89.2
+    },
+    {
+     "id": "left-arrow",
+     "map": "winnipeg",
+     "pass": true,
+     "time_s": 57.1
+    },
+    {
+     "id": "double-parked",
+     "map": "toronto",
+     "pass": true,
+     "time_s": 33.2
+    },
+    {
+     "id": "scramble",
+     "map": "victoria",
+     "pass": true,
+     "time_s": 97.9
+    },
+    {
+     "id": "make-room",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 24.9
+    },
+    {
+     "id": "chasing-the-ball",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 31.2
+    },
+    {
+     "id": "room-to-park",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 45
+    },
+    {
+     "id": "door-zone",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 59.7
+    },
+    {
+     "id": "right-hook",
+     "map": "kitsilano",
+     "pass": true,
+     "time_s": 49.7
+    },
+    {
+     "id": "contraflow",
+     "map": "montreal",
+     "pass": true,
+     "time_s": 31.3
+    },
+    {
+     "id": "bridges-freeze-first",
+     "map": "saskatoon",
+     "pass": true,
+     "time_s": 40.2
+    }
+   ],
+   "sources": [
+    "data/results/2026-11-20/claude-haiku-open.json",
+    "data/recordings/claude-haiku-open-2026-11-20.json.gz"
+   ],
+   "recording": "data/recordings/claude-haiku-open-2026-11-20.json.gz"
   },
   {
    "driver": "llm:deepseek",

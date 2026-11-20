@@ -553,6 +553,20 @@ class EndpointTests(LlmTestCase):
                 self.assertIsInstance(ctx.exception.body, str)
                 self.assertNotIn(SECRET, str(ctx.exception) + ctx.exception.body + json.dumps(reg.public()))
 
+    def test_the_trace_leaves_out_thinking_signatures(self):
+        reply = {
+            "content": [
+                {"type": "thinking", "thinking": "", "signature": "x" * 1700},
+                {"type": "text", "text": '{"candidate":"keep_lane_target"}'},
+            ]
+        }
+        traced = llm.without_signatures(reply)
+        self.assertEqual(traced["content"][0], {"type": "thinking", "thinking": "", "signature": ""})
+        self.assertEqual(traced["content"][1], reply["content"][1])
+        self.assertEqual(len(reply["content"][0]["signature"]), 1700)  # the reply itself is untouched
+        self.assertEqual(llm.without_signatures({"choices": []}), {"choices": []})
+        self.assertIsNone(llm.without_signatures(None))
+
     def test_http_errors_map_to_statuses(self):
         cases = [
             (429, 429, "rate limited"),

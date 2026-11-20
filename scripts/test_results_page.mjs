@@ -64,11 +64,15 @@ test("the challenge matrix covers every challenge and road test once", () => {
   const known = new Set([...CHALLENGES, ...ROAD_TESTS].map((c) => c.id));
   assert.equal(matrix.rows.length, CHALLENGES.length + ROAD_TESTS.length);
   for (const row of matrix.rows) assert.ok(known.has(row.id), row.id);
-  assert.deepEqual(matrix.drivers, ["rules", "cautious", "jev", "llm:deepseek"]);
-  const failed = matrix.rows
-    .flatMap((r) => r.cells.map((c, i) => (c && !c.pass ? `${matrix.drivers[i]} ${r.id}` : null)))
-    .filter(Boolean);
-  assert.deepEqual(failed, ["llm:deepseek double-parked"]);
+  assert.deepEqual(matrix.drivers, ["rules", "cautious", "jev", "llm:claude-haiku-5-5", "llm:deepseek"]);
+  const failed = (m) =>
+    m.rows.flatMap((r) => r.cells.map((c, i) => (c && !c.pass ? `${m.drivers[i]} ${r.id}` : null))).filter(Boolean);
+  assert.deepEqual(failed(matrix).sort(), ["llm:claude-haiku-5-5 on-your-bumper", "llm:deepseek double-parked"]);
+  // (and the same set on the open track: brain/tracks.js)
+  const open = challengeMatrix(data, "open");
+  assert.equal(open.rows.length, CHALLENGES.length + ROAD_TESTS.length);
+  assert.deepEqual(open.drivers, ["rules", "cautious", "jev", "llm:claude-haiku-5-5"]);
+  assert.deepEqual(failed(open), ["llm:claude-haiku-5-5 flagger"]);
 });
 
 test("the city grid has one row per map and weather, Kitsilano first", () => {
@@ -84,7 +88,7 @@ test("the city grid has one row per map and weather, Kitsilano first", () => {
 
 test("every recording offered for replay is committed", () => {
   const list = recordings(data);
-  assert.equal(list.length, 6);
+  assert.equal(list.length, 9);
   for (const r of list) {
     assert.ok(fs.existsSync(new URL(`../${r.recording}`, import.meta.url)), r.recording);
     assert.ok(r.command.includes(`--replay ${r.recording}`));

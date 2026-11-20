@@ -84,7 +84,7 @@ function summaryTable(data, { drivers, pilots }) {
               d.open?.failed.length
                 ? h("small", {}, `failed ${d.open.failed.map((f) => challenge(f.id)?.title || f.id).join(", ")}`)
                 : null,
-              d.open ? h("small", {}, d.open.date) : null,
+              d.open ? h("small", {}, `${d.open.flagged_choices ?? 0} flagged choices · ${d.open.date}`) : null,
             ),
             h(
               "td",

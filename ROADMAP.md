@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-11-14. This is the one place the plan lives. Update it when an item lands, when
+Last reviewed: 2026-11-20. This is the one place the plan lives. Update it when an item lands, when
 a priority changes, or when a decision under [Open decisions](#open-decisions) is made.
 
 ## What this project is for
@@ -31,8 +31,8 @@ Measured on 2026-11-09 at `0b5bdd3`.
 | Checks | 268 Python tests, 76 Node checks, browser and renderer suites; CI green, 10 to 17 minutes |
 | Seeded benchmark, features off | Rules 12/12 on Kitsilano dry; full 70-route matrix last run 31 October |
 | Seeded routes, features on | **Rules 6/12** in a one-off probe: 2 routes threw, 2 left the car stuck, 4 logged a failure to yield |
-| Model results | Since 11 November: Jev 62/62 and DeepSeek V4.1 Flash 61/62 on the challenges and road tests, recorded and replayable ([model results](docs/model-results.md)); no city-suite model result yet; endpoints checked against real providers |
-| Release | Still `0.2.0` (28 September) with about 1,600 lines of unreleased changelog |
+| Model results | Since 11 November: Jev 62/62 and DeepSeek V4.1 Flash 61/62 on the challenges and road tests; since 20 November Claude Haiku 5.5 61/62, and on the open track Jev 62/62 with 8 flagged choices and Claude Haiku 61/62 with 216. All recorded and replayable ([model results](docs/model-results.md)); no city-suite model result yet |
+| Release | `0.3.0` (20 November) |
 | Size | `static/js` about 41,000 lines, up from about 12,600 on 14 October |
 
 The two bold rows are why the order below is what it is: the default free drive is not known to
@@ -330,9 +330,14 @@ already passed the safety filter. Both make a pass easy to get and hard to learn
   Keep going safely), offer an ordinary manoeuvre that fails
   ([record](docs/validation/driver-latitude-2026-11-14.md)). The challenges test the filter, which is
   the case for 4.2.
-- [ ] **4.2 An open track.** (L) A second scoring mode in which the filter advises but does not
+- [x] **4.2 An open track.** (L) A second scoring mode in which the filter advises but does not
   remove options (collisions that are about to happen are still braked for), so a driver's own
   judgment decides the outcome. Keep the current mode as the "guarded" track.
+  *Done 20 November:* `track: "open"` (`brain/tracks.js`; `--track open`, the *track* box on `/bench` and
+  in the arena). Road-rule failures stay on offer, flagged with the rule; a predicted collision is still
+  removed. Rules and the cautious agent drive it exactly as the guarded track (124 challenge drives and the
+  seeded suites identical). Results report `flagged_choices`, and the leaderboard has an open-track column
+  ([how](docs/reference/benchmarks.md#benchmarks-and-validation)).
 - [x] **4.3 Scores beyond pass or fail.** (M) Report progress, comfort, margin kept and time lost
   as numbers per driver, so two passing drivers can still be ranked.
   *Done 14 November:* progress, pace, comfort, margin kept, time lost and a combined score
@@ -350,10 +355,15 @@ already passed the safety filter. Both make a pass easy to get and hard to learn
 
 Exit: the published comparison shows a difference between two models that the report can explain.
 
+**Exit met 20 November.** On the open track Jev passes 62/62 and took a flagged manoeuvre 8 times; Claude
+Haiku 5.5 passes 61/62 and took one 216 times, mostly rolling stop signs and going on at reds, and failed
+`flagger` by never going on at the SLOW paddle ([write-up](docs/model-results.md#the-open-track-roadmap-42-20-november-2026)).
+One run of each; the size of the gap needs more runs.
+
 ## Phase 5: release and presentation
 
-- [ ] **5.1 Cut 0.3.0.** (S) Then release on a rhythm, so the unreleased section never reaches
-  1,600 lines again.
+- [x] **5.1 Cut 0.3.0.** (S) Then release on a rhythm, so the unreleased section never reaches
+  1,600 lines again. *Done 20 November.*
 - [x] **5.2 Rewrite the top of the README.** (M) Lead with what the project is and the results
   table. The opening paragraph is one sentence of about 300 words listing every feature; replace it
   with a short list. Move the 60-row challenge table to the docs. Remove the two stray paragraphs
@@ -411,10 +421,10 @@ A scenario is ready when all of these hold:
 | | Decision | Recommendation |
 |---|---|---|
 | **D1** | Is this first a model showcase or a driving game? | The showcase, with the game as how people meet it: the one-line statement at the top |
-| **D2** | Which models go in the first comparison, and what is the budget? | *Decided 11 November:* Jev and DeepSeek V4.1 Flash through OpenRouter, $5 to start, raised for DeepSeek's full run; about $8.36 spent. At billed prices an LLM costs $0.0002 to $0.0055 a decision; a model on the city suite needs a further $1.40 (Jev) to $2.10 (DeepSeek) |
+| **D2** | Which models go in the first comparison, and what is the budget? | *Decided 11 November:* Jev and DeepSeek V4.1 Flash through OpenRouter, $5 to start, raised for DeepSeek's full run; about $8.36 spent. At billed prices an LLM costs $0.0002 to $0.0055 a decision; a model on the city suite needs a further $1.40 (Jev) to $2.10 (DeepSeek). *20 November:* live model test runs now use Jev and Claude Haiku 5.5 only (AGENTS.md) |
 | **D3** | Does the scenario freeze hold until Phase 1 exits, or until Phase 3? | Phase 1; allow at most one new scenario between phases after that |
 | **D4** | Is `city` a second suite, or does it replace the current one? | A second suite, so earlier records stay comparable |
-| **D5** | Is the next release 0.3.0 or 1.0? | 0.3.0 now; 1.0 when Phase 2 exits |
+| **D5** | Is the next release 0.3.0 or 1.0? | *Decided:* 0.3.0, cut 20 November; 1.0 when Phase 2 exits |
 
 ## Done so far
 

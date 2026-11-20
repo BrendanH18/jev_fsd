@@ -69,7 +69,16 @@ BUILT_IN = {
         "about": "The starter browser agent (static/js/agents/cautious.js); no model calls.",
     },
 }
-ORDER = ["rules", "cautious", "jev", "llm:deepseek", "llm:luna", "decision:liquid-d1", "llm:granite"]
+ORDER = [
+    "rules",
+    "cautious",
+    "jev",
+    "llm:claude-haiku-5-5",
+    "llm:deepseek",
+    "llm:luna",
+    "decision:liquid-d1",
+    "llm:granite",
+]
 KIND_NOTES = {"jev": "decision model (TypeSafe)", "decision": "decision model", "llm": "LLM"}
 
 
@@ -214,6 +223,12 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "fallbacks": sum(r.get("fallbacks") or 0 for r in row_results),
                 "hard_brakes": sum(r.get("hard_brakes") or 0 for r in row_results),
                 "safety_brakes": sum(r.get("safety_brakes") or 0 for r in row_results),
+                # (the open track: how often the car went on with a manoeuvre that broke a road rule)
+                **(
+                    {"flagged_choices": sum(r.get("flagged_choices") or 0 for r in row_results)}
+                    if track == "open"
+                    else {}
+                ),
                 "driving_s": round(sum(r.get("time_s") or 0 for r in row_results), 1),
                 "cost_usd": round(cost, 6),
                 "cost_basis": cost_basis,
@@ -410,6 +425,8 @@ def readme_block(data: dict) -> str:
             return text
 
         challenge, open_track = verdict(full), verdict(opened)
+        if opened:
+            open_track += f", {opened.get('flagged_choices', 0)} flagged choices"
         share = full.get("model_share") if full else None
         model = f"`{info['model']}`" if info.get("model") else "none"
         # (a driver run on the open track alone: that run's cost, said so)
@@ -429,6 +446,7 @@ def readme_block(data: dict) -> str:
         f"{plain(r['traffic'] for r in city_rows)} traffic cars. A driver's runs may come from different dates. "
         "On the open track the safety filter flags a manoeuvre that breaks a road rule instead of removing it, "
         "so the driver's own judgment decides ([how](docs/reference/benchmarks.md#benchmarks-and-validation)). "
+        '"Flagged choices" counts how often the driver went on with one. '
         '"Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. '
         "Model drives are recorded under `data/recordings/` and replay without a key. "
         "Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).",
