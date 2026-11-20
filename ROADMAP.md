@@ -268,6 +268,16 @@ Each recent feature edited the same core files: `sim/npc.js` (2,499 lines, with 
   processes (Python's hash seed); comparisons need one server process or `PYTHONHASHSEED=0` until it
   is made deterministic.
 - [ ] **3.2 Move the rest across.** (L) A few at a time, each with the same before-and-after record.
+  *Under way:* 20 November, puddles, black ice and snowbanks moved onto the registry, each in a commit
+  of its own, and the core files no longer name them (six features of 32 are records now). This ends
+  the one exception AGENTS.md allowed: traffic's lane hooks hand each other their moves, so puddles read
+  the move round a pothole without naming it. Black ice and snowbanks needed new hooks for the step's
+  start, the clock's day, sight lines, the emergency pull-over and traffic's line and pedals
+  ([feature interface](docs/feature-interface.md)). Bare, city, city snow and city rain on Kitsilano
+  seed 1, all 62 challenge and road-test drives with Rules and with the cautious agent, and the model
+  recording are identical before and after
+  ([record](docs/validation/registry-round2-2026-11-20.md)). Next: the driveway reversers, ball chase
+  and parkers, the neighbours whose slots (`"driveways"`, `"balls"`, `"parkers"`) the records still use.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step`, the sensing pass and the one-line
   `needsMotionQuestion` test, once the features have moved out of them.
 - [x] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same

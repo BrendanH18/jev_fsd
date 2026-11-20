@@ -33,13 +33,21 @@ export default {
   limit, target, hazard,                                // snap.limit, desiredSpeed, hazard flags
   candidates, adjust, brakeDetour, sim,                 // lane candidates, their forward-sim checks and rejections
   state, outcome, slowOutcome, clause, holdStill, prompt, // the model's decision state and wording
-  trafficStart, trafficReplan, trafficLane, trafficYield, // how traffic and cyclists take it
+  trafficStart, trafficReplan, trafficLane, trafficYield, trafficPullOut, // how traffic and cyclists take it
+  hides, blocksView, placeEgo, detour, turnPace,        // what it hides, the car put down by hand, its move in the lane
+  evStop, evKerb, pullOverDetour,                       // the emergency pull-over and its audit
+  day,                                                  // true: the clock keeps the `day` of the year while it is on
 };
 ```
 
 The header of `features/index.js` lists every hook, its arguments and its slots. The World takes the
 option through `...features` in its constructor and builds every record at the end of the constructor,
-with its `seen` flag false and its `calls` an empty map.
+in registration order, with its `seen` flag false and its `calls` an empty map.
+
+A core module asks for its hooks once, when it loads (`hooks(name, slot)`). Through an import cycle that
+can be before the records have loaded (the snowbanks record's simulation reaches `sim/npc.js`, say), so the
+list `hooks()` hands out is filled as soon as the registry has loaded, before anything can run it; a slot
+the core never runs is still refused, then.
 
 ## Slots: why results stay exactly the same
 
@@ -57,7 +65,8 @@ that the core calls every slot).
 Where order provably does not matter the hooks share one place: the speed ceilings that are a plain
 `Math.min`, the forward-sim checks (each sets only its own flag), traffic's holds (each stops it with
 `leadV = 0`, so the closest wins whatever the order), the outcome labels chosen by candidate id, and the
-motion test (a pure `||`).
+motion test (a pure `||`). A hazard flag or a clause hook may return a list (snowbanks give two flags and
+two sentences), pushed in its order.
 
 ## The proof
 
@@ -77,6 +86,11 @@ the browser tests at `/tests` (199/199) and every `scripts/test_*.mjs` that touc
 closures, free drives, bench options or the drive lab pass unchanged, apart from `test_free_drive.mjs`,
 which now reads the registered options beside the World's own.
 
+**Round two** (puddles, black ice, snowbanks; 2026-11-20) added Kitsilano city in snow (snowbanks on
+every route, black ice on one) and in rain, and every challenge with the cautious agent as well as
+Rules: all identical after each of the three commits
+([record](validation/registry-round2-2026-11-20.md)).
+
 **Run before and after against one server process, or set `PYTHONHASHSEED`.** The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
 where the server's `/api/route` returned a different number of alternative routes for the same request.
@@ -87,7 +101,7 @@ gave identical city results, the 12.81 km of the committed reference.
 
 ## How close a new feature is to "its own file, its challenge, its test and one registration line"
 
-For the three migrated features, the core files above no longer name them. What a feature still needs
+For the six migrated features, the core files above no longer name them. What a feature still needs
 outside its own files:
 
 | Where | What | Hook needed |
@@ -113,6 +127,12 @@ pipeline need nothing.
   pipeline needs no slots at all; register the records in the order the core runs them today, which
   differs by pipeline (candidates put road closures beside turn restrictions, but the audit puts them
   after parkers), so a few records will keep an explicit slot or the core will need a reviewed reorder.
+  Moving black ice, snowbanks and puddles (registered in that order, after geese) showed it: they run in
+  that order in sensing, the audit and the hazard flags, but puddles come first in the speed ceiling, the
+  target, the candidates, the decision state and the wording, beside potholes, and black ice's lane
+  adjustment and slowed-outcome wording come after puddles' (`"end"`). The temporary `"snowbanks"` slots
+  that puddles used went once snowbanks moved; the new slots are named after the core code they follow
+  (`"officers"`, `"tailgaters"`, `"parking"`, `"parkers"`).
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).
@@ -121,6 +141,14 @@ pipeline need nothing.
   got to; `easing`), so the puddles record reads the pothole's move without naming it. Puddles still treat
   potholes full of water as puddles (`sim/puddles.js waterSets`), and black ice reuses the pothole
   slow-down helpers, inside the features' own modules.
+* **Hooks added in round two.** Black ice and snowbanks reached further into the core than the first
+  three: the refresh before anything moves (`stepBeforeTraffic` at `"first"`), the clock's `day`, the gap a
+  turn across traffic needs on ice (`turnPace`), traffic's gentle pedals (`trafficYield`'s `controls`),
+  what a snowbank hides (`hides`, `blocksView`), the car put down in a narrowing (`placeEgo`), the move
+  toward the middle (`detour`), the emergency pull-over and its audit (`evStop`, `pullOverDetour`,
+  `evKerb`), a parked car's wait to pull out (`trafficPullOut`) and traffic's line between the banks
+  (`trafficLane` at `"parkers"`, with `hold`, `lineAt` and `kept` for the leader search). The forward-sim
+  checker gained `settle` (puddles' "no manoeuvre can help it" pass) and the sim time in `afterLaw`.
 * **Hooks still to add.** Driver preferences (Rules, the cautious agent), the coach, the HUD and
   renderers, checkpoint fixes and the re-plan, as in the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are
