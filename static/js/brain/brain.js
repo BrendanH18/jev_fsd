@@ -53,6 +53,9 @@ function creepForOfficer(law, snap, world) {
     : { ...rest, ...officerStopLaw(world.ego.spec), officerStop: hold, stopAtRoute: hold, stopAt: hold - law.s0 };
 }
 
+// Answers `local` without the vector (the guarded track never has one where nothing is eligible).
+const withoutVector = ({ vector: _vector, ...rest }) => rest;
+
 export class Autopilot {
   constructor(world, { onDecision = () => {}, onEvent = () => {} } = {}) {
     this.world = world;
@@ -389,7 +392,8 @@ export class Autopilot {
           motion: "stop",
           candidateId: "hard_brake",
           meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" },
-          answers: { ...local },
+          // (no vector: on the open track a lone flagged manoeuvre answers it locally, and the car brakes instead)
+          answers: withoutVector(local),
         },
         snap,
         candidates,

@@ -318,7 +318,8 @@ export class Hud {
     const selected = probs.find(([id]) => id === decision.chosenId);
     if (selected && !top.includes(selected)) top.splice(4, 1, selected);
     const rows = top.map(([id, p]) => {
-      const text = byId.has(id) ? describe(byId.get(id)) : id;
+      const c = byId.get(id);
+      const text = c ? `${describe(c)}${c.flagged ? ` · flagged: ${c.reject}` : ""}` : id;
       return h(
         "div",
         { class: `option ${id === decision.chosenId ? "chosen" : ""}`, title: `${text} (${id})` },
@@ -334,7 +335,7 @@ export class Hud {
           { class: "muted" },
           m.source === "rules_fallback" || m.fallback
             ? `Rules fallback${chosen ? `: ${describe(chosen)}` : ": holding still"}. No model probabilities available.`
-            : eligible === 1 && chosen?.eligible
+            : eligible === 1 && !flagged && chosen?.eligible
               ? `Only one safe option: ${describe(chosen)}.`
               : "Resolved locally without model probabilities.",
         ),

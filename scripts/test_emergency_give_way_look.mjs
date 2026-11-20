@@ -189,6 +189,14 @@ assert.ok(
   pass(world, ev);
   assert.equal(world.violations.failed_to_yield, 0, "holding still where it looks from is yielding");
 }
+{
+  // crawling mid-block 12.7 m short of where it looks from at 2.5 m/s, then rolling on to stop 7.7 m short of
+  // it without pulling over: the crawl had room to pull over, so the later stop excuses nothing
+  const { world, ev, FRONT } = setup(signed.sPeek - 12.7, 2.5);
+  moveTo(world, FRONT, signed.sPeek - 7.7, 2);
+  pass(world, ev);
+  assert.equal(world.violations.failed_to_yield, 1, "a crawl mid-block that stops near the junction still fails");
+}
 console.log("✓ a stop sign set back from its junction excuses only stops at the sign or where the car looks from");
 
 // A crawl just over its stop line when the call comes, stopping between the line and where it looks from.

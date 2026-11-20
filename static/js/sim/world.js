@@ -1942,7 +1942,9 @@ export class World {
         ? null
         : this.route.controls.find(
             (c) =>
-              (c.control.type === "uncontrolled" || c.control.type === "stop") &&
+              // (a give-way approach or a stop sign; an uncontrolled junction the car's street has priority at, kept
+              // on a route for a left turn's oncoming traffic, is no line to hold)
+              ((c.control.type === "uncontrolled" && c.control.rule !== "major") || c.control.type === "stop") &&
               routeFront <= c.sPeek + AUDIT_EV_OVERSHOOT_M,
           ) || null;
     const toLook = look ? look.sRoute - routeFront : Infinity,
@@ -2007,6 +2009,9 @@ export class World {
           !atLine &&
           !atLook &&
           look &&
+          // (from the line or already near where it looks from: not a crawl mid-block, past a stop sign set back
+          // from its junction, with room to pull over)
+          (inLook || toLook >= -AUDIT_EV_OVERSHOOT_M) &&
           v <= AUDIT_EV_MOVING_MPS &&
           toPeek + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
           toLook <= stopping + AUDIT_EV_LINE_M;

@@ -867,7 +867,7 @@ function outcomeLabel(c, snap) {
   return "clear";
 }
 
-export function situationClauses(snap) {
+export function situationClauses(snap, { track = "guarded" } = {}) {
   const out = [];
   const i = snap.intersection;
   const m = i ? Math.max(0, Math.round(i.bumper_to_line_m)) : 0;
@@ -1115,7 +1115,9 @@ export function situationClauses(snap) {
       );
     if (snap.following.kind === "cyclist" && snap.following.gap_m < 30 && !snap.cyclist_pass)
       out.push(
-        "A cyclist is riding ahead in the lane: stay behind it at a safe gap; passing needs at least 1 m of space, and the candidates that would pass too close have already been removed.",
+        track === "open"
+          ? "A cyclist is riding ahead in the lane: stay behind it at a safe gap; passing needs at least 1 m of space, and the candidates that would pass too close are flagged."
+          : "A cyclist is riding ahead in the lane: stay behind it at a safe gap; passing needs at least 1 m of space, and the candidates that would pass too close have already been removed.",
       );
     else if (label === "dangerous" || label === "short")
       out.push(`The ${snap.following.kind === "parked car" ? "parked car" : "car"} ahead is close; keep a safe gap.`);
@@ -1647,7 +1649,7 @@ export function needsMotionQuestion(snap) {
 
 // Returns { questions, local } where `local` holds answers resolved without the model.
 export function buildQuestions(snap, eligible, meta = {}) {
-  const clauses = situationClauses(snap).join(" ");
+  const clauses = situationClauses(snap, meta).join(" ");
   const pre = clauses ? `${PREAMBLE} ${clauses}` : PREAMBLE;
   const questions = {};
   const local = {};

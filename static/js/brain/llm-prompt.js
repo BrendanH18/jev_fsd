@@ -113,7 +113,7 @@ export function buildLlmPrompt(snap, request) {
   if (questions.route) expect.route = Object.keys(questions.route.criteria);
   // `units` lives in the system message; candidates and route options are listed separately below.
   const { driving_style, units, candidates = [], rejected, route_options, ...observed } = state;
-  const input = { driving_style, situation: snap ? situationClauses(snap) : [], observed };
+  const input = { driving_style, situation: snap ? situationClauses(snap, { track: request.track }) : [], observed };
   if (expect.candidate) input.candidates = candidates.filter((c) => expect.candidate.includes(c.id));
   if (expect.motion) input.motion_options = questions.motion.criteria;
   if (expect.route) input.route_options = questions.route.criteria;

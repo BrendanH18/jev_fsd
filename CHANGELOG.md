@@ -15,8 +15,9 @@
 - **Two failures to yield fixed on other maps (ROADMAP 1.8).** Winnipeg's city smoke `s1-1` held still
   for an ambulance at the mouth of a junction it gives way at on Martha Street, a few metres past its
   give-way line where it looks from; the emergency audit only excused stops at sign and signal lines,
-  so it counted a failure to yield. A stop held anywhere from a give-way or stop line to that look point
-  now counts as a line stop (`auditEmergency`, `sim/world.js`). On Kitsilano's city suite at 06:30,
+  so it counted a failure to yield. A stop held between a give-way or stop line and that look point (away from
+  the line, within 8 m of the look point, so a stop sign set back from its junction excuses no stop
+  mid-block) now counts as a line stop (`auditEmergency`, `sim/world.js`). On Kitsilano's city suite at 06:30,
   `s1-4`, the car began to pull over only 3.6 m short of its stop on Vine Street (its forward simulations
   had rejected the pull-over near a parked car) and stopped 0.17 m over, short of the audit's 0.19 m. A
   pull-over not begun a second after it was planned, with under half the 8 m steering distance left, now

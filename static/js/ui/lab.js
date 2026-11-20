@@ -592,7 +592,8 @@ export class DriveLab {
     const frame = this.recorder.frames[index];
     this.branchCandidate.replaceChildren(
       ...(frame?.state.pilot.lastDecision?.candidates || [])
-        .filter((c) => c.eligible)
+        // (only those that passed the safety checks: not the open track's flagged ones, brain/tracks.js)
+        .filter((c) => c.eligible && !c.flagged)
         .map((c) =>
           h(
             "option",
