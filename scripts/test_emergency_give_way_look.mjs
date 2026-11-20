@@ -20,7 +20,7 @@ const { Vehicle, AMBULANCE } = await import("../static/js/sim/vehicle.js");
 const ARM = 150,
   HALF = 1.6;
 const ARMS = { w: 180, e: 0, n: 90, s: -90 };
-function junction() {
+function junction(stopAt = null) {
   const ends = { c: [0, 0] },
     edges = [],
     lanes = [];
@@ -53,6 +53,10 @@ function junction() {
         limit: 11.1,
         oneway: false,
         name: west ? "West Street" : "North Street",
+        // (a stop sign `stopAt` metres along West Street, coming in from the west)
+        ...(stopAt !== null && id === "w_in"
+          ? { control: { type: "stop", id: "stop_w", s_line: stopAt, all_way: false } }
+          : {}),
       });
       lanes.push({ edge: id, idx: 0, pts: pts.map(([x, y]) => [x + rx * HALF, y + ry * HALF]) });
     }
@@ -67,7 +71,7 @@ function junction() {
     buildings: [],
   });
 }
-const MAP = junction();
+let MAP = junction();
 function straight() {
   const pts = joinLanes(MAP.lane("w_in", 0).pts, MAP.lane("e_out", 0).pts),
     cum = cumulative(pts),
@@ -163,4 +167,43 @@ console.log("✓ stopped between a give-way line and where it looks from, the ca
   assert.equal(world.violations.failed_to_yield, 1, "leaving the stop ends the exception");
 }
 console.log("✓ room to pull over, a late stop and leaving the stop still fail the audit");
+
+// A stop sign set back from its junction: 75 m along a 150 m street whose junction the car looks from at
+// about 140 m. The street between the sign and where it looks from is room to pull over in.
+MAP = junction(75);
+const signed = new Route(straight(), MAP).controls[0];
+assert.equal(signed.control.type, "stop");
+assert.ok(
+  signed.sPeek - signed.sRoute > 50,
+  `${(signed.sPeek - signed.sRoute).toFixed(1)} m from its sign to where it looks`,
+);
+{
+  // stopped in its lane halfway between the sign and the junction: it could have pulled over
+  const { world, ev } = setup((signed.sRoute + signed.sPeek) / 2);
+  pass(world, ev);
+  assert.equal(world.violations.failed_to_yield, 1, "a stop mid-block is not a line stop");
+}
+{
+  // stopped a few metres short of where it looks from, at the junction: as at a give-way line's look point
+  const { world, ev } = setup(signed.sPeek - 3);
+  pass(world, ev);
+  assert.equal(world.violations.failed_to_yield, 0, "holding still where it looks from is yielding");
+}
+console.log("✓ a stop sign set back from its junction excuses only stops at the sign or where the car looks from");
+
+// A crawl just over its stop line when the call comes, stopping between the line and where it looks from.
+MAP = junction(136);
+const near = new Route(straight(), MAP).controls[0];
+assert.ok(near.sPeek - near.sRoute > 2 && near.sPeek - near.sRoute < 8, "the sign close to its junction");
+{
+  const { world, ev, FRONT } = setup(near.sRoute + 0.25, 1.3);
+  moveTo(world, FRONT, near.sRoute + 1.8, 1.5);
+  pass(world, ev);
+  assert.equal(
+    world.violations.failed_to_yield,
+    0,
+    "a crawl over the line that stops short of where it looks is yielding",
+  );
+}
+console.log("✓ a crawl just over a stop line that stops before where it looks from is yielding");
 process.exit(0);

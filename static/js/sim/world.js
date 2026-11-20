@@ -170,6 +170,9 @@ const AUDIT_EV_PULL_S = 4;
 const AUDIT_EV_SIDE_M = 8;
 const AUDIT_EV_LINE_M = 2;
 const AUDIT_EV_OVERSHOOT_M = 1.5; // a short stop at a line can end this far over it, and still be a stop at it
+// Away from its line, a stop short of where the car looks from (`sPeek`) counts as a line stop only this close
+// to it: a stop sign set well back from its junction leaves the street between them open to pull over in.
+const AUDIT_EV_LOOK_M = 8;
 // Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
 // lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
 // or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
@@ -1944,7 +1947,10 @@ export class World {
           ) || null;
     const toLook = look ? look.sRoute - routeFront : Infinity,
       toPeek = look ? look.sPeek - routeFront : -Infinity;
-    const inLook = toLook <= AUDIT_EV_LINE_M && toPeek >= -AUDIT_EV_OVERSHOOT_M;
+    const inLook =
+      toLook <= AUDIT_EV_LINE_M &&
+      toPeek >= -AUDIT_EV_OVERSHOOT_M &&
+      (toLook >= -AUDIT_EV_OVERSHOOT_M || toPeek <= AUDIT_EV_LOOK_M);
     // An existing queue can leave less steering room than a control line. Measure
     // real bodies here, including a bus standing at an angle, independently of the plan.
     const queued =
@@ -1995,11 +2001,11 @@ export class World {
           v <= AUDIT_EV_MOVING_MPS &&
           toLine + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
           toLine <= stopping + AUDIT_EV_LINE_M;
-        // (and a crawl that stops there, short of where it looks from)
+        // (and a crawl that stops there, short of where it looks from, whether or not it could also have stopped
+        // at the line: a crawl just over it stops between the two)
         const approachingLook =
           !atLine &&
           !atLook &&
-          !approachingLine &&
           look &&
           v <= AUDIT_EV_MOVING_MPS &&
           toPeek + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&

@@ -49,7 +49,7 @@ test("every summary cell matches the README table", () => {
       d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a",
       `${d.label} own decisions`,
     );
-    assert.equal(row[7], moneyText(d.cost), `${d.label} cost`);
+    assert.equal(row[7], d.costTrack ? `${moneyText(d.cost)} (open track)` : moneyText(d.cost), `${d.label} cost`);
   });
 });
 

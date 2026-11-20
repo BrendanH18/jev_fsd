@@ -85,6 +85,9 @@
 //                                       while not braking harder than comfortable) ("end")
 //   trafficPullOut(world, n)            false: a car parked at the kerb must not pull out yet ("end")
 
+// Import a record through this registry (or a core module), never on its own: the snowbanks record's simulation
+// reaches sim/npc.js, which loads this registry while that record is still loading
+// (scripts/test_feature_registry.mjs checks each record loads after it).
 import potholes from "./potholes.js";
 import geese from "./geese.js";
 import ice from "./black-ice.js";

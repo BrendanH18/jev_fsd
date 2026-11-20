@@ -6,6 +6,7 @@
 // runs is refused.
 // node --experimental-default-type=module scripts/test_feature_registry.mjs
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
 const R = await import("../static/js/sim/features/index.js");
@@ -232,6 +233,16 @@ test("a record at a slot the core never runs is refused", () => {
   assert.match(R.recordProblem({ ...record, sensing() {} }), /unknown hook/);
   assert.match(R.recordProblem({ ...record, seen: undefined }), /no seen/);
   assert.throws(() => R.hooks("sense", "nowhere"), /no slot/);
+});
+
+test("every record loads in a fresh process, through the registry as the core loads it", () => {
+  const dir = new URL("../static/js/sim/features/", import.meta.url);
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "index.js")) {
+    const code = `globalThis.document = { querySelector: () => null }; await import(${JSON.stringify(new URL("index.js", dir).href)}); const r = await import(${JSON.stringify(new URL(file, dir).href)}); if (!r.default?.key) throw new Error("no record");`;
+    execFileSync(process.execPath, ["--experimental-default-type=module", "--input-type=module", "-e", code], {
+      stdio: "pipe",
+    });
+  }
 });
 
 console.log(`${checks} feature registry checks passed`);

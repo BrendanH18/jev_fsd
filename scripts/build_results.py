@@ -181,7 +181,9 @@ def challenge_rows(drivers: dict) -> list[dict]:
             drivers.setdefault(driver, model_driver(header, model))
         if cost_basis is None:
             cost_basis = "none" if not cost else "as recorded (the cost the server counted for each call)"
-        full = summary.get("set") == "all"
+        # (the whole set, every challenge and road test: a run of some of them, or one stopped part way,
+        # is a pilot, never the full set)
+        full = summary.get("set") == "all" and {r["challenge"] for r in row_results} == full_set_ids()
         failed = [
             {"id": r["challenge"], "map": r["map"], "failures": r["failures"]} for r in row_results if not r["pass"]
         ]
@@ -225,6 +227,15 @@ def challenge_rows(drivers: dict) -> list[dict]:
             }
         )
     return rows
+
+
+def full_set_ids() -> set[str]:
+    """The ids of the challenge set: one module per challenge (static/js/lab/challenges/<id>.js) and the
+    road tests (static/js/lab/road-tests.js)."""
+    lab = ROOT / "static" / "js" / "lab"
+    challenges = {p.stem for p in (lab / "challenges").glob("*.js")}
+    road_tests = set(re.findall(r'^\s*id: "(road-test-[a-z0-9-]+)"', (lab / "road-tests.js").read_text(), re.M))
+    return challenges | road_tests
 
 
 def committed_runs() -> list[Path]:
@@ -401,7 +412,8 @@ def readme_block(data: dict) -> str:
         challenge, open_track = verdict(full), verdict(opened)
         share = full.get("model_share") if full else None
         model = f"`{info['model']}`" if info.get("model") else "none"
-        cost = money(full["cost_usd"]) if full else "$0"
+        # (a driver run on the open track alone: that run's cost, said so)
+        cost = money(full["cost_usd"]) if full else f"{money(opened['cost_usd'])} (open track)" if opened else "$0"
         lines.append(
             f"| {info['label']} | {model} | {challenge} | {open_track} | {home} | {other} | {percent(share) if full and 'model_share' in full else 'n/a'} | {cost} |"
         )

@@ -61,7 +61,7 @@ export const FLAG_TEXT = {
   passes_reversing_vehicle_too_close: "it passes a car backing out of a driveway too close",
   passes_ball_gap_too_fast: "it passes where a ball rolled out too fast to stop for a child following it",
   crosses_ice_too_fast: "it reaches the black ice faster than is safe on it",
-  brakes_on_ice: "it brakes or steers hard on black ice",
+  brakes_on_ice: "it brakes, accelerates or steers hard on black ice, or skids on it",
   enters_narrowing_out_of_turn: "it enters a stretch narrowed by snowbanks while it is the oncoming car's turn",
   blocks_parking_car: "it blocks or goes round a car parallel parking ahead",
   fails_to_yield_to_emergency: "it does not give way to an emergency vehicle",

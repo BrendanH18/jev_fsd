@@ -117,7 +117,7 @@ function summaryTable(data, { drivers, pilots }) {
                 : verdict(null, "not run"),
             ),
             h("td", {}, d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a"),
-            h("td", {}, moneyText(d.cost)),
+            h("td", {}, moneyText(d.cost), d.costTrack ? h("small", {}, "open track") : null),
           ),
         ),
       ),

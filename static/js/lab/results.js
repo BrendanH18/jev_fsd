@@ -45,7 +45,9 @@ export function summary(data) {
       home,
       others: others.length ? { ...fraction(others), maps: others.length, rows: others } : null,
       share: challenges?.model_share ?? null,
-      cost: challenges?.cost_usd ?? 0,
+      // (a driver run on the open track alone: that run's cost, marked so)
+      cost: challenges ? challenges.cost_usd : (open?.cost_usd ?? 0),
+      costTrack: !challenges && open ? "open" : null,
       pilots: pilot,
     });
   }
