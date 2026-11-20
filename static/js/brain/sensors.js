@@ -302,6 +302,7 @@ const EV_FIRM_DECEL = 3.5;
 const EV_SHORT_M = 2.5;
 const ALONGSIDE_M = 4; // an emergency vehicle this close beside the car, going round it
 const EV_STEER_M = 8;
+const EV_LATE_S = 1; // a pull-over not begun this long after it was planned has started late
 // More room to stop in for each lane it crosses into the curb lane to pull over: the sharpest lane change
 // offered (MIN_CHANGE_M, brain/candidates.js). With 8 m in all, a car crossing from the inner lane of
 // West Broadway reached its stop at an angle, short of the curb lane's middle, and one standing in the
@@ -632,7 +633,7 @@ export function buildSnapshot(world, executing = null) {
     }
     const lane = (snap.lane = laneState(route, p, executing?.law));
     snap.right_hook = rightHook(world, p, frontS, lane);
-    snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection);
+    snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection, executing);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
     snap.bus = busPullingOut(world, frontS, visible);
     if (world.pxo) {
@@ -1293,7 +1294,7 @@ function rightHook(world, p, frontS, lane) {
 // far right of its lane's centre it pulls over (`offset_m`); `clearing` when that is past a
 // junction, and `lead` (no stop) when the vehicle is stuck behind the car. The stop is chosen once
 // per call and remembered in `world.evYield`.
-function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
+function emergencyYield(world, p, frontS, lane, visible, intersection = null, executing = null) {
   const { ego, route, map } = world;
   const evs = world.npcs.filter(isEmergency);
   // where the car is and will be over the next 20 m, along its route
@@ -1400,6 +1401,15 @@ function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
       reach,
     };
   }
+  // A pull-over still not begun a second after it was planned (its forward simulations kept rejecting it,
+  // say), with less than half the steering distance left, finishes its move within the stop, as one
+  // planned short does. With more room the ordinary pursuit still gets over (Kitsilano city rain s1-9,
+  // begun 6.2 m short), and the shorter one can swing the car's nose into the parked cars' margin; with
+  // less it stops short (06:30 s1-4 on Vine Street, begun 3.6 m short: 0.17 m over). One begun keeps its
+  // ordinary pursuit, even if dropped for a moment.
+  if (executing?.candidate?.id === "pull_over") plan.begun = true;
+  if (!plan.tight && !plan.begun && world.t - plan.since >= EV_LATE_S && plan.stop - frontS < EV_STEER_M / 2)
+    plan.tight = true;
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
   if (frontS > plan.stop + EV_OVERSHOOT_M)

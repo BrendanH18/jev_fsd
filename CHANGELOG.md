@@ -12,6 +12,19 @@
   model recording keeps its track. The guarded track, the default, is unchanged: Rules and the cautious
   agent keep to the unflagged manoeuvres and drive the open track exactly as the guarded one
   (`brain/tracks.js`, `scripts/test_open_track.mjs`).
+- **Two failures to yield fixed on other maps (ROADMAP 1.8).** Winnipeg's city smoke `s1-1` held still
+  for an ambulance at the mouth of a junction it gives way at on Martha Street, a few metres past its
+  give-way line where it looks from; the emergency audit only excused stops at sign and signal lines,
+  so it counted a failure to yield. A stop held anywhere from a give-way or stop line to that look point
+  now counts as a line stop (`auditEmergency`, `sim/world.js`). On Kitsilano's city suite at 06:30,
+  `s1-4`, the car began to pull over only 3.6 m short of its stop on Vine Street (its forward simulations
+  had rejected the pull-over near a parked car) and stopped 0.17 m over, short of the audit's 0.19 m. A
+  pull-over not begun a second after it was planned, with under half the 8 m steering distance left, now
+  finishes its move within its stop (`emergencyYield`, `brain/sensors.js`). Every other seeded route,
+  challenge and road test is unchanged; Rules passes the other maps' smoke suite 22/22. New checks:
+  `scripts/test_emergency_give_way_look.mjs`, `scripts/test_emergency_late_pull_over.mjs`.
+  (`docs/validation/yields-2026-11-20.md`)
+
 - **The big labs' own APIs as LLM presets.** The Connect a model dialog's LLMs tab adds **Google Gemini**,
   **xAI** and **Mistral** beside OpenAI, each through the lab's own OpenAI-compatible endpoint, with its
   key page and key variable (`GEMINI_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`). Gemini and xAI start
