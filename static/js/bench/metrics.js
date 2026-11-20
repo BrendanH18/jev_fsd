@@ -140,12 +140,7 @@ export class DriveMetrics {
       ...featureMetrics(world, v, "balls"),
       // (only for a drive a tailgater followed the car in: sim/tailgaters.js)
       ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
-      // (only for a drive in which the car came near black ice: sim/black-ice.js)
-      ...(world.iceSeen ? { ice_overspeed: v.ice_overspeed || 0 } : {}),
-      // (only for a drive in which the car came up to a stretch snowbanks narrow to one car: sim/snowbanks.js)
-      ...(world.snowbanksSeen ? { snowbank_conflicts: v.snowbank_conflicts || 0 } : {}),
-      // (only for a drive in which the car came up to a puddle with someone near it: sim/puddles.js)
-      ...(world.puddlesSeen ? { pedestrians_splashed: v.pedestrians_splashed || 0 } : {}),
+      ...featureMetrics(world, v, "tailgaters"),
       // (only for a drive in which a car signalled to parallel park ahead of the car: sim/parkers.js)
       ...(world.parkersSeen ? { parking_conflicts: v.parking_conflicts || 0 } : {}),
       ...featureMetrics(world, v, "parkers"),
@@ -177,6 +172,9 @@ export class DriveMetrics {
       latency_p95_ms: lat.length ? Math.round(lat[Math.min(lat.length - 1, Math.floor(lat.length * 0.95))]) : null,
       // (who made the decisions, for every driver but Rules, whose results stay as they were)
       ...decidedBy(autopilot),
+      // (the open track, brain/tracks.js: the flagged manoeuvres the car went on with; a guarded drive's
+      // result stays as it was)
+      ...trackFields(autopilot),
     };
     out.failures = failures(out);
     out.pass = out.failures.length === 0;
@@ -213,9 +211,7 @@ export function failures(m) {
   if (m.ball_warnings_ignored) f.push("ignored a ball rolling into the street");
   f.push(...featureFailures(m, "balls"));
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
-  if (m.ice_overspeed) f.push("crossed black ice too fast, or braked or steered hard on it");
-  if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
-  if (m.pedestrians_splashed) f.push("splashed a pedestrian from a puddle");
+  f.push(...featureFailures(m, "tailgaters"));
   if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");
   f.push(...featureFailures(m, "parkers"));
   if (m.officer_violations) f.push("went on when a police officer signalled stop");
@@ -223,6 +219,18 @@ export function failures(m) {
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");
   return f;
+}
+
+// The open track's fields (brain/tracks.js): the track, and how often the car went on with a manoeuvre
+// that failed a road-rule check, in all and by check. None on the guarded track.
+export function trackFields(autopilot) {
+  if (autopilot?.track !== "open") return {};
+  const by = autopilot.flaggedChoices || {};
+  return {
+    track: "open",
+    flagged_choices: Object.values(by).reduce((a, n) => a + n, 0),
+    flagged_by_check: Object.fromEntries(Object.entries(by).sort(([a], [b]) => a.localeCompare(b))),
+  };
 }
 
 // Who made a drive's decisions (Autopilot.decidedBy), for any driver but Rules: the counts, and the
@@ -315,5 +323,6 @@ export function aggregate(results) {
     tokens: sum("tokens"),
     cost_usd: Math.round(sum("cost_usd") * 1e6) / 1e6,
     ...decidedByTotals(results),
+    ...(results.some((r) => r.track === "open") ? { flagged_choices: sum("flagged_choices") } : {}),
   };
 }

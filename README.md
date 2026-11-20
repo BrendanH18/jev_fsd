@@ -54,26 +54,24 @@ all 60 challenges and both road tests.
   fails 6 of its 12 snowy city drives in Kitsilano. That's what the seeded city suite is for: ordinary
   routes with the city's hazards switched on.
 
-Every published model drive is committed as a recording of each answer the model gave, so anyone can replay it
-with one command, with no key and no model call ([how, and its limits](docs/model-results.md)). The
-full table is [below](#results).
+See the [full results](#results) or [replay a recorded model drive](docs/model-results.md) without a key.
 
-**One honest caveat.** An AI driver chooses among manoeuvres a shared safety filter has already
-screened, with a controller and an emergency brake underneath. We measured how much that leaves to
-the driver: in 55 of the 60 challenges, no option the filter let through led to a failure at any decision we
-sampled. So for
-now the challenges mostly test the filter, and the clearest way left to fail is DeepSeek's: by not
-making progress. Making them tell drivers apart is the next phase of the [roadmap](ROADMAP.md)
-([the measurement](docs/validation/driver-latitude-2026-11-14.md)).
+**One honest caveat.** An AI driver normally chooses among manoeuvres a shared safety filter has
+already screened. In 55 of the 60 challenges, none of the manoeuvres it let through at the decisions
+we sampled led to a failure within six seconds ([the measurement](docs/validation/driver-latitude-2026-11-14.md)),
+so those challenges mostly test the filter, and the clearest way left to fail is DeepSeek's: by not
+making progress. That's what the **open track** is for. The filter only flags a manoeuvre that breaks a
+road rule, says which rule, and leaves the choice to the driver
+([how it works](docs/reference/benchmarks.md#benchmarks-and-validation)).
 
 ## Take the test yourself
 
 Everything an AI can drive, you can drive too, with the keyboard, a gamepad or a touch screen. You
 don't get the safety filter or the emergency brake.
 
-- **Practise the challenges.** Work through the library by city, skill or weather. Your clean,
-  unaided runs are saved in your browser, and each drive ends with a debrief: what went wrong, the
-  lesson behind the challenge, and links to rewind to each moment.
+- **Practise the challenges.** Work through the library by city, skill or weather. Your browser
+  saves your practice progress. The debrief explains the lesson and lets you rewind to incidents
+  still in the replay.
 - **Book a road test.** There's a Class 5-style test in Kitsilano and a G2-style test in Toronto's
   Annex: a longer drive on a fixed route, an examiner giving directions, and an examiner's sheet at
   the end. Any dangerous action fails you, and minor errors cost demerits. Run an AI through the same
@@ -106,10 +104,9 @@ Each one is a situation real drivers get wrong. A few of them:
 [See all sixty →](docs/challenges.md)
 
 The rules are local. You can't turn right on red in Montréal, BC traffic stops both ways for a school
-bus's flashing reds, and Ontario has pedestrian crossovers. A challenge **passes** only if the driver
-arrives with no collision, no red light or stop sign run, no failure to yield and less than a second
-off the road (and, in Squeeze in, parks within 30 cm of the kerb). A good style score doesn't save a
-drive that broke a rule.
+bus's flashing reds, and Ontario has pedestrian crossovers. To pass a challenge, arrive without a
+collision or a driving violation and spend less than a second off the road. In **Squeeze in**, you
+also have to park within 30 cm of the kerb. The coaching score is separate.
 
 ## See what the AI saw
 
@@ -119,7 +116,7 @@ Turn on **AI eyes** to see the world the way the driver sees it: which hazards i
 a building is hiding, how far it can see in fog, where it thinks everyone else is going, and why it
 turned down each manoeuvre it considered.
 
-The last two minutes of every drive are recorded. Scrub back to the moment before a car door opened,
+Replay keeps the last two minutes of the active drive. Scrub back to the moment before a car door opened,
 then take over, swap in a different driver, or make it try another manoeuvre that passed the safety
 checks, and watch what happens.
 
@@ -150,21 +147,22 @@ export default {
 };
 ```
 
-Load it from **Settings → Local agent module**, then put it up against Rules, Jev and your favourite
-LLM in the arena, which runs every challenge and compares safety, comfort, latency and cost. The
-[agent guide](docs/agents.md) has the starter template and step-by-step setup for every provider.
+Enter `/js/agents/my-driver.js` under **Settings → Local agent module** and click **Load agent**.
+To compare it with other drivers, load the same path under **Add a trusted local agent** in the
+[local arena](http://127.0.0.1:8322/arena). The [agent guide](docs/agents.md) has the full example.
 
 ## Results
 
 <!-- results:start -->
-| Driver | Model | 60 challenges + 2 road tests | City suite, Kitsilano: dry · fog · rain · snow | City suite, 11 other maps (dry) | Own decisions | Cost of the challenges |
-|---|---|---|---|---|---|---|
-| Rules | none | 62/62 | 12/12 · 12/12 · 12/12 · 12/12 | 21/22 | n/a | $0 |
-| Cautious agent | none | 62/62 | 10/12 · 10/12 · 12/12 · 6/12 | 17/22 | 99.98% | $0 |
-| Jev | `jev-1.14.0` | 62/62 | not run | not run | 99.95% | $1.26 |
-| DeepSeek V4.1 Flash | `deepseek/deepseek-v4.1-flash-1017` | **61/62** (failed `double-parked`) | not run | not run | 99.01% | $2.55 |
+| Driver | Model | 60 challenges + 2 road tests | Open track | City suite, Kitsilano: dry · fog · rain · snow | City suite, 11 other maps (dry) | Own decisions | Cost of the challenges |
+|---|---|---|---|---|---|---|---|
+| Rules | none | 62/62 | 62/62, 0 flagged choices | 12/12 · 12/12 · 12/12 · 12/12 | 22/22 | n/a | $0 |
+| Cautious agent | none | 62/62 | 62/62, 0 flagged choices | 10/12 · 10/12 · 12/12 · 6/12 | 17/22 | 99.98% | $0 |
+| Jev | `jev-1.14.0` | 62/62 | 62/62, 8 flagged choices | not run | not run | 99.95% | $1.26 |
+| Claude Haiku 5.5 | `claude-haiku-5-5` | **61/62** (failed `on-your-bumper`) | **61/62** (failed `flagger`), 216 flagged choices | not run | not run | 99.98% | $4.07 |
+| DeepSeek V4.1 Flash | `deepseek/deepseek-v4.1-flash-1017` | **61/62** (failed `double-parked`) | not run | not run | not run | 99.01% | $2.55 |
 
-Built from the committed records (2026-11-11 to 2026-11-18) by `scripts/build_results.py`, which also writes [`data/results.json`](data/results.json) with each row's source files. The [leaderboard](https://brendanh18.github.io/jev_fsd/results.html) shows published challenge results and the newest standard benchmark run for each driver, map, preset, weather, suite size and seed. City runs in this table use suite seed 1, lockstep clock, 40 traffic cars. A driver's runs may come from different dates. "Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. Model drives are recorded under `data/recordings/` and replay without a key. Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).
+Built from the committed records (2026-11-11 to 2026-11-20) by `scripts/build_results.py`, which also writes [`data/results.json`](data/results.json) with each row's source files. The [leaderboard](https://brendanh18.github.io/jev_fsd/results.html) shows published challenge results and the newest standard benchmark run for each driver, map, preset, weather, suite size and seed. City runs in this table use suite seed 1, lockstep clock, 40 traffic cars. A driver's runs may come from different dates. On the open track the safety filter flags a manoeuvre that breaks a road rule instead of removing it, so the driver's own judgment decides ([how](docs/reference/benchmarks.md#benchmarks-and-validation)). "Flagged choices" counts how often the driver went on with one. "Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. Model drives are recorded under `data/recordings/` and replay without a key. Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).
 
 One-challenge pilots: GPT-6 Luna (`openai/gpt-6-luna`) 1/1 (door-zone); Liquid d1 (`liquid/d1-20260930`) 1/1 (door-zone); Granite 4.2 3B (`granite4.2:3b`) 2/2 (dont-splash, left-on-red).
 <!-- results:end -->
@@ -196,12 +194,13 @@ restrictions come from OpenStreetMap, with sensible defaults where a tag is miss
 them is full of traffic, cyclists and people on foot, plus buses, streetcars, snow plows, garbage
 trucks, road crews and police officers directing traffic. Each city has its own house colours and
 something on the horizon: Citadel Hill in Halifax, a river-valley truss bridge in Edmonton, the North
-Shore mountains behind Vancouver. All twelve ship with the project, so it works offline.
+Shore mountains behind Vancouver. All twelve maps ship with the project, so once the local app
+is installed you can drive manually or with Rules offline.
 
 ## How a decision is made
 
-Every AI driver goes through the same loop, every 650 ms on a clear road and every 250 ms near a
-hazard:
+Every AI driver goes through the same loop. A new decision starts once the previous one has finished
+and at least 650 ms have passed since it started (250 ms near a hazard).
 
 ```mermaid
 flowchart LR
@@ -215,18 +214,18 @@ flowchart LR
 - **Sensing is honest.** Buildings block the view, fog and darkness shorten it, and a light you can't
   see counts as unknown.
 - **Only the choice differs.** Physics, the controller and the emergency brake are shared, so
-  results come down to the decisions.
-- **Runs repeat.** Seeded routes and a lockstep clock give the same numbers every time on the same
-  simulation version and JavaScript engine. A recorded model run replays without the model; the
-  [model results](docs/model-results.md) say which revision replays each published run exactly.
-- **A wrong answer is never silent.** If a model's answer is late, malformed or fails, Rules drives
-  that step, the HUD says so, and the fallback counts against the model.
+  results come down to the decisions. On the open track the filter flags rule breaks instead of
+  removing them.
+- **Rules runs repeat.** Use the same scenario, simulation version and JavaScript engine with the
+  lockstep clock. For a model driver, replay its recorded answers to repeat the run.
+- **Fallbacks count.** If a model times out or returns an unusable decision, Rules drives that
+  step. The HUD shows the fallback and the run counts it.
 
 ## Run it yourself
 
 The [browser demo](https://brendanh18.github.io/jev_fsd/) has Rules, the cautious starter agent, the
-challenges and the road tests. To load your own agent or connect a model, run it locally. You need
-[uv](https://docs.astral.sh/uv/), and uv fetches Python 3.10+ if you don't have it:
+challenges and the road tests. To connect a model or develop your own agent, run the app locally
+with [uv](https://docs.astral.sh/uv/). It fetches Python 3.10 or newer if needed.
 
 ```sh
 git clone https://github.com/BrendanH18/jev_fsd
@@ -234,8 +233,30 @@ cd jev_fsd
 uv run server.py
 ```
 
-Open **<http://127.0.0.1:8322>** in a desktop browser with WebGL. That's it: one Python dependency, no
-frontend build, and every map included.
+Open **<http://127.0.0.1:8322>** in a browser with WebGL. That's it: one Python dependency, no
+frontend build, and every map included. The Drive lab opens first; pick a drive, or choose **Back to
+street ↗** to drive freely. Rules drives without a key.
+
+### Connecting a model
+
+Connect a model from the driving screen. You don't edit any files.
+
+1. Click **Decision** for Jev and other decision models, or **LLM** for a language model. Before
+   any model is connected, the click opens the **Connect a model** dialog. Later, it's under the
+   **▾** menu next to each button.
+2. Pick a provider: **TypeSafe** for Jev, OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI,
+   Mistral, Groq, Ollama, LM Studio, or any OpenAI-compatible server. Paste a key if it needs one and pick or
+   type the model. For Jev, keep the preselected model.
+3. Click **Save and drive**. Then set a destination (click the minimap, or choose a drive in
+   **Explore cities**) and the model drives. On a route you already have, press `J` to switch
+   the autopilot on.
+
+The local server saves the key to `.env`, never sends it back to the browser, and uses it without a
+restart. One OpenRouter key covers both decision models and LLMs. A spend cap
+(`JEV_FSD_BUDGET_USD`, $1 per server run by default; a call with no reported cost or price counts as
+$0) and a rate cap (`JEV_FSD_RPM`) keep live runs from surprising you. The
+[agent guide](docs/agents.md) covers every provider, prices and limits. This project is independent
+of TypeSafe AI.
 
 ### Controls
 
@@ -251,24 +272,6 @@ frontend build, and every map included.
 A gamepad works too, and on touch screens the controls appear on screen
 ([details](docs/drive-experience.md#gamepad-and-touch)). Click the minimap to set a destination, or open
 **Explore cities** for suggested drives.
-
-### Connecting a model
-
-Click **Decision ▾** or **LLM ▾**, choose **Connect a model…**, pick a provider (TypeSafe for Jev,
-OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI, Mistral, Ollama, or any OpenAI-compatible
-server), paste a key and choose **Save and drive**. It
-starts driving straight away, without a restart, and one OpenRouter key covers both kinds.
-
-Keys are saved to `.env` by your local server and are never sent back to the browser. A spend cap
-(`JEV_FSD_BUDGET_USD`, $1 per server run by default) and a rate cap (`JEV_FSD_RPM`) keep live runs
-from surprising you. To set Jev up by hand instead:
-
-```sh
-cp .env.example .env    # then set TYPESAFE_API_KEY=... and restart the server
-```
-
-This project is independent and not affiliated with TypeSafe AI. Every provider, and how the spend
-cap counts, is covered in the [agent guide](docs/agents.md#decision-models-jev-and-others).
 
 ## Contributing
 
@@ -294,10 +297,10 @@ node --experimental-default-type=module scripts/test_drive_lab.mjs   # one of th
 python3 scripts/build_demo.py                                # build the static GitHub Pages demo
 ```
 
-Each `scripts/test_*.mjs` file is a standalone Node 22 check. The
-[development reference](docs/reference/development.md) lists them all, along with the browser suites.
-CI runs every check on every pull request and deploys the demo from `main`. If you change physics,
-sensing or planning, run a seeded `/bench` comparison before and after against the
+Run the standalone `scripts/test_*.mjs` checks with Node 22. The
+[development reference](docs/reference/development.md) covers the browser suites and offline checks.
+Pull requests run lint, tests and the dry seeded benchmarks. The demo deploys from `main`.
+If you change physics, sensing or planning, run a seeded `/bench` comparison before and after against the
 [Rules baseline](docs/rules-baseline.md).
 
 ```

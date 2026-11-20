@@ -60,6 +60,24 @@ there uses the distance driven, so a longer way round looks like less time lost)
 route length when a road closure re-plans the route (a drive that does not arrive after a detour
 under-reports its progress).
 
+# Emergency yields on Martha Street and Vine Street — 2026-11-20
+
+Rules, lockstep, suite seed 1, 40 traffic cars, Node 22.23.4. The two failures to yield left open in
+ROADMAP 1.8 are fixed; causes and checks are in [the validation record](validation/yields-2026-11-20.md).
+
+| Route | Before | After |
+|---|---|---|
+| Winnipeg `s1-1`, Martha Street | Failed to yield to `ambulance_1` while holding at a give-way junction's look point | Passes; the drive is unchanged field for field (183.8 s), only the verdict |
+| Kitsilano 06:30 `s1-4`, Vine Street | Failed to yield to `ambulance_1`, stopped 0.17 m over | Passes at 320.4 s (was 322.6 s), pulled over 0.29 m |
+
+Every other route is identical field for field, timings aside, against the unchanged tree run the same
+day: Kitsilano bare dry, city in four weathers, city dry with parking, city at 06:30 and 23:30, the
+two-route city smoke suite on the eleven other maps, and the 60 challenges and 2 road tests with Rules
+and with the cautious agent (62/62 each). The stub model recording replays unchanged. The new
+reference is [Winnipeg city dry](../data/runs/20261120-120000-rules.json) (2/2), replacing
+`20261112-190015-rules`; no other committed reference changes. On the unchanged tree every committed
+reference still reproduces except Calgary `s1-1` and Kitsilano parking `s1-12`, which already differed.
+
 # Edmonton and destination parking — 2026-11-18
 
 Rules, lockstep, suite seed 1, 40 traffic cars, Node 22.23.4. The Edmonton city smoke suite and

@@ -47,6 +47,7 @@ function summaryTable(data, { drivers, pilots }) {
           h("th", {}, "Driver"),
           h("th", {}, "Model"),
           h("th", {}, "60 challenges + 2 road tests"),
+          h("th", {}, "Open track"),
           h("th", {}, `City suite, ${maps[HOME_MAP] || HOME_MAP}: ${WEATHERS.join(" · ")}`),
           h("th", {}, `City suite, ${others} other maps (dry)`),
           h("th", {}, "Own decisions"),
@@ -79,6 +80,15 @@ function summaryTable(data, { drivers, pilots }) {
             h(
               "td",
               {},
+              d.open ? verdict(d.open, fractionText(d.open)) : verdict(null, "not run"),
+              d.open?.failed.length
+                ? h("small", {}, `failed ${d.open.failed.map((f) => challenge(f.id)?.title || f.id).join(", ")}`)
+                : null,
+              d.open ? h("small", {}, `${d.open.flagged_choices ?? 0} flagged choices · ${d.open.date}`) : null,
+            ),
+            h(
+              "td",
+              {},
               Object.values(d.home).some(Boolean)
                 ? WEATHERS.map((w, i) => [
                     i ? " · " : "",
@@ -107,7 +117,7 @@ function summaryTable(data, { drivers, pilots }) {
                 : verdict(null, "not run"),
             ),
             h("td", {}, d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a"),
-            h("td", {}, moneyText(d.cost)),
+            h("td", {}, moneyText(d.cost), d.costTrack ? h("small", {}, "open track") : null),
           ),
         ),
       ),
@@ -132,6 +142,7 @@ function summaryTable(data, { drivers, pilots }) {
 }
 
 function challengeTable(matrix, data) {
+  if (!matrix.runs.length) return h("p", { class: "muted" }, "No run published yet.");
   const label = (id) => data.drivers[id]?.label || id;
   return h(
     "div",
@@ -283,6 +294,7 @@ async function main() {
     const top = summary(data);
     $("#results-summary").replaceChildren(summaryTable(data, top));
     $("#results-challenges").replaceChildren(challengeTable(challengeMatrix(data), data));
+    $("#results-open").replaceChildren(challengeTable(challengeMatrix(data, "open"), data));
     $("#results-city").replaceChildren(cityTable(cityGrid(data), data));
     $("#results-replay").replaceChildren(replayList(recordings(data), data));
     $("#results-sources").replaceChildren(

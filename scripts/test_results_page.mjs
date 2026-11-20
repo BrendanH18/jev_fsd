@@ -13,7 +13,7 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const data = checkResults(JSON.parse(fs.readFileSync(new URL("../data/results.json", import.meta.url), "utf8")));
 const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
 const block = readme.slice(readme.indexOf("<!-- results:start -->"), readme.indexOf("<!-- results:end -->"));
-// README rows: | Driver | Model | challenges | Kitsilano weathers | other maps | own decisions | cost |
+// README rows: | Driver | Model | challenges | open track | Kitsilano weathers | other maps | own decisions | cost |
 const readmeRows = block
   .split("\n")
   .filter((l) => l.startsWith("| ") && !l.startsWith("| Driver"))
@@ -38,17 +38,18 @@ test("every summary cell matches the README table", () => {
   drivers.forEach((d, i) => {
     const row = readmeRows[i];
     assert.ok(row[2].includes(fractionText(d.challenges)), `${d.label} challenges`);
+    assert.ok(row[3].includes(fractionText(d.open)), `${d.label} open track`);
     const home = Object.values(d.home).some(Boolean)
       ? WEATHERS.map((w) => (d.home[w] ? fractionText(d.home[w]) : "–")).join(" · ")
       : "not run";
-    assert.equal(row[3], home, `${d.label} Kitsilano`);
-    assert.equal(row[4], fractionText(d.others), `${d.label} other maps`);
+    assert.equal(row[4], home, `${d.label} Kitsilano`);
+    assert.equal(row[5], fractionText(d.others), `${d.label} other maps`);
     assert.equal(
-      row[5],
+      row[6],
       d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a",
       `${d.label} own decisions`,
     );
-    assert.equal(row[6], moneyText(d.cost), `${d.label} cost`);
+    assert.equal(row[7], d.costTrack ? `${moneyText(d.cost)} (open track)` : moneyText(d.cost), `${d.label} cost`);
   });
 });
 
@@ -63,11 +64,15 @@ test("the challenge matrix covers every challenge and road test once", () => {
   const known = new Set([...CHALLENGES, ...ROAD_TESTS].map((c) => c.id));
   assert.equal(matrix.rows.length, CHALLENGES.length + ROAD_TESTS.length);
   for (const row of matrix.rows) assert.ok(known.has(row.id), row.id);
-  assert.deepEqual(matrix.drivers, ["rules", "cautious", "jev", "llm:deepseek"]);
-  const failed = matrix.rows
-    .flatMap((r) => r.cells.map((c, i) => (c && !c.pass ? `${matrix.drivers[i]} ${r.id}` : null)))
-    .filter(Boolean);
-  assert.deepEqual(failed, ["llm:deepseek double-parked"]);
+  assert.deepEqual(matrix.drivers, ["rules", "cautious", "jev", "llm:claude-haiku-5-5", "llm:deepseek"]);
+  const failed = (m) =>
+    m.rows.flatMap((r) => r.cells.map((c, i) => (c && !c.pass ? `${m.drivers[i]} ${r.id}` : null))).filter(Boolean);
+  assert.deepEqual(failed(matrix).sort(), ["llm:claude-haiku-5-5 on-your-bumper", "llm:deepseek double-parked"]);
+  // (and the same set on the open track: brain/tracks.js)
+  const open = challengeMatrix(data, "open");
+  assert.equal(open.rows.length, CHALLENGES.length + ROAD_TESTS.length);
+  assert.deepEqual(open.drivers, ["rules", "cautious", "jev", "llm:claude-haiku-5-5"]);
+  assert.deepEqual(failed(open), ["llm:claude-haiku-5-5 flagger"]);
 });
 
 test("the city grid has one row per map and weather, Kitsilano first", () => {
@@ -83,7 +88,7 @@ test("the city grid has one row per map and weather, Kitsilano first", () => {
 
 test("every recording offered for replay is committed", () => {
   const list = recordings(data);
-  assert.equal(list.length, 6);
+  assert.equal(list.length, 9);
   for (const r of list) {
     assert.ok(fs.existsSync(new URL(`../${r.recording}`, import.meta.url)), r.recording);
     assert.ok(r.command.includes(`--replay ${r.recording}`));

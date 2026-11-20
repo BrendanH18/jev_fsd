@@ -19,6 +19,7 @@ import { officerStopLaw } from "../sim/traffic-officer.js";
 import { Route } from "../map/route.js";
 import { browserRoute } from "../demo/routing.js";
 import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
+import { DEFAULT_TRACK, openTrack, unflagged } from "./tracks.js";
 
 const INTERVAL_HAZARD_MS = 250;
 const INTERVAL_CLEAR_MS = 650;
@@ -52,6 +53,11 @@ function creepForOfficer(law, snap, world) {
     : { ...rest, ...officerStopLaw(world.ego.spec), officerStop: hold, stopAtRoute: hold, stopAt: hold - law.s0 };
 }
 
+// Answers `local` without the vector (the guarded track never has one where nothing is eligible).
+const withoutVector = ({ vector: _vector, ...rest }) => rest;
+// The drivers that keep to the unflagged manoeuvres on the open track, and so drive it as the guarded one.
+const REFERENCE_DRIVERS = new Set(["rules", "cautious"]);
+
 export class Autopilot {
   constructor(world, { onDecision = () => {}, onEvent = () => {} } = {}) {
     this.world = world;
@@ -75,6 +81,10 @@ export class Autopilot {
     // it was asked to the default), answered locally with no call (`local`), or Rules after a timeout,
     // an error, an unusable answer or an invalid vector (`fallback`).
     this.decidedBy = { model: 0, partial: 0, local: 0, fallback: 0 };
+    // The guarded or the open track (brain/tracks.js), and on the open one the flagged manoeuvres the
+    // car went on with, by the check each failed.
+    this.track = DEFAULT_TRACK;
+    this.flaggedChoices = {};
     this.snap = null;
     this.offRouteFor = 0;
     this.rerouting = false;
@@ -362,23 +372,41 @@ export class Autopilot {
     this.lastStart = now;
     const epoch = this.epoch;
     const candidates = sampleCandidates(snap, world);
-    const { eligible, rejected, mustStop } = simulateAll(candidates, snap, world);
+    const sim = simulateAll(candidates, snap, world);
+    const { eligible, rejected, mustStop } = this.track === "open" ? openTrack(candidates, sim) : sim;
+    // (what Rules and the built-in agents choose among: on the guarded track, every eligible manoeuvre)
+    const clear = this.track === "open" ? unflagged(eligible) : eligible;
     this.goalBlockedBy = atGoal(snap) ? goalBlocker(candidates, world) : null;
     if (this.executing?.candidate) {
       this.executing.hazard = pathHazard(this.executing, snap, world);
       if (this.executing.hazard) snap.current_path_hazard = this.executing.hazard;
     }
     const routeOptions = this.pendingRoutes;
-    const state = toJevState(snap, candidates, { rejected, routeOptions }, this.style);
-    const { questions, local } = buildQuestions(snap, eligible, { routeOptions });
-    const request = { epoch, state, questions, local, candidates, eligible, flags, mustStop };
-    if (!eligible.length) {
+    const track = this.track;
+    const state = toJevState(snap, candidates, { rejected, routeOptions, track }, this.style);
+    const { questions, local } = buildQuestions(snap, eligible, { routeOptions, track });
+    const request = {
+      epoch,
+      state,
+      questions,
+      local,
+      candidates,
+      eligible,
+      flags,
+      mustStop,
+      // (the open track only: a guarded request is as before)
+      ...(track === "open" ? { track } : {}),
+    };
+    // (on the open track, a choice among flagged manoeuvres alone is the driver's: Rules and the cautious agent,
+    // the reference drivers, brake there as on the guarded track, where nothing would be left)
+    if (!eligible.length || (!clear.length && (eligible.length < 2 || REFERENCE_DRIVERS.has(this.brainName)))) {
       this.apply(
         {
           motion: "stop",
           candidateId: "hard_brake",
           meta: { source: "local", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "none" },
-          answers: { ...local },
+          // (no vector: on the open track a lone flagged manoeuvre answers it locally, and the car brakes instead)
+          answers: withoutVector(local),
         },
         snap,
         candidates,
@@ -388,7 +416,7 @@ export class Autopilot {
       return;
     }
     if ((!Object.keys(questions).length && this.brain?.questionDriven) || this.brainName === "rules") {
-      const r = this.brains.rules.decideSync(snap, eligible);
+      const r = this.rulesDecide(snap, clear);
       if (this.brainName !== "rules") {
         r.meta.source = "local";
         r.answers = { ...local };
@@ -430,8 +458,10 @@ export class Autopilot {
       for (const key of ["latency_ms", "input_tokens", "cost_usd"])
         if (!Number.isFinite(result.meta[key]) || result.meta[key] < 0) result.meta[key] = 0;
       if (result.candidateId === null && eligible.length) {
-        const r = this.brains.rules.decideSync(snap, eligible);
+        const r = this.rulesDecide(snap, clear);
         result.candidateId = r.candidateId;
+        // (on the open track with nothing unflagged, the fallback is a stop: its motion too)
+        if (!clear.length) result.motion = r.motion;
         result.meta.fallback = "invalid vector";
         this.world.violations.fallbacks++;
       }
@@ -440,7 +470,7 @@ export class Autopilot {
     } catch (err) {
       clearTimeout(timer);
       if (epoch !== this.epoch) return;
-      const r = this.brains.rules.decideSync(snap, eligible);
+      const r = this.rulesDecide(snap, clear);
       // A call that happened but returned an unusable answer still counts its tokens, cost and latency.
       if (err.meta?.live_call) {
         for (const key of SPEND_KEYS) if (err.meta[key] !== undefined) r.meta[key] = err.meta[key];
@@ -456,6 +486,18 @@ export class Autopilot {
     } finally {
       if (this.inFlight === controller) this.inFlight = null;
     }
+  }
+
+  // Rules' choice among `clear` (the unflagged manoeuvres). With none, only on the open track (a model
+  // was offered flagged manoeuvres alone), it brakes, as the guarded track does with nothing eligible.
+  rulesDecide(snap, clear) {
+    if (clear.length) return this.brains.rules.decideSync(snap, clear);
+    return {
+      motion: "stop",
+      candidateId: "hard_brake",
+      meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" },
+      answers: null,
+    };
   }
 
   // `by` is who made the decision, for `decidedBy`; a choice made from outside the autopilot (a
@@ -514,6 +556,9 @@ export class Autopilot {
       // fallback or a local decision (an emergency stop) never asked the model, so it asks again.
       this.pendingRoutes = null;
     }
+    // (a flagged manoeuvre chosen to go on with; holding still, or the brake a stop answer applies, is none)
+    if (chosen?.flagged && result.motion !== "stop")
+      this.flaggedChoices[chosen.reject] = (this.flaggedChoices[chosen.reject] || 0) + 1;
     this.totals.decisions++;
     this.decidedBy[by]++;
     if (partial) this.decidedBy.partial++;

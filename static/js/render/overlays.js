@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { GeoBuilder } from "./geo.js";
 import { beamTexture } from "./textures.js";
 
-const COLORS = { eligible: 0x57d27f, rejected: 0xff6b6b, chosen: 0xffe066, route: 0x4cc2ff };
+const COLORS = { eligible: 0x57d27f, flagged: 0xffa53d, rejected: 0xff6b6b, chosen: 0xffe066, route: 0x4cc2ff };
 
 // Transparent, unlit, depth-tested against cars and buildings; the ground layers never write depth,
 // so these always sit on top of the road.
@@ -37,6 +37,8 @@ export class Overlays {
     this.mats = {
       route: overlayMat(COLORS.route, 0.22),
       eligible: overlayMat(COLORS.eligible, 0.5),
+      // (the open track's flagged manoeuvres: offered, though they failed a road-rule check)
+      flagged: overlayMat(COLORS.flagged, 0.5),
       rejected: overlayMat(COLORS.rejected, 0.4),
       chosen: overlayMat(COLORS.chosen, 0.9),
     };
@@ -93,7 +95,13 @@ export class Overlays {
     for (const c of candidates) {
       if (!c.trace || c.trace.length < 2) continue;
       const chosen = c.id === chosenId;
-      const mat = chosen ? this.mats.chosen : c.eligible ? this.mats.eligible : this.mats.rejected;
+      const mat = chosen
+        ? this.mats.chosen
+        : c.flagged
+          ? this.mats.flagged
+          : c.eligible
+            ? this.mats.eligible
+            : this.mats.rejected;
       const mesh = ribbonMesh(c.trace, chosen ? 0.32 : 0.12, mat, chosen ? 3 : 2);
       this.group.add(mesh);
       this.candidateMeshes.push(mesh);

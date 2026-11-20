@@ -69,7 +69,16 @@ BUILT_IN = {
         "about": "The starter browser agent (static/js/agents/cautious.js); no model calls.",
     },
 }
-ORDER = ["rules", "cautious", "jev", "llm:deepseek", "llm:luna", "decision:liquid-d1", "llm:granite"]
+ORDER = [
+    "rules",
+    "cautious",
+    "jev",
+    "llm:claude-haiku-5-5",
+    "llm:deepseek",
+    "llm:luna",
+    "decision:liquid-d1",
+    "llm:granite",
+]
 KIND_NOTES = {"jev": "decision model (TypeSafe)", "decision": "decision model", "llm": "LLM"}
 
 
@@ -155,6 +164,8 @@ def challenge_rows(drivers: dict) -> list[dict]:
         published = json.loads(path.read_text())
         summary, results = published["summary"], published["results"]
         driver = summary["brain"]
+        # (the guarded track, every earlier record's, or the open one: static/js/brain/tracks.js)
+        track = summary.get("track") or "guarded"
         recording_path = RECORDINGS / f"{name}-{date}.json.gz"
         row_results, cost, cost_basis, model, requested = results, summary.get("cost_usd") or 0, None, None, None
         sources = [rel(path)]
@@ -163,6 +174,8 @@ def challenge_rows(drivers: dict) -> list[dict]:
             header = recording["header"]
             if header.get("driver") != driver:
                 raise ValueError(f"{rel(recording_path)} is for {header.get('driver')}, {rel(path)} for {driver}")
+            if ((header.get("arena") or {}).get("track") or "guarded") != track:
+                raise ValueError(f"{rel(recording_path)} and {rel(path)} were driven on different tracks")
             row_results = list(recording["results"].values())
             mine = {r["challenge"]: r["pass"] for r in results}
             theirs = {r["challenge"]: r["pass"] for r in row_results}
@@ -177,15 +190,22 @@ def challenge_rows(drivers: dict) -> list[dict]:
             drivers.setdefault(driver, model_driver(header, model))
         if cost_basis is None:
             cost_basis = "none" if not cost else "as recorded (the cost the server counted for each call)"
-        full = summary.get("set") == "all"
+        # (the whole set, every challenge and road test: a run of some of them, or one stopped part way,
+        # is a pilot, never the full set)
+        full = summary.get("set") == "all" and {r["challenge"] for r in row_results} == full_set_ids()
         failed = [
             {"id": r["challenge"], "map": r["map"], "failures": r["failures"]} for r in row_results if not r["pass"]
         ]
         rows.append(
             {
                 "driver": driver,
-                "suite": "challenges" if full else "pilot",
-                "label": "60 challenges and 2 road tests"
+                "suite": ("open" if track == "open" else "challenges") if full else "pilot",
+                "track": track,
+                "label": (
+                    "Open track: 60 challenges and 2 road tests"
+                    if track == "open"
+                    else "60 challenges and 2 road tests"
+                )
                 if full
                 else ", ".join(sorted(r["challenge"] for r in row_results)),
                 "map": None,
@@ -203,6 +223,12 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "fallbacks": sum(r.get("fallbacks") or 0 for r in row_results),
                 "hard_brakes": sum(r.get("hard_brakes") or 0 for r in row_results),
                 "safety_brakes": sum(r.get("safety_brakes") or 0 for r in row_results),
+                # (the open track: how often the car went on with a manoeuvre that broke a road rule)
+                **(
+                    {"flagged_choices": sum(r.get("flagged_choices") or 0 for r in row_results)}
+                    if track == "open"
+                    else {}
+                ),
                 "driving_s": round(sum(r.get("time_s") or 0 for r in row_results), 1),
                 "cost_usd": round(cost, 6),
                 "cost_basis": cost_basis,
@@ -216,6 +242,15 @@ def challenge_rows(drivers: dict) -> list[dict]:
             }
         )
     return rows
+
+
+def full_set_ids() -> set[str]:
+    """The ids of the challenge set: one module per challenge (static/js/lab/challenges/<id>.js) and the
+    road tests (static/js/lab/road-tests.js)."""
+    lab = ROOT / "static" / "js" / "lab"
+    challenges = {p.stem for p in (lab / "challenges").glob("*.js")}
+    road_tests = set(re.findall(r'^\s*id: "(road-test-[a-z0-9-]+)"', (lab / "road-tests.js").read_text(), re.M))
+    return challenges | road_tests
 
 
 def committed_runs() -> list[Path]:
@@ -233,7 +268,7 @@ def committed_runs() -> list[Path]:
 # Suite variants that are reported elsewhere, never as the plain suite's cell: held-out routes
 # (bench/heldout.js, reported apart), destination parking, a time of day, features left out and
 # covering rows.
-VARIANT_KEYS = ("heldout", "park", "hour", "cover", "without")
+VARIANT_KEYS = ("heldout", "park", "hour", "cover", "without", "track")
 
 
 def run_rows() -> list[dict]:
@@ -268,6 +303,7 @@ def run_rows() -> list[dict]:
             {
                 "driver": driver,
                 "suite": "city" if preset == "city" else preset,
+                "track": "guarded",
                 "label": f"{MAP_NAMES.get(key, key)}, {preset} preset, {weather}",
                 "map": key,
                 "preset": preset,
@@ -305,7 +341,7 @@ def build() -> dict:
     drivers = {k: dict(v) for k, v in BUILT_IN.items()}
     rows = challenge_rows(drivers) + run_rows()
     order = {d: i for i, d in enumerate(ORDER)}
-    suite_order = {"challenges": 0, "city": 1, "bare": 2, "pilot": 3}
+    suite_order = {"challenges": 0, "open": 1, "city": 2, "bare": 3, "pilot": 4}
     map_order = {k: i for i, k in enumerate([HOME_MAP] + sorted(k for k in MAP_NAMES if k != HOME_MAP))}
     weather_order = {w: i for i, w in enumerate(WEATHERS)}
     # newest first within equal keys (the sort is stable), so the README and the page, which take a driver's
@@ -353,16 +389,17 @@ def readme_block(data: dict) -> str:
     city_rows = [r for r in rows if r["suite"] == "city"]
     other_maps = sorted({r["map"] for r in city_rows if r["map"] != HOME_MAP})
     lines = [
-        f"| Driver | Model | 60 challenges + 2 road tests | City suite, {data['maps'][HOME_MAP]}: {' · '.join(WEATHERS)} "
+        f"| Driver | Model | 60 challenges + 2 road tests | Open track | City suite, {data['maps'][HOME_MAP]}: {' · '.join(WEATHERS)} "
         f"| City suite, {len(other_maps)} other maps (dry) | Own decisions | Cost of the challenges |",
-        "|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|",
     ]
     pilots = []
     for driver, info in drivers.items():
         mine = [r for r in rows if r["driver"] == driver]
         full = next((r for r in mine if r["suite"] == "challenges"), None)
+        opened = next((r for r in mine if r["suite"] == "open"), None)
         city = {(r["map"], r["weather"]): r for r in mine if r["suite"] == "city"}
-        if not full and not city:
+        if not full and not city and not opened:
             pilot = [r for r in mine if r["suite"] == "pilot"]
             if pilot:
                 passed, total = sum(r["passed"] for r in pilot), sum(r["total"] for r in pilot)
@@ -378,18 +415,26 @@ def readme_block(data: dict) -> str:
         other = f"{sum(r['passed'] for r in others)}/{sum(r['total'] for r in others)}" if others else "not run"
         if not city:
             home = "not run"
-        challenge = "not run"
-        if full:
-            challenge = f"{full['passed']}/{full['total']}"
-            if full["failed"]:
-                challenge = f"**{challenge}** (failed {', '.join('`' + f['id'] + '`' for f in full['failed'])})"
+
+        def verdict(run):
+            if not run:
+                return "not run"
+            text = f"{run['passed']}/{run['total']}"
+            if run["failed"]:
+                text = f"**{text}** (failed {', '.join('`' + f['id'] + '`' for f in run['failed'])})"
+            return text
+
+        challenge, open_track = verdict(full), verdict(opened)
+        if opened:
+            open_track += f", {opened.get('flagged_choices', 0)} flagged choices"
         share = full.get("model_share") if full else None
         model = f"`{info['model']}`" if info.get("model") else "none"
-        cost = money(full["cost_usd"]) if full else "$0"
+        # (a driver run on the open track alone: that run's cost, said so)
+        cost = money(full["cost_usd"]) if full else f"{money(opened['cost_usd'])} (open track)" if opened else "$0"
         lines.append(
-            f"| {info['label']} | {model} | {challenge} | {home} | {other} | {percent(share) if full and 'model_share' in full else 'n/a'} | {cost} |"
+            f"| {info['label']} | {model} | {challenge} | {open_track} | {home} | {other} | {percent(share) if full and 'model_share' in full else 'n/a'} | {cost} |"
         )
-    dates = sorted({r["date"] for r in rows if r["suite"] in ("challenges", "city")})
+    dates = sorted({r["date"] for r in rows if r["suite"] in ("challenges", "open", "city")})
     plain = lambda values: " or ".join(str(v) for v in sorted(set(values), key=str))  # noqa: E731
     notes = [
         "",
@@ -399,6 +444,9 @@ def readme_block(data: dict) -> str:
         "for each driver, map, preset, weather, suite size and seed. City runs in this table use "
         f"suite seed {plain(r['seed'] for r in city_rows)}, {plain(r['mode'] for r in city_rows)} clock, "
         f"{plain(r['traffic'] for r in city_rows)} traffic cars. A driver's runs may come from different dates. "
+        "On the open track the safety filter flags a manoeuvre that breaks a road rule instead of removing it, "
+        "so the driver's own judgment decides ([how](docs/reference/benchmarks.md#benchmarks-and-validation)). "
+        '"Flagged choices" counts how often the driver went on with one. '
         '"Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. '
         "Model drives are recorded under `data/recordings/` and replay without a key. "
         "Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).",

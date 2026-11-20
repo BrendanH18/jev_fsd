@@ -215,10 +215,17 @@ export default {
     run(world, n, front, busy, dt) {
       const ph =
         world.potholes?.list.length && n.kind !== "bike" && !n.transit?.tram ? npcPothole(world, n, front) : null;
-      if (!(ph || n.phShift)) return { result: ph, shift: undefined };
+      if (!(ph || n.phShift)) return { result: ph, shift: undefined, aim: 0, now: n.phShift || 0, easing: false };
       const to = ph && !busy ? ph.shift : 0;
       n.phShift = (n.phShift || 0) + Math.max(-NPC_SHIFT_MPS * dt, Math.min(NPC_SHIFT_MPS * dt, to - (n.phShift || 0)));
-      return { result: ph, shift: n.phShift };
+      // (where it is heading in the lane: round the pothole, unless changing lanes)
+      return {
+        result: ph,
+        shift: n.phShift,
+        aim: ph && !n.lc ? ph.shift : 0,
+        now: n.phShift || 0,
+        easing: !!ph?.shift,
+      };
     },
   },
 };

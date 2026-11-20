@@ -469,6 +469,19 @@ def anthropic_payload(config: "EndpointConfig", messages: List[dict], expect: di
     return payload
 
 
+def without_signatures(response: Any) -> Any:
+    """The reply for the trace, with the opaque `signature` of Anthropic's thinking blocks emptied: a kilobyte
+    or two of encrypted text per call that nothing reads, and that a model recording (brain/recording.js)
+    would otherwise keep for every decision. The reply itself is left as it came."""
+    if not isinstance(response, dict) or not isinstance(response.get("content"), list):
+        return response
+    content = [
+        dict(b, signature="") if isinstance(b, dict) and isinstance(b.get("signature"), str) else b
+        for b in response["content"]
+    ]
+    return dict(response, content=content)
+
+
 def _error_text(body: Any) -> str:
     if isinstance(body, dict):
         err = body.get("error", body)
@@ -660,7 +673,7 @@ def llm_decide(registry: LlmRegistry, body: dict) -> dict:
         url=public_url(endpoint.config.base_url) + endpoint.config.call_path,
         api_key_env=endpoint.config.api_key_env,
     )
-    trace = {"request": request, "response": result.response, "meta": meta}
+    trace = {"request": request, "response": without_signatures(result.response), "meta": meta}
     # Scrub everything: the answer, reason and invalid excerpt all quote the model's reply.
     return scrub(
         {

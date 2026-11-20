@@ -1,3 +1,4 @@
+import { flagText } from "../brain/tracks.js";
 import * as THREE from "three";
 import { buildSnapshot } from "../brain/sensors.js";
 import { isEmergency } from "../sim/emergency.js";
@@ -393,8 +394,14 @@ export class PerceptionView {
       safeSpeed: Math.min(snap.limit, snap.visibility.safe_speed_mps) * 3.6,
       rejected:
         decision?.candidates
-          ?.filter((c) => !c.eligible)
-          .map((c) => ({ id: c.id, reason: reasons[c.reject] || "Safety filter" })) || [],
+          // (and the open track's flagged ones, offered though they failed a road-rule check: brain/tracks.js)
+          ?.filter((c) => !c.eligible || c.flagged)
+          .map((c) => ({
+            id: c.id,
+            reason: c.flagged
+              ? `Flagged: ${reasons[c.reject] || flagText(c.reject)}`
+              : reasons[c.reject] || "Safety filter",
+          })) || [],
     };
   }
 }

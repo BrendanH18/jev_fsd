@@ -22,6 +22,21 @@ and a combined score, computed from the saved fields when shown (`bench/scores.j
 routes** box (`--heldout 1` in `bench_node.mjs` and `soak.mjs`) runs routes no fix was tuned against,
 reported apart. Formulas and the held-out policy are in the [Rules baseline](../rules-baseline.md).
 
+**Guarded and open tracks.** By default (the **guarded** track) the shared safety filter removes every
+manoeuvre that fails a collision or road-rule check, so a driver only chooses among those left, and a
+pass says more about the filter than the driver ([ROADMAP 4.1](../../ROADMAP.md#phase-4-a-benchmark-that-separates-drivers)).
+On the **open** track (`track: "open"`; `--track open` in `bench_node.mjs` and `arena_node.mjs`, the
+*track* box on `/bench` and in the arena) the filter advises instead: a manoeuvre that fails a road-rule
+check stays on offer, flagged with the check, and the driver's own judgment decides the outcome, which
+the audit judges as on any track (`brain/tracks.js`). A predicted collision is still removed, and the
+emergency brake still brakes for one about to happen. Models are told so: the vector question's
+instructions and the LLM system prompt say that only collisions were checked, and a flagged manoeuvre's
+`outcome` reads `flagged: <the rule it breaks>`. Rules and the built-in agents keep to the unflagged
+manoeuvres and brake where none is left, so they drive the open track exactly as the guarded one, and
+remain the reference (`scripts/test_open_track.mjs`). An open-track result adds `track: "open"`,
+`flagged_choices` (how often the car went on with a flagged manoeuvre) and `flagged_by_check`; a
+guarded result and config are as before. A model recording keeps its track and replays on it.
+
 **Who made the decisions.** A model can pass a drive that Rules mostly drove: many decisions need
 no question and are answered locally, and a timeout or an unusable answer falls back to Rules.
 So every driver but Rules also reports, per drive, where its decisions came from, counted by the

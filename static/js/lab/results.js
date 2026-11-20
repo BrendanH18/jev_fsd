@@ -25,9 +25,11 @@ export function summary(data) {
   for (const [id, info] of Object.entries(data.drivers)) {
     const mine = data.rows.filter((r) => r.driver === id);
     const challenges = mine.find((r) => r.suite === "challenges") || null;
+    // (the same set on the open track: static/js/brain/tracks.js)
+    const open = mine.find((r) => r.suite === "open") || null;
     const city = mine.filter((r) => r.suite === "city");
     const pilot = mine.filter((r) => r.suite === "pilot");
-    if (!challenges && !city.length) {
+    if (!challenges && !open && !city.length) {
       if (pilot.length) pilots.push({ id, ...info, rows: pilot, ...fraction(pilot) });
       continue;
     }
@@ -39,10 +41,13 @@ export function summary(data) {
       id,
       ...info,
       challenges,
+      open,
       home,
       others: others.length ? { ...fraction(others), maps: others.length, rows: others } : null,
       share: challenges?.model_share ?? null,
-      cost: challenges?.cost_usd ?? 0,
+      // (a driver run on the open track alone: that run's cost, marked so)
+      cost: challenges ? challenges.cost_usd : (open?.cost_usd ?? 0),
+      costTrack: !challenges && open ? "open" : null,
       pilots: pilot,
     });
   }
@@ -50,9 +55,9 @@ export function summary(data) {
 }
 
 // The challenge set as a matrix: one row per challenge or road test, in the order the first driver
-// drove them, one cell per driver that ran the full set.
-export function challengeMatrix(data) {
-  const runs = data.rows.filter((r) => r.suite === "challenges");
+// drove them, one cell per driver that ran the full set; `suite` "open" for the open track's runs.
+export function challengeMatrix(data, suite = "challenges") {
+  const runs = data.rows.filter((r) => r.suite === suite);
   const order = [];
   for (const run of runs)
     for (const d of run.drives) if (!order.some((o) => o.id === d.id)) order.push({ id: d.id, map: d.map });

@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.3.0 (20 November 2026)
+
+The first release since September. The project became a driving test for AI models: 60 challenges and 2
+road tests across 12 neighbourhoods in 11 Canadian cities, a seeded city suite with every free-drive
+feature on, published and replayable model results, and now an open track on which the safety filter
+flags rule breaks instead of removing them, so models can be told apart. Rules passes every seeded
+reference; Jev passes all 62 drives on both tracks, Claude Haiku 5.5 61 on each.
+
+- **First open-track results (ROADMAP Phase 4 exit).** Jev passes 62/62 on the open track, taking a flagged
+  manoeuvre 8 times; Claude Haiku 5.5 (Claude Platform) passes 61/62, taking one 216 times, and fails
+  `flagger`. Claude Haiku also ran the guarded track: 61/62 (fails `on-your-bumper`). Recorded under
+  `data/recordings/*-2026-11-20.json.gz`, published in `data/results/2026-11-20/`, and written up in
+  `docs/model-results.md`. The leaderboard and the README table have an open-track column with each
+  driver's flagged choices.
+- **Model runs in parts, and smaller Claude recordings.** `scripts/merge_recordings.mjs` merges arena
+  recordings made in parts with `--only`, refusing parts that disagree or repeat a drive. The server leaves
+  the Claude Platform's encrypted thinking `signature` out of the trace it returns (`without_signatures`,
+  `jev/llm.py`): about 1.7 KB a call that nothing reads, which made a recording of the challenge set 16 MB.
+- **The open track (ROADMAP 4.2).** A second way to run the benchmark and the arena: on the open track the
+  safety filter flags a manoeuvre that fails a road-rule check instead of removing it, so the driver's own
+  judgment decides the outcome, and the audit judges it as on any track. A predicted collision is still
+  removed and the emergency brake still runs. Models are told which rule a flagged manoeuvre breaks (its
+  `outcome` reads `flagged: …`, and the vector question and LLM system prompt say only collisions were
+  checked). `--track open` in `scripts/bench_node.mjs` and `scripts/arena_node.mjs`, a *track* box on
+  `/bench` and in the arena; open-track results add `track`, `flagged_choices` and `flagged_by_check`, and a
+  model recording keeps its track. The guarded track, the default, is unchanged: Rules and the cautious
+  agent keep to the unflagged manoeuvres and drive the open track exactly as the guarded one
+  (`brain/tracks.js`, `scripts/test_open_track.mjs`).
+- **Two failures to yield fixed on other maps (ROADMAP 1.8).** Winnipeg's city smoke `s1-1` held still
+  for an ambulance at the mouth of a junction it gives way at on Martha Street, a few metres past its
+  give-way line where it looks from; the emergency audit only excused stops at sign and signal lines,
+  so it counted a failure to yield. A stop held between a give-way or stop line and that look point (away from
+  the line, within 8 m of the look point, so a stop sign set back from its junction excuses no stop
+  mid-block) now counts as a line stop (`auditEmergency`, `sim/world.js`). On Kitsilano's city suite at 06:30,
+  `s1-4`, the car began to pull over only 3.6 m short of its stop on Vine Street (its forward simulations
+  had rejected the pull-over near a parked car) and stopped 0.17 m over, short of the audit's 0.19 m. A
+  pull-over not begun a second after it was planned, with under half the 8 m steering distance left, now
+  finishes its move within its stop (`emergencyYield`, `brain/sensors.js`). Every other seeded route,
+  challenge and road test is unchanged; Rules passes the other maps' smoke suite 22/22. New checks:
+  `scripts/test_emergency_give_way_look.mjs`, `scripts/test_emergency_late_pull_over.mjs`.
+  (`docs/validation/yields-2026-11-20.md`)
+
+- Puddles, black ice and snowbanks moved onto the feature registry (`static/js/sim/features/`): each is
+  one record and one registration line, and the core files no longer name them. Traffic's lane hooks now
+  hand each other their moves (`aim`, `now`, `easing`), which ends the one exception AGENTS.md allowed
+  (traffic's puddle check reading the move round a pothole by name). New hooks for what black ice and
+  snowbanks reached into (the step's start, the clock's day, sight lines, the emergency pull-over, traffic's
+  line and pedals); `hooks()` lists are filled once the registry has loaded, so an import cycle cannot
+  leave a core module without them. Every result is identical before and after
+  (`docs/validation/registry-round2-2026-11-20.md`). (ROADMAP 3.2)
 - **The big labs' own APIs as LLM presets.** The Connect a model dialog's LLMs tab adds **Google Gemini**,
   **xAI** and **Mistral** beside OpenAI, each through the lab's own OpenAI-compatible endpoint, with its
   key page and key variable (`GEMINI_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`). Gemini and xAI start

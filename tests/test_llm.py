@@ -553,6 +553,20 @@ class EndpointTests(LlmTestCase):
                 self.assertIsInstance(ctx.exception.body, str)
                 self.assertNotIn(SECRET, str(ctx.exception) + ctx.exception.body + json.dumps(reg.public()))
 
+    def test_the_trace_leaves_out_thinking_signatures(self):
+        reply = {
+            "content": [
+                {"type": "thinking", "thinking": "", "signature": "x" * 1700},
+                {"type": "text", "text": '{"candidate":"keep_lane_target"}'},
+            ]
+        }
+        traced = llm.without_signatures(reply)
+        self.assertEqual(traced["content"][0], {"type": "thinking", "thinking": "", "signature": ""})
+        self.assertEqual(traced["content"][1], reply["content"][1])
+        self.assertEqual(len(reply["content"][0]["signature"]), 1700)  # the reply itself is untouched
+        self.assertEqual(llm.without_signatures({"choices": []}), {"choices": []})
+        self.assertIsNone(llm.without_signatures(None))
+
     def test_http_errors_map_to_statuses(self):
         cases = [
             (429, 429, "rate limited"),
@@ -1034,6 +1048,14 @@ class AnthropicTests(LlmTestCase):
         self.assertAlmostEqual(meta["cost_usd"], ((300 + 0.1 * 5000) * 0.1 + 40 * 0.5) / 1e6)
         self.assertTrue(out["trace"]["request"]["url"].endswith("/v1/messages"))
         self.assertNotIn(SECRET, json.dumps(out))
+
+    def test_the_trace_leaves_out_the_thinking_signature(self):
+        reply = message('{"motion": "drive", "candidate": "keep_lane_target"}')
+        reply["content"][0]["signature"] = "s" * 1700  # (encrypted thinking, as Anthropic sends it)
+        mock = self.mock(lambda h, body: (200, reply, {}))
+        out = self.decide(self.claude(mock), "haiku")
+        self.assertEqual(out["answer"], {"motion": "drive", "candidate": "keep_lane_target"})
+        self.assertEqual(out["trace"]["response"]["content"][0], {"type": "thinking", "thinking": "", "signature": ""})
 
     def test_the_schema_is_the_same_whatever_is_offered_so_the_cached_prefix_holds(self):
         # (Anthropic renders output_config.format into the prompt; the user message names the ids)

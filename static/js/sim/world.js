@@ -86,18 +86,19 @@ import { DrivewayReversers, auditReversers, boxGap, reverserHidden } from "./dri
 import { BallChase, auditBalls } from "./ball-chase.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers, parkerConflict } from "./parkers.js";
-import { FEATURES, featureObstacle, hooks } from "./features/index.js";
+import { FEATURES, featureNeedsDay, featureObstacle, hooks } from "./features/index.js";
 import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
-import { BlackIce, auditIce } from "./black-ice.js";
-import { Snowbanks, auditSnowbanks, bankHidden, keepAt, NARROW_FULL_M } from "./snowbanks.js";
-import { Puddles, auditPuddles } from "./puddles.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 // The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
 const OBSTACLES_NEAR = hooks("obstacles");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_AFTER_BALLS = hooks("audit", "balls");
+const AUDIT_AFTER_TAILGATERS = hooks("audit", "tailgaters");
+const HIDES = hooks("hides"),
+  PLACE_EGO = hooks("placeEgo"),
+  EV_KERB = hooks("evKerb");
 const AUDIT_AFTER_PARKERS = hooks("audit", "parkers");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -151,7 +152,8 @@ const AUDIT_HOOK_AGAIN_S = 10;
 // if its front enters a junction (8 m of its centre) that a vehicle coming from the side is due
 // across, 3 s or more after the call came; if, 4 s or more after the call came, the vehicle draws
 // level with it along its street (within 8 m to the side) while it is not pulled over and not in a
-// junction (unless the call found it constrained by an existing line stop or close queue);
+// junction (unless the call found it constrained by an existing line stop, including one between a
+// give-way or stop line and where it looks from, or a close queue);
 // or if the vehicle has been stuck behind it for 6 s while
 // it is not pulled over (at least 0.2 m right of its lane's centre) and has not been told to drive on
 // ahead of it. A second blocker directly ahead can prevent that too. In a snowbank
@@ -168,6 +170,9 @@ const AUDIT_EV_PULL_S = 4;
 const AUDIT_EV_SIDE_M = 8;
 const AUDIT_EV_LINE_M = 2;
 const AUDIT_EV_OVERSHOOT_M = 1.5; // a short stop at a line can end this far over it, and still be a stop at it
+// Away from its line, a stop short of where the car looks from (`sPeek`) counts as a line stop only this close
+// to it: a stop sign set well back from its junction leaves the street between them open to pull over in.
+const AUDIT_EV_LOOK_M = 8;
 // Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
 // lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
 // or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
@@ -286,18 +291,12 @@ export class World {
   // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
   // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
   // not brake-check it, and lets it by (sim/tailgaters.js).
-  // `ice`: near freezing, black ice forms on bridges and in the shade of tall buildings, where everyone's
-  // tyres lose their grip, and everyone slows before it and crosses it gently (sim/black-ice.js).
-  // `snowbanks`: when it is snowing as the drive starts, snowbanks line the kerbs, high at the corners,
-  // where they hide whoever waits there; and where they push the parked cars out, drivers take turns
-  // through the one-car stretch (sim/snowbanks.js).
-  // `puddles`: in the rain, puddles stand in the gutter; everyone eases left in the lane, or slows below
-  // the splash speed, rather than drench someone on the sidewalk beside one (sim/puddles.js).
   // `parkers`: now and then the traffic car ahead of the driven car parallel parks, and everyone behind
   // it stops well back and waits until it is in (sim/parkers.js).
   // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
   // obeys the officer rather than the lights (sim/traffic-officer.js).
-  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `roadClosures`.
+  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `ice`,
+  // `snowbanks`, `puddles`, `roadClosures`.
   constructor(
     map,
     {
@@ -334,9 +333,6 @@ export class World {
       driveways = false,
       balls = false,
       tailgaters = false,
-      ice = false,
-      snowbanks = false,
-      puddles = false,
       parkers = false,
       officers = false,
       ...features
@@ -489,29 +485,6 @@ export class World {
     this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
     this.tailgatersSeen = false;
     this.tailgaterCall = null;
-    // black ice (sim/black-ice.js): where it forms, whether the car has come near a patch this drive, and
-    // the patches it is crossing (built in every world: one without it clears the car model's grip hook)
-    this.ice = new BlackIce(this, { enabled: ice, seed });
-    this.iceSeen = false;
-    this.iceCalls = new Map();
-    // snowbanks (sim/snowbanks.js): the banks, piles and narrowings, whether the car has come up to a
-    // narrowing this drive, and whether it was in each one it is near last tick
-    this.snowbanks = new Snowbanks(this, { enabled: snowbanks, seed });
-    if (this.snowbanks.narrowings.length) {
-      const near = map.nearestLane(this.ego.x, this.ego.y, this.ego.psi);
-      if (near) this.snowbanks.place(this.ego, near.lane);
-      this.resetContactHistory();
-    }
-    this.snowbanksSeen = false;
-    this.snowbankCalls = new Map();
-    // puddles at the kerb (sim/puddles.js): where they stand, whether it has rained this drive (they lie
-    // on until it snows), whether the car has come up to one with someone near this drive, and who it has
-    // splashed from each one its wheels are in
-    this.puddles = new Puddles(map, { enabled: puddles, seed });
-    this.puddlesRained = this.puddles.enabled && this.weather === "rain";
-    this.puddlesSeen = false;
-    this.puddleCalls = new Map();
-    this.puddleWarn = null;
     // traffic parallel parking ahead (sim/parkers.js): whether it does, whether one has signalled to park
     // ahead of the car this drive, and the ones the car has blocked or gone round
     this.parkers = createParkers({ enabled: parkers, seed });
@@ -576,8 +549,9 @@ export class World {
       !wellLit(this);
     if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach)))
       return false;
-    // (a high snowbank at a corner hides people, cyclists and cars behind it from the car: sim/snowbanks.js)
-    if (this.snowbanks?.piles.length && observer === this.ego && bankHidden(this, observer, o)) return false;
+    // (what a registered feature hides from the car: a high snowbank at a corner, say, hides people,
+    // cyclists and cars behind it)
+    for (const hides of HIDES) if (hides(this, observer, o)) return false;
     // (a car backing out of a driveway: the cars parked at the kerb hide it, sim/driveway-reversers.js)
     if (o.reverser) return !(this.hazards && reverserHidden(this, observer, o));
     if (o.kind === "pedestrian")
@@ -613,7 +587,7 @@ export class World {
     this.ego.v = 0;
     this.ego.delta = 0;
     this.ego.a = 0;
-    if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, lane);
+    for (const place of PLACE_EGO) place(this, lane);
     this.egoStop.reset();
     this.allWay.forget(this.ego);
     this.resetContactHistory();
@@ -628,7 +602,7 @@ export class World {
       this.ego.v = 0;
       this.ego.delta = 0;
       this.ego.a = 0;
-      if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, near.lane);
+      for (const place of PLACE_EGO) place(this, near.lane);
       this.resetContactHistory();
     }
     this.events.push({ type: "reset" });
@@ -697,9 +671,6 @@ export class World {
     this.drivewayCalls?.clear();
     this.ballCalls?.clear();
     this.tailgaterCall = null;
-    this.iceCalls?.clear();
-    this.snowbankCalls?.clear();
-    this.puddleCalls?.clear();
     this.parkerCalls?.clear();
     for (const f of FEATURES) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
@@ -757,14 +728,14 @@ export class World {
   }
 
   // (with sun glare on, the clock may also carry the `day` of the year and a `utc_offset`, for the sun:
-  // sim/sun-glare.js)
+  // sim/sun-glare.js; and the `day` for a registered feature that reads it: sim/features/index.js)
   setClock(clock) {
     this.clock = clock
       ? {
           hour: clock.hour,
           sun_deg: clock.sun_deg,
           ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}),
-          ...((this.sunGlare || this.ice?.enabled) && clock.day !== undefined ? { day: clock.day } : {}),
+          ...((this.sunGlare || featureNeedsDay(this)) && clock.day !== undefined ? { day: clock.day } : {}),
           ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}),
         }
       : null;
@@ -1193,9 +1164,7 @@ export class World {
     if (this.balls?.enabled) auditBalls(this);
     for (const audit of AUDIT_AFTER_BALLS) audit(this);
     if (this.tailgaters?.enabled) auditTailgaters(this);
-    if (this.ice?.enabled) auditIce(this);
-    if (this.snowbanks?.enabled) auditSnowbanks(this);
-    if (this.puddles?.enabled) auditPuddles(this);
+    for (const audit of AUDIT_AFTER_TAILGATERS) audit(this);
     if (this.parkers?.enabled) auditParkers(this);
     for (const audit of AUDIT_AFTER_PARKERS) audit(this);
     this.auditKerb();
@@ -1909,15 +1878,11 @@ export class World {
     }
     const entered = junction !== null && junction !== this.evJunction && ego.v > 1;
     this.evJunction = junction;
-    // Snowbanks move the usable right edge into the lane. A stopped car must not
-    // drive into the cars parked there to satisfy a measurement from the old lane centre.
-    const narrowed = this.snowbanks?.enabled && road.lane && road.edge && this.snowbanks.on(road.edge.id);
-    const entry = narrowed && (narrowed.dir > 0 ? narrowed.nw.a : narrowed.nw.L - narrowed.nw.b);
-    const exit = narrowed && (narrowed.dir > 0 ? narrowed.nw.b : narrowed.nw.L - narrowed.nw.a);
-    const rightmost =
-      narrowed && road.s + FRONT >= entry - NARROW_FULL_M && road.s - ego.spec.rearOverhang <= exit + NARROW_FULL_M
-        ? keepAt(road.edge, ego.spec) - road.lane.offset
-        : Infinity;
+    // A registered feature may move the usable right edge into the lane (snowbanks pushing the parked cars
+    // out, say). A stopped car must not drive into the cars parked there to satisfy a measurement from the
+    // old lane centre.
+    let rightmost = Infinity;
+    for (const kerb of EV_KERB) rightmost = Math.min(rightmost, kerb(this, road, FRONT));
     // The normal target leaves a settling allowance before this audit's minimum
     // (0.3 m versus 0.2 m for the standard car). Preserve that allowance when banks
     // move the target left; requiring exact equality with keepAt has no feasible
@@ -1964,6 +1929,30 @@ export class World {
       (boxedRight || road.lateral + 1e-6 >= Math.min(AUDIT_EV_PULLED_M, rightmost - settling, besideParked));
     const control = road.edge?.control,
       toLine = control ? control.s_line - road.s - FRONT : Infinity;
+    // Giving way at a junction without a sign or signal, or at a stop sign, the car stops anywhere from its
+    // line to the point it looks from (`sPeek`, map/route.js; sim/priority.js), short of the junction, and
+    // has no more room to pull over there than at the line. Measured along the route, as sensing does.
+    const rp = this.route ? this.route.project(ego.x, ego.y, this.route.hint) : null;
+    const routeFront =
+      rp && rp.distance < AUDIT_ROUTE_CORRIDOR_M && Math.abs(wrap(ego.psi - rp.heading)) < AUDIT_ROUTE_HEADING_RAD
+        ? rp.s + FRONT
+        : null;
+    const look =
+      routeFront === null
+        ? null
+        : this.route.controls.find(
+            (c) =>
+              // (a give-way approach or a stop sign; an uncontrolled junction the car's street has priority at, kept
+              // on a route for a left turn's oncoming traffic, is no line to hold)
+              ((c.control.type === "uncontrolled" && c.control.rule !== "major") || c.control.type === "stop") &&
+              routeFront <= c.sPeek + AUDIT_EV_OVERSHOOT_M,
+          ) || null;
+    const toLook = look ? look.sRoute - routeFront : Infinity,
+      toPeek = look ? look.sPeek - routeFront : -Infinity;
+    const inLook =
+      toLook <= AUDIT_EV_LINE_M &&
+      toPeek >= -AUDIT_EV_OVERSHOOT_M &&
+      (toLook >= -AUDIT_EV_OVERSHOOT_M || toPeek <= AUDIT_EV_LOOK_M);
     // An existing queue can leave less steering room than a control line. Measure
     // real bodies here, including a bus standing at an angle, independently of the plan.
     const queued =
@@ -2001,6 +1990,8 @@ export class World {
           Math.abs(ego.v) < 0.3 &&
           toLine >= -AUDIT_EV_OVERSHOOT_M &&
           toLine <= AUDIT_EV_LINE_M;
+        // (or between a give-way or stop line and where it looks from)
+        const atLook = !atLine && Math.abs(ego.v) < 0.3 && inLook;
         const v = Math.max(0, ego.v);
         // A crawl already running out of steering room before a control can finish
         // that stop. Judge the opportunity at the call, not from its later choice.
@@ -2012,6 +2003,18 @@ export class World {
           v <= AUDIT_EV_MOVING_MPS &&
           toLine + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
           toLine <= stopping + AUDIT_EV_LINE_M;
+        // (and a crawl that stops there, short of where it looks from, whether or not it could also have stopped
+        // at the line: a crawl just over it stops between the two)
+        const approachingLook =
+          !atLine &&
+          !atLook &&
+          look &&
+          // (from the line or already near where it looks from: not a crawl mid-block, past a stop sign set back
+          // from its junction, with room to pull over)
+          (inLook || toLook >= -AUDIT_EV_OVERSHOOT_M) &&
+          v <= AUDIT_EV_MOVING_MPS &&
+          toPeek + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
+          toLook <= stopping + AUDIT_EV_LINE_M;
         // (and likewise a crawl up to the hold line of a traffic car stopped to reverse into a space, or
         // reversing: the room beside and ahead of it is the parker's, sim/parkers.js)
         const hold = !queued && v <= AUDIT_EV_MOVING_MPS ? this.parkerHold(FRONT) : null;
@@ -2027,6 +2030,7 @@ export class World {
             lead: false,
             ahead: null,
             ...(atLine ? { stoppedAtLine: [ego.x, ego.y], ...(toLine < 0 ? { lineOvershoot: true } : {}) } : {}),
+            ...(atLook ? { stoppedAtLine: [ego.x, ego.y], lookAt: look.control.id } : {}),
             ...(queued ? { stoppedInQueue: { id: queued.id, at: [ego.x, ego.y] } } : {}),
             ...(approachingLine
               ? {
@@ -2036,6 +2040,9 @@ export class World {
                     until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL,
                   },
                 }
+              : {}),
+            ...(approachingLook
+              ? { lookApproach: { control: look.control.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } }
               : {}),
             ...(approachingQueue
               ? { queueApproach: { id: approachingQueue.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } }
@@ -2063,13 +2070,24 @@ export class World {
           delete rec.lineApproach;
         }
       }
+      if (rec.lookApproach) {
+        if (this.t > rec.lookApproach.until) delete rec.lookApproach;
+        else if (Math.abs(ego.v) < 0.3 && inLook && look.control.id === rec.lookApproach.control) {
+          rec.stoppedAtLine = [ego.x, ego.y];
+          rec.lookAt = look.control.id;
+          delete rec.lookApproach;
+        }
+      }
       if (
         rec.stoppedAtLine &&
-        (toLine < (rec.lineOvershoot ? -AUDIT_EV_OVERSHOOT_M : 0) ||
-          toLine > AUDIT_EV_LINE_M ||
+        ((rec.lookAt
+          ? !inLook || look.control.id !== rec.lookAt
+          : toLine < (rec.lineOvershoot ? -AUDIT_EV_OVERSHOOT_M : 0) || toLine > AUDIT_EV_LINE_M) ||
           Math.hypot(ego.x - rec.stoppedAtLine[0], ego.y - rec.stoppedAtLine[1]) > AUDIT_EV_LINE_M)
-      )
+      ) {
         delete rec.stoppedAtLine;
+        delete rec.lookAt;
+      }
       // (released from the queue, the car has as long to pull over as it had from the call)
       if (
         rec.stoppedInQueue &&

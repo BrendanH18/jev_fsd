@@ -265,7 +265,7 @@ class JevClient:
                 headers={
                     "Authorization": "Bearer " + (self.api_key or ""),
                     "Content-Type": "application/json",
-                    "User-Agent": "jev-fsd/0.2.0 (stdlib)",
+                    "User-Agent": "jev-fsd/0.3.0 (stdlib)",
                 },
             )
             try:

@@ -62,12 +62,41 @@ class ResultsTest(unittest.TestCase):
             original = build_results.committed_runs
             build_results.committed_runs = lambda: original() + [heldout]
             try:
-                # (hour 0 and cover row 0 are variants too, though 0 == False in Python)
-                for variant in ({"heldout": True}, {"hour": 0}, {"cover": 0}, {"park": True}, {"without": ["geese"]}):
+                # (hour 0 and cover row 0 are variants too, though 0 == False in Python; an open-track run
+                # never takes a guarded run's place)
+                for variant in (
+                    {"heldout": True},
+                    {"hour": 0},
+                    {"cover": 0},
+                    {"park": True},
+                    {"without": ["geese"]},
+                    {"track": "open"},
+                ):
                     heldout.write_text(json.dumps(dict(run, config=dict(run["config"], **variant))))
                     self.assertEqual(build_results.build()["rows"], self.data["rows"], variant)
             finally:
                 build_results.committed_runs = original
+
+    def test_a_partial_run_of_the_whole_set_is_a_pilot(self):
+        # `--set all --only door-zone`, or a run stopped part way, keeps set "all": it never takes the full
+        # set's row, on either track (inside the repository, as published results are)
+        with tempfile.TemporaryDirectory(dir=ROOT / "data") as tmp:
+            day = Path(tmp) / "2099-01-01"
+            day.mkdir()
+            for track in ("guarded", "open"):
+                summary = {"brain": "llm:partial", "set": "all", "drives": 1, "passed": 1, "cost_usd": 0.1}
+                if track == "open":
+                    summary["track"] = "open"
+                result = {"challenge": "door-zone", "map": "kitsilano", "pass": True, "failures": [], "time_s": 60}
+                (day / f"partial-{track}.json").write_text(json.dumps({"summary": summary, "results": [result]}))
+            original = build_results.RESULTS
+            build_results.RESULTS = Path(tmp)
+            try:
+                rows = build_results.challenge_rows({})
+            finally:
+                build_results.RESULTS = original
+        self.assertEqual(sorted(r["suite"] for r in rows), ["pilot", "pilot"])
+        self.assertEqual(len(build_results.full_set_ids()), 62)
 
     def test_a_newer_challenge_run_leads(self):
         # a second published full run for a driver: its summary and the README take the newest

@@ -5,15 +5,15 @@ import { stepChallenge } from "../lab/challenges.js";
 import { stepOfficers } from "./traffic-officer.js";
 import { hooks } from "./features/index.js";
 
-// The registered features' steps (sim/features/index.js): before the traffic moves, and after it,
-// before the people on foot.
+// The registered features' steps (sim/features/index.js): first of all, before the traffic moves, and
+// after it, before the people on foot.
+const FIRST = hooks("stepBeforeTraffic", "first");
 const BEFORE_TRAFFIC = hooks("stepBeforeTraffic");
 const AFTER_TRAFFIC = hooks("stepAfterTraffic");
 
 export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
-  // (black ice, with that option on: whether the weather and the time favour it now, and its grip hook,
-  // before anything moves: sim/black-ice.js)
-  if (world.ice?.enabled) world.ice.refresh(world);
+  // (what a registered feature sets up before anything moves: black ice's grip hook, say)
+  for (const step of FIRST) step(world, fleet, dt);
   stepChallenge(world, fleet);
   if (autopilot.enabled) autopilot.step(dt, now);
   else if (input) world.stepManual(dt, input);
@@ -28,9 +28,6 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   // (police officers directing traffic, with that option on: sim/traffic-officer.js; before the traffic
   // takes their directions)
   if (world.officers?.enabled) stepOfficers(world, dt);
-  // (who has come up to each narrowed stretch between snowbanks, and who has gone in, with that option
-  // on: sim/snowbanks.js; before the traffic takes its turns)
-  if (world.snowbanks?.enabled) world.snowbanks.step(dt);
   for (const step of BEFORE_TRAFFIC) step(world, fleet, dt);
   fleet.step(dt);
   // (contraflow cyclists, with that option on: sim/contraflow.js)

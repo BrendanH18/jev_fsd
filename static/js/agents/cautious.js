@@ -1,10 +1,14 @@
 import { beamChoice } from "../sim/high-beams.js";
-// Copy this module to build your own agent. The harness has already rejected unsafe candidates.
+// Copy this module to build your own agent. The harness has already rejected unsafe candidates. On the
+// open track (brain/tracks.js) `eligible` also holds manoeuvres that failed a road-rule check, each with
+// `flagged` true and the check in `reject`; this agent keeps to the others, as Rules does.
 export class CautiousAgent {
   constructor() {
     this.name = "cautious";
   }
-  decideSync(snap, eligible) {
+  decideSync(snap, offered) {
+    // (the autopilot brakes without asking it when nothing unflagged is left: brain/brain.js)
+    const eligible = offered.filter((c) => !c.flagged);
     const i = snap.intersection;
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.

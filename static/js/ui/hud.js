@@ -311,12 +311,15 @@ export class Hud {
     const probs = Object.entries(m.fallback ? {} : decision.answers?.vector?.probabilities || {}).sort(
       (a, b) => b[1] - a[1],
     );
-    const eligible = decision.candidates.filter((c) => c.eligible).length;
+    const eligible = decision.candidates.filter((c) => c.eligible && !c.flagged).length;
+    // (the open track's flagged manoeuvres, offered though they failed a road-rule check: brain/tracks.js)
+    const flagged = decision.candidates.filter((c) => c.flagged).length;
     const top = probs.slice(0, 5);
     const selected = probs.find(([id]) => id === decision.chosenId);
     if (selected && !top.includes(selected)) top.splice(4, 1, selected);
     const rows = top.map(([id, p]) => {
-      const text = byId.has(id) ? describe(byId.get(id)) : id;
+      const c = byId.get(id);
+      const text = c ? `${describe(c)}${c.flagged ? ` · flagged: ${c.reject}` : ""}` : id;
       return h(
         "div",
         { class: `option ${id === decision.chosenId ? "chosen" : ""}`, title: `${text} (${id})` },
@@ -332,7 +335,7 @@ export class Hud {
           { class: "muted" },
           m.source === "rules_fallback" || m.fallback
             ? `Rules fallback${chosen ? `: ${describe(chosen)}` : ": holding still"}. No model probabilities available.`
-            : eligible === 1 && chosen?.eligible
+            : eligible === 1 && !flagged && chosen?.eligible
               ? `Only one safe option: ${describe(chosen)}.`
               : "Resolved locally without model probabilities.",
         ),
@@ -342,7 +345,7 @@ export class Hud {
       h(
         "div",
         { class: "option-note" },
-        `${eligible} of ${decision.candidates.length} manoeuvres passed safety checks${decision.flags?.length ? ` · ${decision.flags.join(", ")}` : ""}`,
+        `${eligible} of ${decision.candidates.length} manoeuvres passed safety checks${flagged ? `, ${flagged} more offered flagged` : ""}${decision.flags?.length ? ` · ${decision.flags.join(", ")}` : ""}`,
       ),
     );
   }

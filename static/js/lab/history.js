@@ -115,6 +115,18 @@ export function validateEvaluation(value) {
       r.report.score > 100 ||
       typeof r.report.qualified !== "boolean" ||
       (r.simulation_error !== undefined && !text(r.simulation_error)) ||
+      // (an open-track drive, brain/tracks.js: bench/metrics.js trackFields)
+      (r.track === undefined
+        ? r.flagged_choices !== undefined || r.flagged_by_check !== undefined
+        : !(
+            r.track === "open" &&
+            Number.isInteger(r.flagged_choices) &&
+            r.flagged_by_check &&
+            typeof r.flagged_by_check === "object" &&
+            !Array.isArray(r.flagged_by_check) &&
+            Object.values(r.flagged_by_check).every((n) => Number.isInteger(n) && n >= 0) &&
+            Object.values(r.flagged_by_check).reduce((a, n) => a + n, 0) === r.flagged_choices
+          )) ||
       r.report.status !== (r.simulation_error ? "error" : r.stopped ? "stopped" : r.arrived ? "arrived" : "timeout") ||
       !Number.isInteger(r.report.model_version) ||
       !Array.isArray(r.report.incidents) ||
@@ -503,6 +515,8 @@ export function conditionDifferences(a, b) {
     .map(([, label]) => label);
   if (!a.engine_version || !b.engine_version || a.engine_version !== b.engine_version)
     differences.push("simulation version");
+  // (the guarded and open tracks are different conditions: brain/tracks.js)
+  if ((a.track ?? "guarded") !== (b.track ?? "guarded")) differences.push("track");
   if (
     a.report?.model_version == null ||
     b.report?.model_version == null ||

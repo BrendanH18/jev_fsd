@@ -61,6 +61,7 @@ export function setupScenario(
     hour = undefined,
     without = [],
     cover = undefined,
+    track = "guarded",
     style = null,
     vehicleSpec = undefined,
     onDecision = null,
@@ -100,6 +101,7 @@ export function setupScenario(
     },
   });
   if (style) autopilot.style = style;
+  autopilot.track = track;
   // (a model recording records or replays the driver's answers: brain/recording.js)
   if (tape)
     autopilot.brains[brain] = tape.brainFor(
@@ -154,6 +156,7 @@ export async function runScenario(
     hour = undefined,
     without = [],
     cover = undefined,
+    track = "guarded",
     style = null,
     vehicleSpec = undefined,
     diagnostics = false,
@@ -172,6 +175,7 @@ export async function runScenario(
     hour,
     without,
     cover,
+    track,
     style,
     vehicleSpec,
     tape,

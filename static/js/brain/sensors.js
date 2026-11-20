@@ -1,10 +1,7 @@
 import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
 import { reversingVehicle } from "../sim/driveway-reversers.js";
-import { puddleLimit, puddlesAhead } from "../sim/puddles.js";
 import { ballInRoad } from "../sim/ball-chase.js";
-import { iceLimit, iceSensing, iceTurn } from "../sim/black-ice.js";
-import { snowbankAhead, WAIT_M as SNOWBANK_WAIT_M } from "../sim/snowbanks.js";
 import { parkerSensing } from "../sim/parkers.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
@@ -172,7 +169,11 @@ const SENSE = {
   balls: hooks("sense", "balls"),
   parkers: hooks("sense", "parkers"),
 };
-const LIMIT = { driveways: hooks("limit", "driveways"), balls: hooks("limit", "balls") };
+const LIMIT = {
+  driveways: hooks("limit", "driveways"),
+  balls: hooks("limit", "balls"),
+  parking: hooks("limit", "parking"),
+};
 const TARGET = {
   restrictions: hooks("target", "restrictions"),
   driveways: hooks("target", "driveways"),
@@ -181,7 +182,22 @@ const TARGET = {
 const HAZARD = {
   driveways: hooks("hazard", "driveways"),
   balls: hooks("hazard", "balls"),
+  officers: hooks("hazard", "officers"),
   parkers: hooks("hazard", "parkers"),
+};
+// (and how slowly and gently it crosses a junction over what a registered feature makes slippery)
+const TURN_PACE = hooks("turnPace");
+// (and the move inside its lane a registered feature has it make, over toward the middle between
+// snowbanks, say; where it stops short of for an emergency vehicle; and what hides a street from it)
+const DETOURS = hooks("detour", "contraflow"),
+  EV_STOP = hooks("evStop"),
+  BLOCKS_VIEW = hooks("blocksView");
+export const featureDetour = (snap) => {
+  for (const d of DETOURS) {
+    const x = d(snap);
+    if (x) return x;
+  }
+  return null;
 };
 import { officerDirection, officerLight, officerSensing } from "../sim/traffic-officer.js";
 
@@ -302,6 +318,7 @@ const EV_FIRM_DECEL = 3.5;
 const EV_SHORT_M = 2.5;
 const ALONGSIDE_M = 4; // an emergency vehicle this close beside the car, going round it
 const EV_STEER_M = 8;
+const EV_LATE_S = 1; // a pull-over not begun this long after it was planned has started late
 // More room to stop in for each lane it crosses into the curb lane to pull over: the sharpest lane change
 // offered (MIN_CHANGE_M, brain/candidates.js). With 8 m in all, a car crossing from the inner lane of
 // West Broadway reached its stop at an angle, short of the curb lane's middle, and one standing in the
@@ -632,7 +649,7 @@ export function buildSnapshot(world, executing = null) {
     }
     const lane = (snap.lane = laneState(route, p, executing?.law));
     snap.right_hook = rightHook(world, p, frontS, lane);
-    snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection);
+    snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection, executing);
     snap.emergency_ahead = emergencyAhead(world, p, frontS);
     snap.bus = busPullingOut(world, frontS, visible);
     if (world.pxo) {
@@ -679,18 +696,6 @@ export function buildSnapshot(world, executing = null) {
     // (a ball rolled into the street ahead, a child maybe after it, with that option on: sim/ball-chase.js)
     if (world.balls?.enabled) snap.ball_in_road = world.balls.balls.length ? ballInRoad(world, p, frontS) : null;
     for (const sense of SENSE.balls) sense(world, snap, senseCtx);
-    // (black ice the car has seen ahead, and a caution while conditions favour it, with that option on:
-    // sim/black-ice.js)
-    if (world.ice?.enabled) Object.assign(snap, iceSensing(world, p, frontS));
-    // (snowbanks: a narrowed stretch to take turns through, and corners they hide, with that option on:
-    // sim/snowbanks.js)
-    if (world.snowbanks?.enabled) snap.snowbank = snowbankAhead(world, p, frontS);
-    // (puddles at the kerb with someone within splash reach, while they lie, with that option on: sim/puddles.js)
-    if (world.puddles?.enabled) {
-      const pd = puddlesAhead(world, p, frontS, lane, road.limit, visible);
-      snap.puddle_splash = pd?.puddle || null;
-      snap.puddles_ahead = pd?.ahead || null;
-    }
     // (a car ahead parallel parking, and the room it needs behind it, with that option on: sim/parkers.js)
     if (world.parkers?.enabled)
       snap.parking_ahead = world.parkers.active.length ? parkerSensing(world, p, frontS) : null;
@@ -735,7 +740,7 @@ export function buildSnapshot(world, executing = null) {
       snap.double_parked?.detour ||
       snap.cyclist_pass?.detour ||
       snap.contraflow_cyclist?.detour ||
-      snap.snowbank?.narrowing?.detour ||
+      featureDetour(snap) ||
       null;
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
     const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
@@ -895,18 +900,10 @@ export function buildSnapshot(world, executing = null) {
   // (and coming up to a car backing out of a driveway: sim/driveway-reversers.js)
   if (snap.reversing_vehicle?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.reversing_vehicle.limit_mps);
   for (const limit of LIMIT.driveways) limit(snap);
-  // (and coming up to a puddle with someone near it that it cannot ease round in its lane, and through it:
-  // sim/puddles.js)
-  if (snap.puddles_ahead && snap.routeProj)
-    for (const h of snap.puddles_ahead)
-      if (!h.room) snap.limit = Math.min(snap.limit, puddleLimit(h, snap.routeProj.s));
   // (and, having seen a ball roll into the street, no faster than it can stop from short of the gap it
   // came from until the child after it has come and gone: sim/ball-chase.js)
   if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
   for (const limit of LIMIT.balls) limit(snap);
-  // (and through a narrowed stretch between snowbanks, and up to a corner a snowbank hides: sim/snowbanks.js)
-  if (snap.snowbank?.narrowing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.snowbank.narrowing.limit_mps);
-  if (snap.snowbank?.corner) snap.limit = Math.min(snap.limit, snap.snowbank.corner.limit_mps);
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -916,16 +913,8 @@ export function buildSnapshot(world, executing = null) {
     snap.limit = Math.min(snap.limit, blindApproach(snap.blind_spot.limit_mps, snap.blind_spot.from_m));
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.parking = parkingState(world, snap, executing);
-  // (and coming up to black ice it has seen, or a bridge in icy weather, and across it, ready to stop
-  // gently on it for what is ahead, the parking space included: sim/black-ice.js; the speed is the target
-  // itself, so the weather does not take it off again)
-  if ((snap.black_ice_ahead || snap.ice_caution?.slow) && snap.routeProj) {
-    const cap = iceLimit(snap, snap.routeProj.s);
-    if (cap < Infinity) {
-      snap.ice_limit_mps = cap;
-      snap.limit = Math.min(snap.limit, cap / Math.min(1, weather.speed));
-    }
-  }
+  // (and what a registered feature caps once the turnaround and the parking are known: black ice, say)
+  for (const limit of LIMIT.parking) limit(snap);
   if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
@@ -1293,7 +1282,7 @@ function rightHook(world, p, frontS, lane) {
 // far right of its lane's centre it pulls over (`offset_m`); `clearing` when that is past a
 // junction, and `lead` (no stop) when the vehicle is stuck behind the car. The stop is chosen once
 // per call and remembered in `world.evYield`.
-function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
+function emergencyYield(world, p, frontS, lane, visible, intersection = null, executing = null) {
   const { ego, route, map } = world;
   const evs = world.npcs.filter(isEmergency);
   // where the car is and will be over the next 20 m, along its route
@@ -1374,17 +1363,10 @@ function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
       }
       break;
     }
-    // Finish steering after a corner, while remaining short of a one-car snowbank corridor.
-    // That corridor's approach detour is not a place to stop while pulling right.
-    for (const nw of world.snowbanks?.narrowings || []) {
-      const ends = world.snowbanks.alongRoute(route, nw);
-      if (
-        ends &&
-        ends.en - SNOWBANK_WAIT_M - frontS >= (v * v) / (2 * EV_FIRM_DECEL) &&
-        stop >= ends.en - SNOWBANK_WAIT_M
-      )
-        stop = Math.min(stop, ends.en - SNOWBANK_WAIT_M);
-    }
+    // Finish steering after a corner, while remaining short of where a registered feature has the car keep
+    // out (a one-car corridor between snowbanks, say, whose approach detour is no place to stop while
+    // pulling right).
+    for (const keepShort of EV_STOP) stop = keepShort(world, route, frontS, v, stop, EV_FIRM_DECEL);
     stop = Math.min(stop, route.length - 1);
     // (the furthest lane right the stop leaves room to change into: the curb lane, or short of a junction
     // perhaps only the one it is in)
@@ -1400,6 +1382,15 @@ function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
       reach,
     };
   }
+  // A pull-over still not begun a second after it was planned (its forward simulations kept rejecting it,
+  // say), with less than half the steering distance left, finishes its move within the stop, as one
+  // planned short does. With more room the ordinary pursuit still gets over (Kitsilano city rain s1-9,
+  // begun 6.2 m short), and the shorter one can swing the car's nose into the parked cars' margin; with
+  // less it stops short (06:30 s1-4 on Vine Street, begun 3.6 m short: 0.17 m over). One begun keeps its
+  // ordinary pursuit, even if dropped for a moment.
+  if (executing?.candidate?.id === "pull_over") plan.begun = true;
+  if (!plan.tight && !plan.begun && world.t - plan.since >= EV_LATE_S && plan.stop - frontS < EV_STEER_M / 2)
+    plan.tight = true;
   // well past the stop (overshot it, beyond what a short stop overshoots): stop where the car can,
   // braking firmly
   if (frontS > plan.stop + EV_OVERSHOOT_M)
@@ -2456,13 +2447,16 @@ function allWayPriority(world, control, visible) {
 // Seconds for the car to cover `distance` taking a turn: speeding up from `v` at TURN_ACCEL to at
 // most `vMax` (holding its speed if already faster).
 function clearTime(v, distance, vMax = TURN_MPS, world = null, frontS = 0) {
-  // (over black ice it has seen, as slowly and gently as the ice lets it go: sim/black-ice.js iceTurn)
+  // (over what a registered feature has it take slowly and gently, black ice it has seen, say)
   let accel = TURN_ACCEL;
-  const ice = world?.ice?.list.length ? iceTurn(world, frontS, distance) : null;
-  if (ice) {
-    vMax = Math.max(0.5, Math.min(vMax, ice.mps));
-    accel = ice.accel;
-  }
+  if (world)
+    for (const pace of TURN_PACE) {
+      const x = pace(world, frontS, distance);
+      if (x) {
+        vMax = Math.max(0.5, Math.min(vMax, x.mps));
+        accel = x.accel;
+      }
+    }
   const v0 = Math.min(Math.max(0, v), vMax);
   const t1 = (vMax - v0) / accel,
     d1 = ((v0 + vMax) / 2) * t1;
@@ -2712,11 +2706,8 @@ function giveWayAt(world, c, frontS) {
           p = alongApproach(map, e, b);
         // as far as the car can see at all, in this weather and light
         if (Math.hypot(p[0] - ego.x, p[1] - ego.y) > world.visibility.rangeAt(ego, ...p)) break;
-        // (or, with snowbanks on, a high one at the corner: sim/snowbanks.js)
-        if (
-          world.visibility.occluded([ego.x, ego.y], p) ||
-          (world.snowbanks?.piles.length && world.snowbanks.blocksView([ego.x, ego.y], p))
-        ) {
+        // (or what a registered feature puts in the way, a high snowbank at the corner, say)
+        if (world.visibility.occluded([ego.x, ego.y], p) || BLOCKS_VIEW.some((b) => b(world, [ego.x, ego.y], p))) {
           blocked = true;
           break;
         }
@@ -3127,37 +3118,10 @@ export function desiredSpeed(snap) {
     }
   } else if (rv?.limit_mps != null && rv.limit_mps <= v + 0.05) reasons.push("car backing out ahead");
   for (const target of TARGET.driveways) v = target(snap, v, reasons, targetCtx);
-  // a puddle with someone near it that it cannot ease round in its lane (sim/puddles.js): `limit` is
-  // already below its splash speed
-  const splashFor = snap.puddles_ahead?.find((h) => !h.room);
-  if (splashFor && snap.routeProj && puddleLimit(splashFor, snap.routeProj.s) * Math.min(1, weather.speed) <= v + 0.05)
-    reasons.push("puddle by the kerb: people on the sidewalk");
   // a ball rolled into the street (sim/ball-chase.js): `limit` is already down to the cover speed
   if (snap.ball_in_road?.limit_mps != null && snap.ball_in_road.limit_mps <= v + 0.05)
     reasons.push("ball in the road: a child may follow");
   for (const target of TARGET.balls) v = target(snap, v, reasons, targetCtx);
-  // black ice seen ahead or under the car, or a bridge in icy weather (sim/black-ice.js): `limit` is
-  // already down to it
-  if (snap.ice_limit_mps != null && snap.ice_limit_mps <= v + 0.05)
-    reasons.push(
-      snap.black_ice?.on_ice
-        ? "on black ice: no braking or sharp steering"
-        : snap.black_ice
-          ? "black ice ahead"
-          : "bridges freeze first",
-    );
-  // between snowbanks (sim/snowbanks.js): wait short of the one-car stretch while it is the oncoming car's
-  // turn; `limit` is already down to the speed through it, and to the creep up to a hidden corner
-  const nb = snap.snowbank?.narrowing;
-  if (nb?.wait) {
-    const vn = nb.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(nb.bumper_to_stop_m - 0.5, decel);
-    if (vn < v) {
-      v = vn;
-      reasons.push("oncoming car's turn between the snowbanks");
-    }
-  } else if (nb?.limit_mps != null && nb.limit_mps <= v + 0.05)
-    reasons.push(nb.squeeze ? "squeezing past an oncoming car between the snowbanks" : "narrowed by snowbanks");
-  if (snap.snowbank?.corner && snap.snowbank.corner.limit_mps <= v + 0.05) reasons.push("snowbank hides the corner");
   // a car ahead parallel parking (sim/parkers.js): stop at its hold line, short of the room it reverses
   // into, until it is in
   const pa = snap.parking_ahead;
@@ -3447,23 +3411,27 @@ export function hazardFlags(snap) {
   if (snap.reversing_vehicle) f.push("reversing vehicle");
   for (const flag of HAZARD.driveways) {
     const x = flag(snap);
-    if (x) f.push(x);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
   }
   if (snap.ball_in_road) f.push("ball in the road");
   for (const flag of HAZARD.balls) {
     const x = flag(snap);
-    if (x) f.push(x);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
   }
   if (snap.tailgater) f.push("tailgater");
   if (snap.traffic_officer) f.push("traffic officer");
-  if (snap.black_ice || (snap.ice_caution?.bridge && snap.ice_caution.bridge.starts_in_m < 80)) f.push("black ice");
-  if (snap.snowbank?.narrowing) f.push("snowbank narrowing");
-  if (snap.snowbank?.corner) f.push("snowbank corner");
-  if (snap.puddle_splash) f.push("puddle by the kerb");
+  for (const flag of HAZARD.officers) {
+    const x = flag(snap);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
+  }
   if (snap.parking_ahead) f.push("car parking ahead");
   for (const flag of HAZARD.parkers) {
     const x = flag(snap);
-    if (x) f.push(x);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
   }
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");

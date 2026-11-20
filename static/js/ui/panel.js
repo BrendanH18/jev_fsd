@@ -143,7 +143,12 @@ export class Panel {
       ...(m.endpoint ? [["endpoint", `${m.endpoint}${m.response_format ? ` · ${m.response_format}` : ""}`]] : []),
       ...(m.reason ? [["model's reason", m.reason]] : []),
       ["hazard flags", (d.flags || []).join(", ") || "none"],
-      ["candidates", `${d.candidates.filter((c) => c.eligible).length} eligible / ${d.candidates.length}`],
+      [
+        "candidates",
+        `${d.candidates.filter((c) => c.eligible && !c.flagged).length} eligible${
+          d.candidates.some((c) => c.flagged) ? `, ${d.candidates.filter((c) => c.flagged).length} flagged` : ""
+        } / ${d.candidates.length}`,
+      ],
       ["fallback", m.fallback || m.error || "–"],
     ];
     const t = this.autopilot.totals;

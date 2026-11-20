@@ -6,9 +6,10 @@ and traffic, so every driver meets exactly the same situation. Open the drive la
 loose on it. A challenge also opens directly with `?challenge=<id>` (add `&drive=rules` to watch
 Rules drive it).
 
-A pass means arriving with no collision, no red light or stop sign run, no failure to yield, and
-less than a second off the road (and, in Squeeze in, parked within 30 cm of the kerb). A good
-coaching score on its own doesn't count. How each driver did is in the
+A pass means arriving without a collision or a driving violation, with less than a second off
+the road. The hazard counts too. For example, passing a cyclist too closely fails the drive.
+In **Squeeze in**, the car must also park within 30 cm of the kerb. The coaching score is separate.
+How each driver did is in the
 [results table](../README.md#results) and [docs/model-results.md](model-results.md).
 
 | Challenge | Where | What it tests |
