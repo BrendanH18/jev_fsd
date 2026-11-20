@@ -74,5 +74,8 @@ merged.header = {
   maps,
 };
 const text = merged.serialize();
-fs.writeFileSync(out, out.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
+// (written beside the destination and renamed over it, so a failed write leaves an existing file as it was)
+const tmp = `${out}.tmp`;
+fs.writeFileSync(tmp, out.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
+fs.renameSync(tmp, out);
 console.log(`merged ${ids.length} drives from ${parts.length} recordings into ${out}`);

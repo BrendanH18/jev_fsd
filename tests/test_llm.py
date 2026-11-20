@@ -1049,6 +1049,14 @@ class AnthropicTests(LlmTestCase):
         self.assertTrue(out["trace"]["request"]["url"].endswith("/v1/messages"))
         self.assertNotIn(SECRET, json.dumps(out))
 
+    def test_the_trace_leaves_out_the_thinking_signature(self):
+        reply = message('{"motion": "drive", "candidate": "keep_lane_target"}')
+        reply["content"][0]["signature"] = "s" * 1700  # (encrypted thinking, as Anthropic sends it)
+        mock = self.mock(lambda h, body: (200, reply, {}))
+        out = self.decide(self.claude(mock), "haiku")
+        self.assertEqual(out["answer"], {"motion": "drive", "candidate": "keep_lane_target"})
+        self.assertEqual(out["trace"]["response"]["content"][0], {"type": "thinking", "thinking": "", "signature": ""})
+
     def test_the_schema_is_the_same_whatever_is_offered_so_the_cached_prefix_holds(self):
         # (Anthropic renders output_config.format into the prompt; the user message names the ids)
         server = self.mock(lambda h, body: (200, message('{"route": "r2"}'), {}))
