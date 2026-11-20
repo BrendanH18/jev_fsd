@@ -443,6 +443,8 @@ export class Autopilot {
       if (result.candidateId === null && eligible.length) {
         const r = this.rulesDecide(snap, clear);
         result.candidateId = r.candidateId;
+        // (on the open track with nothing unflagged, the fallback is a stop: its motion too)
+        if (!clear.length) result.motion = r.motion;
         result.meta.fallback = "invalid vector";
         this.world.violations.fallbacks++;
       }

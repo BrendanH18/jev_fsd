@@ -62,8 +62,16 @@ class ResultsTest(unittest.TestCase):
             original = build_results.committed_runs
             build_results.committed_runs = lambda: original() + [heldout]
             try:
-                # (hour 0 and cover row 0 are variants too, though 0 == False in Python)
-                for variant in ({"heldout": True}, {"hour": 0}, {"cover": 0}, {"park": True}, {"without": ["geese"]}):
+                # (hour 0 and cover row 0 are variants too, though 0 == False in Python; an open-track run
+                # never takes a guarded run's place)
+                for variant in (
+                    {"heldout": True},
+                    {"hour": 0},
+                    {"cover": 0},
+                    {"park": True},
+                    {"without": ["geese"]},
+                    {"track": "open"},
+                ):
                     heldout.write_text(json.dumps(dict(run, config=dict(run["config"], **variant))))
                     self.assertEqual(build_results.build()["rows"], self.data["rows"], variant)
             finally:

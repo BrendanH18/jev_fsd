@@ -82,6 +82,14 @@ refused(
   /other map data/,
   "other map data",
 );
+// (a finished drive whose answers are missing could not replay)
+const torn = new ModelRecording({
+  header: header(["six"], { track: "open" }),
+  drives: {},
+  results: { six: { challenge: "six", pass: true, result_sha: "six" } },
+});
+fs.writeFileSync(path.join(dir, "f.json"), torn.serialize());
+refused([a, path.join(dir, "f.json")], /no answers/, "a result without its answers");
 fs.rmSync(dir, { recursive: true, force: true });
 console.log("\nmerge recordings checks passed");
 process.exit(0);

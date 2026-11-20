@@ -63,6 +63,7 @@
   {
    "driver": "rules",
    "suite": "challenges",
+   "track": "guarded",
    "label": "60 challenges and 2 road tests",
    "map": null,
    "preset": null,
@@ -464,6 +465,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, dry",
    "map": "kitsilano",
    "preset": "city",
@@ -493,6 +495,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, fog",
    "map": "kitsilano",
    "preset": "city",
@@ -522,6 +525,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, rain",
    "map": "kitsilano",
    "preset": "city",
@@ -551,6 +555,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, snow",
    "map": "kitsilano",
    "preset": "city",
@@ -580,6 +585,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Calgary, city preset, dry",
    "map": "calgary",
    "preset": "city",
@@ -609,6 +615,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Edmonton, city preset, dry",
    "map": "edmonton",
    "preset": "city",
@@ -638,6 +645,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Halifax, city preset, dry",
    "map": "halifax",
    "preset": "city",
@@ -667,6 +675,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Montréal, city preset, dry",
    "map": "montreal",
    "preset": "city",
@@ -696,6 +705,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Mount Pleasant, city preset, dry",
    "map": "mount_pleasant",
    "preset": "city",
@@ -725,6 +735,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Ottawa, city preset, dry",
    "map": "ottawa",
    "preset": "city",
@@ -754,6 +765,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Québec City, city preset, dry",
    "map": "quebec_city",
    "preset": "city",
@@ -783,6 +795,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Saskatoon, city preset, dry",
    "map": "saskatoon",
    "preset": "city",
@@ -812,6 +825,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Toronto, city preset, dry",
    "map": "toronto",
    "preset": "city",
@@ -841,6 +855,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Victoria, city preset, dry",
    "map": "victoria",
    "preset": "city",
@@ -870,6 +885,7 @@
   {
    "driver": "rules",
    "suite": "city",
+   "track": "guarded",
    "label": "Winnipeg, city preset, dry",
    "map": "winnipeg",
    "preset": "city",
@@ -907,6 +923,7 @@
   {
    "driver": "rules",
    "suite": "bare",
+   "track": "guarded",
    "label": "Kitsilano, bare preset, dry",
    "map": "kitsilano",
    "preset": "bare",
@@ -936,6 +953,7 @@
   {
    "driver": "cautious",
    "suite": "challenges",
+   "track": "guarded",
    "label": "60 challenges and 2 road tests",
    "map": null,
    "preset": null,
@@ -1341,6 +1359,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, dry",
    "map": "kitsilano",
    "preset": "city",
@@ -1392,6 +1411,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, fog",
    "map": "kitsilano",
    "preset": "city",
@@ -1443,6 +1463,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, rain",
    "map": "kitsilano",
    "preset": "city",
@@ -1479,6 +1500,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Kitsilano, city preset, snow",
    "map": "kitsilano",
    "preset": "city",
@@ -1560,6 +1582,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Calgary, city preset, dry",
    "map": "calgary",
    "preset": "city",
@@ -1596,6 +1619,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Edmonton, city preset, dry",
    "map": "edmonton",
    "preset": "city",
@@ -1641,6 +1665,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Halifax, city preset, dry",
    "map": "halifax",
    "preset": "city",
@@ -1677,6 +1702,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Montréal, city preset, dry",
    "map": "montreal",
    "preset": "city",
@@ -1722,6 +1748,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Mount Pleasant, city preset, dry",
    "map": "mount_pleasant",
    "preset": "city",
@@ -1758,6 +1785,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Ottawa, city preset, dry",
    "map": "ottawa",
    "preset": "city",
@@ -1794,6 +1822,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Québec City, city preset, dry",
    "map": "quebec_city",
    "preset": "city",
@@ -1838,6 +1867,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Saskatoon, city preset, dry",
    "map": "saskatoon",
    "preset": "city",
@@ -1874,6 +1904,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Toronto, city preset, dry",
    "map": "toronto",
    "preset": "city",
@@ -1918,6 +1949,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Victoria, city preset, dry",
    "map": "victoria",
    "preset": "city",
@@ -1954,6 +1986,7 @@
   {
    "driver": "cautious",
    "suite": "city",
+   "track": "guarded",
    "label": "Winnipeg, city preset, dry",
    "map": "winnipeg",
    "preset": "city",
@@ -1998,6 +2031,7 @@
   {
    "driver": "jev",
    "suite": "challenges",
+   "track": "guarded",
    "label": "60 challenges and 2 road tests",
    "map": null,
    "preset": null,
@@ -2407,6 +2441,7 @@
   {
    "driver": "llm:deepseek",
    "suite": "challenges",
+   "track": "guarded",
    "label": "60 challenges and 2 road tests",
    "map": null,
    "preset": null,
@@ -2825,6 +2860,7 @@
   {
    "driver": "llm:deepseek",
    "suite": "pilot",
+   "track": "guarded",
    "label": "door-zone",
    "map": null,
    "preset": null,
@@ -2868,6 +2904,7 @@
   {
    "driver": "llm:luna",
    "suite": "pilot",
+   "track": "guarded",
    "label": "door-zone",
    "map": null,
    "preset": null,
@@ -2911,6 +2948,7 @@
   {
    "driver": "decision:liquid-d1",
    "suite": "pilot",
+   "track": "guarded",
    "label": "door-zone",
    "map": null,
    "preset": null,
@@ -2954,6 +2992,7 @@
   {
    "driver": "llm:granite",
    "suite": "pilot",
+   "track": "guarded",
    "label": "dont-splash, left-on-red",
    "map": null,
    "preset": null,

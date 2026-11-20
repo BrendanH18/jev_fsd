@@ -17,11 +17,13 @@ export const isTrack = (t) => TRACKS.includes(t);
 // The rejections the open track still enforces.
 const ENFORCED = new Set(["collision"]);
 
-// The open track's candidates: those the filter rejected for anything but a collision become eligible,
-// flagged. Returns the same shape as simulateAll; `rejected` counts only what stays removed.
+// The open track's candidates: those the filter rejected for anything but a predicted collision become
+// eligible, flagged. A manoeuvre whose forward sim collides stays removed whatever check rejected it
+// first (a road closure's barricade, say, is checked before collisions). Returns the same shape as
+// simulateAll; `rejected` counts only what stays removed.
 export function openTrack(candidates, sim) {
   for (const c of candidates)
-    if (c.reject && !ENFORCED.has(c.reject)) {
+    if (c.reject && !ENFORCED.has(c.reject) && !c.sim?.collision) {
       c.eligible = true;
       c.flagged = true;
     }
@@ -47,7 +49,7 @@ export const FLAG_TEXT = {
   crosses_into_oncoming_traffic: "it crosses into the oncoming lane into the way of oncoming traffic",
   off_road: "it leaves the road",
   passes_officer_stop: "it goes on past the line while the police officer signals stop",
-  runs_red: "it crosses the stop line on a red or unseen signal",
+  runs_red: "it crosses the stop line where the signal requires the car to stop",
   fails_to_yield: "it enters without giving way to traffic that has the right of way",
   runs_stop: "it crosses the line without completing the stop",
   fails_to_yield_to_pedestrian: "it does not stop for a pedestrian crossing",

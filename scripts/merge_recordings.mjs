@@ -60,8 +60,10 @@ recordings.forEach((r, i) => {
   }
   for (const id of Object.keys(r.results)) {
     if (id in merged.results) fail(`${id} is recorded in more than one part (${parts[i]}).`);
+    // (a finished drive keeps its answers, an empty set for one that asked nothing)
+    if (!Object.hasOwn(r.drives, id)) fail(`${parts[i]} has a result for ${id} but no answers for it.`);
     merged.results[id] = r.results[id];
-    merged.drives[id] = r.drives[id] || {};
+    merged.drives[id] = r.drives[id];
     ids.push(id);
   }
 });

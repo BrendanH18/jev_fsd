@@ -311,7 +311,9 @@ export class Hud {
     const probs = Object.entries(m.fallback ? {} : decision.answers?.vector?.probabilities || {}).sort(
       (a, b) => b[1] - a[1],
     );
-    const eligible = decision.candidates.filter((c) => c.eligible).length;
+    const eligible = decision.candidates.filter((c) => c.eligible && !c.flagged).length;
+    // (the open track's flagged manoeuvres, offered though they failed a road-rule check: brain/tracks.js)
+    const flagged = decision.candidates.filter((c) => c.flagged).length;
     const top = probs.slice(0, 5);
     const selected = probs.find(([id]) => id === decision.chosenId);
     if (selected && !top.includes(selected)) top.splice(4, 1, selected);
@@ -342,7 +344,7 @@ export class Hud {
       h(
         "div",
         { class: "option-note" },
-        `${eligible} of ${decision.candidates.length} manoeuvres passed safety checks${decision.flags?.length ? ` · ${decision.flags.join(", ")}` : ""}`,
+        `${eligible} of ${decision.candidates.length} manoeuvres passed safety checks${flagged ? `, ${flagged} more offered flagged` : ""}${decision.flags?.length ? ` · ${decision.flags.join(", ")}` : ""}`,
       ),
     );
   }

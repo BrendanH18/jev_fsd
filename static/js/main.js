@@ -261,6 +261,8 @@ export async function boot() {
       hour: replay.hour,
       without: replay.without || [],
       cover: replay.cover,
+      // (an open-track benchmark run watched on its own track, brain/tracks.js)
+      track: replay.track === "open" ? "open" : "guarded",
       ...callbacks,
     }));
   } else {

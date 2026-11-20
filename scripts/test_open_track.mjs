@@ -17,7 +17,7 @@ const { openTrack, unflagged, FLAG_TEXT, flagText, TRACKS } = await import("../s
 const { buildLlmPrompt, SYSTEM_PROMPT, OPEN_SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
 const { benchmarkConfig } = await import("../static/js/bench/options.js");
 const { comparableResult, canonicalJson, recordingHeader, hashText } = await import("../static/js/brain/recording.js");
-const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
+const { validateEvaluation, conditionDifferences, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
 
 let checks = 0;
 async function test(name, fn) {
@@ -125,13 +125,20 @@ await test("open track: a red-light manoeuvre stays on offer, flagged, a collisi
     { id: "a", reject: null, eligible: true },
     { id: "b", reject: "runs_red", eligible: false },
     { id: "c", reject: "collision", eligible: false },
+    // (a barricade it would hit, rejected first for the closed road: still a collision, still removed)
+    { id: "d", reject: "enters_closed_road", eligible: false, sim: { collision: { id: "barricade", t: 1.2 } } },
   ];
-  const out = openTrack(cs, { eligible: [cs[0]], rejected: { runs_red: 1, collision: 1 }, mustStop: true });
+  const out = openTrack(cs, {
+    eligible: [cs[0]],
+    rejected: { runs_red: 1, collision: 1, enters_closed_road: 1 },
+    mustStop: true,
+  });
   assert.deepEqual(
     out.eligible.map((c) => c.id),
     ["a", "b"],
   );
-  assert.deepEqual(out.rejected, { collision: 1 });
+  assert.equal(cs[3].flagged, undefined);
+  assert.deepEqual(out.rejected, { collision: 1, enters_closed_road: 1 });
   assert.equal(out.mustStop, true);
   assert.deepEqual(
     unflagged(out.eligible).map((c) => c.id),
@@ -146,7 +153,7 @@ await test("open track: a model is told which rule a flagged manoeuvre breaks, a
   assert.equal(said.outcome, `flagged: ${FLAG_TEXT.runs_red}`);
   const q = decision.questions.vector;
   assert.ok(q, "the vector question is asked");
-  assert.match(q.criteria[run.id], /flagged: it crosses the stop line on a red or unseen signal$/);
+  assert.match(q.criteria[run.id], /flagged: it crosses the stop line where the signal requires the car to stop$/);
   assert.match(q.instructions, /not held to the road rules/);
   assert.ok(q.instructions.length < 4000, `${q.instructions.length} characters`);
   // (and an LLM gets the open track's system prompt, which differs from the guarded one in that paragraph alone)
@@ -210,6 +217,52 @@ await test("a driver that goes with flagged manoeuvres runs the red and fails, w
     results: [open],
   };
   validateEvaluation(exported);
+  // (and refuses counts that do not add up, or open-track fields on a guarded drive)
+  const bad = (r) => () => validateEvaluation({ ...exported, results: [r] });
+  assert.throws(bad({ ...open, flagged_choices: open.flagged_choices + 1 }), /invalid evaluation result/);
+  assert.throws(bad({ ...open, flagged_by_check: [] }), /invalid evaluation result/);
+  const { track, ...noTrack } = open;
+  assert.throws(bad(noTrack), /invalid evaluation result/);
+  // (an arena baseline on the other track is not a matching condition)
+  assert.ok(conditionDifferences(open, guarded).includes("track"));
+  assert.ok(!conditionDifferences(guarded, { ...guarded }).includes("track"));
+});
+
+await test("a model's invalid answer with nothing unflagged left falls back to a stop, not a flagged manoeuvre", async () => {
+  // (the flag-blind driver up to the first decision with only flagged manoeuvres on offer, coming up to the
+  // red too fast to stop; from there Jev, a model driver, who is asked among them and answers with no
+  // usable vector)
+  const ctx = setupChallenge(WINNIPEG, CHALLENGE, { track: "open", brain: "flag_blind_test" });
+  const ap = ctx.autopilot;
+  const onlyFlagged = (d) => d.candidates.some((c) => c.flagged) && !d.candidates.some((c) => c.eligible && !c.flagged);
+  let cornered = false,
+    seen = null;
+  ap.onDecision = (d) => {
+    if (onlyFlagged(d)) cornered = true;
+    if (!seen && d.meta?.fallback === "invalid vector" && onlyFlagged(d)) seen = d;
+  };
+  while (!cornered && ctx.world.t < 40) {
+    step(ctx);
+    if (ap.firing) await ap.firing;
+  }
+  assert.ok(cornered, "only flagged manoeuvres left");
+  const before = ap.flaggedChoices.runs_red || 0;
+  ap.brainName = "jev";
+  ap.brains.jev = {
+    timeoutMs: 1000,
+    async decide() {
+      return { motion: "drive", candidateId: null, meta: { source: "jev", latency_ms: 5 } };
+    },
+  };
+  const until = ctx.world.t + 3;
+  while (!seen && ctx.world.t < until) {
+    step(ctx);
+    if (ap.firing) await ap.firing;
+  }
+  assert.ok(seen, "an invalid answer with only flagged manoeuvres on offer");
+  assert.equal(seen.motion, "stop");
+  assert.equal(seen.chosenId, "hard_brake");
+  assert.equal(ap.flaggedChoices.runs_red || 0, before, JSON.stringify(ap.flaggedChoices));
 });
 
 await test("benchmark config: the open track is recorded, the guarded one leaves the config as before", () => {

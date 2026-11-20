@@ -13,7 +13,7 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const data = checkResults(JSON.parse(fs.readFileSync(new URL("../data/results.json", import.meta.url), "utf8")));
 const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
 const block = readme.slice(readme.indexOf("<!-- results:start -->"), readme.indexOf("<!-- results:end -->"));
-// README rows: | Driver | Model | challenges | Kitsilano weathers | other maps | own decisions | cost |
+// README rows: | Driver | Model | challenges | open track | Kitsilano weathers | other maps | own decisions | cost |
 const readmeRows = block
   .split("\n")
   .filter((l) => l.startsWith("| ") && !l.startsWith("| Driver"))
@@ -38,17 +38,18 @@ test("every summary cell matches the README table", () => {
   drivers.forEach((d, i) => {
     const row = readmeRows[i];
     assert.ok(row[2].includes(fractionText(d.challenges)), `${d.label} challenges`);
+    assert.ok(row[3].includes(fractionText(d.open)), `${d.label} open track`);
     const home = Object.values(d.home).some(Boolean)
       ? WEATHERS.map((w) => (d.home[w] ? fractionText(d.home[w]) : "–")).join(" · ")
       : "not run";
-    assert.equal(row[3], home, `${d.label} Kitsilano`);
-    assert.equal(row[4], fractionText(d.others), `${d.label} other maps`);
+    assert.equal(row[4], home, `${d.label} Kitsilano`);
+    assert.equal(row[5], fractionText(d.others), `${d.label} other maps`);
     assert.equal(
-      row[5],
+      row[6],
       d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a",
       `${d.label} own decisions`,
     );
-    assert.equal(row[6], moneyText(d.cost), `${d.label} cost`);
+    assert.equal(row[7], moneyText(d.cost), `${d.label} cost`);
   });
 });
 
