@@ -147,6 +147,7 @@ Where features reach into shared code:
 ## Decisions
 
 - Ask before adding any dependency, tool or service.
+- Live model test runs (recordings, published results, the arena and benchmark runs that call a model) use Jev and Claude Haiku 5.5 (`claude-haiku-5-5`, through the Claude Platform, `ANTHROPIC_API_KEY`) only. Don't use Claude Sonnet.
 - New maps are Canadian cities. LLM drivers use a generic OpenAI-compatible endpoint, or Anthropic's Messages API for Claude models (`"api": "anthropic"`, the Claude Platform preset in `jev/llm_setup.py`).
 - Hosted provider presets in Connect a model are the major labs' own APIs (OpenAI, Anthropic, Google, xAI, Mistral), through an OpenAI-compatible endpoint where the lab offers one, plus OpenRouter and Groq. Don't add presets for Chinese-hosted APIs.
 
