@@ -32,13 +32,6 @@ import { turnBanned } from "./turn-restrictions.js";
 // once it is coming into their lane (sim/driveway-reversers.js reverserYield).
 // With `balls` on, drivers who see a ball roll into the street slow to a speed from which they can stop
 // short of the gap it came from, until the child after it has come and gone (sim/ball-chase.js ballYield).
-// With `ice` on, drivers and cyclists slow for black ice ahead, and for bridges in icy weather, and only
-// ease off on the ice; their tyres feel it through the shared car model (sim/black-ice.js npcIce).
-// With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
-// toward the middle and take turns with traffic coming the other way through the one-car stretch, and
-// cyclists keep clear of the parked cars (sim/snowbanks.js snowbankYield).
-// With `puddles` on, in the rain, drivers ease left inside their lane round a puddle at the kerb with
-// someone within splash reach of it, or otherwise slow below its splash speed (sim/puddles.js npcPuddle).
 
 import {
   Vehicle,
@@ -169,7 +162,7 @@ import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
 import { reverserYield } from "./driveway-reversers.js";
 import { ballYield } from "./ball-chase.js";
-import { hookEntries, hooks } from "./features/index.js";
+import { hooks } from "./features/index.js";
 
 // How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
 // re-plan round them, a move inside its lane, and where it stops for them; each where that feature's own
@@ -177,14 +170,13 @@ import { hookEntries, hooks } from "./features/index.js";
 // to the kerb ahead and stop short of their way across until the last goose is off the roadway.)
 const TRAFFIC_START = hooks("trafficStart"),
   TRAFFIC_REPLAN = hooks("trafficReplan");
-const TRAFFIC_LANE = hookEntries("trafficLane", "contraflow"),
-  TRAFFIC_YIELD = hooks("trafficYield");
+const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
+  TRAFFIC_KEEP = hooks("trafficLane", "parkers"),
+  TRAFFIC_YIELD = hooks("trafficYield"),
+  TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { manageParkers, parkerConflict, parkerStop, stepParker } from "./parkers.js";
 import { officerDirection } from "./traffic-officer.js";
-import { gentleOnIce, npcIce } from "./black-ice.js";
-import { snowbankYield } from "./snowbanks.js";
-import { NPC_SHIFT_MPS as PD_SHIFT_MPS, npcPuddle } from "./puddles.js";
 import {
   AMBER_M,
   KID_CROSS_P,
@@ -314,7 +306,6 @@ const BODY_LOOK_M = 8;
 const BODY_AHEAD_M = 2;
 // How fast a driver moves over for a contraflow cyclist coming the other way (sim/contraflow.js).
 const CF_SHIFT_MPS = 0.7;
-const SB_SHIFT_MPS = 0.6; // moving over toward the middle between snowbanks (sim/snowbanks.js)
 // Giving way to an emergency vehicle (sim/emergency.js): a driver eases over at up to 0.8 m/s and
 // stops within its stopping distance braking at 1.5 m/s^2 (3.5 m/s^2 for one coming toward it or
 // across its way; at least 4 m on), short of the next junction
@@ -1427,45 +1418,36 @@ export class NpcFleet {
         offset += n.cfShift;
       }
       // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
-      // while changing lanes or going round something), and its speed ceiling for it
+      // while changing lanes or going round something), and its speed ceiling for it; each is handed where
+      // it keeps in the lane so far and the earlier moves (where each is heading, `aim`, and has got to, `now`)
       const laneBusy = !!(n.lc || wzShift || dpShift || lzShift || cyc || n.pull),
-        laneFx = {};
+        laneMoves = [];
       let featureLimit = Infinity;
-      for (const { key, run } of TRAFFIC_LANE) {
-        const r = run(world, n, front, laneBusy, dt);
-        laneFx[key] = r.result;
+      for (const run of TRAFFIC_LANE) {
+        const r = run(world, n, front, laneBusy, dt, { offset, moves: laneMoves });
         if (r.shift !== undefined) offset += r.shift;
         if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
-      }
-      // (puddles, not yet a registered feature, allow for the move round a pothole: sim/features/potholes.js)
-      const ph = laneFx.potholes;
-      // a puddle at the kerb with someone within splash reach (sim/puddles.js): ease left inside the lane
-      // where that takes the wheels out of it (not while off the middle of the lane for anything else, or
-      // easing round a pothole), and otherwise slow below its splash speed, wherever in the lane it is going
-      const pdBusy = !!(n.lc || wzShift || dpShift || lzShift || cyc || n.pull || ph?.shift || Math.abs(offset) > 0.05);
-      const pd =
-        world.puddles?.enabled && n.kind !== "bike" && !n.transit?.tram
-          ? npcPuddle(world, n, front, offset, pdBusy, offset + (ph && !n.lc ? ph.shift : 0) - (n.phShift || 0))
-          : null;
-      if (pd || n.pdShift) {
-        const to = pd && !pdBusy ? pd.shift : 0;
-        n.pdShift = (n.pdShift || 0) + Math.max(-PD_SHIFT_MPS * dt, Math.min(PD_SHIFT_MPS * dt, to - (n.pdShift || 0)));
-        offset += n.pdShift;
+        laneMoves.push(r);
       }
       // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
       if (n.tgPeek) offset += n.tgPeek;
       // a car about to parallel park easing right toward where it starts (sim/parkers.js)
       if (n.parker) offset += n.parker.shift;
-      // between snowbanks that push the parked cars out from the kerb (sim/snowbanks.js): over toward the
-      // middle, clear of them, as far as it has come into the stretch at its pursuit point
-      const sb = world.snowbanks?.narrowings.length && !n.transit?.tram ? snowbankYield(world, n, front) : null;
-      const sbBase = offset,
-        sbAt = (s) => (sb ? Math.min(0, sb.keep - sbBase) * sb.at(s) : 0);
-      if (sb || n.sbShift) {
-        const to = sbAt(path.s + lookahead(n.v));
-        n.sbShift = (n.sbShift || 0) + Math.max(-SB_SHIFT_MPS * dt, Math.min(SB_SHIFT_MPS * dt, to - (n.sbShift || 0)));
-        offset += n.sbShift;
+      // the line a registered feature has it keep to in its lane, over toward the middle between snowbanks
+      // that push the parked cars out from the kerb, say: where it stops (`hold`), the move along its way
+      // (`lineAt`) and the line it keeps to (`kept`) for what is in its way, and what it has moved so far
+      const keepMoves = [];
+      for (const run of TRAFFIC_KEEP) {
+        const r = run(world, n, front, laneBusy, dt, {
+          offset,
+          moves: keepMoves,
+          pursuit: () => path.s + lookahead(n.v),
+        });
+        if (r.shift !== undefined) offset += r.shift;
+        if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
+        keepMoves.push(r);
       }
+      const keptBy = keepMoves.find((m) => m.kept);
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -1520,24 +1502,21 @@ export class NpcFleet {
         const inWay = (lat, at) => {
           if (wz?.detour) lat -= detourAt(wz.detour, at) - wzShift;
           if (lz?.detour) lat -= detourAt(lz.detour, at) - lzShift;
-          // (between snowbanks, the line it will keep to where `o` is: sim/snowbanks.js)
-          if (sb) lat -= sbAt(at) - (n.sbShift || 0);
+          // (between snowbanks, say, the line it will keep to where `o` is)
+          for (const m of keepMoves) if (m.lineAt) lat -= m.lineAt(at);
           // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
           const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
-          // Another move (a pothole nudge, for example) may already keep left of the snowbank
-          // corridor, leaving sbShift at zero. The lane it keeps to includes that move too.
+          // (a registered feature's line, between snowbanks say, is its own: `kept`)
           const kept =
             n.evRejoin != null
               ? Math.abs(lat - offset)
-              : sb
-                ? Math.abs(lat - sbBase - (n.sbShift || 0))
+              : keptBy
+                ? keptBy.kept(lat)
                 : Math.abs(
-                    lat -
-                      keepRight -
-                      (n.nudge || 0) -
-                      (dp?.go ? dpShift : 0) -
-                      (cyc ? n.cpShift : 0) -
-                      (n.sbShift || 0),
+                    keepMoves.reduce(
+                      (x, m) => x - m.now,
+                      lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0),
+                    ),
                   );
           return (
             Math.abs(round - offset) <= reach ||
@@ -2033,10 +2012,11 @@ export class NpcFleet {
           leadV = 0;
         }
       }
-      // between snowbanks, short of the one-car stretch until it is its turn (once it could stop there:
-      // otherwise it has the way) (sim/snowbanks.js)
-      if (sb?.hold != null) {
-        const g = sb.hold - front;
+      // where a registered feature's line has it stop: between snowbanks, say, short of the one-car stretch
+      // until it is its turn (once it could stop there: otherwise it has the way)
+      for (const { hold } of keepMoves) {
+        if (hold == null) continue;
+        const g = hold - front;
         if (g > -1 && g < gap && g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1) {
           gap = Math.max(0.05, g);
           leadV = 0;
@@ -2045,11 +2025,14 @@ export class NpcFleet {
       // where a registered feature has it stop, and its speed ceiling: for Canada geese, say, slowing while a
       // gaggle comes up to the kerb ahead and stopping short of their way across until the last is off the
       // roadway (once it could stop there, `canStop`: otherwise it carries on); or short of the barricade
-      // across a block closed for an event, on a way that could not be changed in time
+      // across a block closed for an event, on a way that could not be changed in time; and how it has the
+      // driver handle the car (`controls`)
+      let featureControls = null;
       for (const yieldTo of TRAFFIC_YIELD) {
         const y = yieldTo(world, n, front);
         if (!y) continue;
         if (y.limit != null) featureLimit = Math.min(featureLimit, y.limit);
+        if (y.controls) featureControls ||= y.controls;
         if (y.hold == null) continue;
         const g = y.hold - front;
         if (g > -1 && g < gap && (!y.canStop || g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1)) {
@@ -2087,10 +2070,6 @@ export class NpcFleet {
         this.world.balls?.balls.length && !n.transit?.tram
           ? (ballYield(this.world, n, front)?.limit ?? Infinity)
           : Infinity;
-      // (and, with black ice on, slowing for the ice ahead, and for bridges in icy weather, and easing off
-      // on it: sim/black-ice.js; a streetcar's steel wheels do not feel it)
-      const vIce =
-        this.world.ice?.list.length && !n.transit?.tram ? (npcIce(this.world, n, front)?.limit ?? Infinity) : Infinity;
       const v0 = Math.min(
         isPlow(n) ? n.v0 : n.v0 * weather.speed,
         limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed,
@@ -2105,9 +2084,6 @@ export class NpcFleet {
         rv?.limit ?? Infinity,
         featureLimit,
         vBall,
-        vIce,
-        sb?.limit ?? Infinity,
-        pd?.limit ?? Infinity,
       );
       const D = n.driver || IDM;
       let a;
@@ -2144,9 +2120,9 @@ export class NpcFleet {
           this.shuffle(n, offset - proj.lateral, turn, dt);
       }
       const steer = purePursuit(n, path, path.s, offset);
-      // (on or coming up to black ice, a driver eases the pedals and the wheel, short of braking harder
-      // than it ever does but in an emergency: sim/black-ice.js gentleOnIce)
-      if (vIce < Infinity && a > -D.b) n.step(dt, gentleOnIce(n, steer, a, dt));
+      // (where a registered feature has the driver ease the pedals and the wheel, on or coming up to black
+      // ice, say, short of braking harder than it ever does but in an emergency)
+      if (featureControls && a > -D.b) n.step(dt, featureControls(n, steer, a, dt));
       else n.step(dt, { steer, accel: a });
       if (n.v < 0) n.v = 0;
     }
@@ -3544,7 +3520,8 @@ export class NpcFleet {
   // Nothing in the lane coming up behind within a few seconds (less for an assertive driver), and
   // nothing stopped right in front.
   pullClear(n) {
-    if (this.world.snowbanks?.narrowings.length && !this.world.snowbanks.canPullOut(n)) return false;
+    // (unless a registered feature has it wait: traffic in a one-car stretch between snowbanks, say)
+    for (const may of TRAFFIC_PULL_OUT) if (!may(this.world, n)) return false;
     const path = n.path;
     const gap = Math.max(n.pull?.T || 3.5, n.driver && n.driver.T < 1.05 ? 3.5 : 5) + 1.5;
     for (const o of [this.world.ego, ...this.vehicles]) {

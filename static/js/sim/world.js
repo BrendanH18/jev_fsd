@@ -86,18 +86,19 @@ import { DrivewayReversers, auditReversers, boxGap, reverserHidden } from "./dri
 import { BallChase, auditBalls } from "./ball-chase.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers, parkerConflict } from "./parkers.js";
-import { FEATURES, featureObstacle, hooks } from "./features/index.js";
+import { FEATURES, featureNeedsDay, featureObstacle, hooks } from "./features/index.js";
 import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
-import { BlackIce, auditIce } from "./black-ice.js";
-import { Snowbanks, auditSnowbanks, bankHidden, keepAt, NARROW_FULL_M } from "./snowbanks.js";
-import { Puddles, auditPuddles } from "./puddles.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 // The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
 const OBSTACLES_NEAR = hooks("obstacles");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_AFTER_BALLS = hooks("audit", "balls");
+const AUDIT_AFTER_TAILGATERS = hooks("audit", "tailgaters");
+const HIDES = hooks("hides"),
+  PLACE_EGO = hooks("placeEgo"),
+  EV_KERB = hooks("evKerb");
 const AUDIT_AFTER_PARKERS = hooks("audit", "parkers");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -287,18 +288,12 @@ export class World {
   // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
   // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
   // not brake-check it, and lets it by (sim/tailgaters.js).
-  // `ice`: near freezing, black ice forms on bridges and in the shade of tall buildings, where everyone's
-  // tyres lose their grip, and everyone slows before it and crosses it gently (sim/black-ice.js).
-  // `snowbanks`: when it is snowing as the drive starts, snowbanks line the kerbs, high at the corners,
-  // where they hide whoever waits there; and where they push the parked cars out, drivers take turns
-  // through the one-car stretch (sim/snowbanks.js).
-  // `puddles`: in the rain, puddles stand in the gutter; everyone eases left in the lane, or slows below
-  // the splash speed, rather than drench someone on the sidewalk beside one (sim/puddles.js).
   // `parkers`: now and then the traffic car ahead of the driven car parallel parks, and everyone behind
   // it stops well back and waits until it is in (sim/parkers.js).
   // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
   // obeys the officer rather than the lights (sim/traffic-officer.js).
-  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `roadClosures`.
+  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `ice`,
+  // `snowbanks`, `puddles`, `roadClosures`.
   constructor(
     map,
     {
@@ -335,9 +330,6 @@ export class World {
       driveways = false,
       balls = false,
       tailgaters = false,
-      ice = false,
-      snowbanks = false,
-      puddles = false,
       parkers = false,
       officers = false,
       ...features
@@ -490,29 +482,6 @@ export class World {
     this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
     this.tailgatersSeen = false;
     this.tailgaterCall = null;
-    // black ice (sim/black-ice.js): where it forms, whether the car has come near a patch this drive, and
-    // the patches it is crossing (built in every world: one without it clears the car model's grip hook)
-    this.ice = new BlackIce(this, { enabled: ice, seed });
-    this.iceSeen = false;
-    this.iceCalls = new Map();
-    // snowbanks (sim/snowbanks.js): the banks, piles and narrowings, whether the car has come up to a
-    // narrowing this drive, and whether it was in each one it is near last tick
-    this.snowbanks = new Snowbanks(this, { enabled: snowbanks, seed });
-    if (this.snowbanks.narrowings.length) {
-      const near = map.nearestLane(this.ego.x, this.ego.y, this.ego.psi);
-      if (near) this.snowbanks.place(this.ego, near.lane);
-      this.resetContactHistory();
-    }
-    this.snowbanksSeen = false;
-    this.snowbankCalls = new Map();
-    // puddles at the kerb (sim/puddles.js): where they stand, whether it has rained this drive (they lie
-    // on until it snows), whether the car has come up to one with someone near this drive, and who it has
-    // splashed from each one its wheels are in
-    this.puddles = new Puddles(map, { enabled: puddles, seed });
-    this.puddlesRained = this.puddles.enabled && this.weather === "rain";
-    this.puddlesSeen = false;
-    this.puddleCalls = new Map();
-    this.puddleWarn = null;
     // traffic parallel parking ahead (sim/parkers.js): whether it does, whether one has signalled to park
     // ahead of the car this drive, and the ones the car has blocked or gone round
     this.parkers = createParkers({ enabled: parkers, seed });
@@ -577,8 +546,9 @@ export class World {
       !wellLit(this);
     if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach)))
       return false;
-    // (a high snowbank at a corner hides people, cyclists and cars behind it from the car: sim/snowbanks.js)
-    if (this.snowbanks?.piles.length && observer === this.ego && bankHidden(this, observer, o)) return false;
+    // (what a registered feature hides from the car: a high snowbank at a corner, say, hides people,
+    // cyclists and cars behind it)
+    for (const hides of HIDES) if (hides(this, observer, o)) return false;
     // (a car backing out of a driveway: the cars parked at the kerb hide it, sim/driveway-reversers.js)
     if (o.reverser) return !(this.hazards && reverserHidden(this, observer, o));
     if (o.kind === "pedestrian")
@@ -614,7 +584,7 @@ export class World {
     this.ego.v = 0;
     this.ego.delta = 0;
     this.ego.a = 0;
-    if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, lane);
+    for (const place of PLACE_EGO) place(this, lane);
     this.egoStop.reset();
     this.allWay.forget(this.ego);
     this.resetContactHistory();
@@ -629,7 +599,7 @@ export class World {
       this.ego.v = 0;
       this.ego.delta = 0;
       this.ego.a = 0;
-      if (this.snowbanks?.narrowings.length) this.snowbanks.place(this.ego, near.lane);
+      for (const place of PLACE_EGO) place(this, near.lane);
       this.resetContactHistory();
     }
     this.events.push({ type: "reset" });
@@ -698,9 +668,6 @@ export class World {
     this.drivewayCalls?.clear();
     this.ballCalls?.clear();
     this.tailgaterCall = null;
-    this.iceCalls?.clear();
-    this.snowbankCalls?.clear();
-    this.puddleCalls?.clear();
     this.parkerCalls?.clear();
     for (const f of FEATURES) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
@@ -758,14 +725,14 @@ export class World {
   }
 
   // (with sun glare on, the clock may also carry the `day` of the year and a `utc_offset`, for the sun:
-  // sim/sun-glare.js)
+  // sim/sun-glare.js; and the `day` for a registered feature that reads it: sim/features/index.js)
   setClock(clock) {
     this.clock = clock
       ? {
           hour: clock.hour,
           sun_deg: clock.sun_deg,
           ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}),
-          ...((this.sunGlare || this.ice?.enabled) && clock.day !== undefined ? { day: clock.day } : {}),
+          ...((this.sunGlare || featureNeedsDay(this)) && clock.day !== undefined ? { day: clock.day } : {}),
           ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}),
         }
       : null;
@@ -1194,9 +1161,7 @@ export class World {
     if (this.balls?.enabled) auditBalls(this);
     for (const audit of AUDIT_AFTER_BALLS) audit(this);
     if (this.tailgaters?.enabled) auditTailgaters(this);
-    if (this.ice?.enabled) auditIce(this);
-    if (this.snowbanks?.enabled) auditSnowbanks(this);
-    if (this.puddles?.enabled) auditPuddles(this);
+    for (const audit of AUDIT_AFTER_TAILGATERS) audit(this);
     if (this.parkers?.enabled) auditParkers(this);
     for (const audit of AUDIT_AFTER_PARKERS) audit(this);
     this.auditKerb();
@@ -1910,15 +1875,11 @@ export class World {
     }
     const entered = junction !== null && junction !== this.evJunction && ego.v > 1;
     this.evJunction = junction;
-    // Snowbanks move the usable right edge into the lane. A stopped car must not
-    // drive into the cars parked there to satisfy a measurement from the old lane centre.
-    const narrowed = this.snowbanks?.enabled && road.lane && road.edge && this.snowbanks.on(road.edge.id);
-    const entry = narrowed && (narrowed.dir > 0 ? narrowed.nw.a : narrowed.nw.L - narrowed.nw.b);
-    const exit = narrowed && (narrowed.dir > 0 ? narrowed.nw.b : narrowed.nw.L - narrowed.nw.a);
-    const rightmost =
-      narrowed && road.s + FRONT >= entry - NARROW_FULL_M && road.s - ego.spec.rearOverhang <= exit + NARROW_FULL_M
-        ? keepAt(road.edge, ego.spec) - road.lane.offset
-        : Infinity;
+    // A registered feature may move the usable right edge into the lane (snowbanks pushing the parked cars
+    // out, say). A stopped car must not drive into the cars parked there to satisfy a measurement from the
+    // old lane centre.
+    let rightmost = Infinity;
+    for (const kerb of EV_KERB) rightmost = Math.min(rightmost, kerb(this, road, FRONT));
     // The normal target leaves a settling allowance before this audit's minimum
     // (0.3 m versus 0.2 m for the standard car). Preserve that allowance when banks
     // move the target left; requiring exact equality with keepAt has no feasible

@@ -25,6 +25,14 @@
   `scripts/test_emergency_give_way_look.mjs`, `scripts/test_emergency_late_pull_over.mjs`.
   (`docs/validation/yields-2026-11-20.md`)
 
+- Puddles, black ice and snowbanks moved onto the feature registry (`static/js/sim/features/`): each is
+  one record and one registration line, and the core files no longer name them. Traffic's lane hooks now
+  hand each other their moves (`aim`, `now`, `easing`), which ends the one exception AGENTS.md allowed
+  (traffic's puddle check reading the move round a pothole by name). New hooks for what black ice and
+  snowbanks reached into (the step's start, the clock's day, sight lines, the emergency pull-over, traffic's
+  line and pedals); `hooks()` lists are filled once the registry has loaded, so an import cycle cannot
+  leave a core module without them. Every result is identical before and after
+  (`docs/validation/registry-round2-2026-11-20.md`). (ROADMAP 3.2)
 - **The big labs' own APIs as LLM presets.** The Connect a model dialog's LLMs tab adds **Google Gemini**,
   **xAI** and **Mistral** beside OpenAI, each through the lab's own OpenAI-compatible endpoint, with its
   key page and key variable (`GEMINI_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`). Gemini and xAI start
