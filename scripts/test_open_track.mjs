@@ -58,8 +58,9 @@ const step = (ctx) => stepWorld({ ...ctx, input: null }, 1 / 60, ctx.world.t * 1
 // (whether an agent module was asked to choose among flagged manoeuvres alone, as any driver but Rules and the
 // cautious agent is)
 let askedOnlyFlagged = false;
-// (the tracks the requests the driver was handed said, as an LLM driver's prompt reads it: brain/llm-prompt.js)
-const requestTracks = new Set();
+// (each request the driver is handed must say the track of the drive under way, as an LLM driver's prompt reads
+// it: brain/llm-prompt.js)
+const requests = { expected: null, seen: 0, wrong: 0 };
 // A driver that ignores the flags: Rules' choice, unless a flagged manoeuvre gets further. On the guarded
 // track, where nothing is flagged, it is Rules.
 registerAgent({
@@ -80,7 +81,8 @@ registerAgent({
       return { ...r, meta: { ...r.meta, source: "flag_blind_test" } };
     },
     async decide(snap, eligible, request) {
-      requestTracks.add(request?.track ?? "guarded");
+      requests.seen++;
+      if ((request?.track ?? "guarded") !== requests.expected) requests.wrong++;
       return this.decideSync(snap, eligible);
     },
   }),
@@ -208,8 +210,11 @@ await test("Rules and the cautious agent drive the open track exactly as the gua
 });
 
 await test("a driver that goes with flagged manoeuvres runs the red and fails, which the guarded track would have stopped", async () => {
+  requests.expected = "guarded";
   const guarded = await evaluateChallenge(WINNIPEG, CHALLENGE, { brain: "flag_blind_test" });
+  requests.expected = "open";
   const open = await evaluateChallenge(WINNIPEG, CHALLENGE, { brain: "flag_blind_test", track: "open" });
+  requests.expected = null;
   assert.equal(guarded.red_lights, 0, "guarded: no red light run");
   assert.ok(open.red_lights > 0, "open: the red is run");
   assert.equal(open.pass, false);
@@ -217,7 +222,10 @@ await test("a driver that goes with flagged manoeuvres runs the red and fails, w
   assert.ok(open.flagged_choices > 0);
   assert.ok(open.flagged_by_check.runs_red > 0, JSON.stringify(open.flagged_by_check));
   assert.equal(askedOnlyFlagged, true, "an agent module chooses among flagged manoeuvres alone");
-  assert.deepEqual([...requestTracks].sort(), ["guarded", "open"], "each request says its track");
+  assert.ok(
+    requests.seen > 0 && requests.wrong === 0,
+    `${requests.wrong} of ${requests.seen} requests said the wrong track`,
+  );
   // (the drive saves and reloads in the arena's history with its open-track fields)
   const exported = {
     schema: EVALUATION_SCHEMA,
