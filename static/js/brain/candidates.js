@@ -16,6 +16,7 @@ import {
   HOOK_STOP_M,
   CLEARING_M,
   PEEK_MPS,
+  featureDetour,
   waitsItsTurn,
 } from "./sensors.js";
 import { poseOf } from "../sim/static-obstacles.js";
@@ -47,6 +48,7 @@ const CANDIDATES = {
   balls: hooks("candidates", "balls"),
   tailgaters: hooks("candidates", "tailgaters"),
 };
+const PULL_OVER_DETOUR = hooks("pullOverDetour");
 const ADJUST_AFTER_BALLS = hooks("adjust", "balls"),
   ADJUST_LAST = hooks("adjust");
 const BRAKE_DETOUR = hooks("brakeDetour");
@@ -157,9 +159,10 @@ export function sampleCandidates(snap, world) {
         ? { detour: snap.double_parked.detour }
         : snap.contraflow_cyclist?.detour && !snap.cyclist_pass?.detour
           ? { detour: snap.contraflow_cyclist.detour }
-          : // (and over toward the middle between snowbanks: see sim/snowbanks.js)
-            snap.snowbank?.narrowing?.detour && !snap.cyclist_pass?.detour
-            ? { detour: snap.snowbank.narrowing.detour }
+          : // (and the move a registered feature has the car make in its lane, over toward the middle between
+            // snowbanks, say: brain/sensors.js featureDetour)
+            featureDetour(snap) && !snap.cyclist_pass?.detour
+            ? { detour: featureDetour(snap) }
             : {};
   const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
   const inLane = (law) => ({
@@ -549,22 +552,6 @@ export function sampleCandidates(snap, world) {
       });
     }
     for (const add of CANDIDATES.tailgaters) add(featureCtx, out);
-    // Between snowbanks (sim/snowbanks.js): while it is the turn of a car coming the other way through the
-    // one-car stretch ahead, stop short of it and wait.
-    const nb = snap.snowbank?.narrowing;
-    if (nb?.wait && nb.bumper_to_stop_m > 0.3) {
-      out.push({
-        id: "wait_for_oncoming_narrowing",
-        laneUntil,
-        law: inLane({
-          kind: "lane",
-          vTarget: Math.min(approach, nb.limit_mps ?? approach),
-          stopAtRoute: stopAt(nb.stop_s_route - FRONT - 0.5),
-        }),
-        steer: "hold lane",
-        speed: "stop short of the stretch narrowed by snowbanks and let the oncoming car through",
-      });
-    }
     // A car ahead parallel parking (sim/parkers.js): stop well back, at its hold line, short of the room it
     // reverses into, and wait until it is in (offered once the hold line is nearer than the queue behind it:
     // until then the car simply follows it).
@@ -611,11 +598,10 @@ export function sampleCandidates(snap, world) {
             stopDecel: EV_STOP_DECEL,
             ...(tight ? { steerAtStop: true } : {}),
           }),
-          // Stopping before the narrowed stretch: pull right here, rather than pursuing its
-          // upcoming move left into the shared corridor while trying to pull over.
-          ...(detour.detour?.id?.startsWith("sb:") && ev.stop_s_route < snap.snowbank.narrowing.entry_s_route
-            ? { detour: null }
-            : {}),
+          // Stopping before where a registered feature's move in the lane takes the car (a narrowed stretch
+          // between snowbanks, say): pull right here, rather than pursuing its upcoming move left into the
+          // shared corridor while trying to pull over.
+          ...(PULL_OVER_DETOUR.some((drop) => drop(snap, detour.detour, ev.stop_s_route)) ? { detour: null } : {}),
         },
         steer: `pull over ${ev.offset_m.toFixed(1)} m to the right`,
         speed:
@@ -1105,11 +1091,6 @@ export function simulateAll(candidates, snap, world) {
   // than a crawl while the warning stands
   const ballLine = snap.ball_in_road?.limit_mps != null ? snap.ball_in_road.stop_s_route : null;
   const ballCreep = snap.ball_in_road?.creep_mps ?? 0;
-  // a stretch narrowed by snowbanks while it is an oncoming car's turn (sim/snowbanks.js): where the car waits
-  // (a metre's overshoot, but never into the stretch itself)
-  const narrowStop = snap.snowbank?.narrowing?.wait
-    ? Math.min(snap.snowbank.narrowing.stop_s_route + 1, snap.snowbank.narrowing.entry_s_route ?? Infinity)
-    : null;
   // a car ahead parallel parking (sim/parkers.js): its hold line (a metre's overshoot, as a short stop
   // makes), never into the room it reverses into, nor round it (no lane change while behind it)
   const parkerHold = snap.parking_ahead?.wait ? snap.parking_ahead.stop_s_route + 1 : null;
@@ -1161,8 +1142,7 @@ export function simulateAll(candidates, snap, world) {
       lateral = 0,
       headingErr = 0,
       offSteps = 0;
-    let intoNarrowing = false,
-      intoParker = false;
+    let intoParker = false;
     for (const x of checks) x.start();
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
@@ -1225,8 +1205,6 @@ export function simulateAll(candidates, snap, world) {
         if (rvStop !== null && s + FRONT > rvStop + 1) rvClose = true;
         // (and past the gap a ball rolled out of, faster than a crawl)
         if (ballLine !== null && s + FRONT > ballLine && car.v > ballCreep + 1) ballFast = true;
-        // (and a metre past where it waits its turn between snowbanks)
-        if (narrowStop !== null && s + FRONT > narrowStop) intoNarrowing = true;
         // (and a metre past a parking car's hold line)
         if (parkerHold !== null && s + FRONT > parkerHold) intoParker = true;
         // (and where the registered features' checks look along the route: sim/features/index.js)
@@ -1458,7 +1436,6 @@ export function simulateAll(candidates, snap, world) {
     else if ((reject = rejectBy(sims.driveways, c)));
     else if (ballFast && c.law.kind !== "hard_brake") reject = "passes_ball_gap_too_fast";
     else if ((reject = rejectBy(sims.balls, c)));
-    else if (intoNarrowing && c.law.kind !== "hard_brake") reject = "enters_narrowing_out_of_turn";
     // (nor going round it: no lane change while behind it, sim/parkers.js)
     else if ((intoParker || (parkerHold !== null && c.change)) && c.law.kind !== "hard_brake")
       reject = "blocks_parking_car";

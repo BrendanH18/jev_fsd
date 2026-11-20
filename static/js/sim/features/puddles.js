@@ -43,11 +43,11 @@ export default {
     world.puddleWarn = null;
     return puddles;
   },
-  metric: { at: "snowbanks", name: "pedestrians_splashed", failure: "splashed a pedestrian from a puddle" },
+  metric: { at: "tailgaters", name: "pedestrians_splashed", failure: "splashed a pedestrian from a puddle" },
   priority: ["ease_round_puddle"],
 
   audit: {
-    at: "snowbanks",
+    at: "tailgaters",
     run(world) {
       if (world.puddles?.enabled) auditPuddles(world);
     },
@@ -55,7 +55,7 @@ export default {
 
   // The car's sensing: puddles at the kerb with someone within splash reach, while they lie.
   sense: {
-    at: "snowbanks",
+    at: "balls",
     run(world, snap, { p, frontS, lane, road, visible }) {
       if (world.puddles?.enabled) {
         const pd = puddlesAhead(world, p, frontS, lane, road.limit, visible);
@@ -87,7 +87,7 @@ export default {
       return v;
     },
   },
-  hazard: { at: "snowbanks", run: (snap) => (snap.puddle_splash ? "puddle by the kerb" : null) },
+  hazard: { at: "officers", run: (snap) => (snap.puddle_splash ? "puddle by the kerb" : null) },
 
   // Over to the left inside the lane, the right wheels clear of it, and back, keeping its speed.
   candidates: {

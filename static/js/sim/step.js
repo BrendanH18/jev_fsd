@@ -28,9 +28,6 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   // (police officers directing traffic, with that option on: sim/traffic-officer.js; before the traffic
   // takes their directions)
   if (world.officers?.enabled) stepOfficers(world, dt);
-  // (who has come up to each narrowed stretch between snowbanks, and who has gone in, with that option
-  // on: sim/snowbanks.js; before the traffic takes its turns)
-  if (world.snowbanks?.enabled) world.snowbanks.step(dt);
   for (const step of BEFORE_TRAFFIC) step(world, fleet, dt);
   fleet.step(dt);
   // (contraflow cyclists, with that option on: sim/contraflow.js)

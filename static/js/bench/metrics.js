@@ -141,9 +141,6 @@ export class DriveMetrics {
       // (only for a drive a tailgater followed the car in: sim/tailgaters.js)
       ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
       ...featureMetrics(world, v, "tailgaters"),
-      // (only for a drive in which the car came up to a stretch snowbanks narrow to one car: sim/snowbanks.js)
-      ...(world.snowbanksSeen ? { snowbank_conflicts: v.snowbank_conflicts || 0 } : {}),
-      ...featureMetrics(world, v, "snowbanks"),
       // (only for a drive in which a car signalled to parallel park ahead of the car: sim/parkers.js)
       ...(world.parkersSeen ? { parking_conflicts: v.parking_conflicts || 0 } : {}),
       ...featureMetrics(world, v, "parkers"),
@@ -212,8 +209,6 @@ export function failures(m) {
   f.push(...featureFailures(m, "balls"));
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
   f.push(...featureFailures(m, "tailgaters"));
-  if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
-  f.push(...featureFailures(m, "snowbanks"));
   if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");
   f.push(...featureFailures(m, "parkers"));
   if (m.officer_violations) f.push("went on when a police officer signalled stop");

@@ -32,9 +32,6 @@ import { turnBanned } from "./turn-restrictions.js";
 // once it is coming into their lane (sim/driveway-reversers.js reverserYield).
 // With `balls` on, drivers who see a ball roll into the street slow to a speed from which they can stop
 // short of the gap it came from, until the child after it has come and gone (sim/ball-chase.js ballYield).
-// With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
-// toward the middle and take turns with traffic coming the other way through the one-car stretch, and
-// cyclists keep clear of the parked cars (sim/snowbanks.js snowbankYield).
 
 import {
   Vehicle,
@@ -174,11 +171,12 @@ import { hooks } from "./features/index.js";
 const TRAFFIC_START = hooks("trafficStart"),
   TRAFFIC_REPLAN = hooks("trafficReplan");
 const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
-  TRAFFIC_YIELD = hooks("trafficYield");
+  TRAFFIC_KEEP = hooks("trafficLane", "parkers"),
+  TRAFFIC_YIELD = hooks("trafficYield"),
+  TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { manageParkers, parkerConflict, parkerStop, stepParker } from "./parkers.js";
 import { officerDirection } from "./traffic-officer.js";
-import { snowbankYield } from "./snowbanks.js";
 import {
   AMBER_M,
   KID_CROSS_P,
@@ -308,7 +306,6 @@ const BODY_LOOK_M = 8;
 const BODY_AHEAD_M = 2;
 // How fast a driver moves over for a contraflow cyclist coming the other way (sim/contraflow.js).
 const CF_SHIFT_MPS = 0.7;
-const SB_SHIFT_MPS = 0.6; // moving over toward the middle between snowbanks (sim/snowbanks.js)
 // Giving way to an emergency vehicle (sim/emergency.js): a driver eases over at up to 0.8 m/s and
 // stops within its stopping distance braking at 1.5 m/s^2 (3.5 m/s^2 for one coming toward it or
 // across its way; at least 4 m on), short of the next junction
@@ -1436,16 +1433,21 @@ export class NpcFleet {
       if (n.tgPeek) offset += n.tgPeek;
       // a car about to parallel park easing right toward where it starts (sim/parkers.js)
       if (n.parker) offset += n.parker.shift;
-      // between snowbanks that push the parked cars out from the kerb (sim/snowbanks.js): over toward the
-      // middle, clear of them, as far as it has come into the stretch at its pursuit point
-      const sb = world.snowbanks?.narrowings.length && !n.transit?.tram ? snowbankYield(world, n, front) : null;
-      const sbBase = offset,
-        sbAt = (s) => (sb ? Math.min(0, sb.keep - sbBase) * sb.at(s) : 0);
-      if (sb || n.sbShift) {
-        const to = sbAt(path.s + lookahead(n.v));
-        n.sbShift = (n.sbShift || 0) + Math.max(-SB_SHIFT_MPS * dt, Math.min(SB_SHIFT_MPS * dt, to - (n.sbShift || 0)));
-        offset += n.sbShift;
+      // the line a registered feature has it keep to in its lane, over toward the middle between snowbanks
+      // that push the parked cars out from the kerb, say: where it stops (`hold`), the move along its way
+      // (`lineAt`) and the line it keeps to (`kept`) for what is in its way, and what it has moved so far
+      const keepMoves = [];
+      for (const run of TRAFFIC_KEEP) {
+        const r = run(world, n, front, laneBusy, dt, {
+          offset,
+          moves: keepMoves,
+          pursuit: () => path.s + lookahead(n.v),
+        });
+        if (r.shift !== undefined) offset += r.shift;
+        if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
+        keepMoves.push(r);
       }
+      const keptBy = keepMoves.find((m) => m.kept);
       // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
       // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
       // and checking for a gap.
@@ -1500,24 +1502,21 @@ export class NpcFleet {
         const inWay = (lat, at) => {
           if (wz?.detour) lat -= detourAt(wz.detour, at) - wzShift;
           if (lz?.detour) lat -= detourAt(lz.detour, at) - lzShift;
-          // (between snowbanks, the line it will keep to where `o` is: sim/snowbanks.js)
-          if (sb) lat -= sbAt(at) - (n.sbShift || 0);
+          // (between snowbanks, say, the line it will keep to where `o` is)
+          for (const m of keepMoves) if (m.lineAt) lat -= m.lineAt(at);
           // (round a double-parked van, only the line it keeps to moves over: what is at the curb stays there)
           const round = dp?.go ? lat - (detourAt(dp.detour, at) - dpShift) : lat;
-          // Another move (a pothole nudge, for example) may already keep left of the snowbank
-          // corridor, leaving sbShift at zero. The lane it keeps to includes that move too.
+          // (a registered feature's line, between snowbanks say, is its own: `kept`)
           const kept =
             n.evRejoin != null
               ? Math.abs(lat - offset)
-              : sb
-                ? Math.abs(lat - sbBase - (n.sbShift || 0))
+              : keptBy
+                ? keptBy.kept(lat)
                 : Math.abs(
-                    lat -
-                      keepRight -
-                      (n.nudge || 0) -
-                      (dp?.go ? dpShift : 0) -
-                      (cyc ? n.cpShift : 0) -
-                      (n.sbShift || 0),
+                    keepMoves.reduce(
+                      (x, m) => x - m.now,
+                      lat - keepRight - (n.nudge || 0) - (dp?.go ? dpShift : 0) - (cyc ? n.cpShift : 0),
+                    ),
                   );
           return (
             Math.abs(round - offset) <= reach ||
@@ -2013,10 +2012,11 @@ export class NpcFleet {
           leadV = 0;
         }
       }
-      // between snowbanks, short of the one-car stretch until it is its turn (once it could stop there:
-      // otherwise it has the way) (sim/snowbanks.js)
-      if (sb?.hold != null) {
-        const g = sb.hold - front;
+      // where a registered feature's line has it stop: between snowbanks, say, short of the one-car stretch
+      // until it is its turn (once it could stop there: otherwise it has the way)
+      for (const { hold } of keepMoves) {
+        if (hold == null) continue;
+        const g = hold - front;
         if (g > -1 && g < gap && g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1) {
           gap = Math.max(0.05, g);
           leadV = 0;
@@ -2084,7 +2084,6 @@ export class NpcFleet {
         rv?.limit ?? Infinity,
         featureLimit,
         vBall,
-        sb?.limit ?? Infinity,
       );
       const D = n.driver || IDM;
       let a;
@@ -3521,7 +3520,8 @@ export class NpcFleet {
   // Nothing in the lane coming up behind within a few seconds (less for an assertive driver), and
   // nothing stopped right in front.
   pullClear(n) {
-    if (this.world.snowbanks?.narrowings.length && !this.world.snowbanks.canPullOut(n)) return false;
+    // (unless a registered feature has it wait: traffic in a one-car stretch between snowbanks, say)
+    for (const may of TRAFFIC_PULL_OUT) if (!may(this.world, n)) return false;
     const path = n.path;
     const gap = Math.max(n.pull?.T || 3.5, n.driver && n.driver.T < 1.05 ? 3.5 : 5) + 1.5;
     for (const o of [this.world.ego, ...this.vehicles]) {

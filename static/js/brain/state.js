@@ -28,8 +28,17 @@ const CLAUSE = {
   driveways: hooks("clause", "driveways"),
   balls: hooks("clause", "balls"),
   ice: hooks("clause", "ice"),
+  tailgaters: hooks("clause", "tailgaters"),
 };
 const HOLD_STILL = { driveways: hooks("holdStill", "driveways"), parkers: hooks("holdStill", "parkers") };
+// The situation's wording from a list of clause hooks, each a sentence, a list of them, or nothing.
+const pushClauses = (out, list, snap) => {
+  for (const clause of list) {
+    const x = clause(snap);
+    if (Array.isArray(x)) out.push(...x);
+    else if (x) out.push(x);
+  }
+};
 // The first answer a list of hooks gives, or null.
 const firstOf = (list, ...args) => {
   for (const h of list) {
@@ -426,35 +435,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     };
   }
   for (const add of STATE.tailgaters) add(snap, state);
-  if (snap.snowbank) {
-    const n = snap.snowbank.narrowing,
-      k = snap.snowbank.corner;
-    state.snowbank = {
-      ...(n
-        ? {
-            narrowing: {
-              one_car_at_a_time: true,
-              length_m: n.length_m,
-              ...(n.inside ? { car_in_it: true } : { starts_in_m: r1(Math.max(0, n.gap_m)) }),
-              turn: n.priority === "car" ? "car" : "oncoming",
-              ...(n.oncoming
-                ? {
-                    oncoming: {
-                      id: n.oncoming.id,
-                      in_it: n.oncoming.inside,
-                      ...(n.oncoming.inside ? {} : { from_its_end_m: n.oncoming.gap_m }),
-                    },
-                  }
-                : {}),
-              ...(n.wait ? { wait: true, wait_in_m: r1(Math.max(0, n.bumper_to_stop_m)) } : {}),
-              ...(n.squeeze ? { squeeze_past: true } : {}),
-              slow_to: r1(n.limit_mps),
-            },
-          }
-        : {}),
-      ...(k ? { corner_hidden: { side: k.side, crosswalk_in_m: r1(k.gap_m), creep_to: r1(k.limit_mps) } } : {}),
-    };
-  }
+
   if (snap.parking_ahead) {
     const a = snap.parking_ahead;
     state.parking_ahead = {
@@ -826,8 +807,6 @@ function outcomeLabel(c, snap) {
     return `clear, eases off gently to ${r1(c.sim.end_speed)} m/s so the tailgater can get by, leaving more room ahead`;
   if (c.id === "wait_for_parker" && snap.parking_ahead)
     return `clear, stops ${Math.max(0, r1(snap.parking_ahead.bumper_to_stop_m - c.sim.progress_m))} m ahead, well back from the car parking, and waits`;
-  if (c.id === "wait_for_oncoming_narrowing" && snap.snowbank?.narrowing?.wait)
-    return `clear, waits ${Math.max(0, r1(snap.snowbank.narrowing.bumper_to_stop_m - c.sim.progress_m))} m ahead, short of the stretch narrowed by snowbanks, for the oncoming car's turn`;
   if (c.id === "yield_to_reversing" && snap.reversing_vehicle)
     return snap.reversing_vehicle.wait
       ? `clear, stops ${Math.max(0, r1(snap.reversing_vehicle.bumper_to_stop_m - c.sim.progress_m))} m short of where it waits for the car backing out`
@@ -1061,7 +1040,7 @@ export function situationClauses(snap) {
     if (x) out.push(x);
   }
   if (snap.tailgater) out.push(tailgaterClause(snap.tailgater));
-  if (snap.snowbank) out.push(...snowbankClauses(snap.snowbank));
+  pushClauses(out, CLAUSE.tailgaters, snap);
   if (snap.parking_ahead) out.push(parkerClause(snap.parking_ahead));
   if (snap.emergency) out.push(emergencyClause(snap.emergency));
   if (snap.bus) {
@@ -1265,34 +1244,6 @@ function ballClause(b) {
   if (b.child === "in_road")
     return `${lead} A child has run out after it and is in the road: stop for them (\`pedestrian\`), and keep to ${r1(b.limit_mps)} m/s or less (\`car.target_speed\` already does) until they are back at the kerb.`;
   return `${lead} A child may run out after it at any moment, hidden by the parked cars until they are in the road. Choose \`slow_for_ball\` while this warning stands: slow to ${r1(b.limit_mps)} m/s or less (\`car.target_speed\` already does), the speed from which the car can stop short of where the ball came out, and keep to it until the child has come and gone back to the kerb${b.cover_left_s != null ? `, or ${Math.round(b.cover_left_s)} s more pass with no child` : ""}.`;
-}
-
-// Snowbanks ahead (sim/snowbanks.js): a stretch they narrow to one car at a time, and a corner they hide.
-function snowbankClauses({ narrowing: n, corner: k }) {
-  const out = [];
-  if (n) {
-    const where = n.inside
-      ? "The car is in a stretch"
-      : `${Math.round(Math.max(0, n.gap_m))} m ahead is a ${n.length_m} m stretch`;
-    const lead = `${where} of ${n.street || "the street"} where snowbanks have pushed the parked cars out from both kerbs, leaving room for only one moving car at a time. Drivers take turns: whoever is already in the stretch, or too close to stop short of it, goes first, then whoever got to their end of it first.`;
-    if (n.wait)
-      out.push(
-        `${lead} It is the turn of the car coming the other way${n.oncoming?.inside ? ", which is already in the stretch" : n.reason === "turn" ? ", which got to its end first" : ", which is too close to stop"}: stop short of the stretch and wait there until it is through (\`wait_for_oncoming_narrowing\`${Math.round(n.bumper_to_stop_m) < 2 ? ", holding still" : `, stopping ${Math.max(0, Math.round(n.bumper_to_stop_m))} m ahead`}). Never enter while it is their turn.`,
-      );
-    else if (n.squeeze)
-      out.push(
-        `${lead} A car coming the other way is in the stretch too: squeeze past each other at walking pace, ${r1(n.limit_mps)} m/s or less (\`car.target_speed\` already does), keeping to the middle.`,
-      );
-    else
-      out.push(
-        `${lead} ${n.inside ? "It is the car's turn: carry on through" : "It is the car's turn: nobody coming the other way has the way, so go on in"}, over toward the middle and clear of the parked cars, at ${r1(n.limit_mps)} m/s or less (\`car.target_speed\` already does).`,
-      );
-  }
-  if (k)
-    out.push(
-      `A high snowbank at the ${k.side === "both" ? "corners" : `${k.side} corner`} of the junction ${Math.round(k.gap_m)} m ahead hides anyone waiting there to cross, and anything small coming out of the side street: creep up to ${r1(k.limit_mps)} m/s or less (\`car.target_speed\` already does), ready to stop for someone stepping out from behind it.`,
-    );
-  return out;
 }
 
 // What a car ahead parallel parking (sim/parkers.js) is doing, for models.
@@ -1669,7 +1620,6 @@ export function needsMotionQuestion(snap) {
     snap.red_light_runner?.wait ||
     snap.reversing_vehicle?.wait ||
     featureMotion(snap) ||
-    snap.snowbank?.narrowing?.wait ||
     snap.parking_ahead?.wait ||
     snap.emergency ||
     snap.bus ||
@@ -1748,13 +1698,9 @@ export function buildQuestions(snap, eligible, meta = {}) {
     // And waiting for what a registered feature asks the car to wait for, geese crossing the road, say
     // (sim/features/index.js).
     const featureWait = HOLD_STILL.driveways.map((h) => h(snap)).join("");
-    // And waiting for an oncoming car's turn through a stretch narrowed by snowbanks.
     // And waiting while a car ahead parallel parks.
     const parkerWait = snap.parking_ahead?.wait
       ? ", when a car ahead is parallel parking (`parking_ahead.wait` true) and the car has reached the point where it waits for it (`parking_ahead.wait_in_m` under 2) or is inside the room it needs (`parking_ahead.in_its_room`), until it is in"
-      : "";
-    const narrowWait = snap.snowbank?.narrowing?.wait
-      ? ", when it is an oncoming car's turn through the stretch narrowed by snowbanks ahead (`snowbank.narrowing.wait` true) and the car has reached the point where it waits for it (`snowbank.narrowing.wait_in_m` under 2), until that car is through"
       : "";
     // (and those that come after a parking car's, a road closed for an event until a detour comes)
     const featureWaitLater = HOLD_STILL.parkers.map((h) => h(snap)).join("");
@@ -1819,7 +1765,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${snap.cyclist_pass ? " Staying behind a cyclist (`follow_cyclist`), at its speed, and passing it (`pass_cyclist`) are driving too." : ""}`,
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${contraWait}${runnerWait}${reverseWait}${featureWait}${narrowWait}${parkerWait}${featureWaitLater}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${guardWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${contraWait}${runnerWait}${reverseWait}${featureWait}${parkerWait}${featureWaitLater}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${guardWait}${mergeWait}${vanWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
       },
     };
   } else {

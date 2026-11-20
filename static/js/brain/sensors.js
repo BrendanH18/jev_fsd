@@ -2,7 +2,6 @@ import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
 import { reversingVehicle } from "../sim/driveway-reversers.js";
 import { ballInRoad } from "../sim/ball-chase.js";
-import { snowbankAhead, WAIT_M as SNOWBANK_WAIT_M } from "../sim/snowbanks.js";
 import { parkerSensing } from "../sim/parkers.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
@@ -168,7 +167,6 @@ import { featureObstacle, hooks } from "../sim/features/index.js";
 const SENSE = {
   driveways: hooks("sense", "driveways"),
   balls: hooks("sense", "balls"),
-  snowbanks: hooks("sense", "snowbanks"),
   parkers: hooks("sense", "parkers"),
 };
 const LIMIT = {
@@ -185,11 +183,22 @@ const HAZARD = {
   driveways: hooks("hazard", "driveways"),
   balls: hooks("hazard", "balls"),
   officers: hooks("hazard", "officers"),
-  snowbanks: hooks("hazard", "snowbanks"),
   parkers: hooks("hazard", "parkers"),
 };
 // (and how slowly and gently it crosses a junction over what a registered feature makes slippery)
 const TURN_PACE = hooks("turnPace");
+// (and the move inside its lane a registered feature has it make, over toward the middle between
+// snowbanks, say; where it stops short of for an emergency vehicle; and what hides a street from it)
+const DETOURS = hooks("detour", "contraflow"),
+  EV_STOP = hooks("evStop"),
+  BLOCKS_VIEW = hooks("blocksView");
+export const featureDetour = (snap) => {
+  for (const d of DETOURS) {
+    const x = d(snap);
+    if (x) return x;
+  }
+  return null;
+};
 import { officerDirection, officerLight, officerSensing } from "../sim/traffic-officer.js";
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -686,10 +695,6 @@ export function buildSnapshot(world, executing = null) {
     // (a ball rolled into the street ahead, a child maybe after it, with that option on: sim/ball-chase.js)
     if (world.balls?.enabled) snap.ball_in_road = world.balls.balls.length ? ballInRoad(world, p, frontS) : null;
     for (const sense of SENSE.balls) sense(world, snap, senseCtx);
-    // (snowbanks: a narrowed stretch to take turns through, and corners they hide, with that option on:
-    // sim/snowbanks.js)
-    if (world.snowbanks?.enabled) snap.snowbank = snowbankAhead(world, p, frontS);
-    for (const sense of SENSE.snowbanks) sense(world, snap, senseCtx);
     // (a car ahead parallel parking, and the room it needs behind it, with that option on: sim/parkers.js)
     if (world.parkers?.enabled)
       snap.parking_ahead = world.parkers.active.length ? parkerSensing(world, p, frontS) : null;
@@ -734,7 +739,7 @@ export function buildSnapshot(world, executing = null) {
       snap.double_parked?.detour ||
       snap.cyclist_pass?.detour ||
       snap.contraflow_cyclist?.detour ||
-      snap.snowbank?.narrowing?.detour ||
+      featureDetour(snap) ||
       null;
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
     const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
@@ -898,9 +903,6 @@ export function buildSnapshot(world, executing = null) {
   // came from until the child after it has come and gone: sim/ball-chase.js)
   if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
   for (const limit of LIMIT.balls) limit(snap);
-  // (and through a narrowed stretch between snowbanks, and up to a corner a snowbank hides: sim/snowbanks.js)
-  if (snap.snowbank?.narrowing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.snowbank.narrowing.limit_mps);
-  if (snap.snowbank?.corner) snap.limit = Math.min(snap.limit, snap.snowbank.corner.limit_mps);
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -1360,17 +1362,10 @@ function emergencyYield(world, p, frontS, lane, visible, intersection = null) {
       }
       break;
     }
-    // Finish steering after a corner, while remaining short of a one-car snowbank corridor.
-    // That corridor's approach detour is not a place to stop while pulling right.
-    for (const nw of world.snowbanks?.narrowings || []) {
-      const ends = world.snowbanks.alongRoute(route, nw);
-      if (
-        ends &&
-        ends.en - SNOWBANK_WAIT_M - frontS >= (v * v) / (2 * EV_FIRM_DECEL) &&
-        stop >= ends.en - SNOWBANK_WAIT_M
-      )
-        stop = Math.min(stop, ends.en - SNOWBANK_WAIT_M);
-    }
+    // Finish steering after a corner, while remaining short of where a registered feature has the car keep
+    // out (a one-car corridor between snowbanks, say, whose approach detour is no place to stop while
+    // pulling right).
+    for (const keepShort of EV_STOP) stop = keepShort(world, route, frontS, v, stop, EV_FIRM_DECEL);
     stop = Math.min(stop, route.length - 1);
     // (the furthest lane right the stop leaves room to change into: the curb lane, or short of a junction
     // perhaps only the one it is in)
@@ -2701,11 +2696,8 @@ function giveWayAt(world, c, frontS) {
           p = alongApproach(map, e, b);
         // as far as the car can see at all, in this weather and light
         if (Math.hypot(p[0] - ego.x, p[1] - ego.y) > world.visibility.rangeAt(ego, ...p)) break;
-        // (or, with snowbanks on, a high one at the corner: sim/snowbanks.js)
-        if (
-          world.visibility.occluded([ego.x, ego.y], p) ||
-          (world.snowbanks?.piles.length && world.snowbanks.blocksView([ego.x, ego.y], p))
-        ) {
+        // (or what a registered feature puts in the way, a high snowbank at the corner, say)
+        if (world.visibility.occluded([ego.x, ego.y], p) || BLOCKS_VIEW.some((b) => b(world, [ego.x, ego.y], p))) {
           blocked = true;
           break;
         }
@@ -3120,18 +3112,6 @@ export function desiredSpeed(snap) {
   if (snap.ball_in_road?.limit_mps != null && snap.ball_in_road.limit_mps <= v + 0.05)
     reasons.push("ball in the road: a child may follow");
   for (const target of TARGET.balls) v = target(snap, v, reasons, targetCtx);
-  // between snowbanks (sim/snowbanks.js): wait short of the one-car stretch while it is the oncoming car's
-  // turn; `limit` is already down to the speed through it, and to the creep up to a hidden corner
-  const nb = snap.snowbank?.narrowing;
-  if (nb?.wait) {
-    const vn = nb.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(nb.bumper_to_stop_m - 0.5, decel);
-    if (vn < v) {
-      v = vn;
-      reasons.push("oncoming car's turn between the snowbanks");
-    }
-  } else if (nb?.limit_mps != null && nb.limit_mps <= v + 0.05)
-    reasons.push(nb.squeeze ? "squeezing past an oncoming car between the snowbanks" : "narrowed by snowbanks");
-  if (snap.snowbank?.corner && snap.snowbank.corner.limit_mps <= v + 0.05) reasons.push("snowbank hides the corner");
   // a car ahead parallel parking (sim/parkers.js): stop at its hold line, short of the room it reverses
   // into, until it is in
   const pa = snap.parking_ahead;
@@ -3421,29 +3401,27 @@ export function hazardFlags(snap) {
   if (snap.reversing_vehicle) f.push("reversing vehicle");
   for (const flag of HAZARD.driveways) {
     const x = flag(snap);
-    if (x) f.push(x);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
   }
   if (snap.ball_in_road) f.push("ball in the road");
   for (const flag of HAZARD.balls) {
     const x = flag(snap);
-    if (x) f.push(x);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
   }
   if (snap.tailgater) f.push("tailgater");
   if (snap.traffic_officer) f.push("traffic officer");
   for (const flag of HAZARD.officers) {
     const x = flag(snap);
-    if (x) f.push(x);
-  }
-  if (snap.snowbank?.narrowing) f.push("snowbank narrowing");
-  if (snap.snowbank?.corner) f.push("snowbank corner");
-  for (const flag of HAZARD.snowbanks) {
-    const x = flag(snap);
-    if (x) f.push(x);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
   }
   if (snap.parking_ahead) f.push("car parking ahead");
   for (const flag of HAZARD.parkers) {
     const x = flag(snap);
-    if (x) f.push(x);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
   }
   if (snap.parking) f.push("parking");
   if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");

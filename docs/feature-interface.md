@@ -6,10 +6,10 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Five features have moved: spring potholes (`features/potholes.js`), Canada geese (`features/geese.js`),
-black ice (`features/black-ice.js`), puddles (`features/puddles.js`) and road closures
-(`features/road-closures.js`). Their simulation (`sim/potholes.js`, `sim/geese.js`, `sim/black-ice.js`,
-`sim/puddles.js`, `sim/road-closures.js`) is unchanged; the records
+Six features have moved: spring potholes (`features/potholes.js`), Canada geese (`features/geese.js`),
+black ice (`features/black-ice.js`), snowbanks (`features/snowbanks.js`), puddles (`features/puddles.js`)
+and road closures (`features/road-closures.js`). Their simulation (`sim/potholes.js`, `sim/geese.js`,
+`sim/black-ice.js`, `sim/snowbanks.js`, `sim/puddles.js`, `sim/road-closures.js`) is unchanged; the records
 hold the glue that used to sit in the core, moved verbatim, and the model wording that used to sit in
 `brain/state.js` and `brain/llm-prompt.js`.
 
