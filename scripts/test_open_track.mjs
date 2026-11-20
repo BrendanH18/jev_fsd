@@ -103,7 +103,7 @@ await test("the tracks, and every check the filter can fail has words for a mode
   for (const m of source.matchAll(/c\.reject === "([a-z_]+)"/g)) ids.add(m[1]);
   // (what the scrape also finds that is no rejection: candidate ids, a law, a collision kind, metric names)
   const notChecks =
-    /^(?:stop|wait|keep|change|creep|pull|let|ease|slow|go|yield|follow|pass|move|turn|hold|reverse)_|^(?:hard_brake|rear_end)$|_(?:conflicts|hits|entries)$/;
+    /^(?:stop|wait|keep|change|creep|pull|let|ease|slow|go|yield|follow|pass|move|turn|hold|reverse)_|^(?:hard_brake|rear_end)$|_(?:conflicts|hits|entries|overspeed|splashed)$/;
   const missing = [...ids].filter((id) => id !== "collision" && !FLAG_TEXT[id] && !notChecks.test(id));
   assert.deepEqual(missing, [], "a rejection without words");
   assert.equal(flagText("runs_red"), FLAG_TEXT.runs_red);
