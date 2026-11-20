@@ -38,7 +38,6 @@ import {
 } from "../sim/tailgaters.js";
 import { officerStopLaw } from "../sim/traffic-officer.js";
 import { earlySlows, iceSimCheck, iceStopDecel, patchesUnder } from "../sim/black-ice.js";
-import { lawSlows, simSplashes, splashTargets } from "../sim/puddles.js";
 import { PRIORITY_IDS, featureObstacle, hooks } from "../sim/features/index.js";
 
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
@@ -50,7 +49,12 @@ const CANDIDATES = {
 };
 const ADJUST_AFTER_BALLS = hooks("adjust", "balls");
 const BRAKE_DETOUR = hooks("brakeDetour");
-const SIMS = { first: hooks("sim", "first"), driveways: hooks("sim", "driveways"), balls: hooks("sim", "balls") };
+const SIMS = {
+  first: hooks("sim", "first"),
+  driveways: hooks("sim", "driveways"),
+  balls: hooks("sim", "balls"),
+  end: hooks("sim"),
+};
 // The first rejection among checkers `list` for candidate `c`, or null.
 const rejectBy = (list, c) => {
   for (const x of list) {
@@ -513,19 +517,6 @@ export function sampleCandidates(snap, world) {
       });
     }
     for (const add of CANDIDATES.driveways) add(featureCtx, out);
-    // A puddle at the kerb ahead with someone within splash reach, which the car can ease round without
-    // leaving the lane (sim/puddles.js): over to the left inside the lane, the right wheels clear of it,
-    // and back, keeping its speed.
-    const pd = snap.puddle_splash;
-    if (pd?.room && pd.detour && !shifting && !detour.detour && !passing.detour) {
-      out.push({
-        id: "ease_round_puddle",
-        laneUntil,
-        law: { ...inLane({ kind: "lane", vTarget: target }), detour: pd.detour },
-        steer: `ease ${Math.abs(pd.shift_m).toFixed(1)} m ${pd.shift_m < 0 ? "left" : "right"} within the lane, the wheels clear of the puddle, and back`,
-        speed: speedLabel(target, v, limit),
-      });
-    }
     // A ball rolled into the street ahead (sim/ball-chase.js): slow to the speed from which the car can
     // stop short of the gap it came from, where it will be by the end of the prediction, ready for a
     // child running out after it.
@@ -929,8 +920,7 @@ export function sampleCandidates(snap, world) {
     c.law.kind === "park" ||
     c.id === "pass_cyclist" ||
     c.id === "follow_cyclist" ||
-    PRIORITY_IDS.has(c.id) ||
-    c.id === "ease_round_puddle"
+    PRIORITY_IDS.has(c.id)
       ? 0
       : c.change
         ? 2
@@ -959,16 +949,6 @@ export function sampleCandidates(snap, world) {
   }
   // (and what the registered features ask of every lane manoeuvre, a pothole's speed: sim/features/index.js)
   for (const adjust of ADJUST_AFTER_BALLS) adjust({ snap, world, s, lateralAt, shifting, detour, passing }, list);
-  // (and every lane manoeuvre whose wheels would go through a puddle with someone near it slows below its
-  // splash speed, by then: sim/puddles.js)
-  if (snap.puddles_ahead && snap.route && snap.routeProj) {
-    for (const c of list) {
-      if (c.law.kind !== "lane") continue;
-      const law = { ...c.law, s0: c.law.s0 ?? s };
-      const slow = lawSlows(snap.puddles_ahead, (at) => lateralAt(law, at, snap.route), world.ego.spec);
-      if (slow.length) c.law.slowTo = [...(c.law.slowTo || []), ...slow];
-    }
-  }
   // (and every lane manoeuvre slows for the black ice it has seen, to its speed by then, and on the ice
   // only eases the pedals and the wheel, `ice`, stopping as gently: sim/black-ice.js gentleOnIce)
   if (snap.black_ice_ahead)
@@ -1138,7 +1118,7 @@ export function simulateAll(candidates, snap, world) {
   const sims = {};
   for (const [slot, list] of Object.entries(SIMS))
     sims[slot] = list.map((prepare) => prepare(world, snap)).filter(Boolean);
-  const checks = [...sims.first, ...sims.driveways, ...sims.balls];
+  const checks = [...sims.first, ...sims.driveways, ...sims.balls, ...sims.end];
   const wheelChecks = checks.filter((x) => x.afterLaw),
     routeChecks = checks.filter((x) => x.along),
     needWheels = checks.some((x) => x.wheels);
@@ -1151,9 +1131,6 @@ export function simulateAll(candidates, snap, world) {
   // model's own: sim/vehicle.js ROAD.gripAt)
   const icy = snap.black_ice_ahead && world.ice?.list.length ? snap.black_ice_ahead : null;
   const iceStart = icy ? patchesUnder(world.ice, world.ego) : null;
-  // puddles at the kerb with someone within splash reach (sim/puddles.js): no manoeuvre may put a wheel
-  // through one faster than its splash speed (unless none can help it: below)
-  const splashAt = splashTargets(world, snap.puddles_ahead);
   // a stretch narrowed by snowbanks while it is an oncoming car's turn (sim/snowbanks.js): where the car waits
   // (a metre's overshoot, but never into the stretch itself)
   const narrowStop = snap.snowbank?.narrowing?.wait
@@ -1212,7 +1189,6 @@ export function simulateAll(candidates, snap, world) {
       headingErr = 0,
       offSteps = 0;
     let intoNarrowing = false,
-      splashes = false,
       intoParker = false;
     for (const x of checks) x.start();
     const steps = Math.round(HORIZON_S / SIM_DT);
@@ -1222,13 +1198,10 @@ export function simulateAll(candidates, snap, world) {
     for (let k = 1; k <= steps; k++) {
       const t = k * SIM_DT;
       const previousPose = poseOf(car);
-      const wheelsBefore = needWheels || splashAt ? wheelPoints(car) : null;
+      const wheelsBefore = needWheels ? wheelPoints(car) : null;
       applyLaw(car, law, route, s, SIM_DT, world);
       // (a wheel going into a pothole too fast, say: sim/features/index.js)
       for (const x of wheelChecks) x.afterLaw(car, wheelsBefore);
-      // (a wheel through a puddle with someone near faster than its splash speed: sim/puddles.js)
-      if (splashAt && wheelsBefore && !splashes)
-        splashes = simSplashes(splashAt, wheelsBefore, wheelPoints(car), car.v);
       // (onto black ice too fast, or braking, accelerating or skidding on it: sim/black-ice.js)
       if (icy && !iceCall) iceCall = iceSimCheck(world.ice, icy, car, t, iceStart);
       // Static map geometry is known even when fog or a corner hides moving traffic. Use the
@@ -1552,7 +1525,7 @@ export function simulateAll(candidates, snap, world) {
       reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";
     else if (pastSpace && c.law.kind === "lane") reject = "passes_parking_space";
-    else if (splashes && c.law.kind !== "hard_brake") reject = "splashes_pedestrian";
+    else if ((reject = rejectBy(sims.end, c)));
     c.reject = reject;
     c.eligible = !reject;
   }
@@ -1568,14 +1541,8 @@ export function simulateAll(candidates, snap, world) {
         c.eligible = false;
       }
   }
-  // (a splash no manoeuvre can help, someone stepping up to the kerb too late for the car to slow, is no
-  // reason to brake hard: those it would have rejected stay eligible, sim/puddles.js)
-  if (splashAt && !candidates.some((c) => !c.reject && c.law.kind !== "hard_brake"))
-    for (const c of candidates)
-      if (c.reject === "splashes_pedestrian") {
-        c.reject = null;
-        c.eligible = true;
-      }
+  // (and what a registered feature lets stand once every candidate is judged: sim/features/index.js)
+  for (const x of checks) x.settle?.(candidates);
   const rejected = {};
   for (const c of candidates) if (c.reject) rejected[c.reject] = (rejected[c.reject] || 0) + 1;
   return { eligible: candidates.filter((c) => c.eligible), rejected, mustStop: !!mustStop };

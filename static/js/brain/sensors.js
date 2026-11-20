@@ -1,7 +1,6 @@
 import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
 import { reversingVehicle } from "../sim/driveway-reversers.js";
-import { puddleLimit, puddlesAhead } from "../sim/puddles.js";
 import { ballInRoad } from "../sim/ball-chase.js";
 import { iceLimit, iceSensing, iceTurn } from "../sim/black-ice.js";
 import { snowbankAhead, WAIT_M as SNOWBANK_WAIT_M } from "../sim/snowbanks.js";
@@ -170,6 +169,7 @@ import { featureObstacle, hooks } from "../sim/features/index.js";
 const SENSE = {
   driveways: hooks("sense", "driveways"),
   balls: hooks("sense", "balls"),
+  snowbanks: hooks("sense", "snowbanks"),
   parkers: hooks("sense", "parkers"),
 };
 const LIMIT = { driveways: hooks("limit", "driveways"), balls: hooks("limit", "balls") };
@@ -181,6 +181,7 @@ const TARGET = {
 const HAZARD = {
   driveways: hooks("hazard", "driveways"),
   balls: hooks("hazard", "balls"),
+  snowbanks: hooks("hazard", "snowbanks"),
   parkers: hooks("hazard", "parkers"),
 };
 import { officerDirection, officerLight, officerSensing } from "../sim/traffic-officer.js";
@@ -685,12 +686,7 @@ export function buildSnapshot(world, executing = null) {
     // (snowbanks: a narrowed stretch to take turns through, and corners they hide, with that option on:
     // sim/snowbanks.js)
     if (world.snowbanks?.enabled) snap.snowbank = snowbankAhead(world, p, frontS);
-    // (puddles at the kerb with someone within splash reach, while they lie, with that option on: sim/puddles.js)
-    if (world.puddles?.enabled) {
-      const pd = puddlesAhead(world, p, frontS, lane, road.limit, visible);
-      snap.puddle_splash = pd?.puddle || null;
-      snap.puddles_ahead = pd?.ahead || null;
-    }
+    for (const sense of SENSE.snowbanks) sense(world, snap, senseCtx);
     // (a car ahead parallel parking, and the room it needs behind it, with that option on: sim/parkers.js)
     if (world.parkers?.enabled)
       snap.parking_ahead = world.parkers.active.length ? parkerSensing(world, p, frontS) : null;
@@ -895,11 +891,6 @@ export function buildSnapshot(world, executing = null) {
   // (and coming up to a car backing out of a driveway: sim/driveway-reversers.js)
   if (snap.reversing_vehicle?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.reversing_vehicle.limit_mps);
   for (const limit of LIMIT.driveways) limit(snap);
-  // (and coming up to a puddle with someone near it that it cannot ease round in its lane, and through it:
-  // sim/puddles.js)
-  if (snap.puddles_ahead && snap.routeProj)
-    for (const h of snap.puddles_ahead)
-      if (!h.room) snap.limit = Math.min(snap.limit, puddleLimit(h, snap.routeProj.s));
   // (and, having seen a ball roll into the street, no faster than it can stop from short of the gap it
   // came from until the child after it has come and gone: sim/ball-chase.js)
   if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
@@ -3127,11 +3118,6 @@ export function desiredSpeed(snap) {
     }
   } else if (rv?.limit_mps != null && rv.limit_mps <= v + 0.05) reasons.push("car backing out ahead");
   for (const target of TARGET.driveways) v = target(snap, v, reasons, targetCtx);
-  // a puddle with someone near it that it cannot ease round in its lane (sim/puddles.js): `limit` is
-  // already below its splash speed
-  const splashFor = snap.puddles_ahead?.find((h) => !h.room);
-  if (splashFor && snap.routeProj && puddleLimit(splashFor, snap.routeProj.s) * Math.min(1, weather.speed) <= v + 0.05)
-    reasons.push("puddle by the kerb: people on the sidewalk");
   // a ball rolled into the street (sim/ball-chase.js): `limit` is already down to the cover speed
   if (snap.ball_in_road?.limit_mps != null && snap.ball_in_road.limit_mps <= v + 0.05)
     reasons.push("ball in the road: a child may follow");
@@ -3459,7 +3445,10 @@ export function hazardFlags(snap) {
   if (snap.black_ice || (snap.ice_caution?.bridge && snap.ice_caution.bridge.starts_in_m < 80)) f.push("black ice");
   if (snap.snowbank?.narrowing) f.push("snowbank narrowing");
   if (snap.snowbank?.corner) f.push("snowbank corner");
-  if (snap.puddle_splash) f.push("puddle by the kerb");
+  for (const flag of HAZARD.snowbanks) {
+    const x = flag(snap);
+    if (x) f.push(x);
+  }
   if (snap.parking_ahead) f.push("car parking ahead");
   for (const flag of HAZARD.parkers) {
     const x = flag(snap);

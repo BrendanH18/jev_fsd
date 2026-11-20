@@ -375,23 +375,6 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     };
   }
   for (const add of STATE.driveways) add(snap, state);
-  if (snap.puddle_splash) {
-    const h = snap.puddle_splash;
-    state.puddle = {
-      id: h.id,
-      ...(h.starts_in_m > 0 ? { ahead_m: r1(h.starts_in_m) } : { under_car: true }),
-      ...(h.kind === "pothole" ? { pothole_full_of_water: true } : { by_the_kerb: true }),
-      right_of_lane_centre_m: r1(h.lateral_m),
-      width_m: h.width_m,
-      depth_cm: h.depth_cm,
-      people_within_splash_reach: h.people,
-      splash_speed: r1(h.splash_mps),
-      ...(h.room
-        ? { room_in_lane: true, ...(h.shift_m ? { ease_to_m: r1(h.shift_m) } : { wheels_miss_it: true }) }
-        : { room_in_lane: false, go_through_at: r1(h.speed_mps) }),
-      ...(snap.puddles_ahead.length > 1 ? { more_ahead: snap.puddles_ahead.length - 1 } : {}),
-    };
-  }
   if (snap.ball_in_road) {
     const b = snap.ball_in_road;
     state.ball_in_road = {
@@ -908,8 +891,6 @@ function outcomeLabel(c, snap) {
     return `clear, stops ${Math.max(0, r1(snap.pedestrian.bumper_to_crosswalk_m - c.sim.progress_m))} m before the ${snap.pedestrian.mid_block ? "crossing pedestrian" : "crosswalk"}`;
   if (c.id === "follow_cyclist" && snap.cyclist_pass)
     return `clear, stays behind the cyclist, ${snap.cyclist_pass.follow_gap_m} m back`;
-  if (c.id === "ease_round_puddle" && snap.puddle_splash)
-    return `clear, eases ${Math.abs(r1(snap.puddle_splash.shift_m))} m ${snap.puddle_splash.shift_m < 0 ? "left" : "right"} inside the lane so that its wheels miss the puddle by the kerb, keeping its speed, and back`;
   // (and the registered features' candidates, by id: sim/features/index.js)
   const byFeature = firstOf(OUTCOME_BY_ID, c, snap);
   if (byFeature) return byFeature;
@@ -924,9 +905,6 @@ function outcomeLabel(c, snap) {
   // (its wheels would cross a pothole, say: it slows to drive over it, sim/features/index.js)
   const slows = firstOf(SLOW_OUTCOME, c, snap);
   if (slows) return slows;
-  // (its wheels would go through a puddle with someone near it: it slows below its splash speed, sim/puddles.js)
-  if (c.law.slowTo && snap.puddle_splash)
-    return `clear, slows to ${r1(Math.min(...c.law.slowTo.map((x) => x.mps)))} m/s to go through the puddle without splashing anyone`;
   // (black ice it has seen: it eases off to cross it steadily, sim/black-ice.js)
   if (c.id === "slow_for_ice" && snap.black_ice)
     return snap.black_ice.on_ice
@@ -1104,7 +1082,6 @@ export function situationClauses(snap) {
     const x = clause(snap);
     if (x) out.push(x);
   }
-  if (snap.puddle_splash) out.push(puddleClause(snap.puddle_splash, snap.puddles_ahead));
   if (snap.ball_in_road) out.push(ballClause(snap.ball_in_road));
   if (snap.black_ice || snap.ice_caution) out.push(iceClause(snap.black_ice, snap.ice_caution, snap.black_ice_ahead));
   for (const clause of CLAUSE.ice) {
@@ -1281,23 +1258,6 @@ function oncomingClause(i) {
 function rightHookClause(h) {
   const w = Math.max(0, Math.round(h.bumper_to_yield_m));
   return `The car turns right ahead and cyclist \`${h.id}\` is coming up on its right, going its way: it reaches the corner in ${r1(h.eta_s)} s, too soon for the car to turn across its path (it needs ${r1(h.need_s)} s). A cyclist on the right going straight on has the right of way. ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_cyclist\`).`}`;
-}
-
-// A puddle in the car's lane ahead with someone within splash reach of it (sim/puddles.js).
-function puddleClause(h, ahead) {
-  const where = h.starts_in_m > 0 ? `${Math.round(h.starts_in_m)} m ahead` : "under the car";
-  const what = h.kind === "pothole" ? `A pothole full of rain water \`${h.id}\`` : `A puddle \`${h.id}\` by the kerb`;
-  const who = h.people === 1 ? "Someone is" : `${h.people} people are`;
-  const lead = `${what} ${where}, ${h.width_m} m wide and about ${h.depth_cm} cm deep, reaches ${r1(Math.abs(h.lateral_m))} m ${h.lateral_m < 0 ? "left" : "right"} of the middle of the car's lane. ${who} on the sidewalk or at the kerb beside it: a wheel through it faster than ${Math.round(h.splash_mps * 3.6)} km/h throws water over them, which is careless driving.`;
-  const more =
-    ahead?.length > 1
-      ? ` ${ahead.length - 1} more with people near ${ahead.length > 2 ? "are" : "is"} further along the lane.`
-      : "";
-  if (h.room && !h.shift_m)
-    return `${lead} The car's wheels miss it in the middle of the lane: keep to the middle and drive on.${more}`;
-  if (h.room)
-    return `${lead} There is room to keep the wheels out of it inside the lane: choose \`ease_round_puddle\` to ease ${r1(Math.abs(h.shift_m))} m ${h.shift_m < 0 ? "left" : "right"}, keeping its speed, then back to the middle. Never cross a lane line to avoid a puddle.${more}`;
-  return `${lead} There is no room to keep the wheels out of it without leaving the lane, so slow to ${Math.round(h.speed_mps * 3.6)} km/h by the time the front wheels reach it and keep to that until the rear wheels are through (\`car.target_speed\` already does).${more}`;
 }
 
 // What a car backing out of a driveway (sim/driveway-reversers.js) is doing, for models.

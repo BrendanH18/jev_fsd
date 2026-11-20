@@ -37,8 +37,6 @@ import { turnBanned } from "./turn-restrictions.js";
 // With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
 // toward the middle and take turns with traffic coming the other way through the one-car stretch, and
 // cyclists keep clear of the parked cars (sim/snowbanks.js snowbankYield).
-// With `puddles` on, in the rain, drivers ease left inside their lane round a puddle at the kerb with
-// someone within splash reach of it, or otherwise slow below its splash speed (sim/puddles.js npcPuddle).
 
 import {
   Vehicle,
@@ -169,7 +167,7 @@ import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
 import { reverserYield } from "./driveway-reversers.js";
 import { ballYield } from "./ball-chase.js";
-import { hookEntries, hooks } from "./features/index.js";
+import { hooks } from "./features/index.js";
 
 // How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
 // re-plan round them, a move inside its lane, and where it stops for them; each where that feature's own
@@ -177,14 +175,13 @@ import { hookEntries, hooks } from "./features/index.js";
 // to the kerb ahead and stop short of their way across until the last goose is off the roadway.)
 const TRAFFIC_START = hooks("trafficStart"),
   TRAFFIC_REPLAN = hooks("trafficReplan");
-const TRAFFIC_LANE = hookEntries("trafficLane", "contraflow"),
+const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
   TRAFFIC_YIELD = hooks("trafficYield");
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { manageParkers, parkerConflict, parkerStop, stepParker } from "./parkers.js";
 import { officerDirection } from "./traffic-officer.js";
 import { gentleOnIce, npcIce } from "./black-ice.js";
 import { snowbankYield } from "./snowbanks.js";
-import { NPC_SHIFT_MPS as PD_SHIFT_MPS, npcPuddle } from "./puddles.js";
 import {
   AMBER_M,
   KID_CROSS_P,
@@ -1427,30 +1424,16 @@ export class NpcFleet {
         offset += n.cfShift;
       }
       // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
-      // while changing lanes or going round something), and its speed ceiling for it
+      // while changing lanes or going round something), and its speed ceiling for it; each is handed where
+      // it keeps in the lane so far and the earlier moves (where each is heading, `aim`, and has got to, `now`)
       const laneBusy = !!(n.lc || wzShift || dpShift || lzShift || cyc || n.pull),
-        laneFx = {};
+        laneMoves = [];
       let featureLimit = Infinity;
-      for (const { key, run } of TRAFFIC_LANE) {
-        const r = run(world, n, front, laneBusy, dt);
-        laneFx[key] = r.result;
+      for (const run of TRAFFIC_LANE) {
+        const r = run(world, n, front, laneBusy, dt, { offset, moves: laneMoves });
         if (r.shift !== undefined) offset += r.shift;
         if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
-      }
-      // (puddles, not yet a registered feature, allow for the move round a pothole: sim/features/potholes.js)
-      const ph = laneFx.potholes;
-      // a puddle at the kerb with someone within splash reach (sim/puddles.js): ease left inside the lane
-      // where that takes the wheels out of it (not while off the middle of the lane for anything else, or
-      // easing round a pothole), and otherwise slow below its splash speed, wherever in the lane it is going
-      const pdBusy = !!(n.lc || wzShift || dpShift || lzShift || cyc || n.pull || ph?.shift || Math.abs(offset) > 0.05);
-      const pd =
-        world.puddles?.enabled && n.kind !== "bike" && !n.transit?.tram
-          ? npcPuddle(world, n, front, offset, pdBusy, offset + (ph && !n.lc ? ph.shift : 0) - (n.phShift || 0))
-          : null;
-      if (pd || n.pdShift) {
-        const to = pd && !pdBusy ? pd.shift : 0;
-        n.pdShift = (n.pdShift || 0) + Math.max(-PD_SHIFT_MPS * dt, Math.min(PD_SHIFT_MPS * dt, to - (n.pdShift || 0)));
-        offset += n.pdShift;
+        laneMoves.push(r);
       }
       // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
       if (n.tgPeek) offset += n.tgPeek;
@@ -2107,7 +2090,6 @@ export class NpcFleet {
         vBall,
         vIce,
         sb?.limit ?? Infinity,
-        pd?.limit ?? Infinity,
       );
       const D = n.driver || IDM;
       let a;

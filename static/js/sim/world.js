@@ -91,13 +91,13 @@ import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection }
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
 import { BlackIce, auditIce } from "./black-ice.js";
 import { Snowbanks, auditSnowbanks, bankHidden, keepAt, NARROW_FULL_M } from "./snowbanks.js";
-import { Puddles, auditPuddles } from "./puddles.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 // The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
 const OBSTACLES_NEAR = hooks("obstacles");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_AFTER_BALLS = hooks("audit", "balls");
+const AUDIT_AFTER_SNOWBANKS = hooks("audit", "snowbanks");
 const AUDIT_AFTER_PARKERS = hooks("audit", "parkers");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -291,13 +291,12 @@ export class World {
   // `snowbanks`: when it is snowing as the drive starts, snowbanks line the kerbs, high at the corners,
   // where they hide whoever waits there; and where they push the parked cars out, drivers take turns
   // through the one-car stretch (sim/snowbanks.js).
-  // `puddles`: in the rain, puddles stand in the gutter; everyone eases left in the lane, or slows below
-  // the splash speed, rather than drench someone on the sidewalk beside one (sim/puddles.js).
   // `parkers`: now and then the traffic car ahead of the driven car parallel parks, and everyone behind
   // it stops well back and waits until it is in (sim/parkers.js).
   // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
   // obeys the officer rather than the lights (sim/traffic-officer.js).
-  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `roadClosures`.
+  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `puddles`,
+  // `roadClosures`.
   constructor(
     map,
     {
@@ -336,7 +335,6 @@ export class World {
       tailgaters = false,
       ice = false,
       snowbanks = false,
-      puddles = false,
       parkers = false,
       officers = false,
       ...features
@@ -504,14 +502,6 @@ export class World {
     }
     this.snowbanksSeen = false;
     this.snowbankCalls = new Map();
-    // puddles at the kerb (sim/puddles.js): where they stand, whether it has rained this drive (they lie
-    // on until it snows), whether the car has come up to one with someone near this drive, and who it has
-    // splashed from each one its wheels are in
-    this.puddles = new Puddles(map, { enabled: puddles, seed });
-    this.puddlesRained = this.puddles.enabled && this.weather === "rain";
-    this.puddlesSeen = false;
-    this.puddleCalls = new Map();
-    this.puddleWarn = null;
     // traffic parallel parking ahead (sim/parkers.js): whether it does, whether one has signalled to park
     // ahead of the car this drive, and the ones the car has blocked or gone round
     this.parkers = createParkers({ enabled: parkers, seed });
@@ -699,7 +689,6 @@ export class World {
     this.tailgaterCall = null;
     this.iceCalls?.clear();
     this.snowbankCalls?.clear();
-    this.puddleCalls?.clear();
     this.parkerCalls?.clear();
     for (const f of FEATURES) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
@@ -1195,7 +1184,7 @@ export class World {
     if (this.tailgaters?.enabled) auditTailgaters(this);
     if (this.ice?.enabled) auditIce(this);
     if (this.snowbanks?.enabled) auditSnowbanks(this);
-    if (this.puddles?.enabled) auditPuddles(this);
+    for (const audit of AUDIT_AFTER_SNOWBANKS) audit(this);
     if (this.parkers?.enabled) auditParkers(this);
     for (const audit of AUDIT_AFTER_PARKERS) audit(this);
     this.auditKerb();

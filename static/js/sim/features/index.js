@@ -11,7 +11,7 @@
 //   calls     the World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
 //   metric    { at, name, failure }: the violation counted, and the failure text (at "driveways",
-//             "balls" or "parkers" among the metrics and failures)
+//             "balls", "snowbanks" or "parkers" among the metrics and failures)
 //   obstacle  { test(o), likePedestrian?, fixed? }: what of `world.obstaclesNear` is the feature's (never
 //             followed or passed as traffic; `likePedestrian`: the car is at fault for driving into one;
 //             `fixed`: stands where it is, like scenery, in the forward sims)
@@ -29,17 +29,19 @@
 //   obstacles(world, x, y, r)          World.obstaclesNear, after the others ("end")
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js, just before the traffic moves ("end")
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, just before the people on foot move ("end")
-//   audit(world)                        World.audit: "driveways", "balls", "parkers"
-//   sense(world, snap, ctx)             the sensing pass: "driveways", "balls", "parkers"
+//   audit(world)                        World.audit: "driveways", "balls", "snowbanks", "parkers"
+//   sense(world, snap, ctx)             the sensing pass: "driveways", "balls", "snowbanks", "parkers"
 //   limit(snap)                         the speed ceiling `snap.limit`: "driveways", "balls"
 //   target(snap, v, reasons, ctx)       `desiredSpeed`, returns the new speed: "restrictions", "driveways", "balls"
-//   hazard(snap)                        a hazard flag, or null: "driveways", "balls", "parkers"
+//   hazard(snap)                        a hazard flag, or null: "driveways", "balls", "snowbanks", "parkers"
 //   candidates(ctx, out)                lane candidates: "restrictions", "driveways", "balls"
 //   adjust(ctx, list)                   every lane candidate once the list is cut: "balls"
 //   brakeDetour(ctx)                    the move `hard_brake` keeps to, or null ("end")
 //   sim(world, snap)                    the forward sims: null, or a checker { wheels, start(), afterLaw(car,
-//                                       wheelsBefore), along(s, front, car), reject(c) } whose rejection
-//                                       comes at its slot: "first", "driveways", "balls"
+//                                       wheelsBefore), along(s, front, car), reject(c), settle(candidates) }
+//                                       whose rejection comes at its slot: "first", "driveways", "balls", "end";
+//                                       `settle` runs once every candidate is judged (after the tailgater's
+//                                       ceiling), and may let a rejection stand down
 //   state(snap, state)                  the decision state: "restrictions", "driveways", "balls"
 //   outcome(c, snap)                    a candidate's outcome label by its id, or null: "ids"
 //   slowOutcome(c, snap)                the outcome of a lane candidate slowed for it, or null: "lane"
@@ -49,14 +51,21 @@
 //                                       "driveways", "snowbanks"
 //   trafficStart(world, n)              each traffic vehicle, each step, first ("end")
 //   trafficReplan(world, n)             before its path is extended; true when re-planned ("end")
-//   trafficLane(world, n, front, busy, dt)  { result, shift }: a move inside the lane ("contraflow")
+//   trafficLane(world, n, front, busy, dt, { offset, moves })  { result, shift, aim, now, easing }: a move
+//                                       inside the lane ("contraflow"), handed where the vehicle keeps in its
+//                                       lane so far (`offset`) and what the earlier hooks returned (`moves`):
+//                                       `shift` is added to its offset now, `result.limit` caps its speed,
+//                                       `aim` is where the move is heading and `now` where it has got to
+//                                       (metres right of the lane's centre), `easing` that it is moving off
+//                                       the middle
 //   trafficYield(world, n, front)       { hold, limit, canStop }: where it stops, and its ceiling ("end")
 
 import potholes from "./potholes.js";
 import geese from "./geese.js";
+import puddles from "./puddles.js";
 import roadClosures from "./road-closures.js";
 
-export const FEATURES = [potholes, geese, roadClosures];
+export const FEATURES = [potholes, geese, puddles, roadClosures];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
 // run, so `hooks` refuses to load one (and scripts/test_feature_registry.mjs checks every record).
@@ -64,22 +73,22 @@ export const SLOTS = {
   obstacles: ["end"],
   stepBeforeTraffic: ["end"],
   stepAfterTraffic: ["end"],
-  audit: ["driveways", "balls", "parkers"],
-  sense: ["driveways", "balls", "parkers"],
+  audit: ["driveways", "balls", "snowbanks", "parkers"],
+  sense: ["driveways", "balls", "snowbanks", "parkers"],
   limit: ["driveways", "balls"],
   target: ["restrictions", "driveways", "balls"],
-  hazard: ["driveways", "balls", "parkers"],
+  hazard: ["driveways", "balls", "snowbanks", "parkers"],
   candidates: ["restrictions", "driveways", "balls"],
   adjust: ["balls"],
   brakeDetour: ["end"],
-  sim: ["first", "driveways", "balls"],
+  sim: ["first", "driveways", "balls", "end"],
   state: ["restrictions", "driveways", "balls"],
   outcome: ["ids"],
   slowOutcome: ["lane"],
   clause: ["restrictions", "driveways", "ice"],
   holdStill: ["driveways", "parkers"],
   prompt: ["restrictions", "driveways", "snowbanks"],
-  metric: ["driveways", "balls", "parkers"],
+  metric: ["driveways", "balls", "snowbanks", "parkers"],
   trafficStart: ["end"],
   trafficReplan: ["end"],
   trafficLane: ["contraflow"],
@@ -120,15 +129,6 @@ export function hooks(name, slot = "end") {
   }
   return out;
 }
-
-// The same, with the key of the record each belongs to: { key, run }.
-export const hookEntries = (name, slot = "end") => {
-  const fns = hooks(name, slot),
-    keys = FEATURES.filter(
-      (f) => f[name] && (typeof f[name] === "function" ? "end" : f[name].at || "end") === slot,
-    ).map((f) => f.key);
-  return fns.map((run, i) => ({ key: keys[i], run }));
-};
 
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
 export const recordsAt = (name, slot) => FEATURES.filter((f) => f[name] && (f[name].at || "end") === slot);

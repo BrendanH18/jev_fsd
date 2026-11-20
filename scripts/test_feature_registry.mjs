@@ -35,7 +35,7 @@ const CORE = [
 test("every record is whole, its option and flags its own, and every hook at a slot the core runs", () => {
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
-    ["potholes", "geese", "roadClosures"],
+    ["potholes", "geese", "puddles", "roadClosures"],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
   for (const field of ["key", "seen", "calls"])
@@ -64,17 +64,19 @@ test("the core runs every slot, and names no registered feature", () => {
   }
   for (const slot of R.SLOTS.prompt)
     assert.ok(source("brain/llm-prompt.js").includes(`\${promptLines("${slot}")}`), `prompt lines at ${slot}`);
-  // (their modules, their snapshot fields and their candidates belong to the records now; puddles, not yet
-  // a record, still allow for a traffic car's move round a pothole: sim/npc.js `laneFx.potholes`)
+  // (their modules, their snapshot fields and their candidates belong to the records now, and traffic's
+  // moves inside its lane reach each other only through what the hooks return, never by name)
   for (const path of CORE) {
     const text = source(path);
     for (const name of [
       'sim/potholes.js"',
       'sim/geese.js"',
       'sim/road-closures.js"',
+      'sim/puddles.js"',
       './potholes.js"',
       './geese.js"',
       './road-closures.js"',
+      './puddles.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -85,7 +87,10 @@ test("the core runs every slot, and names no registered feature", () => {
       "snap.pothole",
       "snap.geese_crossing",
       "snap.road_closed",
+      "snap.puddle_splash",
+      "snap.puddles_ahead",
       '"ease_round_pothole"',
+      '"ease_round_puddle"',
       '"wait_for_geese"',
       '"stop_for_closure"',
       "world.roadClosures",
@@ -93,6 +98,11 @@ test("the core runs every slot, and names no registered feature", () => {
       "this.geese",
       "this.roadClosures",
       "this.potholes",
+      "world.puddles",
+      "this.puddles",
+      "phShift",
+      "pdShift",
+      "laneFx",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -105,7 +115,15 @@ test("the World builds each feature from its option, with its seen flag and its 
   pack.parks = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.parks.v1.json", root)));
   const map = new MapData(pack);
   const off = new World(map, { seed: 3, parked: 0, pedestrians: 0 });
-  const on = new World(map, { seed: 3, parked: 0, pedestrians: 0, potholes: true, geese: true, roadClosures: true });
+  const on = new World(map, {
+    seed: 3,
+    parked: 0,
+    pedestrians: 0,
+    potholes: true,
+    geese: true,
+    puddles: true,
+    roadClosures: true,
+  });
   for (const f of R.FEATURES) {
     assert.equal(off[f.key].enabled, false, `${f.key} off by default`);
     assert.equal(on[f.key].enabled, f.key === "geese" ? !!map.parkSpans?.length : true, `${f.key} on with its option`);
@@ -116,6 +134,9 @@ test("the World builds each feature from its option, with its seen flag and its 
   }
   // (off, nothing is placed and no random stream is made)
   assert.equal(off.potholes.list.length, 0);
+  assert.equal(off.puddles.list.length, 0);
+  assert.ok(on.puddles.list.length > 0);
+  assert.equal(on.puddlesRained, false, "dry: no rain yet this drive");
   assert.equal(off.geese.random, null);
   assert.equal(off.roadClosures.random, null);
   assert.ok(on.potholes.list.length > 0);
@@ -124,10 +145,11 @@ test("the World builds each feature from its option, with its seen flag and its 
 });
 
 test("metrics and failures appear only once a feature has met the car, each at its old place", () => {
-  const world = { potholesSeen: false, geeseSeen: true, roadClosuresSeen: true };
+  const world = { potholesSeen: false, geeseSeen: true, puddlesSeen: true, roadClosuresSeen: true };
   const v = { wildlife_conflicts: 2 };
   assert.deepEqual(R.featureMetrics(world, v, "driveways"), {});
   assert.deepEqual(R.featureMetrics(world, v, "balls"), { wildlife_conflicts: 2 });
+  assert.deepEqual(R.featureMetrics(world, v, "snowbanks"), { pedestrians_splashed: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "parkers"), { closure_entries: 0 });
   const m = {
     arrived: true,
@@ -136,6 +158,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
     ball_warnings_ignored: 1,
     wildlife_conflicts: 1,
     brake_checks: 1,
+    snowbank_conflicts: 1,
+    pedestrians_splashed: 1,
     parking_conflicts: 1,
     closure_entries: 1,
     officer_violations: 1,
@@ -146,6 +170,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
     "ignored a ball rolling into the street",
     "drove into or too close to geese crossing the road",
     "braked hard with a tailgater close behind",
+    "entered a stretch narrowed by snowbanks out of turn",
+    "splashed a pedestrian from a puddle",
     "blocked or went round a car parallel parking",
     "drove onto a closed road",
     "went on when a police officer signalled stop",
@@ -164,6 +190,7 @@ test("the LLM prompt keeps each feature's line where it was", () => {
   assert.equal(at("When road_closed.on_route"), at("When turn_restriction.banned") + 1);
   assert.equal(at("- Watch for potholes"), at("- Watch driveways for reversing lights") + 1);
   assert.equal(at("- Canada geese cross the road"), at("- Snowbanks (") + 1);
+  assert.equal(at("- In the rain, watch for puddles"), at("- Canada geese cross the road") + 1);
 });
 
 test("a record at a slot the core never runs is refused", () => {

@@ -6,10 +6,11 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Three features have moved: spring potholes (`features/potholes.js`), Canada geese (`features/geese.js`)
-and road closures (`features/road-closures.js`). Their simulation (`sim/potholes.js`, `sim/geese.js`,
-`sim/road-closures.js`) is unchanged; the records hold the glue that used to sit in the core, moved
-verbatim, and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
+Four features have moved: spring potholes (`features/potholes.js`), Canada geese (`features/geese.js`),
+puddles (`features/puddles.js`) and road closures (`features/road-closures.js`). Their simulation
+(`sim/potholes.js`, `sim/geese.js`, `sim/puddles.js`, `sim/road-closures.js`) is unchanged; the records
+hold the glue that used to sit in the core, moved verbatim, and the model wording that used to sit in
+`brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
 
@@ -114,11 +115,11 @@ pipeline need nothing.
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).
-* **Cross-feature couplings to resolve.** Puddles allow for a traffic car's move round a pothole
-  (`laneFx.potholes` and `n.phShift` in `sim/npc.js`) and treat potholes full of water as puddles
-  (`sim/puddles.js waterSets`); black ice reuses the pothole slow-down helpers. When puddles move, their
-  `trafficLane` hook should read the pothole record's result from the lane results it is handed rather
-  than by name.
+* **Cross-feature couplings.** Puddles allow for a traffic car's move round a pothole: each `trafficLane`
+  hook is handed the moves the earlier ones returned (`aim`, where a move is heading; `now`, where it has
+  got to; `easing`), so the puddles record reads the pothole's move without naming it. Puddles still treat
+  potholes full of water as puddles (`sim/puddles.js waterSets`), and black ice reuses the pothole
+  slow-down helpers, inside the features' own modules.
 * **Hooks still to add.** Driver preferences (Rules, the cautious agent), the coach, the HUD and
   renderers, checkpoint fixes and the re-plan, as in the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are

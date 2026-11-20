@@ -144,8 +144,7 @@ export class DriveMetrics {
       ...(world.iceSeen ? { ice_overspeed: v.ice_overspeed || 0 } : {}),
       // (only for a drive in which the car came up to a stretch snowbanks narrow to one car: sim/snowbanks.js)
       ...(world.snowbanksSeen ? { snowbank_conflicts: v.snowbank_conflicts || 0 } : {}),
-      // (only for a drive in which the car came up to a puddle with someone near it: sim/puddles.js)
-      ...(world.puddlesSeen ? { pedestrians_splashed: v.pedestrians_splashed || 0 } : {}),
+      ...featureMetrics(world, v, "snowbanks"),
       // (only for a drive in which a car signalled to parallel park ahead of the car: sim/parkers.js)
       ...(world.parkersSeen ? { parking_conflicts: v.parking_conflicts || 0 } : {}),
       ...featureMetrics(world, v, "parkers"),
@@ -215,7 +214,7 @@ export function failures(m) {
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
   if (m.ice_overspeed) f.push("crossed black ice too fast, or braked or steered hard on it");
   if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
-  if (m.pedestrians_splashed) f.push("splashed a pedestrian from a puddle");
+  f.push(...featureFailures(m, "snowbanks"));
   if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");
   f.push(...featureFailures(m, "parkers"));
   if (m.officer_violations) f.push("went on when a police officer signalled stop");
