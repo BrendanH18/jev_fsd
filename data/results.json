@@ -874,9 +874,9 @@
    "map": "winnipeg",
    "preset": "city",
    "weather": "dry",
-   "passed": 1,
+   "passed": 2,
    "total": 2,
-   "date": "2026-11-12",
+   "date": "2026-11-20",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -890,17 +890,9 @@
    "km": 2.36,
    "cost_usd": 0,
    "cost_basis": "none",
-   "failed": [
-    {
-     "id": "s1-1",
-     "map": "winnipeg",
-     "failures": [
-      "failed to yield"
-     ]
-    }
-   ],
+   "failed": [],
    "sources": [
-    "data/runs/20261112-190015-rules.json"
+    "data/runs/20261120-120000-rules.json"
    ],
    "recording": null
   },

@@ -169,9 +169,11 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
   weekly city matrix (Kitsilano rain `s1-12`, a brake check; snow `s1-4`, a failure to yield). Kitsilano
   is 12/12 in every weather again. *Fixed 18 November:* on Edmonton `s1-2` a contraflow rider now
   clears the waiting car on 81 Avenue NW, and on Kitsilano parking `s1-10` the car finishes parking
-  on Stephens Street. See [the seeded comparisons](docs/rules-baseline.md). Still open:
-  - Winnipeg `s1-1`: failure to yield on Martha Street.
-  - Kitsilano 06:30 `s1-4`: failure to yield on Vine Street.
+  on Stephens Street. *Fixed 20 November:* Winnipeg `s1-1` (the audit now takes a stop held between a
+  give-way line and where the car looks from as a line stop) and Kitsilano 06:30 `s1-4` (a pull-over
+  begun late, with little room left, finishes its move within its stop) no longer fail to yield to an
+  ambulance on Martha Street and Vine Street; every other route and challenge is unchanged
+  (`docs/validation/yields-2026-11-20.md`). See [the seeded comparisons](docs/rules-baseline.md). Still open:
   - Unprotected lefts in fog: 28 m of sight is too short to judge 11 m/s oncoming traffic
     (`docs/validation/night-2026-11-12.md`); the fog-night `s1-6` failure is gone for now only because
     traffic changed.

@@ -151,7 +151,8 @@ const AUDIT_HOOK_AGAIN_S = 10;
 // if its front enters a junction (8 m of its centre) that a vehicle coming from the side is due
 // across, 3 s or more after the call came; if, 4 s or more after the call came, the vehicle draws
 // level with it along its street (within 8 m to the side) while it is not pulled over and not in a
-// junction (unless the call found it constrained by an existing line stop or close queue);
+// junction (unless the call found it constrained by an existing line stop, including one between a
+// give-way or stop line and where it looks from, or a close queue);
 // or if the vehicle has been stuck behind it for 6 s while
 // it is not pulled over (at least 0.2 m right of its lane's centre) and has not been told to drive on
 // ahead of it. A second blocker directly ahead can prevent that too. In a snowbank
@@ -1964,6 +1965,25 @@ export class World {
       (boxedRight || road.lateral + 1e-6 >= Math.min(AUDIT_EV_PULLED_M, rightmost - settling, besideParked));
     const control = road.edge?.control,
       toLine = control ? control.s_line - road.s - FRONT : Infinity;
+    // Giving way at a junction without a sign or signal, or at a stop sign, the car stops anywhere from its
+    // line to the point it looks from (`sPeek`, map/route.js; sim/priority.js), short of the junction, and
+    // has no more room to pull over there than at the line. Measured along the route, as sensing does.
+    const rp = this.route ? this.route.project(ego.x, ego.y, this.route.hint) : null;
+    const routeFront =
+      rp && rp.distance < AUDIT_ROUTE_CORRIDOR_M && Math.abs(wrap(ego.psi - rp.heading)) < AUDIT_ROUTE_HEADING_RAD
+        ? rp.s + FRONT
+        : null;
+    const look =
+      routeFront === null
+        ? null
+        : this.route.controls.find(
+            (c) =>
+              (c.control.type === "uncontrolled" || c.control.type === "stop") &&
+              routeFront <= c.sPeek + AUDIT_EV_OVERSHOOT_M,
+          ) || null;
+    const toLook = look ? look.sRoute - routeFront : Infinity,
+      toPeek = look ? look.sPeek - routeFront : -Infinity;
+    const inLook = toLook <= AUDIT_EV_LINE_M && toPeek >= -AUDIT_EV_OVERSHOOT_M;
     // An existing queue can leave less steering room than a control line. Measure
     // real bodies here, including a bus standing at an angle, independently of the plan.
     const queued =
@@ -2001,6 +2021,8 @@ export class World {
           Math.abs(ego.v) < 0.3 &&
           toLine >= -AUDIT_EV_OVERSHOOT_M &&
           toLine <= AUDIT_EV_LINE_M;
+        // (or between a give-way or stop line and where it looks from)
+        const atLook = !atLine && Math.abs(ego.v) < 0.3 && inLook;
         const v = Math.max(0, ego.v);
         // A crawl already running out of steering room before a control can finish
         // that stop. Judge the opportunity at the call, not from its later choice.
@@ -2012,6 +2034,15 @@ export class World {
           v <= AUDIT_EV_MOVING_MPS &&
           toLine + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
           toLine <= stopping + AUDIT_EV_LINE_M;
+        // (and a crawl that stops there, short of where it looks from)
+        const approachingLook =
+          !atLine &&
+          !atLook &&
+          !approachingLine &&
+          look &&
+          v <= AUDIT_EV_MOVING_MPS &&
+          toPeek + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
+          toLook <= stopping + AUDIT_EV_LINE_M;
         // (and likewise a crawl up to the hold line of a traffic car stopped to reverse into a space, or
         // reversing: the room beside and ahead of it is the parker's, sim/parkers.js)
         const hold = !queued && v <= AUDIT_EV_MOVING_MPS ? this.parkerHold(FRONT) : null;
@@ -2027,6 +2058,7 @@ export class World {
             lead: false,
             ahead: null,
             ...(atLine ? { stoppedAtLine: [ego.x, ego.y], ...(toLine < 0 ? { lineOvershoot: true } : {}) } : {}),
+            ...(atLook ? { stoppedAtLine: [ego.x, ego.y], lookAt: look.control.id } : {}),
             ...(queued ? { stoppedInQueue: { id: queued.id, at: [ego.x, ego.y] } } : {}),
             ...(approachingLine
               ? {
@@ -2036,6 +2068,9 @@ export class World {
                     until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL,
                   },
                 }
+              : {}),
+            ...(approachingLook
+              ? { lookApproach: { control: look.control.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } }
               : {}),
             ...(approachingQueue
               ? { queueApproach: { id: approachingQueue.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } }
@@ -2063,13 +2098,24 @@ export class World {
           delete rec.lineApproach;
         }
       }
+      if (rec.lookApproach) {
+        if (this.t > rec.lookApproach.until) delete rec.lookApproach;
+        else if (Math.abs(ego.v) < 0.3 && inLook && look.control.id === rec.lookApproach.control) {
+          rec.stoppedAtLine = [ego.x, ego.y];
+          rec.lookAt = look.control.id;
+          delete rec.lookApproach;
+        }
+      }
       if (
         rec.stoppedAtLine &&
-        (toLine < (rec.lineOvershoot ? -AUDIT_EV_OVERSHOOT_M : 0) ||
-          toLine > AUDIT_EV_LINE_M ||
+        ((rec.lookAt
+          ? !inLook || look.control.id !== rec.lookAt
+          : toLine < (rec.lineOvershoot ? -AUDIT_EV_OVERSHOOT_M : 0) || toLine > AUDIT_EV_LINE_M) ||
           Math.hypot(ego.x - rec.stoppedAtLine[0], ego.y - rec.stoppedAtLine[1]) > AUDIT_EV_LINE_M)
-      )
+      ) {
         delete rec.stoppedAtLine;
+        delete rec.lookAt;
+      }
       // (released from the queue, the car has as long to pull over as it had from the call)
       if (
         rec.stoppedInQueue &&
