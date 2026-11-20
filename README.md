@@ -56,9 +56,13 @@ all 60 challenges and both road tests.
 
 See the [full results](#results) or [replay a recorded model drive](docs/model-results.md) without a key.
 
-How much did the safety filter decide? In 55 of the 60 challenges, none of the allowed manoeuvres
-we tried at sampled decisions caused a violation within six seconds. A driver could still time out
-by waiting, as DeepSeek did. [Read the measurement](docs/validation/driver-latitude-2026-11-14.md).
+**One honest caveat.** An AI driver normally chooses among manoeuvres a shared safety filter has
+already screened. In 55 of the 60 challenges, none of the manoeuvres it let through at the decisions
+we sampled led to a failure within six seconds ([the measurement](docs/validation/driver-latitude-2026-11-14.md)),
+so those challenges mostly test the filter, and the clearest way left to fail is DeepSeek's: by not
+making progress. That's what the **open track** is for. The filter only flags a manoeuvre that breaks a
+road rule, says which rule, and leaves the choice to the driver
+([how it works](docs/reference/benchmarks.md#benchmarks-and-validation)).
 
 ## Take the test yourself
 
@@ -194,8 +198,8 @@ is installed you can drive manually or with Rules offline.
 
 ## How a decision is made
 
-Every AI driver goes through the same loop. The next decision can start after 650 ms on a clear
-road or 250 ms near a hazard, once the previous decision has finished.
+Every AI driver goes through the same loop. A new decision starts once the previous one has finished
+and at least 650 ms have passed since it started (250 ms near a hazard).
 
 ```mermaid
 flowchart LR
@@ -208,6 +212,9 @@ flowchart LR
 
 - **Sensing is honest.** Buildings block the view, fog and darkness shorten it, and a light you can't
   see counts as unknown.
+- **Only the choice differs.** Physics, the controller and the emergency brake are shared, so
+  results come down to the decisions. On the open track the filter flags rule breaks instead of
+  removing them.
 - **Rules runs repeat.** Use the same scenario, simulation version and JavaScript engine with the
   lockstep clock. For a model driver, replay its recorded answers to repeat the run.
 - **Fallbacks count.** If a model times out or returns an unusable decision, Rules drives that
@@ -225,28 +232,30 @@ cd jev_fsd
 uv run server.py
 ```
 
-Open **<http://127.0.0.1:8322>** in a browser with WebGL. Rules is ready to drive without a key.
+Open **<http://127.0.0.1:8322>** in a browser with WebGL. That's it: one Python dependency, no
+frontend build, and every map included. The Drive lab opens first; pick a drive, or choose **Back to
+street ↗** to drive freely. Rules drives without a key.
 
 ### Connecting a model
 
-Open the **Connect a model** dialog from the local driving screen.
+Connect a model from the driving screen. You don't edit any files.
 
-- **Jev and other decision models.** Open **Decision ▾ → Connect a decision model…** (or
-  **Connect or manage decision models…** if you've already added one). For the
-  built-in Jev driver, choose **TypeSafe**, paste your TypeSafe API key and keep the preselected
-  model. For another decision model, choose its provider, enter a key if it needs one and select
-  the model.
-- **LLMs.** Click **LLM** to connect your first model. If one is already connected, open
-  **LLM ▾ → Connect or manage models…**. Choose a provider, enter a key if it needs one and
-  select or type the model.
+1. Click **Decision** for Jev and other decision models, or **LLM** for a language model. Before
+   any model is connected, the click opens the **Connect a model** dialog. Later, it's under the
+   **▾** menu next to each button.
+2. Pick a provider: **TypeSafe** for Jev, OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI,
+   Mistral, Groq, Ollama, LM Studio, or any OpenAI-compatible server. Paste a key if it needs one and pick or
+   type the model. For Jev, keep the preselected model.
+3. Click **Save and drive**. Then set a destination (click the minimap, or choose a drive in
+   **Explore cities**) and the model drives. On a route you already have, press `J` to switch
+   the autopilot on.
 
-Click **Save and drive**. The local server saves the key in `.env` and makes the model available
-without a restart. It never sends the saved key back to the browser. Press `J` if autopilot is off.
-One OpenRouter key works for both decision models and LLMs.
-
-The default budget is $1 of counted spend per server run. Calls without a reported cost or
-configured price count as $0. The [agent guide](docs/agents.md#decision-models-jev-and-others)
-covers providers, prices and rate limits. This project is independent of TypeSafe AI.
+The local server saves the key to `.env`, never sends it back to the browser, and uses it without a
+restart. One OpenRouter key covers both decision models and LLMs. A spend cap
+(`JEV_FSD_BUDGET_USD`, $1 per server run by default; a call with no reported cost or price counts as
+$0) and a rate cap (`JEV_FSD_RPM`) keep live runs from surprising you. The
+[agent guide](docs/agents.md) covers every provider, prices and limits. This project is independent
+of TypeSafe AI.
 
 ### Controls
 
