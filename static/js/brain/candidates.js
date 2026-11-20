@@ -37,7 +37,6 @@ import {
   behindInLane,
 } from "../sim/tailgaters.js";
 import { officerStopLaw } from "../sim/traffic-officer.js";
-import { earlySlows, iceSimCheck, iceStopDecel, patchesUnder } from "../sim/black-ice.js";
 import { PRIORITY_IDS, featureObstacle, hooks } from "../sim/features/index.js";
 
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
@@ -46,8 +45,10 @@ const CANDIDATES = {
   restrictions: hooks("candidates", "restrictions"),
   driveways: hooks("candidates", "driveways"),
   balls: hooks("candidates", "balls"),
+  tailgaters: hooks("candidates", "tailgaters"),
 };
-const ADJUST_AFTER_BALLS = hooks("adjust", "balls");
+const ADJUST_AFTER_BALLS = hooks("adjust", "balls"),
+  ADJUST_LAST = hooks("adjust");
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
   first: hooks("sim", "first"),
@@ -547,20 +548,7 @@ export function sampleCandidates(snap, world) {
         speed: `ease off gently to ${vt.toFixed(1)} and let the tailgater by`,
       });
     }
-    // Black ice seen ahead, or under the car (sim/black-ice.js): ease off early, on the dry road, to the
-    // speed to cross it at, and hold that across it, without braking, accelerating or steering hard on it.
-    const ice = snap.black_ice_ahead;
-    if (ice) {
-      out.push({
-        id: "slow_for_ice",
-        laneUntil,
-        law: { ...inLane({ kind: "lane", vTarget: target }), slowTo: earlySlows(ice) },
-        steer: "hold lane, steering gently",
-        speed: snap.black_ice.on_ice
-          ? "ease off, no braking, and hold steady across the ice"
-          : "ease off before the ice, then hold steady across it",
-      });
-    }
+    for (const add of CANDIDATES.tailgaters) add(featureCtx, out);
     // Between snowbanks (sim/snowbanks.js): while it is the turn of a car coming the other way through the
     // one-car stretch ahead, stop short of it and wait.
     const nb = snap.snowbank?.narrowing;
@@ -949,16 +937,7 @@ export function sampleCandidates(snap, world) {
   }
   // (and what the registered features ask of every lane manoeuvre, a pothole's speed: sim/features/index.js)
   for (const adjust of ADJUST_AFTER_BALLS) adjust({ snap, world, s, lateralAt, shifting, detour, passing }, list);
-  // (and every lane manoeuvre slows for the black ice it has seen, to its speed by then, and on the ice
-  // only eases the pedals and the wheel, `ice`, stopping as gently: sim/black-ice.js gentleOnIce)
-  if (snap.black_ice_ahead)
-    for (const c of list)
-      if (c.law.kind === "lane") {
-        c.law.slowTo = [...(c.law.slowTo || []), ...snap.black_ice_ahead.map((a) => a.slow)];
-        c.law.ice = true;
-        if (c.law.stopAtRoute !== undefined)
-          c.law.stopDecel = Math.min(c.law.stopDecel ?? Infinity, iceStopDecel(snap.black_ice_ahead));
-      }
+  for (const adjust of ADJUST_LAST) adjust({ snap, world, s, lateralAt, shifting, detour, passing }, list);
   // (well off the lane's centre, nudged over to pass something, it brakes on the line it is on, to the
   // nearest half metre, as with scenery in the lane: steering back while braking hard would swing it
   // into whatever it was keeping clear of)
@@ -1126,11 +1105,6 @@ export function simulateAll(candidates, snap, world) {
   // than a crawl while the warning stands
   const ballLine = snap.ball_in_road?.limit_mps != null ? snap.ball_in_road.stop_s_route : null;
   const ballCreep = snap.ball_in_road?.creep_mps ?? 0;
-  // black ice the car has seen (sim/black-ice.js): no manoeuvre may take it onto a patch faster than its
-  // safe speed, or brake, accelerate or skid on one (the ice under every forward sim's tyres is the car
-  // model's own: sim/vehicle.js ROAD.gripAt)
-  const icy = snap.black_ice_ahead && world.ice?.list.length ? snap.black_ice_ahead : null;
-  const iceStart = icy ? patchesUnder(world.ice, world.ego) : null;
   // a stretch narrowed by snowbanks while it is an oncoming car's turn (sim/snowbanks.js): where the car waits
   // (a metre's overshoot, but never into the stretch itself)
   const narrowStop = snap.snowbank?.narrowing?.wait
@@ -1177,7 +1151,6 @@ export function simulateAll(candidates, snap, world) {
       passesRunner = false,
       rvClose = false,
       ballFast = false,
-      iceCall = null,
       collision = null,
       followerHit = null,
       staticHit = null,
@@ -1201,9 +1174,7 @@ export function simulateAll(candidates, snap, world) {
       const wheelsBefore = needWheels ? wheelPoints(car) : null;
       applyLaw(car, law, route, s, SIM_DT, world);
       // (a wheel going into a pothole too fast, say: sim/features/index.js)
-      for (const x of wheelChecks) x.afterLaw(car, wheelsBefore);
-      // (onto black ice too fast, or braking, accelerating or skidding on it: sim/black-ice.js)
-      if (icy && !iceCall) iceCall = iceSimCheck(world.ice, icy, car, t, iceStart);
+      for (const x of wheelChecks) x.afterLaw(car, wheelsBefore, t);
       // Static map geometry is known even when fog or a corner hides moving traffic. Use the
       // same footprint sweep as execution, including reverse and sideways body motion.
       // Keep sweeping after a predicted vehicle contact, so a later static hit is still known.
@@ -1487,8 +1458,6 @@ export function simulateAll(candidates, snap, world) {
     else if ((reject = rejectBy(sims.driveways, c)));
     else if (ballFast && c.law.kind !== "hard_brake") reject = "passes_ball_gap_too_fast";
     else if ((reject = rejectBy(sims.balls, c)));
-    else if (iceCall && c.law.kind !== "hard_brake")
-      reject = iceCall === "fast" ? "crosses_ice_too_fast" : "brakes_on_ice";
     else if (intoNarrowing && c.law.kind !== "hard_brake") reject = "enters_narrowing_out_of_turn";
     // (nor going round it: no lane change while behind it, sim/parkers.js)
     else if ((intoParker || (parkerHold !== null && c.change)) && c.law.kind !== "hard_brake")

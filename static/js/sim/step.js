@@ -5,15 +5,15 @@ import { stepChallenge } from "../lab/challenges.js";
 import { stepOfficers } from "./traffic-officer.js";
 import { hooks } from "./features/index.js";
 
-// The registered features' steps (sim/features/index.js): before the traffic moves, and after it,
-// before the people on foot.
+// The registered features' steps (sim/features/index.js): first of all, before the traffic moves, and
+// after it, before the people on foot.
+const FIRST = hooks("stepBeforeTraffic", "first");
 const BEFORE_TRAFFIC = hooks("stepBeforeTraffic");
 const AFTER_TRAFFIC = hooks("stepAfterTraffic");
 
 export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
-  // (black ice, with that option on: whether the weather and the time favour it now, and its grip hook,
-  // before anything moves: sim/black-ice.js)
-  if (world.ice?.enabled) world.ice.refresh(world);
+  // (what a registered feature sets up before anything moves: black ice's grip hook, say)
+  for (const step of FIRST) step(world, fleet, dt);
   stepChallenge(world, fleet);
   if (autopilot.enabled) autopilot.step(dt, now);
   else if (input) world.stepManual(dt, input);

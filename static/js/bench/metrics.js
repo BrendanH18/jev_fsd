@@ -140,8 +140,7 @@ export class DriveMetrics {
       ...featureMetrics(world, v, "balls"),
       // (only for a drive a tailgater followed the car in: sim/tailgaters.js)
       ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
-      // (only for a drive in which the car came near black ice: sim/black-ice.js)
-      ...(world.iceSeen ? { ice_overspeed: v.ice_overspeed || 0 } : {}),
+      ...featureMetrics(world, v, "tailgaters"),
       // (only for a drive in which the car came up to a stretch snowbanks narrow to one car: sim/snowbanks.js)
       ...(world.snowbanksSeen ? { snowbank_conflicts: v.snowbank_conflicts || 0 } : {}),
       ...featureMetrics(world, v, "snowbanks"),
@@ -212,7 +211,7 @@ export function failures(m) {
   if (m.ball_warnings_ignored) f.push("ignored a ball rolling into the street");
   f.push(...featureFailures(m, "balls"));
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
-  if (m.ice_overspeed) f.push("crossed black ice too fast, or braked or steered hard on it");
+  f.push(...featureFailures(m, "tailgaters"));
   if (m.snowbank_conflicts) f.push("entered a stretch narrowed by snowbanks out of turn");
   f.push(...featureFailures(m, "snowbanks"));
   if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");

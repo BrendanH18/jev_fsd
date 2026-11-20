@@ -86,10 +86,9 @@ import { DrivewayReversers, auditReversers, boxGap, reverserHidden } from "./dri
 import { BallChase, auditBalls } from "./ball-chase.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers, parkerConflict } from "./parkers.js";
-import { FEATURES, featureObstacle, hooks } from "./features/index.js";
+import { FEATURES, featureNeedsDay, featureObstacle, hooks } from "./features/index.js";
 import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
-import { BlackIce, auditIce } from "./black-ice.js";
 import { Snowbanks, auditSnowbanks, bankHidden, keepAt, NARROW_FULL_M } from "./snowbanks.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
@@ -97,6 +96,7 @@ import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guard
 const OBSTACLES_NEAR = hooks("obstacles");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_AFTER_BALLS = hooks("audit", "balls");
+const AUDIT_AFTER_TAILGATERS = hooks("audit", "tailgaters");
 const AUDIT_AFTER_SNOWBANKS = hooks("audit", "snowbanks");
 const AUDIT_AFTER_PARKERS = hooks("audit", "parkers");
 
@@ -286,8 +286,6 @@ export class World {
   // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
   // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
   // not brake-check it, and lets it by (sim/tailgaters.js).
-  // `ice`: near freezing, black ice forms on bridges and in the shade of tall buildings, where everyone's
-  // tyres lose their grip, and everyone slows before it and crosses it gently (sim/black-ice.js).
   // `snowbanks`: when it is snowing as the drive starts, snowbanks line the kerbs, high at the corners,
   // where they hide whoever waits there; and where they push the parked cars out, drivers take turns
   // through the one-car stretch (sim/snowbanks.js).
@@ -295,8 +293,8 @@ export class World {
   // it stops well back and waits until it is in (sim/parkers.js).
   // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
   // obeys the officer rather than the lights (sim/traffic-officer.js).
-  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `puddles`,
-  // `roadClosures`.
+  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `ice`,
+  // `puddles`, `roadClosures`.
   constructor(
     map,
     {
@@ -333,7 +331,6 @@ export class World {
       driveways = false,
       balls = false,
       tailgaters = false,
-      ice = false,
       snowbanks = false,
       parkers = false,
       officers = false,
@@ -487,11 +484,6 @@ export class World {
     this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
     this.tailgatersSeen = false;
     this.tailgaterCall = null;
-    // black ice (sim/black-ice.js): where it forms, whether the car has come near a patch this drive, and
-    // the patches it is crossing (built in every world: one without it clears the car model's grip hook)
-    this.ice = new BlackIce(this, { enabled: ice, seed });
-    this.iceSeen = false;
-    this.iceCalls = new Map();
     // snowbanks (sim/snowbanks.js): the banks, piles and narrowings, whether the car has come up to a
     // narrowing this drive, and whether it was in each one it is near last tick
     this.snowbanks = new Snowbanks(this, { enabled: snowbanks, seed });
@@ -687,7 +679,6 @@ export class World {
     this.drivewayCalls?.clear();
     this.ballCalls?.clear();
     this.tailgaterCall = null;
-    this.iceCalls?.clear();
     this.snowbankCalls?.clear();
     this.parkerCalls?.clear();
     for (const f of FEATURES) this[f.calls]?.clear();
@@ -746,14 +737,14 @@ export class World {
   }
 
   // (with sun glare on, the clock may also carry the `day` of the year and a `utc_offset`, for the sun:
-  // sim/sun-glare.js)
+  // sim/sun-glare.js; and the `day` for a registered feature that reads it: sim/features/index.js)
   setClock(clock) {
     this.clock = clock
       ? {
           hour: clock.hour,
           sun_deg: clock.sun_deg,
           ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}),
-          ...((this.sunGlare || this.ice?.enabled) && clock.day !== undefined ? { day: clock.day } : {}),
+          ...((this.sunGlare || featureNeedsDay(this)) && clock.day !== undefined ? { day: clock.day } : {}),
           ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}),
         }
       : null;
@@ -1182,7 +1173,7 @@ export class World {
     if (this.balls?.enabled) auditBalls(this);
     for (const audit of AUDIT_AFTER_BALLS) audit(this);
     if (this.tailgaters?.enabled) auditTailgaters(this);
-    if (this.ice?.enabled) auditIce(this);
+    for (const audit of AUDIT_AFTER_TAILGATERS) audit(this);
     if (this.snowbanks?.enabled) auditSnowbanks(this);
     for (const audit of AUDIT_AFTER_SNOWBANKS) audit(this);
     if (this.parkers?.enabled) auditParkers(this);

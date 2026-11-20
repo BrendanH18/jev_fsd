@@ -35,7 +35,7 @@ const CORE = [
 test("every record is whole, its option and flags its own, and every hook at a slot the core runs", () => {
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
-    ["potholes", "geese", "puddles", "roadClosures"],
+    ["potholes", "geese", "ice", "puddles", "roadClosures"],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
   for (const field of ["key", "seen", "calls"])
@@ -73,10 +73,12 @@ test("the core runs every slot, and names no registered feature", () => {
       'sim/geese.js"',
       'sim/road-closures.js"',
       'sim/puddles.js"',
+      'sim/black-ice.js"',
       './potholes.js"',
       './geese.js"',
       './road-closures.js"',
       './puddles.js"',
+      './black-ice.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -89,6 +91,10 @@ test("the core runs every slot, and names no registered feature", () => {
       "snap.road_closed",
       "snap.puddle_splash",
       "snap.puddles_ahead",
+      "snap.black_ice",
+      "snap.ice_caution",
+      "snap.ice_limit_mps",
+      '"slow_for_ice"',
       '"ease_round_pothole"',
       '"ease_round_puddle"',
       '"wait_for_geese"',
@@ -103,6 +109,10 @@ test("the core runs every slot, and names no registered feature", () => {
       "phShift",
       "pdShift",
       "laneFx",
+      "world.ice",
+      "this.ice",
+      "vIce",
+      "iceSeen",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -121,6 +131,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     pedestrians: 0,
     potholes: true,
     geese: true,
+    ice: true,
     puddles: true,
     roadClosures: true,
   });
@@ -145,10 +156,11 @@ test("the World builds each feature from its option, with its seen flag and its 
 });
 
 test("metrics and failures appear only once a feature has met the car, each at its old place", () => {
-  const world = { potholesSeen: false, geeseSeen: true, puddlesSeen: true, roadClosuresSeen: true };
+  const world = { potholesSeen: false, geeseSeen: true, iceSeen: true, puddlesSeen: true, roadClosuresSeen: true };
   const v = { wildlife_conflicts: 2 };
   assert.deepEqual(R.featureMetrics(world, v, "driveways"), {});
   assert.deepEqual(R.featureMetrics(world, v, "balls"), { wildlife_conflicts: 2 });
+  assert.deepEqual(R.featureMetrics(world, v, "tailgaters"), { ice_overspeed: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "snowbanks"), { pedestrians_splashed: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "parkers"), { closure_entries: 0 });
   const m = {
@@ -158,6 +170,7 @@ test("metrics and failures appear only once a feature has met the car, each at i
     ball_warnings_ignored: 1,
     wildlife_conflicts: 1,
     brake_checks: 1,
+    ice_overspeed: 1,
     snowbank_conflicts: 1,
     pedestrians_splashed: 1,
     parking_conflicts: 1,
@@ -170,6 +183,7 @@ test("metrics and failures appear only once a feature has met the car, each at i
     "ignored a ball rolling into the street",
     "drove into or too close to geese crossing the road",
     "braked hard with a tailgater close behind",
+    "crossed black ice too fast, or braked or steered hard on it",
     "entered a stretch narrowed by snowbanks out of turn",
     "splashed a pedestrian from a puddle",
     "blocked or went round a car parallel parking",
@@ -191,6 +205,7 @@ test("the LLM prompt keeps each feature's line where it was", () => {
   assert.equal(at("- Watch for potholes"), at("- Watch driveways for reversing lights") + 1);
   assert.equal(at("- Canada geese cross the road"), at("- Snowbanks (") + 1);
   assert.equal(at("- In the rain, watch for puddles"), at("- Canada geese cross the road") + 1);
+  assert.equal(at("- Near freezing (`ice_caution`)"), at("- A car tailgating close behind") + 1);
 });
 
 test("a record at a slot the core never runs is refused", () => {

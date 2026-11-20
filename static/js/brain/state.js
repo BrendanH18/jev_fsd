@@ -18,12 +18,15 @@ const STATE = {
   restrictions: hooks("state", "restrictions"),
   driveways: hooks("state", "driveways"),
   balls: hooks("state", "balls"),
+  tailgaters: hooks("state", "tailgaters"),
 };
 const OUTCOME_BY_ID = hooks("outcome", "ids"),
-  SLOW_OUTCOME = hooks("slowOutcome", "lane");
+  SLOW_OUTCOME = hooks("slowOutcome", "lane"),
+  SLOW_OUTCOME_LAST = hooks("slowOutcome");
 const CLAUSE = {
   restrictions: hooks("clause", "restrictions"),
   driveways: hooks("clause", "driveways"),
+  balls: hooks("clause", "balls"),
   ice: hooks("clause", "ice"),
 };
 const HOLD_STILL = { driveways: hooks("holdStill", "driveways"), parkers: hooks("holdStill", "parkers") };
@@ -422,37 +425,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(t.can_move_right ? { move_right_to_let_it_pass: true } : { lane_to_the_right: t.lane_right }),
     };
   }
-  if (snap.black_ice) {
-    const a = snap.black_ice;
-    state.black_ice = {
-      id: a.id,
-      on: ICE_WHERE[a.kind],
-      ...(a.name ? { street: a.name } : {}),
-      ...(a.on_ice ? { under_car: true, ends_in_m: r1(Math.max(0, a.ends_in_m)) } : { ahead_m: r1(a.starts_in_m) }),
-      length_m: a.length_m,
-      grip: "about a tenth of dry asphalt",
-      safe_speed: r1(a.safe_mps),
-      cross_at: r1(a.speed_mps),
-      ...(snap.black_ice_ahead.length > 1 ? { more_ahead: snap.black_ice_ahead.length - 1 } : {}),
-    };
-  }
-  if (snap.ice_caution) {
-    const k = snap.ice_caution,
-      b = k.bridge;
-    state.ice_caution = {
-      conditions: k.text,
-      ice_forms_first_on: "bridges, overpasses and shaded stretches",
-      ...(b
-        ? {
-            bridge: {
-              ...(b.name ? { name: b.name } : {}),
-              ...(b.on ? { on_it: true, ends_in_m: r1(Math.max(0, b.ends_in_m)) } : { ahead_m: r1(b.starts_in_m) }),
-              keep_to: r1(k.slow.mps),
-            },
-          }
-        : {}),
-    };
-  }
+  for (const add of STATE.tailgaters) add(snap, state);
   if (snap.snowbank) {
     const n = snap.snowbank.narrowing,
       k = snap.snowbank.corner;
@@ -905,13 +878,9 @@ function outcomeLabel(c, snap) {
   // (its wheels would cross a pothole, say: it slows to drive over it, sim/features/index.js)
   const slows = firstOf(SLOW_OUTCOME, c, snap);
   if (slows) return slows;
-  // (black ice it has seen: it eases off to cross it steadily, sim/black-ice.js)
-  if (c.id === "slow_for_ice" && snap.black_ice)
-    return snap.black_ice.on_ice
-      ? `clear, eases off to ${r1(snap.black_ice.speed_mps)} m/s without braking and holds steady across the ice`
-      : `clear, eases off early, on the dry road, to ${r1(snap.black_ice.speed_mps)} m/s before the black ice and holds it across, without braking on it`;
-  if (c.law.slowTo && snap.black_ice && c.sim.end_speed > 0.5)
-    return `clear, slows to ${r1(snap.black_ice.speed_mps)} m/s by the black ice and holds it across`;
+  // (and what comes after them: black ice it has seen, say, which it eases off to cross steadily)
+  const slowsLast = firstOf(SLOW_OUTCOME_LAST, c, snap);
+  if (slowsLast) return slowsLast;
   if (c.sim.min_gap_m < 4) return `clear, but closes to ${r1(c.sim.min_gap_m)} m of a car`;
   return "clear";
 }
@@ -1083,7 +1052,10 @@ export function situationClauses(snap) {
     if (x) out.push(x);
   }
   if (snap.ball_in_road) out.push(ballClause(snap.ball_in_road));
-  if (snap.black_ice || snap.ice_caution) out.push(iceClause(snap.black_ice, snap.ice_caution, snap.black_ice_ahead));
+  for (const clause of CLAUSE.balls) {
+    const x = clause(snap);
+    if (x) out.push(x);
+  }
   for (const clause of CLAUSE.ice) {
     const x = clause(snap);
     if (x) out.push(x);
@@ -1356,32 +1328,6 @@ function tailgaterClause(t) {
     ? "Another lane goes the car's way on the right and it is clear: choose `let_tailgater_pass` to move over at the car's speed and let it by."
     : "There is no lane to move right into: ease off a little, gently (`ease_off_for_tailgater`, where it is offered), so it can pass when it is safe.";
   return `${lead} ${brake} ${by}`;
-}
-
-// Where a patch of black ice (sim/black-ice.js) lies, for models.
-const ICE_WHERE = { bridge: "a bridge deck", shade: "a stretch in the shade of tall buildings" };
-
-// Black ice the car has seen, and the caution while conditions favour it (sim/black-ice.js).
-function iceClause(a, k, ahead) {
-  const caution = k
-    ? `Conditions favour black ice (${k.text}): it forms first on bridges, overpasses and shaded stretches, thin and nearly invisible, while the rest of the road looks dry or damp.`
-    : "";
-  const bridge = k?.bridge
-    ? k.bridge.on
-      ? ` The car is on a bridge${k.bridge.name ? ` (${k.bridge.name})` : ""}: keep to ${r1(k.slow.mps)} m/s or less until the end of it, ${Math.max(0, Math.round(k.bridge.ends_in_m))} m on.`
-      : ` A bridge${k.bridge.name ? ` (${k.bridge.name})` : ""} starts ${Math.max(0, Math.round(k.bridge.starts_in_m))} m ahead: ease off to ${r1(k.slow.mps)} m/s before it (\`car.target_speed\` already does).`
-    : "";
-  if (!a) return `${caution}${bridge}`;
-  const where = `on ${ICE_WHERE[a.kind]}${a.name ? ` (${a.name})` : ""}`;
-  const more =
-    ahead?.length > 1 ? ` ${ahead.length - 1} more patch${ahead.length > 2 ? "es are" : " is"} further on.` : "";
-  const lead = a.on_ice
-    ? `The car is on black ice ${where}, ${Math.max(0, Math.round(a.ends_in_m))} m from the end of it: its tyres have about a tenth of their grip.`
-    : `The road ${Math.round(a.starts_in_m)} m ahead, ${where}, has a glossy sheen: black ice, ${a.length_m} m of it, where the tyres have about a tenth of their grip.`;
-  const how = a.on_ice
-    ? ` Do not brake, accelerate or steer sharply: ease off and hold steady at ${r1(a.speed_mps)} m/s or less until all four wheels are off it (\`slow_for_ice\`, or \`car.target_speed\`). Braking hard here slides the car.`
-    : ` Slow down now, on the dry road, to ${r1(a.speed_mps)} m/s by the time the front wheels reach it, then cross it steadily, without braking, accelerating or steering sharply (choose \`slow_for_ice\`; \`car.target_speed\` already slows for it). Leave more room to anything ahead: on the ice the car can hardly stop.`;
-  return `${caution}${bridge} ${lead}${how}${more}`.trim();
 }
 
 // How a contraflow cyclist (sim/contraflow.js) meets the car's way, for models.

@@ -11,12 +11,13 @@
 //   calls     the World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
 //   metric    { at, name, failure }: the violation counted, and the failure text (at "driveways",
-//             "balls", "snowbanks" or "parkers" among the metrics and failures)
+//             "balls", "tailgaters", "snowbanks" or "parkers" among the metrics and failures)
 //   obstacle  { test(o), likePedestrian?, fixed? }: what of `world.obstaclesNear` is the feature's (never
 //             followed or passed as traffic; `likePedestrian`: the car is at fault for driving into one;
 //             `fixed`: stands where it is, like scenery, in the forward sims)
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   motion    (snap) => whether the model must be asked to stop or drive
+//   day       true: while it is on, the World's clock keeps the `day` of the year (World.setClock)
 //   and the hooks below.
 //
 // A hook is a function, or { at, run } to run it at a slot. The core runs each hook where the feature's
@@ -27,28 +28,34 @@
 //
 // Hooks (and their slots in the core):
 //   obstacles(world, x, y, r)          World.obstaclesNear, after the others ("end")
-//   stepBeforeTraffic(world, fleet, dt) sim/step.js, just before the traffic moves ("end")
+//   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
+//                                       traffic moves ("end")
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, just before the people on foot move ("end")
-//   audit(world)                        World.audit: "driveways", "balls", "snowbanks", "parkers"
+//   audit(world)                        World.audit: "driveways", "balls", "tailgaters", "snowbanks", "parkers"
 //   sense(world, snap, ctx)             the sensing pass: "driveways", "balls", "snowbanks", "parkers"
-//   limit(snap)                         the speed ceiling `snap.limit`: "driveways", "balls"
+//   limit(snap)                         the speed ceiling `snap.limit`: "driveways", "balls", "parking" (once
+//                                       the turnaround and the parking are known)
 //   target(snap, v, reasons, ctx)       `desiredSpeed`, returns the new speed: "restrictions", "driveways", "balls"
-//   hazard(snap)                        a hazard flag, or null: "driveways", "balls", "snowbanks", "parkers"
-//   candidates(ctx, out)                lane candidates: "restrictions", "driveways", "balls"
-//   adjust(ctx, list)                   every lane candidate once the list is cut: "balls"
+//   hazard(snap)                        a hazard flag, or null: "driveways", "balls", "officers", "snowbanks",
+//                                       "parkers"
+//   turnPace(world, frontS, distance)   { mps, accel } the car crosses a junction at, over what the feature
+//                                       makes slippery, or null ("end")
+//   candidates(ctx, out)                lane candidates: "restrictions", "driveways", "balls", "tailgaters"
+//   adjust(ctx, list)                   every lane candidate once the list is cut: "balls", "end"
 //   brakeDetour(ctx)                    the move `hard_brake` keeps to, or null ("end")
 //   sim(world, snap)                    the forward sims: null, or a checker { wheels, start(), afterLaw(car,
-//                                       wheelsBefore), along(s, front, car), reject(c), settle(candidates) }
+//                                       wheelsBefore, t), along(s, front, car), reject(c), settle(candidates) }
 //                                       whose rejection comes at its slot: "first", "driveways", "balls", "end";
 //                                       `settle` runs once every candidate is judged (after the tailgater's
 //                                       ceiling), and may let a rejection stand down
-//   state(snap, state)                  the decision state: "restrictions", "driveways", "balls"
+//   state(snap, state)                  the decision state: "restrictions", "driveways", "balls", "tailgaters"
 //   outcome(c, snap)                    a candidate's outcome label by its id, or null: "ids"
-//   slowOutcome(c, snap)                the outcome of a lane candidate slowed for it, or null: "lane"
-//   clause(snap)                        the situation's wording, or null: "restrictions", "driveways", "ice"
+//   slowOutcome(c, snap)                the outcome of a lane candidate slowed for it, or null: "lane", "end"
+//   clause(snap)                        the situation's wording, or null: "restrictions", "driveways", "balls",
+//                                       "ice" (after black ice's)
 //   holdStill(snap)                     when holding still is right, or "": "driveways", "parkers"
 //   prompt                              { at, text }: a line of the LLM system prompt: "restrictions",
-//                                       "driveways", "snowbanks"
+//                                       "driveways", "snowbanks", "tailgaters"
 //   trafficStart(world, n)              each traffic vehicle, each step, first ("end")
 //   trafficReplan(world, n)             before its path is extended; true when re-planned ("end")
 //   trafficLane(world, n, front, busy, dt, { offset, moves })  { result, shift, aim, now, easing }: a move
@@ -58,44 +65,48 @@
 //                                       `aim` is where the move is heading and `now` where it has got to
 //                                       (metres right of the lane's centre), `easing` that it is moving off
 //                                       the middle
-//   trafficYield(world, n, front)       { hold, limit, canStop }: where it stops, and its ceiling ("end")
+//   trafficYield(world, n, front)       { hold, limit, canStop, controls }: where it stops, its ceiling, and
+//                                       how the driver handles the car (`controls(vehicle, steer, accel, dt)`,
+//                                       while not braking harder than comfortable) ("end")
 
 import potholes from "./potholes.js";
 import geese from "./geese.js";
+import ice from "./black-ice.js";
 import puddles from "./puddles.js";
 import roadClosures from "./road-closures.js";
 
-export const FEATURES = [potholes, geese, puddles, roadClosures];
+export const FEATURES = [potholes, geese, ice, puddles, roadClosures];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
 // run, so `hooks` refuses to load one (and scripts/test_feature_registry.mjs checks every record).
 export const SLOTS = {
   obstacles: ["end"],
-  stepBeforeTraffic: ["end"],
+  stepBeforeTraffic: ["first", "end"],
   stepAfterTraffic: ["end"],
-  audit: ["driveways", "balls", "snowbanks", "parkers"],
+  audit: ["driveways", "balls", "tailgaters", "snowbanks", "parkers"],
   sense: ["driveways", "balls", "snowbanks", "parkers"],
-  limit: ["driveways", "balls"],
+  limit: ["driveways", "balls", "parking"],
   target: ["restrictions", "driveways", "balls"],
-  hazard: ["driveways", "balls", "snowbanks", "parkers"],
-  candidates: ["restrictions", "driveways", "balls"],
-  adjust: ["balls"],
+  hazard: ["driveways", "balls", "officers", "snowbanks", "parkers"],
+  turnPace: ["end"],
+  candidates: ["restrictions", "driveways", "balls", "tailgaters"],
+  adjust: ["balls", "end"],
   brakeDetour: ["end"],
   sim: ["first", "driveways", "balls", "end"],
-  state: ["restrictions", "driveways", "balls"],
+  state: ["restrictions", "driveways", "balls", "tailgaters"],
   outcome: ["ids"],
-  slowOutcome: ["lane"],
-  clause: ["restrictions", "driveways", "ice"],
+  slowOutcome: ["lane", "end"],
+  clause: ["restrictions", "driveways", "balls", "ice"],
   holdStill: ["driveways", "parkers"],
-  prompt: ["restrictions", "driveways", "snowbanks"],
-  metric: ["driveways", "balls", "snowbanks", "parkers"],
+  prompt: ["restrictions", "driveways", "snowbanks", "tailgaters"],
+  metric: ["driveways", "balls", "tailgaters", "snowbanks", "parkers"],
   trafficStart: ["end"],
   trafficReplan: ["end"],
   trafficLane: ["contraflow"],
   trafficYield: ["end"],
 };
 // The fields of a record that are not hooks.
-const FIELDS = ["key", "seen", "calls", "build", "obstacle", "priority", "motion"];
+const FIELDS = ["key", "seen", "calls", "build", "obstacle", "priority", "motion", "day"];
 
 // What is wrong with record `f`, or null: a missing field, an unknown hook, or a hook at a slot the core
 // never runs.
@@ -165,6 +176,10 @@ export const promptLines = (slot) =>
   recordsAt("prompt", slot)
     .map((f) => `${f.prompt.text}\n`)
     .join("");
+
+// Whether a registered feature that is on reads the day of the year from the World's clock.
+const DAY = FEATURES.filter((f) => f.day);
+export const featureNeedsDay = (world) => DAY.some((f) => !!world[f.key]?.enabled);
 
 // Every World option a registered feature takes.
 export const FEATURE_OPTIONS = FEATURES.map((f) => f.key);

@@ -32,8 +32,6 @@ import { turnBanned } from "./turn-restrictions.js";
 // once it is coming into their lane (sim/driveway-reversers.js reverserYield).
 // With `balls` on, drivers who see a ball roll into the street slow to a speed from which they can stop
 // short of the gap it came from, until the child after it has come and gone (sim/ball-chase.js ballYield).
-// With `ice` on, drivers and cyclists slow for black ice ahead, and for bridges in icy weather, and only
-// ease off on the ice; their tyres feel it through the shared car model (sim/black-ice.js npcIce).
 // With `snowbanks` on, between snowbanks that push the parked cars out from the kerb, drivers keep over
 // toward the middle and take turns with traffic coming the other way through the one-car stretch, and
 // cyclists keep clear of the parked cars (sim/snowbanks.js snowbankYield).
@@ -180,7 +178,6 @@ const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import { manageParkers, parkerConflict, parkerStop, stepParker } from "./parkers.js";
 import { officerDirection } from "./traffic-officer.js";
-import { gentleOnIce, npcIce } from "./black-ice.js";
 import { snowbankYield } from "./snowbanks.js";
 import {
   AMBER_M,
@@ -2028,11 +2025,14 @@ export class NpcFleet {
       // where a registered feature has it stop, and its speed ceiling: for Canada geese, say, slowing while a
       // gaggle comes up to the kerb ahead and stopping short of their way across until the last is off the
       // roadway (once it could stop there, `canStop`: otherwise it carries on); or short of the barricade
-      // across a block closed for an event, on a way that could not be changed in time
+      // across a block closed for an event, on a way that could not be changed in time; and how it has the
+      // driver handle the car (`controls`)
+      let featureControls = null;
       for (const yieldTo of TRAFFIC_YIELD) {
         const y = yieldTo(world, n, front);
         if (!y) continue;
         if (y.limit != null) featureLimit = Math.min(featureLimit, y.limit);
+        if (y.controls) featureControls ||= y.controls;
         if (y.hold == null) continue;
         const g = y.hold - front;
         if (g > -1 && g < gap && (!y.canStop || g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1)) {
@@ -2070,10 +2070,6 @@ export class NpcFleet {
         this.world.balls?.balls.length && !n.transit?.tram
           ? (ballYield(this.world, n, front)?.limit ?? Infinity)
           : Infinity;
-      // (and, with black ice on, slowing for the ice ahead, and for bridges in icy weather, and easing off
-      // on it: sim/black-ice.js; a streetcar's steel wheels do not feel it)
-      const vIce =
-        this.world.ice?.list.length && !n.transit?.tram ? (npcIce(this.world, n, front)?.limit ?? Infinity) : Infinity;
       const v0 = Math.min(
         isPlow(n) ? n.v0 : n.v0 * weather.speed,
         limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed,
@@ -2088,7 +2084,6 @@ export class NpcFleet {
         rv?.limit ?? Infinity,
         featureLimit,
         vBall,
-        vIce,
         sb?.limit ?? Infinity,
       );
       const D = n.driver || IDM;
@@ -2126,9 +2121,9 @@ export class NpcFleet {
           this.shuffle(n, offset - proj.lateral, turn, dt);
       }
       const steer = purePursuit(n, path, path.s, offset);
-      // (on or coming up to black ice, a driver eases the pedals and the wheel, short of braking harder
-      // than it ever does but in an emergency: sim/black-ice.js gentleOnIce)
-      if (vIce < Infinity && a > -D.b) n.step(dt, gentleOnIce(n, steer, a, dt));
+      // (where a registered feature has the driver ease the pedals and the wheel, on or coming up to black
+      // ice, say, short of braking harder than it ever does but in an emergency)
+      if (featureControls && a > -D.b) n.step(dt, featureControls(n, steer, a, dt));
       else n.step(dt, { steer, accel: a });
       if (n.v < 0) n.v = 0;
     }
