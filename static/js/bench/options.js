@@ -1,10 +1,19 @@
+import { DEFAULT_TRACK, TRACKS, isTrack } from "../brain/tracks.js";
 import { FEATURE_NAMES, coveringArray, featureSubset } from "./features.js";
 export const FEATURE_PRESETS = ["bare", "city"];
 export const CITY_HOUR = 15.5,
   CITY_WEEKDAY = 0;
 
 // Only nondefault options enter saved configs. Accept the same shape from CLI, browser and replay.
-export function benchmarkConfig({ features = "bare", park = false, hour, without = [], cover } = {}) {
+export function benchmarkConfig({
+  features = "bare",
+  park = false,
+  hour,
+  without = [],
+  cover,
+  track = DEFAULT_TRACK,
+} = {}) {
+  if (!isTrack(track)) throw new Error(`Unknown track "${track}": use ${TRACKS.join(" or ")}.`);
   if (!FEATURE_PRESETS.includes(features))
     throw new Error(`Unknown feature preset "${features}": use ${FEATURE_PRESETS.join(" or ")}.`);
   if (typeof park !== "boolean") throw new Error("park must be true or false.");
@@ -34,6 +43,8 @@ export function benchmarkConfig({ features = "bare", park = false, hour, without
     ...(hour !== undefined && (features === "bare" || hour !== CITY_HOUR) ? { hour } : {}),
     ...(without.length ? { without } : {}),
     ...(cover !== undefined ? { cover } : {}),
+    // (the open track, brain/tracks.js; a guarded run's config stays as every earlier one)
+    ...(track !== DEFAULT_TRACK ? { track } : {}),
   };
 }
 

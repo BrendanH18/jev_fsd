@@ -28,7 +28,8 @@ export default {
   label: "My driver",
   create: () => ({
     async decide(snap, eligible, request, signal) {
-      // snap: the observed world; eligible: candidates that passed shared safety checks.
+      // snap: the observed world; eligible: candidates that passed shared safety checks (on the
+      // open track also those that failed a road-rule check, with `flagged` true and the check in `reject`).
       // Each candidate includes id, law, steer, speed and sim (3-second prediction).
       const candidate = eligible.reduce((best, c) =>
         c.sim.progress_m > best.sim.progress_m ? c : best);
@@ -46,7 +47,12 @@ export default {
 The harness rejects an invalid candidate or motion and falls back to Rules. The decision
 timeout is 1.5 seconds even if an agent ignores the abort signal; stale results cannot execute.
 The emergency brake and safety filtering remain shared. An agent can still choose a poor
-eligible manoeuvre, and the simulator still audits collisions and violations.
+eligible manoeuvre, and the simulator still audits collisions and violations. On the
+[open track](reference/benchmarks.md#benchmarks-and-validation) `eligible` also holds the manoeuvres that
+failed a road-rule check, each with `flagged: true` and the check in `reject`; choosing one is allowed and
+judged by the audit. With nothing unflagged left, the autopilot brakes without asking an agent module,
+as it does on the guarded track with nothing eligible; only a model driver is asked to choose among flagged
+manoeuvres alone.
 
 For a remote model, the easiest route is a [decision model](#decision-models-jev-and-others) or an
 [LLM endpoint](#llm-endpoints-test-your-own-model): no code, and the local server keeps the key. To write your own adapter instead, implement
@@ -319,8 +325,10 @@ Parsing is lenient about form (code fences, prose around the JSON, `<think>` blo
 spelling, case) and strict about content: the motion and candidate must be among the offered
 values. The browser then re-checks the choice with `validAgentChoice`.
 
-**Fallbacks.** The model only ever chooses among candidates that already passed the shared
-safety filter; the controller and emergency brake still run underneath it. When the reply is
+**Fallbacks.** On the guarded track the model only ever chooses among candidates that already passed
+the shared safety filter; on the open track it also sees those that failed a road-rule check, flagged
+(see [the benchmark](reference/benchmarks.md#benchmarks-and-validation)), and a fallback keeps to the
+unflagged ones. The controller and emergency brake still run underneath it. When the reply is
 not usable, the call times out, the endpoint returns an HTTP error (429, 5xx, 401), the key is
 missing or the budget is spent, Rules makes that decision instead, exactly as for Jev. The HUD
 shows an amber `rules_fallback` tag with the reason, the fallback counter increases, and arena

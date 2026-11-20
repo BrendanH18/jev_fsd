@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **The open track (ROADMAP 4.2).** A second way to run the benchmark and the arena: on the open track the
+  safety filter flags a manoeuvre that fails a road-rule check instead of removing it, so the driver's own
+  judgment decides the outcome, and the audit judges it as on any track. A predicted collision is still
+  removed and the emergency brake still runs. Models are told which rule a flagged manoeuvre breaks (its
+  `outcome` reads `flagged: …`, and the vector question and LLM system prompt say only collisions were
+  checked). `--track open` in `scripts/bench_node.mjs` and `scripts/arena_node.mjs`, a *track* box on
+  `/bench` and in the arena; open-track results add `track`, `flagged_choices` and `flagged_by_check`, and a
+  model recording keeps its track. The guarded track, the default, is unchanged: Rules and the cautious
+  agent keep to the unflagged manoeuvres and drive the open track exactly as the guarded one
+  (`brain/tracks.js`, `scripts/test_open_track.mjs`).
 - **The big labs' own APIs as LLM presets.** The Connect a model dialog's LLMs tab adds **Google Gemini**,
   **xAI** and **Mistral** beside OpenAI, each through the lab's own OpenAI-compatible endpoint, with its
   key page and key variable (`GEMINI_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`). Gemini and xAI start

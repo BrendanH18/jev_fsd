@@ -178,7 +178,7 @@ async function loadRuns() {
       h(
         "option",
         { value: r.name },
-        `${r.name} · ${r.config?.brain} · ${r.config?.heldout ? `held-out ${r.config.count} routes` : `${r.config?.count} × seed ${r.config?.seed}`}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`,
+        `${r.name} · ${r.config?.brain} · ${r.config?.heldout ? `held-out ${r.config.count} routes` : `${r.config?.count} × seed ${r.config?.seed}`}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.track ? ` · ${r.config.track} track` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`,
       ),
     ),
   );
@@ -199,6 +199,7 @@ function runFromForm() {
     hour: $("#hour").value === "" ? undefined : +$("#hour").value,
     without: $("#without").value,
     heldout: $("#heldout").checked,
+    track: $("#track").value,
   });
 }
 
@@ -217,6 +218,7 @@ export async function run({
   without = [],
   cover = undefined,
   heldout = false,
+  track = "guarded",
   save = true,
   record = false,
   replay = null,
@@ -231,14 +233,14 @@ export async function run({
       );
     checkMap(replaying, map);
     ({ count, npcs, seed, weather } = b);
-    ({ features = "bare", park = false, hour, without = [], cover, heldout = false } = b);
+    ({ features = "bare", park = false, hour, without = [], cover, heldout = false, track = "guarded" } = b);
     brain = replaying.header.driver;
   }
   if ((record || replaying) && mode !== "lockstep")
     throw new Error("Model recordings record and replay only on the lockstep clock.");
   if (record && !replaying && !driverKind(brain))
     throw new Error(`Only model drivers (jev, decision:<name>, llm:<name>) can be recorded, not "${brain}".`);
-  const options = benchmarkConfig({ features, park, hour, without, cover });
+  const options = benchmarkConfig({ features, park, hour, without, cover, track });
   const plan = heldout ? heldoutPlan(status.map.id) : null;
   if (plan) {
     count = plan.seeds.length * plan.count;

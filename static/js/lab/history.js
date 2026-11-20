@@ -115,6 +115,16 @@ export function validateEvaluation(value) {
       r.report.score > 100 ||
       typeof r.report.qualified !== "boolean" ||
       (r.simulation_error !== undefined && !text(r.simulation_error)) ||
+      // (an open-track drive, brain/tracks.js: bench/metrics.js trackFields)
+      (r.track !== undefined &&
+        !(
+          r.track === "open" &&
+          Number.isInteger(r.flagged_choices) &&
+          r.flagged_choices >= 0 &&
+          r.flagged_by_check &&
+          typeof r.flagged_by_check === "object" &&
+          Object.values(r.flagged_by_check).every((n) => Number.isInteger(n) && n >= 0)
+        )) ||
       r.report.status !== (r.simulation_error ? "error" : r.stopped ? "stopped" : r.arrived ? "arrived" : "timeout") ||
       !Number.isInteger(r.report.model_version) ||
       !Array.isArray(r.report.incidents) ||

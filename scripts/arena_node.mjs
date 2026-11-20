@@ -7,7 +7,9 @@
 // road-tests; or all), --only id,id (just these), --port, --json out.json (a summary per drive, no
 // decision trace), --check 1 (exit with status 1 if a drive fails or a replay does not play out as
 // recorded), --record out.json and --replay rec.json (model drivers only; docs/agents.md; a name
-// ending .gz is gzipped), --reserve 0.5 (stop between drives once the server's budget runs low).
+// ending .gz is gzipped), --reserve 0.5 (stop between drives once the server's budget runs low), --track
+// open (the open track: road-rule checks flag manoeuvres instead of removing them, brain/tracks.js; a
+// recording keeps its track).
 //
 // A recording here covers several maps, so its header keeps one map fingerprint per map
 // (`header.maps`), and each drive's recorded result leaves out the decision trace and timeline,
@@ -23,7 +25,7 @@ const fail = (message) => {
   console.error(message);
   process.exit(1);
 };
-const OPTIONS = ["brain", "set", "only", "port", "json", "check", "record", "replay", "reserve"];
+const OPTIONS = ["brain", "set", "only", "port", "json", "check", "record", "replay", "reserve", "track"];
 for (const [name, value] of Object.entries(args)) {
   if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
   if (value === true) fail(`--${name} needs a value.`);
@@ -41,11 +43,14 @@ if (args.replay) {
   }
   if (typeof replayJson?.header?.driver !== "string" || !replayJson.header.arena)
     fail(`${args.replay} is not an arena model recording.`);
-  const given = ["brain", "set"].filter((name) => args[name] !== undefined);
+  const given = ["brain", "set", "track"].filter((name) => args[name] !== undefined);
   if (given.length)
     fail(`The recording sets the driver and drives: drop ${given.map((name) => `--${name}`).join(", ")}.`);
   args.brain = replayJson.header.driver;
+  if (replayJson.header.arena.track) args.track = replayJson.header.arena.track;
 }
+const track = String(args.track || "guarded");
+if (!["guarded", "open"].includes(track)) fail(`Unknown track "${track}": use guarded or open.`);
 
 const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
 const page = await (await fetch(`${base}/bench`)).text();
@@ -118,7 +123,7 @@ if (replayJson) {
       driver: brain,
       brain: { endpoint: definition?.llm || definition?.decision },
       model,
-      arena: { set, ids: drives.map((c) => c.id) },
+      arena: { set, ids: drives.map((c) => c.id), ...(track === "open" ? { track } : {}) },
       maps: shas,
     }),
   });
@@ -156,6 +161,9 @@ const SUMMARY = [
   "output_tokens",
   "simulation_error",
   "stopped",
+  "track",
+  "flagged_choices",
+  "flagged_by_check",
 ];
 
 // --reserve 0.5: start no further drive once less than this many dollars of the server's budget
@@ -176,7 +184,7 @@ for (const challenge of drives) {
     }
   }
   const tape = recording ? recording.tape(challenge.id, args.record ? "record" : "replay") : null;
-  const r = await evaluateChallenge(maps[challenge.map], challenge, { brain, tape });
+  const r = await evaluateChallenge(maps[challenge.map], challenge, { brain, tape, track });
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
   if (args.record) {
     recording.results[challenge.id] = { ...trimmed(r), result_sha: resultSha(r) };
@@ -191,7 +199,7 @@ for (const challenge of drives) {
   const shares =
     r.model_share !== undefined ? ` model=${r.model_share} local=${r.local_share} fallback=${r.fallback_share}` : "";
   console.log(
-    `${challenge.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} decisions=${r.decisions}${shares} cost=${r.cost_usd ?? 0}` +
+    `${challenge.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} decisions=${r.decisions}${shares}${r.flagged_choices ? ` flagged=${r.flagged_choices}` : ""} cost=${r.cost_usd ?? 0}` +
       `${r.pass ? "" : ` failures=${(r.failures || []).join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}` +
       `${r.model_recording ? ` rec=${JSON.stringify(r.model_recording)}` : ""}`,
   );
@@ -204,6 +212,9 @@ const cost = results.reduce((sum, r) => sum + (r.cost_usd || 0), 0);
 const summary = {
   brain,
   set,
+  ...(track === "open"
+    ? { track, flagged_choices: results.reduce((sum, r) => sum + (r.flagged_choices || 0), 0) }
+    : {}),
   drives: results.length,
   passed,
   cost_usd: Math.round(cost * 1e6) / 1e6,

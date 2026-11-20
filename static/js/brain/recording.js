@@ -29,7 +29,7 @@ import { api } from "../common.js";
 import { LlmBrain } from "./llm.js";
 import { DecisionBrain } from "./decision.js";
 import { JevBrain } from "./jev.js";
-import { SYSTEM_PROMPT } from "./llm-prompt.js";
+import { OPEN_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./llm-prompt.js";
 
 export const RECORDING_FORMAT = "jev-model-recording/1";
 const BODY = "$body"; // a trace field that only echoed the request: rebuilt from it on replay
@@ -92,6 +92,8 @@ const ENDPOINT_FIELDS = ["id", "name", "label", "model", "timeout_s"];
 // id when the brain does not know it (Jev's comes from the server's status).
 export function recordingHeader({ driver, brain = null, model = null, ...context }) {
   const kind = driverKind(driver);
+  // (an open-track run, brain/tracks.js, asks with the open track's system prompt)
+  const open = Object.values(context).some((v) => v?.track === "open");
   if (!kind) throw new Error(`Only model drivers (jev, decision:<name>, llm:<name>) can be recorded, not "${driver}".`);
   const endpoint = brain?.endpoint
     ? Object.fromEntries(
@@ -110,7 +112,10 @@ export function recordingHeader({ driver, brain = null, model = null, ...context
       ? `node ${globalThis.process.version}`
       : globalThis.navigator?.userAgent || "unknown",
     // (what the key depends on besides the request itself: a changed LLM system prompt changes every key)
-    versions: { format: RECORDING_FORMAT, ...(kind === "llm" ? { llm_prompt: hashText(SYSTEM_PROMPT) } : {}) },
+    versions: {
+      format: RECORDING_FORMAT,
+      ...(kind === "llm" ? { llm_prompt: hashText(open ? OPEN_SYSTEM_PROMPT : SYSTEM_PROMPT) } : {}),
+    },
     ...context,
   };
 }

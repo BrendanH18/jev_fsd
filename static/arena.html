@@ -14,6 +14,7 @@
     <section class="arena-controls panel" aria-label="Evaluation controls">
       <fieldset><legend>Agents to compare</legend><div id="agents"></div><p id="llm-status" class="llm-status"></p></fieldset>
       <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
+      <label title="Guarded: the safety filter removes every manoeuvre that fails a road-rule check. Open: it flags them instead, and the driver's own judgment decides">Track <select id="arena-track"><option value="guarded">Guarded · the filter removes rule breaks</option><option value="open">Open · the filter flags them, the driver decides</option></select></label>
       <label><input type="checkbox" id="arena-road-tests"> Include road tests (longer drives)</label>
       <button id="arena-run" class="toggle on">Run evaluation</button><button id="arena-export" class="toggle" disabled>Export results</button>
       <p id="arena-status" role="status">Loading the arena…</p>

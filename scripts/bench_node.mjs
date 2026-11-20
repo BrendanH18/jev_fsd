@@ -5,6 +5,7 @@
 // node --experimental-default-type=module scripts/bench_node.mjs --map calgary --count 2
 // Options: --map (a preset id or W,S,E,N), --count, --seed, --npcs, --brain, --weather, --port,
 // --features (bare, the default, with every opt-in feature off; or city, the free drive's: bench/runner.js),
+// --track open (the open track: road-rule checks flag manoeuvres instead of removing them, brain/tracks.js),
 // --park 1, --hour 23.5 (both presets), --without geese,ice (city), --cover 0 (city pairwise row),
 // --diagnostics 1 (incident positions and actors), --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
 // (exit with status 1 if any route fails, as CI does).
@@ -49,6 +50,7 @@ const OPTIONS = [
   "record",
   "replay",
   "heldout",
+  "track",
 ];
 for (const [name, value] of Object.entries(args)) {
   if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
@@ -69,6 +71,7 @@ const SUITE_OPTIONS = [
   "without",
   "cover",
   "heldout",
+  "track",
 ];
 // (read here, checked once the modules load: they need the page's token first)
 let replayJson = null;
@@ -100,6 +103,7 @@ if (args.replay) {
     ...(b.without?.length ? { without: b.without.join(",") } : {}),
     ...(b.cover !== undefined ? { cover: String(b.cover) } : {}),
     ...(b.heldout ? { heldout: "1" } : {}),
+    ...(b.track ? { track: b.track } : {}),
   });
 }
 const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
@@ -177,6 +181,7 @@ try {
     ...(args.hour !== undefined ? { hour: Number(args.hour) } : {}),
     without: args.without || [],
     ...(args.cover !== undefined ? { cover: integer("cover", 0, 0) } : {}),
+    ...(args.track !== undefined ? { track: String(args.track) } : {}),
   });
 } catch (error) {
   fail(error.message);

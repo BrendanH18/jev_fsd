@@ -27,7 +27,7 @@ export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 export function setupChallenge(
   map,
   challenge,
-  { brain = "rules", onDecision = () => {}, onEvent = () => {}, tape = null } = {},
+  { brain = "rules", onDecision = () => {}, onEvent = () => {}, tape = null, track = "guarded" } = {},
 ) {
   const world = new World(map, {
     seed: challenge.seed,
@@ -81,6 +81,7 @@ export function setupChallenge(
       brain !== "__proto__" && Object.hasOwn(autopilot.brains, brain) ? autopilot.brains[brain] : null,
     );
   autopilot.setBrain(brain);
+  autopilot.track = track;
   world.route = new Route(scenario.route, map, world.ego.spec);
   world.destination = scenario.goal;
   installChallenge(world, fleet, challenge, scenario);
@@ -91,7 +92,14 @@ export function setupChallenge(
 export async function evaluateChallenge(
   map,
   challenge,
-  { brain = "rules", mode = "lockstep", shouldStop = () => false, limit = challenge.limit_s || 180, tape = null } = {},
+  {
+    brain = "rules",
+    mode = "lockstep",
+    shouldStop = () => false,
+    limit = challenge.limit_s || 180,
+    tape = null,
+    track = "guarded",
+  } = {},
 ) {
   if (!["lockstep", "realtime"].includes(mode) || !Number.isFinite(limit) || limit <= 0)
     throw new Error("Choose a valid evaluation clock and time limit.");
@@ -103,6 +111,7 @@ export async function evaluateChallenge(
   const ctx = setupChallenge(map, challenge, {
     brain,
     tape,
+    track,
     onEvent: (event) => {
       if (event.type === "arrived") {
         arrived = true;

@@ -272,7 +272,7 @@ function decisionDetails(decision, age) {
             h(
               "li",
               {},
-              `${c.id}${c.id === decision.chosen_id ? " · executed" : ""} · ${c.eligible ? "eligible" : `rejected: ${c.reject || "safety filter"}`}${c.target_mps == null ? "" : ` · ${Math.round(c.target_mps * 3.6)} km/h target`}`,
+              `${c.id}${c.id === decision.chosen_id ? " · executed" : ""} · ${c.eligible ? (c.reject ? `flagged: ${c.reject}` : "eligible") : `rejected: ${c.reject || "safety filter"}`}${c.target_mps == null ? "" : ` · ${Math.round(c.target_mps * 3.6)} km/h target`}`,
             ),
           ),
         )
@@ -416,6 +416,7 @@ async function run() {
   render();
   $("#arena-run").textContent = "Stop evaluation";
   const mode = $("#arena-mode").value,
+    track = $("#arena-track")?.value === "open" ? "open" : "guarded",
     pool = [...CHALLENGES, ...($("#arena-road-tests")?.checked ? ROAD_TESTS : [])];
   try {
     for (const challenge of pool) {
@@ -426,13 +427,13 @@ async function run() {
         if (stop) break;
         $("#arena-status").textContent =
           `${challenge.title} · ${agentLabel(brain)} · ${results.length + 1}/${pool.length * selected.length}`;
-        results.push(await evaluateChallenge(map, challenge, { brain, mode, shouldStop: () => stop }));
+        results.push(await evaluateChallenge(map, challenge, { brain, mode, track, shouldStop: () => stop }));
         render();
       }
     }
     current.status = stop ? "stopped" : "complete";
     $("#arena-status").textContent =
-      `${stop ? "Stopped" : "Complete"} · ${results.filter((r) => r.pass).length}/${results.length} passes · ${mode}`;
+      `${stop ? "Stopped" : "Complete"} · ${results.filter((r) => r.pass).length}/${results.length} passes · ${mode}${track === "open" ? " · open track" : ""}`;
   } catch (error) {
     current.status = "error";
     $("#arena-status").textContent = `Evaluation failed: ${error.message}. Completed attempts are retained.`;

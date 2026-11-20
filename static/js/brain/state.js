@@ -11,6 +11,7 @@ import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
 import { STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
 import { featureMotion, hooks } from "../sim/features/index.js";
+import { flagText } from "./tracks.js";
 
 // The registered features' decision state and wording (sim/features/index.js), each where that feature's
 // own code used to be.
@@ -840,6 +841,8 @@ const CYCLIST_NOT_HERE = {
 };
 
 function outcomeLabel(c, snap) {
+  // (the open track: a manoeuvre the road-rule checks flagged, brain/tracks.js)
+  if (c.flagged) return `flagged: ${flagText(c.reject)}`;
   if (c.id === "stop_at_line" && snap.intersection)
     return `clear, stops ${Math.max(0, r1(snap.intersection.bumper_to_line_m - c.sim.progress_m))} m before the line`;
   if (c.id === "stop_at_destination") return "clear, reaches the destination";
@@ -1923,9 +1926,14 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const criteria = {};
     for (const c of eligible)
       criteria[c.id] = `${c.steer}, ${c.speed}, +${r1(c.sim.progress_m)} m, ${outcomeLabel(c, snap)}`;
+    // (the open track: a manoeuvre that failed a road-rule check is still offered, saying which, brain/tracks.js)
+    const checks =
+      meta.track === "open"
+        ? `The 3-second predictions have passed a collision check against observed objects only; unseen objects and later changes remain possible. They are not held to the road rules: a maneuver described as "flagged" broke a road rule in its prediction, and says which. The drive is judged on what the car does.`
+        : "The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible.";
     questions.vector = {
       type: "choice",
-      instructions: `${pre} Choose the maneuver for the next second using driving_style and the visible situation. The 3-second predictions have passed collision and road-rule checks against observed objects only; unseen objects and later changes remain possible. Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.`,
+      instructions: `${pre} Choose the maneuver for the next second using driving_style and the visible situation. ${checks} Weigh progress against braking, cornering, nearby clearance, roadside activity and limited sight lines. car.target_speed is a planning reference for limits, curves and stopping room, not a required choice. You may slow earlier or choose a safe lateral clearance when the situation or style warrants it. Keep moving when there is adequate visible room; hold still only for a present obstruction or a required stop at the car's current position.`,
       criteria,
     };
   } else if (eligible.length === 1) {

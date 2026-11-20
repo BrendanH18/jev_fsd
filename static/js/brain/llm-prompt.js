@@ -7,8 +7,9 @@
 // with. What it returns: one JSON object such as {"motion": "drive", "candidate": "keep_lane_target"}.
 // The server parses the reply leniently and rejects ids that were not offered (jev/llm.py).
 //
-// Every offered manoeuvre has already passed the shared safety filter, so the model only chooses
-// among safe options; the controller and emergency brake still run underneath it.
+// On the guarded track every offered manoeuvre has already passed the shared safety filter, so the model
+// only chooses among safe options; on the open track (brain/tracks.js) those that failed a road-rule
+// check are offered too, flagged. The controller and emergency brake still run underneath it.
 //
 // Lessons from tuning Jev's wording:
 //  * Models take wording literally. Say *when* each option is correct instead of hinting.
@@ -19,14 +20,21 @@ import { situationClauses } from "./state.js";
 // (each registered feature's line, at its place: sim/features/index.js)
 import { promptLines } from "../sim/features/index.js";
 
-export const SYSTEM_PROMPT = `
+// What the candidates were checked for: on the guarded track every check, on the open track the collision
+// check alone, with the road-rule checks' findings shown as flags (brain/tracks.js).
+const GUARDED_CHECKS =
+  "Every manoeuvre in `candidates` already passed a 3-second collision and road-rule check against the objects the car can see. All of them are allowed; your job is to choose the one that best fits `driving_style` and `situation`. Unseen objects and later changes are still possible.";
+const OPEN_CHECKS =
+  'Every manoeuvre in `candidates` already passed a 3-second collision check against the objects the car can see, but not the road rules: one whose `outcome` begins "flagged:" broke a road rule in its 3-second prediction, and the outcome says which. Your job is to choose the one that best fits `driving_style` and `situation`; the drive is judged on what the car does. Unseen objects and later changes are still possible.';
+
+const systemPrompt = (CHECKED) => `
 Flashing amber means slow and proceed cautiously, yielding to pedestrians and vehicles already in the junction. Flashing red means a full stop, then yield to main-street traffic as at a two-way stop; neither is an advance green or a right-on-red decision.
 
 When turn_restriction.banned is true, stop before the junction and request a legal route. Conditional signs apply only while in_effect is true.
 ${promptLines("restrictions")}When headlights is present, answer headlights with high only when headlights.high_allowed is true; otherwise low. Dip for oncoming traffic within 150 m, following within 60 m, fog, snow and lit streets.
 You are the driving policy of a car in a city traffic simulator. Several times a second you receive what the car's sensors observe and the manoeuvres it can make next, and you choose one.
 
-Every manoeuvre in \`candidates\` already passed a 3-second collision and road-rule check against the objects the car can see. All of them are allowed; your job is to choose the one that best fits \`driving_style\` and \`situation\`. Unseen objects and later changes are still possible.
+${CHECKED}
 
 The input is JSON:
 - Units are metres, m/s and seconds. \`right\` and \`ahead\` are relative to the car; a negative \`ahead\` is behind it.
@@ -94,6 +102,9 @@ How to choose \`route\` (only when \`answer\` asks for it): the car has left its
 
 Reply with one JSON object and nothing else. Use exactly the keys listed in \`answer\`, each with one of the listed values, for example {"motion": "drive", "candidate": "keep_lane_target"}.`;
 
+export const SYSTEM_PROMPT = systemPrompt(GUARDED_CHECKS);
+export const OPEN_SYSTEM_PROMPT = systemPrompt(OPEN_CHECKS);
+
 // Returns { messages, expect }. `expect` lists the values the model may answer with; the server
 // uses it for structured output (when the endpoint supports it) and to validate the reply.
 export function buildLlmPrompt(snap, request) {
@@ -112,7 +123,7 @@ export function buildLlmPrompt(snap, request) {
   input.answer = expect;
   return {
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: request.track === "open" ? OPEN_SYSTEM_PROMPT : SYSTEM_PROMPT },
       { role: "user", content: JSON.stringify(input) },
     ],
     expect,
