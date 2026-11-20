@@ -44,8 +44,6 @@ export const agentOptionLabel = (d) => (d.note ? `${d.label} · ${d.note}` : d.l
 // The three pillars: Rules, decision models (Jev and every decision:<name>) and LLMs (llm:<name>).
 // Local agents such as the cautious starter are their own group.
 export const isDecisionAgent = (id) => id === "jev" || String(id).startsWith("decision:");
-// A driver that asks a model: a decision model or an LLM endpoint.
-export const isModelAgent = (id) => isDecisionAgent(id) || String(id).startsWith("llm:");
 export const pillarOf = (id) => (isDecisionAgent(id) ? "decision" : String(id).startsWith("llm:") ? "llm" : id);
 registerAgent({ id: "rules", label: "Rules", create: () => new RulesBrain(), builtin: true });
 registerAgent({

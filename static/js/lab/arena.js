@@ -44,7 +44,7 @@ const roadTestVerdict = (r) => {
 const percent = (n) => `${Math.round(n * 100)}%`;
 const signed = (n, digits = 0) => `${n > 0 ? "+" : ""}${n.toFixed(digits)}`;
 const runLabel = (run) =>
-  `${new Date(run.created_at).toLocaleString()} · ${run.status} · ${run.results.length} attempts · ${[...new Set(run.results.map((r) => r.mode))].join(" / ")}`;
+  `${new Date(run.created_at).toLocaleString()} · ${run.status} · ${run.results.length} attempts · ${[...new Set(run.results.map((r) => r.mode))].join(" / ")}${run.results.some((r) => r.track === "open") ? " · open track" : ""}`;
 const visibleRun = () => ($("#arena-history").value === "current" ? current : saved[Number($("#arena-history").value)]);
 const baselineRun = () => ($("#arena-baseline").value === "" ? null : saved[Number($("#arena-baseline").value)]);
 function agents() {

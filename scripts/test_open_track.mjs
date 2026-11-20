@@ -55,6 +55,9 @@ const WINNIPEG = load("19bb885c9cae");
 const CHALLENGE = CHALLENGES.find((c) => c.id === "left-arrow");
 const step = (ctx) => stepWorld({ ...ctx, input: null }, 1 / 60, ctx.world.t * 1000);
 
+// (whether an agent module was asked to choose among flagged manoeuvres alone, as any driver but Rules and the
+// cautious agent is)
+let askedOnlyFlagged = false;
 // A driver that ignores the flags: Rules' choice, unless a flagged manoeuvre gets further. On the guarded
 // track, where nothing is flagged, it is Rules.
 registerAgent({
@@ -64,6 +67,7 @@ registerAgent({
     name: "flag_blind_test",
     rules: new RulesBrain(),
     decideSync(snap, eligible) {
+      if (!unflagged(eligible).length) askedOnlyFlagged = true;
       const r = this.rules.decideSync(snap, unflagged(eligible));
       const pick = eligible.find((c) => c.id === r.candidateId);
       const further = eligible
@@ -209,6 +213,7 @@ await test("a driver that goes with flagged manoeuvres runs the red and fails, w
   assert.ok(open.failures.includes("red light"), JSON.stringify(open.failures));
   assert.ok(open.flagged_choices > 0);
   assert.ok(open.flagged_by_check.runs_red > 0, JSON.stringify(open.flagged_by_check));
+  assert.equal(askedOnlyFlagged, true, "an agent module chooses among flagged manoeuvres alone");
   // (the drive saves and reloads in the arena's history with its open-track fields)
   const exported = {
     schema: EVALUATION_SCHEMA,

@@ -18,7 +18,7 @@ import { api } from "../common.js";
 import { officerStopLaw } from "../sim/traffic-officer.js";
 import { Route } from "../map/route.js";
 import { browserRoute } from "../demo/routing.js";
-import { createAgents, validAgentChoice, isDecisionAgent, isModelAgent } from "./registry.js";
+import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
 import { DEFAULT_TRACK, openTrack, unflagged } from "./tracks.js";
 
 const INTERVAL_HAZARD_MS = 250;
@@ -55,6 +55,8 @@ function creepForOfficer(law, snap, world) {
 
 // Answers `local` without the vector (the guarded track never has one where nothing is eligible).
 const withoutVector = ({ vector: _vector, ...rest }) => rest;
+// The drivers that keep to the unflagged manoeuvres on the open track, and so drive it as the guarded one.
+const REFERENCE_DRIVERS = new Set(["rules", "cautious"]);
 
 export class Autopilot {
   constructor(world, { onDecision = () => {}, onEvent = () => {} } = {}) {
@@ -383,10 +385,21 @@ export class Autopilot {
     const track = this.track;
     const state = toJevState(snap, candidates, { rejected, routeOptions, track }, this.style);
     const { questions, local } = buildQuestions(snap, eligible, { routeOptions, track });
-    const request = { epoch, state, questions, local, candidates, eligible, flags, mustStop, track };
-    // (on the open track, a choice among flagged manoeuvres alone is a model's: Rules and the built-in
-    // agents brake there as on the guarded track, where nothing would be left)
-    if (!eligible.length || (!clear.length && (eligible.length < 2 || !isModelAgent(this.brainName)))) {
+    const request = {
+      epoch,
+      state,
+      questions,
+      local,
+      candidates,
+      eligible,
+      flags,
+      mustStop,
+      // (the open track only: a guarded request is as before)
+      ...(track === "open" ? { track } : {}),
+    };
+    // (on the open track, a choice among flagged manoeuvres alone is the driver's: Rules and the cautious agent,
+    // the reference drivers, brake there as on the guarded track, where nothing would be left)
+    if (!eligible.length || (!clear.length && (eligible.length < 2 || REFERENCE_DRIVERS.has(this.brainName)))) {
       this.apply(
         {
           motion: "stop",

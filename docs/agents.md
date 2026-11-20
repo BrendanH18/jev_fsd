@@ -50,9 +50,9 @@ The emergency brake and safety filtering remain shared. An agent can still choos
 eligible manoeuvre, and the simulator still audits collisions and violations. On the
 [open track](reference/benchmarks.md#benchmarks-and-validation) `eligible` also holds the manoeuvres that
 failed a road-rule check, each with `flagged: true` and the check in `reject`; choosing one is allowed and
-judged by the audit. With nothing unflagged left, the autopilot brakes without asking an agent module,
-as it does on the guarded track with nothing eligible; only a model driver is asked to choose among flagged
-manoeuvres alone.
+judged by the audit. With nothing unflagged left, Rules and the cautious agent brake without being asked,
+as on the guarded track with nothing eligible; any other driver, a model or an agent module, is asked to
+choose among the flagged manoeuvres (with a single one left, the car brakes).
 
 For a remote model, the easiest route is a [decision model](#decision-models-jev-and-others) or an
 [LLM endpoint](#llm-endpoints-test-your-own-model): no code, and the local server keeps the key. To write your own adapter instead, implement

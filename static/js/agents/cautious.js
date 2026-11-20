@@ -7,7 +7,7 @@ export class CautiousAgent {
     this.name = "cautious";
   }
   decideSync(snap, offered) {
-    // (the autopilot brakes without asking when nothing unflagged is left: brain/brain.js)
+    // (the autopilot brakes without asking it when nothing unflagged is left: brain/brain.js)
     const eligible = offered.filter((c) => !c.flagged);
     const i = snap.intersection;
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
