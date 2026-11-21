@@ -3,6 +3,7 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { driverScores, SCORES_VERSION } from "../static/js/bench/scores.js";
+import { suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording } from "../static/js/brain/recording.js";
 
 // Audit counters and sampled durations from DriveMetrics.summary. Keep each metric in its saved unit.
@@ -84,7 +85,9 @@ function readRepeat(path) {
   if (header.kind === "llm" && providerSettings.size !== 1)
     throw new Error(`${path} needs matching provider settings in its request traces.`);
   return {
+    suite_version: suiteVersion(header),
     signature: canonicalJson({
+      suite_version: suiteVersion(header),
       track,
       engine: header.engine,
       set: header.arena.set,
@@ -144,10 +147,13 @@ function compare(paths) {
     !first.source ||
     runs.some((run) => run.signature !== first.signature || run.dirty || run.source !== first.source)
   )
-    throw new Error("Record each repeat on the same clean source, engine, track, maps and authored drives.");
+    throw new Error(
+      "Record each repeat on the same clean source, suite version, engine, track, maps and authored drives.",
+    );
   const groups = Map.groupBy(runs, (run) => run.driver);
   return {
     scores_version: SCORES_VERSION,
+    suite_version: first.suite_version,
     source_commit: first.source,
     engine: first.engine,
     track: first.track,

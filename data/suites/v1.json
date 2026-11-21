@@ -1,0 +1,371 @@
+{
+  "version": "v1",
+  "defined_from": "90bc6dc7055fe70b1d82a547d085ff4471d0c59e",
+  "arena": {
+    "drives": {
+      "door-zone": {
+        "map": "kitsilano",
+        "seed": 1042,
+        "version": 1
+      },
+      "fog-junction": {
+        "map": "victoria",
+        "seed": 2042,
+        "version": 1
+      },
+      "rain-crossing": {
+        "map": "montreal",
+        "seed": 3042,
+        "version": 2
+      },
+      "snow-stop": {
+        "map": "toronto",
+        "seed": 4042,
+        "version": 1
+      },
+      "curb-merge": {
+        "map": "kitsilano",
+        "seed": 5042,
+        "version": 1
+      },
+      "blind-crossing": {
+        "map": "kitsilano",
+        "seed": 6042,
+        "version": 1
+      },
+      "unprotected-left": {
+        "map": "ottawa",
+        "seed": 7042,
+        "version": 1
+      },
+      "right-on-red": {
+        "map": "calgary",
+        "seed": 8042,
+        "version": 1
+      },
+      "four-way-stop": {
+        "map": "toronto",
+        "seed": 9042,
+        "version": 1
+      },
+      "blind-corner": {
+        "map": "mount_pleasant",
+        "seed": 10042,
+        "version": 1
+      },
+      "right-hook": {
+        "map": "kitsilano",
+        "seed": 11042,
+        "version": 1
+      },
+      "lights-and-sirens": {
+        "map": "edmonton",
+        "seed": 12042,
+        "version": 1
+      },
+      "bus-pulling-out": {
+        "map": "kitsilano",
+        "seed": 13042,
+        "version": 1
+      },
+      "multiple-threat": {
+        "map": "kitsilano",
+        "seed": 14042,
+        "version": 1
+      },
+      "school-bus": {
+        "map": "kitsilano",
+        "seed": 15042,
+        "version": 1
+      },
+      "school-zone": {
+        "map": "kitsilano",
+        "seed": 16042,
+        "version": 1
+      },
+      "move-over": {
+        "map": "winnipeg",
+        "seed": 17042,
+        "version": 1
+      },
+      "streetcar": {
+        "map": "toronto",
+        "seed": 18042,
+        "version": 1
+      },
+      "level-crossing": {
+        "map": "edmonton",
+        "seed": 19042,
+        "version": 1
+      },
+      "junction-box": {
+        "map": "montreal",
+        "seed": 20042,
+        "version": 1
+      },
+      "left-arrow": {
+        "map": "winnipeg",
+        "seed": 21042,
+        "version": 1
+      },
+      "flagger": {
+        "map": "ottawa",
+        "seed": 22042,
+        "version": 1
+      },
+      "after-midnight": {
+        "map": "halifax",
+        "seed": 39042,
+        "version": 1
+      },
+      "lights-out": {
+        "map": "halifax",
+        "seed": 23042,
+        "version": 1
+      },
+      "double-parked": {
+        "map": "toronto",
+        "seed": 24042,
+        "version": 1
+      },
+      "parallel-park": {
+        "map": "kitsilano",
+        "seed": 25042,
+        "version": 1
+      },
+      "step-out": {
+        "map": "kitsilano",
+        "seed": 26042,
+        "version": 1
+      },
+      "blind-left": {
+        "map": "kitsilano",
+        "seed": 27042,
+        "version": 1
+      },
+      "snow-plow": {
+        "map": "winnipeg",
+        "seed": 28042,
+        "version": 1
+      },
+      "zipper": {
+        "map": "calgary",
+        "seed": 29042,
+        "version": 1
+      },
+      "cyclist-pass": {
+        "map": "kitsilano",
+        "seed": 30042,
+        "version": 1
+      },
+      "speed-humps": {
+        "map": "ottawa",
+        "seed": 31042,
+        "version": 1
+      },
+      "scramble": {
+        "map": "victoria",
+        "seed": 32042,
+        "version": 1
+      },
+      "collection": {
+        "map": "kitsilano",
+        "seed": 33042,
+        "version": 1
+      },
+      "crossing-guard": {
+        "map": "montreal",
+        "seed": 34042,
+        "version": 1
+      },
+      "pxo-far-curb": {
+        "map": "ottawa",
+        "seed": 35042,
+        "version": 1
+      },
+      "bus-lanes": {
+        "map": "mount_pleasant",
+        "seed": 36042,
+        "version": 1
+      },
+      "no-left-turn": {
+        "map": "toronto",
+        "seed": 37042,
+        "version": 1
+      },
+      "contraflow": {
+        "map": "montreal",
+        "seed": 40042,
+        "version": 1
+      },
+      "dip-your-lights": {
+        "map": "saskatoon",
+        "seed": 41042,
+        "version": 1
+      },
+      "left-on-red": {
+        "map": "calgary",
+        "seed": 38042,
+        "version": 1
+      },
+      "roundabout-gap": {
+        "map": "halifax",
+        "seed": 42042,
+        "version": 1
+      },
+      "wait-for-green": {
+        "map": "toronto",
+        "seed": 43042,
+        "version": 1
+      },
+      "amber-stop": {
+        "map": "kitsilano",
+        "seed": 44042,
+        "version": 1
+      },
+      "amber-clear": {
+        "map": "kitsilano",
+        "seed": 45042,
+        "version": 1
+      },
+      "brakes-ahead": {
+        "map": "kitsilano",
+        "seed": 46042,
+        "version": 1
+      },
+      "make-room": {
+        "map": "kitsilano",
+        "seed": 47042,
+        "version": 1
+      },
+      "fresh-green": {
+        "map": "edmonton",
+        "seed": 48042,
+        "version": 1
+      },
+      "into-the-sun": {
+        "map": "calgary",
+        "seed": 50042,
+        "version": 1
+      },
+      "reverse-lights": {
+        "map": "calgary",
+        "seed": 49042,
+        "version": 1
+      },
+      "pothole-season": {
+        "map": "montreal",
+        "seed": 51042,
+        "version": 1
+      },
+      "chasing-the-ball": {
+        "map": "kitsilano",
+        "seed": 52042,
+        "version": 1
+      },
+      "goose-crossing": {
+        "map": "ottawa",
+        "seed": 53042,
+        "version": 1
+      },
+      "on-your-bumper": {
+        "map": "winnipeg",
+        "seed": 56042,
+        "version": 1
+      },
+      "bridges-freeze-first": {
+        "map": "saskatoon",
+        "seed": 55042,
+        "version": 1
+      },
+      "one-car-at-a-time": {
+        "map": "montreal",
+        "seed": 54042,
+        "version": 1
+      },
+      "dont-splash": {
+        "map": "mount_pleasant",
+        "seed": 59042,
+        "version": 1
+      },
+      "room-to-park": {
+        "map": "kitsilano",
+        "seed": 58042,
+        "version": 1
+      },
+      "road-closed": {
+        "map": "halifax",
+        "seed": 60042,
+        "version": 1
+      },
+      "follow-the-officer": {
+        "map": "toronto",
+        "seed": 57042,
+        "version": 1
+      },
+      "road-test-kitsilano": {
+        "map": "kitsilano",
+        "seed": 61042,
+        "version": 1
+      },
+      "road-test-toronto": {
+        "map": "toronto",
+        "seed": 62042,
+        "version": 1
+      }
+    }
+  },
+  "maps": {
+    "kitsilano": "585df0725632b07b",
+    "victoria": "6953284dd7bae0bb",
+    "montreal": "be12ae23627769f7",
+    "toronto": "cfdd948bbe741675",
+    "ottawa": "c18b8436019517f5",
+    "calgary": "d8c3b4c3921cb359",
+    "mount_pleasant": "6ced97725cf745ba",
+    "edmonton": "a51694d053bc1df7",
+    "winnipeg": "71b18c535b3fe622",
+    "halifax": "9b6ff7fddda0fe53",
+    "saskatoon": "f881164b6b5aea9c"
+  },
+  "bench": {
+    "config": {
+      "map": "kitsilano",
+      "features": "city",
+      "mode": "lockstep",
+      "count": 12,
+      "seed": 1,
+      "npcs": 40
+    },
+    "weathers": [
+      "dry",
+      "fog",
+      "rain",
+      "snow"
+    ],
+    "ids": [
+      "s1-1",
+      "s1-2",
+      "s1-3",
+      "s1-4",
+      "s1-5",
+      "s1-6",
+      "s1-7",
+      "s1-8",
+      "s1-9",
+      "s1-10",
+      "s1-11",
+      "s1-12"
+    ],
+    "route_sha": "1607d4bf5bdaaeec",
+    "heldout": {
+      "seeds": [
+        101,
+        102,
+        103
+      ],
+      "count": 4,
+      "route_sha": "06d11ac197ecf178"
+    }
+  }
+}

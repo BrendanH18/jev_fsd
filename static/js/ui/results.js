@@ -17,7 +17,10 @@ import {
   moneyText,
   WEATHERS,
   HOME_MAP,
+  resultVersions,
+  suiteLabel,
 } from "../lab/results.js";
+import { CUSTOM_SUITE, LEGACY_SUITE, suiteVersion } from "../bench/suite-version.js";
 
 const REPO = "https://github.com/BrendanH18/jev_fsd/blob/main/";
 const KITSILANO_REPLAY_SOURCE = "9b53a074ba6e4e17001d904d32fcb67151260eb1";
@@ -296,7 +299,7 @@ function replayList(list, data) {
           "li",
           {},
           h("strong", {}, data.drivers[r.driver]?.label || r.driver),
-          ` · ${r.label} · `,
+          ` · ${suiteLabel(r.suite_version)} · ${r.label} · `,
           source(r.recording),
           r.sourceCommit
             ? h(
@@ -333,11 +336,45 @@ async function main() {
   const status = $("#results-status");
   try {
     const data = checkResults(await api("/api/results"));
-    const top = summary(data);
-    $("#results-summary").replaceChildren(summaryTable(data, top));
-    $("#results-challenges").replaceChildren(challengeTable(challengeMatrix(data), data));
-    $("#results-open").replaceChildren(challengeTable(challengeMatrix(data, "open"), data));
-    $("#results-city").replaceChildren(cityTable(cityGrid(data), data));
+    const versions = resultVersions(data);
+    const filter = $("#results-version");
+    filter.replaceChildren(...versions.map((v) => h("option", { value: v }, suiteLabel(v))));
+    $("#suite-filter").hidden = versions.length < 2;
+    const renderVersion = () => {
+      const version = filter.value || LEGACY_SUITE;
+      const rows = data.rows.filter((row) => suiteVersion(row) === version);
+      const custom = version === CUSTOM_SUITE;
+      for (const id of ["challenges", "open", "city"]) $(`#results-${id}`).closest("section").hidden = custom;
+      $("#results-summary").replaceChildren(
+        custom
+          ? h(
+              "ul",
+              {},
+              rows.map((row) =>
+                h(
+                  "li",
+                  {},
+                  `${data.drivers[row.driver]?.label || row.driver} · ${row.label} · ${fractionText(row)} · ${row.date} · `,
+                  row.sources.map((path) => source(path)),
+                ),
+              ),
+            )
+          : summaryTable(data, summary(data, version)),
+      );
+      if (!custom) {
+        $("#results-challenges").replaceChildren(challengeTable(challengeMatrix(data, "challenges", version), data));
+        $("#results-open").replaceChildren(challengeTable(challengeMatrix(data, "open", version), data));
+        $("#results-city").replaceChildren(cityTable(cityGrid(data, version), data));
+      }
+      const dates = rows
+        .map((row) => row.date)
+        .filter(Boolean)
+        .sort();
+      const period = dates.length ? `, ${dates[0]} to ${dates.at(-1)}` : "";
+      status.textContent = `${suiteLabel(version)} · ${rows.length} committed runs${period}.`;
+    };
+    filter.addEventListener("change", renderVersion);
+    renderVersion();
     $("#results-replay").replaceChildren(replayList(recordings(data), data));
     $("#results-sources").replaceChildren(
       h(
@@ -346,8 +383,6 @@ async function main() {
         [...new Set(data.rows.flatMap((r) => r.sources))].sort().map((path) => h("li", {}, source(path))),
       ),
     );
-    const dates = [...new Set(data.rows.filter((r) => r.suite !== "bare").map((r) => r.date))].sort();
-    status.textContent = `${data.rows.length} committed runs, ${dates[0]} to ${dates.at(-1)}. Hover a result to see the file it came from.`;
     // The tables above the replay grow after a direct link has already scrolled to its fragment.
     if (location.hash === "#replay-heading") $(location.hash).scrollIntoView();
   } catch (err) {

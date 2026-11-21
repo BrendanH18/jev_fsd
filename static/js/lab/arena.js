@@ -18,6 +18,7 @@ import {
 import { ROAD_TESTS } from "./road-tests.js";
 import { decidedByText } from "../bench/metrics.js";
 import { driveScores, rankDrivers, scoresText } from "../bench/scores.js";
+import { CUSTOM_SUITE, suiteVersion } from "../bench/suite-version.js";
 import { examine } from "./examiner.js";
 
 let running = false,
@@ -44,7 +45,7 @@ const roadTestVerdict = (r) => {
 const percent = (n) => `${Math.round(n * 100)}%`;
 const signed = (n, digits = 0) => `${n > 0 ? "+" : ""}${n.toFixed(digits)}`;
 const runLabel = (run) =>
-  `${new Date(run.created_at).toLocaleString()} · ${run.status} · ${run.results.length} attempts · ${[...new Set(run.results.map((r) => r.mode))].join(" / ")}${run.results.some((r) => r.track === "open") ? " · open track" : ""}`;
+  `${new Date(run.created_at).toLocaleString()} · ${suiteVersion(run)} · ${run.status} · ${run.results.length} attempts · ${[...new Set(run.results.map((r) => r.mode))].join(" / ")}${run.results.some((r) => r.track === "open") ? " · open track" : ""}`;
 const visibleRun = () => ($("#arena-history").value === "current" ? current : saved[Number($("#arena-history").value)]);
 const baselineRun = () => ($("#arena-baseline").value === "" ? null : saved[Number($("#arena-baseline").value)]);
 function agents() {
@@ -405,6 +406,7 @@ async function run() {
   results = [];
   current = {
     schema: EVALUATION_SCHEMA,
+    suite_version: CUSTOM_SUITE,
     challenge_version: CHALLENGE_VERSION,
     created_at: new Date().toISOString(),
     status: "complete",
@@ -427,7 +429,8 @@ async function run() {
         if (stop) break;
         $("#arena-status").textContent =
           `${challenge.title} · ${agentLabel(brain)} · ${results.length + 1}/${pool.length * selected.length}`;
-        results.push(await evaluateChallenge(map, challenge, { brain, mode, track, shouldStop: () => stop }));
+        const result = await evaluateChallenge(map, challenge, { brain, mode, track, shouldStop: () => stop });
+        results.push({ ...result, suite_version: current.suite_version });
         render();
       }
     }
@@ -493,7 +496,12 @@ async function boot() {
     }
   });
   $("#arena-export").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(visibleRun())], { type: "application/json" });
+    const run = visibleRun();
+    const suite_version = suiteVersion(run);
+    const blob = new Blob(
+      [JSON.stringify({ ...run, suite_version, results: run.results.map((r) => ({ ...r, suite_version })) })],
+      { type: "application/json" },
+    );
     const url = URL.createObjectURL(blob),
       a = h("a", { href: url, download: "jev-agent-evaluation.json" });
     a.click();

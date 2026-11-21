@@ -1,4 +1,5 @@
 import { failures, DECIDED_BY, decidedByTotals, decidedByCounts } from "../bench/metrics.js";
+import { CUSTOM_SUITE, LEGACY_SUITE, suiteVersion } from "../bench/suite-version.js";
 
 // (v3: decisions no event links to are compact, and repeats are folded together: lab/trace.js)
 export const EVALUATION_SCHEMA = "jev-agent-evaluation-v3";
@@ -90,7 +91,10 @@ export function validateEvaluation(value) {
     !Number.isFinite(Date.parse(value.created_at))
   )
     throw new Error("The evaluation has invalid dates, versions or results.");
+  if (value.suite_version !== undefined && ![LEGACY_SUITE, CUSTOM_SUITE].includes(value.suite_version))
+    throw new Error("The evaluation has an unknown suite version.");
   const results = value.results.map((r) => {
+    if (r?.suite_version !== value.suite_version) throw new Error("The evaluation disagrees on suite version.");
     if (
       !r ||
       !["challenge", "map", "brain", "weather", "time", "car"].every((k) => text(r[k])) ||
@@ -187,6 +191,7 @@ export function validateEvaluation(value) {
   });
   return {
     schema: value.schema,
+    ...(value.suite_version === undefined ? {} : { suite_version: value.suite_version }),
     challenge_version: value.challenge_version,
     created_at: value.created_at,
     status: ["complete", "stopped", "error", "imported"].includes(value.status) ? value.status : "imported",
@@ -513,6 +518,7 @@ export function conditionDifferences(a, b) {
   const differences = Object.entries(CONDITIONS)
     .filter(([k]) => a[k] == null || b[k] == null || a[k] !== b[k])
     .map(([, label]) => label);
+  if (suiteVersion(a) !== suiteVersion(b)) differences.push("suite version");
   if (!a.engine_version || !b.engine_version || a.engine_version !== b.engine_version)
     differences.push("simulation version");
   // (the guarded and open tracks are different conditions: brain/tracks.js)

@@ -5,8 +5,10 @@ import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { aggregate } from "../static/js/bench/metrics.js";
+import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording, sameResult } from "../static/js/brain/recording.js";
 import { benchRouteFingerprint, benchRunName } from "./run_manifest.mjs";
+import { benchSuiteVersion } from "./canonical_suite.mjs";
 
 const mismatched = (file, detail) => new Error(`${file}: ${detail}`);
 
@@ -31,6 +33,8 @@ function readPart(path) {
     canonicalJson(config) !== canonicalJson(header.bench) ||
     canonicalJson(config) !== canonicalJson(manifest.suite.config) ||
     manifest.cost_usd !== aggregate(report.results).cost_usd ||
+    report.suite_version !== header.suite_version ||
+    report.results.some((result) => result.suite_version !== report.suite_version) ||
     header.map_sha !== manifest.maps?.[config.map]?.fingerprint
   )
     throw mismatched(path, "report, tape and manifest disagree");
@@ -121,6 +125,12 @@ function merge(paths, reportPath, recordingPath, suitePath) {
     cost_usd: summary.cost_usd,
   };
   merged.header.manifest = manifest;
+  const suite_version =
+    suiteVersion(first.tape.header) === LEGACY_SUITE
+      ? LEGACY_SUITE
+      : benchSuiteVersion({ ...manifest.suite, map_sha: merged.header.map_sha }, ordered);
+  setRecordingSuiteVersion(merged, suite_version);
+  for (const result of ordered) result.suite_version = suite_version;
   merged.header.recorded_at = parts
     .map(({ tape }) => tape.header.recorded_at)
     .sort()
@@ -129,7 +139,15 @@ function merge(paths, reportPath, recordingPath, suitePath) {
     .map(({ report }) => report.saved_at)
     .sort()
     .at(-1);
-  const output = { name: benchRunName(saved_at, config.brain), saved_at, config, summary, results: ordered, manifest };
+  const output = {
+    suite_version,
+    name: benchRunName(saved_at, config.brain),
+    saved_at,
+    config,
+    summary,
+    results: ordered,
+    manifest,
+  };
   writePair([
     [recordingPath, gzipSync(merged.serialize(), { level: 9 })],
     [reportPath, `${JSON.stringify(output, null, 1)}\n`],

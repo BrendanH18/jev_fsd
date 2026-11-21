@@ -184,6 +184,65 @@ class ResultsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "recording and results disagree"):
             build_results.checked_manifest(path, run, "2099-01-01", recording)
 
+    def test_suite_version_checks_benchmark_membership(self):
+        path = ROOT / "data/runs/20990101-000000-rules.json"
+        definition = build_results.CANONICAL["v1"]
+        bench = definition["bench"]
+        config = dict(bench["config"], brain="rules", weather="snow", pack=10, engine="node v22")
+        suite = {
+            "kind": "bench",
+            "config": config,
+            "ids": bench["ids"],
+            "generated_ids": bench["ids"],
+            "route_sha": bench["route_sha"],
+        }
+        manifest = {
+            "format": build_results.MANIFEST_FORMAT,
+            "suite_version": "v1",
+            "source_commit": "a" * 40,
+            "source_dirty": False,
+            "engine": config["engine"],
+            "engine_version": "12",
+            "driver": "rules",
+            "track": "guarded",
+            "cost_usd": 0,
+            "suite": suite,
+            "maps": {
+                "kitsilano": {
+                    "pack_version": config["pack"],
+                    "fingerprint": definition["maps"]["kitsilano"],
+                    "components": {"roads": "1" * 16},
+                },
+            },
+        }
+        run = {
+            "suite_version": "v1",
+            "config": config,
+            "summary": {"cost_usd": 0},
+            "results": [{"id": drive, "suite_version": "v1", "pass": False} for drive in bench["ids"]],
+            "manifest": manifest,
+        }
+        self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01"), manifest)
+        with self.assertRaisesRegex(ValueError, "report and manifest disagree"):
+            build_results.checked_manifest(
+                path, dict(run, manifest=dict(manifest, suite_version="custom")), "2099-01-01"
+            )
+        with self.assertRaisesRegex(ValueError, "run and results disagree"):
+            build_results.checked_manifest(path, dict(run, suite_version="custom"), "2099-01-01")
+        for key, value in (("npcs", 10), ("park", True), ("hour", 0), ("weather", "ice")):
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "outside the canonical v1 suite"):
+                config[key] = value
+                try:
+                    build_results.checked_manifest(path, run, "2099-01-01")
+                finally:
+                    config.clear()
+                    config.update(bench["config"], brain="rules", weather="snow", pack=10, engine="node v22")
+        with self.assertRaisesRegex(ValueError, "outside the canonical v1 suite"):
+            build_results.checked_manifest(path, dict(run, stopped="reserve"), "2099-01-01")
+        with self.assertRaisesRegex(ValueError, "outside the canonical v1 suite"):
+            suite["only"] = True
+            build_results.checked_manifest(path, run, "2099-01-01")
+
     def test_a_newer_challenge_run_leads(self):
         # a second published full run for a driver: its summary and the README take the newest
         newer = [

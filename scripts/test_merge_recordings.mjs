@@ -6,6 +6,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
+import canonical from "../data/suites/v1.json" with { type: "json" };
+import { setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
 globalThis.document = { querySelector: () => null };
 const { ModelRecording } = await import("../static/js/brain/recording.js");
 const { benchRouteFingerprint } = await import("./run_manifest.mjs");
@@ -111,9 +113,57 @@ const g = withManifest("seven", "kitsilano", "aaaa");
 const h = withManifest("eight", "toronto", "bbbb");
 assert.match(merge(g, h), /merged 2 drives from 2 recordings/);
 const provenance = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.manifest;
+assert.equal(provenance.suite_version, "legacy");
 assert.deepEqual(Object.keys(provenance.suite.drives), ["seven", "eight"]);
 assert.deepEqual(Object.keys(provenance.maps), ["kitsilano", "toronto"]);
 refused([g, withManifest("nine", "toronto", "bbbb", "b".repeat(40))], /differs.*source/, "another source commit");
+
+const { CHALLENGES } = await import("../static/js/lab/challenges.js");
+const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
+const { authoredDrive } = await import("./canonical_suite.mjs");
+const { heldoutPlan } = await import("../static/js/bench/heldout.js");
+assert.equal(CHALLENGES.length, 60);
+assert.equal(ROAD_TESTS.length, 2);
+const authored = [...CHALLENGES, ...ROAD_TESTS].map((c) => [c.id, authoredDrive(c)]);
+assert.deepEqual(Object.fromEntries(authored), canonical.arena.drives);
+const { seeds, count } = canonical.bench.heldout;
+assert.deepEqual(heldoutPlan("kitsilano"), { seeds, count });
+
+function arenaShard(name, entries) {
+  const maps = Object.fromEntries(entries.map(([, { map }]) => [map, canonical.maps[map]]));
+  const ids = entries.map(([id]) => id);
+  const recording = new ModelRecording({
+    header: header(ids, {
+      maps,
+      manifest: {
+        source_commit: "a".repeat(40),
+        source_dirty: false,
+        suite: { kind: "arena", set: "all", drives: Object.fromEntries(entries) },
+        maps: Object.fromEntries(Object.entries(maps).map(([map, fingerprint]) => [map, { fingerprint }])),
+        cost_usd: 0,
+      },
+    }),
+    drives: Object.fromEntries(ids.map((id) => [id, {}])),
+    results: Object.fromEntries(
+      entries.map(([id, drive]) => [id, { challenge: id, ...drive, pass: false, result_sha: id }]),
+    ),
+  });
+  setRecordingSuiteVersion(recording, "custom");
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, recording.serialize());
+  return file;
+}
+const shardA = arenaShard("arena-a.json", authored.slice(0, 31));
+const shardB = arenaShard("arena-b.json", authored.slice(31));
+merge(shardA, shardB);
+const canonicalMerge = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8"));
+assert.equal(canonicalMerge.header.suite_version, "v1");
+assert.equal(canonicalMerge.results["door-zone"].result_sha, "door-zone");
+assert.equal(canonicalMerge.results["door-zone"].suite_version, "v1");
+delete canonicalMerge.results["door-zone"].suite_version;
+assert.throws(() => ModelRecording.parse(canonicalMerge.serialize()), /disagree on suite_version/);
+merge(shardA, arenaShard("arena-short.json", authored.slice(31, -1)));
+assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "custom");
 
 const config = { map: "kitsilano", features: "city", count: 3, seed: 1, brain: "jev" };
 const benchScenarios = ["s1-1", "s1-2"].map((id) => ({ id, traffic_seed: 42 }));
@@ -175,6 +225,7 @@ assert.deepEqual(
   ],
 );
 assert.equal(combined.summary.cost_usd, 0.02);
+assert.equal(combined.suite_version, "legacy");
 assert.equal(combined.manifest.suite.only, undefined);
 assert.deepEqual(combined.manifest.suite.ids, ["s1-1", "s1-2"]);
 assert.equal(combined.name, "20261121-080000-jev");

@@ -23,6 +23,8 @@ if (parts.length < 2) fail("Give at least two recordings to merge.");
 
 const { ModelRecording, canonicalJson } = await import("../static/js/brain/recording.js");
 const { runCost } = await import("./run_manifest.mjs");
+const { arenaSuiteVersion } = await import("./canonical_suite.mjs");
+const { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } = await import("../static/js/bench/suite-version.js");
 const read = (file) => {
   try {
     const raw = fs.readFileSync(file);
@@ -47,6 +49,7 @@ const identity = (h) =>
     endpoint: h.endpoint ?? null,
     engine: h.engine,
     versions: h.versions,
+    suite_version: h.suite_version,
     manifest: manifestIdentity(h.manifest),
     set: h.arena?.set,
     track: h.arena?.track ?? null,
@@ -91,6 +94,12 @@ if (first.manifest)
     maps: manifestMaps,
     cost_usd: runCost(Object.values(merged.results)),
   };
+setRecordingSuiteVersion(
+  merged,
+  suiteVersion(first) === LEGACY_SUITE
+    ? LEGACY_SUITE
+    : arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
+);
 const text = merged.serialize();
 // (written beside the destination and renamed over it, so a failed write leaves an existing file as it was)
 const tmp = `${out}.tmp`;

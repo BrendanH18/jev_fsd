@@ -3,6 +3,7 @@ import { realpathSync } from "node:fs";
 import { isAbsolute, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { headingAt, pointAt } from "../static/js/map/mapdata.js";
+import { replaySuiteVersion } from "../static/js/bench/suite-version.js";
 import { analyzeStreets, surfaceHalf } from "../static/js/map/scenery.js";
 
 const round = (value) => Math.round(value * 1000) / 1000;
@@ -72,6 +73,7 @@ export function captureBrowserReplay() {
       const inRepo = source && !isAbsolute(source) && source !== ".." && !source.startsWith(`..${sep}`);
       return {
         format: "jev-browser-replay/1",
+        suite_version: replaySuiteVersion(recording.header, false),
         challenge: challenge.id,
         model: recording.header.model,
         ...(inRepo ? { source: source.split(sep).join("/") } : {}),
