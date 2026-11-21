@@ -263,9 +263,11 @@ fi
 cd "$repo"
 untar() { tar -xzf "$push/files.tgz" --warning=no-unknown-keyword; }
 junk() { git clean -ffdqx -e /node_modules -e /.venv; }   # untracked and ignored files, empty directories
-watch_all() {   # no index entry may hide a working tree change from git
+watch_all() {   # no index entry may hide a working tree change from git (assume-unchanged, skip-worktree)
     local flag
-    for flag in --no-assume-unchanged --no-skip-worktree; do git ls-files -z | git update-index "$flag" -z --stdin; done
+    for flag in --no-assume-unchanged --no-skip-worktree; do
+        git ls-files -v -z | perl -0ne "print substr(\$_, 2) if /^[a-zS] /" | git update-index "$flag" -z --stdin
+    done
 }
 if [ -n "$base" ]; then
     # Undo what earlier checks left: their files, and changes to tracked ones.
@@ -497,7 +499,8 @@ pushed_file=$state_dir/pushed-$slot
 rm -f "$tree_index"
 cp "$(git rev-parse --path-format=absolute --git-path index)" "$tree_index" 2>/dev/null || true
 for flag in --no-assume-unchanged --no-skip-worktree; do   # the copy must see every change
-    GIT_INDEX_FILE=$tree_index git ls-files -z | GIT_INDEX_FILE=$tree_index git update-index "$flag" -z --stdin
+    GIT_INDEX_FILE=$tree_index git ls-files -v -z | perl -0ne 'print substr($_, 2) if /^[a-zS] /' \
+        | GIT_INDEX_FILE=$tree_index git update-index "$flag" -z --stdin
 done
 GIT_INDEX_FILE=$tree_index git add -A
 tree=$(GIT_INDEX_FILE=$tree_index git write-tree)

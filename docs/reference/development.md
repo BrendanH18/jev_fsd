@@ -43,7 +43,7 @@ CI runs all of the above on every pull request. Agents run them through
 ## Boat checks
 
 Agents run these checks in a [Boat](https://boat.dev) sandbox, not on the owner's computers.
-`scripts/boat-check.sh` needs the signed-in `boat` CLI, `jq` and git.
+`scripts/boat-check.sh` needs the signed-in `boat` CLI, `jq`, git, tar and perl.
 
 ```sh
 scripts/boat-check.sh            # lint, Python tests, offline Jev requests, fixture check
