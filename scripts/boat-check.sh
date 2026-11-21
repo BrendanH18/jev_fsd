@@ -64,25 +64,17 @@ id_file=$state_dir/sandbox-$slot
 lock=$state_dir/lock-$slot
 name="jev-fsd-check-$(basename "$PWD" | tr -c 'A-Za-z0-9_\n-' '-' | cut -c1-80)-$slot"
 
-# One run at a time per slot, so two checks never race to create the slot's sandbox. The lock is
-# taken over only when it names a process that has ended: it is first renamed to a name of this
-# run's own (only one run can rename it) and checked again, so a run never removes a lock that a
-# live run holds. A lock with no pid counts as held.
+# One run at a time per slot, so two checks never race to create the slot's sandbox. Only
+# `mkdir` takes the lock, and the exit trap releases it; a lock left by a killed run is reported,
+# never taken over, so no run can remove a lock another run holds.
 if ! mkdir "$lock" 2>/dev/null; then
     holder=$(cat "$lock/pid" 2>/dev/null || true)
-    taken=0
-    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null && mv "$lock" "$lock.stale.$$" 2>/dev/null; then
-        if [ "$(cat "$lock.stale.$$/pid" 2>/dev/null || true)" = "$holder" ]; then
-            rm -rf "$lock.stale.$$"
-            mkdir "$lock" 2>/dev/null && taken=1
-        else   # another run took it over first; give its lock back
-            mv "$lock.stale.$$" "$lock" 2>/dev/null || rm -rf "$lock.stale.$$"
-        fi
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+        echo "boat-check: a boat-check that has ended (pid $holder) left its lock; remove $lock and run again" >&2
+    else
+        echo "boat-check: another boat-check (pid ${holder:-starting}) holds this worktree's sandbox lock; wait for it, or give this agent its own JEV_BOAT_SLOT" >&2
     fi
-    if [ "$taken" = 0 ]; then
-        echo "boat-check: another boat-check (pid ${holder:-unknown}) holds this worktree's sandbox lock; wait for it, or give this agent its own JEV_BOAT_SLOT. If no boat-check is running, remove $lock" >&2
-        exit 2
-    fi
+    exit 2
 fi
 echo $$ > "$lock/pid"
 id=$(cat "$id_file" 2>/dev/null || true)
