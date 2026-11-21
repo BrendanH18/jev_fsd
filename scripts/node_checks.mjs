@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { longestFirst, measuredTimes, testFiles } from "./ci_shard.mjs";
+import { costs, measuredTimes, testFiles } from "./ci_shard.mjs";
 
 const SCRIPTS = fileURLToPath(new URL(".", import.meta.url));
 const KEEP_BYTES = 256 * 1024; // the tail of a failing file's output that is printed
@@ -39,7 +39,7 @@ function parseArgs(argv) {
   return opts;
 }
 
-// Runs one file; resolves { file, ok, code, signal, timedOut, seconds, output }.
+// Runs one file; resolves { file, ok, code, signal, timedOut, error, seconds, output, cut }.
 function runFile(file, timeoutS, nodeArgs = []) {
   return new Promise((resolve) => {
     const started = performance.now();
@@ -48,7 +48,7 @@ function runFile(file, timeoutS, nodeArgs = []) {
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });
-    running.add(child.pid);
+    if (child.pid) running.add(child.pid);
     const chunks = [];
     let kept = 0;
     const keep = (chunk) => {
@@ -59,6 +59,7 @@ function runFile(file, timeoutS, nodeArgs = []) {
     child.stdout.on("data", keep);
     child.stderr.on("data", keep);
     const signalGroup = (sig) => {
+      if (!child.pid) return;
       try {
         process.kill(-child.pid, sig);
       } catch {
@@ -72,27 +73,36 @@ function runFile(file, timeoutS, nodeArgs = []) {
       signalGroup("SIGTERM");
       killer = setTimeout(() => signalGroup("SIGKILL"), KILL_AFTER_MS);
     }, timeoutS * 1000);
-    child.on("close", (code, signal) => {
-      running.delete(child.pid);
+    let done = false;
+    const finish = (code, signal, error) => {
+      if (done) return;
+      done = true;
       clearTimeout(timer);
       clearTimeout(killer);
+      // Whatever the check left running in its group goes with it, whether it passed or timed out.
+      signalGroup("SIGKILL");
+      running.delete(child.pid);
       const output = Buffer.concat(chunks);
       resolve({
         file,
-        ok: code === 0 && !timedOut,
+        ok: code === 0 && !timedOut && !error,
         code,
         signal,
         timedOut,
+        error,
         seconds: (performance.now() - started) / 1000,
         output: kept > KEEP_BYTES ? output.subarray(output.length - KEEP_BYTES) : output,
         cut: kept > KEEP_BYTES,
       });
-    });
+    };
+    child.on("error", (error) => finish(null, null, error));
+    child.on("close", (code, signal) => finish(code, signal, null));
   });
 }
 
 function verdict(r, timeoutS) {
   if (r.ok) return "ok";
+  if (r.error) return `could not start: ${r.error.message}`;
   if (r.timedOut) return `timed out after ${timeoutS} s`;
   if (r.signal === "SIGKILL") return "was killed (out of memory?)";
   if (r.signal) return `ended by ${r.signal}`;
@@ -100,13 +110,18 @@ function verdict(r, timeoutS) {
 }
 
 export async function runChecks({ jobs, timeout, files, nodeArgs = [] }, log = console.log) {
-  // bare name -> path; named files may live anywhere (scripts/test_node_checks.mjs uses its own)
-  const paths = new Map(
-    files.length
-      ? files.map((f) => [path.basename(f), { file: path.resolve(f), label: f }])
-      : testFiles().map((f) => [f, { file: path.join(SCRIPTS, f), label: `scripts/${f}` }]),
+  // Named files may live anywhere (scripts/test_node_checks.mjs uses its own); each is one check by
+  // its full path, and its bare name only looks up its measured time.
+  const checks = files.length
+    ? [...new Map(files.map((f) => [path.resolve(f), f])).entries()].map(([file, label]) => ({ file, label }))
+    : testFiles().map((f) => ({ file: path.join(SCRIPTS, f), label: `scripts/${f}` }));
+  const cost = costs(
+    checks.map((c) => path.basename(c.file)),
+    measuredTimes(),
   );
-  const queue = longestFirst([...paths.keys()], measuredTimes());
+  const queue = checks.sort(
+    (a, b) => cost(path.basename(b.file)) - cost(path.basename(a.file)) || (a.label < b.label ? -1 : 1),
+  );
   const total = queue.length;
   const results = [];
   let lowestFree = os.freemem();
@@ -117,8 +132,7 @@ export async function runChecks({ jobs, timeout, files, nodeArgs = [] }, log = c
   log(`node-checks: ${total} files, ${Math.min(jobs, total)} at a time, ${timeout} s each`);
   const worker = async () => {
     while (queue.length) {
-      const name = queue.shift();
-      const { file, label } = paths.get(name);
+      const { file, label } = queue.shift();
       const r = await runFile(file, timeout, nodeArgs);
       r.label = label;
       results.push(r);
@@ -172,5 +186,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exit(130);
     });
   const { failed } = await runChecks(opts);
-  process.exit(failed.length ? 1 : 0);
+  // (an exit code rather than process.exit, so a long failure output reaches a pipe in full)
+  process.exitCode = failed.length ? 1 : 0;
 }

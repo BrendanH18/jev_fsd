@@ -32,7 +32,7 @@ export function costs(files, times) {
 }
 
 // The files longest first, ties by name.
-export function longestFirst(files, times) {
+function longestFirst(files, times) {
   const cost = costs(files, times);
   return [...files].sort((a, b) => cost(b) - cost(a) || (a < b ? -1 : a > b ? 1 : 0));
 }

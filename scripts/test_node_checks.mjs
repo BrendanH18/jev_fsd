@@ -37,6 +37,15 @@ try {
   assert.match(bad.out, /FAIL .*test_hang\.mjs: timed out after 2 s/);
   assert.match(bad.out, /failed:\n {2}\S*test_fail\.mjs: .*\n {2}\S*test_hang\.mjs: /);
 
+  // two files with one name in different folders are two checks
+  fs.mkdirSync(path.join(dir, "a"));
+  fs.mkdirSync(path.join(dir, "b"));
+  const same = [write("a/test_same.mjs", "process.exit(4);\n"), write("b/test_same.mjs", "")];
+  const twins = run(...same);
+  assert.equal(twins.status, 1, twins.out);
+  assert.match(twins.out, /1 of 2 passed/);
+  assert.match(twins.out, /FAIL .*a\/test_same\.mjs: failed with exit code 4/);
+
   assert.equal(run("--jobs", "0").status, 2, "a bad option is refused");
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });

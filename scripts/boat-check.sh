@@ -385,8 +385,9 @@ if [ -n "$id" ]; then
 fi
 # A sandbox of another size is stopped and resumed at this run's size (one start, as any resume).
 case "$state" in provisioned|cloning|ready|idle|running)
-    size=$(boat info "$id" --json 2>/dev/null | jq -r '.sandbox.type // ""' || true)
-    if [ -n "$size" ] && [ "$size" != "$type" ]; then
+    size=$(boat info "$id" --json 2>/dev/null | jq -r '.sandbox.type // ""') && [ -n "$size" ] \
+        || { echo "boat-check: couldn't read the size of $id from Boat; try again once Boat answers" >&2; exit 1; }
+    if [ "$size" != "$type" ]; then
         echo "boat-check: $id is $size; stopping it to resume as $type" >&2
         boat stop "$id" --json >/dev/null || { echo "boat-check: couldn't stop $id: boat stop $id" >&2; exit 1; }
         state=$(sandbox_state "$id") || exit 1
