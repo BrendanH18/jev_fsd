@@ -8,10 +8,39 @@ from scripts.run_insights.safety import REPORTS
 
 class SafetyInsightsTest(unittest.TestCase):
     def test_all_audits_measure_only_observed_routes(self):
-        self.assertEqual(len(REPORTS), 25)
+        expected = {
+            "collisions": "collisions at_fault",
+            "signals": "red_lights amber_lights_run",
+            "stop-signs": "stop_signs",
+            "yields": "failed_to_yield",
+            "plows": "plow_right_passes",
+            "merges": "merge_cut_ins",
+            "cyclists": "close_passes contraflow_conflicts",
+            "bus-lanes": "bus_lane_driving",
+            "high-beams": "glare_seconds",
+            "sun-glare": "glare_speeding_seconds",
+            "prohibited-turns": "illegal_turns",
+            "speed-humps": "hump_hits",
+            "crossovers": "pxo_early_goes",
+            "collection-crews": "crew_close_passes",
+            "directed-stops": "guard_violations officer_violations",
+            "fresh-greens": "fresh_green_conflicts",
+            "driveways": "reversing_conflicts",
+            "potholes": "pothole_hits",
+            "ball-warnings": "ball_warnings_ignored",
+            "geese": "wildlife_conflicts",
+            "tailgaters": "brake_checks",
+            "winter-surfaces": "ice_overspeed snowbank_conflicts",
+            "puddles": "pedestrians_splashed",
+            "parking-conflicts": "parking_conflicts",
+            "road-closures": "closure_entries",
+        }
+        self.assertEqual(set(REPORTS), {f"safety-{name}" for name in expected})
         metrics = set()
         for report_id, (_, run) in REPORTS.items():
-            for field in run([]):
+            fields = expected[report_id.removeprefix("safety-")].split()
+            self.assertEqual(set(run([])), set(fields))
+            for field in fields:
                 with self.subTest(report=report_id, field=field):
                     self.assertNotIn(field, metrics)
                     metrics.add(field)

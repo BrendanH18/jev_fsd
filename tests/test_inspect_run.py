@@ -19,10 +19,17 @@ class InspectRunTests(unittest.TestCase):
         catalog = subprocess.check_output([sys.executable, CLI, "--list"], text=True)
         names = [line.split()[0] for line in catalog.splitlines()]
         result = json.loads(subprocess.check_output([sys.executable, CLI, SAMPLE]))
-        self.assertTrue(all(row["value"] == 100 for row in result["motion-progress"]["routes"]))
+        self.assertEqual(
+            result["motion-progress"]["routes"], [{"id": "s1-1", "value": 100}, {"id": "s1-2", "value": 100}]
+        )
         self.assertEqual(len(names), 100)
         self.assertEqual(list(result), names)
         self.assertEqual(result["suite-verdicts"]["counts"], {"passed": 2})
+
+    def test_incomplete_measurements(self):
+        rows = [{"arrived": False, "deadlocks": float("inf")}, {"arrived": False, "events": "missing"}]
+        self.assertEqual(REPORTS["suite-final-events"][1](rows), {"measured_routes": 0, "counts": {}})
+        self.assertEqual(REPORTS["suite-deadlock-outcomes"][1](rows), {"unknown": {"unknown": 2}})
 
     def test_selection_and_errors(self):
         output = subprocess.check_output([sys.executable, CLI, SAMPLE, "suite-verdicts"])

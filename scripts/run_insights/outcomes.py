@@ -144,7 +144,7 @@ def streak(rows):
 
 def exposure(row, field):
     value = row.get(field)
-    if type(value) in (int, float) and value >= 0:
+    if type(value) in (int, float) and isfinite(value) and value >= 0:
         return "observed" if value else "none"
     return None
 

@@ -54,7 +54,7 @@ REPORTS = {
     "motion-duration": _rank("Which routes consumed the most simulated time?", "s", "time_s"),
     "motion-distance": _rank("Which drives covered the most ground, including reverse travel?", "m", "distance_m"),
     "motion-progress": _rank(
-        "Which routes reached the smallest fraction of their route length?",
+        "Rank saved progress, counting arrivals as complete. Unfinished detours can understate progress.",
         "%",
         "progress",
         calculate=lambda progress: 100 * progress if progress <= 1 else None,
