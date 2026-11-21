@@ -909,6 +909,7 @@ export class World {
               past,
             )
           : null;
+      if (entered && handled) this.giveWay = null;
       if (entered && !handled) {
         if (control.type === "signal") {
           if (runner) {
