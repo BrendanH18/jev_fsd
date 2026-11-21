@@ -18,6 +18,7 @@ const { setWeather } = await import("../static/js/sim/weather.js");
 const { applyLaw } = await import("../static/js/sim/controller.js");
 const { followingPolicy } = await import("../static/js/sim/following.js");
 const T = await import("../static/js/sim/tailgaters.js");
+const { behindInLane } = await import("../static/js/sim/following.js");
 const { DriveMetrics, failures } = await import("../static/js/bench/metrics.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
@@ -116,7 +117,7 @@ function step(ctx, law = { kind: "lane", vTarget: ctx.world.ego.v }) {
   applyLaw(w.ego, law, w.route, p.s, DT, w);
   return stepWorld(ctx, DT, w.t * 1000);
 }
-const gapOf = (w, car) => T.behindInLane(w.ego, car, 60);
+const gapOf = (w, car) => behindInLane(w.ego, car, 60);
 const decide = (w, brain = new RulesBrain()) => {
   const snap = buildSnapshot(w),
     candidates = sampleCandidates(snap, w),

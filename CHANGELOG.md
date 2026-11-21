@@ -16,6 +16,8 @@
 - Check exact replays independently from drive verdicts and report drift for published recordings weekly.
 - Measure city pilot prompts, reserve budget between drives and compare repeated arena recordings offline.
 - Register police officers through the feature interface.
+- Register tailgaters and derive free-drive switches from the feature registry.
+- Define registered feature audit labels and examiner categories alongside their metrics.
 - Check a local driver on both tracks and use dedicated issue templates for map and driving problems.
 - Compare an unchanged manual challenge or road-test attempt with published drivers and see measured
   benchmark scores from the challenge leaderboard.

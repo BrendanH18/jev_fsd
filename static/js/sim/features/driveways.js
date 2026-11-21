@@ -49,6 +49,8 @@ export default {
     at: "driveways",
     name: "reversing_conflicts",
     failure: "squeezed past or failed to stop for a car backing out",
+    label: "Squeezed past or failed to stop for a car backing out of a driveway",
+    category: "observation",
   },
   sense: {
     at: "driveways",

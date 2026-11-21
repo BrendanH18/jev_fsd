@@ -45,3 +45,19 @@ export function followingPolicy(vehicle, lead, { scale = 1 } = {}) {
     braking_mps2: braking,
   };
 }
+
+const SAME_LANE_SIDE_M = 1.4;
+
+// How far `o` is behind `observer` in its lane, going its way: from its front bumper to the observer's
+// rear bumper (m), or null.
+export function behindInLane(observer, o, look) {
+  const heading = o.psi - observer.psi;
+  const alignment = Math.cos(Math.atan2(Math.sin(heading), Math.cos(heading)));
+  if (alignment < 0.87) return null;
+  const spec = observer.spec || CAR,
+    os = o.spec || CAR,
+    local = observer.toLocal(o.x, o.y);
+  if (Math.abs(local.right) > SAME_LANE_SIDE_M) return null;
+  const gap = -spec.rearOverhang - (local.ahead + (os.length - os.rearOverhang) * alignment);
+  return gap < -0.5 || gap > look ? null : gap;
+}

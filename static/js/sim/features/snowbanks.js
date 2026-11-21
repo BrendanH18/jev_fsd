@@ -56,9 +56,10 @@ export default {
     return sb;
   },
   metric: {
-    at: "tailgaters",
+    at: "rearTraffic",
     name: "snowbank_conflicts",
     failure: "entered a stretch narrowed by snowbanks out of turn",
+    label: "Entered a stretch narrowed by snowbanks while it was an oncoming car's turn",
   },
   motion: (snap) => !!snap.snowbank?.narrowing?.wait,
 
@@ -67,7 +68,7 @@ export default {
     if (world.snowbanks?.enabled) world.snowbanks.step(dt);
   },
   audit: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run(world) {
       if (world.snowbanks?.enabled) auditSnowbanks(world);
     },
@@ -153,7 +154,7 @@ export default {
   // While it is the turn of a car coming the other way through the one-car stretch ahead, stop short of
   // it and wait.
   candidates: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run({ snap, laneUntil, inLane, approach, stopAt, FRONT }, out) {
       const nb = snap.snowbank?.narrowing;
       if (nb?.wait && nb.bumper_to_stop_m > 0.3) {
@@ -197,7 +198,7 @@ export default {
   },
 
   state: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run(snap, state) {
       if (snap.snowbank) {
         const n = snap.snowbank.narrowing,
@@ -238,7 +239,7 @@ export default {
       return null;
     },
   },
-  clause: { at: "tailgaters", run: (snap) => (snap.snowbank ? snowbankClauses(snap.snowbank) : null) },
+  clause: { at: "rearTraffic", run: (snap) => (snap.snowbank ? snowbankClauses(snap.snowbank) : null) },
   holdStill: {
     at: "driveways",
     run: (snap) =>

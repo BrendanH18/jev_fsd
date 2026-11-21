@@ -163,6 +163,7 @@ import { firstHookResult, hooks, isParkingTraffic } from "./features/index.js";
 // code used to be. (With `geese` on, say, drivers and cyclists slow for a gaggle of Canada geese coming up
 // to the kerb ahead and stop short of their way across until the last goose is off the roadway.)
 const TRAFFIC_MANAGE = hooks("trafficManage"),
+  TRAFFIC_DRIVER = hooks("trafficDriver"),
   TRAFFIC_MANEUVER = hooks("trafficManeuver"),
   TRAFFIC_LEADER_HOLD = hooks("trafficLeaderHold"),
   TRAFFIC_PARKING_PLAN = hooks("trafficParkingPlan"),
@@ -175,7 +176,6 @@ const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
   TRAFFIC_YIELD = hooks("trafficYield"),
   TRAFFIC_SPEED = hooks("trafficSpeed"),
   TRAFFIC_PULL_OUT = hooks("trafficPullOut");
-import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
 import {
   AMBER_M,
   KID_CROSS_P,
@@ -1183,9 +1183,7 @@ export class NpcFleet {
     if (world.doubleParked?.vans.length) this.driveOffVans();
     if (this.plows.length || this.plowTarget) this.managePlows();
     if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
-    // (now and then a car behind the driven car tailgates it, with that option on: sim/tailgaters.js)
-    if (world.tailgaters?.enabled) manageTailgaters(world, this, dt);
-    for (const manage of TRAFFIC_MANAGE) manage(world, this);
+    for (const manage of TRAFFIC_MANAGE) manage(world, this, dt);
     const all = [world.ego, ...this.vehicles];
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     const riders = world.contraflow?.riders || [];
@@ -1433,8 +1431,8 @@ export class NpcFleet {
         if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
         laneMoves.push(r);
       }
-      // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
-      if (n.tgPeek) offset += n.tgPeek;
+      const driverOverride = firstHookResult(TRAFFIC_DRIVER, world, n);
+      if (driverOverride?.offset) offset += driverOverride.offset;
       let parkingPlan = null;
       for (const plan of TRAFFIC_PARKING_PLAN) {
         parkingPlan = plan(n, (n.driver || IDM).s0);
@@ -1665,8 +1663,7 @@ export class NpcFleet {
       }
       // (and stays back the distance the law asks of it, less the room it leaves anyway)
       if (isPlow(leader) && !isPlow(n)) gap = Math.max(0.05, gap - (stayBack(edge.limit) - (n.driver || IDM).s0));
-      // (a tailgater close behind the driven car sees its brake lights late: sim/tailgaters.js)
-      if (n.tailgate && leader === world.ego) leadV = tailgateLeadSpeed(world);
+      if (driverOverride?.leadSpeed) leadV = driverOverride.leadSpeed(leader, leadV);
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
       let stopAt = null,
         flashCap = Infinity,
@@ -2049,7 +2046,7 @@ export class NpcFleet {
           ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed)
           : Infinity;
       const vFollow =
-        this.world.followingDistance && n.lead && n.kind !== "bike" && !n.tailgate
+        this.world.followingDistance && n.lead && n.kind !== "bike" && !driverOverride?.skipFollowing
           ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps
           : Infinity;
       // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
@@ -2057,7 +2054,7 @@ export class NpcFleet {
       const vGlare = this.world.sunGlare && n.kind !== "bike" ? npcGlareCeiling(this.world, n) : Infinity;
       const v0 = Math.min(
         isPlow(n) ? n.v0 : n.v0 * weather.speed,
-        limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed,
+        limit * (n.transit || n.school ? 0.95 : (driverOverride?.speedFactor ?? 1.05)) * weather.speed,
         vCurve,
         flashCap,
         amberCap,
@@ -2082,8 +2079,7 @@ export class NpcFleet {
         const sStar = D.s0 + Math.max(0, n.v * T + (n.v * dv) / (2 * Math.sqrt(D.aMax * b)));
         a = D.aMax * (1 - (n.v / v0) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2);
       }
-      // (a tailgater brakes for the driven car as hard as it sees it braking, and more: sim/tailgaters.js)
-      if (n.tailgate && leader === world.ego && gap < Infinity) a = Math.min(a, tailgateBrake(world, n, gap));
+      if (driverOverride?.brake) a = driverOverride.brake(leader, gap, a);
       a = Math.max(-Math.min(6, comfort().hardDecel * 1.1), Math.min(D.aMax, a));
       // standing still, a driver takes a moment to notice the way is clear and move off
       if (n.v < 0.3 && a > 0.2) {

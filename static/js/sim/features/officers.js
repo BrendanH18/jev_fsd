@@ -163,5 +163,11 @@ export default {
     at: "junctions",
     text: `- A police officer directing traffic at a junction (\`traffic_officer\`) overrides the signal, whatever it shows, even when its lights are out. When \`traffic_officer.direction\` is "stop", choose \`wait_for_officer\`: stop at the line and stay stopped there, even on a green, until the officer waves the car on. When it is "go", go on (\`go_on_officer_wave\`), even on a red, still yielding to pedestrians and traffic already in the junction and, turning left, to oncoming traffic.`,
   },
-  metric: { at: "junctions", name: "officer_violations", failure: "went on when a police officer signalled stop" },
+  metric: {
+    at: "junctions",
+    name: "officer_violations",
+    failure: "went on when a police officer signalled stop",
+    label: "Went on when a police officer directing traffic signalled stop",
+    category: "right_of_way",
+  },
 };

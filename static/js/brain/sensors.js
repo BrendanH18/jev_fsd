@@ -156,7 +156,6 @@ import {
   stopKey,
 } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
-import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
 import {
   controlDirection,
   firstHookResult,
@@ -169,6 +168,7 @@ import {
 // The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
 const SENSE = {
+  following: hooks("sense", "following"),
   driveways: hooks("sense", "driveways"),
   streetHazards: hooks("sense", "streetHazards"),
   late: hooks("sense", "late"),
@@ -185,9 +185,12 @@ const TARGET = {
   streetHazards: hooks("target", "streetHazards"),
   beforeEmergency: hooks("target", "beforeEmergency"),
 };
+const FINISH_LANES = hooks("finishLanes");
+const LANE_OFFER = hooks("laneOffer");
 const HAZARD = {
   driveways: hooks("hazard", "driveways"),
   streetHazards: hooks("hazard", "streetHazards"),
+  rearTraffic: hooks("hazard", "rearTraffic"),
   late: hooks("hazard", "late"),
 };
 // (and how slowly and gently it crosses a junction over what a registered feature makes slippery)
@@ -830,13 +833,7 @@ export function buildSnapshot(world, executing = null) {
         closing_mps: b.vehicle.v - ego.v,
       };
     }
-    // (a tailgater close behind, with that option on: sim/tailgaters.js; tailgated, the car leaves twice
-    // its usual gap to whatever is ahead, so as to brake early and gently)
-    if (world.tailgaters?.enabled) {
-      snap.tailgater = tailgaterSensing(world, visibleNpcs, p.s);
-      if (snap.tailgater && snap.following)
-        snap.following.policy = followingPolicy(ego, snap.following, { scale: TAIL_ROOM });
-    }
+    for (const sense of SENSE.following) sense(world, snap, { visibleNpcs, s: p.s });
   }
   for (const n of visibleNpcs) {
     const d = Math.hypot(n.x - ego.x, n.y - ego.y);
@@ -935,12 +932,7 @@ export function buildSnapshot(world, executing = null) {
   if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
-  // (whether there is a lane to the right, and the car can move into it and let a tailgater by: sim/tailgaters.js)
-  if (snap.tailgater) {
-    const right = snap.lane?.sides.right;
-    snap.tailgater.lane_right = !!right;
-    snap.tailgater.can_move_right = !!right && (right.offer === "let_pass" || right.offer === "return") && right.gap_ok;
-  }
+  for (const finish of FINISH_LANES) finish(snap);
   if (world.highBeams) snap.headlights = headlights(world, world.ego, undefined, 25);
   return snap;
 }
@@ -2870,19 +2862,15 @@ function laneOptions(snap, world) {
               !inJunction(CHANGE_JUNCTION_M)
             ? "move_over"
             : null;
-    // (tailgated, over to the right to let the tailgater by, where another lane goes the car's way:
-    // sim/tailgaters.js)
-    if (
-      dir === "right" &&
-      snap.tailgater &&
-      !side.offer &&
-      !lane.shift &&
-      !turnLane &&
-      side.gap_ok &&
-      room >= Math.max(80, 2 * laneChangeLength(v) + 30) &&
-      !inJunction(PASS_JUNCTION_M)
-    )
-      side.offer = "let_pass";
+    if (!side.offer)
+      side.offer = firstHookResult(LANE_OFFER, snap, side, {
+        dir,
+        turnLane,
+        room,
+        v,
+        inJunction,
+        junctionMargin: PASS_JUNCTION_M,
+      });
     if (world.busLanes) {
       const b = routeBusLane(route, s, world.clock, route.busLanePolicy?.curb);
       if (
@@ -3415,7 +3403,11 @@ export function hazardFlags(snap) {
     if (Array.isArray(x)) f.push(...x);
     else if (x) f.push(x);
   }
-  if (snap.tailgater) f.push("tailgater");
+  for (const flag of HAZARD.rearTraffic) {
+    const x = flag(snap);
+    if (Array.isArray(x)) f.push(...x);
+    else if (x) f.push(x);
+  }
   for (const flag of HAZARD.late) {
     const x = flag(snap);
     if (Array.isArray(x)) f.push(...x);

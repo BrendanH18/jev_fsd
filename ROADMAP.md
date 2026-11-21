@@ -59,7 +59,7 @@ claimed before the exits it depends on.
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app | Exited 9 Nov |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it | Exited 10 Nov; 1.8 open |
 | [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Met** on 21 November with the Kitsilano dry city suite (2.5b) |
-| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 9 of 41 moved |
+| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 11 of 41 moved |
 | [4](#phase-4-a-benchmark-that-separates-drivers) | Scores tell drivers apart | Two different models get measurably different scores for a stated reason | Met 20 Nov, on one run each |
 | [5](#phase-5-release-and-presentation) | The project presents what it is | 0.3.0 cut; README leads with results | Exited 20 Nov |
 | [6](#phase-6-grow-the-world-again) | New scenarios, under the admission rule | Each one passes the [checklist](#admission-rule-for-new-scenarios) | Gated (see [order](#expansion-plan-from-20-november)) |
@@ -311,9 +311,9 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   seed 1, all 62 challenge and road-test drives with Rules and with the cautious agent, and the model
   recording are identical before and after
   ([record](docs/validation/registry-round2-2026-11-20.md)). Driveway reversers, ball chase
-  and traffic parking moved next (#98, #99). Police officers now use the registry too, bringing
-  it to **10 of 41**. The bare and city comparisons and all Rules and cautious arena drives matched
-  before and after ([record](docs/feature-interface.md)). Tailgaters and the remaining parking
+  and traffic parking moved next (#98, #99). Police officers and tailgaters now use the registry,
+  bringing it to **11 of 41**. The bare and city comparisons and all Rules and cautious arena
+  drives matched before and after ([record](docs/feature-interface.md)). The remaining parking
   and late features are next.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
@@ -353,13 +353,13 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
 - [ ] **3.9 Trace the engine difference.** (M) The same seed gives different results in V8 and
   WebKit, and the cause has never been found. Find the first step where they part. *Moved to 7.4*,
   since it decides which published tapes a reader can replay.
-- [ ] **3.10 Hooks for what still sits outside a record.** (L) A registered feature still needs a
-  line each in about eight driver and presentation files: its free-drive option, the drivers'
+- [ ] **3.10 Hooks for what still sits outside a record.** (L) The registry now supplies free-drive
+  switches, trace labels and road-test categories. A registered feature still needs entries for the drivers'
   preferences (`brain/rules.js`, `agents/cautious.js`), checkpoints and re-plans, the coach
-  (`sim/drive-score.js`), drawing, the HUD and the perception overlay, and the trace and examiner
-  labels ([list](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)).
-  Add the `freeDrive`, `rules`, `cautious`, `coach`, `view`, `notice`, `perception` and `label` hooks the
-  list names, proved on the nine registered features with the 3.2 record. Without this, finishing
+  (`sim/drive-score.js`), drawing, the HUD and the perception overlay
+  ([list](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)).
+  Add the `rules`, `cautious`, `coach`, `view`, `notice` and `perception` hooks the
+  list names, proved on the registered features with the 3.2 record. Without this, finishing
   3.2 does not meet the exit below.
 - [ ] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in
   `tests/fixtures/parity_cases.json`, and the exact-130° U-turn comparison, in one change that

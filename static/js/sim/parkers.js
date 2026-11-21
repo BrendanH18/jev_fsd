@@ -47,7 +47,7 @@ import {
   parkRoom,
   solveS,
 } from "./parallel-park.js";
-import { behindInLane } from "./tailgaters.js";
+import { behindInLane } from "./following.js";
 import { isEmergency, isEmergencyVehicle } from "./emergency.js";
 import { isPlow } from "./snow-plow.js";
 

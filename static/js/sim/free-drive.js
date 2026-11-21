@@ -15,6 +15,7 @@ import { VAN_COUNT } from "./double-parked.js";
 import { PLOW_COUNT } from "./snow-plow.js";
 import { STEP_OUT_COUNT } from "./hidden-hazards.js";
 import { TRUCK_COUNT } from "./collection-truck.js";
+import { FEATURE_OPTIONS } from "./features/index.js";
 
 export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 } = {}) {
   const on = (name) => params.get(name) !== "0";
@@ -63,21 +64,9 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     redRunners: on("redrunners"),
     followingDistance: on("followingdistance"),
     sunGlare: on("sunglare"),
-    driveways: on("driveways"),
-    potholes: on("potholes"),
-    balls: on("balls"),
-    geese: on("geese"),
-    // now and then a car behind closes up and tailgates the driven car (`?tailgaters=0`)
-    tailgaters: on("tailgaters"),
-    ice: on("ice"),
-    snowbanks: on("snowbanks"),
-    puddles: on("puddles"),
-    // now and then the car ahead parallel parks, and everyone waits (`?parkers=0`)
-    parkers: on("parkers"),
-    roadClosures: on("roadclosures"),
-    // now and then a police officer directs traffic at a signal on the car's way (`?officers=0`)
-    officers: on("officers"),
   };
+  // Each registered World option is enabled unless its lowercase query flag is 0.
+  for (const key of FEATURE_OPTIONS) world[key] = on(key.toLowerCase());
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)
     emergency: on("emergency"),

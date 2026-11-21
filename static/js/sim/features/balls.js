@@ -38,6 +38,8 @@ export default {
     at: "streetHazards",
     name: "ball_warnings_ignored",
     failure: "ignored a ball rolling into the street",
+    label: "Drove on past where a ball rolled out, too fast to stop for a child after it",
+    category: "observation",
   },
   sense: {
     at: "streetHazards",
