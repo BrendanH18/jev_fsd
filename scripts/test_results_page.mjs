@@ -5,8 +5,18 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
-const { checkResults, summary, challengeMatrix, cityGrid, recordings, fractionText, percentText, moneyText, WEATHERS } =
-  await import("../static/js/lab/results.js");
+const {
+  checkResults,
+  summary,
+  challengeMatrix,
+  compatibleChallengeDrive,
+  cityGrid,
+  recordings,
+  fractionText,
+  percentText,
+  moneyText,
+  WEATHERS,
+} = await import("../static/js/lab/results.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 
@@ -84,6 +94,31 @@ test("the city grid has one row per map and weather, Kitsilano first", () => {
   );
   assert.deepEqual(grid.drivers, ["rules", "cautious"]);
   for (const row of grid.rows) assert.equal(row.cells.filter(Boolean).length, 2, `${row.map} ${row.weather}`);
+});
+
+test("the matrix keeps the newest full run per driver on each track", () => {
+  const rules = data.rows.find((r) => r.suite === "challenges" && r.driver === "rules");
+  const older = { ...rules, date: "2026-01-01", drives: [] };
+  const matrix = challengeMatrix({ ...data, rows: [...data.rows, older] });
+  assert.equal(
+    matrix.runs.find((r) => r.driver === "rules"),
+    rules,
+  );
+  assert.equal(matrix.drivers.filter((id) => id === "rules").length, 1);
+});
+
+test("manual comparison finds the newest guarded drive with the same map data and challenge version", () => {
+  const rules = data.rows.find((r) => r.suite === "challenges" && r.driver === "rules");
+  const match = rules.drives.find((d) => d.id === "road-test-kitsilano");
+  assert.ok(match.map_sha && match.score_inputs);
+  const config = { ...match, challenge: match.id };
+  const changedMap = { ...rules, drives: [{ ...match, map_sha: "changed", time_s: 0 }] };
+  const changedVersion = { ...rules, drives: [{ ...match, version: match.version + 1, time_s: 0 }] };
+  const open = { ...rules, suite: "open", drives: [{ ...match, time_s: 0 }] };
+  const history = { rows: [changedMap, changedVersion, open, rules] };
+  assert.deepEqual(compatibleChallengeDrive(history, "rules", config), { ...match, failures: [] });
+  assert.equal(compatibleChallengeDrive(history, "rules", { ...config, map_sha: "unknown" }), null);
+  assert.equal(compatibleChallengeDrive(history, "rules", { ...config, map_sha: undefined }), null);
 });
 
 test("every recording offered for replay is committed", () => {

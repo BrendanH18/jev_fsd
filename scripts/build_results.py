@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import math
 import re
 import subprocess
 import sys
@@ -280,6 +281,35 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
     return manifest
 
 
+def finite_number(value) -> bool:
+    return type(value) is int or (type(value) is float and math.isfinite(value))
+
+
+def published_drive(result: dict, map_sha: str | None = None) -> dict:
+    seconds = result.get("time_s")
+    drive = {
+        "id": result["challenge"],
+        "map": result["map"],
+        "pass": result["pass"],
+        "time_s": seconds if finite_number(seconds) else None,
+    }
+    drive.update({key: result[key] for key in ("version", "pack") if key in result})
+    if map_sha:
+        drive["map_sha"] = map_sha
+    drive["incident_counts"] = {
+        k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if finite_number(result.get(k))
+    }
+    numeric = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
+    nullable = ("min_ttc_s", "min_headway_s")
+    if (
+        isinstance(result.get("arrived"), bool)
+        and all(finite_number(result.get(k)) for k in (*numeric, "time_s"))
+        and all(k in result and (result[k] is None or finite_number(result[k])) for k in nullable)
+    ):
+        drive["score_inputs"] = {k: result[k] for k in ("arrived", *numeric, *nullable)}
+    return drive
+
+
 def challenge_rows(drivers: dict) -> list[dict]:
     rows = []
     for path in sorted(RESULTS.glob("*/*.json")):
@@ -294,8 +324,10 @@ def challenge_rows(drivers: dict) -> list[dict]:
         sources = [rel(path)]
         recording = read_recording(recording_path) if recording_path.is_file() else None
         manifest = checked_manifest(path, published, date, recording)
+        map_shas = {key: entry["fingerprint"] for key, entry in manifest["maps"].items()} if manifest else {}
         if recording is not None:
             header = recording["header"]
+            map_shas = header.get("maps") or map_shas
             if header.get("driver") != driver:
                 raise ValueError(f"{rel(recording_path)} is for {header.get('driver')}, {rel(path)} for {driver}")
             if ((header.get("arena") or {}).get("track") or "guarded") != track:
@@ -357,10 +389,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "cost_usd": round(cost, 6),
                 "cost_basis": cost_basis,
                 "failed": failed,
-                "drives": [
-                    {"id": r["challenge"], "map": r["map"], "pass": r["pass"], "time_s": r.get("time_s")}
-                    for r in row_results
-                ],
+                "drives": [published_drive(r, map_shas.get(r["map"])) for r in row_results],
                 "sources": sources,
                 "recording": rel(recording_path) if recording_path.is_file() else None,
                 **({"manifest": manifest} if manifest else {}),
@@ -609,7 +638,7 @@ def readme_block(data: dict) -> str:
 
 
 def render(data: dict) -> str:
-    return json.dumps(data, indent=1, ensure_ascii=False) + "\n"
+    return json.dumps(data, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
 
 
 def readme_with(text: str, block: str) -> str:

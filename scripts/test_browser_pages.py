@@ -62,6 +62,12 @@ PRACTICE_FINISH = """async kind => {
         detail: JSON.stringify({ reports: reports.map(r => ({ title: r.title, status: r.status, modified: r.modified, collisions: r.collisions })), record }) }];
     }
     const parking = ['parked', 'wide-kerb', 'outside-space', 'simulation-error'].includes(kind);
+    if (kind === 'early') {
+      app.world.paused = false;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+      app.advance(2);
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
+    }
     if (kind === 'modified') app.setTime('morning');
     if (kind === 'branched') app.recorder.branched = true;
     if (parking) {
@@ -243,6 +249,55 @@ def check(url, chromium=None, groups=GROUPS):
             page = open_page(f"/?challenge={challenge}&drive={driver}&quality=low")
             page.evaluate("window.__jev.world.paused = true")
             ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
+            comparison = page.locator(".drive-comparison")
+            if kind in ("arrived", "early", "parked"):
+                comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
+                assert comparison.locator("tbody th").all_text_contents() == ["You", "Rules", "Jev", "Claude Haiku 5.5"]
+                assert comparison.locator("tbody td").nth(0).inner_text() == ("Fail" if kind == "early" else "Pass")
+                if kind == "early":
+                    score = comparison.locator("tbody tr").first.locator("td").nth(2).inner_text()
+                    assert float(score) > 0, score
+            elif kind in ("rules", "branched", "modified"):
+                assert comparison.count() == 0
+            page.close()
+
+        if "practice" in groups:
+            page = open_page("/?challenge=bus-lanes&drive=manual&quality=low&weekday=6")
+            assert page.evaluate("window.__jev.world.clock.weekday") == 0
+            assert page.evaluate("""() => {
+              const app = window.__jev, before = app.world.t;
+              app.drive.metrics.record = () => { throw new Error('Injected benchmark sampling failure'); };
+              app.world.paused = false;
+              app.advance(0.2);
+              return app.world.t > before && app.drive.metrics === null && app.simulationError === null;
+            }""")
+            page.evaluate("window.__jev.finishDrive('finished')")
+            assert page.locator(".drive-comparison tbody tr").first.locator("td").nth(2).inner_text() == "Unmeasured"
+            page.close()
+
+            page = open_page("/?challenge=road-test-kitsilano&drive=manual&quality=low")
+            page.evaluate("window.__jev.finishDrive('finished')")
+            comparison = page.locator(".drive-comparison")
+            comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
+            assert comparison.get_by_role("columnheader", name="Benchmark verdict").is_visible()
+            assert "The examiner’s sheet determines road-test completion." in comparison.inner_text()
+            assert comparison.locator("tbody td").first.inner_text() == "Fail"
+            for score in comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents():
+                assert 0 <= float(score) <= 100, score
+
+            for endpoint in ("**/api/results", "**/demo-data/results.json"):
+                page.route(endpoint, lambda route: route.fulfill(status=503))
+            page.evaluate("""async () => {
+              const { readHistory } = await import('/js/sim/drive-score.js');
+              window.__jev.driveReport.show(readHistory()[0]);
+            }""")
+            comparison.get_by_text("Published comparisons could not be loaded.", exact=True).wait_for(
+                timeout=TIMEOUT_MS
+            )
+            assert comparison.get_by_text(
+                "The examiner’s sheet determines road-test completion.", exact=True
+            ).is_visible()
+            assert comparison.locator("tbody th").all_text_contents() == ["You"]
             page.close()
 
         if "parking" in groups:

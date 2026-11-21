@@ -1,10 +1,13 @@
-import { $, h } from "../common.js";
+import { $, api, h } from "../common.js";
 import { readHistory } from "../sim/drive-score.js";
 import { exportDriveCard, copyDriveLink, driveLink } from "../lab/share.js";
 import { CHALLENGES, challengeById, challengeConfig } from "../lab/challenges.js";
-import { readPractice, practiceStatus, challengeFailures } from "../lab/practice.js";
+import { readPractice, practiceStatus, practiceEligible, challengeFailures } from "../lab/practice.js";
 import { examinerSheet, roadTestNote } from "./road-test.js";
 import { decidedByText } from "../bench/metrics.js";
+
+import { driveScores } from "../bench/scores.js";
+import { checkResults, compatibleChallengeDrive } from "../lab/results.js";
 
 const time = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
@@ -149,6 +152,81 @@ export class DriveReport {
     );
   }
 
+  comparison(challenge, report) {
+    const reasons = challengeFailures(challenge, report);
+    const row = (driver, verdict, seconds, score, incidents) =>
+      h(
+        "tr",
+        {},
+        h("th", { scope: "row" }, driver),
+        [verdict, Number.isFinite(seconds) ? `${seconds.toFixed(1)} s` : "—", score, incidents].map((value) =>
+          h("td", {}, value),
+        ),
+      );
+    const manual = row(
+      "You",
+      reasons.length ? "Fail" : "Pass",
+      report.elapsed_s,
+      report.benchmarkMetrics ? driveScores(report.benchmarkMetrics).score : "Unmeasured",
+      [...new Set([...reasons, ...report.incidents.map((i) => i.message)])].join(" · ") || "None recorded",
+    );
+    const body = h("tbody", {}, manual);
+    const status = h("p", { class: "muted", role: "status" }, "Loading published drives…");
+    const section = h(
+      "section",
+      { class: "drive-comparison", "aria-label": "Same-drive comparison" },
+      h("h3", {}, "Your drive beside theirs"),
+      h(
+        "table",
+        {},
+        h(
+          "thead",
+          {},
+          h(
+            "tr",
+            {},
+            ["Driver", "Benchmark verdict", "Duration", "Benchmark score / 100", "Incidents"].map((label) =>
+              h("th", { scope: "col" }, label),
+            ),
+          ),
+        ),
+        body,
+      ),
+      challenge.roadTest ? h("p", { class: "muted" }, "The examiner’s sheet determines road-test completion.") : null,
+      status,
+    );
+    api("/api/results")
+      .then(checkResults)
+      .then((data) => {
+        for (const id of ["rules", "jev", "llm:claude-haiku-5-5"]) {
+          const cell = compatibleChallengeDrive(data, id, report.config);
+          const label = data.drivers[id]?.label || id;
+          if (!cell) {
+            body.append(row(label, "No published drive", null, "—", "—"));
+            continue;
+          }
+          const counts = Object.entries(cell.incident_counts || {}).map(
+            ([key, value]) => `${key.replaceAll("_", " ")}: ${value}`,
+          );
+          body.append(
+            row(
+              label,
+              cell.pass ? "Pass" : "Fail",
+              cell.time_s,
+              cell.score_inputs ? driveScores({ ...cell.score_inputs, time_s: cell.time_s }).score : "Unmeasured",
+              [...cell.failures, ...counts].join(" · ") || "No incident data",
+            ),
+          );
+        }
+        status.textContent =
+          "Published rows use guarded-track results. Your following measurements come from the car’s path. Published following measurements come from the planner’s snapshots.";
+      })
+      .catch(() => {
+        status.textContent = "Published comparisons could not be loaded.";
+      });
+    return section;
+  }
+
   replayIncident(report, incident) {
     // Revalidate when clicked: a new drive or replay branch can replace the recording.
     const index = this.getReplayTarget(report, incident);
@@ -227,6 +305,7 @@ export class DriveReport {
           : challenge
             ? this.debrief(challenge, report)
             : null,
+        challenge && practiceEligible(challenge, report) ? this.comparison(challenge, report) : null,
         h(
           "div",
           { class: "report-score" },

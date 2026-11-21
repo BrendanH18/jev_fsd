@@ -115,7 +115,7 @@ import { ModelSetup, ModelMenu, KINDS } from "./ui/model-setup.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
-import { decidedByCounts } from "./bench/metrics.js";
+import { DriveMetrics, decidedByCounts } from "./bench/metrics.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
 import { advanceNotice, approachPhase, pedPhase, scrambleNotice } from "./sim/signals.js";
@@ -134,7 +134,7 @@ import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-mod
 import { OrbitControls } from "./ui/orbit-controls.js";
 import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
-import { savePractice } from "./lab/practice.js";
+import { practiceEligible, savePractice } from "./lab/practice.js";
 import { saveRoadTest } from "./lab/practice.js";
 import { RoadTestObserver, examine } from "./lab/examiner.js";
 import { ExaminerPrompt } from "./ui/road-test.js";
@@ -144,8 +144,9 @@ import { DriveLab } from "./ui/lab.js";
 import { PerceptionView } from "./render/perception.js";
 import { setupChallenge } from "./lab/evaluation.js";
 import { CITY_STYLES, buildCityIdentity } from "./render/city-identity.js";
-import { buildSnapshot } from "./brain/sensors.js";
+import { buildSnapshot, manualMetricSnapshot } from "./brain/sensors.js";
 import { sampleCandidates, simulateAll } from "./brain/candidates.js";
+import { mapFingerprint } from "./brain/recording.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -180,7 +181,7 @@ export async function boot() {
   }
   const quality = params.get("quality") || savedQuality || "high";
   let hour = replay?.hour ?? parseHour(params.get("time"));
-  const clock = new WorldClock(hour, options.clockRate, Number(params.get("weekday") || 0));
+  const clock = new WorldClock(hour, options.clockRate, challenge ? 0 : Number(params.get("weekday") || 0));
   const view = new SceneView($("#view"), map.extent, { quality });
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
@@ -910,6 +911,8 @@ export async function boot() {
       map: pack.synthetic ? "Practice grid" : status.map.label,
       driver: autopilot.enabled ? autopilot.brainName : "manual",
     });
+    if (challenge && !challengeModified && route && drive.driver === "manual")
+      drive.metrics = new DriveMetrics(route.length);
     if (challenge?.roadTest) drive.observer = new RoadTestObserver(); // (the road test's examiner: lab/examiner.js)
     arrivalPending = false;
     recorder.reset();
@@ -978,6 +981,15 @@ export async function boot() {
     report.recording_id = recorder.recordingId;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
+    if (challenge && practiceEligible(challenge, report)) {
+      report.config.map_sha = mapFingerprint(map);
+      if (drive.metrics?.jerkN)
+        report.benchmarkMetrics = {
+          ...drive.metrics.summary(world, autopilot, report.status === "arrived"),
+          // Arena results also publish the DriveScore count from the drive report.
+          hard_brakes: report.hard_brakes,
+        };
+    }
     withDecidedBy(report);
     if (challenge) {
       const practice = challenge.roadTest
@@ -1385,8 +1397,9 @@ export async function boot() {
           previousCars.set(bike.id, capturePose(bike, previousCars.get(bike.id)));
         for (const car of world.driveways.cars) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
         for (const p of world.crowd.list) previousPeople.set(p.id, capturePose(p, previousPeople.get(p.id)));
+        let road;
         try {
-          stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
+          road = stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
         } catch (error) {
           simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
           console.error("Simulation stopped", error);
@@ -1406,6 +1419,20 @@ export async function boot() {
             ),
           );
           break;
+        }
+        if (
+          drive?.metrics &&
+          !drive.finished &&
+          drive.driver === "manual" &&
+          !challengeModified &&
+          !recorder.branched
+        ) {
+          try {
+            drive.metrics.record(world, manualMetricSnapshot(world), road, FIXED_DT);
+          } catch (error) {
+            drive.metrics = null;
+            console.warn("Benchmark score unavailable", error);
+          }
         }
         if (drive && !drive.finished && !autopilot.enabled && world.route && Math.abs(world.ego.v) < 0.5) {
           const projection = world.route.project(world.ego.x, world.ego.y);

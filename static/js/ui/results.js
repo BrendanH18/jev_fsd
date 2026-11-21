@@ -2,6 +2,7 @@
 // data/results.json (scripts/build_results.py), served by /api/results or the demo's bundled copy.
 
 import { api, $, h, appUrl } from "../common.js";
+import { driveScores } from "../bench/scores.js";
 import { CHALLENGES } from "../lab/challenges.js";
 import { ROAD_TESTS } from "../lab/road-tests.js";
 import { mountPublishedReplay } from "./published-replay.js";
@@ -183,7 +184,19 @@ function challengeTable(matrix, data) {
                 cell
                   ? [
                       h("span", { class: cell.pass ? "pass" : "fail" }, cell.pass ? "✓ pass" : "✗ fail"),
-                      h("small", {}, cell.failures.length ? cell.failures.join(", ") : seconds(cell.time_s)),
+                      h(
+                        "small",
+                        {},
+                        [
+                          seconds(cell.time_s),
+                          cell.score_inputs
+                            ? `score ${driveScores({ ...cell.score_inputs, time_s: cell.time_s }).score}/100`
+                            : "score unavailable",
+                        ]
+                          .filter(Boolean)
+                          .join(" · "),
+                      ),
+                      cell.failures.length ? h("small", {}, cell.failures.join(", ")) : null,
                     ]
                   : h("span", { class: "muted" }, "–"),
               ),

@@ -45,10 +45,10 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .challenge-empty { padding: 28px 0; color: #afc0cc; }
 .challenge-empty h2 { color: var(--text); font-size: 20px; }
 .challenge-practice-note { padding: 12px; border: 1px solid #83d9c433; border-radius: 8px; color: #afc0cc; }
-.challenge-debrief { margin: 20px 0; padding: 16px; border: 1px solid #f2ce9044; border-radius: 12px; background: #ffffff04; }
+.challenge-debrief, .drive-comparison { margin: 20px 0; padding: 16px; border: 1px solid #f2ce9044; border-radius: 12px; background: #ffffff04; }
 .challenge-verdict { display: block; margin-top: 10px; color: #f2ce90; font-size: 20px; }
 .challenge-verdict.clean { color: #83d9c4; }
-.challenge-debrief p:last-child { margin-bottom: 0; }
+.challenge-debrief p:last-child, .drive-comparison p:last-child { margin-bottom: 0; }
 .challenge-debrief .challenge-failures { margin-bottom: 0; }
 .challenge-failures li::first-letter { text-transform: uppercase; }
 .incident-replay { display: block; width: 100%; padding: 10px; border: 1px solid #83d9c433; border-radius: 8px; background: #83d9c408; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -111,3 +111,7 @@ body:has(.replay-controls:not([hidden])) .cluster { bottom: 180px; }
 .examiner-remark.fail .examiner-mark { color: #ff999c; }
 .examiner-events { grid-column: 2; list-style: none; padding: 0; margin: 2px 0 0; }
 .examiner-events li { margin: 0; }
+
+.drive-comparison { overflow-x: auto; }
+.drive-comparison table { width: 100%; border-collapse: collapse; }
+.drive-comparison th, .drive-comparison td { padding: 6px; text-align: left; vertical-align: top; }

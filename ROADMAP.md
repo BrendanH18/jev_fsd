@@ -588,13 +588,17 @@ a repeated comparison reports its spread.
 The game and the leaderboard are two separate places today: a manual drive gets a coach score that is
 never set beside a model's result on the same drive.
 
-- [ ] **8.1 Your drive beside theirs.** (M) After a manual challenge or road test, the drive report
+- [x] **8.1 Your drive beside theirs.** (M) After a manual challenge or road test, the drive report
   shows Rules, Jev and Claude Haiku on the same drive from `results.json`: verdict, time, the score
   of `bench/scores.js` and incidents. As for practice, only the original unchanged manual attempt
-  counts, and every verdict comes from `challengeFailures`.
-- [ ] **8.2 From the leaderboard to the wheel.** (S) Each challenge on `/results` links to driving it
+  counts, and every verdict comes from `challengeFailures`. The comparison selects the latest
+  guarded drive with the matching authored version and map fingerprint.
+  *Follow-up:* Manual scores measure following from the driven corridor. Published scores use
+  the planner snapshot saved by the arena. Share one sampler for future runs and remeasure older
+  comparisons from exact replays before ranking scores across the two methods.
+- [x] **8.2 From the leaderboard to the wheel.** (S) Each challenge on `/results` links to driving it
   with its authored setup, and the leaderboard shows the scores of `bench/scores.js` beside pass and
-  fail.
+  fail when the recording or report has the required measurements.
 - [ ] **8.3 A gallery of model drives.** (M) Generalise `ui/published-replay.js` from one drive to a
   list of exported drives: four to six that show a difference (Claude Haiku at the flagger, one of
   Jev's flagged lefts, a pass and a fail on the same challenge), with the chosen and flagged manoeuvres
@@ -610,9 +614,10 @@ Jev and Claude Haiku on the same drive, and can watch at least four contrasting 
 Phase 4 found that the challenges mostly test the filter (4.1: 4 of 3,042 sampled decisions offer an
 ordinary manoeuvre that fails) and that most open-track flags never became violations.
 
-- [ ] **9.1 Decide what a flagged choice costs.** (M) First measure how long each flagged choice was
-  held and how close it came to the line. Then either add a score term (bump `SCORES_VERSION`) or keep
-  scores on outcomes and report flags apart, and record why.
+- [x] **9.1 Decide what a flagged choice costs.** (M) Keep the outcome score and report flags
+  separately. All 224 published flagged choices were held for 250–267 ms. The replay measured
+  clearance for 217 choices. All 107 red-light and stop-sign flags ended more than 5 m short of
+  the line. See the [exposure record](docs/validation/open-track-flag-exposure-2026-11-21.md).
 - [x] **9.2 Claude Haiku's two losses.** (S) The open-track `flagger` stall and the guarded
   `on-your-bumper` brake check replay exactly. The
   [review](docs/validation/haiku-two-losses-2026-11-21.md) records what the model saw,

@@ -3,14 +3,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
 const { fixtureWorld } = await import("../static/tests/jev-fixtures.js");
-const { Vehicle } = await import("../static/js/sim/vehicle.js");
+const { BIKE, Vehicle } = await import("../static/js/sim/vehicle.js");
 const { followingPolicy } = await import("../static/js/sim/following.js");
-const { buildSnapshot } = await import("../static/js/brain/sensors.js");
+const { buildSnapshot, manualMetricSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, buildQuestions } = await import("../static/js/brain/state.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { CautiousAgent } = await import("../static/js/agents/cautious.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
+const { DriveMetrics } = await import("../static/js/bench/metrics.js");
 const { cloneState } = await import("../static/js/lab/recorder.js");
 const { EvaluationTrace } = await import("../static/js/lab/trace.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
@@ -71,6 +72,30 @@ test("feature off preserves legacy observation and candidate shape", () => {
     false,
   );
   assert.equal("following_policy" in new DriveScore(w).snapshot(), false);
+});
+test("manual following measures a cyclist ahead until the car moves beside their line", () => {
+  const w = setup();
+  const rider = new Vehicle(w.ego.x + 10, w.ego.y, 0, 4, BIKE);
+  rider.id = "cyclist";
+  w.npcs = [rider];
+  const hint = w.route.hint;
+  assert.equal(manualMetricSnapshot(w).following?.id, rider.id);
+  assert.ok(manualMetricSnapshot(w).following.gap_m > 0);
+  w.ego.y += 1.5;
+  assert.equal(manualMetricSnapshot(w).following, null);
+  assert.equal(w.route.hint, hint);
+});
+test("manual benchmark progress stays at the last point sampled on the route", () => {
+  const w = setup();
+  const metrics = new DriveMetrics(w.route.length);
+  metrics.record(w, manualMetricSnapshot(w), null, 0.1);
+  const progress = metrics.maxProgress;
+  w.ego.x += 20;
+  w.ego.y += 50;
+  assert.equal(manualMetricSnapshot(w), null);
+  metrics.record(w, manualMetricSnapshot(w), null, 0.1);
+  assert.equal(metrics.maxProgress, progress);
+  assert.equal(metrics.t, 0.2);
 });
 test("ordinary traffic rebuilds more room under the shared wet-road policy", () => {
   function run(enabled) {
