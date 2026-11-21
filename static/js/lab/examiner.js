@@ -18,19 +18,12 @@
 
 import { projectPoint } from "../map/mapdata.js";
 import { FEATURE_METRICS } from "../sim/features/index.js";
+import { CATEGORIES } from "./examiner-categories.js";
 import { challengeFailures } from "./practice.js";
 
+export { CATEGORIES };
 export const EXAMINER_VERSION = 1;
 export const MAX_REPEAT = 3;
-export const CATEGORIES = {
-  observation: "Observation",
-  speed: "Speed control",
-  space: "Space management",
-  steering: "Steering and lane position",
-  right_of_way: "Signals and right of way",
-  parking: "Parking",
-  other: "Other",
-};
 
 const SIGNAL_LOOK_M = 60; // a turn's signal counts from this far before the junction
 const SIGNAL_RECENT_S = 8; // a lane change's signal counts if it was on this recently
@@ -369,7 +362,7 @@ const CORE_FAIL_CATEGORY = {
 };
 const FAIL_CATEGORY = new Map([
   ...Object.entries(CORE_FAIL_CATEGORY),
-  ...FEATURE_METRICS.filter(({ category }) => Object.hasOwn(CATEGORIES, category)).map(({ failure, category }) => [
+  ...FEATURE_METRICS.filter(({ category }) => category !== undefined).map(({ failure, category }) => [
     failure,
     category,
   ]),

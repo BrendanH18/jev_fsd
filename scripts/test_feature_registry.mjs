@@ -321,6 +321,7 @@ test("a record at a slot the core never runs is refused", () => {
   const metric = { at: "late", name: "test_violation", failure: "test failure", label: "Test violation" };
   assert.equal(R.recordProblem({ ...record, metric }), null);
   assert.match(R.recordProblem({ ...record, metric: { ...metric, label: "" } }), /metric has no label/);
+  assert.match(R.recordProblem({ ...record, metric: { ...metric, category: "rightOfWay" } }), /unknown category/);
   assert.throws(() => R.hooks("sense", "nowhere"), /no slot/);
 });
 

@@ -114,6 +114,7 @@
 // Import a record through this registry (or a core module), never on its own: the snowbanks record's simulation
 // reaches sim/npc.js, which loads this registry while that record is still loading
 // (scripts/test_feature_registry.mjs checks each record loads after it).
+import { CATEGORIES } from "../../lab/examiner-categories.js";
 import balls from "./balls.js";
 import driveways from "./driveways.js";
 import potholes from "./potholes.js";
@@ -203,11 +204,15 @@ export function recordProblem(f) {
   for (const k of ["key", "seen", "calls"])
     if (typeof f[k] !== "string" || !f[k]) return `${f.key || "a record"} has no ${k}`;
   if (typeof f.build !== "function") return `${f.key} has no build`;
-  if (f.metric !== undefined)
+  if (f.metric !== undefined) {
     for (const key of ["name", "failure", "label"]) {
       const value = f.metric?.[key];
       if (typeof value !== "string" || !value.trim()) return `${f.key}'s metric has no ${key}`;
     }
+    const { category } = f.metric;
+    if (category !== undefined && (typeof category !== "string" || !Object.hasOwn(CATEGORIES, category)))
+      return `${f.key}'s metric has an unknown category`;
+  }
   for (const [name, h] of Object.entries(f)) {
     if (FIELDS.includes(name)) continue;
     if (!SLOTS[name]) return `${f.key} has an unknown hook or field ${name}`;
