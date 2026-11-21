@@ -82,10 +82,10 @@ function streetView(canvas, replay) {
 }
 
 const drives = [
-  ["jev-right-on-red", "Jev · Right on red · Calgary"],
-  ["claude-haiku-flagger", "Claude Haiku · Flagger · Ottawa"],
-  ["jev-flagger", "Jev · Flagger · Ottawa"],
-  ["jev-unprotected-left", "Jev · The unprotected left · Ottawa"],
+  ["jev-right-on-red", "Jev · Right on red · Calgary", "right-on-red", "d068809918d0d0e7"],
+  ["claude-haiku-flagger", "Claude Haiku · Flagger · Ottawa", "flagger", "a4599358446f908f"],
+  ["jev-flagger", "Jev · Flagger · Ottawa", "flagger", "037cff94081ae1bc"],
+  ["jev-unprotected-left", "Jev · The unprotected left · Ottawa", "unprotected-left", "6718f664d8f8681f"],
 ];
 
 // Jev open-track exports. The map, versions and end time describe the recorded
@@ -112,11 +112,16 @@ export function incidentDrive(config, incident) {
 }
 
 export async function loadPublishedDrive(id, signal) {
+  const entry = drives.find(([candidate]) => candidate === id);
+  if (!entry) throw new Error("Unknown published replay");
+  const [, , challenge, resultSha] = entry;
   const response = await fetch(new URL(`../../replays/${id}.json`, import.meta.url), { signal });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
   const replay = await response.json();
   if (replay.format !== "jev-browser-replay/1" || !replay.choices || !(replay.frames?.length >= 2))
     throw new Error("Replay data is incomplete");
+  if (replay.challenge !== challenge || replay.result_sha !== resultSha)
+    throw new Error("Replay does not match the selected drive");
   return replay;
 }
 

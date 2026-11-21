@@ -260,8 +260,49 @@ def check_incident_comparison(page):
     )
     print("Paused manual time and model readout:", sync, flush=True)
     assert abs(sync[0] - incident_time) < 0.01 and sync[1].startswith(f"{sync[0]:.1f} /"), sync
+    reset_guard, rewind, model_time = deck.evaluate("""deck => {
+      const {lab, world} = window.__jev;
+      const ego = () => [world.ego.x, world.ego.y, world.ego.psi, world.ego.v];
+      const before = ego();
+      window.dispatchEvent(new KeyboardEvent('keydown', {key: 'r'}));
+      window.dispatchEvent(new KeyboardEvent('keyup', {key: 'r'}));
+      const resetGuard = ego().every((value, i) => value === before[i]);
+      const slider = deck.querySelector('input[type="range"]');
+      slider.value = Math.max(0, Number(slider.value) - 2);
+      slider.dispatchEvent(new Event('input'));
+      lab.update(lab.recorder, performance.now());
+      const elapsed = lab.recorder.frames[Number(slider.value)].state.drive.elapsed;
+      return [resetGuard, elapsed, document.querySelector('.incident-model .published-replay-readout').textContent];
+    }""")
+    assert reset_guard
+    assert rewind < sync[0] and model_time.startswith(f"{rewind:.1f} /"), (rewind, model_time)
     deck.get_by_role("button", name="Return to drive").click()
     assert not model.is_visible()
+
+    page.evaluate("""async () => {
+      const {readHistory} = await import('./js/sim/drive-score.js');
+      const fetchReplay = window.fetch;
+      window.fetch = (url, options) => {
+        if (!String(url).endsWith('/jev-flagger.json')) return fetchReplay(url, options);
+        return new Promise(resolve => {
+          window.releaseIncidentReplay = async () => {
+            window.fetch = fetchReplay;
+            resolve(await fetchReplay(url, options));
+          };
+        });
+      };
+      window.__jev.driveReport.show(readHistory()[0]);
+    }""")
+    stop.locator("xpath=ancestor::details").evaluate("d => d.open = true")
+    compare = stop.locator("..").get_by_role("button", name="Compare with Jev")
+    pending_button = compare.element_handle()
+    compare.click()
+    page.wait_for_function("typeof window.releaseIncidentReplay === 'function'")
+    page.evaluate("window.__jev.driveReport.dialog.close()")
+    page.evaluate("window.releaseIncidentReplay()")
+    page.wait_for_function("button => !button.disabled", arg=pending_button)
+    assert page.evaluate("!window.__jev.lab.reviewing") and not model.is_visible()
+
     negatives = page.evaluate("""async () => {
       const app = window.__jev, { readHistory } = await import('./js/sim/drive-score.js');
       const report = readHistory()[0], outcomes = [];
@@ -280,7 +321,7 @@ def check_incident_comparison(page):
     }""")
     print("Nonmatches (rewinds, compare offered):", negatives, flush=True)
     assert all(n > 0 and not offered for _, n, offered in negatives[:-1])
-    assert negatives[-1][1:] == [0, False] and len(replay_requests) == 1
+    assert negatives[-1][1:] == [0, False] and len(replay_requests) == 2
 
 
 GROUPS = ["pages", "practice", "parking"]

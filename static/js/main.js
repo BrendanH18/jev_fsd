@@ -825,7 +825,7 @@ export async function boot() {
     signalRight: () => signal("right"),
     horn: () => audio.horn(),
     reset: () => {
-      if (photo.active) return;
+      if (photo.active || lab?.reviewing) return;
       if (challenge) challengeModified = true;
       drive?.reset();
       world.resetToLane();
