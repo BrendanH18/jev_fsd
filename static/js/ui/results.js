@@ -258,7 +258,7 @@ function cityTable(grid, data) {
                         ? h(
                             "small",
                             { title: cell.cost_basis },
-                            `${percentText(cell.model_share)} model decisions · ${moneyText(cell.cost_usd)}`,
+                            `${percentText(cell.model_share)} model decisions · Rules fallbacks ${cell.fallbacks} · ${moneyText(cell.cost_usd)}`,
                           )
                         : null,
                     ]

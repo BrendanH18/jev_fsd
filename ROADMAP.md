@@ -58,7 +58,7 @@ claimed before the exits it depends on.
 |---|---|---|---|
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app | Exited 9 Nov |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it | Exited 10 Nov; 1.8 open |
-| [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Open**: no model city run (2.5b) |
+| [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Met** on 21 November with the Kitsilano dry city suite (2.5b) |
 | [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 9 of 41 moved |
 | [4](#phase-4-a-benchmark-that-separates-drivers) | Scores tell drivers apart | Two different models get measurably different scores for a stated reason | Met 20 Nov, on one run each |
 | [5](#phase-5-release-and-presentation) | The project presents what it is | 0.3.0 cut; README leads with results | Exited 20 Nov |
@@ -264,21 +264,19 @@ cost $0.033.
   `scripts/inspect_run.py` answers 100 questions about a saved run (outcomes, audits, motion, model
   decisions; `--list`), and `--compare` runs any of them over the matched routes of two runs.
 
-**2.5 is split.** *2.5a, the challenges and road tests:* done (above). *2.5b, the city suite:* open,
-and now the first item of the [expansion plan](#expansion-plan-from-20-november). Under the
-20 November rule (AGENTS.md, [D2](#open-decisions)) the LLM is Claude Haiku 5.5, not DeepSeek:
-
-- [ ] **2.5b Jev and Claude Haiku on the city suite.** (M) Kitsilano dry, seed 1, the 12 routes Rules
+- [x] **2.5b Jev and Claude Haiku on the city suite.** (M) Kitsilano dry, seed 1, the 12 routes Rules
   and the cautious agent already have. First make the route snapping deterministic (7.1), so a
   re-plan is the same on any server process. Pilot one route of each model to measure decisions,
   instruction length, fallbacks and cost (S), then record both on their own servers with their own
   rate limits, and publish them beside Rules and the cautious agent with `model_share`, verdicts,
-  cost and a keyless replay. Both one-route pilots and their exact replays are recorded in the
-  [city pilot results](docs/validation/city-model-pilots.md). The full suites are the next publication.
+  cost and a keyless replay. *Done 21 November:* Rules passed 12/12, Cautious 9/12, Jev 2/12 and
+  Claude Haiku 5.5 passed 3/12. Both model tapes replayed all 12 drives exactly on their recorded
+  revision without a key. Jev exceeded the 5,500-input-token target on 39 decisions. The
+  [city results](docs/validation/city-model-pilots.md#complete-city-suites) include the usage and audit.
 
 Exit: someone with no key can open the repository, see how each driver did on the challenges and
-on the city suite, and replay any of the published drives. *Met for the challenges; open until
-2.5b lands.*
+on the city suite, and replay any of the published drives. *Met for the challenges, road tests and
+12-route Kitsilano dry suite.*
 
 ## Phase 3: make features cheap to add
 
@@ -673,7 +671,7 @@ documented path, and adding it grows the repository by a stated, small amount.
 | **D4** | Is `city` a second suite, or does it replace the current one? | *Decided and built (1.2):* a second suite, so earlier records stay comparable |
 | **D5** | Is the next release 0.3.0 or 1.0? | *Decided:* 0.3.0, cut 20 November. What makes 1.0 is now D6 |
 | **D6** | What makes 1.0? | Phase 2's exit (2.5b), 7.1 to 7.3, 7.8 and 8.1 on the public demo: models on the city, results that verify on a named suite, and a person set beside them. Until then, release 0.x on a rhythm (5.7). The [six-month plan](#six-month-plan-23-november-2026-to-21-may-2027) meets this at the end of January and cuts 1.0.0 on 26 February |
-| **D7** | What is the budget for 2.5b, 7.5 and 7.6? | **21 November:** up to $30 approved for Jev and Claude Haiku city work, starting with one city route per model. The owner approved using provider-reported token usage at published rates to verify spend for this city run. The two pilots cost $0.3237 on that basis. At 20 November prices Jev's 62 open-track drives cost $1.47 and Claude Haiku's $4.53 (effort low), so three repeats of both are about $18 |
+| **D7** | What is the budget for 2.5b, 7.5 and 7.6? | **21 November:** up to $30 approved for the Jev and Claude Haiku city work, starting with one route per model. Provider-reported usage at published rates put the completed suites at $10.259457 in total, including the $0.3237 pilots. That verification method was approved for this city run. At 20 November prices Jev's 62 open-track drives cost $1.47 and Claude Haiku's $4.53 (effort low), so three repeats of both are about $18. The repeat and held-out budgets are open |
 | **D8** | Where do model recordings live? | First slim them in Git (keep only what replay needs). Moving them to release assets, with a hash in Git, is a change of service and needs the owner's approval |
 
 ## Done so far

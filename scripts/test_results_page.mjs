@@ -98,6 +98,10 @@ test("the city grid has one row per map and weather, Kitsilano first", () => {
   for (const cell of kitsilanoDry.cells.slice(2)) {
     assert.ok(cell.recording && cell.model && cell.cost_usd > 0 && cell.model_share > 0);
   }
+  assert.deepEqual(
+    kitsilanoDry.cells.slice(2).map((cell) => cell.fallbacks),
+    [0, 18],
+  );
   for (const row of rest) assert.equal(row.cells.filter(Boolean).length, 2, `${row.map} ${row.weather}`);
 });
 

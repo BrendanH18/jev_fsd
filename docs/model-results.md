@@ -20,8 +20,9 @@ to Rules (Jev still passes all 62, DeepSeek still fails only `double-parked`). C
 to replay every drive exactly, or record those eight again.
 The per-drive results are in `data/results/2026-11-11/`.
 
-The [city pilot measurements](validation/city-model-pilots.md#21-november-2026)
-cover the first Kitsilano city route and its keyless replay.
+The [Kitsilano city results](validation/city-model-pilots.md#complete-city-suites)
+cover the 12-route dry suite for Rules, Cautious, Jev and Claude Haiku 5.5,
+with recorded replies and provider usage for both models.
 
 ## The open track (ROADMAP 4.2), 20 November 2026
 
@@ -246,9 +247,10 @@ now the costliest place to drive: its median request is 43% larger than a challe
 
 **The ceiling.** A new situation clause, or new question wording, must keep:
 
-- each question's instructions under **4,000 characters** on the city suite (today's longest is
-  2,970; the server refuses anything over 6,000, and Jev's own limit is at least that);
-- a Jev decision under **5,500 input tokens**, about $0.00023 (today's longest is 5,225);
+- each question's instructions under **4,000 characters** on the city suite (the November 21 city
+  run peaked at 3,006 characters and the server refuses anything over 6,000);
+- a Jev decision under **5,500 input tokens**, about $0.00023 (39 decisions exceeded this target
+  in the November 21 city run, with a maximum of 5,927);
 - the LLM system prompt under **6,000 tokens** (about 5,000 today).
 
 Audit input sizes from a saved Jev recording without running a server or replaying a drive:
