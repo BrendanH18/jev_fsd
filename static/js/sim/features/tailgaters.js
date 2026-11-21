@@ -40,11 +40,11 @@ export default {
   audit: {
     at: "rearTraffic",
     run(world) {
-      if (world.tailgaters.enabled) auditTailgaters(world);
+      if (world.tailgaters?.enabled) auditTailgaters(world);
     },
   },
   trafficManage(world, fleet, dt) {
-    if (world.tailgaters.enabled) manageTailgaters(world, fleet, dt);
+    if (world.tailgaters?.enabled) manageTailgaters(world, fleet, dt);
   },
   trafficDriver(world, n) {
     if (!n.tailgate) return n.tgPeek ? { offset: n.tgPeek } : null;
@@ -60,7 +60,7 @@ export default {
   sense: {
     at: "following",
     run(world, snap, { visibleNpcs, s }) {
-      if (!world.tailgaters.enabled) return;
+      if (!world.tailgaters?.enabled) return;
       snap.tailgater = tailgaterSensing(world, visibleNpcs, s);
       if (snap.tailgater && snap.following)
         snap.following.policy = followingPolicy(world.ego, snap.following, { scale: TAIL_ROOM });

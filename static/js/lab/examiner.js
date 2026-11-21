@@ -369,7 +369,10 @@ const CORE_FAIL_CATEGORY = {
 };
 const FAIL_CATEGORY = new Map([
   ...Object.entries(CORE_FAIL_CATEGORY),
-  ...FEATURE_METRICS.filter(({ category }) => category).map(({ failure, category }) => [failure, category]),
+  ...FEATURE_METRICS.filter(({ category }) => Object.hasOwn(CATEGORIES, category)).map(({ failure, category }) => [
+    failure,
+    category,
+  ]),
 ]);
 const FAIL_REMARK = {
   timeout: "Did not complete the route",

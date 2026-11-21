@@ -1,7 +1,7 @@
 // The feature registry (docs/feature-interface.md). Each opt-in feature that has moved here is one record,
 // in a file of its own beside this one, and one line in FEATURES. The core (sim/world.js, sim/step.js,
 // sim/npc.js, brain/sensors.js, brain/candidates.js, brain/state.js, brain/llm-prompt.js, brain/tracks.js,
-// bench/metrics.js, lab/trace.js, lab/examiner.js)
+// sim/free-drive.js, bench/metrics.js, lab/trace.js, lab/examiner.js)
 // loops over the records' hooks and never names these features.
 //
 // A record:
@@ -203,6 +203,11 @@ export function recordProblem(f) {
   for (const k of ["key", "seen", "calls"])
     if (typeof f[k] !== "string" || !f[k]) return `${f.key || "a record"} has no ${k}`;
   if (typeof f.build !== "function") return `${f.key} has no build`;
+  if (f.metric !== undefined)
+    for (const key of ["name", "failure", "label"]) {
+      const value = f.metric?.[key];
+      if (typeof value !== "string" || !value.trim()) return `${f.key}'s metric has no ${key}`;
+    }
   for (const [name, h] of Object.entries(f)) {
     if (FIELDS.includes(name)) continue;
     if (!SLOTS[name]) return `${f.key} has an unknown hook or field ${name}`;

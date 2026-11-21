@@ -87,9 +87,9 @@ export const FLAG_TEXT = {
   passes_turn_round_point: "it drives past the point where the route turns round",
   passes_parking_space: "it drives past the parking space at the destination",
   splashes_pedestrian: "it splashes a pedestrian from a puddle",
-  ...FEATURE_FLAG_TEXT,
   hits_pothole_too_fast: "it hits a pothole too fast",
   drives_into_geese: "it drives into geese crossing the road",
   enters_closed_road: "it drives onto a road closed by barricades",
+  ...FEATURE_FLAG_TEXT,
 };
 export const flagText = (reject) => FLAG_TEXT[reject] || reject.replaceAll("_", " ");

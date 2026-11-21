@@ -26,12 +26,15 @@ const CORE = [
   "sim/world.js",
   "sim/step.js",
   "sim/npc.js",
+  "sim/free-drive.js",
   "brain/sensors.js",
   "brain/candidates.js",
   "brain/state.js",
   "brain/llm-prompt.js",
   "brain/tracks.js",
   "bench/metrics.js",
+  "lab/trace.js",
+  "lab/examiner.js",
 ];
 
 test("every record is whole, its option and flags its own, and every hook at a slot the core runs", () => {
@@ -315,6 +318,9 @@ test("a record at a slot the core never runs is refused", () => {
   assert.match(R.recordProblem({ ...record, sense: { at: "nowhere", run() {} } }), /never runs/);
   assert.match(R.recordProblem({ ...record, sensing() {} }), /unknown hook/);
   assert.match(R.recordProblem({ ...record, seen: undefined }), /no seen/);
+  const metric = { at: "late", name: "test_violation", failure: "test failure", label: "Test violation" };
+  assert.equal(R.recordProblem({ ...record, metric }), null);
+  assert.match(R.recordProblem({ ...record, metric: { ...metric, label: "" } }), /metric has no label/);
   assert.throws(() => R.hooks("sense", "nowhere"), /no slot/);
 });
 

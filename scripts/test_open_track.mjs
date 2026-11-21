@@ -108,7 +108,7 @@ await test("the tracks, and every check the filter can fail has words for a mode
     .map((f) => fs.readFileSync(new URL(`../static/js/sim/features/${f}`, import.meta.url), "utf8"))
     .join("\n")
     // Examiner categories label audit results and cannot reject manoeuvres.
-    .replace(/^[ \t]*category:.*$/gm, "");
+    .replace(/\bcategory\s*:\s*"[^"]*"/g, "");
   const ids = new Set();
   for (const text of [source, features])
     for (const m of text.matchAll(/(?:reject\s*=|\?|:)\s*"([a-z]+(?:_[a-z]+)+)"/g)) ids.add(m[1]);
