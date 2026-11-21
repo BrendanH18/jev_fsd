@@ -199,7 +199,9 @@ const trimmed = (result) =>
 const resultSha = (result) => rec.hashText(rec.canonicalJson(rec.comparableResult(result)));
 const SUMMARY = [
   "challenge",
+  "version",
   "map",
+  "pack",
   "pass",
   "failures",
   "arrived",

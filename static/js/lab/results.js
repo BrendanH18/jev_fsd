@@ -57,7 +57,10 @@ export function summary(data) {
 // The challenge set as a matrix: one row per challenge or road test, in the order the first driver
 // drove them, one cell per driver that ran the full set; `suite` "open" for the open track's runs.
 export function challengeMatrix(data, suite = "challenges") {
-  const runs = data.rows.filter((r) => r.suite === suite);
+  const latest = new Map();
+  for (const row of data.rows)
+    if (row.suite === suite && !latest.has(row.driver)) latest.set(row.driver, row);
+  const runs = [...latest.values()];
   const order = [];
   for (const run of runs)
     for (const d of run.drives) if (!order.some((o) => o.id === d.id)) order.push({ id: d.id, map: d.map });

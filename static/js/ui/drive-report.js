@@ -202,7 +202,7 @@ export class DriveReport {
         for (const id of ["rules", "jev", "llm:claude-haiku-5-5"]) {
           const cell = match?.cells[matrix.drivers.indexOf(id)];
           const label = data.drivers[id]?.label || id;
-          if (!cell) {
+          if (!cell || cell.version !== (challenge.version || 1) || cell.pack !== report.config.pack) {
             body.append(row(label, "No published drive", null, "—", "—"));
             continue;
           }
