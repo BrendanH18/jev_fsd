@@ -482,6 +482,18 @@ await test("the audit: going on while held is an officer violation; going on whe
   );
 });
 
+await test("crossing an officer-controlled line clears the previous junction's give-way record", () => {
+  const ctx = world({ t: B_GREEN, toLine: 2, v: 8 });
+  const w = ctx.world;
+  O.placeOfficer(w, SIG, { phase: "A" });
+  w.giveWay = { centre: [w.ego.x, w.ego.y], counted: false, coming: new Set() };
+  step(ctx, { kind: "lane", vTarget: 8 });
+  assert.equal(w.giveWay !== null, true, "before reaching the new line");
+  driveThrough(ctx, 8, 1);
+  assert.equal(w.violations.officer_violations, 1, "crossed the new line");
+  assert.equal(w.giveWay === null, true, "the earlier junction is no longer audited");
+});
+
 await test("officer_violations reaches the metrics, the drive score, the practice verdict and the examiner only once the car has come up to an officer", () => {
   const ctx = world({ t: B_GREEN, toLine: 30, v: 8 }),
     w = ctx.world;

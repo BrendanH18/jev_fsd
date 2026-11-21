@@ -1,0 +1,58 @@
+name: Published recording replay drift
+on:
+  schedule:
+    - cron: '34 9 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tapes:
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.tapes.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Find every published tape
+        id: tapes
+        run: |
+          matrix=$(python3 scripts/report_replay_drift.py matrix)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  replay:
+    name: ${{ matrix.tape }}
+    needs: tapes
+    runs-on: namespace-profile-gitrunner
+    timeout-minutes: 45
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.tapes.outputs.matrix) }}
+    env:
+      TAPE: ${{ matrix.tape }}
+      REPLAY_RUNNER: ${{ matrix.runner }}
+      DRIVE_COUNT: ${{ matrix.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: report
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Replay on main
+        working-directory: report
+        run: python3 scripts/report_replay_drift.py run . "$TAPE" "$REPLAY_RUNNER" "$DRIVE_COUNT" main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: published
+          ref: ${{ matrix.tree }}
+      - name: Replay on the published revision
+        working-directory: report
+        run: python3 scripts/report_replay_drift.py run ../published "$TAPE" "$REPLAY_RUNNER" "$DRIVE_COUNT" published

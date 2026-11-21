@@ -33,6 +33,8 @@ RECORDINGS = ROOT / "data" / "recordings"
 OUTPUT = ROOT / "data" / "results.json"
 README = ROOT / "README.md"
 FORMAT = "jev-results/1"
+MANIFEST_FORMAT = "jev-run-manifest/1"
+LEGACY_RESULTS_THROUGH = "2026-11-20"
 START, END = "<!-- results:start -->", "<!-- results:end -->"
 HOME_MAP = "kitsilano"
 LEADERBOARD = "https://brendanh18.github.io/jev_fsd/results.html"
@@ -157,6 +159,127 @@ def model_driver(header: dict, model: str | None) -> dict:
     return {"label": label, "kind": kind, "model": model, "about": f"{about}, {where}" if where else about}
 
 
+def comparable_bench_result(result: dict) -> dict:
+    # Match comparableResult in static/js/brain/recording.js.
+    compact = {key: value for key, value in result.items() if key not in ("wall_ms", "model_recording", "diagnostics")}
+    if isinstance(compact.get("report"), dict):
+        compact["report"] = {key: value for key, value in compact["report"].items() if key != "started_at"}
+    return compact
+
+
+def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = None) -> dict | None:
+    """Validate the declared run settings and bind the manifest to a matching model recording."""
+
+    def require(ok, message):
+        if not ok:
+            raise ValueError(f"{rel(path)}: {message}")
+
+    def fingerprint(value):
+        return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{16}", value)
+
+    manifest = run.get("manifest")
+    header = recording["header"] if recording is not None else {}
+    if manifest is None and date <= LEGACY_RESULTS_THROUGH and "manifest" not in header:
+        return None
+    require(isinstance(manifest, dict) and manifest.get("format") == MANIFEST_FORMAT, "run manifest is required")
+    commit = manifest.get("source_commit")
+    require(
+        isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit) and manifest.get("source_dirty") is False,
+        "the manifest must identify a clean source commit",
+    )
+    config, summary, results = run.get("config"), run["summary"], run["results"]
+    settings = config if config is not None else summary
+    driver, engine, track = settings["brain"], settings.get("engine"), settings.get("track") or "guarded"
+    require(
+        manifest.get("driver") == driver and manifest.get("engine") == engine and manifest.get("track") == track,
+        "driver, engine or track disagrees with the manifest",
+    )
+    require(isinstance(manifest.get("engine_version"), str) and manifest["engine_version"], "missing V8 version")
+    cost = round(sum(r.get("cost_usd") or 0 for r in results), 6)
+    require(manifest.get("cost_usd") == summary.get("cost_usd") == cost, "cost disagrees with the manifest")
+    maps, suite = manifest.get("maps"), manifest.get("suite")
+    require(isinstance(maps, dict) and isinstance(suite, dict), "missing map or suite provenance")
+    for data in maps.values():
+        require(isinstance(data, dict) and fingerprint(data.get("fingerprint")), "invalid map fingerprint")
+        components = data.get("components")
+        require(
+            isinstance(components, dict) and components and all(fingerprint(v) for v in components.values()),
+            "invalid map component fingerprints",
+        )
+    if config is None:
+        drives = suite.get("drives")
+        require(
+            suite.get("kind") == "arena" and suite.get("set") == summary.get("set") and isinstance(drives, dict),
+            "arena set disagrees with the manifest",
+        )
+        require(
+            all(isinstance(d, dict) and d.get("map") in maps and type(d.get("seed")) is int for d in drives.values()),
+            "invalid authored map or seed",
+        )
+        require(
+            all(r["challenge"] in drives and drives[r["challenge"]]["map"] == r["map"] for r in results),
+            "arena drives disagree with the manifest",
+        )
+    else:
+        key = config.get("map")
+        require(
+            suite.get("kind") == "bench"
+            and suite.get("config") == config
+            and suite.get("ids") == [r["id"] for r in results]
+            and (suite.get("only") is True or suite.get("generated_ids", suite["ids"]) == suite["ids"]),
+            "benchmark settings or routes disagree with the manifest",
+        )
+        require(
+            set(maps) == {key} and maps[key].get("pack_version") == config.get("pack"),
+            "map disagrees with the manifest",
+        )
+    model, prompt = manifest.get("model"), manifest.get("prompt_hash")
+    is_model = driver == "jev" or driver.startswith(("decision:", "llm:"))
+    if is_model:
+        require(isinstance(model, str) and model and fingerprint(prompt), "invalid model id or prompt fingerprint")
+        require(recording is not None, "model runs need a corresponding recording")
+        require(header.get("manifest") == manifest, "recording and results disagree on their manifest")
+        require(header.get("model") == model and header.get("engine") == engine, "recording model or engine disagrees")
+        if driver.startswith("llm:"):
+            require(header.get("versions", {}).get("llm_prompt") == prompt, "recording prompt disagrees")
+        fingerprints = {key: data["fingerprint"] for key, data in maps.items()}
+        recorded_maps = header.get("maps") if config is None else {config["map"]: header.get("map_sha")}
+        require(fingerprints == recorded_maps, "recording map data disagrees with the manifest")
+        recorded = recording.get("results", {})
+        id_key = "challenge" if config is None else "id"
+        require(
+            len(recorded) == len(results) and recorded.keys() == {result[id_key] for result in results},
+            "recording and report have different drives",
+        )
+        if config is None:
+            recorded_arena = header.get("arena") or {}
+            require(
+                recorded_arena.get("set") == suite["set"]
+                and set(recorded_arena.get("ids", [])) == suite["drives"].keys(),
+                "arena recording set or drive list disagrees with the manifest",
+            )
+            # The arena report exports only a subset of the fields kept in the tape.
+            require(
+                all(
+                    all(
+                        key in recorded[result[id_key]] and recorded[result[id_key]][key] == value
+                        for key, value in result.items()
+                    )
+                    and recorded[result[id_key]].get("seed") == suite["drives"][result[id_key]]["seed"]
+                    for result in results
+                ),
+                "arena report and recording disagree on per-drive data",
+            )
+        else:
+            require(
+                all(comparable_bench_result(result) == recorded[result[id_key]] for result in results),
+                "benchmark report and recording disagree on per-drive data",
+            )
+    else:
+        require(model is None and prompt is None, "non-model runs cannot declare a model or prompt")
+    return manifest
+
+
 def challenge_rows(drivers: dict) -> list[dict]:
     rows = []
     for path in sorted(RESULTS.glob("*/*.json")):
@@ -169,8 +292,9 @@ def challenge_rows(drivers: dict) -> list[dict]:
         recording_path = RECORDINGS / f"{name}-{date}.json.gz"
         row_results, cost, cost_basis, model, requested = results, summary.get("cost_usd") or 0, None, None, None
         sources = [rel(path)]
-        if recording_path.is_file():
-            recording = read_recording(recording_path)
+        recording = read_recording(recording_path) if recording_path.is_file() else None
+        manifest = checked_manifest(path, published, date, recording)
+        if recording is not None:
             header = recording["header"]
             if header.get("driver") != driver:
                 raise ValueError(f"{rel(recording_path)} is for {header.get('driver')}, {rel(path)} for {driver}")
@@ -239,6 +363,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 ],
                 "sources": sources,
                 "recording": rel(recording_path) if recording_path.is_file() else None,
+                **({"manifest": manifest} if manifest else {}),
             }
         )
     return rows
@@ -271,7 +396,7 @@ def committed_runs() -> list[Path]:
 VARIANT_KEYS = ("heldout", "park", "hour", "cover", "without", "track")
 
 
-def run_rows() -> list[dict]:
+def run_rows(drivers: dict) -> list[dict]:
     newest = {}
     for path in committed_runs():
         run = json.loads(path.read_text())
@@ -285,6 +410,24 @@ def run_rows() -> list[dict]:
             for k in VARIANT_KEYS
         ):
             continue
+        manifest_data = run.get("manifest")
+        if isinstance(manifest_data, dict) and (
+            run.get("stopped") or (manifest_data.get("suite") or {}).get("only") is True
+        ):
+            continue
+        recording_path = RECORDINGS / f"{path.stem}.json.gz"
+        recording = read_recording(recording_path) if recording_path.is_file() else None
+        manifest = checked_manifest(path, run, run["saved_at"][:10], recording)
+        if recording is not None:
+            header = recording["header"]
+            published_verdicts = {r["id"]: r["pass"] for r in run["results"]}
+            recorded_verdicts = {key: r["pass"] for key, r in recording["results"].items()}
+            if (
+                header.get("driver") != config["brain"]
+                or header.get("bench") != config
+                or published_verdicts != recorded_verdicts
+            ):
+                raise ValueError(f"{rel(recording_path)} disagrees with the driver, config or verdicts in {rel(path)}")
         preset = config.get("features") or "bare"
         group = (
             config.get("brain"),
@@ -295,10 +438,18 @@ def run_rows() -> list[dict]:
             config.get("seed"),
         )
         if group not in newest or run["name"] > newest[group][0]["name"]:
-            newest[group] = (run, path)
+            newest[group] = (run, path, manifest, recording, recording_path)
     rows = []
-    for (driver, preset, key, weather, count, seed), (run, path) in newest.items():
+    for (driver, preset, key, weather, count, seed), (run, path, manifest, recording, recording_path) in newest.items():
         results, summary = run["results"], run.get("summary") or {}
+        sources, model, requested = [rel(path)], None, None
+        if recording is not None:
+            sources.append(rel(recording_path))
+            models, _, _ = answered_by(recording)
+            header = recording["header"]
+            requested = header.get("model")
+            model = models[0] if models else requested
+            drivers.setdefault(driver, model_driver(header, model))
         rows.append(
             {
                 "driver": driver,
@@ -315,8 +466,8 @@ def run_rows() -> list[dict]:
                 "mode": run["config"].get("mode"),
                 "traffic": run["config"].get("npcs"),
                 "engine": run["config"].get("engine"),
-                "model": None,
-                "model_requested": None,
+                "model": model,
+                "model_requested": requested if requested != model else None,
                 **shares(results),
                 "fallbacks": sum(r.get("fallbacks") or 0 for r in results),
                 "hard_brakes": sum(r.get("hard_brakes") or 0 for r in results),
@@ -330,8 +481,9 @@ def run_rows() -> list[dict]:
                     for r in results
                     if not r.get("pass")
                 ],
-                "sources": [rel(path)],
-                "recording": None,
+                "sources": sources,
+                "recording": rel(recording_path) if recording is not None else None,
+                **({"manifest": manifest} if manifest else {}),
             }
         )
     return rows
@@ -339,7 +491,7 @@ def run_rows() -> list[dict]:
 
 def build() -> dict:
     drivers = {k: dict(v) for k, v in BUILT_IN.items()}
-    rows = challenge_rows(drivers) + run_rows()
+    rows = challenge_rows(drivers) + run_rows(drivers)
     order = {d: i for i, d in enumerate(ORDER)}
     suite_order = {"challenges": 0, "open": 1, "city": 2, "bare": 3, "pilot": 4}
     map_order = {k: i for i, k in enumerate([HOME_MAP] + sorted(k for k in MAP_NAMES if k != HOME_MAP))}

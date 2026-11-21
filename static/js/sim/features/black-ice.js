@@ -109,7 +109,7 @@ export default {
     },
   },
   hazard: {
-    at: "officers",
+    at: "late",
     run: (snap) =>
       snap.black_ice || (snap.ice_caution?.bridge && snap.ice_caution.bridge.starts_in_m < 80) ? "black ice" : null,
   },

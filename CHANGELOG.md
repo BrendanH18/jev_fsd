@@ -2,7 +2,21 @@
 
 ## Unreleased
 
-Nothing yet.
+- Run agent builds and tests in Boat sandboxes ([#96](https://github.com/BrendanH18/jev_fsd/pull/96)).
+- Inspect saved benchmarks with 100 offline reports and compare matched routes across two runs
+  ([#97](https://github.com/BrendanH18/jev_fsd/pull/97), [#98](https://github.com/BrendanH18/jev_fsd/pull/98)).
+- Watch Jev's recorded **Right on red** drive in the public demo without an API key
+  ([#98](https://github.com/BrendanH18/jev_fsd/pull/98)).
+- Register driveway reversers, ball chase and traffic parking through the feature interface
+  ([#98](https://github.com/BrendanH18/jev_fsd/pull/98), [#99](https://github.com/BrendanH18/jev_fsd/pull/99)).
+- Prioritise city model results, reproducibility and manual-to-model comparisons in the six-month roadmap
+  ([#100](https://github.com/BrendanH18/jev_fsd/pull/100)).
+- Break route snapping ties the same way across server processes.
+- Record source, engine, map, model and suite metadata for new published Node runs.
+- Check exact replays independently from drive verdicts and report drift for published recordings weekly.
+- Measure city pilot prompts, reserve budget between drives and compare repeated arena recordings offline.
+- Register police officers through the feature interface.
+- Check a local driver on both tracks and use dedicated issue templates for map and driving problems.
 
 ## 0.3.0 (20 November 2026)
 

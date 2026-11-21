@@ -138,8 +138,7 @@ export class DriveMetrics {
       ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
       ...featureMetrics(world, v, "tailgaters"),
       ...featureMetrics(world, v, "late"),
-      // (only for a drive in which the car came up to a junction a police officer directed: sim/traffic-officer.js)
-      ...(world.officersSeen ? { officer_violations: v.officer_violations || 0 } : {}),
+      ...featureMetrics(world, v, "junctions"),
       off_road_s: r(v.off_road_s),
       safety_brakes: v.safety_brakes,
       deadlocks: v.deadlock_overrides,
@@ -205,7 +204,7 @@ export function failures(m) {
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
   f.push(...featureFailures(m, "tailgaters"));
   f.push(...featureFailures(m, "late"));
-  if (m.officer_violations) f.push("went on when a police officer signalled stop");
+  f.push(...featureFailures(m, "junctions"));
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)
   if (m.arrived && m.parked === false) f.push("not parked");

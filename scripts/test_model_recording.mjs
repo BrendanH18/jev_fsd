@@ -11,6 +11,7 @@
 // state or the LLM prompt changes what the model is asked, so its replay drifts and this test fails:
 // check the change is intended, then rewrite the recording with --write.
 import assert from "node:assert/strict";
+import { promptAudit } from "./prompt_audit.mjs";
 import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
 const { MapData } = await import("../static/js/map/mapdata.js");
@@ -160,6 +161,19 @@ await test("only model drivers can be recorded", () => {
   assert.throws(() => ModelRecording.parse({ format: "other" }), /Not a model recording/);
 });
 
+await test("prompt audit counts Unicode characters and omits prompt contents", () => {
+  const audit = promptAudit();
+  audit.observe({ questions: { vector: { instructions: "🚗".repeat(4000) }, motion: { instructions: "Stop" } } });
+  audit.observe({ questions: { vector: { instructions: "🚗".repeat(4001) } } });
+  assert.deepEqual(audit.result(), {
+    requests: 2,
+    prompts: {
+      vector: { samples: 2, max_chars: 4001, over_4000: 1 },
+      motion: { samples: 1, max_chars: 4, over_4000: 0 },
+    },
+  });
+});
+
 await test("a call cancelled by a new epoch replays as cancelled, and only when the epoch moves again", async () => {
   const recording = new ModelRecording({
     header: recordingHeader({ driver: "llm:stub", brain: { endpoint: ENDPOINT } }),
@@ -242,12 +256,22 @@ await test("a replay makes no model call, needs no registered endpoint and plays
   registerLlmAgents({ endpoints: [] }); // the endpoint is gone: the header rebuilds the driver
   const before = modelCalls;
   const saved = ModelRecording.parse(recording.serialize()); // (through the file's text)
-  const tape = saved.tape(sc.id, "replay");
+  const audit = promptAudit();
+  const tape = saved.tape(sc.id, "replay", { onRequest: audit.observe });
   const replayed = await runScenario(map, sc, { brain: saved.header.driver, npcs: BENCH.npcs, tape });
   assert.equal(modelCalls, before);
   assert.equal(tape.stats.missing, 0);
   assert.equal(tape.stats.drift, 0);
   assert.equal(tape.stats.served, outcomes.length);
+  assert.deepEqual(audit.result(), {
+    requests: outcomes.length,
+    prompts: {
+      llm_system: {
+        samples: outcomes.length,
+        max_chars: Array.from((await import("../static/js/brain/llm-prompt.js")).SYSTEM_PROMPT).length,
+      },
+    },
+  });
   assert.equal(tape.exact, true);
   assert.equal(replayed.fallbacks, recorded.fallbacks);
   assert.equal(replayed.calls, recorded.calls);

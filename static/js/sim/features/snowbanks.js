@@ -141,7 +141,7 @@ export default {
     },
   },
   hazard: {
-    at: "officers",
+    at: "late",
     run(snap) {
       const f = [];
       if (snap.snowbank?.narrowing) f.push("snowbank narrowing");

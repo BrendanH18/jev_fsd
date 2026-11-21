@@ -273,7 +273,8 @@ and now the first item of the [expansion plan](#expansion-plan-from-20-november)
   re-plan is the same on any server process. Pilot one route of each model to measure decisions,
   instruction length, fallbacks and cost (S), then record both on their own servers with their own
   rate limits, and publish them beside Rules and the cautious agent with `model_share`, verdicts,
-  cost and a keyless replay. Budget: [D7](#open-decisions).
+  cost and a keyless replay. Both one-route pilots and their exact replays are recorded in the
+  [city pilot results](docs/validation/city-model-pilots.md). The full suites are the next publication.
 
 Exit: someone with no key can open the repository, see how each driver did on the challenges and
 on the city suite, and replay any of the published drives. *Met for the challenges; open until
@@ -312,9 +313,10 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   seed 1, all 62 challenge and road-test drives with Rules and with the cautious agent, and the model
   recording are identical before and after
   ([record](docs/validation/registry-round2-2026-11-20.md)). Driveway reversers, ball chase
-  and traffic parking have since moved (#98, #99), bringing the registry to **9 of 41**. Next, by
-  neighbours: the features whose hooks run at the `"officers"`, `"tailgaters"`, `"parking"` and
-  `"late"` slots, so those slots can go.
+  and traffic parking moved next (#98, #99). Police officers now use the registry too, bringing
+  it to **10 of 41**. The bare and city comparisons and all Rules and cautious arena drives matched
+  before and after ([record](docs/feature-interface.md)). Tailgaters and the remaining parking
+  and late features are next.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
   under about 150 lines, with the same before-and-after record as 3.2.
@@ -408,11 +410,12 @@ already passed the safety filter. Both make a pass easy to get and hard to learn
 Exit: the published comparison shows a difference between two models that the report can explain.
 
 **Exit met 20 November.** On the open track Jev passes 62/62 and took a flagged manoeuvre 8 times; Claude
-Haiku 5.5 passes 61/62 and took one 216 times, mostly rolling stop signs and going on at reds, and failed
-`flagger` by never going on at the SLOW paddle ([write-up](docs/model-results.md#the-open-track-roadmap-42-20-november-2026)).
+Haiku 5.5 passes 61/62 and took one 216 times, mostly rolling stop signs and going on at reds. It failed
+`flagger` after stopping outside the work zone's waiting window and receiving a STOP paddle until timeout
+([write-up](docs/model-results.md#the-open-track-roadmap-42-20-november-2026)).
 One run of each; the size of the gap needs more runs (7.5). Most of Claude Haiku's 216 flagged choices
 never became a violation, because it chose again before the line; whether a flag should cost score is
-9.1. Its guarded `on-your-bumper` brake check has not been looked into (9.2).
+9.1. The guarded `on-your-bumper` brake check is documented in 9.2.
 
 ## Phase 5: release and presentation
 
@@ -439,8 +442,8 @@ never became a violation, because it chose again before the line; whether a flag
   *Done 14 November:* `docs/adding-a-challenge.md`, linked from the README and the reference index.
 - ~~**5.6 Tidy the repository.**~~ Dropped 20 November: the branches and worktrees were on one
   machine, not in the repository, so the roadmap cannot track them.
-- [ ] **5.7 Keep the changelog current.** (S) The Unreleased section says "Nothing yet" after #96 to
-  #99. Fill it in, then add each PR's line as it merges, and cut 0.3.1 or 0.4.0 when 2.5b lands.
+- [ ] **5.7 Keep the changelog current.** (S) Unreleased now covers #96 to #100. Add each PR's line
+  as it merges, and cut 0.3.1 or 0.4.0 when 2.5b lands.
 
 ## Phase 6: grow the world again
 
@@ -549,24 +552,25 @@ past an agreed amount.
 
 ## Phase 7: results that hold up
 
-- [ ] **7.1 Deterministic route snapping.** (S) `snap` and `snap_all` in `jev/routing.py` break ties
-  between equally near lanes in `set` order, so a re-planned route depends on Python's hash seed (found
-  in 3.1). Break ties by a stable key, check that two servers with different `PYTHONHASHSEED` plan the
-  same routes, re-baseline what changes, then drop the `PYTHONHASHSEED=0` advice from AGENTS.md.
-- [ ] **7.2 A manifest for every published run.** (M) Source commit, JavaScript engine and version,
+- [x] **7.1 Deterministic route snapping.** (S) `snap` and `snap_all` break ties by edge ID and
+  lane index. Two servers with different hash seeds agreed on all 576 route requests across the
+  12 maps. All 60 seeded Kitsilano drives matched before and after. See the
+  [routing validation record](docs/validation/deterministic-routing-2026-11-21.md).
+- [x] **7.2 A manifest for every published run.** (M) Source commit, JavaScript engine and version,
   map pack and layer fingerprints, prompt hash, model id, track, seed, suite and cost, written by
   `bench_node.mjs` and `arena_node.mjs` and checked by `scripts/build_results.py`.
-- [ ] **7.3 Check replays apart from verdicts.** (S) `arena_node.mjs --check 1` fails a replay whose
-  recorded drive failed, even when it replays exactly. Add a replay-only check that passes an exactly
-  reproduced failure, and a scheduled job that replays every published tape on its declared tree and
-  reports which no longer replay on main (a drift report, not blocking).
+  New publications carry the manifest. Earlier results retain their original metadata.
+- [x] **7.3 Check replays apart from verdicts.** (S) Both Node runners accept `--check replay`, which
+  passes an exactly reproduced failure. The weekly replay drift job checks published tapes on their
+  declared revision and on main and reports both results in its job summary.
 - [ ] **7.4 Trace the engine difference.** (M) Was 3.9. Find the first step where V8 and WebKit part
   on a tuned seed, and fix it or document which engine each published result needs.
 - [ ] **7.5 Repeat runs and their spread.** (M) Declare the drives and the number of repeats before
   running (suggested: three runs of Jev and of Claude Haiku over the 62 drives on the open track, within
   [D7](#open-decisions)), then report each score with its range and which differences recur. Report
   flagged choices per decision, audited violations, emergency-brake interventions and fallbacks as
-  separate numbers.
+  separate numbers. `scripts/compare_repeats.mjs` reports spread from recordings with matching
+  source and drive settings. The repeated live runs and their results are still due.
 - [ ] **7.6 Models on the held-out routes.** (S) Jev and Claude Haiku on the held-out Kitsilano
   city routes (`bench/heldout.js`), reported apart and never debugged against.
 - [ ] **7.7 The eight drifted tapes.** (S) Record Jev's eight drifted 11 November drives again on main,
@@ -609,8 +613,10 @@ ordinary manoeuvre that fails) and that most open-track flags never became viola
 - [ ] **9.1 Decide what a flagged choice costs.** (M) First measure how long each flagged choice was
   held and how close it came to the line. Then either add a score term (bump `SCORES_VERSION`) or keep
   scores on outcomes and report flags apart, and record why.
-- [ ] **9.2 Claude Haiku's two losses.** (S) The open-track `flagger` stall and the guarded
-  `on-your-bumper` brake check: record what the driver was shown and why it chose as it did, under 4.5.
+- [x] **9.2 Claude Haiku's two losses.** (S) The open-track `flagger` stall and the guarded
+  `on-your-bumper` brake check replay exactly. The
+  [review](docs/validation/haiku-two-losses-2026-11-21.md) records what the model saw,
+  the choices it made and which audit or timeout determined each verdict.
 - [ ] **9.3 Compound drives.** (L) One or two longer drives on existing maps that string several
   situations together, like the road tests, each passing the admission rule. Run the latitude script of
   4.1 on each before admitting it: a drive in which no ordinary manoeuvre can fail does not separate
@@ -624,17 +630,17 @@ Exit: on a set built for it, Rules, Jev and Claude Haiku differ by a stated marg
 
 ## Phase 10: open to outside drivers
 
-- [ ] **10.1 Check your own driver.** (S) A script that runs a custom driver module over the
-  challenges on both tracks and prints its results beside Rules, the cautious agent and the published
-  models, building on [adding a driver](docs/agents.md).
+- [x] **10.1 Check your own driver.** (S) `scripts/check_driver.mjs` runs a trusted custom module
+  over the challenges on both tracks and prints its results beside Rules, the cautious agent and
+  matching published model runs. See [adding a driver](docs/agents.md).
 - [ ] **10.2 A submission bundle.** (M) A versioned format (the 7.2 manifest, the recording and the
   results) and an offline verifier that replays it and checks `model_share`, the prompt hash, the tree
   and the cost. Rows submitted from outside are marked as such on the leaderboard.
 - [ ] **10.3 Where recordings live.** (M) `data/recordings/` is 12 MB, and each Claude Haiku run of the
   62 drives adds about 4.5 MB, so 7.5's repeats alone would add about 15 MB. Slim the tapes or move
   them ([D8](#open-decisions)).
-- [ ] **10.4 A real-street report.** (S) An issue template for "the map is wrong here" and "the car
-  did something wrong here" that asks for the map, seed, route and a saved run.
+- [x] **10.4 A real-street report.** (S) The Map problem and Driving problem issue templates ask for
+  the map, seed, route and a saved run.
 
 Exit: an outside driver goes from a scaffold to a verified submission bundle offline by one
 documented path, and adding it grows the repository by a stated, small amount.
@@ -662,7 +668,7 @@ documented path, and adding it grows the repository by a stated, small amount.
 | **D4** | Is `city` a second suite, or does it replace the current one? | *Decided and built (1.2):* a second suite, so earlier records stay comparable |
 | **D5** | Is the next release 0.3.0 or 1.0? | *Decided:* 0.3.0, cut 20 November. What makes 1.0 is now D6 |
 | **D6** | What makes 1.0? | Phase 2's exit (2.5b), 7.1 to 7.3, 7.8 and 8.1 on the public demo: models on the city, results that verify on a named suite, and a person set beside them. Until then, release 0.x on a rhythm (5.7). The [six-month plan](#six-month-plan-23-november-2026-to-21-may-2027) meets this at the end of January and cuts 1.0.0 on 26 February |
-| **D7** | What is the budget for 2.5b, 7.5 and 7.6? | Pilot one city route of each model first. At 20 November prices Jev's 62 open-track drives cost $1.47 and Claude Haiku's $4.53 (effort low), so three repeats of both are about $18; Jev on Kitsilano city dry about $1.40; Claude Haiku on the city from the pilot. Suggest $30 for all three, revisited after the pilot; ask before spending past it |
+| **D7** | What is the budget for 2.5b, 7.5 and 7.6? | **21 November:** up to $30 approved for Jev and Claude Haiku city work, starting with one city route per model. The owner approved using provider-reported token usage at published rates to verify spend for this city run. The two pilots cost $0.3237 on that basis. At 20 November prices Jev's 62 open-track drives cost $1.47 and Claude Haiku's $4.53 (effort low), so three repeats of both are about $18 |
 | **D8** | Where do model recordings live? | First slim them in Git (keep only what replay needs). Moving them to release assets, with a hash in Git, is a change of service and needs the owner's approval |
 
 ## Done so far

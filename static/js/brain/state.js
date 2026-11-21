@@ -10,7 +10,7 @@ import { FOLLOW_M } from "../sim/emergency.js";
 import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
 import { STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
-import { featureMotion, hooks } from "../sim/features/index.js";
+import { featureMotion, hooks, junctionPlan } from "../sim/features/index.js";
 import { flagText } from "./tracks.js";
 
 // The registered features' decision state and wording (sim/features/index.js), each where that feature's
@@ -19,6 +19,7 @@ const STATE = {
   restrictions: hooks("state", "restrictions"),
   driveways: hooks("state", "driveways"),
   streetHazards: hooks("state", "streetHazards"),
+  junctions: hooks("state", "junctions"),
   tailgaters: hooks("state", "tailgaters"),
 };
 const OUTCOME_BY_ID = hooks("outcome", "ids"),
@@ -377,22 +378,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   }
   for (const add of STATE.driveways) add(snap, state);
   for (const add of STATE.streetHazards) add(snap, state);
-  if (snap.traffic_officer) {
-    const o = snap.traffic_officer;
-    state.traffic_officer = {
-      id: o.id,
-      direction: o.direction,
-      ...(o.direction === "stop" ? { wait_in_m: r1(Math.max(0, o.bumper_to_line_m)) } : {}),
-      officer_waves:
-        o.axis === null
-          ? "nobody: everyone held"
-          : o.axis === o.approach_group
-            ? "the car's way"
-            : "the crossing street",
-      light_shows: o.signal,
-      ...(o.against_light ? { against_the_light: true } : {}),
-    };
-  }
+  for (const add of STATE.junctions) add(snap, state);
   if (snap.tailgater) {
     const t = snap.tailgater;
     state.tailgater = {
@@ -759,9 +745,6 @@ function outcomeLabel(c, snap) {
     return `clear, waits ${Math.max(0, r1(snap.red_light_runner.bumper_to_stop_m - c.sim.progress_m))} m ahead, at the line, for the car running the red`;
   if (c.id === "let_tailgater_pass" && snap.tailgater)
     return `clear, moves over into the right lane at the car's speed and lets the tailgater by${c.sim.min_gap_m < 8 ? `, ${r1(c.sim.min_gap_m)} m behind a car` : ""}`;
-  if (c.id === "wait_for_officer" && snap.intersection)
-    return `clear, stops ${Math.max(0, r1(snap.intersection.bumper_to_line_m - c.sim.progress_m))} m ahead, at the line, as the officer holds the car`;
-  if (c.id === "go_on_officer_wave") return `clear, goes on through the junction as the officer waves the car on`;
   if (c.id === "ease_off_for_tailgater" && snap.tailgater)
     return `clear, eases off gently to ${r1(c.sim.end_speed)} m/s so the tailgater can get by, leaving more room ahead`;
   if (c.id === "stop_for_cyclist" && snap.right_hook)
@@ -823,7 +806,8 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
   const m = i ? Math.max(0, Math.round(i.bumper_to_line_m)) : 0;
   const atLine = i && i.bumper_to_line_m < STOP_ZONE_M;
   if (i && i.control === "signal") {
-    if (i.officer) out.push(officerClause(i.officer, m, atLine));
+    const directive = junctionPlan(i);
+    if (directive) out.push(directive.clause(m, atLine));
     else if (i.signal === "flashing_amber")
       out.push(
         "Flashing amber: proceed cautiously at no more than 20 km/h, yielding to pedestrians and vehicles already in the junction.",
@@ -1161,15 +1145,6 @@ function oncomingClause(i) {
 function rightHookClause(h) {
   const w = Math.max(0, Math.round(h.bumper_to_yield_m));
   return `The car turns right ahead and cyclist \`${h.id}\` is coming up on its right, going its way: it reaches the corner in ${r1(h.eta_s)} s, too soon for the car to turn across its path (it needs ${r1(h.need_s)} s). A cyclist on the right going straight on has the right of way. ${w < 2 ? "Hold still until it has passed." : `Slow down and wait ${w} m ahead, short of its path, until it has passed (\`stop_for_cyclist\`).`}`;
-}
-
-// A police officer directing traffic at the junction ahead (sim/traffic-officer.js): their directions
-// override the signal.
-function officerClause(o, m, atLine) {
-  const lead = `A police officer is directing traffic in the junction ${atLine ? "at the line" : `${m} m ahead`}; the officer's directions override the signal${o.signal === "dark" ? ", whose lights are out" : ""}.`;
-  if (o.direction === "stop")
-    return `${lead} The officer is holding the car${o.signal === "green" ? ", though its light is green" : ""}: ${atLine ? "hold still at the line until the officer waves the car on" : "stop at the line and wait there for the officer's wave (`wait_for_officer`)"}, never going on into the junction while held.`;
-  return `${lead} The officer is waving the car through${o.against_light ? `, though its light is ${o.signal}` : ""}: go on (\`go_on_officer_wave\`), without stopping for the light, still yielding to pedestrians and traffic already in the junction, and, turning left, to oncoming traffic.`;
 }
 
 // A car tailgating the driven car, close behind it in its lane (sim/tailgaters.js).
@@ -1563,13 +1538,13 @@ export function buildQuestions(snap, eligible, meta = {}) {
       ? ", when the car is turning left and has reached the point where it waits for oncoming traffic (`intersection.oncoming.wait_in_m` under 2)"
       : "";
     // A red light the car may turn right on is a reason to hold still only while the turn is not clear.
-    const redOk = snap.intersection?.officer
-      ? ' (but not where a police officer directs traffic: then hold still only when the officer holds the car, `traffic_officer.direction` "stop", even on a green; waved through, keep moving, even on a red)'
-      : snap.intersection?.left_on_red?.go
+    const redOk =
+      junctionPlan(snap.intersection)?.motionCriterion ??
+      (snap.intersection?.left_on_red?.go
         ? " (except when intersection.left_on_red.stop_completed and clear are both true: the car may turn left on red)"
         : snap.intersection?.right_on_red?.go
           ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)"
-          : "";
+          : "");
     // Likewise waiting its turn at an all-way stop.
     const turnWait = waitsItsTurn(snap.intersection)
       ? ", when the car has stopped at an all-way stop and it is not its turn (`intersection.priority.your_turn` is false)"

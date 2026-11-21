@@ -156,7 +156,7 @@ import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
 import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
-import { hooks, isParkingTraffic } from "./features/index.js";
+import { firstHookResult, hooks, isParkingTraffic } from "./features/index.js";
 
 // How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
 // re-plan round them, a move inside its lane, and where it stops for them; each where that feature's own
@@ -167,6 +167,8 @@ const TRAFFIC_MANAGE = hooks("trafficManage"),
   TRAFFIC_LEADER_HOLD = hooks("trafficLeaderHold"),
   TRAFFIC_PARKING_PLAN = hooks("trafficParkingPlan"),
   TRAFFIC_START = hooks("trafficStart"),
+  TRAFFIC_CONTROL_START = hooks("trafficStart", "beforeControl"),
+  TRAFFIC_CONTROL = hooks("trafficControl"),
   TRAFFIC_REPLAN = hooks("trafficReplan");
 const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
   TRAFFIC_KEEP = hooks("trafficLane", "late"),
@@ -174,7 +176,6 @@ const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
   TRAFFIC_SPEED = hooks("trafficSpeed"),
   TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
-import { officerDirection } from "./traffic-officer.js";
 import {
   AMBER_M,
   KID_CROSS_P,
@@ -1683,8 +1684,8 @@ export class NpcFleet {
           if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id))
             amberCap = Math.min(amberCap, choice.speed_mps);
         }
-      // (only an officer holding it at a control ahead this step keeps it from giving up a wait)
-      if (n.officerHeld) n.officerHeld = false;
+      let heldAtControl = false;
+      for (const start of TRAFFIC_CONTROL_START) start(world, n);
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
         // (a signal whose lights are out is an all-way stop: sim/outage.js)
@@ -1693,12 +1694,10 @@ export class NpcFleet {
         const bumperToLine = lineS - front;
         if (bumperToLine < -1) continue;
         if (bumperToLine > 70) break;
-        // (a police officer directing traffic there: their direction, not the light's; held, it stays held,
-        // never giving up on the wait: sim/traffic-officer.js)
-        const officer = ctl.type === "signal" && world.officers?.list.length ? officerDirection(world, n, e.id) : null;
-        if (officer) {
-          n.officerHeld = officer === "stop";
-          if (n.officerHeld) stopAt = bumperToLine;
+        const direction = ctl.type === "signal" ? firstHookResult(TRAFFIC_CONTROL, world, n, e.id) : null;
+        if (direction) {
+          heldAtControl = direction === "stop";
+          if (heldAtControl) stopAt = bumperToLine;
         } else if (ctl.type === "signal") {
           // (the light for the way it goes: under a left arrow, only a left turn has a green)
           const after = path.edges[path.edges.indexOf(e) + 1];
@@ -1919,7 +1918,7 @@ export class NpcFleet {
         stopAt !== null &&
         stopAt < 1 &&
         leadV === 0 &&
-        !n.officerHeld &&
+        !heldAtControl &&
         !this.blockedByVehicle(n) &&
         !(cur && this.crossComing(n, cur.to))
       ) {

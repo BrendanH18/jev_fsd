@@ -64,8 +64,8 @@ stops at the line by itself (as for an amber stop or pulling over). Models get a
 and a line in the system prompt. The HUD says OFFICER DIRECTING TRAFFIC · STOP or · GO, and the coach
 says to stop even on a green, or to go even on a red.
 
-The audit (`World.auditOfficer`): crossing the line of a junction an officer governs is judged by the
-officer, not the light: while held it counts as `officer_violations` (event `officer_violation`), and
+The crossing audit (`controlAudit` in `sim/features/officers.js`) follows the officer's direction.
+Crossing while held counts as `officer_violations` (event `officer_violation`), and
 the red-light, amber, right-on-red, arrow and fresh-green checks are skipped there (a left turn waved
 through is still checked against oncoming traffic). It reaches the metrics and fails a drive and a road
 test (filed under right of way) only once the car has come within 60 m of the line of a junction an

@@ -42,6 +42,34 @@ class RouterTests(unittest.TestCase):
         e2 = self.router.edges[west["edge"]]
         self.assertLess(e2["pts"][-1][0], e2["pts"][0][0])
 
+    def test_snap_breaks_ties_by_edge_then_lane_index(self):
+        east = [(0.0, -1.0), (20.0, -1.0)]
+        west = [(20.0, 1.0), (0.0, 1.0)]
+        pack = {
+            "edges": [
+                {"id": "west", "from": "b", "to": "a", "pts": west},
+                {"id": "east", "from": "a", "to": "b", "pts": east},
+            ],
+            "lanes": [
+                {"edge": "west", "idx": 0, "pts": west},
+                {"edge": "east", "idx": 1, "pts": east},
+                {"edge": "east", "idx": 0, "pts": east},
+            ],
+        }
+        for lanes in (pack["lanes"], pack["lanes"][::-1]):
+            with self.subTest(lanes=lanes):
+                router = Router(dict(pack, lanes=lanes))
+                snap = router.snap(10.0, 0.0)
+                self.assertEqual((snap["edge"], snap["lane"]), ("east", 0))
+                heading_match = router.snap(10.0, 0.0, heading=math.pi)
+                self.assertEqual((heading_match["edge"], heading_match["lane"]), ("west", 0))
+                fallback = router.snap(10.0, 0.0, heading=math.pi / 2)
+                self.assertEqual((fallback["edge"], fallback["lane"]), ("east", 0))
+                self.assertEqual(
+                    [(p["edge"], p["lane"]) for p in router.snap_all(10.0, 0.0)],
+                    [("east", 0), ("west", 0)],
+                )
+
     def test_route_never_backs_up_at_turns(self):
         # Lanes sit right of each street's centerline, so a naive end-to-start join at a right turn
         # makes the path step backwards. Every consecutive 1 m step must keep going forward.

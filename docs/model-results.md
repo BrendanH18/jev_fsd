@@ -20,6 +20,9 @@ to Rules (Jev still passes all 62, DeepSeek still fails only `double-parked`). C
 to replay every drive exactly, or record those eight again.
 The per-drive results are in `data/results/2026-11-11/`.
 
+The [city pilot measurements](validation/city-model-pilots.md#21-november-2026)
+cover the first Kitsilano city route and its keyless replay.
+
 ## The open track (ROADMAP 4.2), 20 November 2026
 
 On the guarded track every manoeuvre a driver is offered has already passed the shared safety filter, so a
@@ -31,7 +34,7 @@ Node 22.23.4, lockstep, each challenge's authored seed. Every model drive is rec
 tree it was published with:
 
 ```sh
-node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/claude-haiku-open-2026-11-20.json.gz --check 1
+node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/claude-haiku-open-2026-11-20.json.gz --check replay
 ```
 
 The [results page](https://brendanh18.github.io/jev_fsd/results.html#replay-heading) plays Jev's
@@ -70,12 +73,14 @@ violation: a decision holds for 250 to 650 ms and the prediction looks 3 s ahead
 again before the line, and the audit counted no red light, rolled stop or collision on either track. The
 difference shows in the drives it lost and in its score, 61.9 to Jev's 63.3 (Haiku scores 63.2 on the guarded track).
 
-- **Open track, `flagger` (Ottawa: a work zone's flagger holds the car's lane):** Haiku went for a manoeuvre
-  past the flagger's STOP paddle 8 times, then stopped and stayed stopped for 171 s, never going on when the
-  paddle turned to SLOW, and timed out.
-- **Guarded track, `on-your-bumper` (Winnipeg: a tailgater close behind):** Haiku braked hard once with the
-  tailgater close behind (`brake_checks`), a failure the guarded track's filter did not prevent. Not yet
-  looked into.
+- **Open track, `flagger` (Ottawa):** Haiku chose a manoeuvre flagged for the STOP paddle eight times.
+  It stopped with its front 1.034 m over the line, just outside the work zone's 1 m waiting window.
+  The paddle stayed at STOP for every recorded request and the drive timed out.
+- **Guarded track, `on-your-bumper` (Winnipeg):** Haiku chose to let the tailgater by on all four early
+  offers. At the red light it chose `keep_lane_stop` when both remaining options predicted hard braking,
+  despite advice to brake at no more than 3.8 m/s². The audit counted one brake check at 33.183 s.
+
+Both failures replayed exactly. [Decision and audit evidence](validation/haiku-two-losses-2026-11-21.md).
 
 That meets the Phase 4 exit: two models with measurably different scores for a stated reason. It is one run of
 each model on one set, so the size of the gap, not its direction, is what further runs should check.

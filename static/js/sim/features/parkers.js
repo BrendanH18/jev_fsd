@@ -150,7 +150,7 @@ export default {
     },
   },
   prompt: {
-    at: "beforeOfficer",
+    at: "snowbanks",
     text: `- A car ahead signalling right and slowing to stop beside a gap in the parked cars is about to parallel park (\`parking_ahead\`). Stop well back, short of the room it reverses into, and wait until it is in: choose \`wait_for_parker\` while \`parking_ahead.wait\` is true, and keep the car stopped there. Never creep up behind it, and never go round it while it signals or reverses. If the car is already inside that room (\`parking_ahead.in_its_room\`), hold still.`,
   },
   parkingTraffic: (n) => !!n.parker,

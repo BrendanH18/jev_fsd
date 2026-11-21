@@ -96,3 +96,50 @@ uv run python scripts/inspect_run.py data/runs/20261112-190015-rules.json \
 ```
 
 The first file is the baseline. Both files need the same map, pack version, seed, requested suite size and route restriction settings. Drivers, tracks, weather, traffic counts and other run conditions may differ. Read the settings beside the reports when interpreting differences. The comparison uses the route ID and saved lengths and counts of lights, stops and turns as a proxy for route identity. It lists routes exclusive to either file and routes with changed or missing tags. Each report uses the matched routes in baseline order. The output shows the run settings and any changes in saved verdicts, arrivals or known failure reasons.
+
+## Publish a Node run
+
+Start the local server and Node runner from the same clean checkout. Use `--json` for the report
+and, for a model, `--record` for the answer tape. Each carries a run manifest with the source
+commit, Node and V8 versions, suite and seeds, track, model id, prompt fingerprint, the full
+map fingerprint and a fingerprint for each map component, and the cost counted by the server.
+The LLM fingerprint covers the selected track's system prompt. The decision model fingerprint
+covers the question builder and its feature modules. An uncommitted checkout is marked dirty.
+
+For the seeded benchmark, add the JSON report under `data/runs/` using `git add -f`. Put its tape
+under `data/recordings/` with the same filename stem and the extension `.json.gz`. For the arena,
+put the report at `data/results/<date>/<name>.json` and its tape at
+`data/recordings/<name>-<date>.json.gz`. Standard seeded rows exclude `--only` pilots and suite
+variants. `scripts/build_results.py` checks the manifests and matching tapes as it builds the
+leaderboard. Historical records through 20 November 2026 still load without a manifest.
+
+For a long seeded benchmark, use `--only` to record disjoint groups of
+drives with the same full suite settings. Give each part's JSON report and
+gzip tape the same stem, such as `part-1.json` and `part-1.json.gz`. Use
+`scripts/merge_bench_recordings.mjs --json RUN.json --record RUN.json.gz PART.json PART.json [...]`
+to assemble a complete suite in seeded order. Replay the combined tape
+before publishing it. The merge checks the complete scenario fingerprint
+from each part. For earlier parts without the fingerprint, regenerate the
+full scenario array from the original source and server, and pass its JSON
+file as `--suite ROUTES.json`.
+
+For a merged arena recording, replay the whole tape with `arena_node.mjs --replay RUN.json.gz
+--check replay --json RUN.json` on its recorded Node version. When the replay is exact, the
+report carries the merged tape's manifest for publication.
+
+## Compare repeated model runs
+
+Use `node --experimental-default-type=module scripts/compare_repeats.mjs`
+with the paths to the completed arena recordings. Use the same clean source,
+engine, track, maps and authored drives for every repeat, and keep the model
+version, prompt and provider settings fixed for each driver. The report gives each driver's
+minimum, mean and maximum driving score and pass count. It also reports
+open-track flags per decision, audit totals, drive failures by reason and by drive,
+emergency brake interventions and fallbacks.
+
+For the first repeated comparison in [7.5](../../ROADMAP.md#phase-7-results-that-hold-up),
+use three complete open-track recordings each of Jev and Claude Haiku 5.5
+over the 60 challenges and both road tests. Use the same revision and Node
+version for all six. Keep Claude Haiku at low effort through the Claude
+Platform. Record the resolved Jev version before the first run and use it
+for all three recordings. Publish all completed repeats, including failures.

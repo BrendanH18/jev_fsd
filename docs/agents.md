@@ -62,6 +62,21 @@ private server or secret store. Return measured latency, token counts and cost i
 `live_call: true` for a remote request. An agent factory should return a fresh instance for
 each run. Stateful agent internals are not rewound by the simulator's replay recorder.
 
+### Check a local driver on both tracks
+
+Start `uv run server.py`, then run the local module over the authored challenges on the guarded and
+open tracks. The check runs Rules and the cautious starter on the same drives and reads the dated
+published model verdicts from the committed leaderboard. The module and the simulator run locally,
+with no model calls from the runner.
+
+```sh
+node --experimental-default-type=module scripts/check_driver.mjs --port 8322 --agent static/js/agents/my-agent.js
+```
+
+Use `--only right-on-red,flagger` for a subset, or `--set all` to include the two road tests. Each
+published verdict matches the track, map and challenge. If a driver has multiple matching results,
+the check shows the latest one. The module runs as trusted JavaScript in Node.
+
 ## Decision models: Jev and others
 
 A decision model takes a state and typed questions and returns each answer with probabilities.
@@ -412,15 +427,17 @@ key's request, and rebuilt on replay.
 <key>`, which counts as a Rules fallback in the drive's results. Each result carries
 `model_recording` (`calls`, `served`, `missing`, `drift`, `exact`), and a replay compares the
 drive's result with the recorded one (`same_result`), ignoring only wall-clock fields
-(`wall_ms`, an arena report's `started_at`). `--check 1` fails a replay that did not play out as
-recorded. With recording off, results and drives are exactly as before.
+(`wall_ms`, an arena report's `started_at`). `--check 1` requires an exact replay and a passing
+verdict on every drive. `--check replay` requires an exact replay and accepts a faithfully
+reproduced failure. The weekly published recording replay workflow reports fidelity for each tape
+on its published tree and on main, using the recorded Node version.
 
 **Challenges and road tests under Node.** `scripts/arena_node.mjs` runs them with any driver, as
 the arena does, and takes the same `--record` and `--replay`:
 
 ```sh
 node --experimental-default-type=module scripts/arena_node.mjs --port 8322 --brain jev --set all --record data/recordings/jev-arena.json.gz
-node --experimental-default-type=module scripts/arena_node.mjs --port 8322 --replay data/recordings/jev-arena-2026-11-11.json.gz --check 1
+node --experimental-default-type=module scripts/arena_node.mjs --port 8322 --replay data/recordings/jev-arena-2026-11-11.json.gz --check replay
 ```
 
 Its recordings span several maps, so the header keeps a fingerprint per map (`maps`) and the drives
