@@ -14,6 +14,7 @@ const { stepWorld } = await import("../static/js/sim/step.js");
 const { registerAgent } = await import("../static/js/brain/registry.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { openTrack, unflagged, FLAG_TEXT, flagText, TRACKS } = await import("../static/js/brain/tracks.js");
+const { FEATURES } = await import("../static/js/sim/features/index.js");
 const { buildLlmPrompt, SYSTEM_PROMPT, OPEN_SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
 const { benchmarkConfig } = await import("../static/js/bench/options.js");
 const { comparableResult, canonicalJson, recordingHeader, hashText } = await import("../static/js/brain/recording.js");
@@ -113,7 +114,10 @@ await test("the tracks, and every check the filter can fail has words for a mode
   // (what the scrape also finds that is no rejection: candidate ids, a law, a collision kind, metric names)
   const notChecks =
     /^(?:stop|wait|keep|change|creep|pull|let|ease|slow|go|yield|follow|pass|move|turn|hold|reverse)_|^(?:hard_brake|rear_end)$|_(?:conflicts|hits|entries|overspeed|splashed)$/;
-  const missing = [...ids].filter((id) => id !== "collision" && !FLAG_TEXT[id] && !notChecks.test(id));
+  const metrics = new Set(FEATURES.flatMap(({ metric }) => (metric ? [metric.name] : [])));
+  const missing = [...ids].filter(
+    (id) => id !== "collision" && !FLAG_TEXT[id] && !metrics.has(id) && !notChecks.test(id),
+  );
   assert.deepEqual(missing, [], "a rejection without words");
   assert.equal(flagText("runs_red"), FLAG_TEXT.runs_red);
   assert.equal(flagText("some_new_check"), "some new check");
