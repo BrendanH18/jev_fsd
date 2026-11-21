@@ -88,7 +88,18 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-sandbox_state() { boat info "$1" --json 2>/dev/null | jq -r '.sandbox.state // ""' 2>/dev/null || true; }
+# The sandbox's state, or "gone" when Boat no longer knows it. Any other failure (network, auth,
+# rate limit) is an error, so a passing hiccup never orphans a sandbox or spends a start.
+sandbox_state() {
+    local out
+    if out=$(boat info "$1" --json 2>&1); then
+        printf '%s\n' "$out" | jq -r '.sandbox.state // "unknown"'
+        return
+    fi
+    case "$out" in *'"not_found"'*) echo gone; return 0 ;; esac
+    echo "boat-check: couldn't read sandbox $1 from Boat: $out" >&2
+    return 1
+}
 pending_save() {
     boat snapshots --json 2>/dev/null | jq -e --arg n "$snapshot" --arg id "$1" \
         '.named[]? | select(.name == $n and .sourceSandboxId == $id and .status != "ready" and .status != "failed")' >/dev/null 2>&1
@@ -97,13 +108,13 @@ pending_save() {
 case "$action" in
     status)
         if [ -z "$id" ]; then echo "boat-check: no sandbox for this worktree (slot $slot)"; exit 0; fi
-        echo "boat-check: $id ($(sandbox_state "$id"))"
+        echo "boat-check: $id ($(sandbox_state "$id" || echo unknown))"
         boat info "$id"
         exit 0 ;;
     stop|done)
         [ -n "$id" ] || { echo "boat-check: no sandbox for this worktree (slot $slot)" >&2; exit 0; }
         if [ "$action" = done ] && ! pending_save "$id"; then
-            if boat delete "$id" --yes --json >/dev/null 2>&1 || [ -z "$(sandbox_state "$id")" ]; then
+            if boat delete "$id" --yes --json >/dev/null 2>&1 || [ "$(sandbox_state "$id")" = gone ]; then
                 rm -f "$id_file"; id=""
                 echo "boat-check: deleted this worktree's sandbox"
                 exit 0
@@ -142,9 +153,11 @@ fast_start() {   # fast_start WHAT boat ARGS...; leaves the output in $out
     return 1
 }
 state=""
-[ -z "$id" ] || state=$(sandbox_state "$id")
+if [ -n "$id" ]; then
+    state=$(sandbox_state "$id") || { echo "boat-check: try again once Boat answers" >&2; exit 1; }
+fi
 if [ "$state" = stopping ]; then
-    for _ in $(seq 1 24); do sleep 5; state=$(sandbox_state "$id"); [ "$state" = stopping ] || break; done
+    for _ in $(seq 1 24); do sleep 5; state=$(sandbox_state "$id") || exit 1; [ "$state" = stopping ] || break; done
 fi
 case "$state" in
     provisioned|cloning|ready|idle|running) ;;
@@ -157,7 +170,9 @@ case "$state" in
                 *) start_failed "resuming $id" "$out" ;;
             esac
         fi ;;
-    "") [ -z "$id" ] || echo "boat-check: Boat doesn't know $id any more; making a new sandbox" >&2 ;;
+    "") ;;
+    gone) echo "boat-check: Boat doesn't know $id any more; making a new sandbox" >&2; state="" ;;
+    unknown) echo "boat-check: boat info $id gave no state; check it with boat info $id" >&2; exit 1 ;;
     *)
         echo "boat-check: $id is $state; deleting it and making a new one" >&2
         boat delete "$id" --yes --json >/dev/null 2>&1 || echo "boat-check: couldn't delete $id: boat delete $id --yes" >&2
