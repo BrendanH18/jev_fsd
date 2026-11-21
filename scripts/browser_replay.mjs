@@ -1,9 +1,13 @@
 // Export a read-only street view of an arena replay. The viewer never re-simulates the drive.
+import { realpathSync } from "node:fs";
+import { isAbsolute, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { headingAt, pointAt } from "../static/js/map/mapdata.js";
 import { analyzeStreets, surfaceHalf } from "../static/js/map/scenery.js";
 
 const round = (value) => Math.round(value * 1000) / 1000;
 const point = (p) => p.map(round);
+const repoRoot = fileURLToPath(new URL("../", import.meta.url));
 
 export function captureBrowserReplay() {
   const frames = [];
@@ -64,11 +68,13 @@ export function captureBrowserReplay() {
           Math.min(...ys) <= bounds[3]
         );
       };
+      const source = relative(repoRoot, realpathSync(recordingPath));
+      const inRepo = source && !isAbsolute(source) && source !== ".." && !source.startsWith(`..${sep}`);
       return {
         format: "jev-browser-replay/1",
         challenge: challenge.id,
         model: recording.header.model,
-        source: recordingPath,
+        ...(inRepo ? { source: source.split(sep).join("/") } : {}),
         result_sha: recording.results[challenge.id].result_sha,
         pass: result.pass,
         bounds: bounds.map(round),

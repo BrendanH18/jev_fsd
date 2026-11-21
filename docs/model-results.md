@@ -46,6 +46,8 @@ node --experimental-default-type=module scripts/arena_node.mjs \
 ```
 
 The export requires every tape answer and the replay result to match the original recording.
+It records a repository-relative source path when the recording is inside the repository.
+An export from elsewhere keeps the result hash and omits the local path.
 
 | Driver | Model | Guarded | Open track | Flagged choices (drives) | Model's own decisions, open | Score, open | Cost, open |
 |---|---|---|---|---|---|---|---|
