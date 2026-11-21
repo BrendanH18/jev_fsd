@@ -2871,373 +2871,1117 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 63
+     "time_s": 63,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 318,
+      "rms_jerk": 3.65,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.1,
+      "min_headway_s": 2.08
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 80.1
+     "time_s": 80.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 393,
+      "rms_jerk": 1.76,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 67.9
+     "time_s": 67.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 402,
+      "rms_jerk": 3.01,
+      "hard_brakes": 4,
+      "max_lat_accel": 1.53,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.5
+     "time_s": 76.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 315,
+      "rms_jerk": 1.55,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 40.9
+     "time_s": 40.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 307,
+      "rms_jerk": 3.87,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 99.7
+     "time_s": 99.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1152,
+      "rms_jerk": 2.04,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 29.6
+     "time_s": 29.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 147,
+      "rms_jerk": 4.3,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.86,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.3
+     "time_s": 65.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 419,
+      "rms_jerk": 3.85,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.33,
+      "collisions": 0,
+      "safety_brakes": 2,
+      "min_ttc_s": 1.2,
+      "min_headway_s": 1.08
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 87
+     "time_s": 87,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 251,
+      "rms_jerk": 3.59,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.5,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 59.8
+     "time_s": 59.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 275,
+      "rms_jerk": 4.09,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 56.2
+     "time_s": 56.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 288,
+      "rms_jerk": 3.59,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.39,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 51.2
+     "time_s": 51.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 2.94,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 49.5
+     "time_s": 49.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 413,
+      "rms_jerk": 3.36,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.36,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.9,
+      "min_headway_s": 1.65
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 96.4
+     "time_s": 96.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1112,
+      "rms_jerk": 2.02,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 55.5
+     "time_s": 55.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 299,
+      "rms_jerk": 4.01,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 31.4
+     "time_s": 31.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 161,
+      "rms_jerk": 4.85,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 37
+     "time_s": 37,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 364,
+      "rms_jerk": 2.29,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.9
+     "time_s": 76.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 381,
+      "rms_jerk": 3.51,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 78.3
+     "time_s": 78.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 2.88,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.2,
+      "min_headway_s": 0.92
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 88.8
+     "time_s": 88.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 194,
+      "rms_jerk": 2.76,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.22,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.4,
+      "min_headway_s": 2.36
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 57.7
+     "time_s": 57.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 225,
+      "rms_jerk": 3,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.59,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 55.4
+     "time_s": 55.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 212,
+      "rms_jerk": 4.74,
+      "hard_brakes": 4,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 46.6
+     "time_s": 46.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 281,
+      "rms_jerk": 3.28,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 58
+     "time_s": 58,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 358,
+      "rms_jerk": 2.5,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 35.3
+     "time_s": 35.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 118,
+      "rms_jerk": 4.15,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.28,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.8
+     "time_s": 33.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.81,
+      "distance_m": 111,
+      "rms_jerk": 2.02,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.73,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 24.7
+     "time_s": 24.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.13,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 53.1
+     "time_s": 53.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 263,
+      "rms_jerk": 4.23,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 72.8
+     "time_s": 72.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 330,
+      "rms_jerk": 0.9,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 42.2
+     "time_s": 42.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 177,
+      "rms_jerk": 4.03,
+      "hard_brakes": 2,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": 1.7,
+      "min_headway_s": 1.15
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 35
+     "time_s": 35,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 236,
+      "rms_jerk": 1.69,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.6,
+      "min_headway_s": 2.01
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 43.2
+     "time_s": 43.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 328,
+      "rms_jerk": 3.99,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.07,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 98.7
+     "time_s": 98.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 269,
+      "rms_jerk": 2.69,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 36.8
+     "time_s": 36.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 119,
+      "rms_jerk": 5.12,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.34,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 34.1
+     "time_s": 34.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 149,
+      "rms_jerk": 5.1,
+      "hard_brakes": 4,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 27.2
+     "time_s": 27.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 117,
+      "rms_jerk": 4.06,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 20.7
+     "time_s": 20.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 128,
+      "rms_jerk": 2.28,
+      "hard_brakes": 0,
+      "max_lat_accel": 4.84,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 116.2
+     "time_s": 116.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 558,
+      "rms_jerk": 3.55,
+      "hard_brakes": 7,
+      "max_lat_accel": 4.61,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 36.1
+     "time_s": 36.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 145,
+      "rms_jerk": 5.17,
+      "hard_brakes": 2,
+      "max_lat_accel": 5.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 59.6,
+      "min_headway_s": 5.06
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 74.9
+     "time_s": 74.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 570,
+      "rms_jerk": 1.44,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5,
+      "min_headway_s": 1.46
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 37
+     "time_s": 37,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 4.83,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.52,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 5.15
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 38.9
+     "time_s": 38.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 123,
+      "rms_jerk": 3.81,
+      "hard_brakes": 0,
+      "max_lat_accel": 3.28,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.5,
+      "min_headway_s": 1.33
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 55.5
+     "time_s": 55.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 134,
+      "rms_jerk": 3.37,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.65,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.7
+     "time_s": 45.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 180,
+      "rms_jerk": 2.9,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 15.7
+     "time_s": 15.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 2.51,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 38.8
+     "time_s": 38.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 200,
+      "rms_jerk": 2.34,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5.2,
+      "min_headway_s": 4.12
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 25.1
+     "time_s": 25.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 210,
+      "rms_jerk": 2.74,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 15.4,
+      "min_headway_s": 2.02
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 24.9
+     "time_s": 24.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 1.75,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.39,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 100
+     "time_s": 100,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 430,
+      "rms_jerk": 3.35,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 32.6
+     "time_s": 32.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.3,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.23
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 28.4
+     "time_s": 28.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 1.56,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 30.9
+     "time_s": 30.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 164,
+      "rms_jerk": 3.82,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 68.9
+     "time_s": 68.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 130,
+      "rms_jerk": 3.59,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 91.2
+     "time_s": 91.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 524,
+      "rms_jerk": 2.37,
+      "hard_brakes": 2,
+      "max_lat_accel": 2.21,
+      "collisions": 0,
+      "safety_brakes": 2,
+      "min_ttc_s": 1.1,
+      "min_headway_s": 0.48
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 41.3
+     "time_s": 41.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 293,
+      "rms_jerk": 2.26,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 15,
+      "min_headway_s": 2.72
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 82.7
+     "time_s": 82.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 233,
+      "rms_jerk": 1.19,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.21,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.6
+     "time_s": 28.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 184,
+      "rms_jerk": 1.46,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.8,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 44.9
+     "time_s": 44.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 4.11,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.03,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.7,
+      "min_headway_s": 2.2
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 150.8
+     "time_s": 150.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.798,
+      "distance_m": 431,
+      "rms_jerk": 4.16,
+      "hard_brakes": 8,
+      "max_lat_accel": 4.89,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 51.7
+     "time_s": 51.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 209,
+      "rms_jerk": 2.79,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 253.1
+     "time_s": 253.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.975,
+      "distance_m": 1637,
+      "rms_jerk": 3.45,
+      "hard_brakes": 11,
+      "max_lat_accel": 4.78,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 204.6
+     "time_s": 204.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.965,
+      "distance_m": 1144,
+      "rms_jerk": 2.62,
+      "hard_brakes": 6,
+      "max_lat_accel": 7.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     }
    ],
    "sources": [
@@ -3282,373 +4026,1117 @@
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 42.4
+     "time_s": 42.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 307,
+      "rms_jerk": 3.46,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 49.7
+     "time_s": 49.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 413,
+      "rms_jerk": 3.08,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.75,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.2,
+      "min_headway_s": 1.36
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 95.4
+     "time_s": 95.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1112,
+      "rms_jerk": 1.86,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 34
+     "time_s": 34,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 149,
+      "rms_jerk": 5.23,
+      "hard_brakes": 3,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 20.7
+     "time_s": 20.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 128,
+      "rms_jerk": 2.38,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.84,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 75.1
+     "time_s": 75.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 570,
+      "rms_jerk": 1.41,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5,
+      "min_headway_s": 1.53
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 39.1
+     "time_s": 39.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 200,
+      "rms_jerk": 2.3,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5.1,
+      "min_headway_s": 4.12
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 100.2
+     "time_s": 100.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 430,
+      "rms_jerk": 3.41,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 69.1
+     "time_s": 69.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 130,
+      "rms_jerk": 3.55,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.8
+     "time_s": 28.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 184,
+      "rms_jerk": 1.42,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.8,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.2
+     "time_s": 45.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 3.47,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.03,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.3,
+      "min_headway_s": 2.2
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 255.3
+     "time_s": 255.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.975,
+      "distance_m": 1637,
+      "rms_jerk": 3.53,
+      "hard_brakes": 10,
+      "max_lat_accel": 4.74,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 73.6
+     "time_s": 73.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 393,
+      "rms_jerk": 2.65,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 75.7
+     "time_s": 75.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 315,
+      "rms_jerk": 1.25,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 56.4
+     "time_s": 56.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 299,
+      "rms_jerk": 4.71,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 57.5
+     "time_s": 57.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 225,
+      "rms_jerk": 2.86,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.59,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 46.8
+     "time_s": 46.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 281,
+      "rms_jerk": 3.33,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 25
+     "time_s": 25,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.17,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 61.2
+     "time_s": 61.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 263,
+      "rms_jerk": 3.61,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.58,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 35
+     "time_s": 35,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 236,
+      "rms_jerk": 1.84,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.6,
+      "min_headway_s": 2.01
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 37.1
+     "time_s": 37.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 4.51,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.43,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 5.22
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 24.9
+     "time_s": 24.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 2.02,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.42,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 203.4
+     "time_s": 203.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.965,
+      "distance_m": 1143,
+      "rms_jerk": 2.87,
+      "hard_brakes": 8,
+      "max_lat_accel": 7.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 3.68
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 100.2
+     "time_s": 100.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1152,
+      "rms_jerk": 1.79,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 58.5
+     "time_s": 58.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 275,
+      "rms_jerk": 4.08,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 50.4
+     "time_s": 50.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 2.91,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 35.9
+     "time_s": 35.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 118,
+      "rms_jerk": 4.36,
+      "hard_brakes": 1,
+      "max_lat_accel": 2.92,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 43.2
+     "time_s": 43.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 328,
+      "rms_jerk": 4.61,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 99
+     "time_s": 99,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 269,
+      "rms_jerk": 2.83,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.92,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 27.5
+     "time_s": 27.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 117,
+      "rms_jerk": 4.2,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.93,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 39.3
+     "time_s": 39.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 123,
+      "rms_jerk": 3.58,
+      "hard_brakes": 2,
+      "max_lat_accel": 2.81,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.5,
+      "min_headway_s": 1.34
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 55.7
+     "time_s": 55.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 134,
+      "rms_jerk": 3.06,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.66,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 15.9
+     "time_s": 15.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 2.38,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 32.6
+     "time_s": 32.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.27,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.11
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 30.7
+     "time_s": 30.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 164,
+      "rms_jerk": 3.92,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 84.3
+     "time_s": 84.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 233,
+      "rms_jerk": 1.25,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.21,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 150.4
+     "time_s": 150.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.798,
+      "distance_m": 431,
+      "rms_jerk": 4.15,
+      "hard_brakes": 8,
+      "max_lat_accel": 4.87,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 51.5
+     "time_s": 51.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 209,
+      "rms_jerk": 3.43,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 68.6
+     "time_s": 68.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 402,
+      "rms_jerk": 2.69,
+      "hard_brakes": 3,
+      "max_lat_accel": 1.54,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 28.8
+     "time_s": 28.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 147,
+      "rms_jerk": 4.98,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 31.9
+     "time_s": 31.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 162,
+      "rms_jerk": 5.1,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 78.4
+     "time_s": 78.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 2.85,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.2,
+      "min_headway_s": 0.91
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 51.8
+     "time_s": 51.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 358,
+      "rms_jerk": 2.45,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 32.7
+     "time_s": 32.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.809,
+      "distance_m": 110,
+      "rms_jerk": 2.59,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.56,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 37
+     "time_s": 37,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 119,
+      "rms_jerk": 5.95,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 128.7
+     "time_s": 128.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 558,
+      "rms_jerk": 3.55,
+      "hard_brakes": 6,
+      "max_lat_accel": 4.6,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.7
+     "time_s": 45.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 179,
+      "rms_jerk": 2.93,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 25.5
+     "time_s": 25.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 210,
+      "rms_jerk": 2.82,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.07,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 7.5,
+      "min_headway_s": 1.62
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 28.7
+     "time_s": 28.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 1.44,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 91.6
+     "time_s": 91.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 524,
+      "rms_jerk": 2.51,
+      "hard_brakes": 1,
+      "max_lat_accel": 2.26,
+      "collisions": 0,
+      "safety_brakes": 2,
+      "min_ttc_s": 1.1,
+      "min_headway_s": 0.6
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.7
+     "time_s": 65.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 419,
+      "rms_jerk": 4.26,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.34,
+      "collisions": 0,
+      "safety_brakes": 2,
+      "min_ttc_s": 1.2,
+      "min_headway_s": 1.08
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 87
+     "time_s": 87,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 251,
+      "rms_jerk": 3.67,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.5,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 36.9
+     "time_s": 36.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 364,
+      "rms_jerk": 2.43,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 77.5
+     "time_s": 77.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 381,
+      "rms_jerk": 3.53,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 89.6
+     "time_s": 89.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 194,
+      "rms_jerk": 2.55,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.25,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.4,
+      "min_headway_s": 2.66
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 56.1
+     "time_s": 56.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 213,
+      "rms_jerk": 4.62,
+      "hard_brakes": 4,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 73.4
+     "time_s": 73.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 330,
+      "rms_jerk": 1.02,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 44.5
+     "time_s": 44.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 180,
+      "rms_jerk": 3.92,
+      "hard_brakes": 1,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": 1.8,
+      "min_headway_s": 1.17
+     }
     },
     {
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 63.4
+     "time_s": 63.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 318,
+      "rms_jerk": 4.03,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.5,
+      "min_headway_s": 2.1
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52
+     "time_s": 52,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 288,
+      "rms_jerk": 4.14,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.45,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 2.71
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 35.2
+     "time_s": 35.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 145,
+      "rms_jerk": 4.63,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 5.4
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 40.7
+     "time_s": 40.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 292,
+      "rms_jerk": 2.29,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 14.1,
+      "min_headway_s": 2.73
+     }
     }
    ],
    "sources": [
@@ -3700,373 +5188,1117 @@
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 74.4
+     "time_s": 74.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 315,
+      "rms_jerk": 1.28,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.49,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 59.2
+     "time_s": 59.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 318,
+      "rms_jerk": 3.76,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.2,
+      "min_headway_s": 1.44
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 29.3
+     "time_s": 29.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 147,
+      "rms_jerk": 4.14,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.23,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 66.1
+     "time_s": 66.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 402,
+      "rms_jerk": 2.37,
+      "hard_brakes": 2,
+      "max_lat_accel": 1.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 36.9
+     "time_s": 36.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 307,
+      "rms_jerk": 3.27,
+      "hard_brakes": 1,
+      "max_lat_accel": 2.5,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 73.1
+     "time_s": 73.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 393,
+      "rms_jerk": 1.88,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 99.5
+     "time_s": 99.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1152,
+      "rms_jerk": 2.04,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.4
+     "time_s": 52.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 299,
+      "rms_jerk": 4.37,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 86.7
+     "time_s": 86.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 251,
+      "rms_jerk": 4,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.49,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 48.5
+     "time_s": 48.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 412,
+      "rms_jerk": 2.81,
+      "hard_brakes": 4,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.5,
+      "min_headway_s": 1.18
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 35.3
+     "time_s": 35.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 364,
+      "rms_jerk": 1.54,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 57
+     "time_s": 57,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 225,
+      "rms_jerk": 2.4,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.58,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 47
+     "time_s": 47,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 236,
+      "rms_jerk": 2.89,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.81,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": 0.9,
+      "min_headway_s": 0.38
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 32.4
+     "time_s": 32.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.29,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.19,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.07
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 40.2
+     "time_s": 40.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 292,
+      "rms_jerk": 1.65,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 8.9,
+      "min_headway_s": 2.36
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 82.7
+     "time_s": 82.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 233,
+      "rms_jerk": 1.23,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.71,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 253.8
+     "time_s": 253.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.975,
+      "distance_m": 1637,
+      "rms_jerk": 3.46,
+      "hard_brakes": 11,
+      "max_lat_accel": 4.87,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.1
+     "time_s": 65.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 418,
+      "rms_jerk": 3.6,
+      "hard_brakes": 3,
+      "max_lat_accel": 5.47,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.9,
+      "min_headway_s": 1.21
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 94.6
+     "time_s": 94.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1112,
+      "rms_jerk": 1.63,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 26.7
+     "time_s": 26.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 117,
+      "rms_jerk": 3.68,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.84,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 34
+     "time_s": 34,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 4.67,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.22,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 8.92
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 38.4
+     "time_s": 38.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 123,
+      "rms_jerk": 3.49,
+      "hard_brakes": 0,
+      "max_lat_accel": 3.64,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.8,
+      "min_headway_s": 0.97
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 38.8
+     "time_s": 38.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 200,
+      "rms_jerk": 1.45,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5.2,
+      "min_headway_s": 4.12
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 68.9
+     "time_s": 68.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 131,
+      "rms_jerk": 3.13,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.5
+     "time_s": 28.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 184,
+      "rms_jerk": 1.74,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.3
+     "time_s": 45.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 3.87,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.03,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.6,
+      "min_headway_s": 2.2
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 56
+     "time_s": 56,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 275,
+      "rms_jerk": 4.13,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 33.8
+     "time_s": 33.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 118,
+      "rms_jerk": 4.53,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.76,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.9
+     "time_s": 52.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 263,
+      "rms_jerk": 3.95,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.52,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 21.6
+     "time_s": 21.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 128,
+      "rms_jerk": 3.29,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.64,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 116.7
+     "time_s": 116.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 558,
+      "rms_jerk": 2.96,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.67,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 31
+     "time_s": 31,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.71,
+      "hard_brakes": 2,
+      "max_lat_accel": 5.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 38.2,
+      "min_headway_s": 5.7
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 55.3
+     "time_s": 55.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 134,
+      "rms_jerk": 2.55,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.66,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 27.9
+     "time_s": 27.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 1.49,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 203.4
+     "time_s": 203.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.965,
+      "distance_m": 1143,
+      "rms_jerk": 2.63,
+      "hard_brakes": 7,
+      "max_lat_accel": 7.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 5.43
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 65.4
+     "time_s": 65.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 358,
+      "rms_jerk": 4.84,
+      "hard_brakes": 6,
+      "max_lat_accel": 0.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 25.4
+     "time_s": 25.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.84,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 72.4
+     "time_s": 72.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 330,
+      "rms_jerk": 0.81,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 42.5
+     "time_s": 42.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 177,
+      "rms_jerk": 3.54,
+      "hard_brakes": 2,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.12
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 41
+     "time_s": 41,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 328,
+      "rms_jerk": 2.4,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 98.1
+     "time_s": 98.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 269,
+      "rms_jerk": 2.85,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.73,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 70.6
+     "time_s": 70.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 430,
+      "rms_jerk": 3.51,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 31.4
+     "time_s": 31.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 164,
+      "rms_jerk": 3.82,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 50.7
+     "time_s": 50.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 209,
+      "rms_jerk": 3.37,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 48.7
+     "time_s": 48.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 2.97,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 29.9
+     "time_s": 29.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 161,
+      "rms_jerk": 4.75,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.5
+     "time_s": 76.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 381,
+      "rms_jerk": 2.74,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 89.1
+     "time_s": 89.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 194,
+      "rms_jerk": 2.59,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.19,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.4,
+      "min_headway_s": 2.78
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 52.5
+     "time_s": 52.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 213,
+      "rms_jerk": 4.35,
+      "hard_brakes": 4,
+      "max_lat_accel": 3.82,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 46
+     "time_s": 46,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 281,
+      "rms_jerk": 2.17,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.4
+     "time_s": 45.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 180,
+      "rms_jerk": 2.91,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 15.5
+     "time_s": 15.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 2.31,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 25.6
+     "time_s": 25.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 2.86,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.45,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 51.7
+     "time_s": 51.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 288,
+      "rms_jerk": 4.13,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.6,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 5.45
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 77.3
+     "time_s": 77.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 2.8,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.1,
+      "min_headway_s": 0.88
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.1
+     "time_s": 33.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.81,
+      "distance_m": 111,
+      "rms_jerk": 1.94,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.54,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34.4
+     "time_s": 34.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 119,
+      "rms_jerk": 3.95,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.74,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 34.1
+     "time_s": 34.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 149,
+      "rms_jerk": 4.77,
+      "hard_brakes": 3,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 74.7
+     "time_s": 74.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 570,
+      "rms_jerk": 2,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.9,
+      "min_headway_s": 0.97
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 25
+     "time_s": 25,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 210,
+      "rms_jerk": 2.58,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.9,
+      "min_headway_s": 1.31
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": false,
-     "time_s": 88.3
+     "time_s": 88.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 525,
+      "rms_jerk": 2.27,
+      "hard_brakes": 3,
+      "max_lat_accel": 2.83,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 96.4
+     "time_s": 96.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.798,
+      "distance_m": 431,
+      "rms_jerk": 5.08,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.97,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     }
    ],
    "sources": [
@@ -4119,373 +6351,1117 @@
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 74
+     "time_s": 74,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 315,
+      "rms_jerk": 1.28,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.65,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 94.4
+     "time_s": 94.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1112,
+      "rms_jerk": 1.59,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 46.3
+     "time_s": 46.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 281,
+      "rms_jerk": 3.64,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 43.6
+     "time_s": 43.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 263,
+      "rms_jerk": 5.17,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.9,
+      "collisions": 0,
+      "safety_brakes": 2,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 42.2
+     "time_s": 42.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 177,
+      "rms_jerk": 3.92,
+      "hard_brakes": 2,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.12
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34.7
+     "time_s": 34.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 236,
+      "rms_jerk": 1.98,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.93,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.6,
+      "min_headway_s": 2.01
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 32.7
+     "time_s": 32.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 149,
+      "rms_jerk": 4.6,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 39
+     "time_s": 39,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 200,
+      "rms_jerk": 1.41,
+      "hard_brakes": 0,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.9,
+      "min_headway_s": 3.95
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 255.9
+     "time_s": 255.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.975,
+      "distance_m": 1637,
+      "rms_jerk": 4.02,
+      "hard_brakes": 21,
+      "max_lat_accel": 4.79,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": false,
-     "time_s": 180
+     "time_s": 180,
+     "score_inputs": {
+      "arrived": false,
+      "progress": 0.313,
+      "distance_m": 66,
+      "rms_jerk": 1.26,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 72.4
+     "time_s": 72.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 330,
+      "rms_jerk": 0.85,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 39.3
+     "time_s": 39.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 328,
+      "rms_jerk": 3.06,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 74.9
+     "time_s": 74.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 570,
+      "rms_jerk": 2.01,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.9,
+      "min_headway_s": 0.97
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 31.3
+     "time_s": 31.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 4.07,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.42,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 24.6,
+      "min_headway_s": 3.71
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 15.5
+     "time_s": 15.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 2.31,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 27.8
+     "time_s": 27.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 1.67,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 204.3
+     "time_s": 204.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.965,
+      "distance_m": 1143,
+      "rms_jerk": 3.17,
+      "hard_brakes": 8,
+      "max_lat_accel": 7.12,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 4.06
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 28.5
+     "time_s": 28.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 147,
+      "rms_jerk": 4.95,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.2,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 64.9
+     "time_s": 64.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 419,
+      "rms_jerk": 4.27,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.15,
+      "collisions": 0,
+      "safety_brakes": 2,
+      "min_ttc_s": 1.2,
+      "min_headway_s": 1.09
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 48.5
+     "time_s": 48.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 3.78,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 56.8
+     "time_s": 56.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 358,
+      "rms_jerk": 4.89,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 42
+     "time_s": 42,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 3.4,
+      "hard_brakes": 1,
+      "max_lat_accel": 5.17,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.7,
+      "min_headway_s": 3.85
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 25.2
+     "time_s": 25.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 117,
+      "rms_jerk": 5,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.75,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 55.3
+     "time_s": 55.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 134,
+      "rms_jerk": 3.26,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.66,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 32.5
+     "time_s": 32.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.49,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.07
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 84.3
+     "time_s": 84.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 233,
+      "rms_jerk": 1.4,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.65,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 93.9
+     "time_s": 93.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.798,
+      "distance_m": 431,
+      "rms_jerk": 5.61,
+      "hard_brakes": 6,
+      "max_lat_accel": 5.65,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 66
+     "time_s": 66,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 402,
+      "rms_jerk": 2.4,
+      "hard_brakes": 3,
+      "max_lat_accel": 1.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 37.1
+     "time_s": 37.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 307,
+      "rms_jerk": 3.47,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.41,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 48.5
+     "time_s": 48.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 412,
+      "rms_jerk": 3.09,
+      "hard_brakes": 3,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.5,
+      "min_headway_s": 1.19
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.4
+     "time_s": 76.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 381,
+      "rms_jerk": 3.45,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 25.4
+     "time_s": 25.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.1,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 117.4
+     "time_s": 117.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 558,
+      "rms_jerk": 4.01,
+      "hard_brakes": 7,
+      "max_lat_accel": 4.61,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 38.4
+     "time_s": 38.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 123,
+      "rms_jerk": 3.73,
+      "hard_brakes": 0,
+      "max_lat_accel": 3.74,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5.1,
+      "min_headway_s": 0.97
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 28.4
+     "time_s": 28.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 2.94,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 67.6
+     "time_s": 67.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 430,
+      "rms_jerk": 3.78,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 72.7
+     "time_s": 72.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 393,
+      "rms_jerk": 2.72,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 86.6
+     "time_s": 86.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 251,
+      "rms_jerk": 4.12,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.5,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 56
+     "time_s": 56,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 275,
+      "rms_jerk": 3.7,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 35.5
+     "time_s": 35.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 364,
+      "rms_jerk": 1.35,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.1
+     "time_s": 33.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.81,
+      "distance_m": 111,
+      "rms_jerk": 1.94,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.54,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 21.2
+     "time_s": 21.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 128,
+      "rms_jerk": 2.66,
+      "hard_brakes": 0,
+      "max_lat_accel": 4.76,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.4
+     "time_s": 45.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 180,
+      "rms_jerk": 2.91,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 68.8
+     "time_s": 68.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 131,
+      "rms_jerk": 2.63,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 91.1
+     "time_s": 91.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 526,
+      "rms_jerk": 2.76,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.58,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 1.3
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.3
+     "time_s": 28.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 184,
+      "rms_jerk": 1.29,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.8,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 51.1
+     "time_s": 51.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 209,
+      "rms_jerk": 3.13,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 99.5
+     "time_s": 99.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1152,
+      "rms_jerk": 2.04,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.9
+     "time_s": 52.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 299,
+      "rms_jerk": 4.5,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.12,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 30.3
+     "time_s": 30.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 162,
+      "rms_jerk": 5.74,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 83.9
+     "time_s": 83.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 3.24,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.1,
+      "min_headway_s": 0.9
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 89.2
+     "time_s": 89.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 194,
+      "rms_jerk": 2.5,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.19,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.4,
+      "min_headway_s": 2.75
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 57.1
+     "time_s": 57.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 225,
+      "rms_jerk": 3.44,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.17,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 33.2
+     "time_s": 33.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 118,
+      "rms_jerk": 3.08,
+      "hard_brakes": 2,
+      "max_lat_accel": 2.55,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.5,
+      "min_headway_s": 2.61
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 97.9
+     "time_s": 97.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 269,
+      "rms_jerk": 2.61,
+      "hard_brakes": 4,
+      "max_lat_accel": 3.82,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 24.9
+     "time_s": 24.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 210,
+      "rms_jerk": 2.88,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5.3,
+      "min_headway_s": 1.47
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 31.2
+     "time_s": 31.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 164,
+      "rms_jerk": 3.98,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.16,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45
+     "time_s": 45,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 3.94,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.03,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.3,
+      "min_headway_s": 2.2
+     }
     },
     {
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 59.7
+     "time_s": 59.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 318,
+      "rms_jerk": 3.85,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.2,
+      "min_headway_s": 1.44
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 49.7
+     "time_s": 49.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 288,
+      "rms_jerk": 4.75,
+      "hard_brakes": 7,
+      "max_lat_accel": 4.69,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": null,
+      "min_headway_s": 0.35
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 31.3
+     "time_s": 31.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.49,
+      "hard_brakes": 1,
+      "max_lat_accel": 5.17,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 19.2,
+      "min_headway_s": 4.61
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 40.2
+     "time_s": 40.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 292,
+      "rms_jerk": 1.64,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 8.9,
+      "min_headway_s": 2.36
+     }
     }
    ],
    "sources": [
@@ -4538,373 +7514,1117 @@
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 253
+     "time_s": 253,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.975,
+      "distance_m": 1637,
+      "rms_jerk": 3.23,
+      "hard_brakes": 11,
+      "max_lat_accel": 4.79,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 204.6
+     "time_s": 204.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.964,
+      "distance_m": 1143,
+      "rms_jerk": 2.54,
+      "hard_brakes": 5,
+      "max_lat_accel": 7.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 56.8
+     "time_s": 56.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 318,
+      "rms_jerk": 3.71,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.3,
+      "min_headway_s": 1.41
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 36.5
+     "time_s": 36.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 307,
+      "rms_jerk": 3.89,
+      "hard_brakes": 2,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 99.3
+     "time_s": 99.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1152,
+      "rms_jerk": 1.53,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.2
+     "time_s": 52.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 4.29,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.49,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 48.1
+     "time_s": 48.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 412,
+      "rms_jerk": 1.92,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.5,
+      "min_headway_s": 1.13
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 95.3
+     "time_s": 95.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 1112,
+      "rms_jerk": 1.81,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.4
+     "time_s": 52.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 298,
+      "rms_jerk": 4.21,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.12,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 30.1
+     "time_s": 30.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 161,
+      "rms_jerk": 5.15,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 32.1
+     "time_s": 32.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.808,
+      "distance_m": 110,
+      "rms_jerk": 2.61,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.54,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 24.5
+     "time_s": 24.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.27,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.5
+     "time_s": 52.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 263,
+      "rms_jerk": 3.6,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.51,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34.6
+     "time_s": 34.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 236,
+      "rms_jerk": 1.37,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.6,
+      "min_headway_s": 2.01
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34.5
+     "time_s": 34.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 4.91,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.1
+     "time_s": 45.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 180,
+      "rms_jerk": 4.06,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 15.4
+     "time_s": 15.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 137,
+      "rms_jerk": 2.37,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 36.2
+     "time_s": 36.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.998,
+      "distance_m": 200,
+      "rms_jerk": 2.04,
+      "hard_brakes": 0,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.9,
+      "min_headway_s": 3.09
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 22.7
+     "time_s": 22.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 210,
+      "rms_jerk": 2.76,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.07,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.5,
+      "min_headway_s": 1.24
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 30.4
+     "time_s": 30.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 164,
+      "rms_jerk": 3.85,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 45.1
+     "time_s": 45.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 5.71,
+      "hard_brakes": 8,
+      "max_lat_accel": 0.03,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.4,
+      "min_headway_s": 2.2
+     }
     },
     {
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.5
+     "time_s": 76.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 315,
+      "rms_jerk": 1.69,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.5,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 86.6
+     "time_s": 86.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.998,
+      "distance_m": 250,
+      "rms_jerk": 3.39,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.49,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 56.7
+     "time_s": 56.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 275,
+      "rms_jerk": 4.53,
+      "hard_brakes": 6,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.2
+     "time_s": 76.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 380,
+      "rms_jerk": 3.17,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": false,
-     "time_s": 180
+     "time_s": 180,
+     "score_inputs": {
+      "arrived": false,
+      "progress": 0.551,
+      "distance_m": 64,
+      "rms_jerk": 1.36,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.81,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.1,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 20.4
+     "time_s": 20.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 128,
+      "rms_jerk": 1.91,
+      "hard_brakes": 0,
+      "max_lat_accel": 4.78,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 117.4
+     "time_s": 117.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 558,
+      "rms_jerk": 3.06,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.7,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 74.7
+     "time_s": 74.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 570,
+      "rms_jerk": 2.03,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.8,
+      "min_headway_s": 0.97
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 55.5
+     "time_s": 55.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 133,
+      "rms_jerk": 2.61,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.51,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 40.2
+     "time_s": 40.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 292,
+      "rms_jerk": 1.9,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 9.6,
+      "min_headway_s": 2.43
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.3
+     "time_s": 28.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 184,
+      "rms_jerk": 1.29,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.8,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 49.9
+     "time_s": 49.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 209,
+      "rms_jerk": 3.59,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.66,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 65.5
+     "time_s": 65.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 402,
+      "rms_jerk": 2.53,
+      "hard_brakes": 2,
+      "max_lat_accel": 1.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.2
+     "time_s": 65.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 419,
+      "rms_jerk": 2.79,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.57,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.2,
+      "min_headway_s": 2.32
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 34.9
+     "time_s": 34.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 363,
+      "rms_jerk": 1.55,
+      "hard_brakes": 1,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 88.8
+     "time_s": 88.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 193,
+      "rms_jerk": 2.65,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.2,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.4,
+      "min_headway_s": 2.73
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 56.1
+     "time_s": 56.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 224,
+      "rms_jerk": 2.27,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.58,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 72.4
+     "time_s": 72.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 330,
+      "rms_jerk": 0.86,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 40.8
+     "time_s": 40.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.991,
+      "distance_m": 175,
+      "rms_jerk": 3.55,
+      "hard_brakes": 2,
+      "max_lat_accel": 2.87,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.3,
+      "min_headway_s": 1.25
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 31.7
+     "time_s": 31.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 149,
+      "rms_jerk": 4.54,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 31.6
+     "time_s": 31.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.16,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.36,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 5.81
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 33.1
+     "time_s": 33.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 159,
+      "rms_jerk": 3.25,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.67,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 9.63
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 97.5
+     "time_s": 97.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 430,
+      "rms_jerk": 3.41,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 32.3
+     "time_s": 32.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.7,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.4,
+      "min_headway_s": 1.06
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 27.6
+     "time_s": 27.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 1.46,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 92.3
+     "time_s": 92.3,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 524,
+      "rms_jerk": 2.66,
+      "hard_brakes": 2,
+      "max_lat_accel": 2.76,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 1.83
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 82.4
+     "time_s": 82.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 233,
+      "rms_jerk": 1.13,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.54,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 73.1
+     "time_s": 73.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 393,
+      "rms_jerk": 1.71,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 28.8
+     "time_s": 28.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 147,
+      "rms_jerk": 4.69,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.72,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 44.7
+     "time_s": 44.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 3.39,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.2,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 76.8
+     "time_s": 76.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 2.78,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.9,
+      "min_headway_s": 0.84
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 52.6
+     "time_s": 52.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 212,
+      "rms_jerk": 4.13,
+      "hard_brakes": 5,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 49.6
+     "time_s": 49.6,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 281,
+      "rms_jerk": 3.09,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 57.1
+     "time_s": 57.1,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 358,
+      "rms_jerk": 2.1,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 36.5
+     "time_s": 36.5,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 328,
+      "rms_jerk": 3.76,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 98.4
+     "time_s": 98.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 269,
+      "rms_jerk": 2.87,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.82,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 26.7
+     "time_s": 26.7,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 117,
+      "rms_jerk": 3.68,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.84,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 38.2
+     "time_s": 38.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 123,
+      "rms_jerk": 3.2,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.72,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.4,
+      "min_headway_s": 0.99
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 25
+     "time_s": 25,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 2.28,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 69.8
+     "time_s": 69.8,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.999,
+      "distance_m": 130,
+      "rms_jerk": 4.02,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 121.9
+     "time_s": 121.9,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.798,
+      "distance_m": 431,
+      "rms_jerk": 3.96,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.76,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     }
    ],
    "sources": [
@@ -4948,7 +8668,19 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 57.4
+     "time_s": 57.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 3.47,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.3,
+      "min_headway_s": 1.4
+     }
     }
    ],
    "sources": [
@@ -4992,7 +8724,19 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 56.2
+     "time_s": 56.2,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 3.91,
+      "hard_brakes": 5,
+      "max_lat_accel": 3.24,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.4,
+      "min_headway_s": 1.49
+     }
     }
    ],
    "sources": [
@@ -5036,7 +8780,19 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 62.4
+     "time_s": 62.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 4.38,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.4,
+      "min_headway_s": 2.2
+     }
     }
    ],
    "sources": [
@@ -5080,13 +8836,37 @@
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 42
+     "time_s": 42,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.997,
+      "distance_m": 159,
+      "rms_jerk": 5.06,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.77,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.4
+     "time_s": 28.4,
+     "score_inputs": {
+      "arrived": true,
+      "progress": 0.983,
+      "distance_m": 181,
+      "rms_jerk": 2.86,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.8,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     }
     }
    ],
    "sources": [

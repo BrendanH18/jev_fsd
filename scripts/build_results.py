@@ -280,6 +280,19 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
     return manifest
 
 
+def published_drive(result: dict) -> dict:
+    drive = {"id": result["challenge"], "map": result["map"], "pass": result["pass"], "time_s": result.get("time_s")}
+    numeric = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
+    nullable = ("min_ttc_s", "min_headway_s")
+    if (
+        isinstance(result.get("arrived"), bool)
+        and all(type(result.get(k)) in (int, float) for k in (*numeric, "time_s"))
+        and all(k in result and (result[k] is None or type(result[k]) in (int, float)) for k in nullable)
+    ):
+        drive["score_inputs"] = {k: result[k] for k in ("arrived", *numeric, *nullable)}
+    return drive
+
+
 def challenge_rows(drivers: dict) -> list[dict]:
     rows = []
     for path in sorted(RESULTS.glob("*/*.json")):
@@ -357,10 +370,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "cost_usd": round(cost, 6),
                 "cost_basis": cost_basis,
                 "failed": failed,
-                "drives": [
-                    {"id": r["challenge"], "map": r["map"], "pass": r["pass"], "time_s": r.get("time_s")}
-                    for r in row_results
-                ],
+                "drives": [published_drive(r) for r in row_results],
                 "sources": sources,
                 "recording": rel(recording_path) if recording_path.is_file() else None,
                 **({"manifest": manifest} if manifest else {}),

@@ -29,6 +29,19 @@ class ResultsTest(unittest.TestCase):
             "data/results.json or README.md is stale: run uv run scripts/build_results.py",
         )
 
+    def test_score_inputs_require_saved_measurements(self):
+        tape = build_results.read_recording(next(build_results.RECORDINGS.glob("jev-arena-*.json.gz")))
+        result = next(iter(tape["results"].values()))
+        inputs = build_results.published_drive(result)["score_inputs"]
+        self.assertEqual(inputs, {key: result[key] for key in inputs})
+        for key in (*inputs, "time_s"):
+            with self.subTest(key=key):
+                partial = result.copy()
+                del partial[key]
+                self.assertNotIn("score_inputs", build_results.published_drive(partial))
+        clear_road = dict(result, min_ttc_s=None, min_headway_s=None)
+        self.assertIn("score_inputs", build_results.published_drive(clear_road))
+
     def test_check_fails_when_the_file_is_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
             stale = Path(tmp) / "results.json"
