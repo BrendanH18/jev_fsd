@@ -8,6 +8,7 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 globalThis.document = { querySelector: () => null };
 const { ModelRecording } = await import("../static/js/brain/recording.js");
+const { benchRouteFingerprint } = await import("./run_manifest.mjs");
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "merge-recordings-"));
 const header = (ids, extra = {}) => ({
@@ -115,12 +116,13 @@ assert.deepEqual(Object.keys(provenance.maps), ["kitsilano", "toronto"]);
 refused([g, withManifest("nine", "toronto", "bbbb", "b".repeat(40))], /differs.*source/, "another source commit");
 
 const config = { map: "kitsilano", features: "city", count: 2, seed: 1, brain: "jev" };
-function benchPart(id, pass) {
+const benchScenarios = ["s1-1", "s1-2"].map((id) => ({ id, traffic_seed: 42 }));
+function benchPart(id, pass, traffic_seed = 42, name = id) {
   const manifest = {
     source_commit: "a".repeat(40),
     source_dirty: false,
     maps: { kitsilano: { fingerprint: "map-sha" } },
-    suite: { kind: "bench", only: true, config, ids: [id] },
+    suite: { kind: "bench", only: true, config, ids: [id], route_sha: benchRouteFingerprint(benchScenarios) },
     cost_usd: 0.01,
   };
   const result = { id, arrived: pass, pass, cost_usd: 0.01, wall_ms: 10 };
@@ -128,8 +130,8 @@ function benchPart(id, pass) {
     header: { driver: "jev", brain: "jev", bench: config, map_sha: "map-sha", manifest },
     drives: { [id]: {} },
   });
-  tape.keepResult(id, result, { id, traffic_seed: 42 });
-  const file = path.join(dir, `${id}.json`);
+  tape.keepResult(id, result, { id, traffic_seed });
+  const file = path.join(dir, `${name}.json`);
   fs.writeFileSync(file, JSON.stringify({ manifest, config, results: [result], saved_at: "2026-11-21T08:00:00Z" }));
   fs.writeFileSync(`${file}.gz`, gzipSync(tape.serialize()));
   return file;
@@ -151,6 +153,10 @@ const mergeBench = (...files) =>
     { stdio: "pipe" },
   ).toString();
 assert.throws(() => mergeBench(first, first), /Unexpected or repeated drive s1-1/);
+assert.throws(
+  () => mergeBench(first, benchPart("s1-2", true, 43, "shifted")),
+  /recorded routes do not match the complete seeded suite/,
+);
 assert.equal(fs.existsSync(report), false);
 assert.match(mergeBench(second, first), /Merged 2 drives from 2 parts/);
 const combined = JSON.parse(fs.readFileSync(report, "utf8"));
@@ -164,6 +170,7 @@ assert.deepEqual(
 assert.equal(combined.summary.cost_usd, 0.02);
 assert.equal(combined.manifest.suite.only, undefined);
 assert.deepEqual(combined.manifest.suite.ids, ["s1-1", "s1-2"]);
+assert.equal(combined.name, "20261121-080000-jev");
 console.log("✓ city parts merge in suite order with failed verdicts kept and duplicate drives refused");
 
 fs.rmSync(dir, { recursive: true, force: true });

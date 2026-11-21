@@ -118,7 +118,10 @@ drives with the same full suite settings. Give each part's JSON report and
 gzip tape the same stem, such as `part-1.json` and `part-1.json.gz`. Use
 `scripts/merge_bench_recordings.mjs --json RUN.json --record RUN.json.gz PART.json PART.json [...]`
 to assemble a complete suite in seeded order. Replay the combined tape
-before publishing it.
+before publishing it. The merge checks the complete scenario fingerprint
+from each part. For earlier parts without the fingerprint, regenerate the
+full scenario array from the original source and server, and pass its JSON
+file as `--suite ROUTES.json`.
 
 ## Compare repeated model runs
 

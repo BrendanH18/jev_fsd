@@ -65,3 +65,9 @@ export function runManifest({ driver, model, track, suite, maps, fingerprints = 
 export function runCost(results) {
   return Math.round(results.reduce((sum, result) => sum + (result.cost_usd || 0), 0) * 1e6) / 1e6;
 }
+
+export function benchRunName(savedAt, driver) {
+  return `${savedAt.slice(0, 19).replaceAll(/[-:]/g, "").replace("T", "-")}-${driver.replaceAll(/[^a-z0-9]/gi, "")}`;
+}
+
+export const benchRouteFingerprint = (suite) => hashText(canonicalJson(suite));

@@ -251,7 +251,13 @@ if (manifestModule) {
     driver,
     model,
     track: config.track || "guarded",
-    suite: { kind: "bench", config, ids: selected.map((sc) => sc.id), ...(only ? { only: true } : {}) },
+    suite: {
+      kind: "bench",
+      config,
+      ids: selected.map((sc) => sc.id),
+      route_sha: manifestModule.benchRouteFingerprint(suite),
+      ...(only ? { only: true } : {}),
+    },
     maps: { [preset]: map },
   });
   if (args.record)
@@ -358,7 +364,7 @@ if (args.json) {
   if (manifest) {
     manifest.cost_usd = summary.cost_usd;
     const savedAt = new Date().toISOString();
-    const name = `${savedAt.slice(0, 19).replaceAll(/[-:]/g, "").replace("T", "-")}-${driver.replaceAll(/[^a-z0-9]/gi, "")}`;
+    const name = manifestModule.benchRunName(savedAt, driver);
     Object.assign(saved, { name, saved_at: savedAt, manifest });
   }
   (await import("node:fs")).writeFileSync(args.json, JSON.stringify(saved, null, 1));
