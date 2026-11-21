@@ -6,8 +6,8 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Eleven features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police officers,
-tailgaters, black ice, snowbanks, puddles, traffic parking and road closures. Each record holds the hooks
+Twelve features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police officers,
+tailgaters, black ice, snowbanks, puddles, traffic parking, road closures and double-parked vans. Each record holds the hooks
 into the core pipeline and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
@@ -151,6 +151,16 @@ tailgater, following, traffic-officer, free-drive, open-track and model-recordin
 22.23.5. All 62 authored drives matched for Rules and the cautious agent on each track,
 including decision traces and examiner sheets. The comparison excluded only `wall_ms` and
 `report.started_at`.
+
+**Double-parked delivery vans** were compared against `7dc60e5` in Boat with Node 22.23.5.
+All 62 authored drives matched for Rules and the cautious agent, including decision traces and
+events. All 12 dry Kitsilano routes at seed 1 matched in each driver's bare and city suites.
+The comparison excluded wall time, arena report start time, and the suite label assigned to the
+after-run shards. Rules passed all 24 routes. The cautious agent passed all 12 bare routes and
+9 of 12 city routes on both trees, with a stall on `s1-2` and red lights on `s1-8` and `s1-10`.
+The guarded and open LLM prompts were byte-identical, the Jev fixtures stayed current, and the
+**Round the van** and **Collection day** drives replayed exactly from both published open-track
+recordings (Jev and Claude Haiku).
 
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison

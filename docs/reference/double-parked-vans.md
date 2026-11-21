@@ -38,4 +38,12 @@ less than 8 m front to front or 2 s away at the speed they close at; once a pass
 it (`van_cutoffs`) with a tip, and going round is not driving the wrong way. The HUD says "DOUBLE-PARKED
 VAN · ONCOMING TRAFFIC · WAIT BEHIND IT", "· CAN'T SEE PAST · WAIT BEHIND IT", "· WAIT YOUR TURN BEHIND
 IT", "· WAY CLEAR · GO ROUND IT" or "· GOING ROUND · BACK INTO YOUR LANE PAST IT", and AI eyes outline the
-van in amber. The seeded benchmark and the other challenges have none.
+van in amber. The bare benchmark has no delivery vans. The city preset uses the free-drive setup.
+
+## Agent rules
+
+The [feature record](../../static/js/sim/features/double-parked.js) takes the `vans` count and
+builds `World.doubleParked`. With the count at zero, its state still accepts authored vans and
+stopped garbage trucks. Both use the same sensing, bypass and audit hooks. The passing audit
+increments the shared `failed_to_yield` counter. Keep the step after outages, and keep the traffic
+departure handoff before plow dispatch and garbage collection.

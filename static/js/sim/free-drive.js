@@ -11,11 +11,10 @@ import { ROADSIDE_COUNT } from "./roadside.js";
 import { WORK_ZONE_COUNT } from "./work-zone.js";
 import { LANE_CLOSURE_COUNT } from "./lane-closure.js";
 import { OUTAGE_COUNT } from "./outage.js";
-import { VAN_COUNT } from "./double-parked.js";
 import { PLOW_COUNT } from "./snow-plow.js";
 import { STEP_OUT_COUNT } from "./hidden-hazards.js";
 import { TRUCK_COUNT } from "./collection-truck.js";
-import { FEATURE_OPTIONS } from "./features/index.js";
+import { FEATURES } from "./features/index.js";
 
 export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 } = {}) {
   const on = (name) => params.get(name) !== "0";
@@ -34,8 +33,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     workZones: on("workzones") ? WORK_ZONE_COUNT : 0,
     // power cuts that turn a signal's lights off for a while (`?outages=0`)
     outages: on("outages") ? OUTAGE_COUNT : 0,
-    // delivery vans double-parked now and then, by day (`?vans=0`)
-    vans: on("vans") ? VAN_COUNT : 0,
     // the autopilot parks at the destination, where there is a space (`?park=0` stops it in its lane)
     park: on("park"),
     hazards,
@@ -66,7 +63,10 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     sunGlare: on("sunglare"),
   };
   // Each registered World option is enabled unless its lowercase query flag is 0.
-  for (const key of FEATURE_OPTIONS) world[key] = on(key.toLowerCase());
+  for (const { key, defaultCount } of FEATURES) {
+    const enabled = on(key.toLowerCase());
+    world[key] = defaultCount === undefined ? enabled : enabled ? defaultCount : 0;
+  }
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)
     emergency: on("emergency"),

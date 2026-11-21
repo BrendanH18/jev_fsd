@@ -28,7 +28,7 @@ import { headlights } from "../sim/high-beams.js";
 import { pxoAhead } from "../sim/pxo.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
-import { cumulative, headingAt, pointAt, projectPoint } from "../map/mapdata.js";
+import { cumulative, headingAt, onStreet, pointAt, projectPoint } from "../map/mapdata.js";
 import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
@@ -85,7 +85,6 @@ import {
   flashing,
   passLimit,
 } from "../sim/roadside.js";
-import { PASS_DECEL, PASS_MPS, VAN_LOOK_M, VAN_NAME, isVan, queuedAhead, wayRound } from "../sim/double-parked.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
 import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
 import { laneSight } from "../sim/hidden-traffic.js";
@@ -116,7 +115,6 @@ import {
   sightFor as cyclistSight,
   wayClear as cyclistWayClear,
 } from "../sim/cyclist-pass.js";
-import { onStreet } from "../sim/double-parked.js";
 import {
   ENTRY_LOOK_M,
   comingOut,
@@ -161,6 +159,8 @@ import {
   firstHookResult,
   isParkingTraffic,
   isTrafficObstacle,
+  FEATURE_SNAPSHOT_FIELDS,
+  featureObstacle,
   hooks,
   junctionPlan,
 } from "../sim/features/index.js";
@@ -168,6 +168,7 @@ import {
 // The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
 const SENSE = {
+  parking: hooks("sense", "parking"),
   following: hooks("sense", "following"),
   driveways: hooks("sense", "driveways"),
   streetHazards: hooks("sense", "streetHazards"),
@@ -175,11 +176,13 @@ const SENSE = {
   junctions: hooks("sense", "junctions"),
 };
 const LIMIT = {
+  passing: hooks("limit", "passing"),
   driveways: hooks("limit", "driveways"),
   streetHazards: hooks("limit", "streetHazards"),
   parking: hooks("limit", "parking"),
 };
 const TARGET = {
+  parking: hooks("target", "parking"),
   restrictions: hooks("target", "restrictions"),
   driveways: hooks("target", "driveways"),
   streetHazards: hooks("target", "streetHazards"),
@@ -188,6 +191,7 @@ const TARGET = {
 const FINISH_LANES = hooks("finishLanes");
 const LANE_OFFER = hooks("laneOffer");
 const HAZARD = {
+  parking: hooks("hazard", "parking"),
   driveways: hooks("hazard", "driveways"),
   streetHazards: hooks("hazard", "streetHazards"),
   rearTraffic: hooks("hazard", "rearTraffic"),
@@ -197,7 +201,9 @@ const HAZARD = {
 const TURN_PACE = hooks("turnPace");
 // (and the move inside its lane a registered feature has it make, over toward the middle between
 // snowbanks, say; where it stops short of for an emergency vehicle; and what hides a street from it)
+const FOLLOWING_EXCLUSION = hooks("followingExclusion");
 const DETOURS = hooks("detour", "contraflow"),
+  PASSING_DETOURS = hooks("detour", "parking"),
   EV_STOP = hooks("evStop"),
   BLOCKS_VIEW = hooks("blocksView");
 export const featureDetour = (snap) => {
@@ -207,6 +213,7 @@ export const featureDetour = (snap) => {
   }
   return null;
 };
+export const featurePassingDetour = (snap) => firstHookResult(PASSING_DETOURS, snap);
 const CONTROL_SENSE = hooks("controlSense");
 
 export const LOOK_AHEAD_CONTROL_M = 80;
@@ -347,7 +354,7 @@ function followingInLane(ego, route, p, lane, vehicles, frame, snap) {
     Math.abs(p.lateral - lane.from_center) < LANE_CLEAR_M &&
     Math.abs(a.lateral - lane.from_center) <= 1.7 &&
     a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
-  const vanStop = snap?.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
+  const excluded = snap ? firstHookResult(FOLLOWING_EXCLUSION, snap) : null;
   const ahead = corridorQuery(
     route,
     p.s + FRONT - 1,
@@ -367,9 +374,7 @@ function followingInLane(ego, route, p, lane, vehicles, frame, snap) {
         : Math.abs(a.lateral - center) < (ego.spec.width + (a.vehicle.spec || CAR).width) / 2,
     )
     .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > (Math.PI * 5) / 6))
-    // (a double-parked van the car waits behind, short of where it waits, is a stop, not a car to
-    // follow: see doubleParked)
-    .filter((a) => !(vanStop && a.vehicle.id === snap.double_parked.van_id))
+    .filter((a) => excluded === null || a.vehicle.id !== excluded)
     // (nor is a cyclist the car is going round, or about to: see cyclistPass)
     .filter((a) => !(snap?.cyclist_pass?.go && a.vehicle.id === snap.cyclist_pass.cyclist_id));
   if (ahead.length) {
@@ -392,13 +397,8 @@ function followingInLane(ego, route, p, lane, vehicles, frame, snap) {
               ? "cyclist"
               : isTruck(lead.vehicle)
                 ? TRUCK_NAME
-                : isVan(lead.vehicle)
-                  ? "double-parked van"
-                  : isPlow(lead.vehicle)
-                    ? PLOW_NAME
-                    : lead.vehicle.parked
-                      ? "parked car"
-                      : "car",
+                : featureObstacle(lead.vehicle)?.label ||
+                  (isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car"),
     };
   }
   return null;
@@ -455,7 +455,7 @@ export function buildSnapshot(world, executing = null) {
     roadside_stop: null,
     work_zone: null,
     lane_closure: null,
-    double_parked: null,
+    ...FEATURE_SNAPSHOT_FIELDS,
     snow_plow: null,
     cyclist_pass: null,
     crossing_guard: null,
@@ -766,7 +766,7 @@ export function buildSnapshot(world, executing = null) {
     snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
     snap.work_zone = workZone(world, p, frontS, road);
     snap.lane_closure = laneClosure(world, p, frontS, road, lane);
-    snap.double_parked = doubleParked(world, p, frontS, lane, executing);
+    for (const sense of SENSE.parking) sense(world, snap, { p, frontS, lane, executing });
     snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
     snap.cyclist_pass = cyclistPass(world, p, lane, executing);
     snap.crossing_guard = crossingGuard(world, frontS);
@@ -806,14 +806,13 @@ export function buildSnapshot(world, executing = null) {
     // Oncoming traffic that is passing is not a follow target; a stopped car facing us still is.
     // During a lane change the lane being left still counts while the car overlaps it, for vehicles
     // the car reaches before its planned path has cleared that lane.
-    // (going round a work zone's closed stretch, or a double-parked van, along the way the car will
-    // go: see workZone and doubleParked)
+    // (follow along the way the car will go round an obstruction)
     // (and round a cyclist, through the oncoming lane: see cyclistPass)
     // (and over to the right for a contraflow cyclist coming the other way: see contraflowCyclist)
     const detour =
       snap.work_zone?.detour ||
       snap.lane_closure?.detour ||
-      snap.double_parked?.detour ||
+      featurePassingDetour(snap) ||
       snap.cyclist_pass?.detour ||
       snap.contraflow_cyclist?.detour ||
       featureDetour(snap) ||
@@ -878,9 +877,7 @@ export function buildSnapshot(world, executing = null) {
                 ? "work zone"
                 : isLaneClosure(o)
                   ? "lane closure"
-                  : isVan(o)
-                    ? "double-parked van"
-                    : ROADSIDE_NAMES[o.kind] || "parked car",
+                  : featureObstacle(o)?.label || ROADSIDE_NAMES[o.kind] || "parked car",
       right: local.right,
       ahead: local.ahead,
       signal: o.signal || null,
@@ -904,8 +901,7 @@ export function buildSnapshot(world, executing = null) {
   if (snap.work_zone) snap.limit = Math.min(snap.limit, workZoneSpeed(snap.work_zone));
   // (and at a lane closure, from its merge point: sim/lane-closure.js)
   if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
-  // (and coming up to a double-parked van, and round it)
-  if (snap.double_parked) snap.limit = Math.min(snap.limit, vanSpeed(snap.double_parked));
+  for (const limit of LIMIT.passing) limit(snap);
   // (and coming up to a speed hump or the like, and over it: sim/traffic-calming.js)
   if (snap.traffic_calming) snap.limit = Math.min(snap.limit, calmingSpeed(snap.traffic_calming));
   // (and driving into a low sun, no faster than it can stop within what it can see: sim/sun-glare.js)
@@ -1911,85 +1907,6 @@ function laneClosure(world, p, frontS, road, lane) {
       ? { from: toRoute(d.from), full: toRoute(d.full), back: toRoute(d.back), to: toRoute(d.to), shift: d.shift }
       : null,
   };
-}
-
-// A van double-parked in the car's lane on its route ahead (sim/double-parked.js), from when the car
-// can see it, VAN_LOOK_M short of its rear or nearer, until its front is past the end of the way
-// round. `stop_s_route` is where its front waits (WAIT_M short of the van, back far enough to pull out
-// round it); `way` the way round as far as the car can tell, from what it can see (`clear`, `oncoming`:
-// the first vehicle coming the other way that leaves too little time, and when it gets there,
-// `sees_far_enough`: along the oncoming lane, as far as anyone at the street's limit would come in
-// the time it takes); `queued` someone waiting behind the van ahead of the car; `going_round` the car
-// has started round it (it is executing a law that goes round, and has moved across or past where
-// it waits), and carries on; `go` it goes round now (going round, or the way clear with nobody
-// waiting ahead of it), and then `detour` is the way round in route arc lengths (sim/controller.js
-// detourAt); `wait` it waits behind it instead. Or null.
-function doubleParked(world, p, frontS, lane, executing) {
-  const { ego, route, map } = world,
-    vans = world.doubleParked;
-  if (!vans?.vans.length) return null;
-  for (const d of vans.vans) {
-    if (Math.hypot(d.x - ego.x, d.y - ego.y) > VAN_LOOK_M + 30) continue;
-    const i = route.edges.findIndex((id, k) => id === d.edge && route.edgeStarts[k + 1] > frontS - ego.spec.length);
-    if (i < 0) continue;
-    const e = map.edges.get(d.edge),
-      el = map.lane(e.id, 0),
-      base = route.edgeStarts[i + 1] - e.length;
-    // (along the route: where the edge puts it, as projected onto the route's own line)
-    const toRoute = (x) => {
-      const est = base + x,
-        q = pointAt(el.pts, el.cum, (x * el.length) / e.length),
-        r = projectPoint(route.pts, route.cum, q);
-      return r && r.distance < 1.5 && Math.abs(r.s - est) < 15 ? r.s : est;
-    };
-    const rear = toRoute(d.rear),
-      to = toRoute(d.detour.to),
-      stop = toRoute(d.wait);
-    if (frontS > to || rear - frontS > VAN_LOOK_M) continue;
-    if (frontS < rear && !world.sees(ego, d.van)) continue;
-    // (what is coming the other way, as far as the car can see: further than the traffic it follows)
-    const sFront = frontS - base,
-      others = world
-        .visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M + 10)
-        .filter((o) => o !== ego && !o.parked && o.kind !== "pedestrian");
-    const way = wayRound(world, d, sFront, ego.v, others, vans.sightFor(d));
-    const queued = queuedAhead(world, d, sFront, ego, others);
-    const across = p.lateral - (lane?.center ?? 0) < -0.3;
-    const going = executing?.law?.detour?.id === d.id && (across || frontS > stop + 0.5);
-    const go = going || (way.clear && !queued);
-    return {
-      id: d.id,
-      van_id: d.van.id,
-      kind: d.name || VAN_NAME,
-      ...(d.truck ? { truck: true, crew_in_road: way.crew ? way.crew.id : null } : {}),
-      gap_m: rear - frontS,
-      beside: frontS > rear,
-      stop_s_route: stop,
-      bumper_to_stop_m: stop - frontS,
-      way: {
-        clear: way.clear,
-        sees_far_enough: way.sees_far_enough,
-        need_s: way.need_s,
-        oncoming: way.oncoming ? { id: way.oncoming.vehicle.id, eta_s: way.oncoming.eta_s } : null,
-      },
-      queued: queued ? queued.id : null,
-      going_round: going,
-      go,
-      wait: !go,
-      limit_mps: PASS_MPS,
-      detour: go
-        ? {
-            id: d.id,
-            from: toRoute(d.detour.from),
-            full: toRoute(d.detour.full),
-            back: toRoute(d.detour.back),
-            to,
-            shift: d.detour.shift,
-          }
-        : null,
-    };
-  }
-  return null;
 }
 
 // A cyclist riding in the car's lane ahead, on a two-way street with one lane each way, that the car
@@ -3245,24 +3162,7 @@ export function desiredSpeed(snap) {
     }
   } else if (lz && closureSpeed(lz) <= v + 0.05)
     reasons.push(lz.side === "closed" ? "lane closed: merge in turn" : "lane closure: take turns at the merge");
-  // a double-parked van with no way round it yet: wait behind it
-  const dp = snap.double_parked;
-  if (dp?.wait && dp.bumper_to_stop_m > -1) {
-    const room = dp.bumper_to_stop_m;
-    const vv = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
-    const what = dp.truck ? "a garbage truck" : "a double-parked van";
-    if (vv < v) {
-      v = vv;
-      reasons.push(
-        dp.queued
-          ? `waiting in turn behind ${what}`
-          : dp.crew_in_road
-            ? "garbage truck: wait while its crew is in the road"
-            : `${what.slice(2)}: wait for the way round to clear`,
-      );
-    }
-  } else if (dp?.go && vanSpeed(dp) <= v + 0.05)
-    reasons.push(`going round ${dp.truck ? "a garbage truck" : "a double-parked van"}`);
+  for (const cap of TARGET.parking) v = cap(snap, v, reasons, { decel, stopSpeedFor });
   // a signal it could not clear for traffic past the junction: wait at the line
   const jb = snap.junction_box;
   if (jb) {
@@ -3336,13 +3236,6 @@ function closureSpeed(lz) {
   return Math.sqrt(lz.limit_mps * lz.limit_mps + 2 * comfort().decel * 0.6 * (lz.bumper_to_merge_m - 5));
 }
 
-// The speed to go round a double-parked van at (see doubleParked), from where the car would wait
-// behind it, or, short of that, the speed from which it slows to it gently by then.
-function vanSpeed(dp) {
-  if (dp.bumper_to_stop_m <= 0) return dp.limit_mps;
-  return Math.sqrt(dp.limit_mps * dp.limit_mps + 2 * PASS_DECEL * dp.bumper_to_stop_m);
-}
-
 // Stopped at an all-way stop, waiting for a vehicle that goes first (a car that overshot the line
 // still waits there; one well into the junction is clearing it).
 export function waitsItsTurn(i) {
@@ -3387,7 +3280,10 @@ export function hazardFlags(snap) {
   if (snap.roadside_stop) f.push("roadside vehicle");
   if (snap.work_zone) f.push("work zone");
   if (snap.lane_closure) f.push("lane closure");
-  if (snap.double_parked) f.push("double-parked van");
+  for (const flag of HAZARD.parking) {
+    const label = flag(snap);
+    if (label) f.push(label);
+  }
   if (snap.snow_plow) f.push("snow plow");
   if (snap.cyclist_pass) f.push("cyclist ahead");
   if (snap.crossing_guard) f.push("crossing guard");
