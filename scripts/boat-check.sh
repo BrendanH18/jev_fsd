@@ -282,7 +282,8 @@ if [ -n "$base" ]; then
     xargs -0r rm -rf -- <"$push/paths"
     junk
     untar
-    git update-index --add --remove --replace -z --stdin <"$push/paths"
+    # A refusal (such as a file under a directory that became a symlink) fails the tree check below.
+    git update-index --add --remove --replace -z --stdin <"$push/paths" || true
 else
     # Replace everything but .git and the installed dependencies.
     find "$repo" -mindepth 1 -maxdepth 1 ! -name .git ! -name node_modules ! -name .venv -exec rm -rf {} +
