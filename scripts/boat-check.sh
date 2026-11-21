@@ -2,7 +2,7 @@
 # Run checks in this worktree's own long-lived Boat sandbox.
 #
 #   scripts/boat-check.sh            lint, Python tests, offline Jev requests, fixture check
-#   scripts/boat-check.sh --full     also every scripts/test_*.mjs, one at a time (CI's limit)
+#   scripts/boat-check.sh --full     also every scripts/test_*.mjs, in parallel (scripts/node_checks.mjs)
 #   scripts/boat-check.sh -- CMD...  run CMD in the checkout instead
 #   scripts/boat-check.sh --save     rebuild the warm snapshot jev-fsd-warm from origin's default
 #                                    branch, in a fresh sandbox that runs no worktree code
@@ -14,19 +14,27 @@
 # of the repository with its dependencies), or a bare one when there is no snapshot, and
 # records its id in this worktree's git directory. Later checks reuse it: each pushes the
 # working tree to a fresh directory, makes the clone at /home/user/jev_fsd match it exactly
-# (git's index included) and runs there with `boat exec --timeout 0`. Boat's auto-stop is a
-# deadline, not an idle timer, so it is kept two hours ahead while a check runs and set to
-# JEV_BOAT_IDLE seconds after it ends (default 2700): a forgotten sandbox stops by itself, and
-# the next check resumes it. One sandbox per worktree; agents sharing a worktree each set
-# JEV_BOAT_SLOT. Overrides: JEV_BOAT_TYPE (default), JEV_BOAT_SNAPSHOT. See
-# docs/reference/development.md#boat-checks.
+# (git's index included) and runs there with `boat exec --timeout 0`. One sandbox per worktree;
+# agents sharing a worktree each set JEV_BOAT_SLOT.
+#
+# Sizes (owner decision, 2026-11-21, measured in docs/reference/development.md#boat-checks):
+# --full runs on xlarge (16 vCPUs) with one Node check per vCPU (JEV_BOAT_JOBS); the plain check
+# and -- CMD run on default (4 vCPUs), which they gain nothing over. A sandbox of the other size
+# is stopped and resumed at this run's size (one start). Boat's auto-stop is a deadline, not an
+# idle timer, so it is kept two hours ahead while a check runs; when the check ends, xlarge stops
+# at once (idle time there costs 5.6 times default's) and smaller sizes stop 15 minutes later, so
+# back-to-back checks reuse them. The next check resumes a stopped sandbox. Overrides:
+# JEV_BOAT_TYPE (the size, for every mode), JEV_BOAT_JOBS, JEV_BOAT_IDLE (seconds; 0 stops at
+# once), JEV_BOAT_SNAPSHOT.
 main() {
 set -euo pipefail
 export BOAT_NO_UPDATE=1
 snapshot=${JEV_BOAT_SNAPSHOT:-jev-fsd-warm}
-type=${JEV_BOAT_TYPE:-default}
-idle=${JEV_BOAT_IDLE:-2700}
+type=${JEV_BOAT_TYPE:-}   # empty: full_type for --full, default for everything else
+full_type=xlarge
+idle=${JEV_BOAT_IDLE:-}   # empty: by size, below
 slot=${JEV_BOAT_SLOT:-main}
+jobs=${JEV_BOAT_JOBS:-}   # --full's parallel Node checks; empty means one per vCPU
 budget=7200   # auto-stop is kept this far ahead while a check runs
 clone_url=${JEV_BOAT_CLONE_URL:-https://github.com/BrendanH18/jev_fsd.git}
 mode=checks action=run cmd=""
@@ -40,13 +48,20 @@ while [ $# -gt 0 ]; do
             [ -n "$cmd" ] || { echo "boat-check: -- needs a command" >&2; exit 2; }
             mode=cmd
             break ;;
-        -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "boat-check: unknown option $1 (try --help)" >&2; exit 2 ;;
     esac
     shift
 done
 [ "$action" = run ] || [ "$mode" = checks ] || { echo "boat-check: --$action takes no --full or command" >&2; exit 2; }
+[ -n "$type" ] || { if [ "$mode" = full ]; then type=$full_type; else type=default; fi; }
+case "$type" in small|default|large|xlarge) ;; *) echo "boat-check: JEV_BOAT_TYPE is small, default, large or xlarge" >&2; exit 2 ;; esac
+# Idle time on a big machine eats the included hours, so xlarge stops as soon as its check ends
+# (the next one resumes it) and the others stop after 15 minutes without a check.
+if [ -z "$idle" ]; then case "$type" in xlarge) idle=0 ;; *) idle=900 ;; esac; fi
+case "$idle" in *[!0-9]*|"") echo "boat-check: JEV_BOAT_IDLE is a number of seconds (0 stops the sandbox when the check ends)" >&2; exit 2 ;; esac
 case "$slot" in *[!A-Za-z0-9_-]*|"") echo "boat-check: JEV_BOAT_SLOT may use letters, digits, - and _" >&2; exit 2 ;; esac
+case "$jobs" in ""|[1-9]|[1-9][0-9]) ;; *) echo "boat-check: JEV_BOAT_JOBS is a whole number from 1 to 99" >&2; exit 2 ;; esac
 case "$cmd" in
     *verify_jev.py*)
         case "$cmd" in *--offline*) ;; *)
@@ -75,10 +90,15 @@ stop_keepalive() {   # the keepalive loop and its sleep
 cleanup() {
     set +e
     stop_keepalive
-    # Leave auto-stop JEV_BOAT_IDLE seconds from now, whatever happened to the check.
+    # Leave auto-stop $idle seconds from now, or stop now when that is 0, whatever happened to the check.
     if [ "$extended" = 1 ] && [ -n "$id" ]; then
-        boat extend "$id" --ttl "$idle" --json >/dev/null 2>&1 \
-            || echo "boat-check: couldn't reset auto-stop on $id: boat extend $id --ttl $idle" >&2
+        if [ "$idle" = 0 ]; then
+            boat stop "$id" --json >/dev/null 2>&1 \
+                || echo "boat-check: couldn't stop $id: boat stop $id" >&2
+        else
+            boat extend "$id" --ttl "$idle" --json >/dev/null 2>&1 \
+                || echo "boat-check: couldn't reset auto-stop on $id: boat extend $id --ttl $idle" >&2
+        fi
     fi
     # The --save build sandbox is deleted, or only stopped while a save from it may still be
     # running (an unfinished save needs its source; a stopped sandbox costs nothing).
@@ -130,19 +150,26 @@ start_failed() {
         exit 3 ;;
     esac
     echo "boat-check: $1 failed:" >&2
-    printf '%s\n' "$2" | jq -r 'select(.event == "error") | .error' 2>/dev/null >&2 || printf '%s\n' "$2" >&2
+    local why
+    why=$(printf '%s\n' "$2" | jq -r 'select(.event == "error") | .error' 2>/dev/null || true)
+    printf '%s\n' "${why:-$2}" >&2
     echo "boat-check: boat limits shows the starts left today; tell the owner rather than retrying" >&2
     exit 3
 }
 # With --fail-fast, a start that finds no ready machine creates nothing and isn't counted against
-# the start limits, so retry it a few times.
+# the start limits, so retry it a few times. A failed attempt can leave Boat finishing a resume for
+# a moment ("resume already in progress"), which a retry also waits out.
 fast_start() {   # fast_start WHAT boat ARGS...; leaves the output in $out
     local what=$1 attempt
     shift
     for attempt in 1 2 3 4 5 6; do
         if out=$("$@" --fail-fast --json 2>&1); then return 0; fi
-        case "$out" in *no_ready_machine*) ;; *) return 1 ;; esac
-        [ "$attempt" = 6 ] || { echo "boat-check: no machine ready for $what; trying again in 10 s" >&2; sleep 10; }
+        case "$out" in
+            *no_ready_machine*) [ "$attempt" = 6 ] || echo "boat-check: no machine ready for $what; trying again in 10 s" >&2 ;;
+            *"already in progress"*) [ "$attempt" = 6 ] || echo "boat-check: Boat is still busy with $what; trying again in 10 s" >&2 ;;
+            *) return 1 ;;
+        esac
+        [ "$attempt" = 6 ] || sleep 10
     done
     return 1
 }
@@ -158,10 +185,10 @@ new_sandbox() {   # new_sandbox NAME [boat new ARGS...]: prints the new sandbox'
 }
 
 # Runs in the sandbox as `bash -c`: $1 mode (checks, full, cmd or build), $2 push directory,
-# $3 command, $4 clone URL.
+# $3 command, $4 clone URL, $5 how many Node checks --full runs at once (empty: one per vCPU).
 # shellcheck disable=SC2016
 remote='set -euo pipefail
-mode=$1 push=$2 cmd=$3 clone_url=$4
+mode=$1 push=$2 cmd=$3 clone_url=$4 jobs=${5:-}
 repo=/home/user/jev_fsd
 export PATH="$HOME/.local/node22/bin:$HOME/.local/bin:$PATH"
 say() { echo "boat-check: $*" >&2; }
@@ -193,7 +220,7 @@ deps() {   # Biome when the lock file changed, and the Python environment
         cp package-lock.json node_modules/.boat-check-lock
     fi
     uv sync --locked --quiet
-    say "node $(node --version), $(uv run --locked python --version), $(nproc) vCPUs"
+    say "node $(node --version), $(uv run --locked python --version), $(nproc) vCPUs ($(lscpu | sed -n "s/^Model name:[[:space:]]*//p"))"
 }
 
 if [ "$mode" = build ]; then   # --save: the default branch and its dependencies, nothing else
@@ -208,6 +235,7 @@ fi
 # Make the clone match the pushed tree exactly: replace everything but .git and the installed
 # dependencies (deleted files go too), and make git index exactly the pushed files, so
 # `git ls-files` lists the same files as on the computer that ran the script.
+t_sync=$SECONDS
 find "$repo" -mindepth 1 -maxdepth 1 ! -name .git ! -name node_modules ! -name .venv -exec rm -rf {} +
 find "$push" -mindepth 1 -maxdepth 1 -exec mv -t "$repo" {} +
 rmdir "$push"
@@ -217,22 +245,39 @@ git read-tree --empty
 find . \( -path ./.git -o -path ./node_modules -o -path ./.venv \) -prune -o \( -type f -o -type l \) -printf "%P\0" \
     | git --literal-pathspecs add -f --pathspec-from-file=- --pathspec-file-nul
 deps
+say "tree and dependencies ready in $((SECONDS - t_sync)) s"
 
 status=0
 case "$mode" in
     cmd) ( eval "$cmd" ) || status=$? ;;
     *)
-        failed=()
-        step() { say "== $1"; if ! ( eval "$2" ); then failed+=("$1"); fi; }
+        failed=() times=()
+        step() {
+            local t0=$SECONDS
+            say "== $1"
+            if ! ( eval "$2" ); then failed+=("$1"); fi
+            times+=("$((SECONDS - t0)) s  $1")
+        }
+        python_tests="JEV_REQUIRE_NODE=1 uv run --locked python -m unittest discover -s tests"
         step "lint and format" "uv run --locked ruff check && uv run --locked ruff format --check && npm run lint"
-        step "Python tests" "JEV_REQUIRE_NODE=1 uv run --locked python -m unittest discover -s tests"
+        [ "$mode" = full ] || step "Python tests" "$python_tests"
         step "offline Jev requests" "uv run --locked scripts/verify_jev.py --offline"
         step "Jev fixtures" "node --experimental-default-type=module scripts/build_jev_fixtures.mjs --check"
         if [ "$mode" = full ]; then
-            for f in scripts/test_*.mjs; do
-                step "$f" "timeout --kill-after=10s 360s node --experimental-default-type=module $f"
-            done
+            # The Python tests run alongside the Node checks, and their output is printed after them.
+            say "== Python tests (alongside the Node checks)"
+            py_log=$(mktemp)
+            ( t0=$SECONDS rc=0; ( eval "$python_tests" ) >"$py_log" 2>&1 || rc=$?
+              echo "$((SECONDS - t0))" >"$py_log.s"; exit "$rc" ) &
+            py_pid=$!
+            step "Node checks" "node scripts/node_checks.mjs --jobs ${jobs:-$(nproc)} --timeout 360"
+            py_rc=0; wait "$py_pid" || py_rc=$?
+            say "== Python tests (output)"; cat "$py_log" >&2
+            [ "$py_rc" = 0 ] || failed+=("Python tests")
+            times+=("$(cat "$py_log.s" 2>/dev/null || echo "?") s  Python tests (alongside the Node checks)")
+            rm -f "$py_log" "$py_log.s"
         fi
+        say "times:"; printf "  %s\n" "${times[@]}" >&2
         if [ "${#failed[@]}" -gt 0 ]; then
             say "failed:"; printf "  %s\n" "${failed[@]}" >&2
             status=1
@@ -273,7 +318,7 @@ run_remote() {
     ( while sleep 1800; do boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1; done ) </dev/null >/dev/null 2>&1 &
     keepalive=$!
     set +e
-    boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" | frames | unframe
+    boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" "$jobs" | frames | unframe
     codes=("${PIPESTATUS[@]}")
     set -e
     stop_keepalive
@@ -333,10 +378,21 @@ case "$action" in
 esac
 
 # Find this slot's sandbox and get it running, or make one.
+t0=$SECONDS
 state=""
 if [ -n "$id" ]; then
     state=$(sandbox_state "$id") || { echo "boat-check: try again once Boat answers" >&2; exit 1; }
 fi
+# A sandbox of another size is stopped and resumed at this run's size (one start, as any resume).
+case "$state" in provisioned|cloning|ready|idle|running)
+    size=$(boat info "$id" --json 2>/dev/null | jq -r '.sandbox.type // ""') && [ -n "$size" ] \
+        || { echo "boat-check: couldn't read the size of $id from Boat; try again once Boat answers" >&2; exit 1; }
+    if [ "$size" != "$type" ]; then
+        echo "boat-check: $id is $size; stopping it to resume as $type" >&2
+        boat stop "$id" --json >/dev/null || { echo "boat-check: couldn't stop $id: boat stop $id" >&2; exit 1; }
+        state=$(sandbox_state "$id") || exit 1
+    fi ;;
+esac
 if [ "$state" = stopping ]; then
     for _ in $(seq 1 24); do sleep 5; state=$(sandbox_state "$id") || exit 1; [ "$state" = stopping ] || break; done
 fi
@@ -344,8 +400,8 @@ case "$state" in
     provisioned|cloning|ready|idle|running) ;;
     stopping) echo "boat-check: $id is still stopping; try again in a minute" >&2; exit 2 ;;
     stopped)
-        echo "boat-check: resuming $id" >&2
-        if ! fast_start "resuming $id" boat resume "$id" --no-env --ttl "$budget"; then
+        echo "boat-check: resuming $id as $type" >&2
+        if ! fast_start "resuming $id" boat resume "$id" --no-env --type "$type" --ttl "$budget"; then
             case "$out" in
                 *snapshot_data_expired*) echo "boat-check: $id can't be resumed (its data expired); making a new one" >&2; state="" ;;
                 *) start_failed "resuming $id" "$out" ;;
@@ -373,11 +429,13 @@ if [ -z "$state" ]; then
 fi
 boat extend "$id" --ttl "$budget" --json >/dev/null
 extended=1
-echo "boat-check: sandbox $id ($name)" >&2
+echo "boat-check: $type sandbox $id ($name), ready in $((SECONDS - t0)) s" >&2
 
 # Push into a fresh directory; the remote script moves it into the clone.
 push="/home/user/push/$(date +%Y%m%d-%H%M%S)-$$"
+t0=$SECONDS
 boat push "$id" . --to "$push" >/dev/null
+echo "boat-check: pushed the working tree in $((SECONDS - t0)) s" >&2
 status=0
 run_remote "$id" "$mode" "$push" "$cmd" || status=$?
 exit "$status"

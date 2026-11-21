@@ -30,6 +30,14 @@ class ResultsTest(unittest.TestCase):
             "data/results.json or README.md is stale: run uv run scripts/build_results.py",
         )
 
+    def test_recording_facts_keep_all_but_the_drives(self):
+        path = next(build_results.RECORDINGS.glob("jev-arena-*.json.gz"))
+        full, facts = build_results.read_recording(path), build_results.recording_facts(path)
+        self.assertEqual(facts["answered"], build_results.answered_by(full))
+        del full["drives"]
+        self.assertEqual({k: v for k, v in facts.items() if k != "answered"}, full)
+        self.assertIs(build_results.recording_facts(path), facts)
+
     def test_score_inputs_require_saved_measurements(self):
         tape = build_results.read_recording(next(build_results.RECORDINGS.glob("jev-arena-*.json.gz")))
         result = next(iter(tape["results"].values()))

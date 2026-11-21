@@ -31,7 +31,7 @@ Measured on 2026-11-20 at `3ca3178` (#99). How each figure was counted is in the
 | World | 12 neighbourhoods in 11 cities, 60 challenges, 2 road tests, 41 opt-in world features (42 free-drive switches); **9 of the 41 are on the feature registry** |
 | Drivers | Rules, the cautious agent, decision models (Jev and others), LLMs through any OpenAI-compatible endpoint or a major lab's own API (Claude through the Claude Platform), your own module |
 | Public demo | Live on GitHub Pages: Rules and the browser agents drive; the results leaderboard; one keyless model replay (Jev, **Right on red**) |
-| Checks | 324 Python tests, 161 Node checks in six shards, four browser jobs, blocking Ruff and Biome lint; the city matrix weekly; the interaction soak weekly, report-only |
+| Checks | 325 Python tests, 162 Node checks in six shards, four browser jobs, blocking Ruff and Biome lint; the city matrix weekly; the interaction soak weekly, report-only |
 | Tools | 100 offline reports on saved runs and a matched comparison of two runs (`scripts/inspect_run.py`) |
 | Seeded benchmark, features off | Rules 12/12 on Kitsilano dry, on every change |
 | Seeded routes, features on (`city`) | Rules 48/48 on Kitsilano in four weathers, 22/22 on the other eleven maps; on held-out routes no fix was tuned against, Kitsilano dry bare 10/12 and city 8/12 (14 November, not fixed by design) |
@@ -341,6 +341,9 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   browser suites take up to seventeen. Split both across parallel jobs.
   *Done 14 November:* six Node shards balanced by measured time (about 1.5 minutes each instead
   of ten in a row), a Python job, and one job per browser suite (four since #92).
+  *21 November:* `scripts/boat-check.sh --full` runs the Node checks in parallel on an `xlarge`
+  Boat sandbox (about 100 s instead of 743 s one at a time), `scripts/test_drive_lab.mjs` drives its
+  arena on four worker threads (102 s down to 32 s) and the Python tests take 25 s instead of 72 s.
 - [x] **3.8 Keep the duplicated rules in step.** (S) The sharp-turn rule and the lane-join geometry
   each exist in Python and in JavaScript. Add a check that runs both on the same cases.
   *Done 14 November:* `tests/test_parity.py` compares both sides on

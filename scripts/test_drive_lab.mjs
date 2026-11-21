@@ -1,8 +1,8 @@
 // Regression coverage for routing, authored hazards, agent safety and replay branching.
 import assert from "node:assert/strict";
-import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
-const { MapData, cumulative } = await import("../static/js/map/mapdata.js");
+const { cumulative } = await import("../static/js/map/mapdata.js");
+const { load } = await import("./drive_lab_maps.mjs");
 const { browserRoute, browserDrives } = await import("../static/js/demo/routing.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
@@ -14,49 +14,6 @@ const { rng } = await import("../static/js/common.js");
 const { validAgentChoice, registerAgent } = await import("../static/js/brain/registry.js");
 const { driveLink } = await import("../static/js/lab/share.js");
 const { validateEvaluation, EVALUATION_SCHEMA } = await import("../static/js/lab/history.js");
-const names = {
-  saskatoon: "ca5573a8d934",
-  kitsilano: "623b012bc8b5",
-  mount_pleasant: "7165f1c807a8",
-  victoria: "d7454a9751b7",
-  montreal: "bb9df59633e0",
-  toronto: "4a96d42cb3f2",
-  ottawa: "d25b07def0d2",
-  calgary: "a53c5bcf6438",
-  edmonton: "3e794edbefcb",
-  winnipeg: "19bb885c9cae",
-  halifax: "49db0d437c8c",
-};
-// (with its bus routes, crosswalks, school and playground zones, level crossings, speed humps and scramble crossings, as the server and the demo serve it)
-const load = (id) => {
-  const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url)));
-  const transit = new URL(`../data/maps/${names[id]}.transit.v1.json`, import.meta.url);
-  if (fs.existsSync(transit)) pack.transit = JSON.parse(fs.readFileSync(transit));
-  // (crossings v2, with Ontario's pedestrian crossovers, where a map has it)
-  const crossings = [2, 1]
-    .map((v) => new URL(`../data/maps/${names[id]}.crossings.v${v}.json`, import.meta.url))
-    .find((u) => fs.existsSync(u));
-  if (crossings) pack.crossings = JSON.parse(fs.readFileSync(crossings));
-  const zones = new URL(`../data/maps/${names[id]}.zones.v1.json`, import.meta.url);
-  if (fs.existsSync(zones)) pack.zones = JSON.parse(fs.readFileSync(zones));
-  const rail = new URL(`../data/maps/${names[id]}.rail.v1.json`, import.meta.url);
-  if (fs.existsSync(rail)) pack.rail = JSON.parse(fs.readFileSync(rail));
-  // (and speed humps and the like, and scramble crossings)
-  for (const name of [
-    "calming",
-    "scrambles",
-    "buslanes",
-    "restrictions",
-    "contraflow",
-    "driveways",
-    "parks",
-    "bridges",
-  ]) {
-    const url = new URL(`../data/maps/${names[id]}.${name}.v1.json`, import.meta.url);
-    if (fs.existsSync(url)) pack[name] = JSON.parse(fs.readFileSync(url));
-  }
-  return new MapData(pack);
-};
 let assertions = 0;
 function test(name, fn) {
   fn();
@@ -106,8 +63,41 @@ test("agent validation rejects ineligible manoeuvres and malformed motions", () 
   assert.throws(() => registerAgent({ id: "rules", label: "Overwrite", create: () => ({}) }));
 });
 
+// Every challenge with Rules and the cautious agent: the slowest part of this check, so a few worker
+// threads (scripts/drive_lab_arena.mjs) drive the challenges in parallel, each taking the next as
+// it finishes one. The checks below run here, in challenge order.
+async function driveArena(threads) {
+  const { Worker } = await import("node:worker_threads");
+  const byIndex = new Array(CHALLENGES.length);
+  let next = 0;
+  const workers = [];
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(threads, CHALLENGES.length) }, () => {
+        const worker = new Worker(new URL("./drive_lab_arena.mjs", import.meta.url));
+        workers.push(worker);
+        return new Promise((resolve, reject) => {
+          const give = () => (next < CHALLENGES.length ? worker.postMessage(next++) : resolve());
+          worker.on("message", ({ index, results }) => {
+            byIndex[index] = results;
+            give();
+          });
+          worker.on("error", reject);
+          worker.on("exit", (code) => reject(new Error(`an arena worker stopped (exit code ${code})`)));
+          give();
+        });
+      }),
+    );
+  } finally {
+    await Promise.all(workers.map((w) => w.terminate()));
+  }
+  return byIndex;
+}
+const { availableParallelism } = await import("node:os");
+const arenaDrives = await driveArena(Math.max(1, Math.min(4, availableParallelism())));
+
 const arenaResults = [];
-for (const challenge of CHALLENGES) {
+for (const [index, challenge] of CHALLENGES.entries()) {
   const map = load(challenge.map),
     a = challengeScenario(map, challenge),
     b = challengeScenario(map, challenge);
@@ -157,8 +147,8 @@ for (const challenge of CHALLENGES) {
       assert.equal(a.oncoming.then, a.route.edges[1]);
     }
   });
-  for (const brain of ["rules", "cautious"]) {
-    const result = await evaluateChallenge(map, challenge, { brain });
+  for (const [k, brain] of ["rules", "cautious"].entries()) {
+    const result = arenaDrives[index][k];
     arenaResults.push(result);
     test(`${challenge.id}: ${brain} completes a clean authored drive`, () => {
       assert.ok(result.pass, JSON.stringify(result.failures));
