@@ -1,7 +1,7 @@
 // A car stopped at the hold line behind a traffic car reversing into a space (sim/parkers.js) has
 // nowhere to pull over to: the room between them is the parker's. When an emergency vehicle comes up
 // behind and goes round, holding that stop is yielding, as in a queue behind a stopped car
-// (World.parkerQueue in auditEmergency). Winnipeg's city smoke s1-1 counted it as a failure to yield.
+// (World.heldInQueue in auditEmergency). Winnipeg's city smoke s1-1 counted it as a failure to yield.
 // Released from that queue just before the vehicle passes, the car has as long to pull over as it had
 // from the call. Without the parker, staying in the lane as the vehicle passes still fails. Creeping
 // the last metre or two up to that hold line when the call comes (Kitsilano's city suite at 06:30,
@@ -94,7 +94,7 @@ function pass({ parker, phase = "reverse", hold = 0.2, parkedAt = Infinity, cree
     Object.assign(ev, { x: 40 + k * 3, y: k > 12 ? 1.75 : -1.75, psi: 0, v: 12, blockedBy: null, blockedFor: 0 });
     world.auditEmergency(world.roadInfo());
   }
-  return { failed: world.violations.failed_to_yield, queued: parker ? (world.parkerQueue(FRONT)?.id ?? null) : null };
+  return { failed: world.violations.failed_to_yield, queued: parker ? (world.heldInQueue(FRONT)?.id ?? null) : null };
 }
 
 const held = pass({ parker: true });

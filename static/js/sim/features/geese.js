@@ -27,7 +27,11 @@ export default {
   seen: "geeseSeen",
   calls: "geeseCalls",
   build: (world, { enabled, seed }) => new Geese(world, { enabled, seed }),
-  metric: { at: "balls", name: "wildlife_conflicts", failure: "drove into or too close to geese crossing the road" },
+  metric: {
+    at: "streetHazards",
+    name: "wildlife_conflicts",
+    failure: "drove into or too close to geese crossing the road",
+  },
   // (waited for as a gaggle, never followed or passed; the car is at fault for one it drives into, as for
   // a pedestrian)
   obstacle: { test: isGoose, likePedestrian: true },
@@ -40,14 +44,14 @@ export default {
     if (world.geese?.enabled) world.geese.step(dt);
   },
   audit: {
-    at: "balls",
+    at: "streetHazards",
     run(world) {
       if (world.geese.enabled) auditGeese(world);
     },
   },
 
   sense: {
-    at: "balls",
+    at: "streetHazards",
     run(world, snap, { p, frontS, lane }) {
       if (world.geese?.enabled)
         snap.geese_crossing = world.geese.gaggles.length ? geeseCrossing(world, p, frontS, lane) : null;
@@ -55,14 +59,14 @@ export default {
   },
   // (coming up to geese by the road, or crossing it)
   limit: {
-    at: "balls",
+    at: "streetHazards",
     run(snap) {
       if (snap.geese_crossing?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.geese_crossing.limit_mps);
     },
   },
   // Stop short of them until the last is off the road.
   target: {
-    at: "balls",
+    at: "streetHazards",
     run(snap, v, reasons, { decel, stopSpeedFor }) {
       const gc = snap.geese_crossing;
       if (gc?.wait) {
@@ -75,12 +79,12 @@ export default {
       return v;
     },
   },
-  hazard: { at: "balls", run: (snap) => (snap.geese_crossing ? "geese" : null) },
+  hazard: { at: "streetHazards", run: (snap) => (snap.geese_crossing ? "geese" : null) },
 
   // Slow while they come up to the kerb, and stop short of their way across, waiting until the last is
   // off the road, once they cross.
   candidates: {
-    at: "balls",
+    at: "streetHazards",
     run({ snap, laneUntil, inLane, approach, stopAt, FRONT }, out) {
       const gc = snap.geese_crossing;
       if (gc && (!gc.wait || gc.bumper_to_stop_m > 0.3)) {
@@ -102,7 +106,7 @@ export default {
   },
   // Where the car stops for them: a metre past it is still short of their way.
   sim: {
-    at: "balls",
+    at: "streetHazards",
     run(_world, snap) {
       const geeseStop = snap.geese_crossing?.wait ? snap.geese_crossing.stop_s_route : null;
       if (geeseStop === null) return null;
@@ -120,7 +124,7 @@ export default {
   },
 
   state: {
-    at: "balls",
+    at: "streetHazards",
     run(snap, state) {
       if (snap.geese_crossing) {
         const g = snap.geese_crossing;

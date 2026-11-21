@@ -105,7 +105,7 @@ export default {
 
   // The car's sensing: a narrowed stretch to take turns through, and corners they hide.
   sense: {
-    at: "balls",
+    at: "streetHazards",
     run(world, snap, { p, frontS }) {
       if (world.snowbanks?.enabled) snap.snowbank = snowbankAhead(world, p, frontS);
     },
@@ -114,7 +114,7 @@ export default {
   detour: { at: "contraflow", run: (snap) => snap.snowbank?.narrowing?.detour },
   // (through a narrowed stretch, and up to a corner a snowbank hides)
   limit: {
-    at: "balls",
+    at: "streetHazards",
     run(snap) {
       if (snap.snowbank?.narrowing?.limit_mps != null)
         snap.limit = Math.min(snap.limit, snap.snowbank.narrowing.limit_mps);
@@ -124,7 +124,7 @@ export default {
   // Wait short of the one-car stretch while it is the oncoming car's turn; `limit` is already down to the
   // speed through it, and to the creep up to a hidden corner.
   target: {
-    at: "balls",
+    at: "streetHazards",
     run(snap, v, reasons, { decel, stopSpeedFor }) {
       const nb = snap.snowbank?.narrowing;
       if (nb?.wait) {
@@ -177,7 +177,7 @@ export default {
     !!(detour?.id?.startsWith("sb:") && stopS < snap.snowbank.narrowing.entry_s_route),
   // No manoeuvre may go a metre past where the car waits its turn (but never into the stretch itself).
   sim: {
-    at: "balls",
+    at: "streetHazards",
     run(_world, snap) {
       const narrowStop = snap.snowbank?.narrowing?.wait
         ? Math.min(snap.snowbank.narrowing.stop_s_route + 1, snap.snowbank.narrowing.entry_s_route ?? Infinity)
@@ -256,7 +256,7 @@ export default {
   // it is its turn (`hold`, once it could stop there: otherwise it has the way); and, finding what is in its
   // way, the line it will keep to where that is (`lineAt`, `kept`).
   trafficLane: {
-    at: "parkers",
+    at: "late",
     run(world, n, front, _busy, dt, { offset, pursuit }) {
       const sb = world.snowbanks?.narrowings.length && !n.transit?.tram ? snowbankYield(world, n, front) : null;
       const sbBase = offset,

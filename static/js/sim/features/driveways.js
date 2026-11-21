@@ -36,11 +36,8 @@ export default {
     predict: reverserBoxAt,
     visible: (world, observer, o) => !(world.hazards && reverserHidden(world, observer, o)),
   },
-  stepAfterTraffic: {
-    at: "beforeBalls",
-    run(world, fleet, dt) {
-      if (world.driveways?.enabled) world.driveways.step(dt, fleet);
-    },
+  stepAfterTraffic(world, fleet, dt) {
+    if (world.driveways?.enabled) world.driveways.step(dt, fleet);
   },
   audit: {
     at: "driveways",

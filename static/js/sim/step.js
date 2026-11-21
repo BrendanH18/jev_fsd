@@ -9,7 +9,6 @@ import { hooks } from "./features/index.js";
 // after it, before the people on foot.
 const FIRST = hooks("stepBeforeTraffic", "first");
 const BEFORE_TRAFFIC = hooks("stepBeforeTraffic");
-const BEFORE_BALLS = hooks("stepAfterTraffic", "beforeBalls");
 const AFTER_TRAFFIC = hooks("stepAfterTraffic");
 
 export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
@@ -33,10 +32,6 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   fleet.step(dt);
   // (contraflow cyclists, with that option on: sim/contraflow.js)
   if (world.contraflow.enabled) world.contraflow.step(dt);
-  for (const step of BEFORE_BALLS) step(world, fleet, dt);
-  // (a ball rolling out from between parked cars, and the child after it, with that option on:
-  // sim/ball-chase.js; before the crowd steps, so the child runs to where the ball is now)
-  if (world.balls?.enabled) world.balls.step(dt);
   for (const step of AFTER_TRAFFIC) step(world, fleet, dt);
   world.crowd.step(dt);
   world.t += dt;

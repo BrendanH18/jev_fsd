@@ -133,15 +133,11 @@ export class DriveMetrics {
       // (and the registered features' metrics, each only for a drive in which the feature met the car:
       // sim/features/index.js; the car coming near a pothole, say)
       ...featureMetrics(world, v, "driveways"),
-      // (only for a drive in which a ball rolled into the street near the car: sim/ball-chase.js)
-      ...(world.ballsSeen ? { ball_warnings_ignored: v.ball_warnings_ignored || 0 } : {}),
-      ...featureMetrics(world, v, "balls"),
+      ...featureMetrics(world, v, "streetHazards"),
       // (only for a drive a tailgater followed the car in: sim/tailgaters.js)
       ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
       ...featureMetrics(world, v, "tailgaters"),
-      // (only for a drive in which a car signalled to parallel park ahead of the car: sim/parkers.js)
-      ...(world.parkersSeen ? { parking_conflicts: v.parking_conflicts || 0 } : {}),
-      ...featureMetrics(world, v, "parkers"),
+      ...featureMetrics(world, v, "late"),
       // (only for a drive in which the car came up to a junction a police officer directed: sim/traffic-officer.js)
       ...(world.officersSeen ? { officer_violations: v.officer_violations || 0 } : {}),
       off_road_s: r(v.off_road_s),
@@ -205,12 +201,10 @@ export function failures(m) {
   if (m.contraflow_conflicts) f.push("cut off or squeezed a contraflow cyclist");
   if (m.fresh_green_conflicts) f.push("entered on green ahead of a car running the red");
   f.push(...featureFailures(m, "driveways"));
-  if (m.ball_warnings_ignored) f.push("ignored a ball rolling into the street");
-  f.push(...featureFailures(m, "balls"));
+  f.push(...featureFailures(m, "streetHazards"));
   if (m.brake_checks) f.push("braked hard with a tailgater close behind");
   f.push(...featureFailures(m, "tailgaters"));
-  if (m.parking_conflicts) f.push("blocked or went round a car parallel parking");
-  f.push(...featureFailures(m, "parkers"));
+  f.push(...featureFailures(m, "late"));
   if (m.officer_violations) f.push("went on when a police officer signalled stop");
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
   // of the kerb)

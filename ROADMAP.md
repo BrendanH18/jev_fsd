@@ -279,9 +279,8 @@ Each recent feature edited the same core files: `sim/npc.js` (2,499 lines, with 
   ([feature interface](docs/feature-interface.md)). Bare, city, city snow and city rain on Kitsilano
   seed 1, all 62 challenge and road-test drives with Rules and with the cautious agent, and the model
   recording are identical before and after
-  ([record](docs/validation/registry-round2-2026-11-20.md)). Driveway reversers have since moved,
-  bringing the registry to seven features. Next are ball chase and parkers, whose slots the
-  records still use.
+  ([record](docs/validation/registry-round2-2026-11-20.md)). Driveway reversers, ball chase
+  and traffic parking have since moved, bringing the registry to nine features.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step`, the sensing pass and the one-line
   `needsMotionQuestion` test, once the features have moved out of them.
 - [x] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same

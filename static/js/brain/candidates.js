@@ -28,7 +28,6 @@ import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { wheelPoints } from "../sim/potholes.js";
-import { coverAfter } from "../sim/ball-chase.js";
 import {
   TAIL_EASE_MIN_MPS,
   TAIL_EASE_MPS,
@@ -44,17 +43,18 @@ import { PRIORITY_IDS, featureObstacle, hooks } from "../sim/features/index.js";
 const CANDIDATES = {
   restrictions: hooks("candidates", "restrictions"),
   driveways: hooks("candidates", "driveways"),
-  balls: hooks("candidates", "balls"),
+  streetHazards: hooks("candidates", "streetHazards"),
   tailgaters: hooks("candidates", "tailgaters"),
 };
 const PULL_OVER_DETOUR = hooks("pullOverDetour");
-const ADJUST_AFTER_BALLS = hooks("adjust", "balls"),
+const ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
   ADJUST_LAST = hooks("adjust");
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
   first: hooks("sim", "first"),
   driveways: hooks("sim", "driveways"),
-  balls: hooks("sim", "balls"),
+  streetHazards: hooks("sim", "streetHazards"),
+  beforeEmergency: hooks("sim", "beforeEmergency"),
   end: hooks("sim"),
 };
 // The first rejection among checkers `list` for candidate `c`, or null.
@@ -347,12 +347,14 @@ export function sampleCandidates(snap, world) {
       snap,
       world,
       FRONT,
+      horizon: HORIZON_S,
       v,
       limit,
       s,
       laneUntil,
       inLane,
       approach,
+      queue,
       stopAt,
       target,
       shifting,
@@ -502,23 +504,7 @@ export function sampleCandidates(snap, world) {
       });
     }
     for (const add of CANDIDATES.driveways) add(featureCtx, out);
-    // A ball rolled into the street ahead (sim/ball-chase.js): slow to the speed from which the car can
-    // stop short of the gap it came from, where it will be by the end of the prediction, ready for a
-    // child running out after it.
-    const ball = snap.ball_in_road;
-    if (ball?.limit_mps != null && ball.gap_m > 0.3) {
-      out.push({
-        id: "slow_for_ball",
-        laneUntil,
-        law: inLane({
-          kind: "lane",
-          vTarget: Math.min(approach, ball.limit_mps, coverAfter(ball.gap_m, v, HORIZON_S)),
-        }),
-        steer: "hold lane",
-        speed: "slow down, ready to stop for a child running out after the ball",
-      });
-    }
-    for (const add of CANDIDATES.balls) add(featureCtx, out);
+    for (const add of CANDIDATES.streetHazards) add(featureCtx, out);
     // A tailgater close behind and no lane to move right into (sim/tailgaters.js): ease off slightly, and
     // gently, below the target speed, so it can get by and the car has more room ahead.
     const tg = snap.tailgater;
@@ -533,20 +519,6 @@ export function sampleCandidates(snap, world) {
       });
     }
     for (const add of CANDIDATES.tailgaters) add(featureCtx, out);
-    // A car ahead parallel parking (sim/parkers.js): stop well back, at its hold line, short of the room it
-    // reverses into, and wait until it is in (offered once the hold line is nearer than the queue behind it:
-    // until then the car simply follows it).
-    const pa = snap.parking_ahead,
-      parkerAt = pa ? pa.stop_s_route - FRONT - 0.5 : Infinity;
-    if (pa?.wait && pa.bumper_to_stop_m > 0.3 && parkerAt <= queue + 0.5) {
-      out.push({
-        id: "wait_for_parker",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: parkerAt }),
-        steer: "hold lane",
-        speed: "stop well back and wait while the car ahead parallel parks",
-      });
-    }
     // Turning right with a cyclist coming up on the right: wait short of its line of travel.
     const hook = snap.right_hook;
     if (hook && hook.bumper_to_yield_m > 0.3) {
@@ -895,15 +867,9 @@ export function sampleCandidates(snap, world) {
   const emergency = snap.emergency;
   if (emergency && !emergency.lead && emergency.max_speed_mps != null)
     for (const c of list) if (c.law.kind === "lane") c.law.vTarget = Math.min(c.law.vTarget, emergency.max_speed_mps);
-  // A competing stop (for the child, a sign, or a closure) must still anticipate the
-  // ball's falling cover speed, rather than chasing its instantaneous ceiling late.
-  const ball = snap.ball_in_road;
-  if (ball?.limit_mps != null && ball.gap_m > 0) {
-    const cap = coverAfter(ball.gap_m, v, HORIZON_S);
-    for (const c of list) if (c.law.kind === "lane") c.law.vTarget = Math.min(c.law.vTarget, cap);
-  }
   // (and what the registered features ask of every lane manoeuvre, a pothole's speed: sim/features/index.js)
-  for (const adjust of ADJUST_AFTER_BALLS) adjust({ snap, world, s, lateralAt, shifting, detour, passing }, list);
+  for (const adjust of ADJUST_STREET_HAZARDS)
+    adjust({ snap, world, s, lateralAt, shifting, detour, passing, v, horizon: HORIZON_S }, list);
   for (const adjust of ADJUST_LAST) adjust({ snap, world, s, lateralAt, shifting, detour, passing }, list);
   // (well off the lane's centre, nudged over to pass something, it brakes on the line it is on, to the
   // nearest half metre, as with scenery in the lane: steering back while braking hard would swing it
@@ -1068,18 +1034,11 @@ export function simulateAll(candidates, snap, world) {
   const sims = {};
   for (const [slot, list] of Object.entries(SIMS))
     sims[slot] = list.map((prepare) => prepare(world, snap)).filter(Boolean);
-  const checks = [...sims.first, ...sims.driveways, ...sims.balls, ...sims.end];
+  const checks = [...sims.first, ...sims.driveways, ...sims.streetHazards, ...sims.beforeEmergency, ...sims.end];
   const wheelChecks = checks.filter((x) => x.afterLaw),
     routeChecks = checks.filter((x) => x.along),
     nearbyChecks = checks.filter((x) => x.near),
     needWheels = checks.some((x) => x.wheels);
-  // a ball rolled into the street (sim/ball-chase.js): the gap's line, which the car passes no faster
-  // than a crawl while the warning stands
-  const ballLine = snap.ball_in_road?.limit_mps != null ? snap.ball_in_road.stop_s_route : null;
-  const ballCreep = snap.ball_in_road?.creep_mps ?? 0;
-  // a car ahead parallel parking (sim/parkers.js): its hold line (a metre's overshoot, as a short stop
-  // makes), never into the room it reverses into, nor round it (no lane change while behind it)
-  const parkerHold = snap.parking_ahead?.wait ? snap.parking_ahead.stop_s_route + 1 : null;
   for (const c of candidates) {
     const car = world.ego.clone();
     const trace = [[car.x, car.y]];
@@ -1116,7 +1075,6 @@ export function simulateAll(candidates, snap, world) {
       cfCut = false,
       cfMeet = false,
       passesRunner = false,
-      ballFast = false,
       collision = null,
       followerHit = null,
       staticHit = null,
@@ -1127,7 +1085,6 @@ export function simulateAll(candidates, snap, world) {
       lateral = 0,
       headingErr = 0,
       offSteps = 0;
-    let intoParker = false;
     for (const x of checks) x.start();
     const steps = Math.round(HORIZON_S / SIM_DT);
     // a law already executing keeps the frame it was chosen in (its s0)
@@ -1186,10 +1143,6 @@ export function simulateAll(candidates, snap, world) {
         if (cfWait !== null && s + FRONT > cfWait + 0.5) cfCut = true;
         // (and here: across the line is into the junction)
         if (runnerStop !== null && s + FRONT > runnerStop + 0.2) passesRunner = true;
-        // (and past the gap a ball rolled out of, faster than a crawl)
-        if (ballLine !== null && s + FRONT > ballLine && car.v > ballCreep + 1) ballFast = true;
-        // (and a metre past a parking car's hold line)
-        if (parkerHold !== null && s + FRONT > parkerHold) intoParker = true;
         // (and where the registered features' checks look along the route: sim/features/index.js)
         for (const x of routeChecks) x.along(s, FRONT, car);
         // (1.5 m past it, as a short stop overshoots)
@@ -1414,11 +1367,8 @@ export function simulateAll(candidates, snap, world) {
     else if (cfMeet && c.law.kind !== "hard_brake") reject = "passes_contraflow_cyclist_too_close";
     else if (passesRunner && c.law.kind !== "hard_brake") reject = "enters_ahead_of_red_light_runner";
     else if ((reject = rejectBy(sims.driveways, c)));
-    else if (ballFast && c.law.kind !== "hard_brake") reject = "passes_ball_gap_too_fast";
-    else if ((reject = rejectBy(sims.balls, c)));
-    // (nor going round it: no lane change while behind it, sim/parkers.js)
-    else if ((intoParker || (parkerHold !== null && c.change)) && c.law.kind !== "hard_brake")
-      reject = "blocks_parking_car";
+    else if ((reject = rejectBy(sims.streetHazards, c)));
+    else if ((reject = rejectBy(sims.beforeEmergency, c)));
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";

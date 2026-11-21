@@ -1,7 +1,5 @@
 import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
-import { ballInRoad } from "../sim/ball-chase.js";
-import { parkerSensing } from "../sim/parkers.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -159,30 +157,31 @@ import {
 } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
-import { isTrafficObstacle, hooks } from "../sim/features/index.js";
+import { isParkingTraffic, isTrafficObstacle, hooks } from "../sim/features/index.js";
 
 // The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
 const SENSE = {
   driveways: hooks("sense", "driveways"),
-  balls: hooks("sense", "balls"),
-  parkers: hooks("sense", "parkers"),
+  streetHazards: hooks("sense", "streetHazards"),
+  late: hooks("sense", "late"),
 };
 const LIMIT = {
   driveways: hooks("limit", "driveways"),
-  balls: hooks("limit", "balls"),
+  streetHazards: hooks("limit", "streetHazards"),
   parking: hooks("limit", "parking"),
 };
 const TARGET = {
   restrictions: hooks("target", "restrictions"),
   driveways: hooks("target", "driveways"),
-  balls: hooks("target", "balls"),
+  streetHazards: hooks("target", "streetHazards"),
+  beforeEmergency: hooks("target", "beforeEmergency"),
 };
 const HAZARD = {
   driveways: hooks("hazard", "driveways"),
-  balls: hooks("hazard", "balls"),
+  streetHazards: hooks("hazard", "streetHazards"),
   officers: hooks("hazard", "officers"),
-  parkers: hooks("hazard", "parkers"),
+  late: hooks("hazard", "late"),
 };
 // (and how slowly and gently it crosses a junction over what a registered feature makes slippery)
 const TURN_PACE = hooks("turnPace");
@@ -689,13 +688,8 @@ export function buildSnapshot(world, executing = null) {
     }
     const senseCtx = { p, frontS, lane, road, route, visible };
     for (const sense of SENSE.driveways) sense(world, snap, senseCtx);
-    // (a ball rolled into the street ahead, a child maybe after it, with that option on: sim/ball-chase.js)
-    if (world.balls?.enabled) snap.ball_in_road = world.balls.balls.length ? ballInRoad(world, p, frontS) : null;
-    for (const sense of SENSE.balls) sense(world, snap, senseCtx);
-    // (a car ahead parallel parking, and the room it needs behind it, with that option on: sim/parkers.js)
-    if (world.parkers?.enabled)
-      snap.parking_ahead = world.parkers.active.length ? parkerSensing(world, p, frontS) : null;
-    for (const sense of SENSE.parkers) sense(world, snap, senseCtx);
+    for (const sense of SENSE.streetHazards) sense(world, snap, senseCtx);
+    for (const sense of SENSE.late) sense(world, snap, senseCtx);
     // (a police officer directing traffic at the junction ahead, with that option on: sim/traffic-officer.js)
     if (world.officers?.enabled) snap.traffic_officer = snap.intersection?.officer || null;
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
@@ -755,8 +749,7 @@ export function buildSnapshot(world, executing = null) {
           Math.abs(a.lateral - lane.center) <= 1.7 ||
           inOrigin(a) ||
           (a.vehicle.pull && a.vehicle.v > 0.2) ||
-          a.vehicle.parking ||
-          a.vehicle.parker,
+          isParkingTraffic(a.vehicle),
       )
       .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > (Math.PI * 5) / 6))
       // (a double-parked van the car waits behind, short of where it waits, is a stop, not a car to
@@ -776,7 +769,7 @@ export function buildSnapshot(world, executing = null) {
         s: lead.s,
         kind: lead.vehicle.pull
           ? "pulling out"
-          : lead.vehicle.parking || lead.vehicle.parker
+          : isParkingTraffic(lead.vehicle)
             ? "parking car"
             : lead.vehicle.kind === "door"
               ? "open door"
@@ -894,10 +887,7 @@ export function buildSnapshot(world, executing = null) {
   if (snap.contraflow_cyclist?.entry_limit_mps != null)
     snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
   for (const limit of LIMIT.driveways) limit(snap);
-  // (and, having seen a ball roll into the street, no faster than it can stop from short of the gap it
-  // came from until the child after it has come and gone: sim/ball-chase.js)
-  if (snap.ball_in_road?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.ball_in_road.limit_mps);
-  for (const limit of LIMIT.balls) limit(snap);
+  for (const limit of LIMIT.streetHazards) limit(snap);
   // (and going round a cyclist, at the pass speed)
   if (snap.cyclist_pass?.go) snap.limit = Math.min(snap.limit, cyclistPassSpeed(snap.cyclist_pass));
   // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
@@ -3103,20 +3093,8 @@ export function desiredSpeed(snap) {
     }
   }
   for (const target of TARGET.driveways) v = target(snap, v, reasons, targetCtx);
-  // a ball rolled into the street (sim/ball-chase.js): `limit` is already down to the cover speed
-  if (snap.ball_in_road?.limit_mps != null && snap.ball_in_road.limit_mps <= v + 0.05)
-    reasons.push("ball in the road: a child may follow");
-  for (const target of TARGET.balls) v = target(snap, v, reasons, targetCtx);
-  // a car ahead parallel parking (sim/parkers.js): stop at its hold line, short of the room it reverses
-  // into, until it is in
-  const pa = snap.parking_ahead;
-  if (pa?.wait) {
-    const vp = pa.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(pa.bumper_to_stop_m - 0.5, decel);
-    if (vp < v) {
-      v = vp;
-      reasons.push("car parking ahead");
-    }
-  }
+  for (const target of TARGET.streetHazards) v = target(snap, v, reasons, targetCtx);
+  for (const target of TARGET.beforeEmergency) v = target(snap, v, reasons, targetCtx);
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
     const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
@@ -3398,8 +3376,7 @@ export function hazardFlags(snap) {
     if (Array.isArray(x)) f.push(...x);
     else if (x) f.push(x);
   }
-  if (snap.ball_in_road) f.push("ball in the road");
-  for (const flag of HAZARD.balls) {
+  for (const flag of HAZARD.streetHazards) {
     const x = flag(snap);
     if (Array.isArray(x)) f.push(...x);
     else if (x) f.push(x);
@@ -3411,8 +3388,7 @@ export function hazardFlags(snap) {
     if (Array.isArray(x)) f.push(...x);
     else if (x) f.push(x);
   }
-  if (snap.parking_ahead) f.push("car parking ahead");
-  for (const flag of HAZARD.parkers) {
+  for (const flag of HAZARD.late) {
     const x = flag(snap);
     if (Array.isArray(x)) f.push(...x);
     else if (x) f.push(x);

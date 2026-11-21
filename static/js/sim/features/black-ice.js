@@ -73,7 +73,7 @@ export default {
 
   // The car's sensing: black ice it has seen ahead, and a caution while conditions favour it.
   sense: {
-    at: "balls",
+    at: "streetHazards",
     run(world, snap, { p, frontS }) {
       if (world.ice?.enabled) Object.assign(snap, iceSensing(world, p, frontS));
     },
@@ -95,7 +95,7 @@ export default {
   },
   // (`limit` is already down to it)
   target: {
-    at: "balls",
+    at: "streetHazards",
     run(snap, v, reasons) {
       if (snap.ice_limit_mps != null && snap.ice_limit_mps <= v + 0.05)
         reasons.push(
@@ -153,7 +153,7 @@ export default {
   // No manoeuvre may take it onto a patch it has seen faster than its safe speed, or brake, accelerate or
   // skid on one (the ice under every forward sim's tyres is the car model's own: ROAD.gripAt).
   sim: {
-    at: "balls",
+    at: "streetHazards",
     run(world, snap) {
       const icy = snap.black_ice_ahead && world.ice?.list.length ? snap.black_ice_ahead : null;
       if (!icy) return null;
@@ -226,7 +226,7 @@ export default {
     },
   },
   clause: {
-    at: "balls",
+    at: "streetHazards",
     run: (snap) =>
       snap.black_ice || snap.ice_caution ? iceClause(snap.black_ice, snap.ice_caution, snap.black_ice_ahead) : null,
   },
