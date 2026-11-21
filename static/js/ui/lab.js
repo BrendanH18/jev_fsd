@@ -582,11 +582,12 @@ export class DriveLab {
   }
   openReplay(index, comparison) {
     if (!this.recorder?.frames.length || (this.reviewing && index === undefined)) return;
-    this.modelView?.remove();
-    this.modelPlayer = null;
+    let modelView = null,
+      modelPlayer = null,
+      modelTime;
     if (comparison) {
       const player = h("div");
-      this.modelView = h(
+      modelView = h(
         "aside",
         { class: "incident-model panel", "aria-label": "Model incident replay" },
         h(
@@ -596,10 +597,14 @@ export class DriveLab {
         ),
         player,
       );
-      document.body.append(this.modelView);
-      this.modelTime = this.recorder.frames[index].state.drive.elapsed;
-      this.modelPlayer = showDrive(player, comparison.replay, this.modelTime);
+      modelTime = this.recorder.frames[index].state.drive.elapsed;
+      modelPlayer = showDrive(player, comparison.replay, modelTime);
     }
+    this.modelView?.remove();
+    if (modelView) document.body.append(modelView);
+    this.modelView = modelView;
+    this.modelPlayer = modelPlayer;
+    this.modelTime = modelTime;
     this.reviewing = true;
     this.controls.hidden = false;
     this.playing = false;

@@ -97,23 +97,68 @@ const triggerLabels = {
 // run, independent of the version of the currently installed challenge.
 const recordedMaps = { ottawa: "c18b8436019517f5", calgary: "d8c3b4c3921cb359" };
 const incidentDrives = new Map([
-  ["flagger", ["ottawa", 56.15]],
-  ["right-on-red", ["calgary", 65.667]],
-  ["unprotected-left", ["ottawa", 28.817]],
+  ["flagger", { map: "ottawa", seed: 22042, end: 56.15 }],
+  ["right-on-red", { map: "calgary", seed: 8042, end: 65.667 }],
+  ["unprotected-left", { map: "ottawa", seed: 7042, end: 28.817 }],
 ]);
 
 export function incidentDrive(config, incident) {
-  const entry = incidentDrives.get(config.challenge);
+  const entry = incidentDrives.get(config?.challenge);
   if (
     !entry ||
     config.version !== 1 ||
     config.pack !== "6" ||
-    entry[0] !== config.map ||
+    entry.seed !== config.seed ||
+    config.weather !== "dry" ||
+    config.time !== "afternoon" ||
+    entry.map !== config.map ||
     recordedMaps[config.map] !== config.map_sha ||
-    incident.at_s > entry[1]
+    !Number.isFinite(incident?.at_s) ||
+    incident.at_s < 0 ||
+    incident.at_s > entry.end
   )
     return null;
   return `jev-${config.challenge}`;
+}
+
+const points = (values) =>
+  Array.isArray(values) && values.every((xy) => Array.isArray(xy) && xy.length === 2 && xy.every(Number.isFinite));
+const pose = (value) => [value?.x, value?.y, value?.psi].every(Number.isFinite);
+
+function usableReplay(replay) {
+  const { bounds, route, roads, buildings, signals, frames, choices, events } = replay;
+  return (
+    Array.isArray(bounds) &&
+    bounds.length === 4 &&
+    bounds.every(Number.isFinite) &&
+    bounds[0] < bounds[2] &&
+    bounds[1] < bounds[3] &&
+    points(route) &&
+    route.length >= 2 &&
+    Array.isArray(roads) &&
+    roads.every((road) => points(road?.points) && Number.isFinite(road.width)) &&
+    Array.isArray(buildings) &&
+    buildings.every(points) &&
+    points(signals) &&
+    Array.isArray(choices) &&
+    choices.every((choice) => Number.isFinite(choice?.t)) &&
+    Array.isArray(events) &&
+    events.every((event) => Number.isFinite(event?.t) && typeof event.message === "string") &&
+    Array.isArray(frames) &&
+    frames.length >= 2 &&
+    frames.every(
+      (frame, i) =>
+        Number.isFinite(frame?.t) &&
+        (i === 0 || frame.t > frames[i - 1].t) &&
+        pose(frame.ego) &&
+        Number.isFinite(frame.ego.speed) &&
+        frame.traffic &&
+        typeof frame.traffic === "object" &&
+        Object.values(frame.traffic).every(pose) &&
+        Array.isArray(frame.lights) &&
+        frame.lights.length === signals.length,
+    )
+  );
 }
 
 export async function loadPublishedDrive(id, signal) {
@@ -123,8 +168,7 @@ export async function loadPublishedDrive(id, signal) {
   const response = await fetch(new URL(`../../replays/${id}.json`, import.meta.url), { signal });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
   const replay = await response.json();
-  if (replay.format !== "jev-browser-replay/1" || !replay.choices || !(replay.frames?.length >= 2))
-    throw new Error("Replay data is incomplete");
+  if (replay?.format !== "jev-browser-replay/1" || !usableReplay(replay)) throw new Error("Replay data is incomplete");
   if (replay.challenge !== challenge || replay.result_sha !== resultSha)
     throw new Error("Replay does not match the selected drive");
   return replay;

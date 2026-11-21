@@ -8,17 +8,17 @@ import { decidedByText } from "../bench/metrics.js";
 
 import { driveScores } from "../bench/scores.js";
 import { checkResults, compatibleChallengeDrive } from "../lab/results.js";
+import { incidentDrive, loadPublishedDrive } from "./published-replay.js";
 
 const time = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
-
-import { incidentDrive, loadPublishedDrive } from "./published-replay.js";
 
 export class DriveReport {
   constructor({ onFinish, onNewDrive, onReplay, getReplayTarget = () => null, onOpen = () => {}, onClose = () => {} }) {
     this.onReplay = onReplay;
     this.getReplayTarget = getReplayTarget;
     this.current = null;
+    this.comparisonRequest = null;
     this.lastUpdate = -Infinity;
     this.onOpen = onOpen;
     this.card = h(
@@ -59,7 +59,10 @@ export class DriveReport {
     this.dialog.addEventListener("click", (ev) => {
       if (ev.target === this.dialog) this.dialog.close();
     });
-    this.dialog.addEventListener("close", onClose);
+    this.dialog.addEventListener("close", () => {
+      if (!this.dialog.open) this.cancelIncidentComparison();
+      onClose();
+    });
     document.body.append(this.dialog);
   }
 
@@ -238,6 +241,11 @@ export class DriveReport {
     return true;
   }
 
+  cancelIncidentComparison() {
+    this.comparisonRequest?.abort();
+    this.comparisonRequest = null;
+  }
+
   incidentRow(report, incident) {
     const text = `${time(incident.at_s)} · ${incident.at_m} m · ${incident.message}`;
     const available = this.onReplay && Number.isInteger(this.getReplayTarget(report, incident));
@@ -277,15 +285,25 @@ export class DriveReport {
     if (id) {
       const compare = h("button", { class: "chip-button", type: "button" }, "Compare with Jev");
       compare.onclick = async () => {
+        this.cancelIncidentComparison();
+        const request = new AbortController();
+        this.comparisonRequest = request;
         compare.disabled = true;
         try {
-          const replay = await loadPublishedDrive(id);
-          if (this.dialog.open && row.isConnected && !this.replayIncident(report, incident, { replay, incident }))
+          const replay = await loadPublishedDrive(id, request.signal);
+          if (
+            !request.signal.aborted &&
+            this.dialog.open &&
+            row.isConnected &&
+            !this.replayIncident(report, incident, { replay, incident })
+          )
             unavailable();
         } catch {
-          compare.textContent = "Model replay unavailable";
+          if (!request.signal.aborted) compare.textContent = "Model replay unavailable";
+        } finally {
+          compare.disabled = false;
+          if (this.comparisonRequest === request) this.comparisonRequest = null;
         }
-        compare.disabled = false;
       };
       row.append(compare);
     }
@@ -293,6 +311,7 @@ export class DriveReport {
   }
 
   show(report, saved = true) {
+    this.cancelIncidentComparison();
     const challenge = challengeById(report.config?.challenge);
     const records = challenge ? readPractice().records : {};
     const remaining = challenge ? CHALLENGES.filter((c) => c.id !== challenge.id) : [];
@@ -440,6 +459,7 @@ export class DriveReport {
   }
 
   showHistory() {
+    this.cancelIncidentComparison();
     const history = readHistory();
     this.dialog.replaceChildren(
       h(

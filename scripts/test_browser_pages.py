@@ -209,6 +209,11 @@ def check_published_replay(page, url):
         if flag:
             replay.get_by_role("button", name="Flagged at").first.click()
             replay.get_by_text(f"Flagged: {flag}", exact=False).wait_for()
+    page.route("**/jev-flagger.json", lambda route: route.fulfill(status=503))
+    select.select_option("jev-flagger")
+    replay.get_by_text("Could not load the browser replay. Request failed (503).", exact=True).wait_for()
+    assert canvas.count() == 0
+    page.unroute("**/jev-flagger.json")
     return report(
         "published browser replay",
         [
@@ -241,11 +246,17 @@ def check_incident_comparison(page):
     stop.locator("xpath=ancestor::details").evaluate("d => d.open = true")
     print("Manual incident:", stop.inner_text(), flush=True)
     assert not replay_requests
-    stop.locator("..").get_by_role("button", name="Compare with Jev").click()
     model = page.get_by_role("complementary", name="Model incident replay")
+    page.route("**/jev-flagger.json", lambda route: route.fulfill(status=503))
+    stop.locator("..").get_by_role("button", name="Compare with Jev").click()
+    retry = stop.locator("..").get_by_role("button", name="Model replay unavailable")
+    retry.wait_for()
+    assert dialog.is_visible() and model.count() == 0 and page.evaluate("!window.__jev.lab.reviewing")
+    page.unroute("**/jev-flagger.json")
+    retry.click()
     model.get_by_text("Matched by elapsed challenge time", exact=False).wait_for()
     print("Aligned model view:", model.inner_text(), flush=True)
-    assert len(replay_requests) == 1 and replay_requests[0].endswith("/jev-flagger.json")
+    assert len(replay_requests) == 2 and all(url.endswith("/jev-flagger.json") for url in replay_requests)
     assert model.get_by_text("Open track · Pass", exact=False).is_visible()
     deck = page.get_by_role("region", name="Recorded drive replay")
     # Step the replay clock through the event in one browser task so software WebGL
@@ -289,11 +300,12 @@ def check_incident_comparison(page):
       const fetchReplay = window.fetch;
       window.fetch = (url, options) => {
         if (!String(url).endsWith('/jev-flagger.json')) return fetchReplay(url, options);
-        return new Promise(resolve => {
-          window.releaseIncidentReplay = async () => {
+        window.pendingIncidentReplay = options.signal;
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => {
             window.fetch = fetchReplay;
-            resolve(await fetchReplay(url, options));
-          };
+            reject(options.signal.reason);
+          }, {once: true});
         });
       };
       window.__jev.driveReport.show(readHistory()[0]);
@@ -302,9 +314,9 @@ def check_incident_comparison(page):
     compare = stop.locator("..").get_by_role("button", name="Compare with Jev")
     pending_button = compare.element_handle()
     compare.click()
-    page.wait_for_function("typeof window.releaseIncidentReplay === 'function'")
+    page.wait_for_function("!!window.pendingIncidentReplay")
     page.evaluate("window.__jev.driveReport.dialog.close()")
-    page.evaluate("window.releaseIncidentReplay()")
+    page.wait_for_function("window.pendingIncidentReplay.aborted")
     page.wait_for_function("button => !button.disabled", arg=pending_button)
     assert page.evaluate("!window.__jev.lab.reviewing") and not model.is_visible()
 
@@ -313,7 +325,7 @@ def check_incident_comparison(page):
       const report = readHistory()[0], outcomes = [];
       const {challengeById, challengeConfig} = await import('./js/lab/challenges.js');
       const unexported = challengeConfig(challengeById('pothole-season'));
-      for (const [name, config] of [['changed map data', {map_sha:'changed'}], ['old pack', {pack:'5'}], ['old author version', {version:2}], ['wrong map', {map:'toronto'}], ['no exported drive', unexported]]) {
+      for (const [name, config] of [['changed map data', {map_sha:'changed'}], ['old pack', {pack:'5'}], ['old author version', {version:2}], ['wrong map', {map:'toronto'}], ['different seed', {seed:0}], ['different weather', {weather:'rain'}], ['different time', {time:'night'}], ['no exported drive', unexported]]) {
         app.driveReport.show({...report, config: {...report.config, ...config}});
         outcomes.push([name, app.driveReport.dialog.querySelectorAll('.incident-replay').length,
           app.driveReport.dialog.textContent.includes('Compare with Jev')]);

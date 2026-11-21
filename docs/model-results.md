@@ -45,7 +45,7 @@ calls. Run the local server on port 8331 before rebuilding the browser data.
 ```sh
 node --experimental-default-type=module scripts/arena_node.mjs \
   --replay data/recordings/jev-open-2026-11-20.json.gz --only right-on-red \
-  --browser-replay static/replays/jev-right-on-red.json --check 1
+  --browser-replay static/replays/jev-right-on-red.json --check replay
 ```
 
 The export requires every tape answer and the replay result to match the original recording.
