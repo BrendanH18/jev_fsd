@@ -18,7 +18,13 @@ export default {
   seen: "geeseSeen",            // the World flag: the feature has met the car this drive
   calls: "geeseCalls",          // the World map of the audit's calls (cleared when the car is moved by hand)
   build: (world, { enabled, seed, map }) => new Geese(world, { enabled, seed }),
-  metric: { at: "streetHazards", name: "wildlife_conflicts", failure: "drove into or too close to geese crossing the road" },
+  metric: {
+    at: "streetHazards",
+    name: "wildlife_conflicts",
+    failure: "drove into or too close to geese crossing the road",
+    label: "Drove into or too close to geese crossing the road",
+    category: "observation",
+  },
   obstacle: { test: isGoose, likePedestrian: true },   // its things in world.obstaclesNear
   motion: (snap) => !!snap.geese_crossing?.wait,       // ask the model "stop or drive?"
   priority: [],                                        // candidate ids kept when the list is cut
@@ -141,6 +147,11 @@ matched byte for byte. The published Jev and Claude
 Haiku open-track recordings of that challenge replayed exactly. The Jev fixture, registry,
 tailgater, following, traffic-officer, free-drive, open-track and model-recording checks passed.
 
+**Audit labels and examiner categories** were compared against `f78bd52` in Boat with Node
+22.23.5. All 62 authored drives matched for Rules and the cautious agent on each track,
+including decision traces and examiner sheets. The comparison excluded only `wall_ms` and
+`report.started_at`.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
@@ -161,12 +172,15 @@ A registered feature still has these integration points outside its own files:
 | `brain/brain.js`, `bench/runner.js`, `lab/evaluation.js`, `lab/recorder.js` | road closures' re-plan round a closure (`avoid`, `closureRouting`) and checkpoint fixes (geese' `world` back-reference, potholes shared between checkpoints) | `reroute`, `checkpoint` |
 | `sim/drive-score.js` | the coach: its seen flag, incident text, score penalty, tip and report field | `coach` |
 | `main.js`, `render/*.js`, `render/perception.js`, `ui/lab.js` | drawing it, the HUD notice and badge, the perception overlay's line and rejection label | `view`, `notice`, `perception` |
-| `lab/trace.js`, `lab/examiner.js` | the audit's label and road-test category | from `metric` (add `label`, `category`) |
 | `AGENTS.md` | its paragraph | ROADMAP 3.4 |
 
 Free drives and the city benchmark enable every registered feature by default. Use the record's
 option key with `--without` and its lowercase form in the URL. For example, disable road closures
 with `--without roadClosures` or `?roadclosures=0`. `scripts/test_free_drive.mjs` checks both paths.
+
+The record's `metric.label` supplies the trace event text. Simultaneous registered violations appear
+in metric slot order, then registration order within each slot. The examiner groups the metric's
+failure under `metric.category` when present and under Other otherwise.
 
 So today a new feature needs its own sim module, its record, its challenge, its test and the registration
 line, plus entries in the presentation and driver files above. The core simulation and decision pipeline

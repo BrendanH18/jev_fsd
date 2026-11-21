@@ -388,6 +388,30 @@ test("later audited failures remain visible after the coaching incident log is f
   assert.equal(trace.events.find((e) => e.type === "hard_brake").count, 100);
   assert.equal(trace.events.filter((e) => e.type === "off_road").length, 1);
 });
+test("simultaneous registered violations keep their trace labels and metric slot order", () => {
+  const expected = [
+    ["collisions", "Collision"],
+    ["reversing_conflicts", "Squeezed past or failed to stop for a car backing out of a driveway"],
+    ["pothole_hits", "Hit a pothole too fast"],
+    ["ball_warnings_ignored", "Drove on past where a ball rolled out, too fast to stop for a child after it"],
+    ["wildlife_conflicts", "Drove into or too close to geese crossing the road"],
+    ["brake_checks", "Braked hard with a tailgater close behind, with nothing ahead calling for it"],
+    ["ice_overspeed", "Crossed black ice too fast, or braked or steered hard on it"],
+    ["snowbank_conflicts", "Entered a stretch narrowed by snowbanks while it was an oncoming car's turn"],
+    ["pedestrians_splashed", "Splashed a pedestrian from a puddle at the kerb"],
+    ["parking_conflicts", "Blocked or went round a car parallel parking ahead"],
+    ["closure_entries", "Drove past a ROAD CLOSED barricade onto a closed block"],
+    ["officer_violations", "Went on when a police officer directing traffic signalled stop"],
+  ];
+  const trace = new EvaluationTrace();
+  const world = { t: 1, violations: Object.fromEntries(expected.toReversed().map(([key]) => [key, 2])) };
+  trace.measurements(world, { hardBrakes: 0 });
+  trace.measurements(world, { hardBrakes: 0 });
+  assert.deepEqual(
+    trace.events.map(({ type, message, at_s, count }) => [type, message, at_s, count]),
+    expected.map(([key, message]) => [key, message, 1, 2]),
+  );
+});
 test("trace limits explicitly label missing later context", () => {
   const trace = new EvaluationTrace();
   // (alternating choices, which do not fold together)

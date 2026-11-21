@@ -1,7 +1,7 @@
 // The feature registry (docs/feature-interface.md). Each opt-in feature that has moved here is one record,
 // in a file of its own beside this one, and one line in FEATURES. The core (sim/world.js, sim/step.js,
 // sim/npc.js, brain/sensors.js, brain/candidates.js, brain/state.js, brain/llm-prompt.js, brain/tracks.js,
-// bench/metrics.js)
+// bench/metrics.js, lab/trace.js, lab/examiner.js)
 // loops over the records' hooks and never names these features.
 //
 // A record:
@@ -11,8 +11,10 @@
 //             reaches the results, and fails a drive, only once it is set)
 //   calls     the World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
-//   metric    { at, name, failure }: the violation counted, and the failure text (at "driveways",
-//             "streetHazards", "rearTraffic", "late" or "junctions" among the metrics and failures)
+//   metric    { at, name, failure, label, category? }: the violation counted, the failure text, the
+//             trace event label and the examiner category (defaults to "other"). The slots order
+//             these metrics, failures and trace events: "driveways", "streetHazards", "rearTraffic",
+//             "late" and "junctions".
 //   obstacle  { test(o), traffic?, likePedestrian?, fixed?, predict(o, t)?, visible(world, observer, o)? }:
 //             an obstacle supplied by the feature. `traffic` allows it in the traffic sensing pass.
 //             `likePedestrian` assigns fault to the ego car on impact. `fixed` treats it as scenery.
@@ -251,6 +253,9 @@ export const junctionPlan = (intersection) => firstHookResult(JUNCTION_PLAN, int
 
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
 export const recordsAt = (name, slot) => FEATURES.filter((f) => f[name] && (f[name].at || "end") === slot);
+
+// Metrics in slot order, with registration order within each slot.
+export const FEATURE_METRICS = SLOTS.metric.flatMap((slot) => recordsAt("metric", slot).map((f) => f.metric));
 
 // The obstacle descriptor of the feature `o` belongs to, or null.
 const OBSTACLES = FEATURES.filter((f) => f.obstacle).map((f) => f.obstacle);

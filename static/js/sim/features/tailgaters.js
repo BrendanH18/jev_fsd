@@ -31,7 +31,12 @@ export default {
   seen: "tailgatersSeen",
   calls: "tailgaterCalls",
   build: (_world, options) => createTailgaters(options),
-  metric: { at: "rearTraffic", name: "brake_checks", failure: "braked hard with a tailgater close behind" },
+  metric: {
+    at: "rearTraffic",
+    name: "brake_checks",
+    failure: "braked hard with a tailgater close behind",
+    label: "Braked hard with a tailgater close behind, with nothing ahead calling for it",
+  },
   audit: {
     at: "rearTraffic",
     run(world) {

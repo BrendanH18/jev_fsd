@@ -244,6 +244,29 @@ test("guard and other opt-in audits in a report fail the test through the shared
   assert.equal(sheet.pass, false);
   assert.deepEqual(sheet.fails.map((f) => f.category).sort(), ["right_of_way", "speed"]);
 });
+test("registered audits keep their examiner categories and remarks", () => {
+  for (const [counter, category, remark] of [
+    ["reversing_conflicts", "observation", "Squeezed past or failed to stop for a car backing out"],
+    ["pothole_hits", "speed", "Hit a pothole too fast"],
+    ["ball_warnings_ignored", "observation", "Ignored a ball rolling into the street"],
+    ["wildlife_conflicts", "observation", "Drove into or too close to geese crossing the road"],
+    ["brake_checks", "other", "Braked hard with a tailgater close behind"],
+    ["ice_overspeed", "other", "Crossed black ice too fast, or braked or steered hard on it"],
+    ["snowbank_conflicts", "other", "Entered a stretch narrowed by snowbanks out of turn"],
+    ["pedestrians_splashed", "speed", "Splashed a pedestrian from a puddle"],
+    ["parking_conflicts", "space", "Blocked or went round a car parallel parking"],
+    ["closure_entries", "observation", "Drove onto a closed road"],
+    ["officer_violations", "right_of_way", "Went on when a police officer signalled stop"],
+  ]) {
+    const sheet = examine(kits, report({ [counter]: 1 }));
+    assert.equal(sheet.pass, false, counter);
+    assert.deepEqual(
+      sheet.fails.map((fail) => [fail.category, fail.remark]),
+      [[category, remark]],
+      counter,
+    );
+  }
+});
 test("minor errors are one demerit each, a repeated one marked at most three times, grouped by category with incidents linked", () => {
   const hard = [1, 2, 3, 4, 5].map((i) => incident("hard_brake", "Hard braking", i * 10));
   const sheet = examine(

@@ -353,12 +353,12 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
 - [ ] **3.9 Trace the engine difference.** (M) The same seed gives different results in V8 and
   WebKit, and the cause has never been found. Find the first step where they part. *Moved to 7.4*,
   since it decides which published tapes a reader can replay.
-- [ ] **3.10 Hooks for what still sits outside a record.** (L) Free-drive switches now come from
-  the registry. A registered feature still needs entries in driver and presentation files: the drivers'
+- [ ] **3.10 Hooks for what still sits outside a record.** (L) The registry now supplies free-drive
+  switches, trace labels and road-test categories. A registered feature still needs entries for the drivers'
   preferences (`brain/rules.js`, `agents/cautious.js`), checkpoints and re-plans, the coach
-  (`sim/drive-score.js`), drawing, the HUD and the perception overlay, and the trace and examiner
-  labels ([list](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)).
-  Add the `rules`, `cautious`, `coach`, `view`, `notice`, `perception` and `label` hooks the
+  (`sim/drive-score.js`), drawing, the HUD and the perception overlay
+  ([list](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)).
+  Add the `rules`, `cautious`, `coach`, `view`, `notice` and `perception` hooks the
   list names, proved on the registered features with the 3.2 record. Without this, finishing
   3.2 does not meet the exit below.
 - [ ] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in

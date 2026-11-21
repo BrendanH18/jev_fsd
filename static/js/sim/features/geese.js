@@ -31,6 +31,8 @@ export default {
     at: "streetHazards",
     name: "wildlife_conflicts",
     failure: "drove into or too close to geese crossing the road",
+    label: "Drove into or too close to geese crossing the road",
+    category: "observation",
   },
   // (waited for as a gaggle, never followed or passed; the car is at fault for one it drives into, as for
   // a pedestrian)

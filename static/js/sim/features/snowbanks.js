@@ -59,6 +59,7 @@ export default {
     at: "rearTraffic",
     name: "snowbank_conflicts",
     failure: "entered a stretch narrowed by snowbanks out of turn",
+    label: "Entered a stretch narrowed by snowbanks while it was an oncoming car's turn",
   },
   motion: (snap) => !!snap.snowbank?.narrowing?.wait,
 

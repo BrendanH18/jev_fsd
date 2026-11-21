@@ -17,6 +17,7 @@
 // not recognised goes under "Other".
 
 import { projectPoint } from "../map/mapdata.js";
+import { FEATURE_METRICS } from "../sim/features/index.js";
 import { challengeFailures } from "./practice.js";
 
 export const EXAMINER_VERSION = 1;
@@ -342,7 +343,7 @@ export const instructionAt = (script, s) =>
 
 // How each failure reason and examiner remark is grouped. Failure reasons are the strings
 // bench/metrics.js `failures()` returns; one this does not know goes under "other".
-const FAIL_CATEGORY = {
+const CORE_FAIL_CATEGORY = {
   timeout: "other",
   stuck: "other",
   collision: "space",
@@ -364,16 +365,12 @@ const FAIL_CATEGORY = {
   "drove past a crossing guard's stop sign": "right_of_way",
   "cut off or squeezed a contraflow cyclist": "space",
   "entered on green ahead of a car running the red": "observation",
-  "squeezed past or failed to stop for a car backing out": "observation",
-  "hit a pothole too fast": "speed",
-  "ignored a ball rolling into the street": "observation",
-  "drove into or too close to geese crossing the road": "observation",
-  "splashed a pedestrian from a puddle": "speed",
-  "blocked or went round a car parallel parking": "space",
-  "went on when a police officer signalled stop": "right_of_way",
   "not parked": "parking",
-  "drove onto a closed road": "observation",
 };
+const FAIL_CATEGORY = new Map([
+  ...Object.entries(CORE_FAIL_CATEGORY),
+  ...FEATURE_METRICS.filter(({ category }) => category).map(({ failure, category }) => [failure, category]),
+]);
 const FAIL_REMARK = {
   timeout: "Did not complete the route",
   stuck: "Did not complete the route: the car got stuck",
@@ -408,7 +405,7 @@ const MINOR_REMARK = {
 
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 // A failure reason's category; one added to `failures()` later, and not listed here, is "other".
-export const failureCategory = (reason) => (Object.hasOwn(FAIL_CATEGORY, reason) ? FAIL_CATEGORY[reason] : "other");
+export const failureCategory = (reason) => FAIL_CATEGORY.get(reason) ?? "other";
 export const MINOR_TYPES = Object.keys(MINOR);
 
 // The examiner's sheet for a finished report, or `available: false` where the report lacks the audit

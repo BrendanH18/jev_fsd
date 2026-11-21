@@ -24,7 +24,13 @@ export default {
   seen: "roadClosuresSeen",
   calls: "roadClosureCalls",
   build: (_world, { enabled, seed }) => new RoadClosures({ enabled, seed }),
-  metric: { at: "late", name: "closure_entries", failure: "drove onto a closed road" },
+  metric: {
+    at: "late",
+    name: "closure_entries",
+    failure: "drove onto a closed road",
+    label: "Drove past a ROAD CLOSED barricade onto a closed block",
+    category: "observation",
+  },
   // (a barricade is stopped short of, or gone round by the detour, never followed; in the forward sims it
   // stands where it is, like scenery)
   obstacle: { test: isBarricade, fixed: true },

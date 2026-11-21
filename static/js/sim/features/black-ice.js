@@ -55,6 +55,7 @@ export default {
     at: "rearTraffic",
     name: "ice_overspeed",
     failure: "crossed black ice too fast, or braked or steered hard on it",
+    label: "Crossed black ice too fast, or braked or steered hard on it",
   },
 
   // Whether the weather and the time favour it now, and its grip hook, before anything moves.

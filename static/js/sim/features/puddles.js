@@ -43,7 +43,13 @@ export default {
     world.puddleWarn = null;
     return puddles;
   },
-  metric: { at: "rearTraffic", name: "pedestrians_splashed", failure: "splashed a pedestrian from a puddle" },
+  metric: {
+    at: "rearTraffic",
+    name: "pedestrians_splashed",
+    failure: "splashed a pedestrian from a puddle",
+    label: "Splashed a pedestrian from a puddle at the kerb",
+    category: "speed",
+  },
   priority: ["ease_round_puddle"],
 
   audit: {

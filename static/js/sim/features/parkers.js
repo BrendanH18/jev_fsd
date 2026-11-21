@@ -40,6 +40,8 @@ export default {
     at: "late",
     name: "parking_conflicts",
     failure: "blocked or went round a car parallel parking",
+    label: "Blocked or went round a car parallel parking ahead",
+    category: "space",
   },
   evQueueHold(world, front) {
     const route = world.route;

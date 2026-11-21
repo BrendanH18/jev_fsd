@@ -41,7 +41,13 @@ export default {
   seen: "potholesSeen",
   calls: "potholeCalls",
   build: (_world, { enabled, seed, map }) => new Potholes(map, { enabled, seed }),
-  metric: { at: "driveways", name: "pothole_hits", failure: "hit a pothole too fast" },
+  metric: {
+    at: "driveways",
+    name: "pothole_hits",
+    failure: "hit a pothole too fast",
+    label: "Hit a pothole too fast",
+    category: "speed",
+  },
   priority: ["ease_round_pothole"],
 
   audit: {

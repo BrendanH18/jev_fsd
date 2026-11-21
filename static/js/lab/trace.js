@@ -1,5 +1,7 @@
+import { FEATURE_METRICS } from "../sim/features/index.js";
+
 const round = (value) => Math.round(value * 1000) / 1000;
-const AUDITS = {
+const CORE_AUDITS = {
   amber_lights_run: "Ignored a safe amber stop or sped up to beat the light",
   collisions: "Collision",
   red_lights_run: "Red light",
@@ -15,18 +17,8 @@ const AUDITS = {
   illegal_turns: "Made a prohibited turn",
   contraflow_conflicts: "Cut off or squeezed a cyclist riding against the one-way",
   fresh_green_conflicts: "Entered on green ahead of a car running the red",
-  reversing_conflicts: "Squeezed past or failed to stop for a car backing out of a driveway",
-  pothole_hits: "Hit a pothole too fast",
-  ball_warnings_ignored: "Drove on past where a ball rolled out, too fast to stop for a child after it",
-  wildlife_conflicts: "Drove into or too close to geese crossing the road",
-  brake_checks: "Braked hard with a tailgater close behind, with nothing ahead calling for it",
-  ice_overspeed: "Crossed black ice too fast, or braked or steered hard on it",
-  snowbank_conflicts: "Entered a stretch narrowed by snowbanks while it was an oncoming car's turn",
-  pedestrians_splashed: "Splashed a pedestrian from a puddle at the kerb",
-  parking_conflicts: "Blocked or went round a car parallel parking ahead",
-  closure_entries: "Drove past a ROAD CLOSED barricade onto a closed block",
-  officer_violations: "Went on when a police officer directing traffic signalled stop",
 };
+const AUDITS = [...Object.entries(CORE_AUDITS), ...FEATURE_METRICS.map(({ name, label }) => [name, label])];
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and
 // source, and its fallback error and hazard flags when it has any. A run of such records with the same
@@ -126,7 +118,7 @@ export class EvaluationTrace {
   }
   measurements(world, score) {
     // Read counters directly: the coaching report's 100-incident limit must not hide later failures.
-    for (const [key, message] of Object.entries(AUDITS)) {
+    for (const [key, message] of AUDITS) {
       const count = (world.violations[key] || 0) - (this.audit[key] || 0);
       if (count > 0) this.event(key, message, world.t, { count });
       this.audit[key] = world.violations[key] || 0;
