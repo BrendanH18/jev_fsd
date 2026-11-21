@@ -371,7 +371,7 @@ async function main() {
         .filter(Boolean)
         .sort();
       const period = dates.length ? `, ${dates[0]} to ${dates.at(-1)}` : "";
-      status.textContent = `${suiteLabel(version)} · ${rows.length} committed runs${period}.`;
+      status.textContent = `${suiteLabel(version)} · ${rows.length} committed ${rows.length === 1 ? "run" : "runs"}${period}.`;
     };
     filter.addEventListener("change", renderVersion);
     renderVersion();
