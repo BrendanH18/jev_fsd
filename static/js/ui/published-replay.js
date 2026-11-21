@@ -1,5 +1,5 @@
 import { h } from "../common.js";
-import { replayPosition } from "../lab/playback.js";
+import { replayPosition, REPORT_INCIDENT_TIME_TOLERANCE_S } from "../lab/playback.js";
 import { interpolatePose } from "../sim/interpolate.js";
 
 const SIZE = [1100, 600];
@@ -115,7 +115,7 @@ export function incidentDrive(config, incident) {
     recordedMaps[config.map] !== config.map_sha ||
     !Number.isFinite(incident?.at_s) ||
     incident.at_s < 0 ||
-    incident.at_s > entry.end
+    incident.at_s > entry.end + REPORT_INCIDENT_TIME_TOLERANCE_S
   )
     return null;
   return `jev-${config.challenge}`;

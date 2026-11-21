@@ -33,7 +33,8 @@ try {
         const config = { challenge, map, pack, version, seed, weather, time, map_sha: source.header.maps[map] };
         const end = replay.frames.at(-1).t;
         assert.equal(incidentDrive(config, { at_s: end }), id);
-        for (const at_s of [end + 0.001, -1, Number.NaN, Infinity, undefined, null])
+        assert.equal(incidentDrive(config, { at_s: Math.round(end * 10) / 10 }), id);
+        for (const at_s of [end + 0.051, -1, Number.NaN, Infinity, undefined, null])
           assert.equal(incidentDrive(config, { at_s }), null);
         for (const mismatch of [{ map_sha: undefined }, { seed: seed + 1 }, { weather: "rain" }, { time: "night" }])
           assert.equal(incidentDrive({ ...config, ...mismatch }, { at_s: 1 }), null);
