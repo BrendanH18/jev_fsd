@@ -5,6 +5,7 @@
 The local app needs no build. Python runs through `uv` with one runtime dependency, `typesafe-sdk`. The browser loads ES modules and maps Three.js to `static/vendor/three/`. CI packages the static demo with `scripts/build_demo.py`. Ruff (config in `pyproject.toml`) and Biome (`biome.jsonc`; `static/vendor/` and `data/` are left out) lint and format; CI runs both (`.github/workflows/lint.yml`). Biome is the only npm package: `package.json` and `package-lock.json` pin it (Dependabot updates it), so use `npm ci` for the first install (no approval needed in Boat; ask first on this Mac). Biome warnings fail CI as errors do. Fix what they report rather than hand-formatting or silencing a rule; an unused parameter a callback signature needs gets a leading `_`. Node checks that read source with regexes must accept the formatter's line breaks and trailing commas.
 
 ```sh
+scripts/boat-check.sh [--full] [-- CMD]                     # the checks below in this worktree's Boat sandbox (see Boat)
 npm ci                                                      # install the pinned Biome (once)
 uv run --locked ruff check && uv run --locked ruff format --check && npm run lint   # lint and format checks
 uv run --locked ruff check --fix && uv run --locked ruff format && npm run format   # apply safe fixes and formatting
@@ -38,18 +39,19 @@ Docs: [`docs/reference/`](docs/reference/README.md) has one page per topic and f
 Use a Boat sandbox for builds, tests, untrusted code, Docker, and long jobs. Never run them on this computer.
 Docs: https://docs.boat.dev/llms.txt. Prices and limits: run `boat limits`; never quote prices from memory.
 
-- Create: `id=$(boat new --json | jq -r 'select(.event=="ready") | .id')`
-- One-shot job: `boat run --push . -- npm test` (new sandbox, run, cost, delete; exits with the test exit code)
-- Run: `boat exec "$id" --cwd my-app "npm test"` (30 s timeout; `--timeout 0` = no limit)
-- Server: `boat exec "$id" --detach "npm run dev"`, then `boat exec "$id" --status <pid>`
-- Copy files: `boat push "$id" ./my-app` (git-tracked files, to /home/user/my-app) or clone the repo inside the sandbox
-- Public URL for a port: `boat ssh "$id" "host 3000 --private"`
+The account, shared by all the owner's projects, allows 200 sandbox starts a day; each create or resume uses one. Run `boat limits` before Boat work. With no starts left, finish and commit the code and docs, then tell the owner what still needs a Boat run; don't wait or retry.
+
+- Checks: `scripts/boat-check.sh` runs lint, the Python tests, the offline Jev requests and the fixture check; `--full` adds every `scripts/test_*.mjs` one at a time with CI's limit; `-- CMD` runs any command in the checkout. Run the checks this way, not with `boat run` ([Boat checks](docs/reference/development.md#boat-checks)).
+- One sandbox per worktree: the first check creates it from the warm snapshot `jev-fsd-warm` (Node 22, uv, Python, Biome and a clone with its dependencies) and later checks reuse it, so a whole job costs one start. Each check pushes the working tree to a fresh directory and makes the clone at `/home/user/jev_fsd` match it, git index included. Auto-stop is moved to 45 minutes after each check, and the next check resumes a stopped sandbox.
+- Never share a sandbox between agents: agents in one worktree each set their own `JEV_BOAT_SLOT`. When the agent's work ends, run `scripts/boat-check.sh --done` (deletes it); `--stop` keeps it for later.
+- After a toolchain or dependency change (Node, `uv.lock`, `package-lock.json`), refresh the snapshot with `scripts/boat-check.sh --save`, which saves only after the checks pass.
+- Each check replaces the checkout, `data/runs/` included: copy results you want to keep back to this Mac first (`boat scp -r "$id":jev_fsd/data/runs ./data/`; `--status` shows the id). Saved snapshots and other gitignored files are never pushed, so copy in any a `verify_jev.py` run needs.
+- Genuine one-offs only (not checks of this worktree): `boat run --push . -- CMD` (new sandbox, run, cost, delete; exits with the command's exit code). Other generic commands: `id=$(boat new --json | jq -r 'select(.event=="ready") | .id')`, `boat exec "$id" --cwd my-app "npm test"` (30 s timeout; `--timeout 0` = no limit), `boat exec "$id" --detach "npm run dev"` then `boat exec "$id" --status <pid>`, `boat push "$id" ./my-app`, and `boat stop "$id"` or `boat delete "$id" --yes` when done.
 - Always pass the sandbox id. `current` does not work in a non-interactive shell.
-- When done: `boat stop "$id"` (keeps the disk for at least 14 days) or `boat delete "$id" --yes` (erases it)
 - Stay on this Mac: `scripts/shot.swift` (WKWebView), WebKit/Safari benchmark runs and the WebKit baselines in `docs/rules-baseline.md`, and local Ollama models (Boat has no GPU). For WebKit runs against a server in Boat, `boat forward` it to the same port on this Mac, because the server checks the port in `Host` and `Origin`. Runs that use Ollama keep the server on this Mac next to it.
 - `server.py` binds 127.0.0.1, accepts only loopback Host names (`jev/security.py`) and holds paid API keys. Never expose it with `boat host` or the in-sandbox `host`. To see it, use the sandbox's desktop Chrome or `boat forward` the port to this Mac.
-- Use Node 22 in Boat, as CI does. `boat push` leaves out `.git` and gitignored files (`data/runs/`, `data/snapshots/`). `tests/test_results.py` needs git, so run the Python tests in a clone at `/home/user/jev_fsd` with your working tree pushed over it (`boat push "$id" . --to /home/user/jev_fsd`), and copy in any saved snapshots a `verify_jev.py` run needs. For results you want to keep, use `boat new`, not `boat run` (which deletes the sandbox), and copy `data/runs/` back to this Mac before deleting it.
-- Live model runs need keys from `.env`. Pass only the key a run needs, with `boat new -e` or `boat run -e`; never copy `.env` into a sandbox, and keep to the budget rules below.
+- Use Node 22 in Boat, as CI does. `boat push` leaves out `.git` and gitignored files (`data/runs/`, `data/snapshots/`); `tests/test_results.py` needs git, which is why checks run in the clone.
+- Live model runs need keys from `.env`, and check sandboxes start with `--no-env` and hold none. Never run `scripts/verify_jev.py` without `--offline` unless the owner asks. For a live run, pass only the key it needs to its own sandbox, with `boat new -e` or `boat run -e`; never copy `.env` into a sandbox, and keep to the budget rules below.
 
 ## Architecture
 
@@ -181,6 +183,7 @@ Where features reach into shared code:
 - Live model test runs (recordings, published results, the arena and benchmark runs that call a model) use Jev and Claude Haiku 5.5 (`claude-haiku-5-5`, through the Claude Platform, `ANTHROPIC_API_KEY`) only. Don't use Claude Sonnet.
 - New maps are Canadian cities. LLM drivers use a generic OpenAI-compatible endpoint, or Anthropic's Messages API for Claude models (`"api": "anthropic"`, the Claude Platform preset in `jev/llm_setup.py`).
 - Hosted provider presets in Connect a model are the major labs' own APIs (OpenAI, Anthropic, Google, xAI, Mistral), through an OpenAI-compatible endpoint where the lab offers one, plus OpenRouter and Groq. Don't add presets for Chinese-hosted APIs.
+- Boat checks reuse one long-lived sandbox per agent or worktree through `scripts/boat-check.sh`, started from the warm snapshot `jev-fsd-warm`; `boat run` is for genuine one-offs (owner, 2026-11-21: the account's 200 daily starts, shared by every project, ran out that day).
 
 ## Context maintenance
 

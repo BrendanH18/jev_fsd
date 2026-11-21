@@ -37,7 +37,51 @@ uv run scripts/verify_jev.py --offline
 With a running app, `uv run --with playwright python scripts/test_browser_pages.py` runs the `/tests`
 page, the renderer assertions, a check that the pilot controls fit the HUD panel, and the practice finish, debrief replay and error recovery cases in headless Chromium (`--group pages`, `practice` or `parking` runs one part, as CI does), and `scripts/test_arena_browser.py` runs the
 arena workflow (install the browser once with `uv run --with playwright python -m playwright install chromium`).
-CI runs all of the above on every pull request.
+CI runs all of the above on every pull request. Agents run them through
+[Boat checks](#boat-checks).
+
+## Boat checks
+
+Agents run these checks in a [Boat](https://boat.dev) sandbox, not on the owner's computers.
+`scripts/boat-check.sh` needs the signed-in `boat` CLI, `jq` and git.
+
+```sh
+scripts/boat-check.sh            # lint, Python tests, offline Jev requests, fixture check
+scripts/boat-check.sh --full     # also every scripts/test_*.mjs, one at a time, 360 s each as in CI
+scripts/boat-check.sh -- uv run --locked python -m unittest discover -s tests -k test_route_never_backs_up
+scripts/boat-check.sh --save     # after passing checks, refresh the warm snapshot jev-fsd-warm
+scripts/boat-check.sh --status   # this worktree's sandbox
+scripts/boat-check.sh --done     # delete it when the work ends (--stop keeps it)
+```
+
+The account's 200 daily sandbox starts are shared by every project, and each create or resume
+uses one, so the script keeps one long-lived sandbox per worktree. The first check creates it
+from the saved snapshot `jev-fsd-warm` (`JEV_BOAT_SNAPSHOT`), or bare when there is none, as a
+`default` machine (`JEV_BOAT_TYPE`) with `--no-env`, so none of the account's stored secrets
+or model keys go in. The sandbox id is kept in the worktree's git directory, and later checks
+reuse that sandbox. Agents sharing a worktree each set their own `JEV_BOAT_SLOT`; one sandbox
+is never shared between agents.
+
+Each check pushes the working tree (tracked and untracked, non-ignored files) to a fresh
+directory and moves it into the clone at `/home/user/jev_fsd`. Everything there but `.git`,
+`node_modules` and `.venv` is replaced, so deleted files go too, and git's index is rebuilt from
+the pushed files, so `git ls-files` (which `tests/test_results.py` relies on) matches the
+computer the script ran on. `npm ci` runs only when `package-lock.json` changed, then
+`uv sync --locked`. The command runs with `boat exec --timeout 0`. A bare sandbox first installs
+Node 22 (checked against the release's SHA-256 sums), uv and the clone. Copy results such as
+`data/runs/` back before the next check replaces them.
+
+Boat's auto-stop is a deadline, not an idle timer. Each check moves it two hours ahead while
+running and back to `JEV_BOAT_IDLE` seconds (default 2700) when it ends, so a forgotten sandbox
+stops itself and the next check resumes it. Starts only happen on a create or a resume; a
+check against a running sandbox uses none. When no starts are left, the script stops with
+exit code 3 and the message from Boat.
+
+`--save` runs the checks and, if they pass, resets the clone to `origin`'s default branch
+(keeping its dependencies), saves the sandbox as `jev-fsd-warm` and waits until Boat reports
+that save ready. Refresh it after changing the Node version, `uv.lock` or `package-lock.json`.
+The script refuses a live `scripts/verify_jev.py` run (it costs credits and needs the owner's
+go-ahead); `--offline` is fine.
 
 Open [/tests](http://127.0.0.1:8322/tests) for simulation and HUD checks. From the simulator's browser
 console, run the WebGL renderer checks:
