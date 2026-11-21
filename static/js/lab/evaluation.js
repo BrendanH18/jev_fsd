@@ -99,6 +99,7 @@ export async function evaluateChallenge(
     limit = challenge.limit_s || 180,
     tape = null,
     track = "guarded",
+    onStep = null,
   } = {},
 ) {
   if (!["lockstep", "realtime"].includes(mode) || !Number.isFinite(limit) || limit <= 0)
@@ -145,6 +146,7 @@ export async function evaluateChallenge(
   metrics.latencies = latencies;
   let hazardRecorded = false,
     simulationError = null;
+  onStep?.(ctx);
   try {
     while (world.t < limit && autopilot.enabled && !shouldStop()) {
       const road = stepWorld({ world, fleet, autopilot }, 1 / 60, world.t * 1000);
@@ -158,6 +160,7 @@ export async function evaluateChallenge(
       if (mode === "lockstep" && autopilot.firing) await autopilot.firing;
       // (and a route round a closed road, so the detour comes at the same step every run: sim/road-closures.js)
       if (mode === "lockstep" && autopilot.closureRouting) await autopilot.closureRouting;
+      onStep?.(ctx);
       if (mode === "realtime") {
         const ahead = world.t * 1000 - (performance.now() - start);
         if (ahead > 4) await new Promise((resolve) => setTimeout(resolve, ahead));

@@ -27,7 +27,6 @@ import { TRY_START_M, planParking, planPullOut } from "../sim/parallel-park.js";
 import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
-import { boxGap, reverserBoxAt } from "../sim/driveway-reversers.js";
 import { wheelPoints } from "../sim/potholes.js";
 import { coverAfter } from "../sim/ball-chase.js";
 import {
@@ -500,24 +499,6 @@ export function sampleCandidates(snap, world) {
         }),
         steer: "hold lane",
         speed: "stop at the line and let the car running the red clear the junction",
-      });
-    }
-    // A car backing out of a driveway ahead (sim/driveway-reversers.js): slow while it backs out toward
-    // the lane, and stop short of it, giving it room to finish, once it is coming into the lane.
-    const rv = snap.reversing_vehicle;
-    if (rv && (!rv.wait || rv.bumper_to_stop_m > 0.3)) {
-      out.push({
-        id: "yield_to_reversing",
-        laneUntil,
-        law: inLane({
-          kind: "lane",
-          vTarget: Math.min(approach, rv.limit_mps ?? approach),
-          ...(rv.wait ? { stopAtRoute: stopAt(rv.stop_s_route - FRONT - 0.5) } : {}),
-        }),
-        steer: "hold lane",
-        speed: rv.wait
-          ? "stop and give the car backing out room to finish"
-          : "slow down, ready to stop for the car backing out",
       });
     }
     for (const add of CANDIDATES.driveways) add(featureCtx, out);
@@ -996,7 +977,15 @@ export function simulateAll(candidates, snap, world) {
         Number.isFinite(n.psi) &&
         n.v > 0.5 &&
         behindInLane(world.ego, n, 60) !== null;
-      return { n, x: n.x, y: n.y, vx: Math.cos(n.psi) * v, vy: Math.sin(n.psi) * v, follower };
+      return {
+        n,
+        feature: featureObstacle(n),
+        x: n.x,
+        y: n.y,
+        vx: Math.cos(n.psi) * v,
+        vy: Math.sin(n.psi) * v,
+        follower,
+      };
     });
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
@@ -1074,10 +1063,6 @@ export function simulateAll(candidates, snap, world) {
   const cfClearance = snap.contraflow_cyclist?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit);
   // a car running the red across the car's way (sim/red-light-runner.js): the line the car waits at
   const runnerStop = snap.red_light_runner?.wait ? snap.red_light_runner.stop_s_route : null;
-  // a car backing out of a driveway (sim/driveway-reversers.js): where the car stops for it, and the room
-  // it leaves one backing out as it goes by
-  const rvStop = snap.reversing_vehicle?.wait ? snap.reversing_vehicle.stop_s_route : null;
-  const rvClearance = snap.reversing_vehicle?.min_pass_m ?? null;
   // what the registered features check along every forward sim (sim/features/index.js): a checker each, or
   // none, by the place its rejection takes among the others
   const sims = {};
@@ -1086,6 +1071,7 @@ export function simulateAll(candidates, snap, world) {
   const checks = [...sims.first, ...sims.driveways, ...sims.balls, ...sims.end];
   const wheelChecks = checks.filter((x) => x.afterLaw),
     routeChecks = checks.filter((x) => x.along),
+    nearbyChecks = checks.filter((x) => x.near),
     needWheels = checks.some((x) => x.wheels);
   // a ball rolled into the street (sim/ball-chase.js): the gap's line, which the car passes no faster
   // than a crawl while the warning stands
@@ -1130,7 +1116,6 @@ export function simulateAll(candidates, snap, world) {
       cfCut = false,
       cfMeet = false,
       passesRunner = false,
-      rvClose = false,
       ballFast = false,
       collision = null,
       followerHit = null,
@@ -1201,8 +1186,6 @@ export function simulateAll(candidates, snap, world) {
         if (cfWait !== null && s + FRONT > cfWait + 0.5) cfCut = true;
         // (and here: across the line is into the junction)
         if (runnerStop !== null && s + FRONT > runnerStop + 0.2) passesRunner = true;
-        // (and a metre past where it stops for a car backing out is still clear of it)
-        if (rvStop !== null && s + FRONT > rvStop + 1) rvClose = true;
         // (and past the gap a ball rolled out of, faster than a crawl)
         if (ballLine !== null && s + FRONT > ballLine && car.v > ballCreep + 1) ballFast = true;
         // (and a metre past a parking car's hold line)
@@ -1258,10 +1241,9 @@ export function simulateAll(candidates, snap, world) {
         const c = Math.cos(car.psi),
           sn = Math.sin(car.psi);
         for (const o of npcs) {
-          // (a car backing out of a driveway goes along its way out: sim/driveway-reversers.js)
-          const ob = o.n.reverser ? reverserBoxAt(o.n, t) : o.n.obb();
-          if (!o.n.reverser)
-            ob.center = [o.x + o.vx * t + (ob.center[0] - o.n.x), o.y + o.vy * t + (ob.center[1] - o.n.y)];
+          const predict = o.feature?.predict;
+          const ob = predict ? predict(o.n, t) : o.n.obb();
+          if (!predict) ob.center = [o.x + o.vx * t + (ob.center[0] - o.n.x), o.y + o.vy * t + (ob.center[1] - o.n.y)];
           // gap to a vehicle in the car's path (one alongside, like a parked car, does not count)
           const dx = ob.center[0] - box.center[0],
             dy = ob.center[1] - box.center[1];
@@ -1308,8 +1290,7 @@ export function simulateAll(candidates, snap, world) {
             side - box.halfWidth - ob.halfWidth < cfClearance - 0.1
           )
             cfMeet = true;
-          // (going by a car backing out of a driveway, with its reverse lamps on: sim/driveway-reversers.js)
-          if (rvClearance !== null && o.n.reverseLamps && car.v > 1 && boxGap(box, ob) < rvClearance) rvClose = true;
+          for (const check of nearbyChecks) check.near(car, box, o.n, ob);
           // going round a cyclist with its far side across the centre line, meeting a vehicle coming the
           // other way in its way (sim/cyclist-pass.js)
           if (
@@ -1326,7 +1307,7 @@ export function simulateAll(candidates, snap, world) {
           }
           // (what a registered feature stands in the road, a closed road's barricade, stands where it is, like
           // scenery: sim/features/index.js)
-          const fixed = !!featureObstacle(o.n)?.fixed;
+          const fixed = !!o.feature?.fixed;
           if (fixed && !staticHit && obbOverlap(box, ob, 0.3))
             staticHit = { id: o.n.id, t: Math.round(t * 10) / 10, kind: o.n.kind, static: true };
           if (!collision && obbOverlap(box, ob, 0.3)) {
@@ -1432,7 +1413,6 @@ export function simulateAll(candidates, snap, world) {
     else if (cfCut && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_contraflow_cyclist";
     else if (cfMeet && c.law.kind !== "hard_brake") reject = "passes_contraflow_cyclist_too_close";
     else if (passesRunner && c.law.kind !== "hard_brake") reject = "enters_ahead_of_red_light_runner";
-    else if (rvClose && c.law.kind !== "hard_brake") reject = "passes_reversing_vehicle_too_close";
     else if ((reject = rejectBy(sims.driveways, c)));
     else if (ballFast && c.law.kind !== "hard_brake") reject = "passes_ball_gap_too_fast";
     else if ((reject = rejectBy(sims.balls, c)));

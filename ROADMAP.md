@@ -243,7 +243,8 @@ cost $0.033.
   a read-only leaderboard in the public demo, built from the committed runs.
   *Done 14 November:* `data/results.json` from the committed runs (`scripts/build_results.py`,
   checked by `tests/test_results.py`), the generated README table, and the `/results` leaderboard in the
-  app and the public demo. Committed recordings replay from the command line, not yet from the page.
+  app and the public demo. Jev’s **Right on red** drive also plays in the browser from
+  sampled positions and signals exported from its exact command-line replay.
 
 Exit: someone with no key can open the repository, see how each driver did, and replay any of the
 drives.
@@ -278,8 +279,9 @@ Each recent feature edited the same core files: `sim/npc.js` (2,499 lines, with 
   ([feature interface](docs/feature-interface.md)). Bare, city, city snow and city rain on Kitsilano
   seed 1, all 62 challenge and road-test drives with Rules and with the cautious agent, and the model
   recording are identical before and after
-  ([record](docs/validation/registry-round2-2026-11-20.md)). Next: the driveway reversers, ball chase
-  and parkers, the neighbours whose slots (`"driveways"`, `"balls"`, `"parkers"`) the records still use.
+  ([record](docs/validation/registry-round2-2026-11-20.md)). Driveway reversers have since moved,
+  bringing the registry to seven features. Next are ball chase and parkers, whose slots the
+  records still use.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step`, the sensing pass and the one-line
   `needsMotionQuestion` test, once the features have moved out of them.
 - [x] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same

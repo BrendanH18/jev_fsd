@@ -79,7 +79,7 @@ The project notes on the benchmark code, moved here verbatim from `AGENTS.md`, w
 
 ## Inspect a saved benchmark
 
-Run these commands from the repository root. The inspector reads one benchmark JSON file and prints JSON to standard output. It works offline with Python 3.10 or newer.
+Run these commands from the repository root. The inspector reads saved benchmark JSON and prints JSON to standard output. It works offline with Python 3.10 or newer.
 
 ```sh
 uv run python scripts/inspect_run.py --list
@@ -87,3 +87,12 @@ uv run python scripts/inspect_run.py data/runs/20261120-120000-rules.json suite-
 ```
 
 Omit the report IDs to run all 100 reports. The catalog describes each question. Use the suite reports for verdicts, route geometry and retained events, safety reports for measured traffic audits, motion reports for route rankings, and decision reports for model attribution and resource use. Missing or unmeasured feature counters carry different information from a measured zero. Event analyses use the first 50 retained events per route. Use the benchmark's separate summary for held-out suites.
+
+Add `--compare` to run the selected reports side by side. This compares two Winnipeg runs and shows that `s1-1` stopped failing to yield.
+
+```sh
+uv run python scripts/inspect_run.py data/runs/20261112-190015-rules.json \
+  --compare data/runs/20261120-120000-rules.json suite-verdicts safety-yields motion-duration
+```
+
+The first file is the baseline. Both files need the same map, pack version, seed, requested suite size and route restriction settings. Drivers, tracks, weather, traffic counts and other run conditions may differ. Read the settings beside the reports when interpreting differences. The comparison uses the route ID and saved lengths and counts of lights, stops and turns as a proxy for route identity. It lists routes exclusive to either file and routes with changed or missing tags. Each report uses the matched routes in baseline order. The output shows the run settings and any changes in saved verdicts, arrivals or known failure reasons.

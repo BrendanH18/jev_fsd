@@ -1,6 +1,5 @@
 import { observeAmber } from "../sim/amber.js";
 import { redLightRunner } from "../sim/red-light-runner.js";
-import { reversingVehicle } from "../sim/driveway-reversers.js";
 import { ballInRoad } from "../sim/ball-chase.js";
 import { parkerSensing } from "../sim/parkers.js";
 import { followingPolicy } from "../sim/following.js";
@@ -160,7 +159,7 @@ import {
 } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
-import { featureObstacle, hooks } from "../sim/features/index.js";
+import { isTrafficObstacle, hooks } from "../sim/features/index.js";
 
 // The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
@@ -633,7 +632,7 @@ export function buildSnapshot(world, executing = null) {
       };
     // (what a registered feature puts in the road, geese or a closed road's barricades, is never followed
     // or passed: sim/features/index.js)
-    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && !featureObstacle(o));
+    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && isTrafficObstacle(o));
     if (world.busLanes) {
       route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
       const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
@@ -688,9 +687,6 @@ export function buildSnapshot(world, executing = null) {
       const runner = redLightRunner(world, snap.intersection, route.headingAt(snap.intersection.s_line_route));
       if (runner) snap.red_light_runner = runner;
     }
-    // (cars backing out of driveways, with that option on: sim/driveway-reversers.js)
-    if (world.driveways?.enabled)
-      snap.reversing_vehicle = world.driveways.cars.length ? reversingVehicle(world, p, frontS, lane) : null;
     const senseCtx = { p, frontS, lane, road, route, visible };
     for (const sense of SENSE.driveways) sense(world, snap, senseCtx);
     // (a ball rolled into the street ahead, a child maybe after it, with that option on: sim/ball-chase.js)
@@ -897,8 +893,6 @@ export function buildSnapshot(world, executing = null) {
   // (and coming up to a contraflow street it cannot see into yet: sim/contraflow.js)
   if (snap.contraflow_cyclist?.entry_limit_mps != null)
     snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
-  // (and coming up to a car backing out of a driveway: sim/driveway-reversers.js)
-  if (snap.reversing_vehicle?.limit_mps != null) snap.limit = Math.min(snap.limit, snap.reversing_vehicle.limit_mps);
   for (const limit of LIMIT.driveways) limit(snap);
   // (and, having seen a ball roll into the street, no faster than it can stop from short of the gap it
   // came from until the child after it has come and gone: sim/ball-chase.js)
@@ -2768,7 +2762,7 @@ function laneOptions(snap, world) {
     s = p.s,
     FRONT = ego.front_m,
     REAR = world.ego.spec.rearOverhang;
-  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian" && !featureObstacle(o));
+  const vehicles = snap.observed.filter((o) => o.kind !== "pedestrian" && isTrafficObstacle(o));
   const free = desiredSpeed({ ...snap, following: null }).v;
   const i = snap.intersection;
   const line = snap.control_line_m ?? (i ? i.bumper_to_line_m : Infinity);
@@ -3108,15 +3102,6 @@ export function desiredSpeed(snap) {
       reasons.push("car running the red: wait");
     }
   }
-  // a car backing out of a driveway into the lane (sim/driveway-reversers.js): stop and give it room
-  const rv = snap.reversing_vehicle;
-  if (rv?.wait) {
-    const vr = rv.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(rv.bumper_to_stop_m - 0.5, decel);
-    if (vr < v) {
-      v = vr;
-      reasons.push("car backing out of a driveway");
-    }
-  } else if (rv?.limit_mps != null && rv.limit_mps <= v + 0.05) reasons.push("car backing out ahead");
   for (const target of TARGET.driveways) v = target(snap, v, reasons, targetCtx);
   // a ball rolled into the street (sim/ball-chase.js): `limit` is already down to the cover speed
   if (snap.ball_in_road?.limit_mps != null && snap.ball_in_road.limit_mps <= v + 0.05)
@@ -3408,7 +3393,6 @@ export function hazardFlags(snap) {
   if (snap.crossing_guard) f.push("crossing guard");
   if (snap.contraflow_cyclist) f.push("contraflow cyclist");
   if (snap.red_light_runner) f.push("red-light runner");
-  if (snap.reversing_vehicle) f.push("reversing vehicle");
   for (const flag of HAZARD.driveways) {
     const x = flag(snap);
     if (Array.isArray(x)) f.push(...x);

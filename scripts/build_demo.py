@@ -34,7 +34,7 @@ def build(output: Path) -> None:
     if output == ROOT or output == static or output.is_relative_to(static) or ROOT.is_relative_to(output):
         raise ValueError("Choose a separate generated output directory.")
     output.mkdir(parents=True, exist_ok=True)
-    for directory in ("js", "css", "vendor"):
+    for directory in ("js", "css", "vendor", "replays"):
         shutil.copytree(ROOT / "static" / directory, output / directory, dirs_exist_ok=True)
     for page in ("index.html", "bench.html", "arena.html", "results.html"):
         text = (ROOT / "static" / page).read_text()

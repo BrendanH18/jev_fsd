@@ -14,7 +14,7 @@ import { Vehicle, CAR, comfort } from "./vehicle.js";
 import { headingAt, pointAt, projectPoint } from "../map/mapdata.js";
 import { surfaceDistance } from "../map/junctions.js";
 import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopMemory } from "./signals.js";
-import { obbOverlap } from "./collision.js";
+import { boxGap, obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
 import { Crowd, PED, PEDESTRIANS } from "./pedestrians.js";
@@ -82,7 +82,6 @@ import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
-import { DrivewayReversers, auditReversers, boxGap, reverserHidden } from "./driveway-reversers.js";
 import { BallChase, auditBalls } from "./ball-chase.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import { auditParkers, createParkers, parkerConflict } from "./parkers.js";
@@ -285,8 +284,6 @@ export class World {
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js). `sunGlare`: a low sun ahead dazzles drivers, who slow to
   // what they can see (sim/sun-glare.js).
-  // `driveways`: now and then a car backs out of a driveway near the car's way, and everyone gives it
-  // room (sim/driveway-reversers.js).
   // `balls`: now and then a ball rolls out from between parked cars ahead, a child runs out after it,
   // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
   // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
@@ -330,7 +327,6 @@ export class World {
       followingDistance = false,
       redRunners = false,
       sunGlare = false,
-      driveways = false,
       balls = false,
       tailgaters = false,
       parkers = false,
@@ -470,11 +466,6 @@ export class World {
     this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
     this.contraflowSeen = false;
     this.contraflowCalls = new Map();
-    // cars backing out of driveways (sim/driveway-reversers.js): whether they do, whether one has backed
-    // out near the car this drive, and the ones the car has squeezed past or not stopped for
-    this.driveways = new DrivewayReversers(this, { enabled: driveways, seed });
-    this.drivewaysSeen = false;
-    this.drivewayCalls = new Map();
     // a ball rolling out from between parked cars, and a child after it (sim/ball-chase.js): whether
     // they do, whether one has rolled out near the car this drive, and the audit's calls on each
     this.balls = new BallChase(this, { enabled: balls, seed });
@@ -514,15 +505,13 @@ export class World {
     const all = out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
     // (and contraflow cyclists, with that option on: sim/contraflow.js)
     const out2 = this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
-    // (and cars backing out of driveways, with that option on: sim/driveway-reversers.js)
-    const out3 = this.driveways?.cars.length ? out2.concat(this.driveways.near(x, y, r)) : out2;
     // (and what the registered features put in the road: sim/features/index.js)
-    let out4 = out3;
+    let obstacles = out2;
     for (const near of OBSTACLES_NEAR) {
       const more = near(this, x, y, r);
-      if (more) out4 = out4.concat(more);
+      if (more) obstacles = obstacles.concat(more);
     }
-    return out4;
+    return obstacles;
   }
 
   visibleObstaclesNear(x, y, r, observer = this.ego) {
@@ -552,8 +541,8 @@ export class World {
     // (what a registered feature hides from the car: a high snowbank at a corner, say, hides people,
     // cyclists and cars behind it)
     for (const hides of HIDES) if (hides(this, observer, o)) return false;
-    // (a car backing out of a driveway: the cars parked at the kerb hide it, sim/driveway-reversers.js)
-    if (o.reverser) return !(this.hazards && reverserHidden(this, observer, o));
+    const visible = featureObstacle(o)?.visible;
+    if (visible) return visible(this, observer, o);
     if (o.kind === "pedestrian")
       return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
     return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
@@ -668,7 +657,6 @@ export class World {
     this.guardCalls?.clear();
     this.contraflowCalls?.clear();
     this.runnerCall = null;
-    this.drivewayCalls?.clear();
     this.ballCalls?.clear();
     this.tailgaterCall = null;
     this.parkerCalls?.clear();
@@ -1159,7 +1147,6 @@ export class World {
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();
     if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
-    if (this.driveways.enabled) auditReversers(this);
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this);
     if (this.balls?.enabled) auditBalls(this);
     for (const audit of AUDIT_AFTER_BALLS) audit(this);

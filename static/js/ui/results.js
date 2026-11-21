@@ -4,6 +4,7 @@
 import { api, $, h, appUrl } from "../common.js";
 import { CHALLENGES } from "../lab/challenges.js";
 import { ROAD_TESTS } from "../lab/road-tests.js";
+import { mountPublishedReplay } from "./published-replay.js";
 import {
   checkResults,
   summary,
@@ -258,8 +259,8 @@ function replayList(list, data) {
     h(
       "p",
       {},
-      "Every model drive is recorded with each answer the model gave, so it replays with no key and no model call. ",
-      demo ? "Replay runs in the local app: clone the repository, start its server (" : "With this server running (",
+      "Replay other published drives in the terminal using the saved answers, with no model calls. ",
+      demo ? "Clone the repository, start its server (" : "With this server running (",
       h("code", {}, "uv run server.py"),
       demo ? ") and run in another terminal:" : "), run in another terminal:",
     ),
@@ -306,9 +307,12 @@ async function main() {
     );
     const dates = [...new Set(data.rows.filter((r) => r.suite !== "bare").map((r) => r.date))].sort();
     status.textContent = `${data.rows.length} committed runs, ${dates[0]} to ${dates.at(-1)}. Hover a result to see the file it came from.`;
+    // The tables above the replay grow after a direct link has already scrolled to its fragment.
+    if (location.hash === "#replay-heading") $(location.hash).scrollIntoView();
   } catch (err) {
     status.textContent = `Could not load the results: ${err.message}`;
   }
 }
 
 main();
+mountPublishedReplay($("#published-replay"));

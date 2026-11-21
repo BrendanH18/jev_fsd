@@ -6,12 +6,10 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Six features have moved: spring potholes (`features/potholes.js`), Canada geese (`features/geese.js`),
+Seven features have moved: driveway reversers (`features/driveways.js`), spring potholes (`features/potholes.js`), Canada geese (`features/geese.js`),
 black ice (`features/black-ice.js`), snowbanks (`features/snowbanks.js`), puddles (`features/puddles.js`)
-and road closures (`features/road-closures.js`). Their simulation (`sim/potholes.js`, `sim/geese.js`,
-`sim/black-ice.js`, `sim/snowbanks.js`, `sim/puddles.js`, `sim/road-closures.js`) is unchanged; the records
-hold the glue that used to sit in the core, moved verbatim, and the model wording that used to sit in
-`brain/state.js` and `brain/llm-prompt.js`.
+and road closures (`features/road-closures.js`). Each record holds the hooks into the core pipeline
+and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
 
@@ -55,9 +53,9 @@ Order matters in the core: the candidates list is ordered (and capped at 15), re
 `else if` chain where the first reason wins, the situation clauses and the LLM prompt are text, events
 are pushed in audit order, and failures are a list. A hook therefore runs at a **slot**: the place in that
 pipeline where the feature's own code used to be. While other features are still written into the core, a
-slot is named after the core code the hook runs right after (`"driveways"` runs after the driveway
-reversers' code in that pipeline, `"restrictions"` after the turn restrictions', `"first"` before
-everything, `"end"` after the rest). `SLOTS` in `index.js` lists the slots the core runs for each hook;
+slot marks a point in the pipeline (`"driveways"` covers the driveway reversers and the hooks that
+follow them, `"restrictions"` follows turn restrictions, `"first"` runs before everything, and `"end"`
+runs after the rest). `SLOTS` in `index.js` lists the slots the core runs for each hook;
 `hooks()` refuses a slot the core never runs, and loading the registry refuses a record with a hook at
 one, so a misspelt slot cannot silently do nothing (`scripts/test_feature_registry.mjs` checks both, and
 that the core calls every slot).
@@ -91,6 +89,15 @@ every route, black ice on one) and in rain, and every challenge with the cautiou
 Rules: all identical after each of the three commits
 ([record](validation/registry-round2-2026-11-20.md)).
 
+**Driveway reversers** were compared against `36efa57` in Boat with Node 22.23.2. The full
+arena results, including decision traces and events, matched in all 62 drives with Rules and
+all 62 with the cautious agent, apart from wall time, decision latency and the run start
+timestamp. The 12-route Kitsilano dry suites (bare and city) and the two-route Calgary city suite
+also matched field for field apart from timings, using seed 1 and one server with `PYTHONHASHSEED=0`.
+All 26 drives passed, with the reversing audit present on three Kitsilano and both Calgary city
+routes. Both runs of **Reverse lights** reported the reversing audit. The LLM system
+prompt was byte-identical, the Jev fixtures stayed current, and the committed stub replay passed.
+
 **Run before and after against one server process, or set `PYTHONHASHSEED`.** The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
 where the server's `/api/route` returned a different number of alternative routes for the same request.
@@ -101,7 +108,7 @@ gave identical city results, the 12.81 km of the committed reference.
 
 ## How close a new feature is to "its own file, its challenge, its test and one registration line"
 
-For the six migrated features, the core files above no longer name them. What a feature still needs
+For the seven migrated features, the core files above no longer name them. What a feature still needs
 outside its own files:
 
 | Where | What | Hook needed |
@@ -122,8 +129,8 @@ pipeline need nothing.
 ## Moving the rest (3.2)
 
 * **A few at a time, by neighbours.** A feature's hooks run at slots named after its neighbours, so move
-  neighbours together: when the driveway reversers move, the `"driveways"` slot becomes registration order
-  (driveways, then potholes) and the slot goes. Once every feature in a pipeline is a record, that
+  neighbours together. Driveway reversers and potholes now share the `"driveways"` slot, in that
+  registration order. Once every feature in a pipeline is a record, that
   pipeline needs no slots at all; register the records in the order the core runs them today, which
   differs by pipeline (candidates put road closures beside turn restrictions, but the audit puts them
   after parkers), so a few records will keep an explicit slot or the core will need a reviewed reorder.
@@ -149,6 +156,9 @@ pipeline need nothing.
   `evKerb`), a parked car's wait to pull out (`trafficPullOut`) and traffic's line between the banks
   (`trafficLane` at `"parkers"`, with `hold`, `lineAt` and `kept` for the leader search). The forward-sim
   checker gained `settle` (puddles' "no manoeuvre can help it" pass) and the sim time in `afterLaw`.
+* **Driveway reversers.** An obstacle can provide its own predicted box and local visibility check, and
+  use `traffic: true` to stay in the ordinary traffic sensing pass. A forward-sim checker can inspect
+  nearby obstacles via `near`. The reverser step runs in the `"beforeBalls"` slot, after contraflow.
 * **Hooks still to add.** Driver preferences (Rules, the cautious agent), the coach, the HUD and
   renderers, checkpoint fixes and the re-plan, as in the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are

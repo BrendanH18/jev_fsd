@@ -34,6 +34,21 @@ tree it was published with:
 node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/claude-haiku-open-2026-11-20.json.gz --check 1
 ```
 
+The [results page](https://brendanh18.github.io/jev_fsd/results.html#replay-heading) plays Jev's
+published **Right on red** challenge in an overhead street view. The viewer renders sampled poses
+and signal states from an exact replay of the saved drive. It works without an API key or model
+calls. Run the local server on port 8331 before rebuilding the browser data.
+
+```sh
+node --experimental-default-type=module scripts/arena_node.mjs \
+  --replay data/recordings/jev-open-2026-11-20.json.gz --only right-on-red \
+  --browser-replay static/replays/jev-right-on-red.json --check 1
+```
+
+The export requires every tape answer and the replay result to match the original recording.
+It records a repository-relative source path when the recording is inside the repository.
+An export from elsewhere keeps the result hash and omits the local path.
+
 | Driver | Model | Guarded | Open track | Flagged choices (drives) | Model's own decisions, open | Score, open | Cost, open |
 |---|---|---|---|---|---|---|---|
 | Rules | none | 62 / 62 | 62 / 62 | 0 | n/a | 65.0 | $0 |
