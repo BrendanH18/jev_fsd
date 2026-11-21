@@ -2,7 +2,7 @@
 
 ## Commands
 
-The local app needs no build. Python runs through `uv` with one runtime dependency, `typesafe-sdk`. The browser loads ES modules and maps Three.js to `static/vendor/three/`. CI packages the static demo with `scripts/build_demo.py`. Ruff (config in `pyproject.toml`) and Biome (`biome.jsonc`; `static/vendor/` and `data/` are left out) lint and format; CI runs both (`.github/workflows/lint.yml`). Biome is the only npm package: `package.json` and `package-lock.json` pin it (Dependabot updates it), so use `npm ci` for an approved first install. Biome warnings fail CI as errors do. Fix what they report rather than hand-formatting or silencing a rule; an unused parameter a callback signature needs gets a leading `_`. Node checks that read source with regexes must accept the formatter's line breaks and trailing commas.
+The local app needs no build. Python runs through `uv` with one runtime dependency, `typesafe-sdk`. The browser loads ES modules and maps Three.js to `static/vendor/three/`. CI packages the static demo with `scripts/build_demo.py`. Ruff (config in `pyproject.toml`) and Biome (`biome.jsonc`; `static/vendor/` and `data/` are left out) lint and format; CI runs both (`.github/workflows/lint.yml`). Biome is the only npm package: `package.json` and `package-lock.json` pin it (Dependabot updates it), so use `npm ci` for the first install (no approval needed in Boat; ask first on this Mac). Biome warnings fail CI as errors do. Fix what they report rather than hand-formatting or silencing a rule; an unused parameter a callback signature needs gets a leading `_`. Node checks that read source with regexes must accept the formatter's line breaks and trailing commas.
 
 ```sh
 npm ci                                                      # install the pinned Biome (once)
@@ -29,9 +29,27 @@ Browser-side checks need the server running:
 - `/tests`: browser unit tests (car model, controller, collisions, candidates, state). Use `/tests`, not `/tests/run.html`: only routes in `server.py`'s `PAGES` get the session token. API POSTs without it return 403.
 - `/bench`: closed-loop benchmark. Lockstep plus the Rules brain is deterministic, so rerun suite seed 1 and compare with the newest committed run in `data/runs/` from the same JavaScript engine with the same map, suite size, preset and weather (`docs/rules-baseline.md` lists them) after any change to physics, traffic, planner, or router.
 
-Headless (macOS): `swift scripts/shot.swift URL OUT.png [wait] [post_js] [pre_js] [settle] [timeout]` screenshots a page in an offscreen WKWebView and runs JS. The page is usually `visibilityState: hidden`, so `requestAnimationFrame` never fires. Step the app with `window.__jev.advance(seconds)`, and run the benchmark with `await window.__bench.run({ brain, count, seed, save })`. The default timeout is `settle + wait + 30` s, so pass the 7th argument for long runs. `SHOT_SIZE=390x844` sets the viewport (default 1440×900); `?touch=1` shows the touch controls on a desktop. `uv` and the server need to run outside a sandbox: uv writes to `~/.cache/uv` and the server binds a port.
+Headless (macOS): `swift scripts/shot.swift URL OUT.png [wait] [post_js] [pre_js] [settle] [timeout]` screenshots a page in an offscreen WKWebView and runs JS. The page is usually `visibilityState: hidden`, so `requestAnimationFrame` never fires. Step the app with `window.__jev.advance(seconds)`, and run the benchmark with `await window.__bench.run({ brain, count, seed, save })`. The default timeout is `settle + wait + 30` s, so pass the 7th argument for long runs. `SHOT_SIZE=390x844` sets the viewport (default 1440×900); `?touch=1` shows the touch controls on a desktop. In a restricted agent sandbox (not Boat), `uv` (which writes to `~/.cache/uv`) and the server (which binds a port) fail, so run them in Boat.
 
 Docs: [`docs/reference/`](docs/reference/README.md) has one page per topic and feature; [adding a challenge](docs/adding-a-challenge.md); [adding a driver](docs/agents.md).
+
+## Cloud sandboxes (Boat)
+
+Use a Boat sandbox for builds, tests, untrusted code, Docker, and long jobs. Never run them on this computer.
+Docs: https://docs.boat.dev/llms.txt. Prices and limits: run `boat limits`; never quote prices from memory.
+
+- Create: `id=$(boat new --json | jq -r 'select(.event=="ready") | .id')`
+- One-shot job: `boat run --push . -- npm test` (new sandbox, run, cost, delete; exits with the test exit code)
+- Run: `boat exec "$id" --cwd my-app "npm test"` (30 s timeout; `--timeout 0` = no limit)
+- Server: `boat exec "$id" --detach "npm run dev"`, then `boat exec "$id" --status <pid>`
+- Copy files: `boat push "$id" ./my-app` (git-tracked files, to /home/user/my-app) or clone the repo inside the sandbox
+- Public URL for a port: `boat ssh "$id" "host 3000 --private"`
+- Always pass the sandbox id. `current` does not work in a non-interactive shell.
+- When done: `boat stop "$id"` (keeps the disk for at least 14 days) or `boat delete "$id" --yes` (erases it)
+- Stay on this Mac: `scripts/shot.swift` (WKWebView), WebKit/Safari benchmark runs and the WebKit baselines in `docs/rules-baseline.md`, and local Ollama models (Boat has no GPU). For WebKit runs against a server in Boat, `boat forward` it to the same port on this Mac, because the server checks the port in `Host` and `Origin`. Runs that use Ollama keep the server on this Mac next to it.
+- `server.py` binds 127.0.0.1, accepts only loopback Host names (`jev/security.py`) and holds paid API keys. Never expose it with `boat host` or the in-sandbox `host`. To see it, use the sandbox's desktop Chrome or `boat forward` the port to this Mac.
+- Use Node 22 in Boat, as CI does. Copy any `data/runs/` results you want to keep back to this Mac before deleting the sandbox.
+- Live model runs need keys from `.env`. Pass only the key a run needs, with `boat new -e` or `boat run -e`; never copy `.env` into a sandbox, and keep to the budget rules below.
 
 ## Architecture
 
@@ -146,7 +164,7 @@ Where features reach into shared code:
 
 - Editing a Python file with an in-place substitution that keeps the file size, inside the same second, can leave a stale `__pycache__/*.pyc` that Python still trusts. Delete `__pycache__` if a change seems to have no effect.
 - NPC colors and car body styles are render-only. Preserve them when moving a car between traffic and parking. Driving decisions must ignore them.
-- In Node tests, never pass sim objects (World, Route, MapData, vehicles) to `assert`; assert on primitives such as ids, counts and booleans. A failing assert on one makes Node print the whole object graph, which has used 70–200 GB of memory on a 16 GB Mac, and `--max-old-space-size` does not stop it. Run heavy checks one at a time; the full Playwright suites run in CI.
+- In Node tests, never pass sim objects (World, Route, MapData, vehicles) to `assert`; assert on primitives such as ids, counts and booleans. A failing assert on one makes Node print the whole object graph, which has used 70–200 GB of memory on a 16 GB Mac, and `--max-old-space-size` does not stop it. Run heavy checks in Boat, one at a time; the full Playwright suites run in CI.
 - End Node tests that build an `Autopilot` with `process.exit(0)` after the assertions. Tests importing `bench/runner.js`, even through arena evaluation, keep Node alive through its module-level `MessageChannel`. Run `scripts/test_*.mjs` with Node 22, as CI does; Node 24 rejects `--experimental-default-type`.
 - CI (`.github/workflows/demo.yml`) runs `scripts/test_*.mjs` in six shards `scripts/ci_shard.mjs` plans from `scripts/ci_test_times.json`, and stops any that runs longer than `NODE_TEST_TIMEOUT` (360 s). Add a new check's measured seconds to the times file (unlisted files count as the median), and change the shard count in both the matrix and the `--shards` argument; `scripts/test_ci_shard.mjs` checks they match. Split a check rather than raise the limit far.
 - `window.__bench.run` saves by default. The local server writes to gitignored `data/runs/` (baselines need `git add -f`). The static demo uses localStorage. Pass `save: false` for a comparison run. For before/after benchmarks, check that the before tree really matches its commit (`diff -r` against a fresh `git archive`) and that its results reproduce the previous record; WebKit can expose timing bugs V8 misses.
