@@ -88,6 +88,38 @@ const drives = [
   ["jev-unprotected-left", "Jev · The unprotected left · Ottawa"],
 ];
 
+// Jev open-track exports. The map, versions and end time describe the recorded
+// run, independent of the version of the currently installed challenge.
+const recordedMaps = { ottawa: "c18b8436019517f5", calgary: "d8c3b4c3921cb359" };
+const incidentDrives = new Map([
+  ["flagger", ["ottawa", 56.15]],
+  ["right-on-red", ["calgary", 65.667]],
+  ["unprotected-left", ["ottawa", 28.817]],
+]);
+
+export function incidentDrive(config, incident) {
+  const entry = incidentDrives.get(config.challenge);
+  if (
+    !entry ||
+    config.version !== 1 ||
+    config.pack !== "6" ||
+    entry[0] !== config.map ||
+    recordedMaps[config.map] !== config.map_sha ||
+    incident.at_s > entry[1]
+  )
+    return null;
+  return `jev-${config.challenge}`;
+}
+
+export async function loadPublishedDrive(id, signal) {
+  const response = await fetch(new URL(`../../replays/${id}.json`, import.meta.url), { signal });
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  const replay = await response.json();
+  if (replay.format !== "jev-browser-replay/1" || !replay.choices || !(replay.frames?.length >= 2))
+    throw new Error("Replay data is incomplete");
+  return replay;
+}
+
 export function mountPublishedReplay(root) {
   const select = h(
     "select",
@@ -103,13 +135,9 @@ export function mountPublishedReplay(root) {
     const { signal } = request;
     player.replaceChildren(h("p", { role: "status" }, "Loading replay…"));
     try {
-      const response = await fetch(new URL(`../../replays/${select.value}.json`, import.meta.url), { signal });
-      if (!response.ok) throw new Error(`Request failed (${response.status})`);
-      const replay = await response.json();
+      const replay = await loadPublishedDrive(select.value, signal);
       if (signal.aborted) return;
-      if (replay.format !== "jev-browser-replay/1" || !replay.choices || replay.frames?.length < 2)
-        throw new Error("Replay data is incomplete");
-      signal.addEventListener("abort", showDrive(player, replay), { once: true });
+      signal.addEventListener("abort", showDrive(player, replay).pause, { once: true });
     } catch (error) {
       if (!signal.aborted)
         player.replaceChildren(h("p", { role: "status" }, `Could not load the browser replay. ${error.message}.`));
@@ -119,7 +147,7 @@ export function mountPublishedReplay(root) {
   return load();
 }
 
-function showDrive(root, replay) {
+export function showDrive(root, replay, alignedTime) {
   const { frames } = replay,
     duration = frames.at(-1).t;
   const canvas = h("canvas", {
@@ -196,10 +224,10 @@ function showDrive(root, replay) {
       { class: "published-replay-legend results-note" },
       "Driven car in mint · Traffic in white · Dashed line for the planned route",
     ),
-    h("div", { class: "published-replay-controls" }, play, scrub, readout),
+    alignedTime !== undefined ? readout : h("div", { class: "published-replay-controls" }, play, scrub, readout),
     choice,
     ...replay.choices
-      .filter((c) => c.flag)
+      .filter((c) => alignedTime === undefined && c.flag)
       .map((c) =>
         h(
           "button",
@@ -217,6 +245,6 @@ function showDrive(root, replay) {
 
     event,
   );
-  render(0);
-  return pause;
+  render(alignedTime ?? 0);
+  return { pause, render };
 }

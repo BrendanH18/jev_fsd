@@ -890,9 +890,9 @@ export async function boot() {
     onFinish: () => finishDrive("finished"),
     onNewDrive: () => explorer.open(),
     getReplayTarget: (report, incident) => reportIncidentTarget(recorder, report, incident),
-    onReplay: (index) => {
+    onReplay: (index, comparison) => {
       lab.update(recorder, performance.now());
-      lab.openReplay(index);
+      lab.openReplay(index, comparison);
     },
     onOpen: () => {
       pausedBeforeReport = world.paused;

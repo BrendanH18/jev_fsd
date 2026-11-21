@@ -1,9 +1,27 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { replayPosition, reportIncidentTarget } from "../static/js/lab/playback.js";
 import { DriveRecorder } from "../static/js/lab/recorder.js";
 
 globalThis.document = { querySelector: () => null };
 const { DriveLab } = await import("../static/js/ui/lab.js");
+const { incidentDrive } = await import("../static/js/ui/published-replay.js");
+const source = JSON.parse(
+  gunzipSync(readFileSync(new URL("../data/recordings/jev-open-2026-11-20.json.gz", import.meta.url))),
+);
+for (const challenge of ["flagger", "right-on-red", "unprotected-left"]) {
+  const id = `jev-${challenge}`;
+  const replay = JSON.parse(readFileSync(new URL(`../static/replays/${id}.json`, import.meta.url)));
+  const { map, pack, version, result_sha } = source.results[challenge];
+  const config = { challenge, map, pack, version, map_sha: source.header.maps[map] };
+  const end = replay.frames.at(-1).t;
+  assert.equal(replay.challenge, challenge);
+  assert.equal(replay.result_sha, result_sha);
+  assert.equal(incidentDrive(config, { at_s: end }), id);
+  assert.equal(incidentDrive(config, { at_s: end + 0.001 }), null);
+  assert.equal(incidentDrive({ ...config, map_sha: undefined }, { at_s: 1 }), null);
+}
 const frames = [10, 10.5, 11, 11.2, 11.2].map((t) => ({ t }));
 const near = (actual, expected) => assert(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
 let position = replayPosition(frames, 0, 0.25);
