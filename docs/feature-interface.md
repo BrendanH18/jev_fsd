@@ -6,9 +6,8 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Seven features have moved: driveway reversers (`features/driveways.js`), spring potholes (`features/potholes.js`), Canada geese (`features/geese.js`),
-black ice (`features/black-ice.js`), snowbanks (`features/snowbanks.js`), puddles (`features/puddles.js`)
-and road closures (`features/road-closures.js`). Each record holds the hooks into the core pipeline
+Nine features have moved: driveway reversers, ball chase, spring potholes, Canada geese, black ice,
+snowbanks, puddles, traffic parking and road closures. Each record holds the hooks into the core pipeline
 and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
@@ -19,15 +18,15 @@ export default {
   seen: "geeseSeen",            // the World flag: the feature has met the car this drive
   calls: "geeseCalls",          // the World map of the audit's calls (cleared when the car is moved by hand)
   build: (world, { enabled, seed, map }) => new Geese(world, { enabled, seed }),
-  metric: { at: "balls", name: "wildlife_conflicts", failure: "drove into or too close to geese crossing the road" },
+  metric: { at: "streetHazards", name: "wildlife_conflicts", failure: "drove into or too close to geese crossing the road" },
   obstacle: { test: isGoose, likePedestrian: true },   // its things in world.obstaclesNear
   motion: (snap) => !!snap.geese_crossing?.wait,       // ask the model "stop or drive?"
   priority: [],                                        // candidate ids kept when the list is cut
 
   obstacles(world, x, y, r) { ... },                    // World.obstaclesNear
   stepAfterTraffic(world, fleet, dt) { ... },           // sim/step.js
-  audit: { at: "balls", run(world) { ... } },           // World.audit
-  sense: { at: "balls", run(world, snap, ctx) { ... } }, // the sensing pass
+  audit: { at: "streetHazards", run(world) { ... } },   // World.audit
+  sense: { at: "streetHazards", run(world, snap, ctx) { ... } },
   limit, target, hazard,                                // snap.limit, desiredSpeed, hazard flags
   candidates, adjust, brakeDetour, sim,                 // lane candidates, their forward-sim checks and rejections
   state, outcome, slowOutcome, clause, holdStill, prompt, // the model's decision state and wording
@@ -98,6 +97,13 @@ All 26 drives passed, with the reversing audit present on three Kitsilano and bo
 routes. Both runs of **Reverse lights** reported the reversing audit. The LLM system
 prompt was byte-identical, the Jev fixtures stayed current, and the committed stub replay passed.
 
+**Ball chase and traffic parking** were compared against `c81cea9` in Boat with Node 22.23.5.
+Every challenge and road test matched for both Rules and the cautious agent, including decision
+traces and events, apart from wall time and the run start timestamp. Both features reported their
+audit metrics in their own challenges. The guarded and open system prompts matched byte for byte,
+the Jev fixtures stayed current, and all 62 drives in the published Jev open-track recording
+replayed exactly.
+
 **Run before and after against one server process, or set `PYTHONHASHSEED`.** The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
 where the server's `/api/route` returned a different number of alternative routes for the same request.
@@ -108,8 +114,7 @@ gave identical city results, the 12.81 km of the committed reference.
 
 ## How close a new feature is to "its own file, its challenge, its test and one registration line"
 
-For the seven migrated features, the core files above no longer name them. What a feature still needs
-outside its own files:
+A registered feature still has these integration points outside its own files:
 
 | Where | What | Hook needed |
 |---|---|---|
@@ -138,8 +143,8 @@ pipeline need nothing.
   that order in sensing, the audit and the hazard flags, but puddles come first in the speed ceiling, the
   target, the candidates, the decision state and the wording, beside potholes, and black ice's lane
   adjustment and slowed-outcome wording come after puddles' (`"end"`). The temporary `"snowbanks"` slots
-  that puddles used went once snowbanks moved; the new slots are named after the core code they follow
-  (`"officers"`, `"tailgaters"`, `"parking"`, `"parkers"`).
+  that puddles used went once snowbanks moved. The remaining hooks run at `"officers"`,
+  `"tailgaters"`, `"parking"` and `"late"`.
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).
@@ -154,11 +159,16 @@ pipeline need nothing.
   what a snowbank hides (`hides`, `blocksView`), the car put down in a narrowing (`placeEgo`), the move
   toward the middle (`detour`), the emergency pull-over and its audit (`evStop`, `pullOverDetour`,
   `evKerb`), a parked car's wait to pull out (`trafficPullOut`) and traffic's line between the banks
-  (`trafficLane` at `"parkers"`, with `hold`, `lineAt` and `kept` for the leader search). The forward-sim
+  (`trafficLane` at `"late"`, with `hold`, `lineAt` and `kept` for the leader search). The forward-sim
   checker gained `settle` (puddles' "no manoeuvre can help it" pass) and the sim time in `afterLaw`.
 * **Driveway reversers.** An obstacle can provide its own predicted box and local visibility check, and
   use `traffic: true` to stay in the ordinary traffic sensing pass. A forward-sim checker can inspect
-  nearby obstacles via `near`. The reverser step runs in the `"beforeBalls"` slot, after contraflow.
+  nearby obstacles via `near`. The reverser step runs after contraflow, followed by ball chase and geese
+  in registration order.
+* **Ball chase and traffic parking.** The `trafficSpeed` hook caps both ordinary and emergency traffic.
+  The fleet uses hooks to schedule parkers, step them as they reverse, give traffic a virtual leader at
+  their hold line, and apply their approach offset, stop and signal. The emergency audit uses
+  `evQueueHold` when a stopped or reversing parker has room reserved behind it.
 * **Hooks still to add.** Driver preferences (Rules, the cautious agent), the coach, the HUD and
   renderers, checkpoint fixes and the re-plan, as in the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are

@@ -55,7 +55,7 @@ export default {
 
   // The car's sensing: puddles at the kerb with someone within splash reach, while they lie.
   sense: {
-    at: "balls",
+    at: "streetHazards",
     run(world, snap, { p, frontS, lane, road, visible }) {
       if (world.puddles?.enabled) {
         const pd = puddlesAhead(world, p, frontS, lane, road.limit, visible);
@@ -108,7 +108,7 @@ export default {
   // Every lane manoeuvre whose wheels would go through a puddle with someone near it slows below its
   // splash speed, by then.
   adjust: {
-    at: "balls",
+    at: "streetHazards",
     run({ snap, world, s, lateralAt }, list) {
       if (snap.puddles_ahead && snap.route && snap.routeProj) {
         for (const c of list) {

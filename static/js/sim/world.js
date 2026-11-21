@@ -82,9 +82,7 @@ import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
-import { BallChase, auditBalls } from "./ball-chase.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
-import { auditParkers, createParkers, parkerConflict } from "./parkers.js";
 import { FEATURES, featureNeedsDay, featureObstacle, hooks } from "./features/index.js";
 import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
@@ -93,12 +91,13 @@ import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guard
 // The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
 const OBSTACLES_NEAR = hooks("obstacles");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
-const AUDIT_AFTER_BALLS = hooks("audit", "balls");
+const AUDIT_STREET_HAZARDS = hooks("audit", "streetHazards");
 const AUDIT_AFTER_TAILGATERS = hooks("audit", "tailgaters");
 const HIDES = hooks("hides"),
   PLACE_EGO = hooks("placeEgo"),
-  EV_KERB = hooks("evKerb");
-const AUDIT_AFTER_PARKERS = hooks("audit", "parkers");
+  EV_KERB = hooks("evKerb"),
+  EV_QUEUE_HOLD = hooks("evQueueHold");
+const AUDIT_LATE = hooks("audit", "late");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -284,16 +283,11 @@ export class World {
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js). `sunGlare`: a low sun ahead dazzles drivers, who slow to
   // what they can see (sim/sun-glare.js).
-  // `balls`: now and then a ball rolls out from between parked cars ahead, a child runs out after it,
-  // and everyone who sees the ball slows, ready to stop for the child (sim/ball-chase.js).
   // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
   // not brake-check it, and lets it by (sim/tailgaters.js).
-  // `parkers`: now and then the traffic car ahead of the driven car parallel parks, and everyone behind
-  // it stops well back and waits until it is in (sim/parkers.js).
   // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
   // obeys the officer rather than the lights (sim/traffic-officer.js).
-  // And the option of each registered feature (sim/features/index.js): `potholes`, `geese`, `ice`,
-  // `snowbanks`, `puddles`, `roadClosures`.
+  // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
     {
@@ -327,9 +321,7 @@ export class World {
       followingDistance = false,
       redRunners = false,
       sunGlare = false,
-      balls = false,
       tailgaters = false,
-      parkers = false,
       officers = false,
       ...features
     } = {},
@@ -466,21 +458,11 @@ export class World {
     this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
     this.contraflowSeen = false;
     this.contraflowCalls = new Map();
-    // a ball rolling out from between parked cars, and a child after it (sim/ball-chase.js): whether
-    // they do, whether one has rolled out near the car this drive, and the audit's calls on each
-    this.balls = new BallChase(this, { enabled: balls, seed });
-    this.ballsSeen = false;
-    this.ballCalls = new Map();
     // tailgaters (sim/tailgaters.js): whether traffic now and then closes up right behind the car, whether
     // one has followed it this drive, and the braking the audit follows
     this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
     this.tailgatersSeen = false;
     this.tailgaterCall = null;
-    // traffic parallel parking ahead (sim/parkers.js): whether it does, whether one has signalled to park
-    // ahead of the car this drive, and the ones the car has blocked or gone round
-    this.parkers = createParkers({ enabled: parkers, seed });
-    this.parkersSeen = false;
-    this.parkerCalls = new Map();
     // police officers directing traffic (sim/traffic-officer.js): whether they come, and whether the car has
     // come up to a junction one governs this drive
     this.officers = createOfficers({ enabled: officers, seed });
@@ -657,9 +639,7 @@ export class World {
     this.guardCalls?.clear();
     this.contraflowCalls?.clear();
     this.runnerCall = null;
-    this.ballCalls?.clear();
     this.tailgaterCall = null;
-    this.parkerCalls?.clear();
     for (const f of FEATURES) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn])
@@ -1148,12 +1128,10 @@ export class World {
     if (this.crossingGuards.enabled) this.auditGuards();
     if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this);
-    if (this.balls?.enabled) auditBalls(this);
-    for (const audit of AUDIT_AFTER_BALLS) audit(this);
+    for (const audit of AUDIT_STREET_HAZARDS) audit(this);
     if (this.tailgaters?.enabled) auditTailgaters(this);
     for (const audit of AUDIT_AFTER_TAILGATERS) audit(this);
-    if (this.parkers?.enabled) auditParkers(this);
-    for (const audit of AUDIT_AFTER_PARKERS) audit(this);
+    for (const audit of AUDIT_LATE) audit(this);
     this.auditKerb();
     leftSpace(this);
   }
@@ -1956,7 +1934,7 @@ export class World {
               p.ahead - along - FRONT <= FOLLOWING_STANDSTILL_M + AUDIT_EV_LINE_M &&
               Math.abs(p.right) < side + ego.spec.width / 2
             );
-          }) || this.parkerQueue(FRONT)
+          }) || this.heldInQueue(FRONT)
         : null;
     for (const ev of evs) {
       const call = emergencyCall(ego, ev);
@@ -2002,12 +1980,11 @@ export class World {
           v <= AUDIT_EV_MOVING_MPS &&
           toPeek + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
           toLook <= stopping + AUDIT_EV_LINE_M;
-        // (and likewise a crawl up to the hold line of a traffic car stopped to reverse into a space, or
-        // reversing: the room beside and ahead of it is the parker's, sim/parkers.js)
-        const hold = !queued && v <= AUDIT_EV_MOVING_MPS ? this.parkerHold(FRONT) : null;
+        // A car crawling up to a queue can finish stopping when the siren arrives.
+        const hold = !queued && v <= AUDIT_EV_MOVING_MPS ? this.queueHold(FRONT) : null;
         const approachingQueue =
-          hold && hold.to_hold_m >= (v * v) / (2 * comfort().hardDecel) && hold.to_hold_m <= stopping + AUDIT_EV_LINE_M
-            ? hold.parker
+          hold && hold.distance >= (v * v) / (2 * comfort().hardDecel) && hold.distance <= stopping + AUDIT_EV_LINE_M
+            ? hold.vehicle
             : null;
         this.evCalls.set(
           ev.id,
@@ -2148,22 +2125,18 @@ export class World {
     }
   }
 
-  // A car ahead stopped to reverse into a space, or reversing (sim/parkers.js), with the driven car
-  // standing at its hold line: the room between them is the parker's, so the car is queued behind it
-  // as behind a stopped body (auditEmergency), with nowhere to pull over to.
-  parkerQueue(FRONT) {
-    const c = this.parkerHold(FRONT);
-    return c && c.to_hold_m <= AUDIT_EV_LINE_M ? c.parker : null;
+  // Within a stopping queue even when the vehicle ahead needs extra room behind it.
+  heldInQueue(front) {
+    const hold = this.queueHold(front);
+    return hold && hold.distance <= AUDIT_EV_LINE_M ? hold.vehicle : null;
   }
 
-  // The parker ahead stopped to reverse into a space, or reversing, whose hold line the car's front is
-  // `to_hold_m` short of (parkerConflict), or null.
-  parkerHold(FRONT) {
-    if (!this.parkers?.active.length || !this.route) return null;
-    const route = this.route,
-      p = route.project(this.ego.x, this.ego.y, route.hint);
-    const c = p && parkerConflict(this, this.ego, route, p.s + FRONT, { lat: p.lateral, hint: p.index });
-    return c && c.phase !== "approach" ? c : null;
+  queueHold(front) {
+    for (const hold of EV_QUEUE_HOLD) {
+      const result = hold(this, front);
+      if (result) return result;
+    }
+    return null;
   }
 
   auditCyclists() {

@@ -101,7 +101,7 @@ export default {
   },
   // Every lane manoeuvre whose wheels would cross a pothole ahead slows to the speed to drive over it at, by then.
   adjust: {
-    at: "balls",
+    at: "streetHazards",
     run({ snap, world, s, lateralAt }, list) {
       if (snap.potholes_ahead && snap.route && snap.routeProj) {
         for (const c of list) {

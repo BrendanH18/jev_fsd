@@ -28,8 +28,6 @@ import { turnBanned } from "./turn-restrictions.js";
 // it: they wait short of the junction for one coming out of the street they turn into, wait for one as
 // for oncoming traffic, and move over for one coming the other way along it, stopping where that leaves
 // less than the minimum passing distance until it has gone by (sim/contraflow.js).
-// With `balls` on, drivers who see a ball roll into the street slow to a speed from which they can stop
-// short of the gap it came from, until the child after it has come and gone (sim/ball-chase.js ballYield).
 
 import {
   Vehicle,
@@ -158,21 +156,24 @@ import { onStreet } from "./double-parked.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
 import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
-import { ballYield } from "./ball-chase.js";
-import { hooks } from "./features/index.js";
+import { hooks, isParkingTraffic } from "./features/index.js";
 
 // How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
 // re-plan round them, a move inside its lane, and where it stops for them; each where that feature's own
 // code used to be. (With `geese` on, say, drivers and cyclists slow for a gaggle of Canada geese coming up
 // to the kerb ahead and stop short of their way across until the last goose is off the roadway.)
-const TRAFFIC_START = hooks("trafficStart"),
+const TRAFFIC_MANAGE = hooks("trafficManage"),
+  TRAFFIC_MANEUVER = hooks("trafficManeuver"),
+  TRAFFIC_LEADER_HOLD = hooks("trafficLeaderHold"),
+  TRAFFIC_PARKING_PLAN = hooks("trafficParkingPlan"),
+  TRAFFIC_START = hooks("trafficStart"),
   TRAFFIC_REPLAN = hooks("trafficReplan");
 const TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
-  TRAFFIC_KEEP = hooks("trafficLane", "parkers"),
+  TRAFFIC_KEEP = hooks("trafficLane", "late"),
   TRAFFIC_YIELD = hooks("trafficYield"),
+  TRAFFIC_SPEED = hooks("trafficSpeed"),
   TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import { TAIL_HURRY, manageTailgaters, tailgateBrake, tailgateLeadSpeed } from "./tailgaters.js";
-import { manageParkers, parkerConflict, parkerStop, stepParker } from "./parkers.js";
 import { officerDirection } from "./traffic-officer.js";
 import {
   AMBER_M,
@@ -192,6 +193,12 @@ import {
 } from "./school-bus.js";
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
+
+function featureTrafficSpeed(world, n, front) {
+  let limit = Infinity;
+  for (const speed of TRAFFIC_SPEED) limit = Math.min(limit, speed(world, n, front));
+  return limit;
+}
 // Behind a double-parked van, a driver more than this past where it would wait is too close to pull out
 // round it (sim/double-parked.js).
 const WAIT_SLACK_M = 1.5;
@@ -1177,8 +1184,7 @@ export class NpcFleet {
     if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
     // (now and then a car behind the driven car tailgates it, with that option on: sim/tailgaters.js)
     if (world.tailgaters?.enabled) manageTailgaters(world, this, dt);
-    // (now and then the car ahead of the driven car parallel parks, with that option on: sim/parkers.js)
-    if (world.parkers?.enabled) manageParkers(world, this);
+    for (const manage of TRAFFIC_MANAGE) manage(world, this);
     const all = [world.ego, ...this.vehicles];
     // (contraflow cyclists, with that option on: sim/contraflow.js)
     const riders = world.contraflow?.riders || [];
@@ -1237,8 +1243,7 @@ export class NpcFleet {
         this.parkStep(n, dt);
         continue;
       }
-      // a car parallel parking: stopped where it starts, then reversing in (sim/parkers.js)
-      if (n.parker && stepParker(world, this, n, dt)) continue;
+      if (TRAFFIC_MANEUVER.some((step) => step(world, this, n, dt))) continue;
       if (n.backoff) {
         this.backOff(n, dt);
         continue;
@@ -1314,10 +1319,11 @@ export class NpcFleet {
       const spec = n.spec;
       const front = path.s + (spec.length - spec.rearOverhang);
       if (isEmergencyVehicle(n) && !n.siren && n.evRejoin === undefined) n.evRejoin = proj.lateral;
-      // behind a car parallel parking ahead (sim/parkers.js): keep back from the room it reverses into
-      // (below), and don't go round it
-      const pkc = world.parkers?.active.length && !n.parker ? parkerConflict(world, n, path, front) : null;
-      if (pkc) n.lcCooldown = Math.max(n.lcCooldown || 0, 0.5);
+      let leaderHold = null;
+      for (const findHold of TRAFFIC_LEADER_HOLD) {
+        const hold = findHold(world, n, path, front);
+        if (hold && (!leaderHold || hold.gap < leaderHold.gap)) leaderHold = hold;
+      }
       // lane change in progress: the lateral offset eases over the maneuver, then the path moves
       // onto the new lane
       // an emergency vehicle calling on this driver to give way (none while still at the curb)
@@ -1428,8 +1434,14 @@ export class NpcFleet {
       }
       // a tailgater drifting left in its lane now and then, to look past the driven car (sim/tailgaters.js)
       if (n.tgPeek) offset += n.tgPeek;
-      // a car about to parallel park easing right toward where it starts (sim/parkers.js)
-      if (n.parker) offset += n.parker.shift;
+      let parkingPlan = null;
+      for (const plan of TRAFFIC_PARKING_PLAN) {
+        parkingPlan = plan(n, (n.driver || IDM).s0);
+        if (parkingPlan) {
+          offset += parkingPlan.shift;
+          break;
+        }
+      }
       // the line a registered feature has it keep to in its lane, over toward the middle between snowbanks
       // that push the parked cars out from the kerb, say: where it stops (`hold`), the move along its way
       // (`lineAt`) and the line it keeps to (`kept`) for what is in its way, and what it has moved so far
@@ -1637,12 +1649,10 @@ export class NpcFleet {
           }
         } else n.parkWait = 0;
       } else if (n.parkWait) n.parkWait = 0;
-      // behind a car parallel parking ahead (sim/parkers.js): stop at its hold line, short of the room it
-      // reverses into, until it is in
-      if (pkc && pkc.to_hold_m < gap) {
-        gap = Math.max(0.05, pkc.to_hold_m);
+      if (leaderHold && leaderHold.gap < gap) {
+        gap = Math.max(0.05, leaderHold.gap);
         leadV = 0;
-        leader = pkc.parker;
+        leader = leaderHold.vehicle;
       }
       // a snow plow ahead (sim/snow-plow.js), as far as the distance to stay back from it: in its lane,
       // or in the lane to its left, never passed on the right
@@ -1796,12 +1806,7 @@ export class NpcFleet {
         const at = this.yieldStop(n, yielding, front);
         stopAt = stopAt === null ? at : Math.min(stopAt, at);
       }
-      // about to parallel park: stop where it starts, alongside the car in front of its space (sim/parkers.js)
-      const pStop = n.parker ? parkerStop(n) : null;
-      if (pStop !== null) {
-        const at = pStop + (n.driver || IDM).s0 - 0.3;
-        stopAt = stopAt === null ? at : Math.min(stopAt, at);
-      }
+      if (parkingPlan?.stop != null) stopAt = stopAt === null ? parkingPlan.stop : Math.min(stopAt, parkingPlan.stop);
       if (stopAt !== null && stopAt < gap) {
         gap = Math.max(0.05, stopAt);
         leadV = 0;
@@ -1831,7 +1836,7 @@ export class NpcFleet {
             ? turn
             : null;
       if (stand && stand.signal !== undefined) n.signal = stand.signal;
-      if (n.parker) n.signal = "right";
+      if (parkingPlan) n.signal = parkingPlan.signal;
       // turning left: yield to oncoming traffic before crossing its lane
       if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
         gap = Math.min(gap, Math.max(0.05, toNode - 5));
@@ -2051,12 +2056,6 @@ export class NpcFleet {
       // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
       // sim/sun-glare.js)
       const vGlare = this.world.sunGlare && n.kind !== "bike" ? npcGlareCeiling(this.world, n) : Infinity;
-      // (and, having seen a ball roll into the street ahead, no faster than it can stop from short of
-      // the gap it came from: sim/ball-chase.js)
-      const vBall =
-        this.world.balls?.balls.length && !n.transit?.tram
-          ? (ballYield(this.world, n, front)?.limit ?? Infinity)
-          : Infinity;
       const v0 = Math.min(
         isPlow(n) ? n.v0 : n.v0 * weather.speed,
         limit * (n.transit || n.school ? 0.95 : n.tailgate ? TAIL_HURRY : 1.05) * weather.speed,
@@ -2069,7 +2068,7 @@ export class NpcFleet {
         vFollow,
         vGlare,
         featureLimit,
-        vBall,
+        featureTrafficSpeed(world, n, front),
       );
       const D = n.driver || IDM;
       let a;
@@ -2357,17 +2356,13 @@ export class NpcFleet {
       gap = Math.max(0.05, stopAt);
       leadV = 0;
     }
-    // (a ball it has seen roll into the street ahead: no faster than it can stop from short of the gap it
-    // came from, as all traffic does, siren or not: sim/ball-chase.js. A truck that ran on stopped over
-    // the child's way back to the gap, each waiting for the other.)
-    const vBall = world.balls?.balls.length ? (ballYield(world, n, front)?.limit ?? Infinity) : Infinity;
     const v0 = Math.min(
       n.v0 * weather.speed,
       e.limit * (n.siren ? EV_LIMIT_FACTOR : 1) * weather.speed,
       EV_MAX_MPS,
       curveSpeed(path, path.s),
       vCap,
-      vBall,
+      featureTrafficSpeed(world, n, front),
     );
     const D = n.driver;
     let a;
@@ -3370,8 +3365,7 @@ export class NpcFleet {
         isPlow(n) ||
         n.collect ||
         n.pull ||
-        n.parking ||
-        n.parker ||
+        isParkingTraffic(n) ||
         n.lc ||
         n.backoff ||
         n.frozen > 0
@@ -3494,7 +3488,7 @@ export class NpcFleet {
     if (cars.length > this.target) {
       let far = null;
       for (const k of cars) {
-        if (k.pull || k.parking || k.parker) continue;
+        if (k.pull || isParkingTraffic(k)) continue;
         const d = Math.hypot(k.x - ego.x, k.y - ego.y);
         if (d > 150 && (!far || d > far.d)) far = { k, d };
       }

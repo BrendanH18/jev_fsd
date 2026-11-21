@@ -24,7 +24,7 @@ export default {
   seen: "roadClosuresSeen",
   calls: "roadClosureCalls",
   build: (_world, { enabled, seed }) => new RoadClosures({ enabled, seed }),
-  metric: { at: "parkers", name: "closure_entries", failure: "drove onto a closed road" },
+  metric: { at: "late", name: "closure_entries", failure: "drove onto a closed road" },
   // (a barricade is stopped short of, or gone round by the detour, never followed; in the forward sims it
   // stands where it is, like scenery)
   obstacle: { test: isBarricade, fixed: true },
@@ -38,7 +38,7 @@ export default {
     if (world.roadClosures?.enabled) world.roadClosures.step(world, fleet);
   },
   audit: {
-    at: "parkers",
+    at: "late",
     run(world) {
       if (world.roadClosures?.enabled) auditRoadClosures(world);
     },
@@ -46,7 +46,7 @@ export default {
 
   // On the route, with no detour yet, or beside the detour.
   sense: {
-    at: "parkers",
+    at: "late",
     run(world, snap, { route, frontS }) {
       if (world.roadClosures?.enabled) snap.road_closed = roadClosedSensing(world, route, frontS);
     },
@@ -62,7 +62,7 @@ export default {
       return v;
     },
   },
-  hazard: { at: "parkers", run: (snap) => (snap.road_closed ? "road closed" : null) },
+  hazard: { at: "late", run: (snap) => (snap.road_closed ? "road closed" : null) },
 
   // On the route, seen at its barricades, with no detour yet: stop short of the junction before it (or,
   // past that, of the barricade) while navigation finds a way round.
@@ -131,7 +131,7 @@ export default {
   clause: { at: "restrictions", run: (snap) => (snap.road_closed ? roadClosedClause(snap.road_closed) : null) },
   // Waiting short of a road closed for an event until a detour comes.
   holdStill: {
-    at: "parkers",
+    at: "late",
     run: (snap) =>
       snap.road_closed?.on_route
         ? ", when the route runs onto a road closed ahead with no detour yet (`road_closed.on_route` true) and the car has reached the point where it waits (`road_closed.stop_in_m` under 2), until the detour comes"
