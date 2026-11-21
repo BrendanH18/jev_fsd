@@ -191,6 +191,19 @@ def check_published_replay(page, url):
     play.click()
     replay.get_by_role("button", name="Play again").wait_for()
     reached_last_frame = slider.input_value() == slider.get_attribute("max")
+    select = replay.get_by_role("combobox", name="Published drive")
+    for drive, verdict, flag in [
+        ("claude-haiku-flagger", "Fail", "runs_flagger_stop"),
+        ("jev-flagger", "Pass", None),
+        ("jev-unprotected-left", "Pass", "fails_to_yield_to_oncoming"),
+    ]:
+        select.select_option(drive)
+        replay.get_by_text(f"Open track · {verdict}", exact=False).wait_for()
+        play.click()
+        page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
+        if flag:
+            replay.get_by_role("button", name="Flagged at").first.click()
+            replay.get_by_text(f"Flagged: {flag}", exact=False).wait_for()
     return report(
         "published browser replay",
         [

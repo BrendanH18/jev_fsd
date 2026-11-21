@@ -12,7 +12,8 @@ const repoRoot = fileURLToPath(new URL("../", import.meta.url));
 
 export function captureBrowserReplay() {
   const frames = [];
-  let context, route, signals;
+  const choices = [];
+  let context, route, signals, previousDecision;
 
   function sample({ world, fleet }) {
     const pose = (vehicle) => {
@@ -45,6 +46,21 @@ export function captureBrowserReplay() {
             psi = headingAt(lane.pts, lane.cum, s);
           return [{ id: e.control.id, edge, turn, at: point([x + Math.sin(psi) * 3, y - Math.cos(psi) * 3]) }];
         });
+      }
+      const decision = ctx.autopilot.lastDecision;
+      if (decision && decision !== previousDecision) {
+        previousDecision = decision;
+        const chosen = decision.candidates.find((c) => c.id === decision.chosenId);
+        const flag = chosen?.flagged && decision.motion !== "stop" ? chosen.reject : null;
+        const previous = choices.at(-1);
+        if (
+          !previous ||
+          flag ||
+          previous.id !== decision.chosenId ||
+          previous.motion !== decision.motion ||
+          previous.flag !== flag
+        )
+          choices.push({ t: round(ctx.world.t), id: decision.chosenId, motion: decision.motion, flag });
       }
       if (ctx.world.tick % 6 === 0) sample(ctx);
     },
@@ -86,6 +102,7 @@ export function captureBrowserReplay() {
         ),
         buildings: (map.pack.buildings || []).flatMap(({ pts }) => (pts && overlaps(pts) ? [pts.map(point)] : [])),
         signals: signals.map(({ at }) => at),
+        choices,
         frames,
         events: result.events.map(({ at_s, message }) => ({ t: at_s, message })),
       };

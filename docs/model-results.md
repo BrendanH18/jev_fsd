@@ -38,8 +38,7 @@ tree it was published with:
 node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/claude-haiku-open-2026-11-20.json.gz --check replay
 ```
 
-The [results page](https://brendanh18.github.io/jev_fsd/results.html#replay-heading) plays Jev's
-published **Right on red** challenge in an overhead street view. The viewer renders sampled poses
+The [results page](https://brendanh18.github.io/jev_fsd/results.html#replay-heading) plays four open-track drives on demand. Compare Haiku’s timeout and Jev’s pass at the Ottawa flagger, seek to Jev’s flagged choice on the unprotected left, or watch Jev turn right on red in Calgary. The viewer renders sampled poses
 and signal states from an exact replay of the saved drive. It works without an API key or model
 calls. Run the local server on port 8331 before rebuilding the browser data.
 
