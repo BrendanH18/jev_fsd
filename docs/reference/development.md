@@ -100,10 +100,11 @@ It exits 1 when any file fails. `scripts/test_node_checks.mjs` checks it. CI's s
 unchanged.
 
 No check needed to run alone: none listens on a port, shares a temporary file or reads wall time,
-and every file passed in all eleven parallel runs (those below and the sizing experiments,
-three to five at each size), as it did in the sequential run. Running together does slow each file 1.3 to 2.2 times (memory and cache, not CPU
+and every file passed in all twelve parallel runs (those below and the sizing experiments,
+three to six at each size), as it did in the sequential run. Running together does slow each file 1.3 to 2.2 times (memory and cache, not CPU
 quota: a pure CPU loop scales to 16 jobs). Boat places a size on different hardware from run to
-run; on an AMD EPYC 8224P host an `xlarge` core ran the checks at half the speed of the others.
+run; on an AMD EPYC 8224P host an `xlarge` core ran the checks at half the speed of the others,
+and on an EPYC 4585PX host sixteen checks at once ran each four to five times slower than alone.
 
 `scripts/test_drive_lab.mjs` was the critical path (96 s alone, up to 235 s in a full pool), so
 its arena drives (every challenge with Rules and the cautious agent) now run on four worker
@@ -125,9 +126,10 @@ Measured 2026-11-21 with no other load; cost from `boat usage` for the run's win
 | `--full`, after | `default` (Ryzen 7 9700X), 4 jobs | 356 s | 301 s | $0.003 |
 | | `large` (EPYC 9455), 8 jobs | 155 s, 153 s | 144 s, 143 s | $0.004 |
 | | `xlarge` (EPYC 9455), 16 jobs | 101 s, 117 s | 72 s, 92 s | $0.005–0.006 |
+| | `xlarge` (EPYC 4585PX), 16 jobs | 202 s | 169 s | $0.011 |
 
-`xlarge` gives the shortest wait at about a cent per `--full` and stops straight afterwards,
-while 15 idle minutes on `large` would cost $0.018. The plain check is single-threaded Python and
+`xlarge` gives the shortest wait (from 72 to 169 s of Node checks, depending on the host) at
+about a cent per `--full` and stops straight afterwards, while 15 idle minutes on `large` would cost $0.018. The plain check is single-threaded Python and
 gains nothing from cores, so it stays on `default`. The `--full` runs above include about 10 to 25
 s of pushing the working tree, and a size change adds the resume (12 to 56 s, longer when Boat has
 no machine ready).
