@@ -111,3 +111,7 @@ body:has(.replay-controls:not([hidden])) .cluster { bottom: 180px; }
 .examiner-remark.fail .examiner-mark { color: #ff999c; }
 .examiner-events { grid-column: 2; list-style: none; padding: 0; margin: 2px 0 0; }
 .examiner-events li { margin: 0; }
+
+.drive-comparison { overflow-x: auto; }
+.drive-comparison table { width: 100%; border-collapse: collapse; }
+.drive-comparison th, .drive-comparison td { padding: 6px; text-align: left; vertical-align: top; }

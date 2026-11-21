@@ -243,6 +243,22 @@ def check(url, chromium=None, groups=GROUPS):
             page = open_page(f"/?challenge={challenge}&drive={driver}&quality=low")
             page.evaluate("window.__jev.world.paused = true")
             ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
+            comparison = page.locator(".drive-comparison")
+            if kind in ("arrived", "early", "parked"):
+                comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
+                assert comparison.locator("tbody th").all_text_contents() == ["You", "Rules", "Jev", "Claude Haiku 5.5"]
+                assert comparison.locator("tbody td").nth(0).inner_text() == ("Fail" if kind == "early" else "Pass")
+            elif kind in ("rules", "branched", "modified"):
+                assert comparison.count() == 0
+            page.close()
+
+        if "practice" in groups:
+            page = open_page("/?challenge=road-test-kitsilano&drive=manual&quality=low")
+            page.evaluate("window.__jev.finishDrive('finished')")
+            comparison = page.locator(".drive-comparison")
+            comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
+            assert comparison.locator("tbody td").first.inner_text() == "Fail"
+            assert comparison.locator("tbody tr").nth(2).locator("td").nth(2).inner_text() != "Unmeasured"
             page.close()
 
         if "parking" in groups:

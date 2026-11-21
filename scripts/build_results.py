@@ -282,6 +282,7 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
 
 def published_drive(result: dict) -> dict:
     drive = {"id": result["challenge"], "map": result["map"], "pass": result["pass"], "time_s": result.get("time_s")}
+    drive["incident_counts"] = {k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if k in result}
     numeric = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
     nullable = ("min_ttc_s", "min_headway_s")
     if (

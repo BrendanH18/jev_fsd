@@ -94,373 +94,683 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 61.8
+     "time_s": 61.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 71.2
+     "time_s": 71.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 62.7
+     "time_s": 62.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.2
+     "time_s": 76.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34
+     "time_s": 34,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 97.9
+     "time_s": 97.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 27.4
+     "time_s": 27.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 63.1
+     "time_s": 63.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 84.6
+     "time_s": 84.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 60.5
+     "time_s": 60.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 54.6
+     "time_s": 54.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 42.8
+     "time_s": 42.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 47.1
+     "time_s": 47.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 93
+     "time_s": 93,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 53.8
+     "time_s": 53.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 32.4
+     "time_s": 32.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 34.4
+     "time_s": 34.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 74.9
+     "time_s": 74.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 76
+     "time_s": 76,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 87.2
+     "time_s": 87.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 55.1
+     "time_s": 55.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 53.5
+     "time_s": 53.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 44.3
+     "time_s": 44.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 56.6
+     "time_s": 56.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 32.7
+     "time_s": 32.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.1
+     "time_s": 33.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 23.3
+     "time_s": 23.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 53.2
+     "time_s": 53.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 71.9
+     "time_s": 71.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 40.6
+     "time_s": 40.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 1
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.8
+     "time_s": 33.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 34.2
+     "time_s": 34.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 97
+     "time_s": 97,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.3
+     "time_s": 33.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 30.8
+     "time_s": 30.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 24.5
+     "time_s": 24.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 19.2
+     "time_s": 19.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 120.1
+     "time_s": 120.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 29.9
+     "time_s": 29.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 73.5
+     "time_s": 73.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 30.6
+     "time_s": 30.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 37.2
+     "time_s": 37.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 53.3
+     "time_s": 53.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 44.2
+     "time_s": 44.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 14.7
+     "time_s": 14.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34.9
+     "time_s": 34.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 21.1
+     "time_s": 21.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 23.5
+     "time_s": 23.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.6
+     "time_s": 65.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 31.2
+     "time_s": 31.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 26.7
+     "time_s": 26.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 28.3
+     "time_s": 28.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 68
+     "time_s": 68,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 91.2
+     "time_s": 91.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 39.3
+     "time_s": 39.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 75.4
+     "time_s": 75.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 27.4
+     "time_s": 27.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 41.8
+     "time_s": 41.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 57.9
+     "time_s": 57.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 49
+     "time_s": 49,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 255.9
+     "time_s": 255.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 204.9
+     "time_s": 204.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     }
    ],
    "sources": [
@@ -497,373 +807,683 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 61.7
+     "time_s": 61.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 71.2
+     "time_s": 71.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 62.7
+     "time_s": 62.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.2
+     "time_s": 76.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34
+     "time_s": 34,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 97.9
+     "time_s": 97.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 27.4
+     "time_s": 27.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 63.1
+     "time_s": 63.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 84.6
+     "time_s": 84.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 60.5
+     "time_s": 60.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 54.6
+     "time_s": 54.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 42.8
+     "time_s": 42.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 47.1
+     "time_s": 47.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 93
+     "time_s": 93,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 53.8
+     "time_s": 53.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 32.4
+     "time_s": 32.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 34.4
+     "time_s": 34.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 74.9
+     "time_s": 74.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 76
+     "time_s": 76,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 87.2
+     "time_s": 87.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 55.1
+     "time_s": 55.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 53.5
+     "time_s": 53.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 44.3
+     "time_s": 44.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 56.6
+     "time_s": 56.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 32.7
+     "time_s": 32.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.1
+     "time_s": 33.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 23.3
+     "time_s": 23.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 53.2
+     "time_s": 53.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 71.9
+     "time_s": 71.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 40.6
+     "time_s": 40.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 1
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.8
+     "time_s": 33.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 34.2
+     "time_s": 34.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 97
+     "time_s": 97,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.3
+     "time_s": 33.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 30.8
+     "time_s": 30.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 24.5
+     "time_s": 24.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 19.2
+     "time_s": 19.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 120.1
+     "time_s": 120.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 29.9
+     "time_s": 29.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 73.5
+     "time_s": 73.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 30.6
+     "time_s": 30.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 37.2
+     "time_s": 37.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 53.3
+     "time_s": 53.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 44.2
+     "time_s": 44.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 14.7
+     "time_s": 14.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 34.9
+     "time_s": 34.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 21.1
+     "time_s": 21.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 23.5
+     "time_s": 23.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.6
+     "time_s": 65.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 31.2
+     "time_s": 31.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 26.7
+     "time_s": 26.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 28.3
+     "time_s": 28.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 68
+     "time_s": 68,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 91.2
+     "time_s": 91.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 39.3
+     "time_s": 39.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 75.4
+     "time_s": 75.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 27.4
+     "time_s": 27.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 41.8
+     "time_s": 41.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 57.9
+     "time_s": 57.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 49
+     "time_s": 49,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 254.6
+     "time_s": 254.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 204.8
+     "time_s": 204.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     }
     }
    ],
    "sources": [
@@ -1383,373 +2003,683 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 60.1
+     "time_s": 60.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 73.3
+     "time_s": 73.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 65.8
+     "time_s": 65.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.1
+     "time_s": 76.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 41.6
+     "time_s": 41.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 116.3
+     "time_s": 116.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 29
+     "time_s": 29,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.9
+     "time_s": 65.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 86.7
+     "time_s": 86.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 62.5
+     "time_s": 62.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.7
+     "time_s": 52.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 48
+     "time_s": 48,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 51.4
+     "time_s": 51.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 108.3
+     "time_s": 108.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 56
+     "time_s": 56,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.4
+     "time_s": 33.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 42.1
+     "time_s": 42.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 109.9
+     "time_s": 109.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 81.2
+     "time_s": 81.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 90.8
+     "time_s": 90.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 56.6
+     "time_s": 56.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 56.7
+     "time_s": 56.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 46.3
+     "time_s": 46.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 54.5
+     "time_s": 54.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 36.5
+     "time_s": 36.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 35
+     "time_s": 35,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 26.3
+     "time_s": 26.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 54.8
+     "time_s": 54.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 73.4
+     "time_s": 73.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 52.3
+     "time_s": 52.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 37.6
+     "time_s": 37.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 41.2
+     "time_s": 41.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 99.9
+     "time_s": 99.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 37
+     "time_s": 37,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 34.7
+     "time_s": 34.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 27.2
+     "time_s": 27.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 21.6
+     "time_s": 21.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 121
+     "time_s": 121,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 32.8
+     "time_s": 32.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 74.4
+     "time_s": 74.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 31.4
+     "time_s": 31.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 38.3
+     "time_s": 38.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 55.6
+     "time_s": 55.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 46
+     "time_s": 46,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 16.8
+     "time_s": 16.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 36.3
+     "time_s": 36.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 23.6
+     "time_s": 23.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 25.6
+     "time_s": 25.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 99
+     "time_s": 99,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 32.9
+     "time_s": 32.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 28.2
+     "time_s": 28.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 30.9
+     "time_s": 30.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 69.6
+     "time_s": 69.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 92.3
+     "time_s": 92.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 45.8
+     "time_s": 45.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 97.9
+     "time_s": 97.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.7
+     "time_s": 28.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 43.2
+     "time_s": 43.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 60.3
+     "time_s": 60.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 51.8
+     "time_s": 51.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 342.4
+     "time_s": 342.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 16,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 209.7
+     "time_s": 209.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 8,
+      "safety_brakes": 0
+     }
     }
    ],
    "sources": [
@@ -1790,373 +2720,683 @@
      "id": "door-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 60.3
+     "time_s": 60.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fog-junction",
      "map": "victoria",
      "pass": true,
-     "time_s": 73.3
+     "time_s": 73.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "rain-crossing",
      "map": "montreal",
      "pass": true,
-     "time_s": 65.8
+     "time_s": 65.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 76.1
+     "time_s": 76.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "curb-merge",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 41.6
+     "time_s": 41.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-crossing",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 116.3
+     "time_s": 116.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "unprotected-left",
      "map": "ottawa",
      "pass": true,
-     "time_s": 29
+     "time_s": 29,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 65.9
+     "time_s": 65.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "four-way-stop",
      "map": "toronto",
      "pass": true,
-     "time_s": 86.7
+     "time_s": 86.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-corner",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 62.5
+     "time_s": 62.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "right-hook",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 52.7
+     "time_s": 52.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-and-sirens",
      "map": "edmonton",
      "pass": true,
-     "time_s": 48
+     "time_s": 48,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-pulling-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 51.4
+     "time_s": 51.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "multiple-threat",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 108.3
+     "time_s": 108.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-bus",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 56
+     "time_s": 56,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "school-zone",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 33.4
+     "time_s": 33.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "move-over",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 42.1
+     "time_s": 42.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "streetcar",
      "map": "toronto",
      "pass": true,
-     "time_s": 109.9
+     "time_s": 109.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "level-crossing",
      "map": "edmonton",
      "pass": true,
-     "time_s": 81.2
+     "time_s": 81.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "junction-box",
      "map": "montreal",
      "pass": true,
-     "time_s": 90.8
+     "time_s": 90.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-arrow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 56.6
+     "time_s": 56.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "flagger",
      "map": "ottawa",
      "pass": true,
-     "time_s": 56.7
+     "time_s": 56.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "after-midnight",
      "map": "halifax",
      "pass": true,
-     "time_s": 46.3
+     "time_s": 46.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "lights-out",
      "map": "halifax",
      "pass": true,
-     "time_s": 54.5
+     "time_s": 54.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "double-parked",
      "map": "toronto",
      "pass": true,
-     "time_s": 36.5
+     "time_s": 36.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "parallel-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 35
+     "time_s": 35,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "step-out",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 26.3
+     "time_s": 26.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "blind-left",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 54.8
+     "time_s": 54.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "snow-plow",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 73.4
+     "time_s": 73.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "zipper",
      "map": "calgary",
      "pass": true,
-     "time_s": 52.3
+     "time_s": 52.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "cyclist-pass",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 37.6
+     "time_s": 37.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "speed-humps",
      "map": "ottawa",
      "pass": true,
-     "time_s": 41.2
+     "time_s": 41.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "scramble",
      "map": "victoria",
      "pass": true,
-     "time_s": 99.9
+     "time_s": 99.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "collection",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 37
+     "time_s": 37,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "crossing-guard",
      "map": "montreal",
      "pass": true,
-     "time_s": 34.7
+     "time_s": 34.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pxo-far-curb",
      "map": "ottawa",
      "pass": true,
-     "time_s": 27.2
+     "time_s": 27.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bus-lanes",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 21.6
+     "time_s": 21.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "no-left-turn",
      "map": "toronto",
      "pass": true,
-     "time_s": 121
+     "time_s": 121,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "contraflow",
      "map": "montreal",
      "pass": true,
-     "time_s": 32.8
+     "time_s": 32.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dip-your-lights",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 74.4
+     "time_s": 74.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "left-on-red",
      "map": "calgary",
      "pass": true,
-     "time_s": 31.4
+     "time_s": 31.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "roundabout-gap",
      "map": "halifax",
      "pass": true,
-     "time_s": 38.3
+     "time_s": 38.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "wait-for-green",
      "map": "toronto",
      "pass": true,
-     "time_s": 55.6
+     "time_s": 55.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-stop",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 46
+     "time_s": 46,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "amber-clear",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 16.8
+     "time_s": 16.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "brakes-ahead",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 36.3
+     "time_s": 36.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "make-room",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 23.6
+     "time_s": 23.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "fresh-green",
      "map": "edmonton",
      "pass": true,
-     "time_s": 25.6
+     "time_s": 25.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "into-the-sun",
      "map": "calgary",
      "pass": true,
-     "time_s": 99
+     "time_s": 99,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "reverse-lights",
      "map": "calgary",
      "pass": true,
-     "time_s": 32.9
+     "time_s": 32.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "pothole-season",
      "map": "montreal",
      "pass": true,
-     "time_s": 28.2
+     "time_s": 28.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "chasing-the-ball",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 30.9
+     "time_s": 30.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "goose-crossing",
      "map": "ottawa",
      "pass": true,
-     "time_s": 69.6
+     "time_s": 69.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "on-your-bumper",
      "map": "winnipeg",
      "pass": true,
-     "time_s": 92.3
+     "time_s": 92.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "bridges-freeze-first",
      "map": "saskatoon",
      "pass": true,
-     "time_s": 45.8
+     "time_s": 45.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "one-car-at-a-time",
      "map": "montreal",
      "pass": true,
-     "time_s": 97.9
+     "time_s": 97.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "dont-splash",
      "map": "mount_pleasant",
      "pass": true,
-     "time_s": 28.7
+     "time_s": 28.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "room-to-park",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 43.2
+     "time_s": 43.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-closed",
      "map": "halifax",
      "pass": true,
-     "time_s": 60.3
+     "time_s": 60.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "follow-the-officer",
      "map": "toronto",
      "pass": true,
-     "time_s": 51.8
+     "time_s": 51.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-kitsilano",
      "map": "kitsilano",
      "pass": true,
-     "time_s": 342.1
+     "time_s": 342.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 16,
+      "safety_brakes": 0
+     }
     },
     {
      "id": "road-test-toronto",
      "map": "toronto",
      "pass": true,
-     "time_s": 209.2
+     "time_s": 209.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 8,
+      "safety_brakes": 0
+     }
     }
    ],
    "sources": [
@@ -2872,6 +4112,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 63,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -2890,6 +4135,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 80.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -2908,6 +4158,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 67.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -2926,6 +4181,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -2944,6 +4204,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 40.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -2962,6 +4227,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 99.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -2980,6 +4250,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 29.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -2998,6 +4273,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 65.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 2
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3016,6 +4296,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 87,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3034,6 +4319,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 59.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3052,6 +4342,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 56.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3070,6 +4365,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 51.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3088,6 +4388,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 49.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3106,6 +4411,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 96.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3124,6 +4434,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 55.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3142,6 +4457,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 31.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3160,6 +4480,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 37,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3178,6 +4503,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3196,6 +4526,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 78.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3214,6 +4549,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 88.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3232,6 +4572,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 57.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3250,6 +4595,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 55.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3268,6 +4618,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 46.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3286,6 +4641,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 58,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3304,6 +4664,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 35.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3322,6 +4687,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 33.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.81,
@@ -3340,6 +4710,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 24.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3358,6 +4733,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 53.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3376,6 +4756,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 72.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -3394,6 +4779,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 42.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 1
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3412,6 +4802,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 35,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3430,6 +4825,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 43.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3448,6 +4848,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 98.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3466,6 +4871,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 36.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3484,6 +4894,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 34.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3502,6 +4917,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 27.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3520,6 +4940,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 20.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3538,6 +4963,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 116.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3556,6 +4986,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 36.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3574,6 +5009,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 74.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3592,6 +5032,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 37,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3610,6 +5055,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 38.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3628,6 +5078,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 55.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3646,6 +5101,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3664,6 +5124,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 15.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3682,6 +5147,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 38.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3700,6 +5170,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 25.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3718,6 +5193,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 24.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3736,6 +5216,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 100,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3754,6 +5239,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 32.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3772,6 +5262,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 28.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3790,6 +5285,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 30.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3808,6 +5308,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 68.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3826,6 +5331,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 91.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 2
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3844,6 +5354,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 41.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3862,6 +5377,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 82.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -3880,6 +5400,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 28.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3898,6 +5423,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 44.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3916,6 +5446,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 150.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 8,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.798,
@@ -3934,6 +5469,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 51.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -3952,6 +5492,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 253.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 11,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.975,
@@ -3970,6 +5515,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 204.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.965,
@@ -4027,6 +5577,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 42.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4045,6 +5600,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 49.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4063,6 +5623,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 95.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4081,6 +5646,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 34,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4099,6 +5669,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 20.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4117,6 +5692,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 75.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4135,6 +5715,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 39.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4153,6 +5738,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 100.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4171,6 +5761,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 69.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4189,6 +5784,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 28.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4207,6 +5807,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4225,6 +5830,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 255.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 10,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.975,
@@ -4243,6 +5853,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 73.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4261,6 +5876,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 75.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -4279,6 +5899,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 56.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4297,6 +5922,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 57.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4315,6 +5945,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 46.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4333,6 +5968,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 25,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4351,6 +5991,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 61.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4369,6 +6014,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 35,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4387,6 +6037,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 37.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4405,6 +6060,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 24.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4423,6 +6083,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 203.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 8,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.965,
@@ -4441,6 +6106,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 100.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4459,6 +6129,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 58.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4477,6 +6152,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 50.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4495,6 +6175,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 35.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4513,6 +6198,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 43.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4531,6 +6221,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 99,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4549,6 +6244,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 27.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4567,6 +6267,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 39.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4585,6 +6290,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 55.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4603,6 +6313,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 15.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4621,6 +6336,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 32.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4639,6 +6359,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 30.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4657,6 +6382,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 84.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -4675,6 +6405,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 150.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 8,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.798,
@@ -4693,6 +6428,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 51.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4711,6 +6451,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 68.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4729,6 +6474,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 28.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4747,6 +6497,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 31.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4765,6 +6520,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 78.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4783,6 +6543,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 51.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4801,6 +6566,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 32.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.809,
@@ -4819,6 +6589,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 37,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4837,6 +6612,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 128.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4855,6 +6635,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4873,6 +6658,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 25.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4891,6 +6681,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 28.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4909,6 +6704,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 91.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 2
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4927,6 +6727,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 65.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 2
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4945,6 +6750,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 87,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4963,6 +6773,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 36.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4981,6 +6796,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 77.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -4999,6 +6819,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 89.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5017,6 +6842,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 56.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5035,6 +6865,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 73.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -5053,6 +6888,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 44.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 1
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5071,6 +6911,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 63.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5089,6 +6934,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5107,6 +6957,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 35.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5125,6 +6980,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 40.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5189,6 +7049,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 74.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -5207,6 +7072,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 59.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5225,6 +7095,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 29.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5243,6 +7118,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 66.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5261,6 +7141,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 36.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5279,6 +7164,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 73.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5297,6 +7187,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 99.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5315,6 +7210,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5333,6 +7233,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 86.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5351,6 +7256,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 48.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5369,6 +7279,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 35.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5387,6 +7302,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 57,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5405,6 +7325,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 47,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 1
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5423,6 +7348,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 32.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5441,6 +7371,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 40.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5459,6 +7394,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 82.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -5477,6 +7417,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 253.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 11,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.975,
@@ -5495,6 +7440,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 65.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5513,6 +7463,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 94.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5531,6 +7486,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 26.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5549,6 +7509,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 34,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5567,6 +7532,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 38.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5585,6 +7555,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 38.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5603,6 +7578,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 68.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5621,6 +7601,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 28.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5639,6 +7624,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5657,6 +7647,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 56,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5675,6 +7670,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 33.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5693,6 +7693,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5711,6 +7716,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 21.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5729,6 +7739,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 116.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5747,6 +7762,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 31,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5765,6 +7785,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 55.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5783,6 +7808,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 27.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5801,6 +7831,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 203.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.965,
@@ -5819,6 +7854,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 65.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5837,6 +7877,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 25.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5855,6 +7900,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 72.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -5873,6 +7923,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 42.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 1
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5891,6 +7946,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 41,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5909,6 +7969,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 98.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5927,6 +7992,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 70.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5945,6 +8015,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 31.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5963,6 +8038,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 50.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5981,6 +8061,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 48.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -5999,6 +8084,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 29.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6017,6 +8107,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6035,6 +8130,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 89.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6053,6 +8153,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 52.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6071,6 +8176,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 46,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6089,6 +8199,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6107,6 +8222,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 15.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6125,6 +8245,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 25.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6143,6 +8268,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 51.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6161,6 +8291,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 77.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6179,6 +8314,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 33.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.81,
@@ -6197,6 +8337,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 34.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6215,6 +8360,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 34.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6233,6 +8383,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 74.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6251,6 +8406,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 25,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6269,6 +8429,11 @@
      "map": "winnipeg",
      "pass": false,
      "time_s": 88.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6287,6 +8452,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 96.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.798,
@@ -6352,6 +8522,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 74,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -6370,6 +8545,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 94.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6388,6 +8568,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 46.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6406,6 +8591,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 43.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 2
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6424,6 +8614,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 42.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 1
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6442,6 +8637,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 34.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6460,6 +8660,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 32.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6478,6 +8683,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 39,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6496,6 +8706,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 255.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 21,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.975,
@@ -6514,6 +8729,11 @@
      "map": "ottawa",
      "pass": false,
      "time_s": 180,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": false,
       "progress": 0.313,
@@ -6532,6 +8752,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 72.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -6550,6 +8775,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 39.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6568,6 +8798,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 74.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6586,6 +8821,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 31.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6604,6 +8844,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 15.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6622,6 +8867,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 27.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6640,6 +8890,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 204.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 8,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.965,
@@ -6658,6 +8913,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 28.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6676,6 +8936,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 64.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 2
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6694,6 +8959,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 48.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6712,6 +8982,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 56.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6730,6 +9005,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 42,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6748,6 +9028,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 25.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6766,6 +9051,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 55.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6784,6 +9074,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 32.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6802,6 +9097,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 84.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -6820,6 +9120,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 93.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.798,
@@ -6838,6 +9143,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 66,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6856,6 +9166,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 37.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6874,6 +9189,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 48.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6892,6 +9212,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6910,6 +9235,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 25.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6928,6 +9258,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 117.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6946,6 +9281,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 38.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6964,6 +9304,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 28.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -6982,6 +9327,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 67.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7000,6 +9350,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 72.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7018,6 +9373,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 86.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7036,6 +9396,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 56,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7054,6 +9419,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 35.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7072,6 +9442,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 33.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.81,
@@ -7090,6 +9465,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 21.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7108,6 +9488,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7126,6 +9511,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 68.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7144,6 +9534,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 91.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7162,6 +9557,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 28.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7180,6 +9580,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 51.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7198,6 +9603,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 99.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7216,6 +9626,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7234,6 +9649,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 30.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7252,6 +9672,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 83.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7270,6 +9695,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 89.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7288,6 +9718,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 57.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7306,6 +9741,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 33.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7324,6 +9764,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 97.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7342,6 +9787,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 24.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7360,6 +9810,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 31.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7378,6 +9833,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7396,6 +9856,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 59.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7414,6 +9879,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 49.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 7,
+      "safety_brakes": 1
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7432,6 +9902,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 31.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7450,6 +9925,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 40.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7515,6 +9995,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 253,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 11,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.975,
@@ -7533,6 +10018,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 204.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.964,
@@ -7551,6 +10041,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 56.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7569,6 +10064,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 36.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7587,6 +10087,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 99.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7605,6 +10110,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7623,6 +10133,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 48.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7641,6 +10156,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 95.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7659,6 +10179,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7677,6 +10202,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 30.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7695,6 +10225,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 32.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.808,
@@ -7713,6 +10248,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 24.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7731,6 +10271,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7749,6 +10294,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 34.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7767,6 +10317,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 34.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7785,6 +10340,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7803,6 +10363,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 15.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7821,6 +10386,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 36.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.998,
@@ -7839,6 +10409,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 22.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7857,6 +10432,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 30.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7875,6 +10455,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 45.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 8,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7893,6 +10478,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -7911,6 +10501,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 86.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.998,
@@ -7929,6 +10524,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 56.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 6,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7947,6 +10547,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -7965,6 +10570,11 @@
      "map": "toronto",
      "pass": false,
      "time_s": 180,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": false,
       "progress": 0.551,
@@ -7983,6 +10593,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 20.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8001,6 +10616,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 117.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8019,6 +10639,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 74.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8037,6 +10662,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 55.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -8055,6 +10685,11 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 40.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8073,6 +10708,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 28.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8091,6 +10731,11 @@
      "map": "toronto",
      "pass": true,
      "time_s": 49.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8109,6 +10754,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 65.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8127,6 +10777,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 65.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8145,6 +10800,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 34.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8163,6 +10823,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 88.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -8181,6 +10846,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 56.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8199,6 +10869,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 72.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -8217,6 +10892,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 40.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.991,
@@ -8235,6 +10915,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 31.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8253,6 +10938,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 31.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8271,6 +10961,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 33.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8289,6 +10984,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 97.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8307,6 +11007,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 32.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8325,6 +11030,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 27.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8343,6 +11053,11 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 92.3,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8361,6 +11076,11 @@
      "map": "montreal",
      "pass": true,
      "time_s": 82.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -8379,6 +11099,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 73.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8397,6 +11122,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 28.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8415,6 +11145,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 44.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8433,6 +11168,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 76.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8451,6 +11191,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 52.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8469,6 +11214,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 49.6,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8487,6 +11237,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 57.1,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8505,6 +11260,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 36.5,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8523,6 +11283,11 @@
      "map": "victoria",
      "pass": true,
      "time_s": 98.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8541,6 +11306,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 26.7,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 2,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8559,6 +11329,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 38.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8577,6 +11352,11 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 25,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 1,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8595,6 +11375,11 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 69.8,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.999,
@@ -8613,6 +11398,11 @@
      "map": "halifax",
      "pass": true,
      "time_s": 121.9,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.798,
@@ -8669,6 +11459,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 57.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8725,6 +11520,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 56.2,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 5,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8781,6 +11581,11 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 62.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 4,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 1,
@@ -8837,6 +11642,11 @@
      "map": "calgary",
      "pass": true,
      "time_s": 42,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 3,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.997,
@@ -8855,6 +11665,11 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 28.4,
+     "incident_counts": {
+      "collisions": 0,
+      "hard_brakes": 0,
+      "safety_brakes": 0
+     },
      "score_inputs": {
       "arrived": true,
       "progress": 0.983,
