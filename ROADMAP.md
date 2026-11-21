@@ -588,13 +588,14 @@ a repeated comparison reports its spread.
 The game and the leaderboard are two separate places today: a manual drive gets a coach score that is
 never set beside a model's result on the same drive.
 
-- [ ] **8.1 Your drive beside theirs.** (M) After a manual challenge or road test, the drive report
+- [x] **8.1 Your drive beside theirs.** (M) After a manual challenge or road test, the drive report
   shows Rules, Jev and Claude Haiku on the same drive from `results.json`: verdict, time, the score
   of `bench/scores.js` and incidents. As for practice, only the original unchanged manual attempt
-  counts, and every verdict comes from `challengeFailures`.
-- [ ] **8.2 From the leaderboard to the wheel.** (S) Each challenge on `/results` links to driving it
+  counts, and every verdict comes from `challengeFailures`. The comparison selects the latest
+  guarded drive with the matching authored version and map fingerprint.
+- [x] **8.2 From the leaderboard to the wheel.** (S) Each challenge on `/results` links to driving it
   with its authored setup, and the leaderboard shows the scores of `bench/scores.js` beside pass and
-  fail.
+  fail when the recording or report has the required measurements.
 - [ ] **8.3 A gallery of model drives.** (M) Generalise `ui/published-replay.js` from one drive to a
   list of exported drives: four to six that show a difference (Claude Haiku at the flagger, one of
   Jev's flagged lefts, a pass and a fail on the same challenge), with the chosen and flagged manoeuvres
