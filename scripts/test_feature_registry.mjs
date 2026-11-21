@@ -52,6 +52,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "puddles",
       "parkers",
       "roadClosures",
+      "vans",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -107,6 +108,7 @@ test("the core runs every slot, and names no registered feature", () => {
       './parkers.js"',
       'sim/traffic-officer.js"',
       'tailgaters.js"',
+      'double-parked.js"',
       './traffic-officer.js"',
     ]) {
       const imports = text
@@ -174,6 +176,10 @@ test("the core runs every slot, and names no registered feature", () => {
       '"wait_for_officer"',
       '"go_on_officer_wave"',
       '"passes_officer_stop"',
+      "snap.double_parked",
+      ".doubleParked",
+      '"wait_behind_van"',
+      '"no_room_to_go_round"',
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -202,10 +208,16 @@ test("the World builds each feature from its option, with its seen flag and its 
     officers: true,
     tailgaters: true,
     roadClosures: true,
+    vans: 2,
   });
   for (const f of R.FEATURES) {
-    assert.equal(off[f.key].enabled, false, `${f.key} off by default`);
-    assert.equal(on[f.key].enabled, f.key === "geese" ? !!map.parkSpans?.length : true, `${f.key} on with its option`);
+    const property = f.property ?? f.key;
+    assert.equal(off[property].enabled, false, `${f.key} off by default`);
+    assert.equal(
+      on[property].enabled,
+      f.key === "geese" ? !!map.parkSpans?.length : true,
+      `${f.key} on with its option`,
+    );
     for (const w of [off, on]) {
       assert.equal(w[f.seen], false);
       assert.ok(w[f.calls] instanceof Map);
@@ -222,6 +234,7 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.equal(on.puddlesRained, false, "dry: no rain yet this drive");
   assert.equal(off.geese.random, null);
   assert.equal(off.roadClosures.random, null);
+  assert.equal(on.doubleParked.count, 2);
   assert.ok(on.potholes.list.length > 0);
   // (the registered features' obstacles join the others only while there are some)
   assert.equal(off.obstaclesNear(off.ego.x, off.ego.y, 50).length, on.obstaclesNear(on.ego.x, on.ego.y, 50).length);
@@ -298,8 +311,12 @@ test("the LLM prompt keeps each feature's line where it was", () => {
     assert.ok(i >= 0, start);
     return i;
   };
-  for (const f of R.FEATURES.filter((x) => x.prompt))
-    assert.equal(lines.filter((l) => l === f.prompt.text).length, 1, f.key);
+  for (const f of R.FEATURES.filter((x) => x.prompt)) {
+    const count = f.prompt.text.split("\n").length;
+    assert.equal(lines.filter((_, i) => lines.slice(i, i + count).join("\n") === f.prompt.text).length, 1, f.key);
+  }
+  assert.equal(at("- A garbage truck stopped"), at("- Choose `wait_behind_van`") + 1);
+  assert.equal(at("- Behind a cyclist"), at("- A garbage truck stopped") + 1);
   assert.equal(at("When road_closed.on_route"), at("When turn_restriction.banned") + 1);
   assert.equal(at("- A ball rolling into the street"), at("- When the car's light turns green") + 1);
   assert.equal(at("- Watch driveways for reversing lights"), at("- A ball rolling into the street") + 1);
@@ -344,6 +361,13 @@ test("every record loads in a fresh process, through the registry as the core lo
       { stdio: "pipe" },
     );
   }
+});
+
+test("the van simulation can load before the registry", () => {
+  const entry = new URL("../static/js/sim/double-parked.js", import.meta.url);
+  const code =
+    'globalThis.document = { querySelector: () => null }; const { DoubleParked, VAN_COUNT } = await import(process.argv[1]); if (typeof DoubleParked !== "function" || VAN_COUNT !== 1) throw new Error("van module did not load");';
+  execFileSync(process.execPath, ["--experimental-default-type=module", "--input-type=module", "-e", code, entry.href]);
 });
 
 console.log(`${checks} feature registry checks passed`);

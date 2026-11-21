@@ -32,12 +32,14 @@
 // a work zone or a vehicle stopped at the roadside.
 
 import { Vehicle, CAR, DELIVERY_VAN } from "./vehicle.js";
-import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
+import { pointAt, headingAt, onStreet, projectPoint } from "../map/mapdata.js";
 import { rng } from "../common.js";
 import { railIndex } from "./rail.js";
 import { DAYLIGHT_RANGE_M } from "./visibility.js";
 import { current as weather } from "./weather.js";
 import { crewInRoad } from "./collection-truck.js";
+
+export { onStreet } from "../map/mapdata.js";
 
 export const VAN_NAME = "delivery van";
 export const WAIT_M = 7;
@@ -56,13 +58,14 @@ const STRAIGHT_RAD = 0.1;
 const FAR_M = 50; // someone this near the junction ahead (or as near as it comes in the time the way round takes) may turn into the oncoming lane
 const STANDING_MPS = 0.5;
 const SIGHT_SLACK_M = 10; // (the car's eyes are behind its front: see as far as it ever does, less this)
-const ON_STREET_M = 1; // on the street: within this of its asphalt
-const END_REACH_M = 6; // or up to this far past its far end
-const SAME_WAY = Math.PI / 4;
 const HELD_M = 4; // parked cars along the way round, and this far beyond it, stay put while it stands there
 // Free drive: how many stand at once, where they turn up, for how long, and how far away the car
 // must be before one leaves without being seen.
-export const VAN_COUNT = 1;
+// Hoisted so the feature registry can read the default during a circular import.
+export function defaultVanCount() {
+  return 1;
+}
+export const VAN_COUNT = defaultVanCount();
 const SPAWN_M = [150, 450];
 const STAY_S = [60, 180];
 const LEAVE_M = 150;
@@ -71,7 +74,9 @@ const ROADSIDE_CLEAR_M = 40;
 const COLORS = [0xf2f2ee, 0xe9e9e4, 0x5b2a86, 0x7a5230];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-export const isVan = (o) => !!o && o.doubleParked === true;
+export function isVan(o) {
+  return !!o && o.doubleParked === true;
+}
 
 // The edge of the same street going the other way from `e`, with one lane, or undefined.
 export function oppositeOf(map, e) {
@@ -117,24 +122,6 @@ function at(e, s, lat) {
   const p = pointAt(e.pts, e.cum, s),
     h = headingAt(e.pts, e.cum, s);
   return [p[0] + Math.sin(h) * lat, p[1] - Math.cos(h) * lat];
-}
-
-// Vehicle `n` on the street of edge `e`: { s (its reference point along `e`), lateral (right of the
-// centre line), same (heading the way of `e`), opposite (heading against it) }, or null when it is
-// not on the street. (One just past its far end, coming into it from the junction there, is on it,
-// at its end.)
-export function onStreet(e, n) {
-  const p = projectPoint(e.pts, e.cum, [n.x, n.y], null);
-  if (
-    !p ||
-    p.s < 0.5 ||
-    p.distance > Math.abs(p.lateral) + END_REACH_M ||
-    p.lateral < e.asphalt[0] - ON_STREET_M ||
-    p.lateral > e.asphalt[1] + ON_STREET_M
-  )
-    return null;
-  const d = wrap(n.psi - p.heading);
-  return { s: p.s, lateral: p.lateral, same: Math.abs(d) < SAME_WAY, opposite: Math.abs(d) > Math.PI - SAME_WAY };
 }
 
 // How long a driver at `v` takes to cover `d` metres going round, pulling away at PASS_ACCEL up to
@@ -245,6 +232,10 @@ export class DoubleParked {
     this.made = 0;
     // (the first stops on the first step, once the car and the traffic are where they start)
     this.next = 0;
+  }
+
+  get enabled() {
+    return this.count > 0;
   }
 
   step(dt) {

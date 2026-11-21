@@ -64,7 +64,6 @@ import {
   paddle,
   stopKey,
 } from "./work-zone.js";
-import { DoubleParked } from "./double-parked.js";
 import { HIT_OVER_MPS, deviceOf, slowsFor } from "./traffic-calming.js";
 import { CREW_CLEAR_M, CREW_PASS_MPS, crewNear } from "./collection-truck.js";
 import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
@@ -80,7 +79,7 @@ import { Outages, controlAt } from "./outage.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
-import { egoPassing, minPassM } from "./cyclist-pass.js";
+import { egoPassing, oncomingPassConflict, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
 import {
   FEATURES,
@@ -103,6 +102,7 @@ const HIDES = hooks("hides"),
   EV_KERB = hooks("evKerb"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
+const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
 const CONTROL_AUDIT = hooks("controlAudit");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -226,14 +226,6 @@ const AUDIT_BOX_MOVING_MPS = 1;
 // to STOP.
 const AUDIT_FLAGGER_PAST_M = 2;
 const AUDIT_FLAGGER_MOVING_MPS = 1;
-// Going round a double-parked van (sim/double-parked.js): the car, going its street's way alongside
-// the way round (its front between where that starts and ends) and across the centre line (its
-// centre left of it), fails to yield if it meets a vehicle coming the other way on the street ahead
-// of it, on its side of the street or within AUDIT_MEET_SIDE_M of the centre line, closer than
-// AUDIT_MEET_M front to front or AUDIT_MEET_S at the speed they close at. Counted once a pass.
-const AUDIT_MEET_M = 8;
-const AUDIT_MEET_S = 2;
-const AUDIT_MEET_SIDE_M = 1;
 // Snow plows (sim/snow-plow.js): the car passes one when its centre draws level with the plow's,
 // going its way in the lane beside it. On its right (the plow not turning left), that is passing it on
 // the right, counted once a pass. Having passed one on the left, moving back into its lane with its
@@ -255,7 +247,7 @@ const AUDIT_MERGE_MOVING_MPS = 1;
 // wholly behind a cyclist going its way (within 30 m) to wholly ahead of it; it is a close pass when,
 // beside it, the gap between their bodies was ever less than the minimum passing distance on the
 // street (1 m up to 50 km/h, 1.5 m above) less AUDIT_PASS_SLACK_M. And, passing one with its centre left
-// of the centre line, the car fails to yield as round a double-parked van (AUDIT_MEET_M): once a pass.
+// of the centre line, the car fails to yield when it cuts off oncoming traffic: once a pass.
 const AUDIT_PASS_SLACK_M = 0.1;
 const AUDIT_PASS_NEAR_M = 30;
 // Stopping for a school crossing guard's STOP sign (sim/crossing-guard.js, Ontario HTA s. 176), with
@@ -271,8 +263,7 @@ export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
   // vehicles stand at the roadside with their lights flashing at a time (sim/roadside.js).
   // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js). `outages`: how
-  // many signals at a time have their lights out (sim/outage.js). `vans`: how many delivery vans
-  // stand double-parked at a time (sim/double-parked.js). `park`: the autopilot parks at the
+  // many signals at a time have their lights out (sim/outage.js). `park`: the autopilot parks at the
   // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
   // driven car keeps to a speed it can stop from beside them; `stepOuts`: with that, how many people at
   // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
@@ -302,7 +293,6 @@ export class World {
       roadside = 0,
       workZones = 0,
       outages = 0,
-      vans = 0,
       park = false,
       hazards = false,
       stepOuts = 0,
@@ -384,7 +374,6 @@ export class World {
     this.onTracks = null; // the level crossing the car is standing on the tracks of, and since when
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
     this.flaggerCalls = new Map(); // "<work zone id>:<paddle change>" -> { owed, counted }: a flagger showing STOP
-    this.vanPass = null; // the double-parked van the car is going round, and whether it failed to yield then
     // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
     // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
     // spaces it gave up, the space it is parked in, and the kerb strikes the audit counted
@@ -449,7 +438,6 @@ export class World {
     this.workZones = new WorkZones(this, { count: workZones, seed });
     this.laneClosures = new LaneClosures(this, { count: closures, seed });
     this.outages = new Outages(this, { count: outages, seed });
-    this.doubleParked = new DoubleParked(this, { count: vans, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     this.crossingGuards = new CrossingGuards(this, { enabled: guards, seed });
@@ -461,7 +449,7 @@ export class World {
     // each registered feature (sim/features/index.js): what it builds, whether it has met the car this
     // drive, and its audit's calls
     for (const f of FEATURES) {
-      this[f.key] = f.build(this, { enabled: features[f.key] ?? false, seed, map });
+      this[f.property ?? f.key] = f.build(this, { enabled: features[f.key] ?? false, seed, map });
       this[f.seen] = false;
       this[f.calls] = new Map();
     }
@@ -619,7 +607,6 @@ export class World {
     this.inBox = null;
     this.flaggerCalls.clear();
     this.flaggerYields?.clear();
-    this.vanPass = null;
     this.plowPass.clear();
     this.mergeCall = null;
     this.mergeWait = null;
@@ -1104,7 +1091,7 @@ export class World {
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
     this.auditFlaggers();
-    this.auditVans();
+    for (const audit of AUDIT_AFTER_FLAGGER) audit(this);
     this.auditPlows();
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
@@ -1134,70 +1121,6 @@ export class World {
     const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
     if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
     this.kerbContact = on;
-  }
-
-  // Going round a double-parked van into the way of oncoming traffic (see AUDIT_MEET_M).
-  auditVans() {
-    const vans = this.doubleParked.vans;
-    if (!vans.length) {
-      this.vanPass = null;
-      return;
-    }
-    const ego = this.ego,
-      FRONT = ego.spec.length - ego.spec.rearOverhang;
-    // (one pass lasts while the car's front is alongside the way round, across the centre line or not)
-    let passing = null;
-    for (const d of vans) {
-      if (Math.abs(ego.x - d.x) > 60 || Math.abs(ego.y - d.y) > 60) continue;
-      const e = this.map.edges.get(d.edge),
-        p = projectPoint(e.pts, e.cum, [ego.x, ego.y], null);
-      if (
-        !p ||
-        Math.abs(wrap(ego.psi - p.heading)) > Math.PI / 3 ||
-        p.lateral < e.asphalt[0] - 1 ||
-        p.lateral > e.asphalt[1] + 1
-      )
-        continue;
-      const front = p.s + FRONT;
-      if (front < d.detour.from || front > d.detour.to) continue;
-      passing = { d, e, front, across: p.lateral < 0 };
-      break;
-    }
-    if (!passing) {
-      this.vanPass = null;
-      return;
-    }
-    const { d, e, front, across } = passing;
-    if (this.vanPass?.id !== d.id) this.vanPass = { id: d.id, counted: false };
-    if (this.vanPass.counted || !across) return;
-    for (const n of this.npcs) {
-      if (n.rail || Math.abs(n.x - ego.x) > 60 || Math.abs(n.y - ego.y) > 60) continue;
-      const q = projectPoint(e.pts, e.cum, [n.x, n.y], null);
-      if (
-        !q ||
-        q.s < 0.5 ||
-        q.s > e.length - 0.5 ||
-        q.lateral > AUDIT_MEET_SIDE_M ||
-        q.lateral < e.asphalt[0] - 1 ||
-        Math.abs(wrap(n.psi - q.heading)) < (Math.PI * 3) / 4
-      )
-        continue;
-      const gap = q.s - ((n.spec || CAR).length - (n.spec || CAR).rearOverhang) - front;
-      if (gap < -1) continue;
-      const closing = Math.max(0, ego.v) + Math.max(0, n.v);
-      if (gap < AUDIT_MEET_M || (closing > 0.5 && gap / closing < AUDIT_MEET_S)) {
-        this.vanPass.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({
-          type: "failed_to_yield",
-          to: "oncoming traffic",
-          with: n.id,
-          double_parked: true,
-          van: d.id,
-        });
-        return;
-      }
-    }
   }
 
   // Passing a snow plow on the right, and cutting back in front of one passed on the left (see
@@ -1438,33 +1361,17 @@ export class World {
     const { bike, e, front, across } = passing;
     if (this.cyclistPass?.id !== bike.id) this.cyclistPass = { id: bike.id, counted: false };
     if (this.cyclistPass.counted || !across) return;
-    for (const n of this.npcs) {
-      if (n.rail || n === bike || Math.abs(n.x - ego.x) > 60 || Math.abs(n.y - ego.y) > 60) continue;
-      const q = projectPoint(e.pts, e.cum, [n.x, n.y], null);
-      if (
-        !q ||
-        q.s < 0.5 ||
-        q.s > e.length - 0.5 ||
-        q.lateral > AUDIT_MEET_SIDE_M ||
-        q.lateral < e.asphalt[0] - 1 ||
-        Math.abs(wrap(n.psi - q.heading)) < (Math.PI * 3) / 4
-      )
-        continue;
-      const gap = q.s - ((n.spec || CAR).length - (n.spec || CAR).rearOverhang) - front;
-      if (gap < -1) continue;
-      const closing = Math.max(0, ego.v) + Math.max(0, n.v);
-      if (gap < AUDIT_MEET_M || (closing > 0.5 && gap / closing < AUDIT_MEET_S)) {
-        this.cyclistPass.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({
-          type: "failed_to_yield",
-          to: "oncoming traffic",
-          with: n.id,
-          cyclist_pass: true,
-          cyclist: bike.id,
-        });
-        return;
-      }
+    const n = oncomingPassConflict(this, e, front, bike);
+    if (n) {
+      this.cyclistPass.counted = true;
+      this.violations.failed_to_yield++;
+      this.events.push({
+        type: "failed_to_yield",
+        to: "oncoming traffic",
+        with: n.id,
+        cyclist_pass: true,
+        cyclist: bike.id,
+      });
     }
   }
 

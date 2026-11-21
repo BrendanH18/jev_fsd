@@ -76,7 +76,6 @@ export const FLAG_TEXT = {
   blocks_junction: "it enters a junction it has no room to clear",
   runs_flagger_stop: "it goes past a work zone flagger showing STOP",
   passes_crossing_guard: "it goes past a crossing guard's STOP sign",
-  no_room_to_go_round: "it goes round the double-parked van without room in the oncoming lane",
   merges_out_of_turn: "it merges at the lane closure out of turn",
   takes_merge_turn: "it takes the turn of the car merging at the lane closure",
   into_closed_lane: "it moves into a closed lane",

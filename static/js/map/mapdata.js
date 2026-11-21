@@ -517,3 +517,23 @@ function cellsOf(pts) {
   }
   return cells;
 }
+
+// Vehicle `n` on the street of edge `e`: { s (its reference point along `e`), lateral (right of the
+// centre line), same (heading the way of `e`), opposite (heading against it) }, or null when it is
+// not on the street. (One just past its far end, coming into it from the junction there, is on it,
+// at its end.)
+export function onStreet(e, n) {
+  const p = projectPoint(e.pts, e.cum, [n.x, n.y], null);
+  if (
+    !p ||
+    p.s < 0.5 ||
+    p.distance > Math.abs(p.lateral) + 6 ||
+    p.lateral < e.asphalt[0] - 1 ||
+    p.lateral > e.asphalt[1] + 1
+  )
+    return null;
+  const difference = n.psi - p.heading;
+  const d = Math.atan2(Math.sin(difference), Math.cos(difference));
+  const sameWay = Math.PI / 4;
+  return { s: p.s, lateral: p.lateral, same: Math.abs(d) < sameWay, opposite: Math.abs(d) > Math.PI - sameWay };
+}

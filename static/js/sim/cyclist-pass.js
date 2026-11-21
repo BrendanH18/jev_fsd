@@ -43,7 +43,8 @@
 // passing one as a failure to yield (sim/world.js). With it off nothing here is computed.
 
 import { CAR, BIKE } from "./vehicle.js";
-import { pointAt, headingAt } from "../map/mapdata.js";
+import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
+import { wrap } from "./world.js";
 import { PASS_SIGHT_M } from "./visibility.js";
 import { arrival, isVan, onStreet, oppositeOf } from "./double-parked.js";
 import { railIndex } from "./rail.js";
@@ -406,4 +407,28 @@ export function cyclistNotice(world) {
         : "CYCLIST AHEAD · CAN'T SEE FAR ENOUGH · STAY BEHIND",
     };
   return { key: `${bike.id}:clear`, wait: false, text: `CYCLIST AHEAD · WAY CLEAR · PASS WITH ${room}` };
+}
+
+// Find the first oncoming vehicle a pass across the centre line cuts off.
+export function oncomingPassConflict(world, edge, front, passed = null) {
+  const ego = world.ego;
+  for (const n of world.npcs) {
+    if (n.rail || n === passed || Math.abs(n.x - ego.x) > 60 || Math.abs(n.y - ego.y) > 60) continue;
+    const q = projectPoint(edge.pts, edge.cum, [n.x, n.y], null);
+    if (
+      !q ||
+      q.s < 0.5 ||
+      q.s > edge.length - 0.5 ||
+      q.lateral > 1 ||
+      q.lateral < edge.asphalt[0] - 1 ||
+      Math.abs(wrap(n.psi - q.heading)) < (Math.PI * 3) / 4
+    )
+      continue;
+    const spec = n.spec || CAR;
+    const gap = q.s - (spec.length - spec.rearOverhang) - front;
+    if (gap < -1) continue;
+    const closing = Math.max(0, ego.v) + Math.max(0, n.v);
+    if (gap < 8 || (closing > 0.5 && gap / closing < 2)) return n;
+  }
+  return null;
 }
