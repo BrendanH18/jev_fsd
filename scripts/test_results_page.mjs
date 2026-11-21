@@ -92,8 +92,17 @@ test("the city grid has one row per map and weather, Kitsilano first", () => {
     grid.rows.slice(0, 4).map((r) => `${r.map} ${r.weather}`),
     WEATHERS.map((w) => `kitsilano ${w}`),
   );
-  assert.deepEqual(grid.drivers, ["rules", "cautious"]);
-  for (const row of grid.rows) assert.equal(row.cells.filter(Boolean).length, 2, `${row.map} ${row.weather}`);
+  assert.deepEqual(grid.drivers, ["rules", "cautious", "jev", "llm:claude-haiku-5-5"]);
+  const [kitsilanoDry, ...rest] = grid.rows;
+  assert.ok(kitsilanoDry.cells.every((cell) => cell.total === 12));
+  for (const cell of kitsilanoDry.cells.slice(2)) {
+    assert.ok(cell.recording && cell.model && cell.cost_usd > 0 && cell.model_share > 0);
+  }
+  assert.deepEqual(
+    kitsilanoDry.cells.slice(2).map((cell) => cell.fallbacks),
+    [0, 18],
+  );
+  for (const row of rest) assert.equal(row.cells.filter(Boolean).length, 2, `${row.map} ${row.weather}`);
 });
 
 test("the matrix keeps the newest full run per driver on each track", () => {
@@ -123,10 +132,14 @@ test("manual comparison finds the newest guarded drive with the same map data an
 
 test("every recording offered for replay is committed", () => {
   const list = recordings(data);
-  assert.equal(list.length, 9);
+  assert.equal(list.length, 11);
   for (const r of list) {
     assert.ok(fs.existsSync(new URL(`../${r.recording}`, import.meta.url)), r.recording);
-    assert.ok(r.command.includes(`scripts/arena_node.mjs --port 8322 --replay ${r.recording} --check replay`));
+    const row = data.rows.find((row) => row.recording === r.recording);
+    const runner = row.map ? "bench_node" : "arena_node";
+    assert.ok(r.command.includes(`scripts/${runner}.mjs --port 8322 --replay ${r.recording} --check replay`));
+    assert.equal(r.sourceCommit, row.map ? row.manifest?.source_commit : null);
+    assert.equal(r.engine, row.manifest?.engine || row.engine);
   }
 });
 

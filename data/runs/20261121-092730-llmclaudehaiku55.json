@@ -1,0 +1,2769 @@
+{
+ "name": "20261121-092730-llmclaudehaiku55",
+ "saved_at": "2026-11-21T09:27:30.012Z",
+ "config": {
+  "brain": "llm:claude-haiku-5-5",
+  "count": 12,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "kitsilano",
+  "bbox": [
+   -123.17,
+   49.26,
+   -123.15,
+   49.27
+  ],
+  "pack": "6",
+  "engine": "node v22.23.4"
+ },
+ "summary": {
+  "scenarios": 12,
+  "pass_rate": 0.25,
+  "arrived_rate": 0.333,
+  "km": 11.27,
+  "collisions": 1,
+  "at_fault": 0,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 0,
+  "off_road_s": 0,
+  "safety_brakes": 14,
+  "deadlocks": 116,
+  "fallbacks": 18,
+  "violations_per_km": 0.09,
+  "avg_kmh": 9.33,
+  "min_gap_m": 1.7,
+  "min_ttc_s": 1.1,
+  "hard_brakes": 0,
+  "rms_jerk": 3.74,
+  "max_lat_accel": 5.34,
+  "lane_rms_m": 0.32,
+  "lane_changes": 3,
+  "speeding_s": 0,
+  "decisions": 17290,
+  "calls": 16588,
+  "tokens": 161222922,
+  "cost_usd": 7.812091,
+  "model_decisions": 16587,
+  "partial_decisions": 80,
+  "local_decisions": 685,
+  "fallback_decisions": 18,
+  "model_share": 0.959,
+  "local_share": 0.04,
+  "fallback_share": 0.001
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 565,
+    "signals": 3,
+    "stops": 1,
+    "lefts": 0,
+    "rights": 1
+   },
+   "arrived": false,
+   "time_s": 226,
+   "distance_m": 232,
+   "progress": 0.411,
+   "avg_kmh": 3.7,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 1,
+   "min_gap_m": null,
+   "min_ttc_s": null,
+   "min_headway_s": null,
+   "max_accel": 2.54,
+   "max_decel": -6.97,
+   "hard_brakes": 0,
+   "rms_jerk": 2.44,
+   "max_jerk": 47.6,
+   "max_lat_accel": 4.07,
+   "lane_rms_m": 0.33,
+   "lane_max_m": 1.07,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 184.2,
+   "decisions": 870,
+   "calls": 857,
+   "tokens": 7463357,
+   "cost_usd": 0.268564,
+   "latency_p50_ms": 1337,
+   "latency_p95_ms": 2590,
+   "model_decisions": 857,
+   "partial_decisions": 0,
+   "local_decisions": 12,
+   "fallback_decisions": 1,
+   "model_share": 0.985,
+   "local_share": 0.014,
+   "fallback_share": 0.001,
+   "failures": [
+    "timeout"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 858,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 96.6,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    }
+   ],
+   "wall_ms": 1353591
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 662,
+    "signals": 2,
+    "stops": 1,
+    "lefts": 3,
+    "rights": 1
+   },
+   "arrived": false,
+   "time_s": 362.3,
+   "distance_m": 869,
+   "progress": 0.664,
+   "avg_kmh": 8.6,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 6,
+   "fallbacks": 2,
+   "min_gap_m": 6.3,
+   "min_ttc_s": 5.9,
+   "min_headway_s": 17.31,
+   "max_accel": 2.6,
+   "max_decel": -6.77,
+   "hard_brakes": 0,
+   "rms_jerk": 4.09,
+   "max_jerk": 52,
+   "max_lat_accel": 4.78,
+   "lane_rms_m": 0.23,
+   "lane_max_m": 1.02,
+   "lane_changes": 1,
+   "speeding_s": 0,
+   "stopped_s": 196.2,
+   "decisions": 1390,
+   "calls": 1345,
+   "tokens": 13044360,
+   "cost_usd": 0.629532,
+   "latency_p50_ms": 1854,
+   "latency_p95_ms": 3429,
+   "model_decisions": 1344,
+   "partial_decisions": 15,
+   "local_decisions": 44,
+   "fallback_decisions": 2,
+   "model_share": 0.967,
+   "local_share": 0.032,
+   "fallback_share": 0.001,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1347,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 72.8,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 88.5,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 131.5,
+     "type": "fallback",
+     "error": "invalid output: candidate \"go_on_officer_wave\" is not an eligible manoeuvre"
+    },
+    {
+     "t": 295.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop153",
+     "line_m": -22.4
+    },
+    {
+     "t": 296.1,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop153",
+     "line_m": -22.4
+    },
+    {
+     "t": 296.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop153",
+     "line_m": -22.5
+    },
+    {
+     "t": 352.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "keep_lane_hold",
+     "rejected": {
+      "collision": 10
+     }
+    },
+    {
+     "t": 352.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "left_0.5_target",
+     "rejected": {
+      "collision": 10
+     }
+    },
+    {
+     "t": 352.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "left_0.5_target",
+     "rejected": {
+      "collision": 11
+     }
+    }
+   ],
+   "wall_ms": 2839150
+  },
+  {
+   "id": "s1-3",
+   "tags": {
+    "length_m": 520,
+    "signals": 0,
+    "stops": 2,
+    "lefts": 1,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 234.7,
+   "distance_m": 713,
+   "progress": 0.921,
+   "avg_kmh": 10.9,
+   "collisions": 1,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 1,
+   "min_gap_m": 1.9,
+   "min_ttc_s": 1.5,
+   "min_headway_s": 2.93,
+   "max_accel": 3.1,
+   "max_decel": -6.89,
+   "hard_brakes": 0,
+   "rms_jerk": 4.91,
+   "max_jerk": 55.7,
+   "max_lat_accel": 5.63,
+   "lane_rms_m": 0.34,
+   "lane_max_m": 1.44,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 78.7,
+   "decisions": 906,
+   "calls": 862,
+   "tokens": 8540826,
+   "cost_usd": 0.438869,
+   "latency_p50_ms": 2047,
+   "latency_p95_ms": 3701,
+   "model_decisions": 862,
+   "partial_decisions": 4,
+   "local_decisions": 43,
+   "fallback_decisions": 1,
+   "model_share": 0.951,
+   "local_share": 0.047,
+   "fallback_share": 0.001,
+   "failures": [
+    "collision"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 863,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 56.5,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "type": "collision",
+     "with": "stepout_1",
+     "kind": "pedestrian",
+     "fault": "other",
+     "at_fault": false,
+     "t": 62.2,
+     "ego_v": 0,
+     "other_v": 2.1,
+     "other_ahead": 1.8,
+     "other_right": -1.2,
+     "relative_heading_deg": -80
+    },
+    {
+     "t": 120,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.929536618288075,
+      "gap": 1.98626468174142
+     }
+    },
+    {
+     "t": 121.2,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 234.7,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 1995737
+  },
+  {
+   "id": "s1-4",
+   "tags": {
+    "length_m": 894,
+    "signals": 2,
+    "stops": 2,
+    "lefts": 4,
+    "rights": 0
+   },
+   "arrived": false,
+   "time_s": 573.5,
+   "distance_m": 1233,
+   "progress": 0.789,
+   "avg_kmh": 7.7,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 1,
+   "min_gap_m": 4.7,
+   "min_ttc_s": 2.9,
+   "min_headway_s": 2.4,
+   "max_accel": 2.55,
+   "max_decel": -6.37,
+   "hard_brakes": 0,
+   "rms_jerk": 3.36,
+   "max_jerk": 52.9,
+   "max_lat_accel": 5.03,
+   "lane_rms_m": 0.33,
+   "lane_max_m": 1.64,
+   "lane_changes": 2,
+   "speeding_s": 0,
+   "stopped_s": 320.1,
+   "decisions": 2179,
+   "calls": 1624,
+   "tokens": 16011121,
+   "cost_usd": 0.78961,
+   "latency_p50_ms": 1837,
+   "latency_p95_ms": 3532,
+   "model_decisions": 1624,
+   "partial_decisions": 6,
+   "local_decisions": 554,
+   "fallback_decisions": 1,
+   "model_share": 0.745,
+   "local_share": 0.254,
+   "fallback_share": 0,
+   "failures": [
+    "timeout"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1625,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 150.5,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 273.1,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.049303589367806,
+      "closing": 4.079905796266735
+     }
+    },
+    {
+     "t": 347.7,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    }
+   ],
+   "wall_ms": 3498596
+  },
+  {
+   "id": "s1-5",
+   "tags": {
+    "length_m": 794,
+    "signals": 3,
+    "stops": 2,
+    "lefts": 2,
+    "rights": 0
+   },
+   "arrived": false,
+   "time_s": 317.6,
+   "distance_m": 438,
+   "progress": 0.315,
+   "avg_kmh": 5,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 18,
+   "fallbacks": 0,
+   "min_gap_m": 7.8,
+   "min_ttc_s": 3.1,
+   "min_headway_s": 3.05,
+   "max_accel": 2.6,
+   "max_decel": -6.92,
+   "hard_brakes": 0,
+   "rms_jerk": 3.55,
+   "max_jerk": 49.5,
+   "max_lat_accel": 5.69,
+   "lane_rms_m": 0.28,
+   "lane_max_m": 0.96,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 218.3,
+   "decisions": 1215,
+   "calls": 1215,
+   "tokens": 11967121,
+   "cost_usd": 0.568352,
+   "latency_p50_ms": 1712,
+   "latency_p95_ms": 3191,
+   "model_decisions": 1215,
+   "partial_decisions": 8,
+   "local_decisions": 0,
+   "fallback_decisions": 0,
+   "model_share": 1,
+   "local_share": 0,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1215,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 49.4,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 142.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.8
+    },
+    {
+     "t": 142.6,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.8
+    },
+    {
+     "t": 142.8,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.7
+    },
+    {
+     "t": 143.1,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.6,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.6
+    },
+    {
+     "t": 215.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.4
+    },
+    {
+     "t": 215.3,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.4
+    },
+    {
+     "t": 215.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.9,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.3
+    },
+    {
+     "t": 267.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.9
+    },
+    {
+     "t": 267.5,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.9
+    },
+    {
+     "t": 267.8,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.8
+    },
+    {
+     "t": 268.1,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -18.5,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.6
+    },
+    {
+     "t": 280.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.8
+    },
+    {
+     "t": 280.9,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.8
+    },
+    {
+     "t": 281.1,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -19.5,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.7
+    },
+    {
+     "t": 293.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -20.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 119
+    },
+    {
+     "t": 293.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -20.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 119
+    },
+    {
+     "t": 293.9,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -20.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 119
+    },
+    {
+     "t": 294.2,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -20.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 118.9
+    }
+   ],
+   "wall_ms": 2407625
+  },
+  {
+   "id": "s1-6",
+   "tags": {
+    "length_m": 1157,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 3
+   },
+   "arrived": true,
+   "time_s": 252.2,
+   "distance_m": 1160,
+   "progress": 0.701,
+   "avg_kmh": 16.6,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.7,
+   "min_ttc_s": 1.6,
+   "min_headway_s": 1.13,
+   "max_accel": 2.53,
+   "max_decel": -6.75,
+   "hard_brakes": 0,
+   "rms_jerk": 4.06,
+   "max_jerk": 48.7,
+   "max_lat_accel": 5.39,
+   "lane_rms_m": 0.27,
+   "lane_max_m": 1.67,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 39,
+   "decisions": 961,
+   "calls": 961,
+   "tokens": 9546962,
+   "cost_usd": 0.493626,
+   "latency_p50_ms": 2051,
+   "latency_p95_ms": 3795,
+   "model_decisions": 961,
+   "partial_decisions": 2,
+   "local_decisions": 0,
+   "fallback_decisions": 0,
+   "model_share": 1,
+   "local_share": 0,
+   "fallback_share": 0,
+   "failures": [],
+   "pass": true,
+   "model_recording": {
+    "mode": "record",
+    "calls": 961,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 105.1,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 252.1,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 2210953
+  },
+  {
+   "id": "s1-7",
+   "tags": {
+    "length_m": 1243,
+    "signals": 0,
+    "stops": 5,
+    "lefts": 1,
+    "rights": 5
+   },
+   "arrived": true,
+   "time_s": 255.1,
+   "distance_m": 1429,
+   "progress": 0.931,
+   "avg_kmh": 20.2,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 2,
+   "min_gap_m": 2.7,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.53,
+   "max_decel": -6.98,
+   "hard_brakes": 0,
+   "rms_jerk": 4.15,
+   "max_jerk": 57.4,
+   "max_lat_accel": 5.74,
+   "lane_rms_m": 0.26,
+   "lane_max_m": 1.08,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 14,
+   "decisions": 984,
+   "calls": 978,
+   "tokens": 9557206,
+   "cost_usd": 0.482157,
+   "latency_p50_ms": 2066,
+   "latency_p95_ms": 3853,
+   "model_decisions": 978,
+   "partial_decisions": 3,
+   "local_decisions": 4,
+   "fallback_decisions": 2,
+   "model_share": 0.994,
+   "local_share": 0.004,
+   "fallback_share": 0.002,
+   "failures": [],
+   "pass": true,
+   "model_recording": {
+    "mode": "record",
+    "calls": 980,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 31.7,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 58.2,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 69.4,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 84.8,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.2758499909576955,
+      "closing": 4.3556333213090435
+     }
+    },
+    {
+     "t": 251.4,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.195320752557825,
+      "gap": 3.5576617523257488
+     }
+    },
+    {
+     "t": 255.1,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 2243752
+  },
+  {
+   "id": "s1-8",
+   "tags": {
+    "length_m": 945,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 2,
+    "rights": 2
+   },
+   "arrived": false,
+   "time_s": 378,
+   "distance_m": 830,
+   "progress": 0.471,
+   "avg_kmh": 7.9,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 22,
+   "fallbacks": 1,
+   "min_gap_m": 5.4,
+   "min_ttc_s": 2.8,
+   "min_headway_s": 2.77,
+   "max_accel": 2.78,
+   "max_decel": -6.92,
+   "hard_brakes": 0,
+   "rms_jerk": 3.97,
+   "max_jerk": 54.1,
+   "max_lat_accel": 5.25,
+   "lane_rms_m": 0.42,
+   "lane_max_m": 3.28,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 198.6,
+   "decisions": 1451,
+   "calls": 1445,
+   "tokens": 14114585,
+   "cost_usd": 0.68008,
+   "latency_p50_ms": 1757,
+   "latency_p95_ms": 3461,
+   "model_decisions": 1445,
+   "partial_decisions": 12,
+   "local_decisions": 5,
+   "fallback_decisions": 1,
+   "model_share": 0.996,
+   "local_share": 0.003,
+   "fallback_share": 0.001,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1446,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 42.4,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 5.628350444999148,
+      "closing": 5.65212392635012
+     }
+    },
+    {
+     "t": 84.2,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 148,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 159.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 124
+    },
+    {
+     "t": 159.5,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 124
+    },
+    {
+     "t": 159.8,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 124
+    },
+    {
+     "t": 160,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.8
+    },
+    {
+     "t": 201.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.1
+    },
+    {
+     "t": 201.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.1
+    },
+    {
+     "t": 201.8,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 123
+    },
+    {
+     "t": 202,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 123
+    },
+    {
+     "t": 222.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.9,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.3
+    },
+    {
+     "t": 222.8,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.9,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.3
+    },
+    {
+     "t": 223,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.2
+    },
+    {
+     "t": 249.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.6,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.6
+    },
+    {
+     "t": 249.8,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.6,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.6
+    },
+    {
+     "t": 250,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.7,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.5
+    },
+    {
+     "t": 250.3,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -17.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.3
+    },
+    {
+     "t": 262.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -18.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.3
+    },
+    {
+     "t": 262.9,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -18.9,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.3
+    },
+    {
+     "t": 263.2,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 5
+     },
+     "control": "stop stop120",
+     "line_m": -19.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.1
+    },
+    {
+     "t": 275.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.4
+    },
+    {
+     "t": 275.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.4
+    },
+    {
+     "t": 276,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.4
+    },
+    {
+     "t": 276.3,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -19.9,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.2
+    }
+   ],
+   "wall_ms": 2951345
+  },
+  {
+   "id": "s1-9",
+   "tags": {
+    "length_m": 1161,
+    "signals": 4,
+    "stops": 2,
+    "lefts": 3,
+    "rights": 2
+   },
+   "arrived": false,
+   "time_s": 598.6,
+   "distance_m": 1377,
+   "progress": 0.732,
+   "avg_kmh": 8.3,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 2,
+   "min_gap_m": 1.7,
+   "min_ttc_s": 1.3,
+   "min_headway_s": 1.1,
+   "max_accel": 2.83,
+   "max_decel": -6.98,
+   "hard_brakes": 0,
+   "rms_jerk": 3.67,
+   "max_jerk": 63.8,
+   "max_lat_accel": 6.49,
+   "lane_rms_m": 0.55,
+   "lane_max_m": 3.56,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 312.3,
+   "decisions": 2249,
+   "calls": 2243,
+   "tokens": 21894393,
+   "cost_usd": 1.104435,
+   "latency_p50_ms": 1995,
+   "latency_p95_ms": 3718,
+   "model_decisions": 2243,
+   "partial_decisions": 8,
+   "local_decisions": 4,
+   "fallback_decisions": 2,
+   "model_share": 0.997,
+   "local_share": 0.002,
+   "fallback_share": 0.001,
+   "failures": [
+    "timeout"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 2245,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 105.7,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 260.5,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.3782368130420817,
+      "gap": 1.994144340139587
+     }
+    },
+    {
+     "t": 263.5,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': Remote end closed connection without response",
+     "status": 502
+    },
+    {
+     "t": 453.3,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    }
+   ],
+   "wall_ms": 5113927
+  },
+  {
+   "id": "s1-10",
+   "tags": {
+    "length_m": 908,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 2
+   },
+   "arrived": false,
+   "time_s": 473.8,
+   "distance_m": 1124,
+   "progress": 0.769,
+   "avg_kmh": 8.5,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 6,
+   "deadlocks": 33,
+   "fallbacks": 4,
+   "min_gap_m": 2,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.53,
+   "max_decel": -6.98,
+   "hard_brakes": 0,
+   "rms_jerk": 3.96,
+   "max_jerk": 68.9,
+   "max_lat_accel": 5.55,
+   "lane_rms_m": 0.26,
+   "lane_max_m": 1.16,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 269.5,
+   "decisions": 1805,
+   "calls": 1796,
+   "tokens": 17458697,
+   "cost_usd": 0.843949,
+   "latency_p50_ms": 1861,
+   "latency_p95_ms": 3402,
+   "model_decisions": 1796,
+   "partial_decisions": 12,
+   "local_decisions": 5,
+   "fallback_decisions": 4,
+   "model_share": 0.995,
+   "local_share": 0.003,
+   "fallback_share": 0.002,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1800,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 17.1,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 6.510615297169009,
+      "closing": 6.602557678948901
+     }
+    },
+    {
+     "t": 23.5,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1921401814875172,
+      "gap": 3.55319121034234
+     }
+    },
+    {
+     "t": 53.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.2,
+     "next_turn": "left",
+     "turn_in_m": 1.1
+    },
+    {
+     "t": 53.6,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.2,
+     "next_turn": "left",
+     "turn_in_m": 1.1
+    },
+    {
+     "t": 53.8,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.3,
+     "next_turn": "left",
+     "turn_in_m": 1
+    },
+    {
+     "t": 66.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24,
+     "next_turn": "left",
+     "turn_in_m": 0.2
+    },
+    {
+     "t": 66.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24,
+     "next_turn": "left",
+     "turn_in_m": 0.2
+    },
+    {
+     "t": 66.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24.1,
+     "next_turn": "left",
+     "turn_in_m": 0.2
+    },
+    {
+     "t": 66.9,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24.2,
+     "next_turn": "left",
+     "turn_in_m": 0.1
+    },
+    {
+     "t": 88.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25.4,
+     "next_turn": "left",
+     "turn_in_m": -1.1
+    },
+    {
+     "t": 89,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25.4,
+     "next_turn": "left",
+     "turn_in_m": -1.1
+    },
+    {
+     "t": 89.3,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25.5,
+     "next_turn": "left",
+     "turn_in_m": -1.2
+    },
+    {
+     "t": 101.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -26.6,
+     "next_turn": "left",
+     "turn_in_m": -2.3
+    },
+    {
+     "t": 101.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -26.6,
+     "next_turn": "left",
+     "turn_in_m": -2.3
+    },
+    {
+     "t": 102.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -26.6,
+     "next_turn": "left",
+     "turn_in_m": -2.4
+    },
+    {
+     "t": 102.4,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -26.8,
+     "next_turn": "left",
+     "turn_in_m": -2.5
+    },
+    {
+     "t": 140.5,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 182.7,
+     "type": "reroute",
+     "count": 2
+    },
+    {
+     "t": 227.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop121",
+     "line_m": -16.1,
+     "next_turn": "right",
+     "turn_in_m": 134.6
+    },
+    {
+     "t": 227.7,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 6
+     },
+     "control": "stop stop121",
+     "line_m": -16.1,
+     "next_turn": "right",
+     "turn_in_m": 134.6
+    },
+    {
+     "t": 227.9,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 8
+     },
+     "control": "stop stop121",
+     "line_m": -16.1,
+     "next_turn": "right",
+     "turn_in_m": 134.6
+    },
+    {
+     "t": 228.2,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 8
+     },
+     "control": "stop stop121",
+     "line_m": -16.3,
+     "next_turn": "right",
+     "turn_in_m": 134.4
+    },
+    {
+     "t": 260.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -17.5,
+     "next_turn": "right",
+     "turn_in_m": 133.2
+    },
+    {
+     "t": 260.5,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -17.5,
+     "next_turn": "right",
+     "turn_in_m": 133.2
+    },
+    {
+     "t": 260.7,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -17.5,
+     "next_turn": "right",
+     "turn_in_m": 133.2
+    },
+    {
+     "t": 261,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -17.7,
+     "next_turn": "right",
+     "turn_in_m": 133
+    },
+    {
+     "t": 299.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -18.4,
+     "next_turn": "right",
+     "turn_in_m": 132.3
+    },
+    {
+     "t": 299.7,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -18.4,
+     "next_turn": "right",
+     "turn_in_m": 132.3
+    },
+    {
+     "t": 299.9,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -18.5,
+     "next_turn": "right",
+     "turn_in_m": 132.2
+    },
+    {
+     "t": 300.2,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop121",
+     "line_m": -18.7,
+     "next_turn": "right",
+     "turn_in_m": 132
+    },
+    {
+     "t": 301.5,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 320.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -20,
+     "next_turn": "right",
+     "turn_in_m": 130.7
+    },
+    {
+     "t": 321,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -20,
+     "next_turn": "right",
+     "turn_in_m": 130.7
+    },
+    {
+     "t": 321.3,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop121",
+     "line_m": -20.1,
+     "next_turn": "right",
+     "turn_in_m": 130.6
+    },
+    {
+     "t": 348.1,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -20.7,
+     "next_turn": "right",
+     "turn_in_m": 130
+    },
+    {
+     "t": 348.2,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -20.7,
+     "next_turn": "right",
+     "turn_in_m": 130
+    },
+    {
+     "t": 348.5,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop121",
+     "line_m": -20.8,
+     "next_turn": "right",
+     "turn_in_m": 129.9
+    },
+    {
+     "t": 348.7,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop121",
+     "line_m": -20.9,
+     "next_turn": "right",
+     "turn_in_m": 129.8
+    },
+    {
+     "t": 376.2,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1938503372929252,
+      "gap": 3.5395627830712333
+     }
+    },
+    {
+     "t": 377.1,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 5.747842949545341,
+      "gap": 1.9997049766903672
+     }
+    },
+    {
+     "t": 425.8,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 426.6,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 467.1,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 470.8,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': Remote end closed connection without response",
+     "status": 502
+    }
+   ],
+   "wall_ms": 3776300
+  },
+  {
+   "id": "s1-11",
+   "tags": {
+    "length_m": 619,
+    "signals": 1,
+    "stops": 0,
+    "lefts": 1,
+    "rights": 0
+   },
+   "arrived": false,
+   "time_s": 327.4,
+   "distance_m": 443,
+   "progress": 0.434,
+   "avg_kmh": 4.9,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 3,
+   "fallbacks": 1,
+   "min_gap_m": 11.1,
+   "min_ttc_s": null,
+   "min_headway_s": 5.08,
+   "max_accel": 2.56,
+   "max_decel": -6.25,
+   "hard_brakes": 0,
+   "rms_jerk": 2.58,
+   "max_jerk": 52.9,
+   "max_lat_accel": 4.8,
+   "lane_rms_m": 0.3,
+   "lane_max_m": 1.08,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 249.6,
+   "decisions": 1255,
+   "calls": 1254,
+   "tokens": 12182309,
+   "cost_usd": 0.551128,
+   "latency_p50_ms": 1548,
+   "latency_p95_ms": 2932,
+   "model_decisions": 1254,
+   "partial_decisions": 2,
+   "local_decisions": 0,
+   "fallback_decisions": 1,
+   "model_share": 0.999,
+   "local_share": 0,
+   "fallback_share": 0.001,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1255,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 75.4,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 164.6,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 166.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -16.1,
+     "next_turn": "left",
+     "turn_in_m": 1.4
+    },
+    {
+     "t": 166.6,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -16.2,
+     "next_turn": "left",
+     "turn_in_m": 1.4
+    },
+    {
+     "t": 166.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -16.3,
+     "next_turn": "left",
+     "turn_in_m": 1.3
+    }
+   ],
+   "wall_ms": 2239658
+  },
+  {
+   "id": "s1-12",
+   "tags": {
+    "length_m": 1087,
+    "signals": 2,
+    "stops": 3,
+    "lefts": 2,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 535.7,
+   "distance_m": 1421,
+   "progress": 0.952,
+   "avg_kmh": 9.6,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 34,
+   "fallbacks": 3,
+   "min_gap_m": 2.1,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.19,
+   "max_accel": 2.75,
+   "max_decel": -6.64,
+   "hard_brakes": 0,
+   "rms_jerk": 4.18,
+   "max_jerk": 56.8,
+   "max_lat_accel": 5.7,
+   "lane_rms_m": 0.3,
+   "lane_max_m": 1.42,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 264.4,
+   "decisions": 2025,
+   "calls": 2008,
+   "tokens": 19441985,
+   "cost_usd": 0.961789,
+   "latency_p50_ms": 1960,
+   "latency_p95_ms": 3601,
+   "model_decisions": 2008,
+   "partial_decisions": 8,
+   "local_decisions": 14,
+   "fallback_decisions": 3,
+   "model_share": 0.992,
+   "local_share": 0.007,
+   "fallback_share": 0.001,
+   "failures": [],
+   "pass": true,
+   "model_recording": {
+    "mode": "record",
+    "calls": 2011,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 99.1,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 144.8,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 145,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 214.2,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 215,
+     "type": "safety",
+     "brake": {
+      "reason": "open door"
+     }
+    },
+    {
+     "t": 270.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -15.4,
+     "next_turn": "left",
+     "turn_in_m": 7.4
+    },
+    {
+     "t": 271.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -15.4,
+     "next_turn": "left",
+     "turn_in_m": 7.4
+    },
+    {
+     "t": 271.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -15.6,
+     "next_turn": "left",
+     "turn_in_m": 7.3
+    },
+    {
+     "t": 283.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -16.3,
+     "next_turn": "left",
+     "turn_in_m": 6.6
+    },
+    {
+     "t": 284.2,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -16.3,
+     "next_turn": "left",
+     "turn_in_m": 6.6
+    },
+    {
+     "t": 284.5,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -16.4,
+     "next_turn": "left",
+     "turn_in_m": 6.4
+    },
+    {
+     "t": 329.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p15",
+     "gap_m": 44.1,
+     "control": "stop stop92",
+     "line_m": -17.1,
+     "next_turn": "left",
+     "turn_in_m": 5.7
+    },
+    {
+     "t": 330.1,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p15",
+     "gap_m": 45.4,
+     "control": "stop stop92",
+     "line_m": -17.1,
+     "next_turn": "left",
+     "turn_in_m": 5.7
+    },
+    {
+     "t": 330.3,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p15",
+     "gap_m": 47,
+     "control": "stop stop92",
+     "line_m": -17.2,
+     "next_turn": "left",
+     "turn_in_m": 5.6
+    },
+    {
+     "t": 342.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -17.8,
+     "next_turn": "left",
+     "turn_in_m": 5
+    },
+    {
+     "t": 342.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -17.8,
+     "next_turn": "left",
+     "turn_in_m": 5
+    },
+    {
+     "t": 343.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -17.9,
+     "next_turn": "left",
+     "turn_in_m": 5
+    },
+    {
+     "t": 343.4,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -18,
+     "next_turn": "left",
+     "turn_in_m": 4.8
+    },
+    {
+     "t": 355.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -19.4,
+     "next_turn": "left",
+     "turn_in_m": 3.4
+    },
+    {
+     "t": 356.2,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -19.4,
+     "next_turn": "left",
+     "turn_in_m": 3.4
+    },
+    {
+     "t": 356.5,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -19.6,
+     "next_turn": "left",
+     "turn_in_m": 3.3
+    },
+    {
+     "t": 377.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -20.7,
+     "next_turn": "left",
+     "turn_in_m": 2.1
+    },
+    {
+     "t": 378,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -20.7,
+     "next_turn": "left",
+     "turn_in_m": 2.1
+    },
+    {
+     "t": 378.3,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop92",
+     "line_m": -20.8,
+     "next_turn": "left",
+     "turn_in_m": 2
+    },
+    {
+     "t": 378.6,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop92",
+     "line_m": -21,
+     "next_turn": "left",
+     "turn_in_m": 1.9
+    },
+    {
+     "t": 443.1,
+     "type": "fallback",
+     "error": "LLM endpoint 'claude-haiku-5-5': could not reach https://api.anthropic.com/v1: [Errno 104] Connection reset by peer",
+     "status": 502
+    },
+    {
+     "t": 448.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -22,
+     "next_turn": "left",
+     "turn_in_m": 4.5
+    },
+    {
+     "t": 448.5,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -22,
+     "next_turn": "left",
+     "turn_in_m": 4.5
+    },
+    {
+     "t": 448.7,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -22.1,
+     "next_turn": "left",
+     "turn_in_m": 4.4
+    },
+    {
+     "t": 449,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -22.3,
+     "next_turn": "left",
+     "turn_in_m": 4.3
+    },
+    {
+     "t": 461.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -23.1,
+     "next_turn": "left",
+     "turn_in_m": 3.5
+    },
+    {
+     "t": 461.8,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -23.1,
+     "next_turn": "left",
+     "turn_in_m": 3.5
+    },
+    {
+     "t": 462.1,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -23.2,
+     "next_turn": "left",
+     "turn_in_m": 3.4
+    },
+    {
+     "t": 474.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -24.3,
+     "next_turn": "left",
+     "turn_in_m": 2.2
+    },
+    {
+     "t": 474.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -24.3,
+     "next_turn": "left",
+     "turn_in_m": 2.2
+    },
+    {
+     "t": 474.9,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -24.3,
+     "next_turn": "left",
+     "turn_in_m": 2.2
+    },
+    {
+     "t": 475.1,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -24.5,
+     "next_turn": "left",
+     "turn_in_m": 2.1
+    },
+    {
+     "t": 487.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -25.7,
+     "next_turn": "left",
+     "turn_in_m": 0.9
+    },
+    {
+     "t": 487.9,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -25.7,
+     "next_turn": "left",
+     "turn_in_m": 0.9
+    },
+    {
+     "t": 488.2,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop46",
+     "line_m": -25.8,
+     "next_turn": "left",
+     "turn_in_m": 0.7
+    },
+    {
+     "t": 535.6,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 4484039
+  }
+ ],
+ "manifest": {
+  "format": "jev-run-manifest/1",
+  "source_commit": "9b53a074ba6e4e17001d904d32fcb67151260eb1",
+  "source_dirty": false,
+  "engine": "node v22.23.4",
+  "engine_version": "12.4.254.21-node.57",
+  "driver": "llm:claude-haiku-5-5",
+  "model": "claude-haiku-5-5",
+  "prompt_hash": "971452a84ca8b571",
+  "track": "guarded",
+  "suite": {
+   "kind": "bench",
+   "config": {
+    "brain": "llm:claude-haiku-5-5",
+    "count": 12,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "kitsilano",
+    "bbox": [
+     -123.17,
+     49.26,
+     -123.15,
+     49.27
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "ids": [
+    "s1-1",
+    "s1-2",
+    "s1-3",
+    "s1-4",
+    "s1-5",
+    "s1-6",
+    "s1-7",
+    "s1-8",
+    "s1-9",
+    "s1-10",
+    "s1-11",
+    "s1-12"
+   ],
+   "generated_ids": [
+    "s1-1",
+    "s1-2",
+    "s1-3",
+    "s1-4",
+    "s1-5",
+    "s1-6",
+    "s1-7",
+    "s1-8",
+    "s1-9",
+    "s1-10",
+    "s1-11",
+    "s1-12"
+   ],
+   "route_sha": "1607d4bf5bdaaeec"
+  },
+  "maps": {
+   "kitsilano": {
+    "pack_version": "6",
+    "fingerprint": "585df0725632b07b",
+    "components": {
+     "bbox": "1c9202d14fca0fc4",
+     "bridges": "428ada657542c5ee",
+     "buildings": "4e33a3e18f699156",
+     "buslanes": "ebb5f0f40dbe01c0",
+     "calming": "f5479d9eb28cf66f",
+     "contraflow": "83a42785988f140d",
+     "crossings": "4f0f89712c0dd098",
+     "driveways": "b24a83c68735bf66",
+     "edges": "7a92c5b76a96651a",
+     "extent": "2eefa060e70f8ecd",
+     "intersections": "2aa60378e8a91cbe",
+     "lanes": "1897097b7c168e5a",
+     "name": "b1cddc5a1972bb56",
+     "nodes": "df9e23e9f16c5afe",
+     "origin": "fc0e672f8966d0c5",
+     "pack_version": "d561ed8d020d5c15",
+     "parks": "c1296cb82ec2c57c",
+     "rail": "7d4588e74b08392f",
+     "restrictions": "3977979aa1145f79",
+     "roundabouts": "7321e79fecfafa47",
+     "routing_bbox": "1c9202d14fca0fc4",
+     "scrambles": "9eba7e525dbd3353",
+     "stats": "beb125fca6c76059",
+     "stops": "3419512ea6f07307",
+     "transit": "66354afaf7b99b5b",
+     "utc_offset": "01f8b23212002df8",
+     "yields": "6ea3d0d7ff48e50f",
+     "zones": "67555ef7e6758357"
+    }
+   }
+  },
+  "cost_usd": 7.812091
+ }
+}

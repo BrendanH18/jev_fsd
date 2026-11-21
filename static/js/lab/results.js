@@ -127,6 +127,8 @@ export function recordings(data) {
       driver: r.driver,
       label: r.label,
       recording: r.recording,
+      sourceCommit: r.map ? r.manifest?.source_commit : null,
+      engine: r.manifest?.engine || r.engine,
       command: `node --experimental-default-type=module scripts/${r.map ? "bench_node" : "arena_node"}.mjs --port 8322 --replay ${r.recording} --check replay`,
     }));
 }

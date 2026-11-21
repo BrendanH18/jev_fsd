@@ -61,6 +61,60 @@ timeout and used all 858 recorded outcomes. The server counted $0.268564 from
 The pilots cost $0.3237 on this usage basis. The owner approved using
 provider-reported usage at published rates to track spend for the complete
 city runs. Both `s1-1` recordings are included in their respective suites.
-The remaining routes run in separate provider processes against separate
+The remaining routes ran in separate provider processes against separate
 loopback servers, with $3 (Jev) and $10 (Haiku) caps across the additional
 routes. Each completed part keeps its own report, tape and prompt measurements.
+
+## Complete city suites
+
+All four drivers used the 12 dry Kitsilano city routes from seed 1, with 40 traffic cars,
+the guarded track, and the lockstep clock. The reports record the clean source revision
+`9b53a07` and Node 22.23.4. Every recorded route matched the independently regenerated
+suite with fingerprint `1607d4bf5bdaaeec`.
+
+| Driver | Passed | Model share | Fallbacks | Server-recorded cost |
+|---|---:|---:|---:|---:|
+| [Rules](../../data/runs/20261121-075044-rules.json) | 12/12 | — | 0 | $0 |
+| [Cautious](../../data/runs/20261121-075157-cautious.json) | 9/12 | — | 0 | $0 |
+| [Jev 1.14.0](../../data/runs/20261121-075524-jev.json) | 2/12 | 99.3% | 0 | $2.447367 |
+| [Claude Haiku 5.5, low effort](../../data/runs/20261121-092730-llmclaudehaiku55.json) | 3/12 | 95.9% | 18 | $7.812091 |
+
+Jev passed `s1-6` and `s1-7`. Its other drives got stuck, collided or failed to yield.
+Haiku passed `s1-6`, `s1-7` and `s1-12`. Its other drives timed out, got stuck or collided.
+Haiku fell back to Rules after 17 HTTP 502 errors and one ineligible manoeuvre response
+on `s1-2`. That drive also cancelled a stale request. There were no HTTP 429 errors.
+
+The independently calculated usage total was **$10.259457**, including the two pilot routes,
+under the approved $30 cap. Jev reported 58,270,615 input tokens. Haiku reported 42,452,842
+uncached input tokens, 118,762,920 cache-read tokens, 7,160 five-minute cache-write tokens,
+and 4,756,565 output tokens. The calculation uses the published [TypeSafe rate](https://help.typesafe.ai/articles/5187202169-how-much-does-jev-cost)
+and the [Claude Haiku rates](https://platform.claude.com/docs/en/models/haiku-5-5/overview)
+for each token category. The table sums per-drive costs rounded by the server. The difference
+from pricing the combined token counts is one millionth of a dollar at the displayed precision.
+
+Jev’s longest vector instruction was 3,006 characters, below the 4,000-character target.
+Thirty-nine decisions on `s1-6` and `s1-12` exceeded the 5,500-input-token target.
+The largest was 5,927 tokens. Those decisions received replies without falling back.
+
+The token counts can be reproduced from the published Jev tape without a server:
+
+```sh
+node --experimental-default-type=module scripts/audit_jev_tokens.mjs data/recordings/20261121-075524-jev.json.gz
+```
+
+### Replay the city recordings
+
+The `replay/kitsilano-city-2026-11-21` Git tag preserves the recorded source revision.
+Both full recordings replayed all 12 routes exactly with `--check replay` in Boat on that
+revision with Node 22.23.4, with zero live model calls. The replays reproduced the failed verdicts
+along with the passes.
+
+Fetch it from the project repository and check it out in a separate worktree:
+
+```sh
+git fetch origin tag replay/kitsilano-city-2026-11-21
+git worktree add --detach ../jev-city-replay replay/kitsilano-city-2026-11-21
+```
+
+With Node 22.23.4, start a keyless `uv run server.py` in that worktree and run its
+`scripts/bench_node.mjs` with `--port 8322 --replay <absolute-path-to-recording> --check replay`.
