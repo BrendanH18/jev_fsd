@@ -212,10 +212,10 @@ flock -w 900 9 || { say "an earlier check is still running in this sandbox; try 
 if ! node --version 2>/dev/null | grep -q "^v22\."; then
     say "installing Node 22"
     arch=$(uname -m); case "$arch" in x86_64) arch=x64 ;; aarch64) arch=arm64 ;; esac
-    base=https://nodejs.org/dist/latest-v22.x
-    line=$(curl -fsSL "$base/SHASUMS256.txt" | grep -E " node-v22\.[0-9.]+-linux-$arch\.tar\.gz$")
+    dist=https://nodejs.org/dist/latest-v22.x
+    line=$(curl -fsSL "$dist/SHASUMS256.txt" | grep -E " node-v22\.[0-9.]+-linux-$arch\.tar\.gz$")
     tmp=$(mktemp -d)
-    curl -fsSL -o "$tmp/${line##* }" "$base/${line##* }"
+    curl -fsSL -o "$tmp/${line##* }" "$dist/${line##* }"
     (cd "$tmp" && printf "%s\n" "$line" | sha256sum -c --quiet)
     rm -rf "$HOME/.local/node22"; mkdir -p "$HOME/.local/node22"
     tar -xzf "$tmp/${line##* }" -C "$HOME/.local/node22" --strip-components=1
@@ -261,12 +261,13 @@ if [ -z "$push" ]; then
 fi
 cd "$repo"
 untar() { tar -xzf "$push/files.tgz" --warning=no-unknown-keyword; }
-junk() { git clean -ffdqx -e node_modules -e .venv; }   # untracked and ignored files, empty directories
+junk() { git clean -ffdqx -e /node_modules -e /.venv; }   # untracked and ignored files, empty directories
 if [ -n "$base" ]; then
     # Undo what earlier checks left: their files, and changes to tracked ones.
     junk
-    git diff-files -z --name-only | git checkout-index -f -u -z --stdin
-    if [ "$(git write-tree)" != "$base" ]; then
+    git diff-files -z --name-only | git checkout-index -f -u -z --stdin || true
+    git update-index -q --refresh || true
+    if [ "$(git write-tree 2>/dev/null)" != "$base" ] || ! git diff-files --quiet; then
         say "the tree here is not the one last pushed to this sandbox; pushing every file"
         touch "$HOME/.boat-check-resync"; exit 75
     fi
@@ -480,18 +481,19 @@ extended=1
 echo "boat-check: $type sandbox $id ($name), ready in $((SECONDS - t0)) s" >&2
 
 # The working tree as git sees it (tracked files, and untracked ones git doesn't ignore, as
-# `boat push` takes them) is indexed in a private index in the git directory, which leaves the
-# worktree's own index alone and keeps stat data, so only changed files are read again. Its git
-# tree names the exact contents. A sandbox that got tree T last time needs only the files that
+# `boat push` takes them) is indexed in a copy of the worktree's index in the git directory,
+# which leaves the real one alone and keeps its stat data, so only changed and untracked files
+# are read. Its git tree names the exact contents. A sandbox that got tree T last time needs only the files that
 # differ from T, so pushed-$slot keeps the sandbox id and T; any other sandbox gets every file.
 tree_index=$state_dir/index-$slot
 pushed_file=$state_dir/pushed-$slot
-[ -f "$tree_index" ] || cp "$(git rev-parse --path-format=absolute --git-path index)" "$tree_index" 2>/dev/null || true
+rm -f "$tree_index"
+cp "$(git rev-parse --path-format=absolute --git-path index)" "$tree_index" 2>/dev/null || true
 GIT_INDEX_FILE=$tree_index git add -A
 tree=$(GIT_INDEX_FILE=$tree_index git write-tree)
 stage=$(mktemp -d)
 base="" last_id="" last_tree=""
-read -r last_id last_tree <"$pushed_file" 2>/dev/null || true
+[ ! -f "$pushed_file" ] || read -r last_id last_tree <"$pushed_file" || true
 if [ -n "$last_id" ] && [ "$last_id" = "$id" ] && git cat-file -e "$last_tree^{tree}" 2>/dev/null; then base=$last_tree; fi
 # send BASE: package the files that changed since BASE, or all of them when BASE is empty. A
 # package of up to 72 KB goes in boat exec's arguments; a bigger one is pushed.
@@ -499,15 +501,15 @@ send() {
     base=$1 files_b64="" paths_b64="" push=""
     local t0=$SECONDS
     rm -rf "${stage:?}"/*
-    if [ -n "$base" ]; then
+    if [ -n "$base" ]; then   # changed files from the working tree; the sandbox checks the result
         git diff-tree -r -z --no-renames --name-only "$base" "$tree" >"$stage/paths"
         git diff-tree -r -z --no-renames --name-only --diff-filter=d "$base" "$tree" >"$stage/list"
-    else
+        COPYFILE_DISABLE=1 tar -czf "$stage/files.tgz" --no-recursion --null -T "$stage/list"
+        rm "$stage/list"
+    else   # every file, exactly as indexed
         : >"$stage/paths"
-        git ls-tree -r -z --name-only "$tree" >"$stage/list"
+        git archive --format=tar.gz -o "$stage/files.tgz" "$tree"
     fi
-    COPYFILE_DISABLE=1 tar -czf "$stage/files.tgz" --null -T "$stage/list"
-    rm "$stage/list"
     local count size
     count=$(tr -cd '\0' <"$stage/paths" | wc -c | tr -d ' ')
     size=$(($(wc -c <"$stage/files.tgz") + $(wc -c <"$stage/paths")))

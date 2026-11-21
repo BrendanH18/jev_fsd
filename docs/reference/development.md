@@ -69,16 +69,16 @@ untracked, non-ignored files, as `boat push` takes them, so deleted files go and
 such as `.env` never leave the computer. Git's index there lists exactly those files, so
 `git ls-files` (which `tests/test_results.py` relies on) matches the computer the script ran on.
 Only what changed since the last check is sent. The script indexes the working tree in a private
-index in the worktree's git directory (stat data keeps this to a few milliseconds, and the
-worktree's own index is untouched), and its git tree names the exact contents. When this
+index in the worktree's git directory, a fresh copy of its own index each time (its stat data keeps this to a
+few milliseconds, and the real index is untouched), and its git tree names the exact contents. When this
 sandbox got tree T last time (`pushed-<slot>` beside the sandbox id), the files that differ
 from T go as a gzipped tarball with the list of changed and deleted paths: inside `boat exec`'s
 arguments up to 72 KB, or pushed when bigger. In the sandbox, the clone's index is the tree last
-synced. Files earlier checks left (`git clean -x`, which keeps `node_modules` and `.venv`) and
+synced. Files earlier checks left (`git clean -x`, which keeps the top-level `node_modules` and `.venv`) and
 their edits to tracked files are undone first, then `git write-tree` must give T before the
 change is applied and the new tree after. A new sandbox, a missing record or a mismatch sends
-every file instead (everything but `.git`, `node_modules` and `.venv` is replaced and the index
-rebuilt); a mismatch found in the sandbox exits 75 and leaves a marker, and the script then
+every file instead, as `git archive` of the tree itself (everything but `.git`, `node_modules`
+and `.venv` is replaced and the index rebuilt); a mismatch found in the sandbox exits 75 and leaves a marker, and the script then
 sends every file and runs again. Measured 2026-11-21 on `default` from a Raspberry Pi 5:
 
 | Push | Before (`boat push` of the tree) | After |
