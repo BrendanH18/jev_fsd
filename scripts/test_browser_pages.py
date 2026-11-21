@@ -182,6 +182,9 @@ def check_published_replay(page, url):
     page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
     replay.get_by_role("button", name="Pause replay").click()
     slider = replay.get_by_role("slider", name="Replay time")
+    seek_trigger = "slider => { slider.value = 5; slider.dispatchEvent(new Event('input')); }"
+    slider.evaluate(seek_trigger)
+    assert replay.get_by_role("status").inner_text() == "Cross traffic released"
     slider.press("End")
     ended = replay.get_by_role("status").inner_text() == "Reached the destination"
     changed = first != canvas.evaluate("canvas => canvas.toDataURL()")
@@ -192,15 +195,17 @@ def check_published_replay(page, url):
     replay.get_by_role("button", name="Play again").wait_for()
     reached_last_frame = slider.input_value() == slider.get_attribute("max")
     select = replay.get_by_role("combobox", name="Published drive")
-    for drive, verdict, flag in [
-        ("claude-haiku-flagger", "Fail", "runs_flagger_stop"),
-        ("jev-flagger", "Pass", None),
-        ("jev-unprotected-left", "Pass", "fails_to_yield_to_oncoming"),
+    for drive, verdict, flag, trigger in [
+        ("claude-haiku-flagger", "Fail", "runs_flagger_stop", "Oncoming traffic enters the work zone"),
+        ("jev-flagger", "Pass", None, "Oncoming traffic enters the work zone"),
+        ("jev-unprotected-left", "Pass", "fails_to_yield_to_oncoming", "Oncoming traffic released"),
     ]:
         select.select_option(drive)
         replay.get_by_text(f"Open track · {verdict}", exact=False).wait_for()
         play.click()
         page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
+        slider.evaluate(seek_trigger)
+        assert replay.get_by_role("status").inner_text() == trigger
         if flag:
             replay.get_by_role("button", name="Flagged at").first.click()
             replay.get_by_text(f"Flagged: {flag}", exact=False).wait_for()

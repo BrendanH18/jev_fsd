@@ -87,6 +87,11 @@ const drives = [
   ["jev-flagger", "Jev · Flagger · Ottawa", "flagger", "037cff94081ae1bc"],
   ["jev-unprotected-left", "Jev · The unprotected left · Ottawa", "unprotected-left", "6718f664d8f8681f"],
 ];
+const triggerLabels = {
+  "right-on-red": "Cross traffic released",
+  flagger: "Oncoming traffic enters the work zone",
+  "unprotected-left": "Oncoming traffic released",
+};
 
 // Jev open-track exports. The map, versions and end time describe the recorded
 // run, independent of the version of the currently installed challenge.
@@ -194,7 +199,10 @@ export function showDrive(root, replay, alignedTime) {
       ? `Chosen: ${selected.id || selected.motion} · ${selected.motion}${selected.flag ? ` · Flagged: ${selected.flag}` : ""}`
       : "Awaiting first decision";
     const latest = replay.events.findLast((e) => e.t <= time)?.message;
-    const message = latest || "Drive started";
+    const message =
+      latest === "Authored hazard triggered"
+        ? triggerLabels[replay.challenge] || "Hazard begins"
+        : latest || "Drive started";
     if (message !== event.textContent) event.textContent = message;
     return ended;
   }
