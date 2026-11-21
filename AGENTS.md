@@ -48,7 +48,7 @@ Docs: https://docs.boat.dev/llms.txt. Prices and limits: run `boat limits`; neve
 - When done: `boat stop "$id"` (keeps the disk for at least 14 days) or `boat delete "$id" --yes` (erases it)
 - Stay on this Mac: `scripts/shot.swift` (WKWebView), WebKit/Safari benchmark runs and the WebKit baselines in `docs/rules-baseline.md`, and local Ollama models (Boat has no GPU). For WebKit runs against a server in Boat, `boat forward` it to the same port on this Mac, because the server checks the port in `Host` and `Origin`. Runs that use Ollama keep the server on this Mac next to it.
 - `server.py` binds 127.0.0.1, accepts only loopback Host names (`jev/security.py`) and holds paid API keys. Never expose it with `boat host` or the in-sandbox `host`. To see it, use the sandbox's desktop Chrome or `boat forward` the port to this Mac.
-- Use Node 22 in Boat, as CI does. Copy any `data/runs/` results you want to keep back to this Mac before deleting the sandbox.
+- Use Node 22 in Boat, as CI does. `boat push` leaves out `.git` and gitignored files (`data/runs/`, `data/snapshots/`). `tests/test_results.py` needs git, so run the Python tests in a clone at `/home/user/jev_fsd` with your working tree pushed over it (`boat push "$id" . --to /home/user/jev_fsd`), and copy in any saved snapshots a `verify_jev.py` run needs. For results you want to keep, use `boat new`, not `boat run` (which deletes the sandbox), and copy `data/runs/` back to this Mac before deleting it.
 - Live model runs need keys from `.env`. Pass only the key a run needs, with `boat new -e` or `boat run -e`; never copy `.env` into a sandbox, and keep to the budget rules below.
 
 ## Architecture
