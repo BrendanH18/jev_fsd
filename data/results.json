@@ -16703,6 +16703,7 @@
   },
   {
    "driver": "jev",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, dry",
@@ -20231,6 +20232,7 @@
   },
   {
    "driver": "llm:claude-haiku-5-5",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, dry",
