@@ -75,7 +75,9 @@ function merge(paths, reportPath, recordingPath, suitePath) {
   if (suitePath && !Array.isArray(reference)) throw new Error("--suite must name a regenerated scenario array.");
   const routeSha = reference ? benchRouteFingerprint(reference) : first.report.manifest.suite.route_sha;
   if (!routeSha) throw new Error("These parts need --suite with the regenerated seeded scenarios.");
-  const ids = Array.from({ length: config.count }, (_, index) => `s${config.seed}-${index + 1}`);
+  const ids = reference ? reference.map((scenario) => scenario.id) : first.report.manifest.suite.generated_ids;
+  if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length)
+    throw new Error("These parts need a generated drive list or --suite with regenerated scenarios.");
   const results = new Map();
   const merged = new ModelRecording({ header: { ...first.tape.header } });
   for (const part of parts) {
@@ -84,6 +86,9 @@ function merge(paths, reportPath, recordingPath, suitePath) {
       throw new Error("The parts must share source, engine, driver, map and suite.");
     const partSha = report.manifest.suite.route_sha;
     if (partSha ? partSha !== routeSha : !reference) throw new Error("A part generated a different seeded suite.");
+    const generatedIds = report.manifest.suite.generated_ids;
+    if (generatedIds && canonicalJson(generatedIds) !== canonicalJson(ids))
+      throw new Error("A part generated a different drive list.");
     const partIds = report.results.map((result) => result.id);
     if (
       canonicalJson(partIds) !== canonicalJson(report.manifest.suite.ids) ||
@@ -112,7 +117,7 @@ function merge(paths, reportPath, recordingPath, suitePath) {
   const summary = aggregate(ordered);
   const manifest = {
     ...first.report.manifest,
-    suite: { kind: "bench", config, ids, route_sha: routeSha },
+    suite: { kind: "bench", config, ids, generated_ids: ids, route_sha: routeSha },
     cost_usd: summary.cost_usd,
   };
   merged.header.manifest = manifest;

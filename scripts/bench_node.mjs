@@ -255,6 +255,7 @@ if (manifestModule) {
       kind: "bench",
       config,
       ids: selected.map((sc) => sc.id),
+      generated_ids: suite.map((sc) => sc.id),
       route_sha: manifestModule.benchRouteFingerprint(suite),
       ...(only ? { only: true } : {}),
     },

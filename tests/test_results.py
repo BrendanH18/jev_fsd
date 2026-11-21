@@ -134,6 +134,10 @@ class ResultsTest(unittest.TestCase):
             "results": {"door-zone": dict(results[0], seed=1042)},
         }
         self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01", recording), manifest)
+        results.append({"challenge": "undeclared", "map": None})
+        with self.assertRaisesRegex(ValueError, "arena drives disagree"):
+            build_results.checked_manifest(path, run, "2099-01-01", recording)
+        results.pop()
         recording["header"]["arena"]["set"] = "road-tests"
         with self.assertRaisesRegex(ValueError, "arena recording set or drive list"):
             build_results.checked_manifest(path, run, "2099-01-01", recording)

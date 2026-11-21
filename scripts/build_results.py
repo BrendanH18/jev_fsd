@@ -217,7 +217,7 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
             "invalid authored map or seed",
         )
         require(
-            all(drives.get(r["challenge"], {}).get("map") == r["map"] for r in results),
+            all(r["challenge"] in drives and drives[r["challenge"]]["map"] == r["map"] for r in results),
             "arena drives disagree with the manifest",
         )
     else:
@@ -225,7 +225,8 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         require(
             suite.get("kind") == "bench"
             and suite.get("config") == config
-            and suite.get("ids") == [r["id"] for r in results],
+            and suite.get("ids") == [r["id"] for r in results]
+            and (suite.get("only") is True or suite.get("generated_ids", suite["ids"]) == suite["ids"]),
             "benchmark settings or routes disagree with the manifest",
         )
         require(
@@ -411,9 +412,7 @@ def run_rows(drivers: dict) -> list[dict]:
             continue
         manifest_data = run.get("manifest")
         if isinstance(manifest_data, dict) and (
-            run.get("stopped")
-            or len(run["results"]) != config.get("count")
-            or (manifest_data.get("suite") or {}).get("only") is True
+            run.get("stopped") or (manifest_data.get("suite") or {}).get("only") is True
         ):
             continue
         recording_path = RECORDINGS / f"{path.stem}.json.gz"

@@ -123,6 +123,10 @@ from each part. For earlier parts without the fingerprint, regenerate the
 full scenario array from the original source and server, and pass its JSON
 file as `--suite ROUTES.json`.
 
+For a merged arena recording, replay the whole tape with `arena_node.mjs --replay RUN.json.gz
+--check replay --json RUN.json` on its recorded Node version. When the replay is exact, the
+report carries the merged tape's manifest for publication.
+
 ## Compare repeated model runs
 
 Use `node --experimental-default-type=module scripts/compare_repeats.mjs`

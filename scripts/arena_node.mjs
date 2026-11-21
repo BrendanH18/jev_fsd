@@ -292,6 +292,14 @@ const summary = {
   engine: `node ${process.version}`,
 };
 if (manifest) manifest.cost_usd = summary.cost_usd;
+const replayManifest = replayJson && recording.header.manifest;
+if (
+  args.check === "replay" &&
+  replayManifest?.engine === summary.engine &&
+  drifted.length === 0 &&
+  results.length === Object.keys(recording.results).length
+)
+  manifest = replayManifest;
 if (args.json)
   fs.writeFileSync(
     args.json,

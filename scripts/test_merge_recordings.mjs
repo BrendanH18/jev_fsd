@@ -115,14 +115,21 @@ assert.deepEqual(Object.keys(provenance.suite.drives), ["seven", "eight"]);
 assert.deepEqual(Object.keys(provenance.maps), ["kitsilano", "toronto"]);
 refused([g, withManifest("nine", "toronto", "bbbb", "b".repeat(40))], /differs.*source/, "another source commit");
 
-const config = { map: "kitsilano", features: "city", count: 2, seed: 1, brain: "jev" };
+const config = { map: "kitsilano", features: "city", count: 3, seed: 1, brain: "jev" };
 const benchScenarios = ["s1-1", "s1-2"].map((id) => ({ id, traffic_seed: 42 }));
 function benchPart(id, pass, traffic_seed = 42, name = id) {
   const manifest = {
     source_commit: "a".repeat(40),
     source_dirty: false,
     maps: { kitsilano: { fingerprint: "map-sha" } },
-    suite: { kind: "bench", only: true, config, ids: [id], route_sha: benchRouteFingerprint(benchScenarios) },
+    suite: {
+      kind: "bench",
+      only: true,
+      config,
+      ids: [id],
+      generated_ids: benchScenarios.map((scenario) => scenario.id),
+      route_sha: benchRouteFingerprint(benchScenarios),
+    },
     cost_usd: 0.01,
   };
   const result = { id, arrived: pass, pass, cost_usd: 0.01, wall_ms: 10 };
